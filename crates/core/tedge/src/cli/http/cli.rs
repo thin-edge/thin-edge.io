@@ -17,6 +17,29 @@ use tedge_config::ProfileName;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeHttpCli {
+    /// GET content from thin-edge local HTTP servers
+    ///
+    /// Examples:
+    ///   # Download file from the file transfer service
+    ///   tedge http get /tedge/file-transfer/target.txt
+    ///
+    ///   # Download file from Cumulocity's binary api
+    ///   tedge http get /c8y/inventory/binaries/104332 > my_file.bin
+    #[clap(verbatim_doc_comment)]
+    Get {
+        /// Source URI
+        uri: String,
+
+        /// MIME type of the expected content
+        #[clap(long)]
+        #[arg(value_parser = parse_mime_type)]
+        accept_type: Option<String>,
+
+        /// Optional c8y cloud profile
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
+
     /// POST content to thin-edge local HTTP servers
     ///
     /// Examples:
@@ -85,18 +108,24 @@ pub enum TEdgeHttpCli {
         profile: Option<ProfileName>,
     },
 
-    /// GET content from thin-edge local HTTP servers
+    /// PATCH content to thin-edge local HTTP servers
     ///
     /// Examples:
-    ///   # Download file from the file transfer service
-    ///   tedge http get /tedge/file-transfer/target.txt
-    ///
-    ///   # Download file from Cumulocity's binary api
-    ///   tedge http get /c8y/inventory/binaries/104332 > my_file.bin
+    ///   # Patch child device twin data
+    ///   tedge http patch /tedge/entity-store/v1/entities/device/child01 '{"type": "Raspberry Pi 4", "serialNo": "98761234"}'
     #[clap(verbatim_doc_comment)]
-    Get {
-        /// Source URI
+    Patch {
+        /// Target URI
         uri: String,
+
+        /// Content to send
+        #[command(flatten)]
+        content: Content,
+
+        /// MIME type of the content
+        #[clap(long)]
+        #[arg(value_parser = parse_mime_type)]
+        content_type: Option<String>,
 
         /// MIME type of the expected content
         #[clap(long)]
@@ -220,6 +249,16 @@ impl From<TEdgeHttpCli> for HttpAction {
                 content_type,
                 accept_type,
             },
+            TEdgeHttpCli::Patch {
+                content,
+                content_type,
+                accept_type,
+                ..
+            } => HttpAction::Patch {
+                content,
+                content_type,
+                accept_type,
+            },
             TEdgeHttpCli::Get { accept_type, .. } => HttpAction::Get { accept_type },
             TEdgeHttpCli::Delete { .. } => HttpAction::Delete,
         }
@@ -232,6 +271,7 @@ impl TEdgeHttpCli {
             TEdgeHttpCli::Post { uri, .. }
             | TEdgeHttpCli::Put { uri, .. }
             | TEdgeHttpCli::Get { uri, .. }
+            | TEdgeHttpCli::Patch { uri, .. }
             | TEdgeHttpCli::Delete { uri, .. } => uri.as_ref(),
         }
     }
@@ -241,6 +281,7 @@ impl TEdgeHttpCli {
             TEdgeHttpCli::Post { profile, .. }
             | TEdgeHttpCli::Put { profile, .. }
             | TEdgeHttpCli::Get { profile, .. }
+            | TEdgeHttpCli::Patch { profile, .. }
             | TEdgeHttpCli::Delete { profile, .. } => profile.as_ref(),
         }
     }

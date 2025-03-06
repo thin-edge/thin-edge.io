@@ -21,9 +21,10 @@ Send HTTP requests to local thin-edge HTTP servers
 Usage: tedge http [OPTIONS] <COMMAND>
 
 Commands:
+  get     GET content from thin-edge local HTTP servers
   post    POST content to thin-edge local HTTP servers
   put     PUT content to thin-edge local HTTP servers
-  get     GET content from thin-edge local HTTP servers
+  patch   PATCH content to thin-edge local HTTP servers
   delete  DELETE resource from thin-edge local HTTP servers
   help    Print this message or the help of the given subcommand(s)
 
@@ -145,6 +146,25 @@ http.client.auth.cert_file  Path to the certificate which is used by the agent w
  http.client.auth.key_file  Path to the private key which is used by the agent when connecting to external services. 
 ```
 
+## tedge http get
+
+```sh title="tedge http get"
+GET content from thin-edge local HTTP servers
+
+Usage: tedge http get [OPTIONS] <URI>
+
+Arguments:
+  <URI>  Source URI
+
+Options:
+      --accept-type <ACCEPT_TYPE>  MIME type of the expected content
+      --config-dir <CONFIG_DIR>    [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+      --debug                      Turn-on the DEBUG log level
+      --profile <PROFILE>          Optional c8y cloud profile
+      --log-level <LOG_LEVEL>      Configures the logging level
+  -h, --help                       Print help (see more with '--help')
+```
+
 ## tedge http post
 
 ```sh title="tedge http post"
@@ -191,23 +211,27 @@ Options:
   -h, --help                         Print help (see more with '--help')
 ```
 
-## tedge http get
+## tedge http patch
 
-```sh title="tedge http get"
-GET content from thin-edge local HTTP servers
+```sh title="tedge http patch"
+PATCH content to thin-edge local HTTP servers
 
-Usage: tedge http get [OPTIONS] <URI>
+Usage: tedge http patch [OPTIONS] <content|--data <DATA>|--file <FILE>> <URI>
 
 Arguments:
-  <URI>  Source URI
+  <URI>      Target URI
+  [content]  Content to send
 
 Options:
-      --accept-type <ACCEPT_TYPE>  MIME type of the expected content
-      --config-dir <CONFIG_DIR>    [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
-      --debug                      Turn-on the DEBUG log level
-      --profile <PROFILE>          Optional c8y cloud profile
-      --log-level <LOG_LEVEL>      Configures the logging level
-  -h, --help                       Print help (see more with '--help')
+      --config-dir <CONFIG_DIR>      [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+      --data <DATA>                  Content to send
+      --debug                        Turn-on the DEBUG log level
+      --file <FILE>                  File which content is sent
+      --content-type <CONTENT_TYPE>  MIME type of the content
+      --log-level <LOG_LEVEL>        Configures the logging level
+      --accept-type <ACCEPT_TYPE>    MIME type of the expected content
+      --profile <PROFILE>            Optional c8y cloud profile
+  -h, --help                         Print help (see more with '--help')
 ```
 
 ## tedge http delete

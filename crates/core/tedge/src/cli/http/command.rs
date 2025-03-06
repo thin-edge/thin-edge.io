@@ -29,6 +29,11 @@ pub enum HttpAction {
         content_type: Option<String>,
         accept_type: Option<String>,
     },
+    Patch {
+        content: Content,
+        content_type: Option<String>,
+        accept_type: Option<String>,
+    },
     Get {
         accept_type: Option<String>,
     },
@@ -41,6 +46,7 @@ impl Command for HttpCommand {
             HttpAction::Post { .. } => "POST",
             HttpAction::Put { .. } => "PUT",
             HttpAction::Get { .. } => "GET",
+            HttpAction::Patch { .. } => "PATCH",
             HttpAction::Delete => "DELETE",
         };
         format!("{verb} {}", self.url)
@@ -65,6 +71,10 @@ impl HttpCommand {
                 .body(blocking::Body::try_from(content.clone())?),
             HttpAction::Put { content, .. } => client
                 .put(url)
+                .headers(headers)
+                .body(blocking::Body::try_from(content.clone())?),
+            HttpAction::Patch { content, .. } => client
+                .patch(url)
                 .headers(headers)
                 .body(blocking::Body::try_from(content.clone())?),
             HttpAction::Get { .. } => client.get(url).headers(headers),
@@ -127,6 +137,11 @@ impl HttpAction {
                 content,
                 content_type,
                 ..
+            }
+            | HttpAction::Patch {
+                content,
+                content_type,
+                ..
             } => content_type
                 .as_ref()
                 .cloned()
@@ -142,6 +157,7 @@ impl HttpAction {
         match self {
             HttpAction::Post { accept_type, .. }
             | HttpAction::Put { accept_type, .. }
+            | HttpAction::Patch { accept_type, .. }
             | HttpAction::Get { accept_type } => accept_type
                 .as_ref()
                 .and_then(|s| HeaderValue::from_str(s).ok()),
@@ -152,7 +168,9 @@ impl HttpAction {
 
     pub fn content_length(&self) -> Option<HeaderValue> {
         match self {
-            HttpAction::Post { content, .. } | HttpAction::Put { content, .. } => content
+            HttpAction::Post { content, .. }
+            | HttpAction::Put { content, .. }
+            | HttpAction::Patch { content, .. } => content
                 .length()
                 .map(|length| length.to_string())
                 .and_then(|s| HeaderValue::from_str(&s).ok()),

@@ -25,6 +25,14 @@ Updating entities from a child device
     Should Contain    ${entity}    "@topic-id":"device/${CHILD_SN}/service/watchdog"
     Should Contain    ${entity}    "@parent":"device/${CHILD_SN}//"
     Should Contain    ${entity}    "@type":"service"
+    Execute Command
+    ...    tedge http patch /tedge/entity-store/v1/entities/device/${CHILD_SN} '{"name": "Child 01", "type": "Raspberry Pi 4"}'
+    ${entity}=    Execute Command    tedge http get /tedge/entity-store/v1/entities/device/${CHILD_SN}/
+    Should Contain    ${entity}    "@topic-id":"device/${CHILD_SN}//"
+    Should Contain    ${entity}    "@parent":"device/main//"
+    Should Contain    ${entity}    "@type":"child-device"
+    Should Contain    ${entity}    "name":"Child 01"
+    Should Contain    ${entity}    "type":"Raspberry Pi 4"
     Execute Command    tedge http delete /tedge/entity-store/v1/entities/device/${CHILD_SN}/service/watchdog
     Execute Command
     ...    tedge http get /tedge/entity-store/v1/entities/device/${CHILD_SN}/service/watchdog
