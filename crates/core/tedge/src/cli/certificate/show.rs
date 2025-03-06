@@ -1,10 +1,10 @@
 use super::error::CertError;
 use crate::command::Command;
 use crate::log::MaybeFancy;
-use std::time::Duration;
 
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
+use certificate::ValidityStatus;
 
 /// Show the device certificate, if any
 pub struct ShowCertCmd {
@@ -35,24 +35,31 @@ impl ShowCertCmd {
         println!("Device certificate: {}", self.cert_path);
         println!("Subject: {}", pem.subject()?);
         println!("Issuer: {}", pem.issuer()?);
-        println!(
-            "{}",
-            pem.still_valid()?
-                .map(|d| format!(
-                    "Still valid: {} days {} hours",
-                    d.whole_days(),
-                    (d - Duration::from_secs(
-                        24 * 3600
-                            * <i64 as TryInto<u64>>::try_into(d.whole_days()).unwrap_or_default()
-                    ))
-                    .whole_hours(),
-                ))
-                .unwrap_or("Invalid".to_string())
-        );
+        println!("Status: {}", display_status(pem.still_valid()?));
         println!("Valid from: {}", pem.not_before()?);
         println!("Valid up to: {}", pem.not_after()?);
         println!("Serial number: {} (0x{})", pem.serial()?, pem.serial_hex()?);
         println!("Thumbprint: {}", pem.thumbprint()?);
         Ok(())
+    }
+}
+
+fn display_status(status: ValidityStatus) -> String {
+    match status {
+        ValidityStatus::Valid { expired_in } => {
+            format!(
+                "VALID (expires in: {})",
+                humantime::format_duration(expired_in)
+            )
+        }
+        ValidityStatus::Expired { since } => {
+            format!("EXPIRED (since: {})", humantime::format_duration(since))
+        }
+        ValidityStatus::NotValidYet { valid_in } => {
+            format!(
+                "NOT VALID YET (will be in: {})",
+                humantime::format_duration(valid_in)
+            )
+        }
     }
 }
