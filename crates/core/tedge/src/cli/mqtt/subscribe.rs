@@ -1,19 +1,21 @@
 use crate::command::Command;
 use crate::log::MaybeFancy;
-use anyhow::anyhow;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate;
 use mqtt_channel::TopicFilter;
 use rumqttc::tokio_rustls::rustls::ClientConfig;
 use rumqttc::tokio_rustls::rustls::RootCertStore;
 use rumqttc::Client;
+use rumqttc::ConnectionError;
 use rumqttc::Event;
 use rumqttc::Incoming;
 use rumqttc::MqttOptions;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::MqttAuthClientConfig;
 
@@ -91,78 +93,100 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
         options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
     }
 
-    match cmd.duration {
-        Some(Duration::ZERO) | None => {}
-        Some(duration) if duration.lt(&Duration::from_secs(1)) => {
-            return Err(anyhow!("--duration <DURATION> must be at least 1 second"));
-        }
-        Some(duration) if duration.as_secs() < 5 => {
-            options.set_keep_alive(duration);
-        }
-        Some(_) => {
-            options.set_keep_alive(Duration::from_secs(5));
-        }
-    }
-
     let (client, mut connection) = Client::new(options, DEFAULT_QUEUE_CAPACITY);
     let interrupted = super::disconnect_if_interrupted(client.clone());
-    let started = std::time::Instant::now();
     let mut n_packets = 0;
 
-    for event in connection.iter() {
-        match event {
-            Ok(Event::Incoming(Packet::Publish(message))) => {
-                // trims the trailing null char if one exists
-                let payload = message
-                    .payload
-                    .strip_suffix(&[0])
-                    .unwrap_or(&message.payload);
-                match std::str::from_utf8(payload) {
-                    Ok(payload) => {
-                        if cmd.hide_topic {
-                            println!("{}", &payload);
-                        } else {
-                            println!("[{}] {}", &message.topic, payload);
-                        }
-                        n_packets += 1;
-                        if matches!(cmd.count, Some(count) if count > 0 && n_packets >= count) {
-                            eprintln!("INFO: Received {n_packets} messages");
-                            break;
-                        }
-                    }
-                    Err(err) => error!("{err}"),
+    match cmd.duration {
+        None => {
+            for event in connection.iter() {
+                if !process_event(
+                    event,
+                    client.clone(),
+                    cmd,
+                    interrupted.clone(),
+                    &mut n_packets,
+                ) {
+                    break;
                 }
             }
-            Ok(Event::Outgoing(Outgoing::PingReq)) => {
-                if matches!(cmd.duration, Some(duration) if !duration.is_zero() && started.elapsed() > duration)
-                {
+        }
+        Some(duration) => loop {
+            match connection.recv_timeout(duration) {
+                Ok(event) => {
+                    if !process_event(
+                        event,
+                        client.clone(),
+                        cmd,
+                        interrupted.clone(),
+                        &mut n_packets,
+                    ) {
+                        break;
+                    }
+                }
+                Err(_timeout) => {
                     eprintln!("INFO: Timeout");
                     break;
                 }
             }
-            Ok(Event::Incoming(Incoming::Disconnect)) => {
-                eprintln!("INFO: Disconnected");
-                break;
-            }
-            Ok(Event::Outgoing(Outgoing::Disconnect)) => {
-                break;
-            }
-            Ok(Event::Incoming(Packet::ConnAck(_))) => {
-                eprintln!("INFO: Connected");
-                client.subscribe(cmd.topic.pattern(), cmd.qos).unwrap();
-            }
-            Err(err) => {
-                if interrupted.load(Ordering::Relaxed) {
-                    break;
-                }
-                error!("{err}");
-                std::thread::sleep(std::time::Duration::from_secs(1));
-            }
-            _ => {}
-        }
+        },
     }
 
     Ok(())
+}
+
+fn process_event(
+    event: Result<Event, ConnectionError>,
+    client: Client,
+    cmd: &MqttSubscribeCommand,
+    interrupted: Arc<AtomicBool>,
+    n_packets: &mut u32,
+) -> bool {
+    match event {
+        Ok(Event::Incoming(Packet::Publish(message))) => {
+            // trims the trailing null char if one exists
+            let payload = message
+                .payload
+                .strip_suffix(&[0])
+                .unwrap_or(&message.payload);
+            match std::str::from_utf8(payload) {
+                Ok(payload) => {
+                    if cmd.hide_topic {
+                        println!("{}", &payload);
+                    } else {
+                        println!("[{}] {}", &message.topic, payload);
+                    }
+                    *n_packets += 1;
+                    if matches!(cmd.count, Some(count) if count > 0 && *n_packets >= count) {
+                        eprintln!("INFO: Received {n_packets} messages");
+                        return false;
+                    }
+                }
+                Err(err) => error!("{err}"),
+            }
+        }
+        Ok(Event::Incoming(Incoming::Disconnect)) => {
+            eprintln!("INFO: Disconnected");
+            return false;
+        }
+        Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+            return false;
+        }
+        Ok(Event::Incoming(Packet::ConnAck(_))) => {
+            eprintln!("INFO: Connected");
+            client.subscribe(cmd.topic.pattern(), cmd.qos).unwrap();
+        }
+        Err(err) => {
+            if interrupted.load(Ordering::Relaxed) {
+                return false;
+            }
+            error!("{err}");
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        _ => {}
+    }
+
+    true
 }
 
 // Using TopicFilter for `tedge sub` would lead to complicate code for nothing
