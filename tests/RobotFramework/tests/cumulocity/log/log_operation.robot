@@ -185,7 +185,7 @@ Publish and Verify Local Command
 
     Sleep    5s    reason=Given mapper a chance to react, if it does not react with 5 seconds it never will
     ${retained_message}=    Execute Command
-    ...    timeout 1 tedge mqtt sub --no-topic '${topic}'
+    ...    tedge mqtt sub --no-topic '${topic}' --duration 1
     ...    ignore_exit_code=${True}
     ...    strip=${True}
     Should Be Equal    ${messages[0]}    ${retained_message}    msg=MQTT message should be unchanged
