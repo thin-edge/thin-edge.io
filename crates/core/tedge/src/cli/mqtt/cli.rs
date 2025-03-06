@@ -49,7 +49,7 @@ pub enum TEdgeMqttCli {
         /// Set a timeout duration (e.g., 60s, 1h)
         #[clap(long, short = 'W')]
         duration: Option<SecondsOrHumanTime>,
-        /// Set the number of packets before stopping
+        /// Disconnect and exit after receiving the specified number of messages
         #[clap(long, short = 'C')]
         count: Option<u32>,
     },

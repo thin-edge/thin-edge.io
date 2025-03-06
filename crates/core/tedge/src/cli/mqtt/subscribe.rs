@@ -1,5 +1,6 @@
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use anyhow::anyhow;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate;
 use mqtt_channel::TopicFilter;
@@ -92,6 +93,9 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
 
     match cmd.duration {
         Some(Duration::ZERO) | None => {}
+        Some(duration) if duration.lt(&Duration::from_secs(1)) => {
+            return Err(anyhow!("--duration <DURATION> must be at least 1 second"));
+        }
         Some(duration) if duration.as_secs() < 5 => {
             options.set_keep_alive(duration);
         }
@@ -122,7 +126,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                         }
                         n_packets += 1;
                         if matches!(cmd.count, Some(count) if count > 0 && n_packets >= count) {
-                            eprintln!("INFO: Break");
+                            eprintln!("INFO: Received {n_packets} messages");
                             break;
                         }
                     }
