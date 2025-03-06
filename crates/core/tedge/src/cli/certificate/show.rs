@@ -5,6 +5,7 @@ use camino::Utf8PathBuf;
 use certificate::PemCertificate;
 use certificate::ValidityStatus;
 use tokio::io::AsyncWriteExt;
+use yansi::Paint;
 
 macro_rules! print_async {
     ($out:expr, $fmt:literal) => (
@@ -43,26 +44,30 @@ impl ShowCertCmd {
             .with_context(|| format!("decoding certificate from {cert_path}"))?;
 
         let mut stdout = tokio::io::stdout();
-        print_async!(stdout, "Device certificate: {}\n", self.cert_path);
-        print_async!(stdout, "Subject: {}\n", pem.subject()?);
-        print_async!(stdout, "Issuer: {}\n", pem.issuer()?);
-        print_async!(stdout, "Status: {}\n", display_status(pem.still_valid()?));
-        print_async!(stdout, "Valid from: {}\n", pem.not_before()?);
-        print_async!(stdout, "Valid up to: {}\n", pem.not_after()?);
+        print_async!(stdout, "Certificate:   {}\n", self.cert_path);
+        print_async!(stdout, "Subject:       {}\n", pem.subject()?);
+        print_async!(stdout, "Issuer:        {}\n", pem.issuer()?);
+        print_async!(
+            stdout,
+            "Status:        {}\n",
+            display_status(pem.still_valid()?)
+        );
+        print_async!(stdout, "Valid from:    {}\n", pem.not_before()?);
+        print_async!(stdout, "Valid until:   {}\n", pem.not_after()?);
         print_async!(
             stdout,
             "Serial number: {} (0x{})\n",
             pem.serial()?,
             pem.serial_hex()?
         );
-        print_async!(stdout, "Thumbprint: {}\n", pem.thumbprint()?);
+        print_async!(stdout, "Thumbprint:    {}\n", pem.thumbprint()?);
         let _ = stdout.flush().await;
         Ok(())
     }
 }
 
 fn display_status(status: ValidityStatus) -> String {
-    match status {
+    let text = match status {
         ValidityStatus::Valid { expired_in } => {
             format!(
                 "VALID (expires in: {})",
@@ -78,5 +83,15 @@ fn display_status(status: ValidityStatus) -> String {
                 humantime::format_duration(valid_in)
             )
         }
+    };
+
+    let threshold = humantime::parse_duration("30d").unwrap();
+    match status {
+        ValidityStatus::Valid { expired_in } if expired_in > threshold => {
+            format!("{}", text.green())
+        }
+        ValidityStatus::Valid { .. } => format!("{}", text.yellow()),
+        ValidityStatus::Expired { .. } => format!("{}", text.red()),
+        ValidityStatus::NotValidYet { .. } => format!("{}", text.red()),
     }
 }
