@@ -123,7 +123,6 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                 break;
             }
             Ok(Event::Outgoing(Outgoing::Disconnect)) => {
-                eprintln!("INFO: Interrupted");
                 break;
             }
             Ok(Event::Incoming(Packet::ConnAck(_))) => {
