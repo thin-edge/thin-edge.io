@@ -32,7 +32,7 @@ before merging your code._
 -->
 
 - [ ] I have read the [CONTRIBUTING](https://github.com/thin-edge/thin-edge.io/blob/main/CONTRIBUTING.md) doc
-- [ ] I have signed the [CLA](https://github.com/thin-edge/thin-edge.io/blob/main/CONTRIBUTOR-LICENSE-AGREEMENT.md) (in all commits with git commit -s)
+- [ ] I have signed the [CLA](https://github.com/thin-edge/thin-edge.io/blob/main/CONTRIBUTOR-LICENSE-AGREEMENT.md) (in all commits with git commit -s. You can activate automatic signing by running `just prepare-dev` once)
 - [ ] I ran `cargo fmt` as mentioned in [CODING_GUIDELINES](https://github.com/thin-edge/thin-edge.io/blob/main/CODING_GUIDELINES.md)
 - [ ] I used `cargo clippy` as mentioned in [CODING_GUIDELINES](https://github.com/thin-edge/thin-edge.io/blob/main/CODING_GUIDELINES.md)
 - [ ] I have added tests that prove my fix is effective or that my feature works
