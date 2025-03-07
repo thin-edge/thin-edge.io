@@ -9,21 +9,18 @@ license.workspace = true
 homepage.workspace = true
 repository.workspace = true
 
-[features]
-# added because rust-analyzer screams at me; probably can be removed later
-cryptoki = []
-
 [dependencies]
 anyhow.workspace = true
+asn1-rs.workspace = true
+base64 = "0.22"
 camino.workspace = true
-certificate = { workspace = true, features = ["cryptoki"] }
 clap.workspace = true
+cryptoki.workspace = true
 hyper-util.workspace = true
 prost = "0.13.5"
 rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tedge_config = { workspace = true, features = ["cryptoki"] }
 tokio.workspace = true
 tokio-stream = "0.1.17"
 tonic = "0.12.3"

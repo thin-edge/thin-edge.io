@@ -1,14 +1,12 @@
-use certificate::parse_root_certificate::pkcs11;
-use certificate::parse_root_certificate::pkcs11::PkcsSigner;
-use certificate::parse_root_certificate::CryptokiConfigDirect;
+use crate::pkcs11;
+use crate::pkcs11::CryptokiConfigDirect;
+use crate::pkcs11::PkcsSigner;
 use tonic::{Request, Response, Status};
 
-pub mod p11_grpc {
-    tonic::include_proto!("p11_grpc");
-}
-use p11_grpc::{
+use crate::p11_grpc::{
     p11_server::P11, ChooseSchemeRequest, ChooseSchemeResponse, SignRequest, SignResponse,
 };
+use tracing::debug;
 
 #[derive(Debug)]
 pub struct P11Service {
@@ -36,6 +34,7 @@ impl P11 for P11Service {
         &self,
         _request: Request<ChooseSchemeRequest>,
     ) -> Result<Response<ChooseSchemeResponse>, Status> {
+        debug!("choose scheme");
         // TODO: implement properly!
         Ok(Response::new(ChooseSchemeResponse {
             chosen: "ECDSA".to_string(),
@@ -43,6 +42,7 @@ impl P11 for P11Service {
     }
 
     async fn sign(&self, request: Request<SignRequest>) -> Result<Response<SignResponse>, Status> {
+        debug!("sign");
         let message = request.into_inner().data;
         let signature = self.signer.sign(&message).unwrap();
 

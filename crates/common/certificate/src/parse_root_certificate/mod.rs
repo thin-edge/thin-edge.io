@@ -1,4 +1,3 @@
-use camino::Utf8PathBuf;
 use rustls::pki_types::pem::PemObject as _;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::PrivateKeyDer;
@@ -10,18 +9,14 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use std::sync::Arc;
+
+#[cfg(feature = "cryptoki")]
+pub use tedge_p11_server::pkcs11::CryptokiConfigDirect;
+
+#[cfg(feature = "cryptoki")]
+pub use tedge_p11_server::signer::CryptokiConfig;
 
 use crate::CertificateError;
-
-#[cfg(feature = "cryptoki")]
-pub mod pkcs11;
-
-#[cfg(feature = "cryptoki")]
-mod p11_client;
-
-#[cfg(feature = "cryptoki")]
-mod single_cert_and_key;
 
 pub fn create_tls_config(
     root_certificates: impl AsRef<Path>,
@@ -47,57 +42,27 @@ pub fn create_tls_config_cryptoki(
     client_certificate: impl AsRef<Path>,
     cryptoki_config: CryptokiConfig,
 ) -> Result<ClientConfig, CertificateError> {
-    use anyhow::Context;
-    use pkcs11::Pkcs11SigningKey;
     use rustls::sign::CertifiedKey;
-    use single_cert_and_key::SingleCertAndKey;
+    use std::sync::Arc;
+    use tedge_p11_server::single_cert_and_key::SingleCertAndKey;
 
     let root_cert_store = new_root_store(root_certificates.as_ref())?;
     let cert_chain = read_cert_chain(client_certificate)?;
 
-    let resolver: SingleCertAndKey = match cryptoki_config {
-        CryptokiConfig::Direct(config_direct) => {
-            let pkcs11_signing_key = Pkcs11SigningKey::from_cryptoki_config(config_direct)
-                .context("failed to create a TLS signer using PKCS#11 device")?;
-            CertifiedKey {
-                cert: cert_chain,
-                key: Arc::new(pkcs11_signing_key),
-                ocsp: None,
-            }
-            .into()
-        }
-        CryptokiConfig::SocketService { socket_path } => {
-            let pkcs11_signing_key = p11_client::TedgeP11Client {
-                socket_path: Arc::from(Path::new(&socket_path)),
-            };
+    let signing_key = tedge_p11_server::signer::signing_key(cryptoki_config)?;
 
-            CertifiedKey {
-                cert: cert_chain,
-                key: Arc::new(pkcs11_signing_key),
-                ocsp: None,
-            }
-            .into()
-        }
+    let certified_key = CertifiedKey {
+        cert: cert_chain,
+        key: signing_key,
+        ocsp: None,
     };
+    let resolver: SingleCertAndKey = certified_key.into();
 
     let config = ClientConfig::builder()
         .with_root_certificates(root_cert_store)
         .with_client_cert_resolver(Arc::new(resolver));
 
     Ok(config)
-}
-
-#[derive(Debug, Clone)]
-pub enum CryptokiConfig {
-    Direct(CryptokiConfigDirect),
-    SocketService { socket_path: Utf8PathBuf },
-}
-
-#[derive(Debug, Clone)]
-pub struct CryptokiConfigDirect {
-    pub module_path: Utf8PathBuf,
-    pub pin: Arc<str>,
-    pub serial: Option<Arc<str>>,
 }
 
 pub fn client_config_for_ca_certificates<P>(

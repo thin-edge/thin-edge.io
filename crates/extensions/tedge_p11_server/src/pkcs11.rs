@@ -7,6 +7,7 @@
 use anyhow::Context;
 use asn1_rs::ToDer;
 use base64::Engine;
+use camino::Utf8PathBuf;
 use cryptoki::context::CInitializeArgs;
 use cryptoki::context::Pkcs11;
 use cryptoki::mechanism::Mechanism;
@@ -29,7 +30,12 @@ use tracing::debug;
 use tracing::error;
 use tracing::warn;
 
-use super::CryptokiConfigDirect;
+#[derive(Debug, Clone)]
+pub struct CryptokiConfigDirect {
+    pub module_path: Utf8PathBuf,
+    pub pin: Arc<str>,
+    pub serial: Option<Arc<str>>,
+}
 
 #[derive(Debug)]
 pub enum Pkcs11SigningKey {
