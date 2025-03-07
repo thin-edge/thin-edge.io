@@ -1030,7 +1030,7 @@ dependencies = [
  "rustls-native-certs",
  "rustls-pemfile 2.2.0",
  "sha-1",
- "tedge_p11_server",
+ "tedge-p11-server",
  "tempfile",
  "thiserror 1.0.61",
  "time",
@@ -4483,6 +4483,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge-p11-server"
+version = "1.4.2"
+dependencies = [
+ "anyhow",
+ "asn1-rs 0.7.0",
+ "base64 0.22.1",
+ "camino",
+ "clap",
+ "cryptoki",
+ "hyper-util",
+ "prost",
+ "rustls 0.23.22",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "tower 0.4.13",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tedge-watchdog"
 version = "1.4.2"
 dependencies = [
@@ -4811,30 +4835,6 @@ dependencies = [
  "tedge_utils",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "tedge_p11_server"
-version = "1.4.2"
-dependencies = [
- "anyhow",
- "asn1-rs 0.7.0",
- "base64 0.22.1",
- "camino",
- "clap",
- "cryptoki",
- "hyper-util",
- "prost",
- "rustls 0.23.22",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "tower 0.4.13",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

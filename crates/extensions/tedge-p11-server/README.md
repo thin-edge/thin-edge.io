@@ -6,12 +6,12 @@ A thin-edge server that allows thin-edge service possibly working in a container
 
 1. Compile on the host
     ```sh
-    $ cargo build --bin tedge_p11_server
+    $ cargo build --bin tedge-p11-server
     ```
 
 2. Run on the host, passing necessary configuration via CLI or tedge config
     ```sh
-    target/debug/tedge_p11_server ./my-socket.sock --module-path /usr/lib/x86_64-linux-gnu/pkcs11/p11-kit-client.so --pin 821370
+    target/debug/tedge-p11-server ./my-socket.sock --module-path /usr/lib/x86_64-linux-gnu/pkcs11/p11-kit-client.so --pin 821370
     ```
 
 3. In the container, set `device.cryptoki.socket_path`

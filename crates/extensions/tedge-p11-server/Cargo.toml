@@ -1,5 +1,5 @@
 [package]
-name = "tedge_p11_server"
+name = "tedge-p11-server"
 description = "thin-edge PKCS#11 server"
 version.workspace = true
 authors.workspace = true
