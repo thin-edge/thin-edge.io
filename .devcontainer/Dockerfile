@@ -98,7 +98,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     # Use cargo-bininstall to improve multi-arch builds
     && curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash \
     && cargo-binstall cargo-nextest --secure \
-    && cargo-binstall taplo-cli --secure
+    && cargo-binstall taplo-cli --secure \
+    && cargo-binstall cargo-deny --secure
 
 # Persist bash history
 USER root
