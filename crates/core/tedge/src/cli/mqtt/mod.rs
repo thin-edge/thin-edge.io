@@ -20,6 +20,7 @@ fn disconnect_if_interrupted(client: Client, timeout: Option<Duration>) -> Arc<A
         let interrupted = interrupted.clone();
         unsafe {
             let _ = signal_hook::low_level::register(*signal, move || {
+                eprintln!("INFO: Interrupted");
                 interrupted.store(true, Ordering::Relaxed);
                 let _ = client.disconnect();
             });
