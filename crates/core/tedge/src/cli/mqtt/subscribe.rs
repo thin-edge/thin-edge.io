@@ -1,6 +1,5 @@
 use crate::command::Command;
 use crate::log::MaybeFancy;
-use anyhow::anyhow;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate;
 use mqtt_channel::TopicFilter;
@@ -91,22 +90,8 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
         options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
     }
 
-    match cmd.duration {
-        Some(Duration::ZERO) | None => {}
-        Some(duration) if duration.lt(&Duration::from_secs(1)) => {
-            return Err(anyhow!("--duration <DURATION> must be at least 1 second"));
-        }
-        Some(duration) if duration.as_secs() < 5 => {
-            options.set_keep_alive(duration);
-        }
-        Some(_) => {
-            options.set_keep_alive(Duration::from_secs(5));
-        }
-    }
-
     let (client, mut connection) = Client::new(options, DEFAULT_QUEUE_CAPACITY);
-    let interrupted = super::disconnect_if_interrupted(client.clone());
-    let started = std::time::Instant::now();
+    let interrupted = super::disconnect_if_interrupted(client.clone(), cmd.duration);
     let mut n_packets = 0;
 
     for event in connection.iter() {
@@ -127,17 +112,11 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                         n_packets += 1;
                         if matches!(cmd.count, Some(count) if count > 0 && n_packets >= count) {
                             eprintln!("INFO: Received {n_packets} messages");
+                            let _ = client.disconnect();
                             break;
                         }
                     }
                     Err(err) => error!("{err}"),
-                }
-            }
-            Ok(Event::Outgoing(Outgoing::PingReq)) => {
-                if matches!(cmd.duration, Some(duration) if !duration.is_zero() && started.elapsed() > duration)
-                {
-                    eprintln!("INFO: Timeout");
-                    break;
                 }
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
