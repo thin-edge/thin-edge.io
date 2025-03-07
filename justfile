@@ -44,6 +44,10 @@ publish-dev-container TAG="latest" IMAGE="ghcr.io/thin-edge/devcontainer" VARIAN
 default:
     @just --list
 
+# Prepare developer settings like enabling git --signoff by default
+prepare-dev:
+    ./ci/dev/add-git-hook-prepare-commit.sh
+
 # Install necessary tools
 install-tools:
     rustup component add rls rust-analysis rust-src rustfmt clippy

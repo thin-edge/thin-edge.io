@@ -234,6 +234,12 @@ https://github.com/thin-edge/thin-edge.io/blob/main/CONTRIBUTOR-LICENSE-AGREEMEN
 **which I have read and understood** and I agree that this Submission
 constitutes a "Contribution" under this Agreement.*
 
+For convenience, you can run the following task, using [just](https://github.com/casey/just), to add a git pre-commit hook which will automatically add the required signoff option to all of your commit messages in the repository.
+
+```sh
+just prepare-dev
+```
+
 ## Note on Privacy
 
 Please note that this project and any contributions to it are public and that a
