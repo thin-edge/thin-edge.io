@@ -112,7 +112,6 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                         n_packets += 1;
                         if matches!(cmd.count, Some(count) if count > 0 && n_packets >= count) {
                             eprintln!("INFO: Received {n_packets} messages");
-                            let _ = client.disconnect();
                             break;
                         }
                     }
@@ -124,6 +123,7 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                 break;
             }
             Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+                eprintln!("INFO: Interrupted");
                 break;
             }
             Ok(Event::Incoming(Packet::ConnAck(_))) => {
@@ -136,6 +136,18 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                 }
                 error!("{err}");
                 std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+            _ => {}
+        }
+    }
+
+    let _ = client.disconnect();
+    for event in connection.iter() {
+        match event {
+            Err(_)
+            | Ok(Event::Incoming(Incoming::Disconnect))
+            | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+                break;
             }
             _ => {}
         }
