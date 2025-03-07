@@ -90,7 +90,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
     let payload = cmd.message.as_bytes();
 
     let (client, mut connection) = rumqttc::Client::new(options, DEFAULT_QUEUE_CAPACITY);
-    super::disconnect_if_interrupted(client.clone());
+    super::disconnect_if_interrupted(client.clone(), None);
     let mut published = false;
     let mut acknowledged = false;
     let mut any_error = None;
