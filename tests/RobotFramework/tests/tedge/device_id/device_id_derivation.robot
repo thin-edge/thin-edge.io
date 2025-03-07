@@ -27,8 +27,8 @@ Create a certificate without device.id in tedge config settings
     Should Contain    ${output}    CN=input
     ${output}=    Execute Command    tedge config get device.id    strip=${True}
     Should Be Equal    ${output}    input
-    ${output}=    Execute Command    tedge config get c8y.device.id    exp_exit_code=1
-    ${output}=    Execute Command    tedge config get c8y.device.id --profile foo    exp_exit_code=1
+    Execute Command    tedge config get c8y.device.id    exp_exit_code=1
+    Execute Command    tedge config get c8y.device.id --profile foo    exp_exit_code=1
 
 Input from --device-id is used over the value from tedge config settings when device.id is set
     Execute Command    tedge config set device.id testid

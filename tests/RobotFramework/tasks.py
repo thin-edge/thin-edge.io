@@ -145,12 +145,14 @@ def lint(c):
 
 @task
 def lint_tests(c, threshold="W"):
-    """Run RobotFramework Test Linter
+    """Run RobotFramework Test Linter and Formatter check
 
     Example:
         $ invoke lint-tests --threshold I
         # Run linting and include Info level messages
     """
+    print("Checking formatting of RobotFramework tests...", file=sys.stderr)
+    c.run(f"{sys.executable} -m robotidy tests --check")
     c.run(f"{sys.executable} -m robocop --report rules_by_error_type --threshold {threshold}")
 
 @task(name="format")
@@ -164,14 +166,6 @@ def format_tests(c):
     """
     print("Formatting of RobotFramework tests...", file=sys.stderr)
     c.run(f"{sys.executable} -m robotidy tests")
-
-@task
-def check_format_tests(c):
-    """Check format of RobotFramework tests (for CI)
-    """
-    print("Checking formatting of RobotFramework tests...", file=sys.stderr)
-    c.run(f"{sys.executable} -m robotidy tests --check")
-
 
 @task(name="reports")
 def start_server(c, port=9000):

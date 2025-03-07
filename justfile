@@ -96,7 +96,7 @@ format-check: check-tools
     fi
     cd tests/RobotFramework
     source .venv/bin/activate
-    invoke check-format-tests
+    invoke lint-tests
 
 # Check code
 check TARGET=DEFAULT_TARGET:

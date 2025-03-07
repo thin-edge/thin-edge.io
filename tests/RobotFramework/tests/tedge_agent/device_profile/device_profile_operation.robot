@@ -1,3 +1,7 @@
+*** Comments ***
+# robocop: off = misaligned-continuation-row
+
+
 *** Settings ***
 Resource            ../../../resources/common.resource
 Library             Collections
