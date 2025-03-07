@@ -53,7 +53,7 @@ install-tools:
     rustup component add rls rust-analysis rust-src rustfmt clippy
     rustup toolchain install nightly
     rustup component add rustfmt --toolchain nightly
-    cargo install taplo-cli cargo-nextest
+    cargo +stable install taplo-cli cargo-nextest
 
 # Check if necessary tools are installed
 [private]
