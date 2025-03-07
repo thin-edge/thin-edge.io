@@ -33,7 +33,7 @@ use tracing_subscriber::EnvFilter;
 #[command(version)]
 pub struct Args {
     /// A path where the service's unix token will be created.
-    #[arg(default_value = "./thin-edge-pkcs11.sock")]
+    #[arg(default_value = "./tedge-p11-server.sock")]
     socket_path: Utf8PathBuf,
 
     /// The path to the PKCS#11 module.
