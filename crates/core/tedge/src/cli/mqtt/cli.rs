@@ -46,7 +46,7 @@ pub enum TEdgeMqttCli {
         /// Avoid printing the message topics on the console
         #[clap(long = "no-topic")]
         hide_topic: bool,
-        /// Set a timeout duration (e.g., 60s, 1h)
+        /// Disconnect and exit after the specified timeout (e.g., 60s, 1h)
         #[clap(long, short = 'W')]
         duration: Option<SecondsOrHumanTime>,
         /// Disconnect and exit after receiving the specified number of messages
