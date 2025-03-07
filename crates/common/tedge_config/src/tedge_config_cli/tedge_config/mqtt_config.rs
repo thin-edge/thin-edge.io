@@ -15,6 +15,8 @@ use super::TEdgeConfigReaderDeviceCryptoki;
 
 #[cfg(feature = "cryptoki")]
 use certificate::parse_root_certificate::CryptokiConfig;
+#[cfg(feature = "cryptoki")]
+use certificate::parse_root_certificate::CryptokiConfigDirect;
 
 /// An MQTT authentication configuration for connecting to the remote cloud broker.
 ///
@@ -253,15 +255,34 @@ impl TEdgeConfig {
 
 impl TEdgeConfigReaderDeviceCryptoki {
     #[cfg(feature = "cryptoki")]
+    pub fn config_direct(&self) -> Result<Option<CryptokiConfigDirect>, anyhow::Error> {
+        if !self.enable {
+            return Ok(None);
+        }
+
+        Ok(Some(CryptokiConfigDirect {
+            module_path: self.module_path.or_config_not_set().unwrap().clone(),
+            pin: self.pin.clone(),
+            serial: self.serial.or_none().cloned(),
+        }))
+    }
+
+    #[cfg(feature = "cryptoki")]
     pub fn config(&self) -> Result<Option<CryptokiConfig>, anyhow::Error> {
         if !self.enable {
             return Ok(None);
         }
 
-        Ok(Some(CryptokiConfig {
+        if let Some(socket_path) = self.socket_path.or_none() {
+            return Ok(Some(CryptokiConfig::SocketService {
+                socket_path: socket_path.clone(),
+            }));
+        }
+
+        Ok(Some(CryptokiConfig::Direct(CryptokiConfigDirect {
             module_path: self.module_path.or_config_not_set().unwrap().clone(),
             pin: self.pin.clone(),
             serial: self.serial.or_none().cloned(),
-        }))
+        })))
     }
 }

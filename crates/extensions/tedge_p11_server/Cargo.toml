@@ -1,0 +1,35 @@
+[package]
+name = "tedge_p11_server"
+description = "thin-edge PKCS#11 server"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+asn1-rs.workspace = true
+base64 = "0.22"
+camino.workspace = true
+clap.workspace = true
+cryptoki.workspace = true
+hyper-util.workspace = true
+prost = "0.13.5"
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-stream = "0.1.17"
+tonic = "0.12.3"
+tower.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[build-dependencies]
+tonic-build = "*"
+
+[lints]
+workspace = true
