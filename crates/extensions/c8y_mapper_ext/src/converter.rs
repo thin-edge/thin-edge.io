@@ -662,7 +662,10 @@ impl CumulocityConverter {
                     &operation_message,
                 )
                 .await;
-            let result = self.handle_c8y_operation_result(&result, Some(operation.op_id));
+            let result = self.handle_c8y_operation_result(&result, Some(operation.op_id.clone()));
+            if !result.is_empty() {
+                self.active_commands.insert(cmd_id);
+            }
             output.extend(result);
         }
 
@@ -769,7 +772,7 @@ impl CumulocityConverter {
         let result = self
             .process_json_custom_operation(
                 operation.op_id.clone(),
-                cmd_id,
+                cmd_id.clone(),
                 device_xid,
                 &operation.extras,
                 message,
@@ -777,6 +780,9 @@ impl CumulocityConverter {
             .await;
 
         let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
+        if !output.is_empty() {
+            self.active_commands.insert(cmd_id);
+        }
 
         Ok(output)
     }
@@ -1362,8 +1368,6 @@ impl CumulocityConverter {
             }
 
             Channel::Command { cmd_id, .. } if self.command_id.is_generator_of(cmd_id) => {
-                self.active_commands.insert(cmd_id.clone());
-
                 let entity = self.entity_cache.try_get(&source)?;
                 let entity = operations::EntityTarget {
                     topic_id: entity.metadata.topic_id.clone(),
@@ -1648,6 +1652,7 @@ pub(crate) mod tests {
     use crate::config::C8yMapperConfig;
     use crate::entity_cache::InvalidExternalIdError;
     use crate::supported_operations::operation::ResultFormat;
+    use crate::supported_operations::SupportedOperations;
     use crate::tests::spawn_dummy_c8y_http_proxy;
     use crate::Capabilities;
     use anyhow::Result;
@@ -1684,6 +1689,7 @@ pub(crate) mod tests {
     use tedge_http_ext::HttpResult;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::MqttMessage;
+    use tedge_mqtt_ext::QoS;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
@@ -2519,6 +2525,118 @@ pub(crate) mod tests {
         // a result between now and elapsed that is not 0 probably means that the operations are
         // blocking and that you probably removed a tokio::spawn handle (;
         assert_eq!(now.elapsed().as_secs(), 0);
+    }
+
+    #[tokio::test]
+    async fn operations_are_deduplicated() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let original = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
+            {"delivery":{"log":[],"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+        let redelivery = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
+            {"delivery":{"log":[{"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},{"time":"2025-03-05T08:49:25.000Z","status":"SEND"},{"time":"2025-03-05T08:49:25.162Z","status":"DELIVERED"}],"time":"2025-03-05T08:49:25.707Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+        assert_eq!(
+            converter
+                .parse_c8y_devicecontrol_topic(&original)
+                .await
+                .unwrap(),
+            vec![MqttMessage {
+                topic: Topic {
+                    name: "te/device/main///cmd/restart/c8y-mapper-16574089".into(),
+                },
+                payload: json!({"status":"init"}).to_string().into(),
+                qos: QoS::AtLeastOnce,
+                retain: true,
+            },]
+        );
+        assert_eq!(
+            converter
+                .parse_c8y_devicecontrol_topic(&redelivery)
+                .await
+                .unwrap(),
+            vec![]
+        );
+    }
+
+    #[tokio::test]
+    async fn custom_operations_are_deduplicated() {
+        let tmp_dir = TempTedgeDir::new();
+        let custom_op = r#"exec.topic = "my/custom/topic"
+        exec.on_fragment = "my_op"
+        exec.command = "/etc/tedge/operations/command ${.payload.my_op.text}""#;
+        let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
+        f.with_raw_content(custom_op);
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let original = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
+            {"delivery":{"log":[],"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+        let redelivery = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
+            {"delivery":{"log":[{"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},{"time":"2025-03-05T08:49:25.000Z","status":"SEND"},{"time":"2025-03-05T08:49:25.162Z","status":"DELIVERED"}],"time":"2025-03-05T08:49:25.707Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+        assert_ne!(
+            converter
+                .parse_json_custom_operation_topic(&original)
+                .await
+                .unwrap(),
+            vec![],
+            "Initial operation delivery produces outgoing message"
+        );
+        assert_eq!(
+            converter
+                .parse_json_custom_operation_topic(&redelivery)
+                .await
+                .unwrap(),
+            vec![],
+            "Operation redelivery is ignored by converter"
+        );
+    }
+
+    #[tokio::test]
+    async fn custom_operations_are_not_deduplicated_before_registration() {
+        let tmp_dir = TempTedgeDir::new();
+        let custom_op = r#"exec.topic = "my/custom/topic"
+        exec.on_fragment = "my_op"
+        exec.command = "/etc/tedge/operations/command ${.payload.my_op.text}""#;
+        let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
+        f.with_raw_content(custom_op);
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let before_registration = SupportedOperations {
+            device_id: converter.supported_operations.device_id.clone(),
+            base_ops_dir: converter.supported_operations.base_ops_dir.clone(),
+            operations_by_xid: <_>::default(),
+        };
+        let after_registration =
+            std::mem::replace(&mut converter.supported_operations, before_registration);
+
+        let original = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
+            {"delivery":{"log":[],"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+        let redelivery = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
+            {"delivery":{"log":[{"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},{"time":"2025-03-05T08:49:25.000Z","status":"SEND"},{"time":"2025-03-05T08:49:25.162Z","status":"DELIVERED"}],"time":"2025-03-05T08:49:25.707Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+        assert_eq!(
+            converter
+                .parse_json_custom_operation_topic(&original)
+                .await
+                .unwrap(),
+            vec![],
+            "Operation is ignored before the operation is registered"
+        );
+
+        converter.supported_operations = after_registration;
+
+        assert_ne!(
+            converter
+                .parse_json_custom_operation_topic(&redelivery)
+                .await
+                .unwrap(),
+            vec![],
+            "First delivery after registration produces outgoing message"
+        );
     }
 
     #[tokio::test]
