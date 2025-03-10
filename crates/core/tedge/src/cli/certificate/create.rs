@@ -165,7 +165,7 @@ fn persist_public_key(mut key_file: File, cert_pem: String) -> Result<(), std::i
     Ok(())
 }
 
-pub fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
+pub fn certificate_is_self_signed(cert_path: &Utf8PathBuf) -> Result<bool, CertError> {
     let pem = PemCertificate::from_pem_file(cert_path).map_err(|err| match err {
         certificate::CertificateError::IoError { error, .. } => {
             CertError::IoError(error).cert_context(cert_path.clone())
@@ -173,13 +173,19 @@ pub fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<String, 
         from => CertError::CertificateError(from),
     })?;
 
-    if pem.issuer()? == pem.subject()? {
-        Ok(pem.subject_common_name()?)
-    } else {
-        Err(CertError::NotASelfSignedCertificate {
-            path: cert_path.clone(),
-        })
-    }
+    let self_signed = pem.issuer()? == pem.subject()?;
+    Ok(self_signed)
+}
+
+pub fn certificate_cn(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
+    let pem = PemCertificate::from_pem_file(cert_path).map_err(|err| match err {
+        certificate::CertificateError::IoError { error, .. } => {
+            CertError::IoError(error).cert_context(cert_path.clone())
+        }
+        from => CertError::CertificateError(from),
+    })?;
+
+    Ok(pem.subject_common_name()?)
 }
 
 #[cfg(test)]
