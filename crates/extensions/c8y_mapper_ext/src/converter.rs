@@ -190,6 +190,8 @@ pub struct CumulocityConverter {
 
     supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
+
+    processed_ids: HashSet<String>,
 }
 
 impl CumulocityConverter {
@@ -279,6 +281,7 @@ impl CumulocityConverter {
             command_id,
             active_commands: HashSet::new(),
             operation_handler,
+            processed_ids: HashSet::new(),
         })
     }
 
@@ -642,6 +645,9 @@ impl CumulocityConverter {
         let mut output = vec![];
         for operation_payload in operation_payloads {
             let operation = C8yOperation::from_json(operation_payload)?;
+            if self.processed_ids.contains(&operation.op_id) {
+                continue;
+            }
             let device_xid = operation.external_source.external_id;
             let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
 
@@ -662,7 +668,10 @@ impl CumulocityConverter {
                     &operation_message,
                 )
                 .await;
-            let result = self.handle_c8y_operation_result(&result, Some(operation.op_id));
+            let result = self.handle_c8y_operation_result(&result, Some(operation.op_id.clone()));
+            if !result.is_empty() {
+                self.processed_ids.insert(operation.op_id);
+            }
             output.extend(result);
         }
 
@@ -1680,6 +1689,7 @@ pub(crate) mod tests {
     use tedge_http_ext::HttpResult;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::MqttMessage;
+    use tedge_mqtt_ext::QoS;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
@@ -2515,6 +2525,40 @@ pub(crate) mod tests {
         // a result between now and elapsed that is not 0 probably means that the operations are
         // blocking and that you probably removed a tokio::spawn handle (;
         assert_eq!(now.elapsed().as_secs(), 0);
+    }
+
+    #[tokio::test]
+    async fn operations_are_deduplicated() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let original = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
+            {"delivery":{"log":[],"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+        let redelivery = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
+            {"delivery":{"log":[{"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},{"time":"2025-03-05T08:49:25.000Z","status":"SEND"},{"time":"2025-03-05T08:49:25.162Z","status":"DELIVERED"}],"time":"2025-03-05T08:49:25.707Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+        assert_eq!(
+            converter
+                .parse_c8y_devicecontrol_topic(&original)
+                .await
+                .unwrap(),
+            vec![MqttMessage {
+                topic: Topic {
+                    name: "te/device/main///cmd/restart/c8y-mapper-16574089".into(),
+                },
+                payload: json!({"status":"init"}).to_string().into(),
+                qos: QoS::AtLeastOnce,
+                retain: true,
+            },]
+        );
+        assert_eq!(
+            converter
+                .parse_c8y_devicecontrol_topic(&redelivery)
+                .await
+                .unwrap(),
+            vec![]
+        );
     }
 
     #[tokio::test]
