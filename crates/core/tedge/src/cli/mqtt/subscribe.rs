@@ -90,20 +90,9 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
         options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
     }
 
-    match cmd.duration {
-        Some(Duration::ZERO) | None => {}
-        Some(duration) if duration.as_secs() < 5 => {
-            options.set_keep_alive(duration);
-        }
-        Some(_) => {
-            options.set_keep_alive(Duration::from_secs(5));
-        }
-    }
-
     let (client, mut connection) = Client::new(options, DEFAULT_QUEUE_CAPACITY);
-    let interrupted = super::disconnect_if_interrupted(client.clone());
-    let started = std::time::Instant::now();
-    let mut n_packets = 0;
+    let interrupted = super::disconnect_if_interrupted(client.clone(), cmd.duration);
+    let mut n_messages = 0;
 
     for event in connection.iter() {
         match event {
@@ -120,20 +109,13 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                         } else {
                             println!("[{}] {}", &message.topic, payload);
                         }
-                        n_packets += 1;
-                        if matches!(cmd.count, Some(count) if count > 0 && n_packets >= count) {
-                            eprintln!("INFO: Break");
+                        n_messages += 1;
+                        if matches!(cmd.count, Some(count) if count > 0 && n_messages >= count) {
+                            eprintln!("INFO: Received {n_messages} message/s");
                             break;
                         }
                     }
                     Err(err) => error!("{err}"),
-                }
-            }
-            Ok(Event::Outgoing(Outgoing::PingReq)) => {
-                if matches!(cmd.duration, Some(duration) if !duration.is_zero() && started.elapsed() > duration)
-                {
-                    eprintln!("INFO: Timeout");
-                    break;
                 }
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
@@ -153,6 +135,18 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                 }
                 error!("{err}");
                 std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+            _ => {}
+        }
+    }
+
+    let _ = client.disconnect();
+    for event in connection.iter() {
+        match event {
+            Err(_)
+            | Ok(Event::Incoming(Incoming::Disconnect))
+            | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+                break;
             }
             _ => {}
         }
