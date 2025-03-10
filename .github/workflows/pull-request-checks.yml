@@ -203,6 +203,26 @@ jobs:
       - name: Cargo audit
         run: cargo audit
 
+  # Check: licenses (only use approved list of licenses), unmaintained repos, yanked versions
+  cargo-deny:
+    name: Run cargo-deny
+    runs-on: ubuntu-22.04
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+
+      - name: Cargo deny
+        run: cargo deny --all-features check --allow duplicate
+
   # Only run check if the project still compiles on MSRV, test are run on stable
   check-msrv:
     name: Run cargo check on MSRV

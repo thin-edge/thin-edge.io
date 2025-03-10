@@ -54,6 +54,7 @@ install-tools:
     rustup toolchain install nightly
     rustup component add rustfmt --toolchain nightly
     cargo +stable install taplo-cli cargo-nextest
+    cargo +stable install cargo-deny
 
 # Check if necessary tools are installed
 [private]
@@ -66,6 +67,11 @@ check-tools:
 
     if ! taplo fmt --help &> /dev/null; then
         echo "taplo is not installed, use just install-tools or install it manually"
+        exit 1
+    fi
+
+    if ! cargo deny --help &> /dev/null; then
+        echo "cargo-deny is not installed, use just install-tools or install it manually"
         exit 1
     fi
 
@@ -105,7 +111,7 @@ check TARGET=DEFAULT_TARGET:
 
     {{CARGO}} check --target {{TARGET}}
     {{CARGO}} clippy --all-targets --all-features --target {{TARGET}}
-
+    just -f {{justfile()}} check-dependencies
     if [ ! -d tests/RobotFramework/.venv ]; then
         just -f {{justfile()}} setup-integration-test
     fi
@@ -113,6 +119,11 @@ check TARGET=DEFAULT_TARGET:
     source .venv/bin/activate
     echo Checking tests...
     invoke lint-tests
+
+# Check dependencies using cargo-deny
+check-dependencies:
+    cargo deny fetch
+    cargo deny --all-features check --allow duplicate
 
 # Release, building all binaries and debian packages
 release *ARGS:
