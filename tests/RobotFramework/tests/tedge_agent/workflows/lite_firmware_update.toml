@@ -1,0 +1,15 @@
+operation = "lite_firmware_update"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "/etc/tedge/operations/write-file.sh ${.payload.logfile} firmware-update ${.payload.update}"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

@@ -193,6 +193,28 @@ Placeholder workflow created for ill-defined operations
     ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-issue-3079-test-1.log
     Should Contain    ${workflow_log}    item=TOML parse error
 
+A new command should not be blocked by a previous command that have not been cleared
+    # Issue https://github.com/thin-edge/thin-edge.io/issues/3456
+    # Trigger a first command
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/lite_firmware_update/1 '{"status":"init", "logfile":"/tmp/firmware-update.log", "update":"first firmware update"}'
+    ${cmd_messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/lite_firmware_update/1
+    ...    message_pattern=.*successful.*
+    # Clear the first command __while__ the agent is down
+    Stop Service    tedge-agent
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/lite_firmware_update/1 ''
+    Start Service    tedge-agent
+    # Trigger a second command of the type
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/lite_firmware_update/2 '{"status":"init", "logfile":"/tmp/firmware-update.log", "update":"second firmware update"}'
+    ${cmd_messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/lite_firmware_update/2
+    ...    message_pattern=.*successful.*
+    # Both command should have been fully executed
+    ${log}    Execute Command    cat /tmp/firmware-update.log
+    Should Contain    ${log}    item=first firmware update
+    Should Contain    ${log}    item=second firmware update
 
 *** Keywords ***
 Custom Test Setup
@@ -226,6 +248,7 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/extract_updates.sh    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_device_profile.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_config_update.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_firmware_update.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_software_update.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_device_profile.example.txt    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-2896.toml    /etc/tedge/operations/
