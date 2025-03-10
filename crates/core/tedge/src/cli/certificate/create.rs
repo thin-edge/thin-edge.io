@@ -190,19 +190,19 @@ async fn persist_public_key(mut key_file: File, cert_pem: String) -> Result<(), 
     Ok(())
 }
 
-pub async fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
+pub fn certificate_is_self_signed(cert_path: &Utf8PathBuf) -> Result<bool, CertError> {
+    let pem = PemCertificate::from_pem_file(cert_path)?;
+    let self_signed = pem.issuer()? == pem.subject()?;
+    Ok(self_signed)
+}
+
+pub async fn certificate_cn(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
     let cert = tokio::fs::read_to_string(cert_path)
         .await
         .map_err(|err| CertError::IoError(err).cert_context(cert_path.clone()))?;
     let pem = PemCertificate::from_pem_string(&cert)?;
 
-    if pem.issuer()? == pem.subject()? {
-        Ok(pem.subject_common_name()?)
-    } else {
-        Err(CertError::NotASelfSignedCertificate {
-            path: cert_path.clone(),
-        })
-    }
+    Ok(pem.subject_common_name()?)
 }
 
 #[cfg(test)]

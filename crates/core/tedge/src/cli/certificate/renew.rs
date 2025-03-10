@@ -1,4 +1,4 @@
-use super::create::cn_of_self_signed_certificate;
+use super::create::certificate_cn;
 use super::error::CertError;
 use crate::command::Command;
 use crate::log::MaybeFancy;
@@ -35,7 +35,7 @@ impl RenewCertCmd {
     async fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
         let cert_path = &self.cert_path;
         let key_path = &self.key_path;
-        let id = cn_of_self_signed_certificate(cert_path).await?;
+        let id = certificate_cn(cert_path).await?;
 
         // Remove only certificate
         tokio::fs::remove_file(&self.cert_path)

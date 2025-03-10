@@ -94,9 +94,6 @@ pub enum CertError {
 
     #[error("Root certificate path {0} does not exist")]
     RootCertificatePathDoesNotExist(String),
-
-    #[error("This certificate {path} is not a self-signed certificate")]
-    NotASelfSignedCertificate { path: Utf8PathBuf },
 }
 
 impl CertError {
