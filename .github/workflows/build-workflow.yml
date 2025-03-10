@@ -143,7 +143,7 @@ jobs:
             path: target/${{ matrix.target }}/packages/*.*
 
   # Note: Validate that all build jobs completed successfully
-  # If a Runner failues on the setup, it can leave a job marked as "skipped"
+  # If a Runner fails on the setup, it can leave a job marked as "skipped"
   # and this does not cause the entire job to fail, instead it silently continues
   # leading to downstream problems (e.g. only publishing half of the artifacts!)
   #
