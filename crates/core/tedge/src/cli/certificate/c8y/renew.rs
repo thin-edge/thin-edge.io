@@ -1,3 +1,4 @@
+use crate::certificate_cn;
 use crate::cli::certificate::c8y::create_device_csr;
 use crate::cli::certificate::c8y::read_csr_from_file;
 use crate::cli::certificate::c8y::store_device_cert;
@@ -17,9 +18,6 @@ use url::Url;
 
 /// Command to renew a device certificate from Cumulocity
 pub struct RenewCertCmd {
-    /// The device identifier to be used as the common name for the certificate
-    pub device_id: String,
-
     /// Cumulocity endpoint from where the device got his current certificate
     pub c8y: C8yEndPoint,
 
@@ -61,12 +59,8 @@ impl RenewCertCmd {
 
     async fn renew_device_certificate(&self) -> Result<(), Error> {
         if self.generate_csr {
-            create_device_csr(
-                self.device_id.clone(),
-                self.key_path.clone(),
-                self.csr_path.clone(),
-            )
-            .await?;
+            let common_name = certificate_cn(&self.cert_path).await?;
+            create_device_csr(common_name, self.key_path.clone(), self.csr_path.clone()).await?;
         }
         let csr = read_csr_from_file(&self.csr_path).await?;
 

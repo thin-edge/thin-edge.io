@@ -3,6 +3,7 @@ use super::create_csr::CreateCsrCmd;
 use super::remove::RemoveCertCmd;
 use super::renew::RenewCertCmd;
 use super::show::ShowCertCmd;
+use crate::certificate_is_self_signed;
 use crate::cli::certificate::c8y;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
@@ -47,10 +48,6 @@ pub enum TEdgeCertCli {
 
     /// Renew the device certificate
     Renew {
-        /// CA from which the certificate will be renew
-        #[arg(long, default_value = "self-signed")]
-        ca: CertRenewalCA,
-
         /// Path to a Certificate Signing Request (CSR) ready to be used
         ///
         /// Providing the CSR is notably required when the request has to be signed
@@ -203,52 +200,60 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Renew {
-                ca: CertRenewalCA::SelfSigned,
-                cloud,
-                ..
-            } => {
+            TEdgeCertCli::Renew { csr_path, cloud } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
-                let cmd = RenewCertCmd {
-                    cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
-                    key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
-                };
-                cmd.into_boxed()
-            }
+                let cert_path = config.device_cert_path(cloud.as_ref())?.to_owned();
+                let key_path = config.device_key_path(cloud.as_ref())?.to_owned();
 
-            TEdgeCertCli::Renew {
-                ca: CertRenewalCA::C8y,
-                csr_path,
-                cloud,
-            } => {
-                let c8y_profile = match cloud.map(<_>::try_into).transpose()? {
-                    None => None,
-                    Some(Cloud::C8y(profile)) => profile,
-                    Some(cloud) => {
-                        return Err(
-                            anyhow!("Certificate renewal is not supported for {cloud}").into()
-                        )
+                // The CA to renew a certificate is determined from the certificate
+                //
+                // The current implementation is simplified knowing that `tedge cert renew`
+                // only supports self-signed certificates and certificates signed by c8y
+                // and more precisely by the CA of the c8y tenant the device is connected to.
+                //
+                // - if the certificate is self signed => create a new self-signed certificate
+                // - if not => assume that the device tenant and its CA tenant are the same.
+                let is_self_signed = match certificate_is_self_signed(&cert_path) {
+                    Ok(is_self_signed) => is_self_signed,
+                    Err(err) => {
+                        return Err(anyhow!("Cannot renew certificate {cert_path}: {err}").into())
                     }
                 };
-                let c8y =
-                    C8yEndPoint::local_proxy(&config, c8y_profile.as_deref().map(|p| p.as_ref()))?;
-                let c8y_config = config.c8y.try_get(c8y_profile.as_deref())?;
-                let (csr_path, generate_csr) = match csr_path {
-                    None => (c8y_config.device.csr_path.clone(), true),
-                    Some(csr_path) => (csr_path, false),
-                };
 
-                let cmd = c8y::RenewCertCmd {
-                    device_id: c8y_config.device.id()?.to_string(),
-                    c8y,
-                    root_certs: config.cloud_root_certs(),
-                    identity: config.http.client.auth.identity()?,
-                    cert_path: c8y_config.device.cert_path.clone(),
-                    key_path: c8y_config.device.key_path.clone(),
-                    csr_path,
-                    generate_csr,
-                };
-                cmd.into_boxed()
+                if is_self_signed {
+                    let cmd = RenewCertCmd {
+                        cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
+                        key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
+                    };
+                    cmd.into_boxed()
+                } else {
+                    let (csr_path, generate_csr) = match csr_path {
+                        None => (config.device_csr_path(cloud.as_ref())?.to_owned(), true),
+                        Some(csr_path) => (csr_path, false),
+                    };
+                    let c8y = match cloud {
+                        None => C8yEndPoint::local_proxy(&config, None)?,
+                        Some(Cloud::C8y(profile)) => C8yEndPoint::local_proxy(
+                            &config,
+                            profile.as_deref().map(|p| p.as_ref()),
+                        )?,
+                        Some(cloud) => {
+                            return Err(
+                                anyhow!("Certificate renewal is not supported for {cloud}").into()
+                            )
+                        }
+                    };
+                    let cmd = c8y::RenewCertCmd {
+                        c8y,
+                        root_certs: config.cloud_root_certs(),
+                        identity: config.http.client.auth.identity()?,
+                        cert_path,
+                        key_path,
+                        csr_path,
+                        generate_csr,
+                    };
+                    cmd.into_boxed()
+                }
             }
         };
         Ok(cmd)
@@ -366,15 +371,6 @@ pub enum DownloadCertCli {
         /// Maximum time waiting for the device to be registered
         max_timeout: Duration,
     },
-}
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-pub enum CertRenewalCA {
-    /// Self-signed a new device certificate
-    SelfSigned,
-
-    /// Renew the device certificate from Cumulocity
-    C8y,
 }
 
 #[cfg(test)]
