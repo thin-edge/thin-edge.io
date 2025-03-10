@@ -4,10 +4,12 @@ use crate::log::MaybeFancy;
 
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
+use certificate::ValidityStatus;
+use yansi::Paint;
 
 /// Show the device certificate, if any
 pub struct ShowCertCmd {
-    /// The path where the device certificate will be stored
+    /// The path where the device certificate is stored
     pub cert_path: Utf8PathBuf,
 }
 
@@ -31,12 +33,44 @@ impl ShowCertCmd {
             from => CertError::CertificateError(from),
         })?;
 
-        println!("Device certificate: {}", self.cert_path);
-        println!("Subject: {}", pem.subject()?);
-        println!("Issuer: {}", pem.issuer()?);
-        println!("Valid from: {}", pem.not_before()?);
-        println!("Valid up to: {}", pem.not_after()?);
-        println!("Thumbprint: {}", pem.thumbprint()?);
+        println!("Certificate:   {}", self.cert_path);
+        println!("Subject:       {}", pem.subject()?);
+        println!("Issuer:        {}", pem.issuer()?);
+        println!("Status:        {}", display_status(pem.still_valid()?));
+        println!("Valid from:    {}", pem.not_before()?);
+        println!("Valid until:   {}", pem.not_after()?);
+        println!("Serial number: {} (0x{})", pem.serial()?, pem.serial_hex()?);
+        println!("Thumbprint:    {}", pem.thumbprint()?);
         Ok(())
+    }
+}
+
+fn display_status(status: ValidityStatus) -> String {
+    let text = match status {
+        ValidityStatus::Valid { expired_in } => {
+            format!(
+                "VALID (expires in: {})",
+                humantime::format_duration(expired_in)
+            )
+        }
+        ValidityStatus::Expired { since } => {
+            format!("EXPIRED (since: {})", humantime::format_duration(since))
+        }
+        ValidityStatus::NotValidYet { valid_in } => {
+            format!(
+                "NOT VALID YET (will be in: {})",
+                humantime::format_duration(valid_in)
+            )
+        }
+    };
+
+    let threshold = humantime::parse_duration("30d").unwrap();
+    match status {
+        ValidityStatus::Valid { expired_in } if expired_in > threshold => {
+            format!("{}", text.green())
+        }
+        ValidityStatus::Valid { .. } => format!("{}", text.yellow()),
+        ValidityStatus::Expired { .. } => format!("{}", text.red()),
+        ValidityStatus::NotValidYet { .. } => format!("{}", text.red()),
     }
 }

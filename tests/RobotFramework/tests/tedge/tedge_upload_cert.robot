@@ -15,11 +15,23 @@ Create the certificate
     [Setup]    Setup With Self-Signed Certificate
     # You can then check the content of that certificate.
     ${output}=    Execute Command    sudo tedge cert show    # You can then check the content of that certificate.
-    Should Contain    ${output}    Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
-    Should Contain    ${output}    Subject: CN=${DEVICE_SN}, O=Thin Edge, OU=Test Device
-    Should Contain    ${output}    Issuer: CN=${DEVICE_SN}, O=Thin Edge, OU=Test Device
+    Should Contain
+    ...    ${output}
+    ...    Certificate: /etc/tedge/device-certs/tedge-certificate.pem
+    ...    collapse_spaces=true
+    Should Contain
+    ...    ${output}
+    ...    Subject: CN=${DEVICE_SN}, O=Thin Edge, OU=Test Device
+    ...    collapse_spaces=true
+    Should Contain
+    ...    ${output}
+    ...    Issuer: CN=${DEVICE_SN}, O=Thin Edge, OU=Test Device
+    ...    collapse_spaces=true
+    Should Contain    ${output}    Status:
+    Should Contain    ${output}    VALID
     Should Contain    ${output}    Valid from:
-    Should Contain    ${output}    Valid up to:
+    Should Contain    ${output}    Valid until:
+    Should Contain    ${output}    Serial number:
     Should Contain    ${output}    Thumbprint:
 
 Renew the certificate

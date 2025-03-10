@@ -14,7 +14,7 @@ use std::path::Path;
 use tedge_utils::paths::set_permission;
 use tedge_utils::paths::validate_parent_dir_exists;
 
-/// Create self-signed device certificate
+/// Create a self-signed device certificate
 pub struct CreateCertCmd {
     /// The device identifier
     pub id: String,
@@ -118,12 +118,24 @@ fn create_new_file(
     Ok(file)
 }
 
+// Allow permissions_set_readonly_false as the file will be make readonly once its content updated
+#[allow(clippy::permissions_set_readonly_false)]
 fn override_file(path: impl AsRef<Path>) -> Result<File, std::io::Error> {
+    let path = path.as_ref();
+
+    // If the file already exists, make sure it can be overwritten.
+    // However defer any error to the open step, to give better context to the user
+    if let Ok(metadata) = std::fs::metadata(path) {
+        let mut perm = metadata.permissions();
+        perm.set_readonly(false);
+        let _ = std::fs::set_permissions(path, perm);
+    };
+
     OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(path.as_ref())
+        .open(path)
 }
 
 pub fn reuse_private_key(key_path: &Utf8PathBuf) -> Result<KeyKind, std::io::Error> {
@@ -153,7 +165,7 @@ fn persist_public_key(mut key_file: File, cert_pem: String) -> Result<(), std::i
     Ok(())
 }
 
-pub fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
+pub fn certificate_is_self_signed(cert_path: &Utf8PathBuf) -> Result<bool, CertError> {
     let pem = PemCertificate::from_pem_file(cert_path).map_err(|err| match err {
         certificate::CertificateError::IoError { error, .. } => {
             CertError::IoError(error).cert_context(cert_path.clone())
@@ -161,13 +173,19 @@ pub fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<String, 
         from => CertError::CertificateError(from),
     })?;
 
-    if pem.issuer()? == pem.subject()? {
-        Ok(pem.subject_common_name()?)
-    } else {
-        Err(CertError::NotASelfSignedCertificate {
-            path: cert_path.clone(),
-        })
-    }
+    let self_signed = pem.issuer()? == pem.subject()?;
+    Ok(self_signed)
+}
+
+pub fn certificate_cn(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
+    let pem = PemCertificate::from_pem_file(cert_path).map_err(|err| match err {
+        certificate::CertificateError::IoError { error, .. } => {
+            CertError::IoError(error).cert_context(cert_path.clone())
+        }
+        from => CertError::CertificateError(from),
+    })?;
+
+    Ok(pem.subject_common_name()?)
 }
 
 #[cfg(test)]
@@ -196,8 +214,8 @@ mod tests {
             cmd.create_test_certificate(&NewCertificateConfig::default()),
             Ok(())
         );
-        assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
-        assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
+        assert_eq!(parse_pem_file(&cert_path).unwrap().tag(), "CERTIFICATE");
+        assert_eq!(parse_pem_file(&key_path).unwrap().tag(), "PRIVATE KEY");
     }
 
     #[test]

@@ -89,11 +89,11 @@ pub enum CertError {
     #[error(transparent)]
     FileError(#[from] FileError),
 
+    #[error(transparent)]
+    IllFormedPk7Cert(#[from] crate::cli::certificate::c8y::IllFormedPk7Cert),
+
     #[error("Root certificate path {0} does not exist")]
     RootCertificatePathDoesNotExist(String),
-
-    #[error("This certificate {path} is not a self-signed certificate")]
-    NotASelfSignedCertificate { path: Utf8PathBuf },
 }
 
 impl CertError {
