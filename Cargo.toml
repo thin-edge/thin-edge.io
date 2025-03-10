@@ -45,6 +45,7 @@ plugin_sm = { path = "crates/core/plugin_sm" }
 tedge-agent = { path = "crates/core/tedge_agent" }
 tedge-apt-plugin = { path = "plugins/tedge_apt_plugin" }
 tedge-mapper = { path = "crates/core/tedge_mapper" }
+tedge-p11-server = { path = "crates/extensions/tedge-p11-server" }
 tedge-watchdog = { path = "crates/core/tedge_watchdog" }
 tedge-write = { path = "crates/core/tedge_write" }
 tedge_actors = { path = "crates/core/tedge_actors" }
@@ -162,7 +163,11 @@ rpassword = "5.0"
 rstest = "0.16.0"
 rumqttc = { git = "https://github.com/jarhodes314/rumqtt", rev = "8c489faf6af910956c97b55587ff3ecb2ac4e96f" }
 rumqttd = "0.19"
-rustls = { version = "0.23", default-features = false, features = ["ring"] }
+rustls = { version = "0.23", default-features = false, features = [
+    "std",
+    "tls12",
+    "ring",
+] }
 rustls-native-certs = "0.8.1"
 rustls-pemfile = "2.2"
 serde = "1.0"
