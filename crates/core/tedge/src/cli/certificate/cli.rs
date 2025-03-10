@@ -11,6 +11,7 @@ use crate::command::BuildContext;
 use crate::command::Command;
 use crate::ConfigError;
 use anyhow::anyhow;
+use c8y_api::http_proxy::C8yEndPoint;
 use camino::Utf8PathBuf;
 use clap::ValueHint;
 use std::time::Duration;
@@ -217,24 +218,27 @@ impl BuildCommand for TEdgeCertCli {
                 csr_path,
                 cloud,
             } => {
-                let c8y_config = match cloud.map(<_>::try_into).transpose()? {
-                    None => config.c8y.try_get::<str>(None)?,
-                    Some(Cloud::C8y(profile)) => config.c8y.try_get(profile.as_deref())?,
+                let c8y_profile = match cloud.map(<_>::try_into).transpose()? {
+                    None => None,
+                    Some(Cloud::C8y(profile)) => profile,
                     Some(cloud) => {
                         return Err(
                             anyhow!("Certificate renewal is not supported for {cloud}").into()
                         )
                     }
                 };
-
+                let c8y =
+                    C8yEndPoint::local_proxy(&config, c8y_profile.as_deref().map(|p| p.as_ref()))?;
+                let c8y_config = config.c8y.try_get(c8y_profile.as_deref())?;
                 let (csr_path, generate_csr) = match csr_path {
                     None => (c8y_config.device.csr_path.clone(), true),
                     Some(csr_path) => (csr_path, false),
                 };
                 let cmd = c8y::RenewCertCmd {
                     device_id: c8y_config.device.id()?.to_string(),
-                    c8y_url: c8y_config.http.or_err()?.to_owned(),
+                    c8y,
                     root_certs: config.cloud_root_certs(),
+                    identity: config.http.client.auth.identity()?,
                     cert_path: c8y_config.device.cert_path.clone(),
                     key_path: c8y_config.device.key_path.clone(),
                     csr_path,

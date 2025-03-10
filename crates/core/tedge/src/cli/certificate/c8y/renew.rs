@@ -6,13 +6,13 @@ use crate::error;
 use crate::get_webpki_error_from_reqwest;
 use crate::log::MaybeFancy;
 use anyhow::Error;
+use c8y_api::http_proxy::C8yEndPoint;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
 use hyper::header::CONTENT_TYPE;
 use hyper::StatusCode;
 use reqwest::blocking::Response;
-use tedge_config::HostPort;
-use tedge_config::HTTPS_PORT;
+use reqwest::Identity;
 use url::Url;
 
 /// Command to renew a device certificate from Cumulocity
@@ -20,11 +20,14 @@ pub struct RenewCertCmd {
     /// The device identifier to be used as the common name for the certificate
     pub device_id: String,
 
-    /// Cumulocity instance from where the device got his current certificate
-    pub c8y_url: HostPort<HTTPS_PORT>,
+    /// Cumulocity endpoint from where the device got his current certificate
+    pub c8y: C8yEndPoint,
 
     /// Root certificates used to authenticate the Cumulocity instance
     pub root_certs: CloudRootCerts,
+
+    /// TLS Client configuration
+    pub identity: Option<Identity>,
 
     /// The path where the device certificate will be stored
     pub cert_path: Utf8PathBuf,
@@ -41,7 +44,7 @@ pub struct RenewCertCmd {
 
 impl Command for RenewCertCmd {
     fn description(&self) -> String {
-        format!("Renew the device certificate from {}", self.c8y_url)
+        format!("Renew the device certificate from {}", self.c8y_url())
     }
 
     fn execute(&self) -> Result<(), MaybeFancy<Error>> {
@@ -50,6 +53,11 @@ impl Command for RenewCertCmd {
 }
 
 impl RenewCertCmd {
+    /// Cumulocity instance from where the device got his current certificate
+    fn c8y_url(&self) -> String {
+        self.c8y.get_base_url()
+    }
+
     fn renew_device_certificate(&self) -> Result<(), Error> {
         if self.generate_csr {
             create_device_csr(
@@ -60,9 +68,19 @@ impl RenewCertCmd {
         }
         let csr = read_csr_from_file(&self.csr_path)?;
 
-        let http = self.root_certs.blocking_client();
-        let url = "http://127.0.0.1:8002/c8y/.well-known/est/simplereenroll";
-        let url = Url::parse(url)?;
+        let http_builder = self.root_certs.blocking_client_builder();
+        let http_builder = if let Some(identity) = &self.identity {
+            http_builder.identity(identity.clone())
+        } else {
+            http_builder
+        };
+        let http = http_builder.build()?;
+
+        let url = format!(
+            "{}/c8y/.well-known/est/simplereenroll",
+            self.c8y.get_proxy_url()
+        );
+        let url = Url::parse(&url)?;
         let result = self.post_device_csr(&http, &url, &csr);
         match result {
             Ok(response) if response.status() == StatusCode::OK => {
@@ -72,13 +90,13 @@ impl RenewCertCmd {
                 }
                 error!(
                     "Fail to extract a certificate from the response returned by {}",
-                    self.c8y_url
+                    self.c8y_url()
                 );
             }
             Ok(response) => {
                 error!(
                     "The device certificate cannot be renewed from {}:\n\t{} {}",
-                    self.c8y_url,
+                    self.c8y_url(),
                     response.status(),
                     response.text().unwrap_or("".to_string())
                 );
@@ -86,7 +104,7 @@ impl RenewCertCmd {
             Err(err) => {
                 error!(
                     "Fail to connect to {}: {:?}",
-                    self.c8y_url,
+                    self.c8y_url(),
                     get_webpki_error_from_reqwest(err)
                 )
             }
