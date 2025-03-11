@@ -14,6 +14,7 @@ use std::future::Future;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::Duration;
+use tedge::block_on;
 use tedge::command::BuildCommand;
 use tedge::command::BuildContext;
 use tedge::log::MaybeFancy;
@@ -94,10 +95,6 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
-}
-
-fn block_on<T>(future: impl Future<Output = T>) -> T {
-    tokio::runtime::Runtime::new().unwrap().block_on(future)
 }
 
 fn block_on_with<T>(log_memory_interval: Duration, future: impl Future<Output = T>) -> T {
