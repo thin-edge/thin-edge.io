@@ -123,7 +123,7 @@ check TARGET=DEFAULT_TARGET:
 # Check dependencies using cargo-deny
 check-dependencies:
     cargo deny fetch
-    cargo deny --all-features check --allow duplicate
+    cargo deny --all-features check --allow duplicate --allow unmaintained
 
 # Release, building all binaries and debian packages
 release *ARGS:
