@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::fmt;
+use std::io::IsTerminal;
 use std::io::Write;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -108,13 +109,15 @@ where
         let mut stdout = std::io::stdout();
         let res = loop {
             let start_loop = Instant::now();
-            write!(
-                stdout,
-                "{title}... {}\r",
-                SPINNER[count_ticks % SPINNER.len()]
-            )
-            .unwrap();
-            stdout.flush().unwrap();
+            if stdout.is_terminal() {
+                write!(
+                    stdout,
+                    "{title}... {}\r",
+                    SPINNER[count_ticks % SPINNER.len()]
+                )
+                .unwrap();
+                stdout.flush().unwrap();
+            }
             std::thread::sleep(ms.saturating_sub(start_loop.elapsed()));
             count_ticks += 1;
 
