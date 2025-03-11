@@ -271,9 +271,10 @@ impl Connection {
                                 .await?;
                         }
 
-                        if config.session_name.is_none() {
+                        if config.session_name.is_none() || !ack.session_present {
                             // Workaround for  https://github.com/bytebeamio/rumqtt/issues/250
-                            // If session_name is not provided, then re-subscribe
+                            // If session_name is not provided or if the broker session persistence
+                            // is not enabled or working, then re-subscribe
 
                             let subscriptions = config.subscriptions.filters();
                             // Need check here otherwise it will hang waiting for a SubAck, and none will come when there is no subscription.
