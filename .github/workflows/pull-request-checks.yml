@@ -220,8 +220,9 @@ jobs:
       - name: cargo install cargo-deny
         uses: taiki-e/install-action@cargo-deny
 
+      # Note: ignoring unmaintained crates due to unnecessary churn
       - name: Cargo deny
-        run: cargo deny --all-features check --allow duplicate
+        run: cargo deny --all-features check --allow duplicate --allow unmaintained
 
   # Only run check if the project still compiles on MSRV, test are run on stable
   check-msrv:
