@@ -72,9 +72,9 @@ fi
 if ! [ -x "$(command -v cloudsmith)" ]; then
     echo 'Install cloudsmith cli' >&2
     if command -v pip3 &>/dev/null; then
-        pip3 install --upgrade cloudsmith-cli
+        pip3 install --no-cache-dir --upgrade cloudsmith-cli
     elif command -v pip &>/dev/null; then
-        pip install --upgrade cloudsmith-cli
+        pip install --no-cache-dir --upgrade cloudsmith-cli
     else
         echo "Could not install cloudsmith cli. Reason: pip3/pip is not installed"
         exit 2
