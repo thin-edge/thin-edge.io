@@ -14,6 +14,7 @@ default-run = "tedge"
 [dependencies]
 anstyle = { workspace = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 base64 = { workspace = true }
 c8y-firmware-plugin = { workspace = true }
 c8y-remote-access-plugin = { workspace = true }

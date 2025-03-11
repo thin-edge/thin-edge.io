@@ -166,3 +166,22 @@ impl BuildContext {
         tedge_config::TEdgeConfig::try_new(self.config_location.clone())
     }
 }
+
+// Temporary wrapper aimed to smooth the refactoring of tedge cli
+// from blocking to async. When all the commands will be updated to async
+// this trait will be renamed Command deprecating the former blocking trait.
+#[async_trait::async_trait]
+pub trait CommandAsync {
+    fn description(&self) -> String;
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>>;
+}
+
+impl<T: CommandAsync> Command for T {
+    fn description(&self) -> String {
+        CommandAsync::description(self)
+    }
+
+    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+        crate::block_on(CommandAsync::execute(self))
+    }
+}
