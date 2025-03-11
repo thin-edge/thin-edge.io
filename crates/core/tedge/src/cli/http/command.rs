@@ -1,15 +1,18 @@
 use crate::cli::http::cli::Content;
-use crate::command::Command;
+use crate::command::CommandAsync;
 use crate::log::MaybeFancy;
 use anyhow::anyhow;
 use anyhow::Error;
 use hyper::http::HeaderValue;
-use reqwest::blocking;
+use mqtt_channel::StreamExt;
 use reqwest::header::HeaderMap;
+use reqwest::Client;
+use reqwest::RequestBuilder;
+use tokio::io::AsyncWriteExt;
 
 pub struct HttpCommand {
     /// HTTP client
-    pub client: blocking::Client,
+    pub client: Client,
 
     /// Target url
     pub url: String,
@@ -40,7 +43,8 @@ pub enum HttpAction {
     Delete,
 }
 
-impl Command for HttpCommand {
+#[async_trait::async_trait]
+impl CommandAsync for HttpCommand {
     fn description(&self) -> String {
         let verb = match self.action {
             HttpAction::Post { .. } => "POST",
@@ -52,15 +56,15 @@ impl Command for HttpCommand {
         format!("{verb} {}", self.url)
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<Error>> {
-        let request = self.request()?;
-        HttpCommand::send(request)?;
+    async fn execute(&self) -> Result<(), MaybeFancy<Error>> {
+        let request = self.request().await?;
+        HttpCommand::send(request).await?;
         Ok(())
     }
 }
 
 impl HttpCommand {
-    fn request(&self) -> Result<blocking::RequestBuilder, Error> {
+    async fn request(&self) -> Result<RequestBuilder, Error> {
         let client = &self.client;
         let url = &self.url;
         let headers = self.action.headers();
@@ -68,15 +72,15 @@ impl HttpCommand {
             HttpAction::Post { content, .. } => client
                 .post(url)
                 .headers(headers)
-                .body(blocking::Body::try_from(content.clone())?),
+                .body(content.clone().into_body().await?),
             HttpAction::Put { content, .. } => client
                 .put(url)
                 .headers(headers)
-                .body(blocking::Body::try_from(content.clone())?),
+                .body(content.clone().into_body().await?),
             HttpAction::Patch { content, .. } => client
                 .patch(url)
                 .headers(headers)
-                .body(blocking::Body::try_from(content.clone())?),
+                .body(content.clone().into_body().await?),
             HttpAction::Get { .. } => client.get(url).headers(headers),
             HttpAction::Delete => client.delete(url).headers(headers),
         };
@@ -84,11 +88,15 @@ impl HttpCommand {
         Ok(request)
     }
 
-    fn send(request: blocking::RequestBuilder) -> Result<(), Error> {
-        let mut http_result = request.send()?;
+    async fn send(request: RequestBuilder) -> Result<(), Error> {
+        let http_result = request.send().await?;
         let status = http_result.status();
         if status.is_success() {
-            http_result.copy_to(&mut std::io::stdout())?;
+            let mut body = http_result.bytes_stream();
+            let mut stdout = tokio::io::stdout();
+            while let Some(bytes) = body.next().await {
+                stdout.write_all(&bytes?).await?;
+            }
             Ok(())
         } else {
             let kind = if status.is_client_error() {
@@ -102,7 +110,7 @@ impl HttpCommand {
                 "{kind}: {} {}\n{}",
                 status.as_u16(),
                 status.canonical_reason().unwrap_or(""),
-                http_result.text().unwrap_or("".to_string())
+                http_result.text().await.unwrap_or("".to_string())
             );
             Err(anyhow!(error))?
         }
