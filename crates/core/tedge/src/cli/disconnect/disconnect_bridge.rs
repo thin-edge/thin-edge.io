@@ -4,9 +4,9 @@ use crate::cli::log::Fancy;
 use crate::cli::log::Spinner;
 use crate::command::*;
 use crate::log::MaybeFancy;
+use crate::system_services::*;
 use anyhow::Context;
 use std::sync::Arc;
-use tedge_config::system_services::*;
 use tedge_config::TEdgeConfigLocation;
 use which::which;
 

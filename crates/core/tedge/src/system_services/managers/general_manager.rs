@@ -2,15 +2,14 @@ use crate::system_services::CommandBuilder;
 use crate::system_services::SystemService;
 use crate::system_services::SystemServiceError;
 use crate::system_services::SystemServiceManager;
-use crate::SystemTomlError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-
-use crate::system_toml::InitConfig;
-use crate::system_toml::SystemConfig;
-use crate::system_toml::SYSTEM_CONFIG_FILE;
 use std::fmt;
 use std::process::ExitStatus;
+use tedge_config::InitConfig;
+use tedge_config::SystemConfig;
+use tedge_config::SystemTomlError;
+use tedge_config::SYSTEM_CONFIG_FILE;
 
 #[derive(Debug)]
 pub struct GeneralServiceManager {

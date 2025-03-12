@@ -1,6 +1,5 @@
 use std::fmt;
-
-use tedge_config_macros::ProfileName;
+use tedge_config::ProfileName;
 
 /// An enumeration of all supported system services.
 #[derive(Debug, Copy, Clone, strum_macros::IntoStaticStr)]

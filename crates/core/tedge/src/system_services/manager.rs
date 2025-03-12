@@ -1,9 +1,9 @@
 use camino::Utf8Path;
 
 use super::*;
-use crate::SystemTomlError;
 use std::fmt::Debug;
 use std::sync::Arc;
+use tedge_config::SystemTomlError;
 
 /// Abstraction over the system-provided facility that manages starting, stopping as well as other
 /// service-related management functions of system services.
