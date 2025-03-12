@@ -58,15 +58,21 @@ async fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
     }
 
     let mut mqtt = mqtt_channel::Connection::new(&config).await?;
+    let mut signals = super::TermSignals::new(None);
+
     let message = MqttMessage::new(&cmd.topic, cmd.message.clone())
         .with_qos(cmd.qos)
         .with_retain_flag(cmd.retain);
 
-    mqtt.published.publish(message).await?;
+    match signals
+        .might_interrupt(mqtt.published.publish(message))
+        .await
+    {
+        Ok(Ok(())) => (),
+        Ok(err) => err?,
+        Err(signal) => eprintln!("INFO: {signal:?}"),
+    }
     mqtt.close().await;
-
-    // TODO handle ^C
-    // super::disconnect_if_interrupted(client.clone(), None);
 
     // TODO keep legacy error messages?
     // - error!("the message has not been published");

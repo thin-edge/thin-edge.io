@@ -66,12 +66,18 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
     }
 
     let mut mqtt = mqtt_channel::Connection::new(&config).await?;
-
-    // TODO handle ^C and timeout
-    // let interrupted = super::disconnect_if_interrupted(client.clone(), cmd.duration);
-
+    let mut signals = super::TermSignals::new(cmd.duration);
     let mut n_messages = 0;
-    while let Some(message) = mqtt.received.next().await {
+    loop {
+        let message = match signals.might_interrupt(mqtt.received.next()).await {
+            Ok(Some(message)) => message,
+            Ok(None) => break,
+            Err(signal) => {
+                eprintln!("INFO: {signal:?}");
+                break;
+            }
+        };
+
         match message.payload_str() {
             Ok(payload) => {
                 if cmd.hide_topic {
