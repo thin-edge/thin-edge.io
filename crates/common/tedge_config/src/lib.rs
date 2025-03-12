@@ -4,7 +4,9 @@ pub mod system_services;
 pub mod tedge_config_cli;
 pub use sudo::SudoCommandBuilder;
 pub mod cli;
+mod system_toml;
 
+pub use self::system_toml::*;
 pub use self::tedge_config_cli::config_setting::*;
 pub use self::tedge_config_cli::error::*;
 pub use self::tedge_config_cli::models::*;

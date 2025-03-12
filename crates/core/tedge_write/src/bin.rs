@@ -5,7 +5,7 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use tedge_config::cli::CommonArgs;
-use tedge_config::system_services::log_init;
+use tedge_config::log_init;
 use tedge_utils::atomic::MaybePermissions;
 
 /// tee-like helper for writing to files which `tedge` user does not have write permissions to.

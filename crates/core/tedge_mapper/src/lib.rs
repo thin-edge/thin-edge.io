@@ -9,7 +9,7 @@ use anyhow::Context;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use tedge_config::cli::CommonArgs;
-use tedge_config::system_services::log_init;
+use tedge_config::log_init;
 use tedge_config::ProfileName;
 use tracing::log::warn;
 

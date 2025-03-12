@@ -2,12 +2,13 @@ use crate::system_services::CommandBuilder;
 use crate::system_services::SystemService;
 use crate::system_services::SystemServiceError;
 use crate::system_services::SystemServiceManager;
+use crate::SystemTomlError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 
-use super::config::InitConfig;
-use super::config::SystemConfig;
-use super::config::SERVICE_CONFIG_FILE;
+use crate::system_toml::InitConfig;
+use crate::system_toml::SystemConfig;
+use crate::system_toml::SYSTEM_CONFIG_FILE;
 use std::fmt;
 use std::process::ExitStatus;
 
@@ -18,10 +19,10 @@ pub struct GeneralServiceManager {
 }
 
 impl GeneralServiceManager {
-    pub fn try_new(config_root: &Utf8Path) -> Result<Self, SystemServiceError> {
+    pub fn try_new(config_root: &Utf8Path) -> Result<Self, SystemTomlError> {
         let init_config = SystemConfig::try_new(config_root)?.init;
 
-        let config_path = config_root.join(SERVICE_CONFIG_FILE);
+        let config_path = config_root.join(SYSTEM_CONFIG_FILE);
 
         Ok(Self {
             init_config,

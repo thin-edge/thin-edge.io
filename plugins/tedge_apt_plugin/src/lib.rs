@@ -11,7 +11,7 @@ use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
 use tedge_config::cli::CommonArgs;
-use tedge_config::system_services::log_init;
+use tedge_config::log_init;
 use tedge_config::AptConfig;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;

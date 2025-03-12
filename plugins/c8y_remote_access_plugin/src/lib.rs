@@ -8,7 +8,7 @@ use miette::Context;
 use miette::IntoDiagnostic;
 use std::io;
 use std::process::Stdio;
-use tedge_config::system_services::log_init;
+use tedge_config::log_init;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::change_user_and_group;
 use tedge_utils::file::create_directory_with_user_group;

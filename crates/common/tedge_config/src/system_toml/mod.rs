@@ -1,60 +1,51 @@
-use crate::system_services::SystemServiceError;
-use camino::Utf8Path;
-use serde::Deserialize;
 use std::collections::HashMap;
-use std::fs;
 use std::time::Duration;
 
-pub const SERVICE_CONFIG_FILE: &str = "system.toml";
+use serde::Deserialize;
+
+mod log_level;
+mod services;
+
+pub use self::log_level::*;
+pub use self::services::*;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
+use std::fs;
+
+pub const SYSTEM_CONFIG_FILE: &str = "system.toml";
 const REBOOT_COMMAND: &[&str] = &["init", "6"];
+
+#[derive(thiserror::Error, Debug)]
+pub enum SystemTomlError {
+    #[error("Toml syntax error in the system config file '{path}': {reason}")]
+    InvalidSyntax { path: Utf8PathBuf, reason: String },
+
+    #[error("Invalid log level: {name:?}, supported levels are info, warn, error and debug")]
+    InvalidLogLevel { name: String },
+}
 
 #[derive(Deserialize, Debug, Default, Eq, PartialEq)]
 pub struct SystemConfig {
     #[serde(default)]
-    pub init: InitConfig,
+    pub init: services::InitConfig,
     #[serde(default)]
     pub log: HashMap<String, String>,
     #[serde(default)]
     pub system: SystemSpecificCommands,
 }
 
-#[derive(Deserialize, Debug, Eq, PartialEq)]
-#[serde(from = "InitConfigToml")]
-pub struct InitConfig {
-    pub name: String,
-    pub is_available: Vec<String>,
-    pub restart: Vec<String>,
-    pub stop: Vec<String>,
-    pub start: Vec<String>,
-    pub enable: Vec<String>,
-    pub disable: Vec<String>,
-    pub is_active: Vec<String>,
-}
+impl SystemConfig {
+    pub fn try_new(config_root: &Utf8Path) -> Result<Self, SystemTomlError> {
+        let config_path = config_root.join(SYSTEM_CONFIG_FILE);
 
-#[derive(Deserialize, Debug, Eq, PartialEq)]
-#[serde(deny_unknown_fields)]
-struct InitConfigToml {
-    name: String,
-    is_available: Vec<String>,
-    restart: Vec<String>,
-    stop: Vec<String>,
-    start: Option<Vec<String>>,
-    enable: Vec<String>,
-    disable: Vec<String>,
-    is_active: Vec<String>,
-}
-
-impl From<InitConfigToml> for InitConfig {
-    fn from(value: InitConfigToml) -> Self {
-        Self {
-            name: value.name,
-            is_available: value.is_available,
-            start: value.start.unwrap_or(value.restart.clone()),
-            restart: value.restart,
-            stop: value.stop,
-            enable: value.enable,
-            disable: value.disable,
-            is_active: value.is_active,
+        match fs::read_to_string(config_path.clone()) {
+            Ok(contents) => {
+                toml::from_str(contents.as_str()).map_err(|e| SystemTomlError::InvalidSyntax {
+                    path: config_path,
+                    reason: e.to_string(),
+                })
+            }
+            Err(_) => Ok(Self::default()),
         }
     }
 }
@@ -90,37 +81,6 @@ impl Default for SystemSpecificCommands {
                 .map(|value| String::from(*value))
                 .collect::<Vec<String>>(),
             reboot_timeout_seconds: SystemSpecificCommands::default_reboot_timeout_seconds(),
-        }
-    }
-}
-
-impl Default for InitConfig {
-    fn default() -> Self {
-        Self {
-            name: "systemd".to_string(),
-            is_available: vec!["/bin/systemctl".into(), "--version".into()],
-            restart: vec!["/bin/systemctl".into(), "restart".into(), "{}".into()],
-            stop: vec!["/bin/systemctl".into(), "stop".into(), "{}".into()],
-            start: vec!["/bin/systemctl".into(), "start".into(), "{}".into()],
-            enable: vec!["/bin/systemctl".into(), "enable".into(), "{}".into()],
-            disable: vec!["/bin/systemctl".into(), "disable".into(), "{}".into()],
-            is_active: vec!["/bin/systemctl".into(), "is-active".into(), "{}".into()],
-        }
-    }
-}
-
-impl SystemConfig {
-    pub fn try_new(config_root: &Utf8Path) -> Result<Self, SystemServiceError> {
-        let config_path = config_root.join(SERVICE_CONFIG_FILE);
-
-        match fs::read_to_string(config_path.clone()) {
-            Ok(contents) => toml::from_str(contents.as_str()).map_err(|e| {
-                SystemServiceError::SystemConfigInvalidToml {
-                    path: config_path,
-                    reason: e.to_string(),
-                }
-            }),
-            Err(_) => Ok(Self::default()),
         }
     }
 }
@@ -235,7 +195,7 @@ mod tests {
     fn create_temp_system_config(content: &str) -> std::io::Result<(TempDir, Utf8PathBuf)> {
         let temp_dir = TempDir::new()?;
         let config_root = Utf8Path::from_path(temp_dir.path()).unwrap().to_owned();
-        let config_file_path = config_root.join(SERVICE_CONFIG_FILE);
+        let config_file_path = config_root.join(SYSTEM_CONFIG_FILE);
         let mut file = std::fs::File::create(config_file_path.as_path())?;
         file.write_all(content.as_bytes())?;
         Ok((temp_dir, config_root))

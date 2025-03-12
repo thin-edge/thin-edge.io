@@ -28,6 +28,9 @@ pub enum TEdgeError {
     FromSystemServiceError(#[from] tedge_config::system_services::SystemServiceError),
 
     #[error(transparent)]
+    FromSystemToml(#[from] tedge_config::SystemTomlError),
+
+    #[error(transparent)]
     FromTEdgeConfigRead(#[from] tedge_config::ReadError),
 
     #[error(transparent)]
