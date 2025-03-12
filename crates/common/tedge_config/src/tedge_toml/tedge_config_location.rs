@@ -1,10 +1,10 @@
 use std::fs;
 use std::path::Path;
 
-use crate::tedge_config_cli::figment::ConfigSources;
-use crate::tedge_config_cli::figment::FileAndEnvironment;
-use crate::tedge_config_cli::figment::FileOnly;
-use crate::tedge_config_cli::figment::UnusedValueWarnings;
+use crate::tedge_toml::figment::ConfigSources;
+use crate::tedge_toml::figment::FileAndEnvironment;
+use crate::tedge_toml::figment::FileOnly;
+use crate::tedge_toml::figment::UnusedValueWarnings;
 use crate::ConfigSettingResult;
 use crate::TEdgeConfig;
 use crate::TEdgeConfigDto;

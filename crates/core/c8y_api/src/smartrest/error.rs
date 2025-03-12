@@ -101,7 +101,4 @@ pub enum SMCumulocityMapperError {
 
     #[error(transparent)]
     FromDownload(#[from] download::DownloadError),
-
-    #[error("Error configuring MQTT client")]
-    FromMqttConfigBuild(#[from] tedge_config::mqtt_config::MqttConfigBuildError),
 }

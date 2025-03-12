@@ -1,16 +1,14 @@
-pub mod mqtt_config;
 mod sudo;
-pub mod tedge_config_cli;
+pub mod tedge_toml;
 pub use sudo::SudoCommandBuilder;
 pub mod cli;
 mod system_toml;
 
 pub use self::system_toml::*;
-pub use self::tedge_config_cli::config_setting::*;
-pub use self::tedge_config_cli::error::*;
-pub use self::tedge_config_cli::models::*;
-pub use self::tedge_config_cli::tedge_config::*;
-pub use self::tedge_config_cli::tedge_config_location::*;
+pub use self::tedge_toml::error::*;
+pub use self::tedge_toml::models::*;
+pub use self::tedge_toml::tedge_config::*;
+pub use self::tedge_toml::tedge_config_location::*;
 pub use camino::Utf8Path as Path;
 pub use camino::Utf8PathBuf as PathBuf;
 pub use certificate::CertificateError;
