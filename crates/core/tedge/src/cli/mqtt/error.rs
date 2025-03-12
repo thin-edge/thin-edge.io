@@ -15,9 +15,9 @@ pub enum MqttError {
     #[error("The input QoS should be 0, 1, or 2")]
     InvalidQoS,
 
-    #[error("MQTT connection error: {0}\n\nHint: Is MQTT server running?")]
-    ServerConnection(String),
-
+    // TODO keep legacy error messages?
+    //    #[error("MQTT connection error: {0}\n\nHint: Is MQTT server running?")]
+    //    ServerConnection(String),
     #[error("Failed to create a TLS config")]
     TlsConfig(#[from] CertificateError),
 

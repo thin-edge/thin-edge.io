@@ -1,20 +1,9 @@
-use crate::cli::mqtt::MqttError;
-use crate::command::Command;
-use crate::error;
+use crate::command::CommandAsync;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
-use certificate::parse_root_certificate;
+use mqtt_channel::MqttMessage;
+use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
-use rumqttc::tokio_rustls::rustls::ClientConfig;
-use rumqttc::tokio_rustls::rustls::RootCertStore;
-use rumqttc::Event;
-use rumqttc::Incoming;
-use rumqttc::MqttOptions;
-use rumqttc::Outgoing;
-use rumqttc::Packet;
-use rumqttc::QoS::AtLeastOnce;
-use rumqttc::QoS::AtMostOnce;
-use rumqttc::QoS::ExactlyOnce;
 use tedge_config::tedge_toml::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
@@ -33,7 +22,8 @@ pub struct MqttPublishCommand {
     pub client_auth_config: Option<MqttAuthClientConfig>,
 }
 
-impl Command for MqttPublishCommand {
+#[async_trait::async_trait]
+impl CommandAsync for MqttPublishCommand {
     fn description(&self) -> String {
         format!(
             "publish the message \"{}\" on the topic \"{}\" with QoS \"{:?}\".",
@@ -43,113 +33,37 @@ impl Command for MqttPublishCommand {
         )
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        Ok(publish(self)?)
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+        Ok(publish(self).await?)
     }
 }
 
-fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
-    let mut options = MqttOptions::new(cmd.client_id.as_str(), &cmd.host, cmd.port);
-    options.set_clean_session(true);
-    options.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
+async fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
+    let mut config = mqtt_channel::Config::default()
+        .with_host(cmd.host.clone())
+        .with_port(cmd.port)
+        .with_session_name(cmd.client_id.clone())
+        .with_clean_session(true)
+        .with_max_packet_size(MAX_PACKET_SIZE)
+        .with_queue_capacity(DEFAULT_QUEUE_CAPACITY);
 
-    if cmd.ca_file.is_some() || cmd.ca_dir.is_some() {
-        let mut root_store = RootCertStore::empty();
-
-        if let Some(ca_file) = &cmd.ca_file {
-            parse_root_certificate::add_certs_from_file(&mut root_store, ca_file)?;
-        }
-
-        if let Some(ca_dir) = &cmd.ca_dir {
-            parse_root_certificate::add_certs_from_directory(&mut root_store, ca_dir)?;
-        }
-
-        const INSECURE_MQTT_PORT: u16 = 1883;
-        const SECURE_MQTT_PORT: u16 = 8883;
-
-        if cmd.port == INSECURE_MQTT_PORT && !root_store.is_empty() {
-            eprintln!("Warning: Connecting on port 1883 for insecure MQTT using a TLS connection");
-        }
-        if cmd.port == SECURE_MQTT_PORT && root_store.is_empty() {
-            eprintln!("Warning: Connecting on port 8883 for secure MQTT with no CA certificates");
-        }
-
-        let tls_config = ClientConfig::builder().with_root_certificates(root_store);
-
-        let tls_config = if let Some(client_auth) = cmd.client_auth_config.as_ref() {
-            let client_cert = parse_root_certificate::read_cert_chain(&client_auth.cert_file)?;
-            let client_key = parse_root_certificate::read_pvt_key(&client_auth.key_file)?;
-            tls_config.with_client_auth_cert(client_cert, client_key)?
-        } else {
-            tls_config.with_no_client_auth()
-        };
-
-        options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
+    if let Some(ca_file) = &cmd.ca_file {
+        config.with_cafile(ca_file)?;
+    }
+    if let Some(ca_dir) = &cmd.ca_dir {
+        config.with_cadir(ca_dir)?;
+    }
+    if let Some(client_auth) = cmd.client_auth_config.as_ref() {
+        config.with_client_auth(&client_auth.cert_file, &client_auth.key_file)?;
     }
 
-    let payload = cmd.message.as_bytes();
+    let mut mqtt = mqtt_channel::Connection::new(&config).await?;
+    let message = MqttMessage::new(&cmd.topic, cmd.message.clone())
+        .with_qos(cmd.qos)
+        .with_retain_flag(cmd.retain);
 
-    let (client, mut connection) = rumqttc::Client::new(options, DEFAULT_QUEUE_CAPACITY);
-    super::disconnect_if_interrupted(client.clone(), None);
-    let mut published = false;
-    let mut acknowledged = false;
-    let mut any_error = None;
+    mqtt.published.publish(message).await?;
+    mqtt.close().await;
 
-    client.publish(&cmd.topic.name, cmd.qos, cmd.retain, payload)?;
-
-    for event in connection.iter() {
-        match event {
-            Ok(Event::Outgoing(Outgoing::Publish(_))) => {
-                published = true;
-                if cmd.qos == AtMostOnce {
-                    acknowledged = true;
-                    break;
-                }
-            }
-            Ok(Event::Incoming(Packet::PubAck(_))) => {
-                if cmd.qos == AtLeastOnce {
-                    acknowledged = true;
-                    break;
-                }
-            }
-            Ok(Event::Incoming(Packet::PubComp(_))) => {
-                if cmd.qos == ExactlyOnce {
-                    acknowledged = true;
-                    break;
-                }
-            }
-            Ok(Event::Incoming(Incoming::Disconnect)) => {
-                any_error = Some(MqttError::ServerConnection("Disconnected".to_string()));
-                break;
-            }
-            Ok(Event::Outgoing(Outgoing::Disconnect)) => {
-                break;
-            }
-            Err(err) => {
-                any_error = Some(err.into());
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    if !published {
-        error!("the message has not been published");
-    } else if !acknowledged {
-        error!("the message has not been acknowledged");
-    }
-
-    client.disconnect()?;
-    for event in connection.iter() {
-        match event {
-            Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
-            _ => {}
-        }
-    }
-
-    if let Some(err) = any_error {
-        Err(err.into())
-    } else {
-        Ok(())
-    }
+    Ok(())
 }
