@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-use signal_hook::consts::signal::*;
-use signal_hook_tokio::Signals;
 use std::convert::Infallible;
-use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -18,6 +15,7 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tokio::signal::unix;
 
 pub type SignalMessageBox = SimpleMessageBox<NoMessage, RuntimeAction>;
 
@@ -70,17 +68,24 @@ impl Actor for SignalActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT]).unwrap(); // FIXME
+        let mut sig_int = unix::signal(unix::SignalKind::interrupt())
+            .map_err(|e| RuntimeError::ActorError(e.into()))?;
+        let mut sig_term = unix::signal(unix::SignalKind::terminate())
+            .map_err(|e| RuntimeError::ActorError(e.into()))?;
+        let mut sig_quit = unix::signal(unix::SignalKind::quit())
+            .map_err(|e| RuntimeError::ActorError(e.into()))?;
         loop {
             tokio::select! {
-                None = self.messages.recv() => return Ok(()),
-                Some(signal) = signals.next() => {
-                    match signal {
-                        SIGTERM | SIGINT | SIGQUIT => self.messages.send(RuntimeAction::Shutdown).await?,
-                        _ => unreachable!(),
-                    }
+                _ = self.messages.recv() => return Ok(()),
+                _ = sig_int.recv() => {
+                    self.messages.send(RuntimeAction::Shutdown).await?
                 }
-                else => return Ok(())
+                _ = sig_term.recv() => {
+                    self.messages.send(RuntimeAction::Shutdown).await?
+                }
+                _ = sig_quit.recv() => {
+                    self.messages.send(RuntimeAction::Shutdown).await?
+                },
             }
         }
     }

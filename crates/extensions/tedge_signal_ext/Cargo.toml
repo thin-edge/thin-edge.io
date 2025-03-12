@@ -11,10 +11,8 @@ repository = { workspace = true }
 
 [dependencies]
 async-trait = { workspace = true }
-signal-hook = { workspace = true }
-signal-hook-tokio = { workspace = true }
 tedge_actors = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["macros", "signal"] }
 
 [lints]
 workspace = true

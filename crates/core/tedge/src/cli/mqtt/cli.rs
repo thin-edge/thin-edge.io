@@ -1,7 +1,6 @@
 use crate::cli::mqtt::publish::MqttPublishCommand;
 use crate::cli::mqtt::subscribe::MqttSubscribeCommand;
 use crate::cli::mqtt::subscribe::SimpleTopicFilter;
-use crate::cli::mqtt::MqttError;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
@@ -115,6 +114,12 @@ fn parse_qos(src: &str) -> Result<QoS, MqttError> {
         2 => Ok(QoS::ExactlyOnce),
         _ => Err(MqttError::InvalidQoS),
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum MqttError {
+    #[error("The input QoS should be 0, 1, or 2")]
+    InvalidQoS,
 }
 
 fn qos_completions() -> Vec<CompletionCandidate> {

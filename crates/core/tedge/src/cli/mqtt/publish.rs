@@ -5,6 +5,7 @@ use mqtt_channel::MqttMessage;
 use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
 use tedge_config::tedge_toml::MqttAuthClientConfig;
+use tracing::info;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
 use super::MAX_PACKET_SIZE;
@@ -14,7 +15,7 @@ pub struct MqttPublishCommand {
     pub port: u16,
     pub topic: Topic,
     pub message: String,
-    pub qos: rumqttc::QoS,
+    pub qos: mqtt_channel::QoS,
     pub client_id: String,
     pub retain: bool,
     pub ca_file: Option<Utf8PathBuf>,
@@ -58,11 +59,20 @@ async fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
     }
 
     let mut mqtt = mqtt_channel::Connection::new(&config).await?;
+    let mut signals = tedge_utils::signals::TermSignals::new(None);
+
     let message = MqttMessage::new(&cmd.topic, cmd.message.clone())
         .with_qos(cmd.qos)
         .with_retain_flag(cmd.retain);
 
-    mqtt.published.publish(message).await?;
+    match signals
+        .might_interrupt(mqtt.published.publish(message))
+        .await
+    {
+        Ok(Ok(())) => (),
+        Ok(err) => err?,
+        Err(signal) => info!("{signal:?}"),
+    }
     mqtt.close().await;
 
     Ok(())
