@@ -130,7 +130,7 @@ impl RemoteAccessConnect {
             stdin.read_line(&mut command).unwrap();
 
             // If it's a smartrest message, it contains a ','
-            if !command.contains(",") {
+            if !command.contains(',') {
                 c8y_profile = Some(command.trim().parse().expect("Parsing profile name"));
                 command.clear();
                 stdin.read_line(&mut command).unwrap();

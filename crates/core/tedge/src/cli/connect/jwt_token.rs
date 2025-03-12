@@ -33,7 +33,7 @@ pub(crate) fn get_connected_c8y_url(
     let mut acknowledged = false;
     let mut c8y_url: Option<String> = None;
 
-    client.subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)?;
+    client.subscribe(c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)?;
     let mut err = None;
 
     for event in connection.iter() {

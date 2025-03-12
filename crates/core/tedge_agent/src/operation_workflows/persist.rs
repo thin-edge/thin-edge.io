@@ -102,12 +102,13 @@ impl WorkflowRepository {
         for entry in dir_path.read_dir_utf8()?.flatten() {
             let file = entry.path();
             if file.extension() == Some("toml") {
-                match read_operation_workflow(file)
+                let result = read_operation_workflow(file)
                     .await
                     .and_then(|(workflow, version)| {
                         let file_source = source.set_inner(file.into());
                         self.load_operation_workflow(file_source, workflow, version)
-                    }) {
+                    });
+                match result {
                     Ok(cmd) => {
                         info!(
                             "Using operation workflow definition from {file:?} for '{cmd}' operation"

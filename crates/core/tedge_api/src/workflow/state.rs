@@ -196,7 +196,7 @@ impl GenericCommandState {
             o.insert(key.into(), val.into());
         }
         if key == STATUS {
-            self.status = val.to_owned();
+            val.clone_into(&mut self.status)
         }
     }
 

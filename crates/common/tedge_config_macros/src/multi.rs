@@ -416,7 +416,7 @@ mod tests {
         });
         let dto: TEdgeConfigDto = serde_json::from_value(val.clone()).unwrap();
 
-        assert_eq!(serde_json::to_value(&dto).unwrap(), val);
+        assert_eq!(serde_json::to_value(dto).unwrap(), val);
     }
 
     #[test]
@@ -431,7 +431,7 @@ mod tests {
         });
         let dto: TEdgeConfigDto = serde_json::from_value(val.clone()).unwrap();
 
-        assert_eq!(serde_json::to_value(&dto).unwrap(), val);
+        assert_eq!(serde_json::to_value(dto).unwrap(), val);
     }
 
     #[test]
