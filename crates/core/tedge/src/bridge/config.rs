@@ -7,6 +7,7 @@ use tedge_config::models::HostPort;
 use tedge_config::models::MQTT_TLS_PORT;
 use tedge_config::TEdgeConfigLocation;
 use tedge_utils::paths::DraftFile;
+use tokio::io::AsyncWriteExt;
 
 use super::TEDGE_BRIDGE_CONF_DIR_PATH;
 
@@ -59,61 +60,67 @@ impl fmt::Display for BridgeLocation {
     }
 }
 
+macro_rules! writeln_async {
+    ($writer:ident, $($fmt_args:expr),+ $(,)?) => {
+        $writer.write_all(format!("{}\n", format_args!($($fmt_args),+)).as_bytes()).await
+    };
+}
+
 impl BridgeConfig {
-    pub fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        writeln!(writer, "### Bridge")?;
-        writeln!(writer, "connection {}", self.connection)?;
-        writeln!(writer, "address {}", self.address)?;
+    pub async fn serialize<W: AsyncWriteExt + Unpin>(&self, writer: &mut W) -> std::io::Result<()> {
+        writeln_async!(writer, "### Bridge")?;
+        writeln_async!(writer, "connection {}", self.connection)?;
+        writeln_async!(writer, "address {}", self.address)?;
 
         if std::fs::metadata(&self.bridge_root_cert_path)?.is_dir() {
-            writeln!(writer, "bridge_capath {}", self.bridge_root_cert_path)?;
+            writeln_async!(writer, "bridge_capath {}", self.bridge_root_cert_path)?;
         } else {
-            writeln!(writer, "bridge_cafile {}", self.bridge_root_cert_path)?;
+            writeln_async!(writer, "bridge_cafile {}", self.bridge_root_cert_path)?;
         }
 
-        writeln!(writer, "remote_clientid {}", self.remote_clientid)?;
-        writeln!(writer, "local_clientid {}", self.local_clientid)?;
+        writeln_async!(writer, "remote_clientid {}", self.remote_clientid)?;
+        writeln_async!(writer, "local_clientid {}", self.local_clientid)?;
 
         if let Some(name) = &self.remote_username {
-            writeln!(writer, "remote_username {}", name)?;
+            writeln_async!(writer, "remote_username {}", name)?;
         }
         let use_basic_auth = self.remote_username.is_some() && self.remote_password.is_some();
         if use_basic_auth {
             if let Some(password) = &self.remote_password {
-                writeln!(writer, "remote_password {}", password)?;
+                writeln_async!(writer, "remote_password {}", password)?;
             }
         } else {
-            writeln!(writer, "bridge_certfile {}", self.bridge_certfile)?;
-            writeln!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
+            writeln_async!(writer, "bridge_certfile {}", self.bridge_certfile)?;
+            writeln_async!(writer, "bridge_keyfile {}", self.bridge_keyfile)?;
         }
 
-        writeln!(writer, "try_private {}", self.try_private)?;
-        writeln!(writer, "start_type {}", self.start_type)?;
-        writeln!(writer, "cleansession {}", self.clean_session)?;
+        writeln_async!(writer, "try_private {}", self.try_private)?;
+        writeln_async!(writer, "start_type {}", self.start_type)?;
+        writeln_async!(writer, "cleansession {}", self.clean_session)?;
         if self.include_local_clean_session {
-            writeln!(writer, "local_cleansession {}", self.local_clean_session)?;
+            writeln_async!(writer, "local_cleansession {}", self.local_clean_session)?;
         }
-        writeln!(writer, "notifications {}", self.notifications)?;
-        writeln!(
+        writeln_async!(writer, "notifications {}", self.notifications)?;
+        writeln_async!(
             writer,
             "notifications_local_only {}",
             self.notifications_local_only
         )?;
-        writeln!(writer, "notification_topic {}", self.notification_topic)?;
-        writeln!(
+        writeln_async!(writer, "notification_topic {}", self.notification_topic)?;
+        writeln_async!(
             writer,
             "bridge_attempt_unsubscribe {}",
             self.bridge_attempt_unsubscribe
         )?;
-        writeln!(
+        writeln_async!(
             writer,
             "keepalive_interval {}",
             self.keepalive_interval.as_secs()
         )?;
 
-        writeln!(writer, "\n### Topics",)?;
+        writeln_async!(writer, "\n### Topics",)?;
         for topic in &self.topics {
-            writeln!(writer, "topic {}", topic)?;
+            writeln_async!(writer, "topic {}", topic)?;
         }
 
         Ok(())
@@ -121,7 +128,7 @@ impl BridgeConfig {
 
     /// Write the configuration file in a mosquitto configuration directory relative to the main
     /// tedge config location.
-    pub fn save(
+    pub async fn save(
         &self,
         tedge_config_location: &TEdgeConfigLocation,
     ) -> Result<(), tedge_utils::paths::PathsError> {
@@ -132,9 +139,9 @@ impl BridgeConfig {
         tedge_utils::paths::create_directories(dir_path)?;
 
         let config_path = self.file_path(tedge_config_location);
-        let mut config_draft = DraftFile::new(config_path)?.with_mode(0o644);
-        self.serialize(&mut config_draft)?;
-        config_draft.persist()?;
+        let mut config_draft = DraftFile::new(config_path).await?.with_mode(0o644);
+        self.serialize(&mut config_draft).await?;
+        config_draft.persist().await?;
 
         Ok(())
     }
@@ -152,8 +159,8 @@ mod test {
     use super::*;
     use camino::Utf8Path;
 
-    #[test]
-    fn test_serialize_with_cafile_correctly() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn test_serialize_with_cafile_correctly() -> anyhow::Result<()> {
         let file = tempfile::NamedTempFile::new()?;
         let bridge_root_cert_path = Utf8Path::from_path(file.path()).unwrap();
 
@@ -190,7 +197,7 @@ mod test {
         };
 
         let mut serialized_config = Vec::<u8>::new();
-        bridge.serialize(&mut serialized_config)?;
+        bridge.serialize(&mut serialized_config).await?;
 
         let bridge_cafile = format!("bridge_cafile {}", bridge_root_cert_path);
         let mut expected = r#"### Bridge
@@ -225,8 +232,8 @@ keepalive_interval 60
         Ok(())
     }
 
-    #[test]
-    fn test_serialize_with_capath_correctly() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn test_serialize_with_capath_correctly() -> anyhow::Result<()> {
         let dir = tempfile::TempDir::new()?;
         let bridge_root_cert_path = Utf8Path::from_path(dir.path()).unwrap();
 
@@ -262,7 +269,7 @@ keepalive_interval 60
             use_cryptoki: false,
         };
         let mut serialized_config = Vec::<u8>::new();
-        bridge.serialize(&mut serialized_config)?;
+        bridge.serialize(&mut serialized_config).await?;
 
         let bridge_capath = format!("bridge_capath {}", bridge_root_cert_path);
         let mut expected = r#"### Bridge
@@ -297,8 +304,8 @@ keepalive_interval 60
         Ok(())
     }
 
-    #[test]
-    fn test_serialize() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn test_serialize() -> anyhow::Result<()> {
         let file = tempfile::NamedTempFile::new()?;
         let bridge_root_cert_path = Utf8Path::from_path(file.path()).unwrap();
 
@@ -338,7 +345,7 @@ keepalive_interval 60
         };
 
         let mut buffer = Vec::new();
-        config.serialize(&mut buffer)?;
+        config.serialize(&mut buffer).await?;
 
         let contents = String::from_utf8(buffer)?;
         let config_set: std::collections::HashSet<&str> = contents
@@ -372,8 +379,8 @@ keepalive_interval 60
         Ok(())
     }
 
-    #[test]
-    fn test_serialize_use_basic_auth() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn test_serialize_use_basic_auth() -> anyhow::Result<()> {
         let file = tempfile::NamedTempFile::new()?;
         let bridge_root_cert_path = Utf8Path::from_path(file.path()).unwrap();
 
@@ -413,7 +420,7 @@ keepalive_interval 60
         };
 
         let mut buffer = Vec::new();
-        config.serialize(&mut buffer)?;
+        config.serialize(&mut buffer).await?;
 
         let contents = String::from_utf8(buffer)?;
         let config_set: std::collections::HashSet<&str> = contents
