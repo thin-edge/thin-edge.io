@@ -199,6 +199,7 @@ pub async fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<St
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::certificate::test_helpers::*;
     use assert_matches::assert_matches;
     use std::fs;
     use tempfile::*;
@@ -223,8 +224,8 @@ mod tests {
                 .await,
             Ok(())
         );
-        assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
-        assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
+        assert_eq!(parse_pem_file(&cert_path).tag, "CERTIFICATE");
+        assert_eq!(parse_pem_file(&key_path).tag, "PRIVATE KEY");
     }
 
     #[tokio::test]
@@ -298,14 +299,5 @@ mod tests {
             .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
-    }
-
-    fn temp_file_path(dir: &TempDir, filename: &str) -> Utf8PathBuf {
-        dir.path().join(filename).try_into().unwrap()
-    }
-
-    fn parse_pem_file(path: impl AsRef<Path>) -> Result<pem::Pem, String> {
-        let content = fs::read(path).map_err(|err| err.to_string())?;
-        pem::parse(content).map_err(|err| err.to_string())
     }
 }
