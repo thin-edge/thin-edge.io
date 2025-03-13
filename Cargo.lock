@@ -263,6 +263,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-tempfile"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8a57b75c36e16f4d015e60e6a177552976a99b6947724403c551bcfa7cb1207"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4633,6 +4642,7 @@ version = "1.4.2"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "async-tempfile",
  "doku",
  "futures",
  "maplit",
@@ -4641,6 +4651,7 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "once_cell",
+ "pin-project",
  "serde",
  "serde_json",
  "strum",

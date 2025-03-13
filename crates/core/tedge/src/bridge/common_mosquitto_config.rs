@@ -2,6 +2,7 @@ use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 use tedge_utils::paths::DraftFile;
+use tokio::io::AsyncWriteExt;
 
 use super::TEDGE_BRIDGE_CONF_DIR_PATH;
 
@@ -35,25 +36,29 @@ impl Default for ListenerConfig {
 }
 
 impl ListenerConfig {
-    fn maybe_writeln<W: std::io::Write + ?Sized, D: std::fmt::Display>(
+    async fn maybe_writeln<W: AsyncWriteExt + Unpin + ?Sized, D: std::fmt::Display>(
         &self,
         writer: &mut W,
         key: &str,
         value: Option<D>,
     ) -> std::io::Result<()> {
-        value
-            .map(|v| self.writeln(writer, key, v))
-            .unwrap_or(Ok(()))
+        if let Some(value) = value {
+            self.writeln(writer, key, value).await?;
+        }
+        Ok(())
     }
-    fn writeln<W: std::io::Write + ?Sized, D: std::fmt::Display>(
+    async fn writeln<W: AsyncWriteExt + Unpin + ?Sized, D: std::fmt::Display>(
         &self,
         writer: &mut W,
         key: &str,
         value: D,
     ) -> std::io::Result<()> {
-        writeln!(writer, "{} {}", key, value)
+        writer
+            .write_all(format!("{key} {value}\n").as_bytes())
+            .await
     }
-    pub fn write(&self, writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+
+    pub async fn write(&self, writer: &mut (impl AsyncWriteExt + Unpin)) -> std::io::Result<()> {
         let bind_address = self.bind_address.clone().unwrap_or_default();
         let maybe_listener = self
             .port
@@ -62,13 +67,19 @@ impl ListenerConfig {
         match maybe_listener {
             None => Ok(()),
             Some(listener) => {
-                self.writeln(writer, "listener", listener)?;
-                self.writeln(writer, "allow_anonymous", self.allow_anonymous)?;
-                self.writeln(writer, "require_certificate", self.require_certificate)?;
-                self.maybe_writeln(writer, "bind_interface", self.bind_interface.as_ref())?;
-                self.maybe_writeln(writer, "capath", self.capath.as_ref())?;
-                self.maybe_writeln(writer, "certfile", self.certfile.as_ref())?;
+                self.writeln(writer, "listener", listener).await?;
+                self.writeln(writer, "allow_anonymous", self.allow_anonymous)
+                    .await?;
+                self.writeln(writer, "require_certificate", self.require_certificate)
+                    .await?;
+                self.maybe_writeln(writer, "bind_interface", self.bind_interface.as_ref())
+                    .await?;
+                self.maybe_writeln(writer, "capath", self.capath.as_ref())
+                    .await?;
+                self.maybe_writeln(writer, "certfile", self.certfile.as_ref())
+                    .await?;
                 self.maybe_writeln(writer, "keyfile", self.keyfile.as_ref())
+                    .await
             }
         }
     }
@@ -109,18 +120,23 @@ impl Default for CommonMosquittoConfig {
 }
 
 impl CommonMosquittoConfig {
-    pub fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        writeln!(writer, "per_listener_settings true")?;
+    pub async fn serialize<W: AsyncWriteExt + Unpin>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_all(b"per_listener_settings true\n").await?;
 
-        writeln!(writer, "connection_messages true")?;
+        writer.write_all(b"connection_messages true\n").await?;
 
         for log_type in &self.log_types {
-            writeln!(writer, "log_type {}", log_type)?;
+            writer
+                .write_all(format!("log_type {log_type}\n").as_bytes())
+                .await?;
         }
-        writeln!(writer, "message_size_limit {}", self.message_size_limit)?;
 
-        self.internal_listener.write(writer)?;
-        self.external_listener.write(writer)?;
+        writer
+            .write_all(format!("message_size_limit {}\n", self.message_size_limit).as_bytes())
+            .await?;
+
+        self.internal_listener.write(writer).await?;
+        self.external_listener.write(writer).await?;
 
         Ok(())
     }
@@ -193,7 +209,7 @@ impl CommonMosquittoConfig {
 
     /// Write the configuration file in a mosquitto configuration directory relative to the main
     /// tedge config location.
-    pub fn save(
+    pub async fn save(
         &self,
         tedge_config_location: &TEdgeConfigLocation,
     ) -> Result<(), tedge_utils::paths::PathsError> {
@@ -204,9 +220,9 @@ impl CommonMosquittoConfig {
         tedge_utils::paths::create_directories(dir_path)?;
 
         let config_path = self.file_path(tedge_config_location);
-        let mut config_draft = DraftFile::new(config_path)?.with_mode(0o644);
-        self.serialize(&mut config_draft)?;
-        config_draft.persist()?;
+        let mut config_draft = DraftFile::new(config_path).await?.with_mode(0o644);
+        self.serialize(&mut config_draft).await?;
+        config_draft.persist().await?;
 
         Ok(())
     }
@@ -223,12 +239,12 @@ impl CommonMosquittoConfig {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_serialize() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn test_serialize() -> anyhow::Result<()> {
         let common_mosquitto_config = CommonMosquittoConfig::default();
 
         let mut buffer = Vec::new();
-        common_mosquitto_config.serialize(&mut buffer)?;
+        common_mosquitto_config.serialize(&mut buffer).await?;
 
         let contents = String::from_utf8(buffer).unwrap();
         let config_set: std::collections::HashSet<&str> = contents
@@ -256,8 +272,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_serialize_with_opts() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn test_serialize_with_opts() -> anyhow::Result<()> {
         let common_mosquitto_config = CommonMosquittoConfig::default();
         let mosquitto_config_with_opts = common_mosquitto_config
             .with_internal_opts(1234, "1.2.3.4".into())
@@ -276,7 +292,7 @@ mod tests {
             .eq(&Some(1234)));
 
         let mut buffer = Vec::new();
-        mosquitto_config_with_opts.serialize(&mut buffer)?;
+        mosquitto_config_with_opts.serialize(&mut buffer).await?;
 
         let contents = String::from_utf8(buffer).unwrap();
         let expected = concat!(

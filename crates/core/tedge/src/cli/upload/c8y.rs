@@ -13,6 +13,7 @@ use reqwest::multipart;
 use reqwest::Identity;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tedge_utils::file_async::path_exists;
 
 /// Upload a file to Cumulocity
 pub struct C8yUpload {
@@ -49,7 +50,7 @@ impl CommandAsync for C8yUpload {
     }
 
     async fn execute(&self) -> Result<(), MaybeFancy<Error>> {
-        if !self.file.exists() {
+        if !path_exists(&self.file).await {
             return Err(anyhow!("Failed to open file: {:?}", self.file))?;
         }
         let internal_id = self.get_internal_id().await?;
