@@ -718,7 +718,7 @@ fn check_device_status_azure(
     if tedge_config.mqtt.bridge.built_in {
         client.subscribe(&built_in_bridge_health, AtLeastOnce)?;
     }
-    client.subscribe(&azure_topic_device_twin_downstream, AtLeastOnce)?;
+    client.subscribe(azure_topic_device_twin_downstream, AtLeastOnce)?;
 
     let mut err = None;
     for event in connection.iter() {
