@@ -119,7 +119,7 @@ mod tests {
         show_cmd
             .assert()
             .failure()
-            .stderr(predicate::str::contains("Missing file"));
+            .stderr(predicate::str::contains("No such file"));
 
         // The remove command also removed the device id from the config
         get_device_id_cmd
