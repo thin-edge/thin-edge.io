@@ -306,7 +306,7 @@ impl Connection {
         // Wait for Err(MqttState(ConnectionAborted))
         // to make sure the disconnect is effective
         loop {
-            if let Err(_) = event_loop.poll().await {
+            if (event_loop.poll().await).is_err() {
                 info!("MQTT connection closed");
                 break;
             }
