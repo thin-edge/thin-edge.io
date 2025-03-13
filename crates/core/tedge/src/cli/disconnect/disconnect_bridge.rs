@@ -38,10 +38,6 @@ impl Command for DisconnectBridgeCommand {
 }
 
 impl DisconnectBridgeCommand {
-    fn service_manager(&self) -> &dyn SystemServiceManager {
-        self.service_manager.as_ref()
-    }
-
     fn stop_bridge(&self) -> Result<(), Fancy<DisconnectBridgeError>> {
         // If this fails, do not continue with applying changes and stopping/disabling tedge-mapper.
         let is_fatal_error = |err: &DisconnectBridgeError| {
@@ -79,10 +75,7 @@ impl DisconnectBridgeCommand {
         // Only C8Y changes the status of tedge-mapper
         if self.use_mapper && which("tedge-mapper").is_ok() {
             let spinner = Spinner::start(format!("Disabling {}", self.cloud.mapper_service()));
-            spinner.finish(
-                self.service_manager()
-                    .stop_and_disable_service(self.cloud.mapper_service()),
-            )?;
+            spinner.finish(self.stop_and_disable_mapper())?;
         }
 
         Ok(())
@@ -109,6 +102,13 @@ impl DisconnectBridgeCommand {
 
             Err(e) => Err(e).with_context(|| format!("Failed to delete {bridge_conf_path}"))?,
         }
+    }
+
+    fn stop_and_disable_mapper(&self) -> Result<(), DisconnectBridgeError> {
+        let service = self.cloud.mapper_service();
+        self.service_manager.stop_service(service)?;
+        self.service_manager.disable_service(service)?;
+        Ok(())
     }
 
     // Deviation from specification:
