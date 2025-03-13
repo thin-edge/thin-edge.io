@@ -164,7 +164,7 @@ impl ConnectCommand {
         match new_bridge(
             &bridge_config,
             &updated_mosquitto_config,
-            self.service_manager.as_ref(),
+            &*self.service_manager,
             &self.config_location,
             device_type,
             self.offline_mode,
@@ -219,7 +219,7 @@ impl ConnectCommand {
             if !use_basic_auth && !self.offline_mode && connection_check_success {
                 let _ = self.tenant_matches_configured_url(config);
             }
-            enable_software_management(&bridge_config, self.service_manager.as_ref());
+            enable_software_management(&bridge_config, &*self.service_manager);
         }
 
         Ok(())
@@ -311,11 +311,10 @@ impl ConnectCommand {
             warning!("tedge-mapper is not installed.");
         } else {
             let spinner = Spinner::start(format!("Enabling {}", self.cloud.mapper_service()));
-            let _ = spinner.finish(
-                self.service_manager
-                    .as_ref()
-                    .start_and_enable_service(self.cloud.mapper_service()),
-            );
+            let _ = spinner.finish(start_and_enable_service(
+                &*self.service_manager,
+                self.cloud.mapper_service(),
+            ));
         }
     }
 }
@@ -1062,12 +1061,23 @@ fn enable_software_management(
     if bridge_config.use_agent {
         if which("tedge-agent").is_ok() {
             let spinner = Spinner::start("Enabling tedge-agent");
-            let _ = spinner
-                .finish(service_manager.start_and_enable_service(SystemService::TEdgeSMAgent));
+            let _ = spinner.finish(start_and_enable_service(
+                service_manager,
+                SystemService::TEdgeSMAgent,
+            ));
         } else {
             println!("Info: Software management is not installed. So, skipping enabling related components.\n");
         }
     }
+}
+
+fn start_and_enable_service(
+    service_manager: &dyn SystemServiceManager,
+    service: SystemService,
+) -> anyhow::Result<()> {
+    service_manager.start_service(service)?;
+    service_manager.enable_service(service)?;
+    Ok(())
 }
 
 // To preserve error chain and not discard other errors we need to ignore error here
