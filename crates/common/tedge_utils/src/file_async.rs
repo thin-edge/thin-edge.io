@@ -582,7 +582,6 @@ mod tests {
     use super::*;
     use once_cell::sync::Lazy;
     use std::os::unix::fs::PermissionsExt;
-    use std::path::Path;
     use tempfile::TempDir;
 
     static USER: Lazy<String> = Lazy::new(whoami::username);
