@@ -58,9 +58,9 @@ impl RenewCertCmd {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::certificate::test_helpers::*;
     use crate::CreateCertCmd;
     use assert_matches::assert_matches;
-    use std::path::Path;
     use std::thread::sleep;
     use std::time::Duration;
     use tempfile::*;
@@ -86,7 +86,7 @@ mod tests {
 
         // Keep the cert and key data for validation
         let first_key = std::fs::read_to_string(&key_path).unwrap();
-        let first_pem = parse_pem_file(&cert_path);
+        let first_pem = parse_x509_file(&cert_path);
         let first_x509_cert = first_pem.parse_x509().expect("X.509: decoding DER failed");
 
         // Wait 2 secs to get different timestamp for the certificate validity
@@ -103,7 +103,7 @@ mod tests {
 
         // Get the cert and key data for validation
         let second_key = std::fs::read_to_string(&key_path).unwrap();
-        let second_pem = parse_pem_file(&cert_path);
+        let second_pem = parse_x509_file(&cert_path);
         let second_x509_cert = second_pem.parse_x509().expect("X.509: decoding DER failed");
 
         // The key must be unchanged
@@ -138,17 +138,5 @@ mod tests {
             .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertificateNotFound { .. });
-    }
-
-    fn temp_file_path(dir: &TempDir, filename: &str) -> Utf8PathBuf {
-        dir.path().join(filename).try_into().unwrap()
-    }
-
-    fn parse_pem_file(path: impl AsRef<Path>) -> x509_parser::pem::Pem {
-        let content = std::fs::read(path).expect("fail to read {path}");
-        x509_parser::pem::Pem::iter_from_buffer(&content)
-            .next()
-            .unwrap()
-            .expect("Reading PEM block failed")
     }
 }
