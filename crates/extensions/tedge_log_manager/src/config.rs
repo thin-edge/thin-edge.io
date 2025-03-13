@@ -6,7 +6,7 @@ use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_config::ReadError;
+use tedge_config::tedge_toml::ReadError;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 

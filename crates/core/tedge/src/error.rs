@@ -1,4 +1,4 @@
-use tedge_config::MultiError;
+use tedge_config::tedge_toml::MultiError;
 
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -31,10 +31,10 @@ pub enum TEdgeError {
     FromSystemToml(#[from] tedge_config::SystemTomlError),
 
     #[error(transparent)]
-    FromTEdgeConfigRead(#[from] tedge_config::ReadError),
+    FromTEdgeConfigRead(#[from] tedge_config::tedge_toml::ReadError),
 
     #[error(transparent)]
-    FromConfigNotSet(#[from] tedge_config::ConfigNotSet),
+    FromConfigNotSet(#[from] tedge_config::tedge_toml::ConfigNotSet),
 
     #[error(transparent)]
     FromMultiError(#[from] MultiError),

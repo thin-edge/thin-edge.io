@@ -13,7 +13,7 @@ use tedge_config::models::HostPort;
 use tedge_config::models::TemplatesSet;
 use tedge_config::models::TopicPrefix;
 use tedge_config::models::MQTT_TLS_PORT;
-use tedge_config::ProfileName;
+use tedge_config::tedge_toml::ProfileName;
 use which::which;
 
 #[derive(Debug)]

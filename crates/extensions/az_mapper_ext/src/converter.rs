@@ -153,7 +153,7 @@ mod tests {
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;
-    use tedge_config::AZ_MQTT_PAYLOAD_LIMIT;
+    use tedge_config::tedge_toml::AZ_MQTT_PAYLOAD_LIMIT;
     use test_case::test_case;
     use time::macros::datetime;
 

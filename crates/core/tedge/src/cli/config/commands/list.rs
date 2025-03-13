@@ -3,8 +3,8 @@ use crate::log::MaybeFancy;
 use pad::PadStr;
 use std::io::stdout;
 use std::io::IsTerminal;
+use tedge_config::tedge_toml::READABLE_KEYS;
 use tedge_config::TEdgeConfig;
-use tedge_config::READABLE_KEYS;
 use yansi::Paint;
 
 pub struct ListConfigCommand {

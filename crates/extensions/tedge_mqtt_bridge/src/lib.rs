@@ -52,8 +52,8 @@ pub use mqtt_channel::MqttError;
 pub use mqtt_channel::MqttMessage;
 pub use mqtt_channel::QoS;
 pub use mqtt_channel::Topic;
+use tedge_config::tedge_toml::TEdgeConfigReaderMqttBridgeReconnectPolicy;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigReaderMqttBridgeReconnectPolicy;
 
 use crate::backoff::CustomBackoff;
 use crate::topics::matches_ignore_dollar_prefix;
@@ -977,7 +977,7 @@ mod tests {
         use rumqttc::mqttbytes::v4::*;
         use rumqttc::Event;
         use rumqttc::QoS;
-        use tedge_config::TEdgeConfigReaderMqttBridgeReconnectPolicy;
+        use tedge_config::tedge_toml::TEdgeConfigReaderMqttBridgeReconnectPolicy;
         use tokio::sync::mpsc;
         use tokio::sync::mpsc::error::TryRecvError;
         use tokio::task::JoinHandle;

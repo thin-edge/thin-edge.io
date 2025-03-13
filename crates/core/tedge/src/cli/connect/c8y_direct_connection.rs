@@ -17,7 +17,7 @@ use rumqttc::Packet;
 use rumqttc::QoS;
 use rumqttc::TlsError;
 use rumqttc::Transport;
-use tedge_config::MqttAuthConfigCloudBroker;
+use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
 
 const CONNECTION_ERROR_CONTEXT: &str = "Connection error while creating device in Cumulocity";
 

@@ -205,7 +205,7 @@ mod tests {
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;
-    use tedge_config::AWS_MQTT_PAYLOAD_LIMIT;
+    use tedge_config::tedge_toml::AWS_MQTT_PAYLOAD_LIMIT;
     use time::macros::datetime;
 
     struct TestClock;

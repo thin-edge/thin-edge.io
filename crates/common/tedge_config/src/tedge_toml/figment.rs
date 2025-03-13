@@ -214,11 +214,11 @@ impl TEdgeEnv {
             Uncased::new(
                 tracing::subscriber::with_default(
                     tracing::subscriber::NoSubscriber::default(),
-                    || lowercase_name.parse::<crate::WritableKey>(),
+                    || lowercase_name.parse::<crate::tedge_toml::WritableKey>(),
                 )
                 .map(|key| key.to_string())
                 .map_err(|err| {
-                    let is_read_only_key = matches!(err, crate::ParseKeyError::ReadOnly(_));
+                    let is_read_only_key = matches!(err, crate::tedge_toml::ParseKeyError::ReadOnly(_));
                     if is_read_only_key && !WARNINGS.lock().unwrap().insert(lowercase_name.clone()) {
                         tracing::error!(
                             "Failed to configure tedge with environment variable `TEDGE_{name}`: {}",
@@ -236,6 +236,8 @@ impl TEdgeEnv {
 mod tests {
     use std::path::PathBuf;
 
+    use crate::tedge_toml::AppendRemoveItem;
+    use crate::tedge_toml::ReadError;
     use serde::Deserialize;
     use tedge_config_macros::define_tedge_config;
 
@@ -381,8 +383,6 @@ mod tests {
 
     #[test]
     fn environment_variables_can_override_profiled_configurations() {
-        use crate::AppendRemoveItem;
-        use crate::ReadError;
         use tedge_config_macros::*;
 
         define_tedge_config!(
@@ -417,8 +417,6 @@ mod tests {
 
     #[test]
     fn environment_variable_profile_warnings_use_key_with_correct_format() {
-        use crate::AppendRemoveItem;
-        use crate::ReadError;
         use tedge_config_macros::*;
 
         define_tedge_config!(
@@ -445,8 +443,6 @@ mod tests {
 
     #[test]
     fn toml_profile_warnings_use_key_with_correct_format() {
-        use crate::AppendRemoveItem;
-        use crate::ReadError;
         use tedge_config_macros::*;
 
         define_tedge_config!(

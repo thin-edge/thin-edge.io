@@ -14,7 +14,7 @@ use rumqttc::Packet;
 use rumqttc::QoS;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use tedge_config::MqttAuthClientConfig;
+use tedge_config::tedge_toml::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
 use super::MAX_PACKET_SIZE;

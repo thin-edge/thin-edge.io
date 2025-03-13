@@ -9,7 +9,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
 use tedge_config::models::MQTT_TLS_PORT;
-use tedge_config::ProfileName;
+use tedge_config::tedge_toml::ProfileName;
 
 #[derive(Debug)]
 pub struct BridgeConfigAzureParams {

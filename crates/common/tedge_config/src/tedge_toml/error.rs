@@ -70,7 +70,7 @@ pub enum ConfigSettingError {
     Other { msg: &'static str },
 
     #[error(transparent)]
-    Write(#[from] crate::WriteError),
+    Write(#[from] super::WriteError),
 }
 
 impl TEdgeConfigError {
