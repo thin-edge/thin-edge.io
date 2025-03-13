@@ -1,7 +1,5 @@
 use camino::Utf8PathBuf;
 use std::sync::Arc;
-use tedge_config::system_services::SystemService;
-use tedge_config::system_services::SystemServiceManager;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 
@@ -14,6 +12,9 @@ use crate::bridge::CommonMosquittoConfig;
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 use crate::command::BuildContext;
 use crate::command::Command;
+use crate::system_services::service_manager;
+use crate::system_services::SystemService;
+use crate::system_services::SystemServiceManager;
 
 pub struct RefreshBridgesCmd {
     config: TEdgeConfig,
@@ -35,9 +36,7 @@ impl RefreshBridgesCmd {
     pub fn new(context: &BuildContext) -> Result<Self, crate::ConfigError> {
         let config = context.load_config()?;
         let config_location = context.config_location.clone();
-        let service_manager = tedge_config::system_services::service_manager(
-            &config_location.tedge_config_root_path,
-        )?;
+        let service_manager = service_manager(&config_location.tedge_config_root_path)?;
 
         let cmd = Self {
             config,

@@ -33,9 +33,6 @@ pub enum WatchdogError {
     #[error("Did not find the WatchdogSec in {file}")]
     NoWatchdogSec { file: String },
 
-    #[error("Error configuring MQTT client")]
-    FromMqttConfigBuild(#[from] tedge_config::mqtt_config::MqttConfigBuildError),
-
     #[error(transparent)]
     FromCertificateError(#[from] CertificateError),
 

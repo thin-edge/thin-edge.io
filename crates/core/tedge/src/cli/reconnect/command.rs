@@ -3,8 +3,8 @@ use crate::cli::connect::ConnectCommand;
 use crate::cli::disconnect::disconnect_bridge::DisconnectBridgeCommand;
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use crate::system_services::SystemServiceManager;
 use std::sync::Arc;
-use tedge_config::system_services::SystemServiceManager;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 

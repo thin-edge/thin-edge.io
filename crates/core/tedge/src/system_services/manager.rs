@@ -1,8 +1,9 @@
 use camino::Utf8Path;
 
-use crate::system_services::*;
+use super::*;
 use std::fmt::Debug;
 use std::sync::Arc;
+use tedge_config::SystemTomlError;
 
 /// Abstraction over the system-provided facility that manages starting, stopping as well as other
 /// service-related management functions of system services.
@@ -34,6 +35,6 @@ pub trait SystemServiceManager: Debug {
 
 pub fn service_manager(
     config_root: &Utf8Path,
-) -> Result<Arc<dyn SystemServiceManager>, SystemServiceError> {
+) -> Result<Arc<dyn SystemServiceManager>, SystemTomlError> {
     Ok(Arc::new(GeneralServiceManager::try_new(config_root)?))
 }

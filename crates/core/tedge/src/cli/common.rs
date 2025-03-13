@@ -1,10 +1,10 @@
+use crate::system_services::SystemService;
 use anyhow::Context;
 use clap_complete::ArgValueCandidates;
 use clap_complete::CompletionCandidate;
 use std::borrow::Cow;
 use std::fmt;
 use tedge_config::get_config_dir;
-use tedge_config::system_services::SystemService;
 use tedge_config::ProfileName;
 use tedge_config::TEdgeConfigLocation;
 

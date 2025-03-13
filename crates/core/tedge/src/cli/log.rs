@@ -6,11 +6,11 @@ use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::system_services::SystemServiceError;
+use crate::system_services::SystemServiceManager;
 use camino::Utf8Path;
 use tedge_config::auth_method::AuthMethod;
 use tedge_config::auth_method::AuthType;
-use tedge_config::system_services::SystemServiceError;
-use tedge_config::system_services::SystemServiceManager;
 use tedge_config::MultiError;
 use yansi::Paint as _;
 

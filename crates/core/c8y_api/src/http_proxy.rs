@@ -15,7 +15,7 @@ use reqwest::Url;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_config::auth_method::AuthType;
-use tedge_config::mqtt_config::MqttConfigBuildError;
+use tedge_config::CertificateError;
 use tedge_config::ConfigNotSet;
 use tedge_config::MultiError;
 use tedge_config::ReadError;
@@ -253,9 +253,6 @@ struct BasicCredentials {
 #[derive(thiserror::Error, Debug)]
 pub enum C8yAuthRetrieverError {
     #[error(transparent)]
-    MqttConfigBuild(#[from] MqttConfigBuildError),
-
-    #[error(transparent)]
     ConfigMulti(#[from] MultiError),
 
     #[error(transparent)]
@@ -266,6 +263,9 @@ pub enum C8yAuthRetrieverError {
 
     #[error(transparent)]
     CredentialsFileError(#[from] CredentialsFileError),
+
+    #[error("Failed to load certificates for MQTT connection")]
+    Certificate(#[from] CertificateError),
 }
 
 impl C8yAuthRetriever {
@@ -281,9 +281,7 @@ impl C8yAuthRetriever {
                 credentials_path: c8y_config.credentials_path.clone(),
             }),
             AuthType::Certificate => {
-                let mqtt_config = tedge_config
-                    .mqtt_config()
-                    .map_err(MqttConfigBuildError::from)?;
+                let mqtt_config = tedge_config.mqtt_config()?;
 
                 let topic = TopicFilter::new_unchecked(&format!("{topic_prefix}/s/dat"));
                 let mqtt_config = mqtt_config

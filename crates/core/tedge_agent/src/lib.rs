@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use agent::AgentConfig;
 use tedge_config::cli::CommonArgs;
-use tedge_config::system_services::log_init;
+use tedge_config::log_init;
 use tracing::log::warn;
 
 mod agent;

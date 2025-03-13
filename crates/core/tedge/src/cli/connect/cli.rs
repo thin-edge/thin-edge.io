@@ -3,7 +3,7 @@ use crate::cli::connect::*;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
-use tedge_config::system_services::service_manager;
+use crate::system_services::service_manager;
 
 #[derive(clap::Args, Debug, Eq, PartialEq)]
 pub struct TEdgeConnectOpt {

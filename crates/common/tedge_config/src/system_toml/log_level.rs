@@ -1,8 +1,8 @@
 use camino::Utf8Path;
 
+use super::SystemConfig;
+use super::SystemTomlError;
 use crate::cli::LogConfigArgs;
-use crate::system_services::SystemConfig;
-use crate::system_services::SystemServiceError;
 use std::io::IsTerminal;
 use std::str::FromStr;
 
@@ -18,7 +18,7 @@ pub fn log_init(
     sname: &str,
     flags: &LogConfigArgs,
     config_dir: &Utf8Path,
-) -> Result<(), SystemServiceError> {
+) -> Result<(), SystemTomlError> {
     let subscriber = tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_ansi(std::io::stderr().is_terminal())
@@ -51,11 +51,11 @@ pub fn log_init(
 pub fn get_log_level(
     sname: &str,
     config_dir: &Utf8Path,
-) -> Result<tracing::Level, SystemServiceError> {
+) -> Result<tracing::Level, SystemTomlError> {
     let loglevel = SystemConfig::try_new(config_dir)?.log;
     match loglevel.get(sname) {
         Some(ll) => tracing::Level::from_str(&ll.to_uppercase()).map_err(|_| {
-            SystemServiceError::InvalidLogLevel {
+            SystemTomlError::InvalidLogLevel {
                 name: ll.to_string(),
             }
         }),

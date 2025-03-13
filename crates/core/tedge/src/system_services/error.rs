@@ -21,9 +21,6 @@ pub enum SystemServiceError {
      Service manager '{name}' is not available on the system or elevated permissions have not been granted.")]
     ServiceManagerUnavailable { cmd: String, name: String },
 
-    #[error("Toml syntax error in the system config file '{path}': {reason}")]
-    SystemConfigInvalidToml { path: Utf8PathBuf, reason: String },
-
     #[error(
         "Syntax error in the system config file for '{cmd}': {reason}\n\
     Check '{path}' file."
@@ -33,7 +30,4 @@ pub enum SystemServiceError {
         cmd: String,
         path: Utf8PathBuf,
     },
-
-    #[error("Invalid log level: {name:?}, supported levels are info, warn, error and debug")]
-    InvalidLogLevel { name: String },
 }

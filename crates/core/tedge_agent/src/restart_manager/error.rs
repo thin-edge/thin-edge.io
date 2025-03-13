@@ -14,7 +14,7 @@ pub enum RestartManagerError {
     FloatCastingError,
 
     #[error(transparent)]
-    FromSystemServices(#[from] tedge_config::system_services::SystemServiceError),
+    FromSystemToml(#[from] tedge_config::SystemTomlError),
 
     #[error(transparent)]
     FromState(#[from] crate::state_repository::error::StateError),

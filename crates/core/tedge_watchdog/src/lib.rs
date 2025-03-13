@@ -1,5 +1,5 @@
 use tedge_config::cli::CommonArgs;
-use tedge_config::system_services::*;
+use tedge_config::log_init;
 
 // on linux, we use systemd
 #[cfg(target_os = "linux")]

@@ -1,5 +1,4 @@
 use rumqttc::tokio_rustls::rustls;
-use tedge_config::mqtt_config::MqttConfigBuildError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
@@ -18,9 +17,6 @@ pub enum ConnectError {
     #[error(transparent)]
     MqttClient(#[from] rumqttc::ClientError),
 
-    #[error("Can't crate MQTT config")]
-    CreateMqttConfig(#[from] MqttConfigBuildError),
-
     #[error("Can't create TLS config")]
     CreateTlsConfig(#[from] rustls::Error),
 
@@ -31,7 +27,7 @@ pub enum ConnectError {
     UrlParse(#[from] url::ParseError),
 
     #[error(transparent)]
-    SystemServiceError(#[from] tedge_config::system_services::SystemServiceError),
+    SystemServiceError(#[from] crate::system_services::SystemServiceError),
 
     #[error("Operation timed out. Is mosquitto running?")]
     TimeoutElapsedError,

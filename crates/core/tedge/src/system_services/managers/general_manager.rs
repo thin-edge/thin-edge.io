@@ -4,12 +4,12 @@ use crate::system_services::SystemServiceError;
 use crate::system_services::SystemServiceManager;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-
-use super::config::InitConfig;
-use super::config::SystemConfig;
-use super::config::SERVICE_CONFIG_FILE;
 use std::fmt;
 use std::process::ExitStatus;
+use tedge_config::InitConfig;
+use tedge_config::SystemConfig;
+use tedge_config::SystemTomlError;
+use tedge_config::SYSTEM_CONFIG_FILE;
 
 #[derive(Debug)]
 pub struct GeneralServiceManager {
@@ -18,10 +18,10 @@ pub struct GeneralServiceManager {
 }
 
 impl GeneralServiceManager {
-    pub fn try_new(config_root: &Utf8Path) -> Result<Self, SystemServiceError> {
+    pub fn try_new(config_root: &Utf8Path) -> Result<Self, SystemTomlError> {
         let init_config = SystemConfig::try_new(config_root)?.init;
 
-        let config_path = config_root.join(SERVICE_CONFIG_FILE);
+        let config_path = config_root.join(SYSTEM_CONFIG_FILE);
 
         Ok(Self {
             init_config,
