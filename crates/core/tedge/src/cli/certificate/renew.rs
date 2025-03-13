@@ -1,6 +1,6 @@
 use super::create::cn_of_self_signed_certificate;
 use super::error::CertError;
-use crate::command::Command;
+use crate::command::CommandAsync;
 use crate::log::MaybeFancy;
 use crate::override_public_key;
 use crate::reuse_private_key;
@@ -17,35 +17,39 @@ pub struct RenewCertCmd {
     pub key_path: Utf8PathBuf,
 }
 
-impl Command for RenewCertCmd {
+#[async_trait::async_trait]
+impl CommandAsync for RenewCertCmd {
     fn description(&self) -> String {
         "Renew the self-signed certificate of the device.".into()
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         let config = NewCertificateConfig::default();
-        self.renew_test_certificate(&config)?;
+        self.renew_test_certificate(&config).await?;
         eprintln!("Certificate was successfully renewed, for un-interrupted service, the certificate has to be uploaded to the cloud");
         Ok(())
     }
 }
 
 impl RenewCertCmd {
-    fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
+    async fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
         let cert_path = &self.cert_path;
         let key_path = &self.key_path;
-        let id = cn_of_self_signed_certificate(cert_path)?;
+        let id = cn_of_self_signed_certificate(cert_path).await?;
 
         // Remove only certificate
-        std::fs::remove_file(&self.cert_path)
+        tokio::fs::remove_file(&self.cert_path)
+            .await
             .map_err(|e| CertError::IoError(e).cert_context(self.cert_path.clone()))?;
 
         // Re-create the certificate from the key, with new validity
         let previous_key = reuse_private_key(key_path)
+            .await
             .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?;
         let cert = KeyCertPair::new_selfsigned_certificate(config, &id, &previous_key)?;
 
         override_public_key(cert_path, cert.certificate_pem_string()?)
+            .await
             .map_err(|err| err.cert_context(cert_path.clone()))?;
         Ok(())
     }
@@ -61,8 +65,8 @@ mod tests {
     use std::time::Duration;
     use tempfile::*;
 
-    #[test]
-    fn validate_renew_certificate() {
+    #[tokio::test]
+    async fn validate_renew_certificate() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
@@ -77,6 +81,7 @@ mod tests {
 
         // First create both cert and key
         cmd.create_test_certificate(&NewCertificateConfig::default())
+            .await
             .unwrap();
 
         // Keep the cert and key data for validation
@@ -93,6 +98,7 @@ mod tests {
             key_path: key_path.clone(),
         };
         cmd.renew_test_certificate(&NewCertificateConfig::default())
+            .await
             .unwrap();
 
         // Get the cert and key data for validation
@@ -116,8 +122,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn renew_certificate_without_key() {
+    #[tokio::test]
+    async fn renew_certificate_without_key() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = Utf8PathBuf::from("/non/existent/key/path");
@@ -129,6 +135,7 @@ mod tests {
 
         let cert_error = cmd
             .renew_test_certificate(&NewCertificateConfig::default())
+            .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertificateNotFound { .. });
     }

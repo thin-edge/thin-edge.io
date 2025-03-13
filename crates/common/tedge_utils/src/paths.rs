@@ -143,23 +143,19 @@ pub fn set_permission(_file: &File, _mode: u32) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub fn validate_parent_dir_exists(path: impl AsRef<Path>) -> Result<(), PathsError> {
+pub async fn validate_parent_dir_exists(path: impl AsRef<Path>) -> Result<(), PathsError> {
     let path = path.as_ref();
     if path.is_relative() {
-        Err(PathsError::RelativePathNotPermitted { path: path.into() })
-    } else {
-        match path.parent() {
-            None => Err(PathsError::ParentDirNotFound { path: path.into() }),
-            Some(parent) => {
-                if !parent.exists() {
-                    Err(PathsError::DirNotFound {
-                        path: parent.into(),
-                    })
-                } else {
-                    Ok(())
-                }
-            }
-        }
+        return Err(PathsError::RelativePathNotPermitted { path: path.into() });
+    };
+    match path.parent() {
+        None => Err(PathsError::ParentDirNotFound { path: path.into() }),
+        Some(parent) => match tokio::fs::try_exists(parent).await {
+            Ok(true) => Ok(()),
+            _ => Err(PathsError::DirNotFound {
+                path: parent.into(),
+            }),
+        },
     }
 }
 
@@ -168,23 +164,23 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
 
-    #[test]
+    #[tokio::test]
     #[cfg(unix)] // On windows the error is unexpectedly RelativePathNotPermitted
-    fn validate_path_non_existent() {
-        let result = validate_parent_dir_exists(Path::new("/non/existent/path"));
+    async fn validate_path_non_existent() {
+        let result = validate_parent_dir_exists(Path::new("/non/existent/path")).await;
         assert_matches!(result.unwrap_err(), PathsError::DirNotFound { .. });
     }
 
-    #[test]
+    #[tokio::test]
     #[cfg(unix)] // On windows the error is unexpectedly RelativePathNotPermitted
-    fn validate_parent_dir_non_existent() {
-        let result = validate_parent_dir_exists(Path::new("/"));
+    async fn validate_parent_dir_non_existent() {
+        let result = validate_parent_dir_exists(Path::new("/")).await;
         assert_matches!(result.unwrap_err(), PathsError::ParentDirNotFound { .. });
     }
 
-    #[test]
-    fn validate_parent_dir_relative_path() {
-        let result = validate_parent_dir_exists(Path::new("test.txt"));
+    #[tokio::test]
+    async fn validate_parent_dir_relative_path() {
+        let result = validate_parent_dir_exists(Path::new("test.txt")).await;
         assert_matches!(
             result.unwrap_err(),
             PathsError::RelativePathNotPermitted { .. }

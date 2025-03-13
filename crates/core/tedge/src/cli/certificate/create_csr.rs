@@ -1,5 +1,5 @@
 use super::error::CertError;
-use crate::command::Command;
+use crate::command::CommandAsync;
 use crate::log::MaybeFancy;
 use crate::override_public_key;
 use crate::persist_new_private_key;
@@ -25,21 +25,22 @@ pub struct CreateCsrCmd {
     pub group: String,
 }
 
-impl Command for CreateCsrCmd {
+#[async_trait::async_trait]
+impl CommandAsync for CreateCsrCmd {
     fn description(&self) -> String {
         "Generate a Certificate Signing Request.".into()
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         let config = NewCertificateConfig::default();
-        self.create_certificate_signing_request(&config)?;
+        self.create_certificate_signing_request(&config).await?;
         eprintln!("Certificate Signing Request was successfully created.");
         Ok(())
     }
 }
 
 impl CreateCsrCmd {
-    pub fn create_certificate_signing_request(
+    pub async fn create_certificate_signing_request(
         &self,
         config: &NewCertificateConfig,
     ) -> Result<(), CertError> {
@@ -47,7 +48,7 @@ impl CreateCsrCmd {
         let csr_path = &self.csr_path;
         let key_path = &self.key_path;
 
-        let previous_key = reuse_private_key(key_path).unwrap_or(KeyKind::New);
+        let previous_key = reuse_private_key(key_path).await.unwrap_or(KeyKind::New);
         let cert = KeyCertPair::new_certificate_sign_request(config, id, &previous_key)?;
 
         if let KeyKind::New = previous_key {
@@ -57,9 +58,11 @@ impl CreateCsrCmd {
                 &self.user,
                 &self.group,
             )
+            .await
             .map_err(|err| err.key_context(key_path.clone()))?;
         }
         override_public_key(csr_path, cert.certificate_signing_request_string()?)
+            .await
             .map_err(|err| err.cert_context(csr_path.clone()))?;
         Ok(())
     }
@@ -75,8 +78,8 @@ mod tests {
     use x509_parser::der_parser::asn1_rs::FromDer;
     use x509_parser::nom::AsBytes;
 
-    #[test]
-    fn create_signing_request_when_private_key_does_not_exist() {
+    #[tokio::test]
+    async fn create_signing_request_when_private_key_does_not_exist() {
         let dir = tempdir().unwrap();
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let csr_path = temp_file_path(&dir, "my-device-csr.csr");
@@ -91,7 +94,8 @@ mod tests {
         };
 
         assert_matches!(
-            cmd.create_certificate_signing_request(&NewCertificateConfig::default()),
+            cmd.create_certificate_signing_request(&NewCertificateConfig::default())
+                .await,
             Ok(())
         );
 
@@ -99,8 +103,8 @@ mod tests {
         assert_eq!(parse_pem_file(&key_path).label, "PRIVATE KEY");
     }
 
-    #[test]
-    fn create_signing_request_when_both_private_key_and_public_cert_exist() {
+    #[tokio::test]
+    async fn create_signing_request_when_both_private_key_and_public_cert_exist() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
@@ -117,7 +121,8 @@ mod tests {
 
         // create private key and public cert with standard command
         assert_matches!(
-            cmd.create_test_certificate(&NewCertificateConfig::default()),
+            cmd.create_test_certificate(&NewCertificateConfig::default())
+                .await,
             Ok(())
         );
 
@@ -136,7 +141,8 @@ mod tests {
 
         // create csr using existing private key and device_id from public cert
         assert_matches!(
-            cmd.create_certificate_signing_request(&NewCertificateConfig::default()),
+            cmd.create_certificate_signing_request(&NewCertificateConfig::default())
+                .await,
             Ok(())
         );
 
