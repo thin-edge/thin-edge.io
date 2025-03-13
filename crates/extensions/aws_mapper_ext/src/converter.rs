@@ -7,7 +7,7 @@ use tedge_actors::Converter;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_config::TopicPrefix;
+use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_utils::timestamp::TimeFormat;
@@ -205,7 +205,7 @@ mod tests {
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;
-    use tedge_config::AWS_MQTT_PAYLOAD_LIMIT;
+    use tedge_config::tedge_toml::AWS_MQTT_PAYLOAD_LIMIT;
     use time::macros::datetime;
 
     struct TestClock;

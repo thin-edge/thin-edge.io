@@ -9,7 +9,7 @@ use clap_complete::ArgValueCandidates;
 use clap_complete::CompletionCandidate;
 use mqtt_channel::Topic;
 use rumqttc::QoS;
-use tedge_config::SecondsOrHumanTime;
+use tedge_config::models::SecondsOrHumanTime;
 
 const PUB_CLIENT_PREFIX: &str = "tedge-pub";
 const SUB_CLIENT_PREFIX: &str = "tedge-sub";

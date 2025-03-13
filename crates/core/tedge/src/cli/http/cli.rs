@@ -12,8 +12,8 @@ use clap::Args;
 use reqwest::blocking;
 use reqwest::Identity;
 use std::fs::File;
+use tedge_config::tedge_toml::ProfileName;
 use tedge_config::OptionalConfig;
-use tedge_config::ProfileName;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeHttpCli {

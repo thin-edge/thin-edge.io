@@ -3,9 +3,9 @@ use crate::cli::config::commands::*;
 use crate::command::*;
 use crate::ConfigError;
 use clap_complete::ArgValueCandidates;
-use tedge_config::ProfileName;
-use tedge_config::ReadableKey;
-use tedge_config::WritableKey;
+use tedge_config::tedge_toml::ProfileName;
+use tedge_config::tedge_toml::ReadableKey;
+use tedge_config::tedge_toml::WritableKey;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum ConfigCmd {

@@ -46,7 +46,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
 use tedge_api::EntityStore;
-use tedge_config::TEdgeConfigReaderService;
+use tedge_config::tedge_toml::TEdgeConfigReaderService;
 use tedge_config_manager::ConfigManagerBuilder;
 use tedge_config_manager::ConfigManagerConfig;
 use tedge_config_manager::ConfigManagerOptions;

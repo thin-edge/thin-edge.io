@@ -5,7 +5,7 @@ use clap_complete::CompletionCandidate;
 use std::borrow::Cow;
 use std::fmt;
 use tedge_config::get_config_dir;
-use tedge_config::ProfileName;
+use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfigLocation;
 
 #[derive(clap::Subcommand, Debug, Clone, PartialEq, Eq)]
@@ -103,12 +103,12 @@ impl fmt::Display for MaybeBorrowedCloud<'_> {
     }
 }
 
-impl<'a> From<&'a MaybeBorrowedCloud<'a>> for tedge_config::Cloud<'a> {
-    fn from(value: &'a MaybeBorrowedCloud<'a>) -> tedge_config::Cloud<'a> {
+impl<'a> From<&'a MaybeBorrowedCloud<'a>> for tedge_config::tedge_toml::Cloud<'a> {
+    fn from(value: &'a MaybeBorrowedCloud<'a>) -> tedge_config::tedge_toml::Cloud<'a> {
         match value {
-            MaybeBorrowedCloud::C8y(p) => tedge_config::Cloud::C8y(p.as_deref()),
-            MaybeBorrowedCloud::Azure(p) => tedge_config::Cloud::Az(p.as_deref()),
-            MaybeBorrowedCloud::Aws(p) => tedge_config::Cloud::Aws(p.as_deref()),
+            MaybeBorrowedCloud::C8y(p) => tedge_config::tedge_toml::Cloud::C8y(p.as_deref()),
+            MaybeBorrowedCloud::Azure(p) => tedge_config::tedge_toml::Cloud::Az(p.as_deref()),
+            MaybeBorrowedCloud::Aws(p) => tedge_config::tedge_toml::Cloud::Aws(p.as_deref()),
         }
     }
 }

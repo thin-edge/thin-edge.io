@@ -70,13 +70,13 @@ impl From<FirmwareManagementError> for RuntimeError {
 #[derive(Debug, thiserror::Error)]
 pub enum FirmwareManagementConfigBuildError {
     #[error(transparent)]
-    ReadError(#[from] tedge_config::ReadError),
+    ReadError(#[from] tedge_config::tedge_toml::ReadError),
 
     #[error(transparent)]
-    ConfigNotSet(#[from] tedge_config::ConfigNotSet),
+    ConfigNotSet(#[from] tedge_config::tedge_toml::ConfigNotSet),
 
     #[error(transparent)]
-    MultiError(#[from] tedge_config::MultiError),
+    MultiError(#[from] tedge_config::tedge_toml::MultiError),
 
     #[error(transparent)]
     C8yEndPointConfigError(#[from] c8y_api::http_proxy::C8yEndPointConfigError),

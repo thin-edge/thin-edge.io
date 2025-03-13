@@ -5,7 +5,7 @@ use crate::ConfigError;
 use c8y_api::http_proxy::C8yEndPoint;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tedge_config::ProfileName;
+use tedge_config::tedge_toml::ProfileName;
 
 mod c8y;
 

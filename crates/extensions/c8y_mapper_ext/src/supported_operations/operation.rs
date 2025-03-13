@@ -371,7 +371,7 @@ mod tests {
     use super::*;
 
     use std::io::Write;
-    use tedge_config::TopicPrefix;
+    use tedge_config::models::TopicPrefix;
     use test_case::test_case;
 
     // Structs for state change with the builder pattern

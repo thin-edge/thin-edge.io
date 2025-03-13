@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandState;
-use tedge_config::AutoLogUpload;
+use tedge_config::models::AutoLogUpload;
 use tedge_uploader_ext::ContentType;
 use tedge_uploader_ext::FormData;
 use tedge_uploader_ext::UploadRequest;

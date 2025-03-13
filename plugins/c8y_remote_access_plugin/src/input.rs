@@ -7,8 +7,8 @@ use serde::Deserialize;
 use std::io::stdin;
 use std::io::BufRead;
 use tedge_config::cli::CommonArgs;
+use tedge_config::tedge_toml::ProfileName;
 use tedge_config::Path;
-use tedge_config::ProfileName;
 use tedge_config::TEdgeConfigLocation;
 
 use crate::csv::deserialize_csv_record;

@@ -33,8 +33,8 @@ use crate::log::MaybeFancy;
 /// ```
 /// use tedge::command::Command;
 /// use tedge_config::TEdgeConfig;
-/// use tedge_config::ReadError;
-/// use tedge_config::ReadableKey;
+/// use tedge_config::tedge_toml::ReadError;
+/// use tedge_config::tedge_toml::ReadableKey;
 /// use tedge::log::MaybeFancy;
 ///
 /// struct GetConfigKey {
@@ -84,7 +84,7 @@ pub trait Command {
     /// The `BuildCommand::build_command()` method has to return a box around a new command.
     ///
     /// ```
-    /// use tedge_config::ReadableKey;
+    /// use tedge_config::tedge_toml::ReadableKey;
     /// use tedge_config::TEdgeConfig;
     /// use tedge::cli::config::GetConfigCommand;
     /// use tedge::ConfigError;
@@ -117,7 +117,7 @@ pub trait Command {
 /// use tedge::command::*;
 /// use tedge::cli::config::*;
 /// use tedge::ConfigError;
-/// use tedge_config::*;
+/// use tedge_config::tedge_toml::tedge_config::*;
 ///
 /// #[derive(clap::Parser, Debug)]
 /// enum ConfigCmd {

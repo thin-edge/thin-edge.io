@@ -3,7 +3,7 @@ use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::smartrest;
 use tedge_api::CommandStatus;
 use tedge_api::SoftwareListCommand;
-use tedge_config::SoftwareManagementApiFlag;
+use tedge_config::models::SoftwareManagementApiFlag;
 use tedge_mqtt_ext::MqttMessage;
 
 use super::error::OperationError;

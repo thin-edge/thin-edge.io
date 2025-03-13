@@ -33,6 +33,7 @@ pub use self::port::*;
 pub use self::seconds::*;
 pub use self::templates_set::*;
 pub use tedge_utils::timestamp;
+pub use tedge_utils::timestamp::TimeFormat;
 pub use topic_prefix::TopicPrefix;
 
 #[derive(

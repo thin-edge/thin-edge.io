@@ -1,7 +1,7 @@
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfigLocation;
-use tedge_config::WritableKey;
 
 pub struct RemoveConfigCommand {
     pub key: WritableKey,

@@ -6,10 +6,10 @@ use std::time::Duration;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_config::HostPort;
-use tedge_config::ProfileName;
-use tedge_config::TopicPrefix;
-use tedge_config::MQTT_TLS_PORT;
+use tedge_config::models::HostPort;
+use tedge_config::models::TopicPrefix;
+use tedge_config::models::MQTT_TLS_PORT;
+use tedge_config::tedge_toml::ProfileName;
 
 #[derive(Debug)]
 pub struct BridgeConfigAwsParams {

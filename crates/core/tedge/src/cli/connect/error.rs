@@ -56,7 +56,7 @@ pub enum ConnectError {
     CertificateError(#[from] certificate::CertificateError),
 
     #[error(transparent)]
-    MultiError(#[from] tedge_config::MultiError),
+    MultiError(#[from] tedge_config::tedge_toml::MultiError),
 
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),

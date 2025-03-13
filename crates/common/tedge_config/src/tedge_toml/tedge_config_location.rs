@@ -193,7 +193,7 @@ impl TEdgeConfigLocation {
 mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
 
-    use crate::Cloud;
+    use crate::tedge_toml::Cloud;
     use crate::TEdgeConfigReader;
 
     use super::*;

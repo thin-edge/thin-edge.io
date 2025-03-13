@@ -8,8 +8,8 @@ use super::upload::*;
 use anyhow::anyhow;
 use camino::Utf8PathBuf;
 use clap::ValueHint;
-use tedge_config::OptionalConfigError;
-use tedge_config::ProfileName;
+use tedge_config::tedge_toml::OptionalConfigError;
+use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 
 use crate::cli::common::Cloud;

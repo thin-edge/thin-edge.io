@@ -8,8 +8,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_api::path::DataDir;
+use tedge_config::models::TopicPrefix;
 use tedge_config::TEdgeConfig;
-use tedge_config::TopicPrefix;
 use tedge_mqtt_ext::TopicFilter;
 
 const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_update";

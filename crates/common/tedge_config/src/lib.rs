@@ -1,14 +1,17 @@
 mod sudo;
-pub mod tedge_toml;
 pub use sudo::SudoCommandBuilder;
 pub mod cli;
 mod system_toml;
+pub use system_toml::*;
 
-pub use self::system_toml::*;
-pub use self::tedge_toml::error::*;
-pub use self::tedge_toml::models::*;
-pub use self::tedge_toml::tedge_config::*;
-pub use self::tedge_toml::tedge_config_location::*;
+pub mod tedge_toml;
+pub use tedge_toml::error::*;
+pub use tedge_toml::models;
+pub use tedge_toml::tedge_config::TEdgeConfig;
+pub use tedge_toml::tedge_config::TEdgeConfigDto;
+pub use tedge_toml::tedge_config::TEdgeConfigReader;
+pub use tedge_toml::tedge_config_location::*;
+
 pub use camino::Utf8Path as Path;
 pub use camino::Utf8PathBuf as PathBuf;
 pub use certificate::CertificateError;

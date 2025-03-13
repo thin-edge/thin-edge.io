@@ -8,7 +8,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
-use tedge_config::ProfileName;
+use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_health_ext::HealthMonitorBuilder;

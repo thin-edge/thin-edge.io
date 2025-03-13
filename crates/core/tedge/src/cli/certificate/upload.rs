@@ -9,8 +9,8 @@ use reqwest::StatusCode;
 use reqwest::Url;
 use std::io::prelude::*;
 use std::path::Path;
-use tedge_config::HostPort;
-use tedge_config::HTTPS_PORT;
+use tedge_config::models::HostPort;
+use tedge_config::models::HTTPS_PORT;
 
 #[derive(Debug, serde::Deserialize)]
 struct CumulocityResponse {
