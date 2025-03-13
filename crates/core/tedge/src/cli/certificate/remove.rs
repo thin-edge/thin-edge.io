@@ -1,7 +1,7 @@
-use std::fs;
-use std::io;
+use std::io::ErrorKind::NotFound;
+use tokio::fs;
 
-use crate::command::Command;
+use crate::command::CommandAsync;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
 
@@ -16,13 +16,14 @@ pub struct RemoveCertCmd {
     pub key_path: Utf8PathBuf,
 }
 
-impl Command for RemoveCertCmd {
+#[async_trait::async_trait]
+impl CommandAsync for RemoveCertCmd {
     fn description(&self) -> String {
         "remove the device certificate".into()
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        match self.remove_certificate()? {
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+        match self.remove_certificate().await? {
             RemoveCertResult::Removed => eprintln!("Certificate was successfully removed"),
             RemoveCertResult::NotFound => eprintln!("There is no certificate to remove"),
         }
@@ -31,10 +32,12 @@ impl Command for RemoveCertCmd {
 }
 
 impl RemoveCertCmd {
-    pub(crate) fn remove_certificate(&self) -> Result<RemoveCertResult, CertError> {
-        match fs::remove_file(&self.cert_path).and_then(|()| fs::remove_file(&self.key_path)) {
+    pub(crate) async fn remove_certificate(&self) -> Result<RemoveCertResult, CertError> {
+        let cert_removed = fs::remove_file(&self.cert_path).await;
+        let key_removed = fs::remove_file(&self.key_path).await;
+        match cert_removed.and(key_removed) {
             Ok(()) => Ok(RemoveCertResult::Removed),
-            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(RemoveCertResult::NotFound),
+            Err(err) if err.kind() == NotFound => Ok(RemoveCertResult::NotFound),
             Err(err) => Err(err.into()),
         }
     }
