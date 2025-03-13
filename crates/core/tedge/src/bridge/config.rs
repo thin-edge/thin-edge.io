@@ -2,10 +2,10 @@ use camino::Utf8PathBuf;
 use core::fmt;
 use std::borrow::Cow;
 use std::time::Duration;
-use tedge_config::auth_method::AuthMethod;
-use tedge_config::HostPort;
+use tedge_config::models::auth_method::AuthMethod;
+use tedge_config::models::HostPort;
+use tedge_config::models::MQTT_TLS_PORT;
 use tedge_config::TEdgeConfigLocation;
-use tedge_config::MQTT_TLS_PORT;
 use tedge_utils::paths::DraftFile;
 
 use super::TEDGE_BRIDGE_CONF_DIR_PATH;

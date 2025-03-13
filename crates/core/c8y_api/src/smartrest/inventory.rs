@@ -13,7 +13,7 @@ use crate::smartrest::topic::publish_topic_from_parent;
 use crate::smartrest::topic::C8yTopic;
 use mqtt_channel::MqttMessage;
 use std::time::Duration;
-use tedge_config::TopicPrefix;
+use tedge_config::models::TopicPrefix;
 
 use super::message_ids::CHILD_DEVICE_CREATION;
 use super::message_ids::SERVICE_CREATION;

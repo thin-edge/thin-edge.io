@@ -9,8 +9,8 @@ use std::time::Instant;
 use crate::system_services::SystemServiceError;
 use crate::system_services::SystemServiceManager;
 use camino::Utf8Path;
-use tedge_config::auth_method::AuthMethod;
-use tedge_config::auth_method::AuthType;
+use tedge_config::models::auth_method::AuthMethod;
+use tedge_config::models::auth_method::AuthType;
 use tedge_config::MultiError;
 use yansi::Paint as _;
 

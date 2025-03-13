@@ -6,7 +6,7 @@ use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::HealthStatus;
 use tedge_api::Status;
-use tedge_config::TopicPrefix;
+use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tracing::error;

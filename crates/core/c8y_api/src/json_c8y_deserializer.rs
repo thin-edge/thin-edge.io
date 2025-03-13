@@ -12,7 +12,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::SoftwareModule;
 use tedge_api::SoftwareModuleUpdate;
 use tedge_api::SoftwareUpdateCommand;
-use tedge_config::TopicPrefix;
+use tedge_config::models::TopicPrefix;
 use time::OffsetDateTime;
 
 pub struct C8yDeviceControlTopic;

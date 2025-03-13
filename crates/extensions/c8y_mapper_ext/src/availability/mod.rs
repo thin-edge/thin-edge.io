@@ -10,7 +10,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::HealthStatus;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
-use tedge_config::TopicPrefix;
+use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::SetTimeout;

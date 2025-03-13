@@ -23,7 +23,7 @@ use operation::get_operation;
 use operation::get_operations;
 use operation::Operation;
 use tedge_api::substitution::Record;
-use tedge_config::TopicPrefix;
+use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file;

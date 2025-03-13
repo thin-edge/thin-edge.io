@@ -8,7 +8,7 @@ use tedge_api::alarm::ThinEdgeAlarmDeserializerError;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_config::TopicPrefix;
+use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 

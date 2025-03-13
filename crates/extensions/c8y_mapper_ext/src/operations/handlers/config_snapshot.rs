@@ -146,7 +146,7 @@ mod tests {
     use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
-    use tedge_config::AutoLogUpload;
+    use tedge_config::models::AutoLogUpload;
     use tedge_downloader_ext::DownloadResponse;
     use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
     use tedge_mqtt_ext::test_helpers::assert_received_includes_json;

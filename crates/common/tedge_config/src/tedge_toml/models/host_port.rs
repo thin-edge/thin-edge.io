@@ -1,5 +1,5 @@
-use crate::ConnectUrl;
-use crate::Port;
+use super::ConnectUrl;
+use super::Port;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt;
@@ -19,7 +19,7 @@ use url::Host;
 /// # Examples
 ///
 /// ```
-/// # use tedge_config::{HostPort, Port, HTTPS_PORT};
+/// # use tedge_config::models::{HostPort, Port, HTTPS_PORT};
 ///
 /// // use a fallback port if not present in string
 /// let http = HostPort::<HTTPS_PORT>::try_from("my-tenant.cumulocity.com".to_string()).unwrap();
@@ -142,8 +142,9 @@ pub enum ParseHostPortError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::HTTPS_PORT;
-    use crate::MQTT_TLS_PORT;
+
+    use super::super::HTTPS_PORT;
+    use super::super::MQTT_TLS_PORT;
     use test_case::test_case;
 
     #[test_case(HostPort::<HTTPS_PORT>::try_from("test.com").unwrap(), "test.com:443")]

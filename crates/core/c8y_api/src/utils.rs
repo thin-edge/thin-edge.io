@@ -2,7 +2,7 @@ pub mod child_device {
     use crate::smartrest::message_ids::CHILD_DEVICE_CREATION;
     use crate::smartrest::topic::C8yTopic;
     use mqtt_channel::MqttMessage;
-    use tedge_config::TopicPrefix;
+    use tedge_config::models::TopicPrefix;
 
     pub fn new_child_device_message(child_id: &str, prefix: &TopicPrefix) -> MqttMessage {
         MqttMessage::new(

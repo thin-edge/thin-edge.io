@@ -7,13 +7,13 @@ use std::time::Duration;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_config::auth_method::AuthMethod;
-use tedge_config::AutoFlag;
-use tedge_config::HostPort;
+use tedge_config::models::auth_method::AuthMethod;
+use tedge_config::models::AutoFlag;
+use tedge_config::models::HostPort;
+use tedge_config::models::TemplatesSet;
+use tedge_config::models::TopicPrefix;
+use tedge_config::models::MQTT_TLS_PORT;
 use tedge_config::ProfileName;
-use tedge_config::TemplatesSet;
-use tedge_config::TopicPrefix;
-use tedge_config::MQTT_TLS_PORT;
 use which::which;
 
 #[derive(Debug)]

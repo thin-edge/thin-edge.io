@@ -16,7 +16,7 @@ use tedge_api::service_health_topic;
 use tedge_config::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigReaderAz;
-use tedge_config::TopicPrefix;
+use tedge_config::models::TopicPrefix;
 use tedge_mqtt_bridge::use_key_and_cert;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
