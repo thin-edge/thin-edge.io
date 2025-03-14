@@ -184,8 +184,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[allow(clippy::disallowed_methods)]
-    async fn get_tenant_id_blocking_should_return_error_given_wrong_credentials() {
+    async fn get_tenant_id_should_return_error_given_wrong_credentials() {
+        #[allow(clippy::disallowed_methods)]
         let client = reqwest::Client::new();
 
         let mut server = mockito::Server::new_async().await;
@@ -210,8 +210,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[allow(clippy::disallowed_methods)]
-    async fn get_tenant_id_blocking_returns_correct_response() {
+    async fn get_tenant_id_returns_correct_response() {
+        #[allow(clippy::disallowed_methods)]
         let client = reqwest::Client::new();
 
         let mut server = mockito::Server::new_async().await;
@@ -241,8 +241,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[allow(clippy::disallowed_methods)]
-    async fn get_tenant_id_blocking_response_should_return_error_when_response_has_no_name_field() {
+    async fn get_tenant_id_response_should_return_error_when_response_has_no_name_field() {
+        #[allow(clippy::disallowed_methods)]
         let client = reqwest::Client::new();
 
         let mut server = mockito::Server::new_async().await;
