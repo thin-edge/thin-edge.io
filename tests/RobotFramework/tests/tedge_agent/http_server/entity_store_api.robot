@@ -1,5 +1,6 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
+Library             Collections
 Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
@@ -125,6 +126,28 @@ Delete entity tree
     Should Contain Entity
     ...    {"@topic-id":"device/child2//","@parent":"device/main//","@type":"child-device"}
     ...    ${entities}
+
+Entity twin update apis
+    ${entity}=    Execute Command
+    ...    curl -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window -H 'Content-Type: application/json' -d '5'
+    ${entity}=    Evaluate    ${entity}
+    Should Be Equal    ${entity["maintenance_window"]}    ${5}
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_window
+    ...    message_contains=5
+
+    ${get}=    Execute Command
+    ...    curl http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
+    Should Be Equal    ${get}    5
+
+    ${timestamp}=    Get Unix Timestamp
+    ${entity}=    Execute Command
+    ...    curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
+    ${entity}=    Evaluate    ${entity}
+    Should Not Contain    ${entity}    maintenance_window
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_window
+    ...    date_from=${timestamp}
 
 
 *** Keywords ***
