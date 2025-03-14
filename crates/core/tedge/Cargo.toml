@@ -21,7 +21,7 @@ c8y-remote-access-plugin = { workspace = true }
 c8y_api = { workspace = true }
 camino = { workspace = true }
 cap = { workspace = true }
-certificate = { workspace = true, features = ["reqwest-blocking"] }
+certificate = { workspace = true }
 clap = { workspace = true }
 clap_complete = { version = "4.5.42", features = ["unstable-dynamic"] }
 doku = { workspace = true }
@@ -31,7 +31,6 @@ mqtt_channel = { workspace = true }
 nix = { workspace = true }
 pad = { workspace = true }
 reqwest = { workspace = true, features = [
-    "blocking",
     "json",
     "multipart",
     "rustls-tls-native-roots",

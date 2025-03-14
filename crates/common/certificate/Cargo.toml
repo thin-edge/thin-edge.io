@@ -10,7 +10,6 @@ repository = { workspace = true }
 
 [features]
 default = []
-reqwest-blocking = ["dep:reqwest", "reqwest/blocking"]
 reqwest = ["dep:reqwest"]
 cryptoki = ["dep:cryptoki"]
 

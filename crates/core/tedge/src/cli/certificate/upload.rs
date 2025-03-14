@@ -1,14 +1,12 @@
 use super::error::get_webpki_error_from_reqwest;
 use super::error::CertError;
-use crate::command::Command;
+use crate::command::CommandAsync;
 use crate::log::MaybeFancy;
 use crate::warning;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
 use reqwest::StatusCode;
 use reqwest::Url;
-use std::io::prelude::*;
-use std::path::Path;
 use tedge_config::models::HostPort;
 use tedge_config::models::HTTPS_PORT;
 
@@ -35,60 +33,72 @@ pub struct UploadCertCmd {
     pub password: String,
 }
 
-impl Command for UploadCertCmd {
+#[async_trait::async_trait]
+impl CommandAsync for UploadCertCmd {
     fn description(&self) -> String {
         "upload root certificate".into()
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        Ok(self.upload_certificate()?)
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+        Ok(self.upload_certificate().await?)
     }
 }
 
 impl UploadCertCmd {
-    fn upload_certificate(&self) -> Result<(), CertError> {
+    async fn upload_certificate(&self) -> Result<(), anyhow::Error> {
         if std::env::var("C8YPASS").is_ok() {
             warning!("Detected use of a deprecated env variable, C8YPASS. Please use C8Y_PASSWORD instead\n");
         }
-
-        // Prompt if not already set
-        let username = if self.username.is_empty() {
-            print!("Enter username: ");
-            std::io::stdout().flush()?;
-            let mut input = String::new();
-            std::io::stdin()
-                .read_line(&mut input)
-                .expect("Invalid username");
-            input.trim_end_matches(['\n', '\r']).to_string()
-        } else {
-            self.username.clone()
-        };
-
-        // Read the password from /dev/tty
-        let password = if self.password.is_empty() {
-            rpassword::read_password_from_tty(Some("Enter password: "))?
-        } else {
-            self.password.clone()
-        };
-
-        let client = self.cloud_root_certs.blocking_client();
+        let (username, password) = self.prompt_for_user_password().await?;
+        let client = self.cloud_root_certs.client();
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io[:port]/tenant/tenants/<tenant_id>/trusted-certificates
         // https://<tenant_domain>.cumulocity.url.io[:port]/tenant/tenants/<tenant_id>/trusted-certificates
         // and therefore we need to get tenant_id.
-        let tenant_id = get_tenant_id_blocking(
+        let tenant_id = get_tenant_id(
             &client,
             build_get_tenant_id_url(&self.host.to_string())?,
             &username,
             &password,
-        )?;
+        )
+        .await?;
         self.post_certificate(&client, &tenant_id, &username, &password)
+            .await?;
+        Ok(())
     }
 
-    fn post_certificate(
+    async fn prompt_for_user_password(&self) -> Result<(String, String), anyhow::Error> {
+        use std::io::Write;
+        let username_arg = self.username.clone();
+        let password_arg = self.password.clone();
+        tokio::task::spawn_blocking(move || {
+            // Prompt if not already set
+            let username = if username_arg.is_empty() {
+                print!("Enter username: ");
+                std::io::stdout().flush()?;
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                input.trim_end_matches(['\n', '\r']).to_string()
+            } else {
+                username_arg
+            };
+
+            // Read the password from /dev/tty
+            let password = if password_arg.is_empty() {
+                rpassword::read_password_from_tty(Some("Enter password: "))?
+            } else {
+                password_arg
+            };
+
+            Ok((username, password))
+        })
+        .await?
+    }
+
+    async fn post_certificate(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         tenant_id: &str,
         username: &str,
         password: &str,
@@ -97,7 +107,7 @@ impl UploadCertCmd {
 
         let post_body = UploadCertBody {
             auto_registration_enabled: true,
-            cert_in_pem_format: read_cert_to_string(&self.path)?,
+            cert_in_pem_format: tokio::fs::read_to_string(&self.path).await?,
             name: self.device_id.clone(),
             status: "ENABLED".into(),
         };
@@ -107,6 +117,7 @@ impl UploadCertCmd {
             .json(&post_body)
             .basic_auth(username, Some(password))
             .send()
+            .await
             .map_err(get_webpki_error_from_reqwest)?;
 
         match res.status() {
@@ -142,8 +153,8 @@ fn build_upload_certificate_url(host: &str, tenant_id: &str) -> Result<Url, Cert
     Ok(Url::parse(&url_str)?)
 }
 
-fn get_tenant_id_blocking(
-    client: &reqwest::blocking::Client,
+async fn get_tenant_id(
+    client: &reqwest::Client,
     url: Url,
     username: &str,
     password: &str,
@@ -152,22 +163,12 @@ fn get_tenant_id_blocking(
         .get(url)
         .basic_auth(username, Some(password))
         .send()
+        .await
         .map_err(get_webpki_error_from_reqwest)?
         .error_for_status()?;
 
-    let body = res.json::<CumulocityResponse>()?;
+    let body = res.json::<CumulocityResponse>().await?;
     Ok(body.name)
-}
-
-fn read_cert_to_string(path: impl AsRef<Path>) -> Result<String, CertError> {
-    let mut file = std::fs::File::open(path.as_ref()).map_err(|err| {
-        let path = path.as_ref().display().to_string();
-        CertError::CertificateReadFailed(err, path)
-    })?;
-    let mut content = String::new();
-    file.read_to_string(&mut content)?;
-
-    Ok(content)
 }
 
 #[cfg(test)]
@@ -182,12 +183,12 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    #[allow(clippy::disallowed_methods)]
-    fn get_tenant_id_blocking_should_return_error_given_wrong_credentials() {
-        let client = reqwest::blocking::Client::new();
+    #[tokio::test]
+    async fn get_tenant_id_should_return_error_given_wrong_credentials() {
+        #[allow(clippy::disallowed_methods)]
+        let client = reqwest::Client::new();
 
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let request_url = Url::parse(&format!("{}/tenant/currentTenant", server.url())).unwrap();
 
         let auth_header_field = "authorization";
@@ -201,18 +202,19 @@ mod tests {
             .match_header(auth_header_field, auth_header_value)
             .with_body(response_body)
             .with_status(expected_status)
-            .create();
+            .create_async()
+            .await;
 
-        let res = get_tenant_id_blocking(&client, request_url, "test", "test");
+        let res = get_tenant_id(&client, request_url, "test", "test").await;
         assert!(res.is_err());
     }
 
-    #[test]
-    #[allow(clippy::disallowed_methods)]
-    fn get_tenant_id_blocking_returns_correct_response() {
-        let client = reqwest::blocking::Client::new();
+    #[tokio::test]
+    async fn get_tenant_id_returns_correct_response() {
+        #[allow(clippy::disallowed_methods)]
+        let client = reqwest::Client::new();
 
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let request_url = Url::parse(&format!("{}/tenant/currentTenant", server.url())).unwrap();
 
         let auth_header_field = "authorization";
@@ -228,19 +230,22 @@ mod tests {
             .match_header(auth_header_field, auth_header_value)
             .with_body(response_body)
             .with_status(expected_status)
-            .create();
+            .create_async()
+            .await;
 
-        let res = get_tenant_id_blocking(&client, request_url, "test", "test").unwrap();
+        let res = get_tenant_id(&client, request_url, "test", "test")
+            .await
+            .unwrap();
 
         assert_eq!(res, expected);
     }
 
-    #[test]
-    #[allow(clippy::disallowed_methods)]
-    fn get_tenant_id_blocking_response_should_return_error_when_response_has_no_name_field() {
-        let client = reqwest::blocking::Client::new();
+    #[tokio::test]
+    async fn get_tenant_id_response_should_return_error_when_response_has_no_name_field() {
+        #[allow(clippy::disallowed_methods)]
+        let client = reqwest::Client::new();
 
-        let mut server = mockito::Server::new();
+        let mut server = mockito::Server::new_async().await;
         let request_url = Url::parse(&format!("{}/tenant/currentTenant", server.url())).unwrap();
 
         let auth_header_field = "authorization";
@@ -254,9 +259,10 @@ mod tests {
             .match_header(auth_header_field, auth_header_value)
             .with_body(response_body)
             .with_status(expected_status)
-            .create();
+            .create_async()
+            .await;
 
-        let res = get_tenant_id_blocking(&client, request_url, "test", "test");
+        let res = get_tenant_id(&client, request_url, "test", "test").await;
         assert!(res.is_err());
     }
 
