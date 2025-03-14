@@ -50,7 +50,7 @@ prepare-dev:
 
 # Install necessary tools
 install-tools:
-    rustup component add rls rust-analysis rust-src rustfmt clippy
+    rustup component add rust-analyzer rust-analysis rust-src rustfmt clippy
     rustup toolchain install nightly
     rustup component add rustfmt --toolchain nightly
     cargo +stable install taplo-cli cargo-nextest
