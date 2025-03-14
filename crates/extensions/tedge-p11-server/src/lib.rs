@@ -19,6 +19,5 @@ pub mod client;
 /// Interfaces with the PKCS#11 dynamic module using cryptoki crate.
 mod pkcs11;
 pub use pkcs11::CryptokiConfigDirect;
-pub use pkcs11::Pkcs11SigningKey;
 
 pub mod single_cert_and_key;

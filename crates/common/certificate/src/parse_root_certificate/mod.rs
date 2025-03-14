@@ -10,10 +10,12 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
-use crate::CertificateError;
-
 #[cfg(feature = "cryptoki")]
-pub use tedge_p11_server::CryptokiConfigDirect as CryptokiConfig;
+pub use tedge_p11_server::CryptokiConfig;
+#[cfg(feature = "cryptoki")]
+pub use tedge_p11_server::CryptokiConfigDirect;
+
+use crate::CertificateError;
 
 pub fn create_tls_config(
     root_certificates: impl AsRef<Path>,
@@ -39,18 +41,13 @@ pub fn create_tls_config_cryptoki(
     client_certificate: impl AsRef<Path>,
     cryptoki_config: CryptokiConfig,
 ) -> Result<ClientConfig, CertificateError> {
-    use anyhow::Context;
     use rustls::sign::CertifiedKey;
     use std::sync::Arc;
     use tedge_p11_server::single_cert_and_key::SingleCertAndKey;
-    use tedge_p11_server::Pkcs11SigningKey;
 
     let root_cert_store = new_root_store(root_certificates.as_ref())?;
     let cert_chain = read_cert_chain(client_certificate)?;
-    let key = Arc::new(
-        Pkcs11SigningKey::from_cryptoki_config(&cryptoki_config)
-            .context("failed to create a TLS signer using PKCS#11 device")?,
-    );
+    let key = tedge_p11_server::signing_key(cryptoki_config)?;
 
     let certified_key = CertifiedKey {
         cert: cert_chain,
