@@ -30,6 +30,8 @@ pub enum EntityStoreRequest {
     Delete(EntityTopicId),
     List(ListFilters),
     MqttMessage(MqttMessage),
+    GetTwinFragment(EntityTopicId, String),
+    UpdateTwinFragment(EntityTwinMessage),
 }
 
 #[derive(Debug)]
@@ -40,6 +42,8 @@ pub enum EntityStoreResponse {
     Delete(Vec<EntityMetadata>),
     List(Vec<EntityMetadata>),
     Ok,
+    UpdateTwinFragment(Result<bool, entity_store::Error>),
+    GetTwinFragment(Option<Value>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -136,6 +140,14 @@ impl Server for EntityStoreServer {
                 let entities = self.entity_store.list_entity_tree(filters);
                 EntityStoreResponse::List(entities.into_iter().cloned().collect())
             }
+            EntityStoreRequest::GetTwinFragment(topic_id, fragment_key) => {
+                let twin = self.entity_store.get_twin_data(&topic_id, &fragment_key);
+                EntityStoreResponse::GetTwinFragment(twin.cloned())
+            }
+            EntityStoreRequest::UpdateTwinFragment(twin_data) => {
+                let res = self.update_twin_data(twin_data).await;
+                EntityStoreResponse::UpdateTwinFragment(res)
+            }
             EntityStoreRequest::MqttMessage(mqtt_message) => {
                 self.process_mqtt_message(mqtt_message).await;
                 EntityStoreResponse::Ok
@@ -208,6 +220,23 @@ impl EntityStoreServer {
                 }
             }
         }
+    }
+
+    async fn update_twin_data(
+        &mut self,
+        twin_message: EntityTwinMessage,
+    ) -> Result<bool, entity_store::Error> {
+        let updated = self.entity_store.update_twin_data(twin_message.clone())?;
+        if updated {
+            self.publish_twin_data(
+                &twin_message.topic_id,
+                twin_message.fragment_key,
+                twin_message.fragment_value,
+            )
+            .await;
+        }
+
+        Ok(updated)
     }
 
     async fn publish_twin_data(

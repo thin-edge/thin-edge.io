@@ -32,6 +32,7 @@ use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::InvalidEntityType;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::TopicIdError;
@@ -115,6 +116,9 @@ enum Error {
 
     #[error(transparent)]
     InvalidTwinData(#[from] InvalidTwinData),
+
+    #[error("Path: {0} not found")]
+    PathNotFound(String),
 }
 
 impl IntoResponse for Error {
@@ -131,6 +135,7 @@ impl IntoResponse for Error {
             Error::InvalidEntityStoreResponse => StatusCode::INTERNAL_SERVER_ERROR,
             Error::InvalidInput(_) => StatusCode::BAD_REQUEST,
             Error::InvalidTwinData(_) => StatusCode::BAD_REQUEST,
+            Error::PathNotFound(_) => StatusCode::NOT_FOUND,
         };
         let error_message = self.to_string();
 
@@ -143,9 +148,10 @@ pub(crate) fn entity_store_router(state: AgentState) -> Router {
         .route("/v1/entities", post(register_entity).get(list_entities))
         .route(
             "/v1/entities/{*path}",
-            get(get_entity)
-                .patch(patch_entity)
-                .delete(deregister_entity),
+            get(get_resource)
+                .put(put_resource)
+                .patch(patch_resource)
+                .delete(delete_resource),
         )
         .with_state(state)
 }
@@ -170,13 +176,91 @@ async fn register_entity(
     ))
 }
 
-async fn patch_entity(
+async fn get_resource(
+    State(state): State<AgentState>,
+    Path(path): Path<String>,
+) -> Result<impl IntoResponse, Error> {
+    let segments = path.split('/').collect::<Vec<&str>>();
+    match segments.as_slice() {
+        [seg1, seg2, seg3, seg4] => {
+            let topic_id = topic_id_from_path_segments(seg1, seg2, seg3, seg4)?;
+            get_entity(state, topic_id)
+                .await
+                .map(|res| res.into_response())
+        }
+        [seg1, seg2, seg3, seg4, "twin", fragment_key] => {
+            let topic_id = topic_id_from_path_segments(seg1, seg2, seg3, seg4)?;
+            get_entity_twin_fragment(state, topic_id, fragment_key.to_string())
+                .await
+                .map(|res| res.into_response())
+        }
+        _ => Err(Error::PathNotFound(path)),
+    }
+}
+
+async fn put_resource(
+    State(state): State<AgentState>,
+    Path(path): Path<String>,
+    Json(value): Json<Value>,
+) -> impl IntoResponse {
+    let segments = path.split('/').collect::<Vec<&str>>();
+    match segments.as_slice() {
+        [seg1, seg2, seg3, seg4, "twin", fragment_key] => {
+            let topic_id = topic_id_from_path_segments(seg1, seg2, seg3, seg4)?;
+            Ok(upsert_entity_twin_fragment(state, topic_id, fragment_key.to_string(), value).await)
+        }
+        _ => Err(Error::PathNotFound(path)),
+    }
+}
+
+async fn patch_resource(
     State(state): State<AgentState>,
     Path(path): Path<String>,
     Json(twin_fragments): Json<Map<String, Value>>,
 ) -> impl IntoResponse {
-    let topic_id = EntityTopicId::from_str(&path)?;
-    let twin_data = EntityTwinData::try_new(topic_id, twin_fragments)?;
+    let segments = path.split('/').collect::<Vec<&str>>();
+    match segments.as_slice() {
+        [seg1, seg2, seg3, seg4] => {
+            let topic_id = topic_id_from_path_segments(seg1, seg2, seg3, seg4)?;
+            Ok(patch_entity(state, topic_id, twin_fragments).await)
+        }
+        _ => Err(Error::PathNotFound(path)),
+    }
+}
+
+async fn delete_resource(
+    State(state): State<AgentState>,
+    Path(path): Path<String>,
+) -> Result<Response, Error> {
+    let segments = path.split('/').collect::<Vec<&str>>();
+    match segments.as_slice() {
+        [seg1, seg2, seg3, seg4] => {
+            let topic_id = topic_id_from_path_segments(seg1, seg2, seg3, seg4)?;
+            deregister_entity(state, topic_id).await
+        }
+        [seg1, seg2, seg3, seg4, "twin", fragment_key] => {
+            let topic_id = topic_id_from_path_segments(seg1, seg2, seg3, seg4)?;
+            delete_entity_twin_fragment(state, topic_id, fragment_key.to_string()).await
+        }
+        _ => Err(Error::PathNotFound(path)),
+    }
+}
+
+fn topic_id_from_path_segments(
+    seg1: &str,
+    seg2: &str,
+    seg3: &str,
+    seg4: &str,
+) -> Result<EntityTopicId, TopicIdError> {
+    EntityTopicId::from_str(&format!("{}/{}/{}/{}", seg1, seg2, seg3, seg4))
+}
+
+async fn patch_entity(
+    state: AgentState,
+    topic_id: EntityTopicId,
+    twin_fragments: Map<String, Value>,
+) -> impl IntoResponse {
+    let twin_data = EntityTwinData::try_new(topic_id.clone(), twin_fragments)?;
 
     let response = state
         .entity_store_handle
@@ -188,17 +272,15 @@ async fn patch_entity(
     };
     res?;
 
-    let entity = get_entity(State(state), Path(path)).await?;
+    let entity = get_entity(state, topic_id).await?;
 
     Ok(entity)
 }
 
 async fn get_entity(
-    State(state): State<AgentState>,
-    Path(path): Path<String>,
-) -> Result<Json<EntityMetadata>, Error> {
-    let topic_id = EntityTopicId::from_str(&path)?;
-
+    state: AgentState,
+    topic_id: EntityTopicId,
+) -> Result<impl IntoResponse, Error> {
     let response = state
         .entity_store_handle
         .clone()
@@ -210,18 +292,13 @@ async fn get_entity(
     };
 
     if let Some(entity) = entity_metadata {
-        Ok(Json(entity.clone()))
+        Ok(Json(entity))
     } else {
         Err(Error::EntityNotFound(topic_id))
     }
 }
 
-async fn deregister_entity(
-    State(state): State<AgentState>,
-    Path(path): Path<String>,
-) -> Result<Response, Error> {
-    let topic_id = EntityTopicId::from_str(&path)?;
-
+async fn deregister_entity(state: AgentState, topic_id: EntityTopicId) -> Result<Response, Error> {
     let response = state
         .entity_store_handle
         .clone()
@@ -255,6 +332,68 @@ async fn list_entities(
     };
 
     Ok(Json(entities))
+}
+
+async fn get_entity_twin_fragment(
+    state: AgentState,
+    topic_id: EntityTopicId,
+    fragment_key: String,
+) -> Result<impl IntoResponse, Error> {
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::GetTwinFragment(topic_id, fragment_key))
+        .await?;
+    let EntityStoreResponse::GetTwinFragment(fragment_value) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+
+    Ok(Json(fragment_value))
+}
+
+async fn upsert_entity_twin_fragment(
+    state: AgentState,
+    topic_id: EntityTopicId,
+    fragment_key: String,
+    fragment_value: Value,
+) -> impl IntoResponse {
+    let twin_data = EntityTwinMessage::new(topic_id.clone(), fragment_key, fragment_value);
+
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::UpdateTwinFragment(twin_data))
+        .await?;
+    let EntityStoreResponse::UpdateTwinFragment(res) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+    res?;
+
+    let entity = get_entity(state, topic_id).await?;
+
+    Ok(entity)
+}
+
+async fn delete_entity_twin_fragment(
+    state: AgentState,
+    topic_id: EntityTopicId,
+    fragment_key: String,
+) -> Result<Response, Error> {
+    let twin_data = EntityTwinMessage::new(topic_id.clone(), fragment_key, Value::Null);
+
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::UpdateTwinFragment(twin_data))
+        .await?;
+    let EntityStoreResponse::UpdateTwinFragment(res) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+    res?;
+
+    let entity = get_entity(state, topic_id).await?;
+
+    Ok(entity.into_response())
 }
 
 #[cfg(test)]
