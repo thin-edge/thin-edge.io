@@ -15,12 +15,13 @@ use crate::log::MaybeFancy;
 ///     name: String,
 /// };
 ///
+/// #[async_trait::async_trait]
 /// impl Command for SayHello {
 ///     fn description(&self) -> String {
 ///        format!("say hello to '{}'", self.name)
 ///     }
 ///
-///     fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+///     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
 ///        println!("Hello {}!", self.name);
 ///        Ok(())
 ///     }
@@ -42,12 +43,13 @@ use crate::log::MaybeFancy;
 ///     key: ReadableKey,
 /// };
 ///
+/// #[async_trait::async_trait]
 /// impl Command for GetConfigKey {
 ///     fn description(&self) -> String {
 ///        format!("get the value of the configuration key '{}'", self.key)
 ///     }
 ///
-///     fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+///     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
 ///        match self.config.read_string(&self.key) {
 ///             Ok(value) => println!("{}", value),
 ///             Err(ReadError::ConfigNotSet(_)) => eprintln!("The configuration key `{}` is not set", self.key),
@@ -57,6 +59,7 @@ use crate::log::MaybeFancy;
 ///     }
 /// }
 /// ```
+#[async_trait::async_trait]
 pub trait Command {
     /// Display that command to the user, telling what will be done.
     ///
@@ -77,7 +80,7 @@ pub trait Command {
     ///     UnknownKey{key: String},
     /// }
     /// ```
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>>;
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>>;
 
     /// Helper method to be used in the `BuildCommand` trait.
     ///
@@ -85,7 +88,7 @@ pub trait Command {
     ///
     /// ```
     /// use tedge_config::tedge_toml::ReadableKey;
-    /// use tedge_config::TEdgeConfig;
+    /// use tedge_config::TEdgeConfigLocation;
     /// use tedge::cli::config::GetConfigCommand;
     /// use tedge::ConfigError;
     /// use tedge::command::Command;
@@ -93,8 +96,8 @@ pub trait Command {
     /// struct SomeStruct;
     ///
     /// impl SomeStruct {
-    ///     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-    ///         let cmd = GetConfigCommand { config, key: ReadableKey::MqttBindPort };
+    ///     fn build_command(self, config_location: TEdgeConfigLocation) -> Result<Box<dyn Command>, ConfigError> {
+    ///         let cmd = GetConfigCommand { config_location, key: ReadableKey::MqttBindPort };
     ///         Ok(cmd.into_boxed())
     ///     }
     /// }
@@ -137,7 +140,7 @@ pub trait Command {
 ///                 value,
 ///             }.into_boxed(),
 ///             ConfigCmd::Get { key } => GetConfigCommand {
-///                 config: context.load_config()?,
+///                 config_location: context.config_location,
 ///                 key,
 ///             }.into_boxed(),
 ///         };
@@ -163,6 +166,6 @@ impl BuildContext {
     }
 
     pub fn load_config(&self) -> Result<tedge_config::TEdgeConfig, tedge_config::TEdgeConfigError> {
-        tedge_config::TEdgeConfig::try_new(self.config_location.clone())
+        tedge_config::TEdgeConfig::try_new_sync(self.config_location.clone())
     }
 }

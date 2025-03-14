@@ -1,9 +1,18 @@
-use super::error::CertError;
 use crate::command::Command;
 use crate::log::MaybeFancy;
-
+use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
+use tokio::io::AsyncWriteExt;
+
+macro_rules! print_async {
+    ($out:expr, $fmt:literal) => (
+        let _ = $out.write_all($fmt.as_bytes()).await;
+    );
+    ($out:expr, $fmt:literal, $($arg:tt)*) => (
+        let _ = $out.write_all(format!($fmt, $($arg)*).as_bytes()).await;
+    );
+}
 
 /// Show the device certificate, if any
 pub struct ShowCertCmd {
@@ -11,32 +20,35 @@ pub struct ShowCertCmd {
     pub cert_path: Utf8PathBuf,
 }
 
+#[async_trait::async_trait]
 impl Command for ShowCertCmd {
     fn description(&self) -> String {
         "show the device certificate".into()
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        self.show_certificate()?;
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+        self.show_certificate().await?;
         Ok(())
     }
 }
 
 impl ShowCertCmd {
-    fn show_certificate(&self) -> Result<(), CertError> {
-        let pem = PemCertificate::from_pem_file(&self.cert_path).map_err(|err| match err {
-            certificate::CertificateError::IoError { error, .. } => {
-                CertError::IoError(error).cert_context(self.cert_path.clone())
-            }
-            from => CertError::CertificateError(from),
-        })?;
+    pub async fn show_certificate(&self) -> Result<(), anyhow::Error> {
+        let cert_path = &self.cert_path;
+        let cert = tokio::fs::read_to_string(cert_path)
+            .await
+            .with_context(|| format!("reading certificate from {cert_path}"))?;
+        let pem = PemCertificate::from_pem_string(&cert)
+            .with_context(|| format!("decoding certificate from {cert_path}"))?;
 
-        println!("Device certificate: {}", self.cert_path);
-        println!("Subject: {}", pem.subject()?);
-        println!("Issuer: {}", pem.issuer()?);
-        println!("Valid from: {}", pem.not_before()?);
-        println!("Valid up to: {}", pem.not_after()?);
-        println!("Thumbprint: {}", pem.thumbprint()?);
+        let mut stdout = tokio::io::stdout();
+        print_async!(stdout, "Device certificate: {}\n", self.cert_path);
+        print_async!(stdout, "Subject: {}\n", pem.subject()?);
+        print_async!(stdout, "Issuer: {}\n", pem.issuer()?);
+        print_async!(stdout, "Valid from: {}\n", pem.not_before()?);
+        print_async!(stdout, "Valid up to: {}\n", pem.not_after()?);
+        print_async!(stdout, "Thumbprint: {}\n", pem.thumbprint()?);
+        let _ = stdout.flush().await;
         Ok(())
     }
 }

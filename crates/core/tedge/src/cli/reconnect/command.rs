@@ -16,19 +16,20 @@ pub struct ReconnectBridgeCommand {
     pub service_manager: Arc<dyn SystemServiceManager>,
 }
 
+#[async_trait::async_trait]
 impl Command for ReconnectBridgeCommand {
     fn description(&self) -> String {
         format!("reconnect {} cloud", self.cloud)
     }
 
     /// calls the disconnect command, followed by the connect command
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         println!("Disconnecting from {}", self.cloud);
         let disconnect_cmd: DisconnectBridgeCommand = self.into();
-        disconnect_cmd.execute()?;
+        disconnect_cmd.execute().await?;
 
         let connect_cmd: ConnectCommand = self.into();
-        connect_cmd.execute()?;
+        connect_cmd.execute().await?;
         Ok(())
     }
 }

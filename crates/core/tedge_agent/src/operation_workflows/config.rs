@@ -13,13 +13,14 @@ pub struct OperationConfig {
 }
 
 impl OperationConfig {
-    pub fn from_tedge_config(
+    pub async fn from_tedge_config(
         topic_root: String,
         device_topic_id: &EntityTopicId,
         tedge_config_location: &tedge_config::TEdgeConfigLocation,
     ) -> Result<OperationConfig, tedge_config::TEdgeConfigError> {
         let config_dir = &tedge_config_location.tedge_config_root_path;
-        let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())?;
+        let tedge_config =
+            tedge_config::TEdgeConfig::try_new(tedge_config_location.clone()).await?;
 
         Ok(OperationConfig {
             mqtt_schema: MqttSchema::with_root(topic_root),

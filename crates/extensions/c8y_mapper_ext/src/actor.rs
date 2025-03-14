@@ -325,8 +325,6 @@ impl C8yMapperBuilder {
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         service_monitor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> Result<Self, FileError> {
-        Self::init(&config)?;
-
         let box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput> =
             SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
 
@@ -367,13 +365,13 @@ impl C8yMapperBuilder {
         })
     }
 
-    fn init(config: &C8yMapperConfig) -> Result<(), FileError> {
+    pub async fn init(config: &C8yMapperConfig) -> Result<(), FileError> {
         // Create c8y operations directory
-        create_directory_with_defaults(config.ops_dir.as_std_path())?;
+        create_directory_with_defaults(config.ops_dir.as_std_path()).await?;
         // Create directory for device custom fragments
-        create_directory_with_defaults(config.config_dir.join("device"))?;
+        create_directory_with_defaults(config.config_dir.join("device")).await?;
         // Create directory for persistent entity store
-        create_directory_with_defaults(config.state_dir.as_std_path())?;
+        create_directory_with_defaults(config.state_dir.as_std_path()).await?;
         Ok(())
     }
 }

@@ -261,6 +261,7 @@ impl TEdgeComponent for CumulocityMapper {
             c8y_profile,
         )?);
 
+        C8yMapperBuilder::init(&c8y_mapper_config).await?;
         let mut c8y_mapper_actor = C8yMapperBuilder::try_new(
             c8y_mapper_config,
             &mut mqtt_actor,

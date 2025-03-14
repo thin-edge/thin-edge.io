@@ -268,7 +268,9 @@ impl FirmwareManagerWorker {
             attempt: 1,
         };
 
-        operation_entry.create_status_file(self.config.data_dir.firmware_dir())?;
+        operation_entry
+            .create_status_file(self.config.data_dir.firmware_dir())
+            .await?;
 
         self.publish_firmware_update_request(operation_entry)
             .await?;

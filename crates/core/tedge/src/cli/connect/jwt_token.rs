@@ -9,7 +9,7 @@ use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
 use tedge_config::TEdgeConfig;
 
-pub(crate) fn get_connected_c8y_url(
+pub(crate) async fn get_connected_c8y_url(
     tedge_config: &TEdgeConfig,
     c8y_prefix: Option<&str>,
 ) -> Result<String, ConnectError> {
@@ -25,27 +25,30 @@ pub(crate) fn get_connected_c8y_url(
         .rumqttc_options()?;
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
 
-    let (client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
-    connection
-        .eventloop
+    let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
+    event_loop
         .network_options
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
     let mut acknowledged = false;
     let mut c8y_url: Option<String> = None;
 
-    client.subscribe(c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)?;
+    client
+        .subscribe(c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)
+        .await?;
     let mut err = None;
 
-    for event in connection.iter() {
-        match event {
+    loop {
+        match event_loop.poll().await {
             Ok(Event::Incoming(Packet::SubAck(_))) => {
                 // We are ready to get the response, hence send the request
-                client.publish(
-                    &c8y_topic_builtin_jwt_token_upstream,
-                    rumqttc::QoS::AtMostOnce,
-                    false,
-                    "",
-                )?;
+                client
+                    .publish(
+                        &c8y_topic_builtin_jwt_token_upstream,
+                        rumqttc::QoS::AtMostOnce,
+                        false,
+                        "",
+                    )
+                    .await?;
             }
             Ok(Event::Incoming(Packet::PubAck(_))) => {
                 // The request has been sent
@@ -87,9 +90,9 @@ pub(crate) fn get_connected_c8y_url(
     }
 
     // Cleanly disconnect client
-    client.disconnect()?;
-    for event in connection.iter() {
-        match event {
+    client.disconnect().await?;
+    loop {
+        match event_loop.poll().await {
             Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
             _ => {}
         }

@@ -348,7 +348,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.file("tedge.toml").with_toml_content(toml);
         let location = TEdgeConfigLocation::from_custom_root(ttd.path());
-        let reader = location.load().unwrap();
+        let reader = location.load_sync().unwrap();
         let id = input_id.map(|s| s.to_string());
         let result = get_device_id(id, &reader, &cloud);
         assert_eq!(result.unwrap().as_str(), expected);
@@ -370,7 +370,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.file("tedge.toml").with_toml_content(toml);
         let location = TEdgeConfigLocation::from_custom_root(ttd.path());
-        let reader = location.load().unwrap();
+        let reader = location.load_sync().unwrap();
         let id = input_id.map(|s| s.to_string());
         let result = get_device_id(id, &reader, &cloud);
         assert!(result.is_err());

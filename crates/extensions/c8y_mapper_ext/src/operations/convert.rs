@@ -38,7 +38,7 @@ impl CumulocityConverter {
     /// Converts a config_snapshot metadata message to
     /// - supported operation "c8y_UploadConfigFile"
     /// - supported config types
-    pub fn convert_config_snapshot_metadata(
+    pub async fn convert_config_snapshot_metadata(
         &mut self,
         topic_id: &EntityTopicId,
         message: &MqttMessage,
@@ -49,12 +49,13 @@ impl CumulocityConverter {
             );
         }
         self.convert_config_metadata(topic_id, message, "c8y_UploadConfigFile")
+            .await
     }
 
     /// Converts a config_update metadata message to
     /// - supported operation "c8y_DownloadConfigFile"
     /// - supported config types
-    pub fn convert_config_update_metadata(
+    pub async fn convert_config_update_metadata(
         &mut self,
         topic_id: &EntityTopicId,
         message: &MqttMessage,
@@ -64,6 +65,7 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
         self.convert_config_metadata(topic_id, message, "c8y_DownloadConfigFile")
+            .await
     }
 
     /// Convert c8y_UploadConfigFile JSON over MQTT operation to ThinEdge config_snapshot command
@@ -155,7 +157,7 @@ impl CumulocityConverter {
     /// Converts a log_upload metadata message to
     /// - supported operation "c8y_LogfileRequest"
     /// - supported log types
-    pub fn convert_log_metadata(
+    pub async fn convert_log_metadata(
         &mut self,
         topic_id: &EntityTopicId,
         message: &MqttMessage,
@@ -165,7 +167,10 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        let mut messages = match self.register_operation(topic_id, "c8y_LogfileRequest") {
+        let mut messages = match self
+            .register_operation(topic_id, "c8y_LogfileRequest")
+            .await
+        {
             Err(err) => {
                 error!(
                     "Failed to register `c8y_LogfileRequest` operation for {topic_id} due to: {err}"
@@ -228,7 +233,7 @@ impl CumulocityConverter {
         ])
     }
 
-    pub fn register_firmware_update_operation(
+    pub async fn register_firmware_update_operation(
         &mut self,
         topic_id: &EntityTopicId,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
@@ -239,7 +244,7 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        match self.register_operation(topic_id, "c8y_Firmware") {
+        match self.register_operation(topic_id, "c8y_Firmware").await {
             Err(err) => {
                 error!("Failed to register `c8y_Firmware` operation for {topic_id} due to: {err}");
                 Ok(vec![])
@@ -299,7 +304,7 @@ impl CumulocityConverter {
         vec![MqttMessage::new(&topic, request.to_json()).with_retain()]
     }
 
-    fn convert_config_metadata(
+    async fn convert_config_metadata(
         &mut self,
         topic_id: &EntityTopicId,
         message: &MqttMessage,
@@ -307,7 +312,7 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let metadata = ConfigMetadata::from_json(message.payload_str()?)?;
 
-        let mut messages = match self.register_operation(topic_id, c8y_op_name) {
+        let mut messages = match self.register_operation(topic_id, c8y_op_name).await {
             Err(err) => {
                 error!("Failed to register {c8y_op_name} operation for {topic_id} due to: {err}");
                 return Ok(vec![]);
@@ -394,7 +399,7 @@ impl CumulocityConverter {
     }
 
     /// Converts a device_profile metadata message to supported operation "c8y_DeviceProfile"
-    pub fn register_device_profile_operation(
+    pub async fn register_device_profile_operation(
         &mut self,
         topic_id: &EntityTopicId,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
@@ -403,7 +408,7 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        match self.register_operation(topic_id, "c8y_DeviceProfile") {
+        match self.register_operation(topic_id, "c8y_DeviceProfile").await {
             Err(err) => {
                 error!(
                     "Failed to register `device_profile` operation for {topic_id} due to: {err}"

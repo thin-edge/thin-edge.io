@@ -184,6 +184,10 @@ impl MqttMessage {
         }
     }
 
+    pub fn with_retain_flag(self, retain: bool) -> Self {
+        Self { retain, ..self }
+    }
+
     /// The message payload
     pub fn payload(&self) -> &Payload {
         &self.payload.0

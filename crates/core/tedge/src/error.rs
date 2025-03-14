@@ -22,9 +22,6 @@ pub enum TEdgeError {
     FromTEdgeConfigSetting(#[from] tedge_config::ConfigSettingError),
 
     #[error(transparent)]
-    FromRumqttClient(#[from] rumqttc::ClientError),
-
-    #[error(transparent)]
     FromSystemServiceError(#[from] crate::system_services::SystemServiceError),
 
     #[error(transparent)]

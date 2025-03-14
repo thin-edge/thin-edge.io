@@ -1,4 +1,3 @@
-use crate::system_services::CommandBuilder;
 use crate::system_services::SystemService;
 use crate::system_services::SystemServiceError;
 use crate::system_services::SystemServiceManager;
@@ -6,6 +5,7 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::fmt;
 use std::process::ExitStatus;
+use std::process::Stdio;
 use tedge_config::InitConfig;
 use tedge_config::SystemConfig;
 use tedge_config::SystemTomlError;
@@ -30,15 +30,16 @@ impl GeneralServiceManager {
     }
 }
 
+#[async_trait::async_trait]
 impl SystemServiceManager for GeneralServiceManager {
     fn name(&self) -> &str {
         &self.init_config.name
     }
 
-    fn check_operational(&self) -> Result<(), SystemServiceError> {
+    async fn check_operational(&self) -> Result<(), SystemServiceError> {
         let exec_command = ServiceCommand::CheckManager.try_exec_command(self)?;
 
-        match exec_command.to_command().status() {
+        match exec_command.to_command().status().await {
             Ok(status) if status.success() => Ok(()),
             _ => Err(SystemServiceError::ServiceManagerUnavailable {
                 cmd: exec_command.to_string(),
@@ -47,39 +48,48 @@ impl SystemServiceManager for GeneralServiceManager {
         }
     }
 
-    fn stop_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
+    async fn stop_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
         let exec_command = ServiceCommand::Stop(service).try_exec_command(self)?;
-        self.run_service_command_as_root(exec_command, self.config_path.as_str())?
+        self.run_service_command_as_root(exec_command, self.config_path.as_str())
+            .await?
             .must_succeed()
     }
 
-    fn start_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
+    async fn start_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
         let exec_command = ServiceCommand::Start(service).try_exec_command(self)?;
-        self.run_service_command_as_root(exec_command, self.config_path.as_str())?
+        self.run_service_command_as_root(exec_command, self.config_path.as_str())
+            .await?
             .must_succeed()
     }
 
-    fn restart_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
+    async fn restart_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
         let exec_command = ServiceCommand::Restart(service).try_exec_command(self)?;
-        self.run_service_command_as_root(exec_command, self.config_path.as_str())?
+        self.run_service_command_as_root(exec_command, self.config_path.as_str())
+            .await?
             .must_succeed()
     }
 
-    fn enable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
+    async fn enable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
         let exec_command = ServiceCommand::Enable(service).try_exec_command(self)?;
-        self.run_service_command_as_root(exec_command, self.config_path.as_str())?
+        self.run_service_command_as_root(exec_command, self.config_path.as_str())
+            .await?
             .must_succeed()
     }
 
-    fn disable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
+    async fn disable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
         let exec_command = ServiceCommand::Disable(service).try_exec_command(self)?;
-        self.run_service_command_as_root(exec_command, self.config_path.as_str())?
+        self.run_service_command_as_root(exec_command, self.config_path.as_str())
+            .await?
             .must_succeed()
     }
 
-    fn is_service_running(&self, service: SystemService<'_>) -> Result<bool, SystemServiceError> {
+    async fn is_service_running(
+        &self,
+        service: SystemService<'_>,
+    ) -> Result<bool, SystemServiceError> {
         let exec_command = ServiceCommand::IsActive(service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())
+            .await
             .map(|status| status.success())
     }
 }
@@ -119,11 +129,12 @@ impl ExecCommand {
         Self::try_new(replaced, service_cmd, config_path)
     }
 
-    fn to_command(&self) -> std::process::Command {
-        CommandBuilder::new(&self.exec)
-            .args(&self.args)
-            .silent()
-            .build()
+    fn to_command(&self) -> tokio::process::Command {
+        let mut cmd = tokio::process::Command::new(&self.exec);
+        cmd.args(&self.args)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        cmd
     }
 }
 
@@ -243,22 +254,21 @@ impl fmt::Display for ServiceCommand<'_> {
 }
 
 impl GeneralServiceManager {
-    fn run_service_command_as_root(
+    async fn run_service_command_as_root(
         &self,
         exec_command: ExecCommand,
         config_path: &str,
     ) -> Result<ServiceCommandExitStatus, SystemServiceError> {
-        exec_command
-            .to_command()
-            .status()
-            .map_err(|_| SystemServiceError::ServiceCommandNotFound {
-                service_command: exec_command.to_string(),
-                path: config_path.to_string(),
-            })
-            .map(|status| ServiceCommandExitStatus {
+        match exec_command.to_command().status().await {
+            Ok(status) => Ok(ServiceCommandExitStatus {
                 status,
                 service_command: exec_command.to_string(),
-            })
+            }),
+            Err(_) => Err(SystemServiceError::ServiceCommandNotFound {
+                service_command: exec_command.to_string(),
+                path: config_path.to_string(),
+            }),
+        }
     }
 }
 
@@ -368,25 +378,6 @@ mod tests {
             system_config_error,
             SystemServiceError::SystemConfigInvalidSyntax { .. }
         );
-    }
-
-    #[test_case(
-    ExecCommand {
-        exec: "bin".to_string(),
-        args: vec!["arg1".to_string(), "arg2".to_string()]
-    },
-    r#""bin" "arg1" "arg2""#
-    ;"with arguments")]
-    #[test_case(
-    ExecCommand {
-        exec: "bin".to_string(),
-        args: vec![]
-    },
-    r#""bin""#
-    ;"only executable")]
-    fn construct_command(exec_command: ExecCommand, expected: &str) {
-        let command = exec_command.to_command();
-        assert_eq!(format!("{:?}", command), expected);
     }
 
     #[test_case(

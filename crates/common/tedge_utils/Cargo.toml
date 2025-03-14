@@ -18,12 +18,14 @@ timestamp = ["strum", "time", "serde", "serde_json"]
 
 [dependencies]
 anyhow = { workspace = true }
+async-tempfile = { workspace = true }
 doku = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }
 nix = { workspace = true }
 notify = { workspace = true, optional = true }
 notify-debouncer-full = { workspace = true, optional = true }
+pin-project = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 strum = { workspace = true, optional = true, features = ["derive"] }

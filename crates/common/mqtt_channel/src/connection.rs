@@ -288,7 +288,6 @@ impl Connection {
 
                 Ok(Event::Incoming(Incoming::Disconnect))
                 | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
-                    info!("MQTT connection closed");
                     break;
                 }
 
@@ -303,6 +302,16 @@ impl Connection {
                 _ => (),
             }
         }
+
+        // Wait for Err(MqttState(ConnectionAborted))
+        // to make sure the disconnect is effective
+        loop {
+            if (event_loop.poll().await).is_err() {
+                info!("MQTT connection closed");
+                break;
+            }
+        }
+
         // No more messages will be forwarded to the client
         let _ = message_sender.close().await;
         let _ = error_sender.close().await;

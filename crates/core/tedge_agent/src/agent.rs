@@ -99,11 +99,12 @@ pub(crate) struct AgentConfig {
 }
 
 impl AgentConfig {
-    pub fn from_config_and_cliopts(
+    pub async fn from_config_and_cliopts(
         tedge_config_location: &tedge_config::TEdgeConfigLocation,
         cliopts: AgentOpt,
     ) -> Result<Self, anyhow::Error> {
-        let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())?;
+        let tedge_config =
+            tedge_config::TEdgeConfig::try_new(tedge_config_location.clone()).await?;
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
         let tmp_dir = Arc::from(tedge_config.tmp.path.as_path());
@@ -145,17 +146,20 @@ impl AgentConfig {
 
         // Restart config
         let restart_config =
-            RestartManagerConfig::from_tedge_config(&mqtt_device_topic_id, tedge_config_location)?;
+            RestartManagerConfig::from_tedge_config(&mqtt_device_topic_id, tedge_config_location)
+                .await?;
 
         // Software update config
-        let sw_update_config = SoftwareManagerConfig::from_tedge_config(tedge_config_location)?;
+        let sw_update_config =
+            SoftwareManagerConfig::from_tedge_config(tedge_config_location).await?;
 
         // Operation Workflow config
         let operation_config = OperationConfig::from_tedge_config(
             mqtt_topic_root.to_string(),
             &mqtt_device_topic_id,
             tedge_config_location,
-        )?;
+        )
+        .await?;
 
         // For flockfile
         let run_dir = tedge_config.run.path.clone();
@@ -236,14 +240,15 @@ impl Agent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub fn init(&self) -> Result<(), anyhow::Error> {
+    pub async fn init(&self) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
-        create_directory_with_defaults(agent_default_state_dir(self.config.config_dir.clone()))?;
-        create_directory_with_defaults(&self.config.agent_log_dir)?;
-        create_directory_with_defaults(&self.config.data_dir)?;
-        create_directory_with_defaults(&self.config.http_config.file_transfer_dir)?;
-        create_directory_with_defaults(self.config.data_dir.cache_dir())?;
-        create_directory_with_defaults(self.config.operations_dir.clone())?;
+        create_directory_with_defaults(agent_default_state_dir(self.config.config_dir.clone()))
+            .await?;
+        create_directory_with_defaults(&self.config.agent_log_dir).await?;
+        create_directory_with_defaults(&self.config.data_dir).await?;
+        create_directory_with_defaults(&self.config.http_config.file_transfer_dir).await?;
+        create_directory_with_defaults(self.config.data_dir.cache_dir()).await?;
+        create_directory_with_defaults(self.config.operations_dir.clone()).await?;
 
         Ok(())
     }
@@ -252,14 +257,14 @@ impl Agent {
     pub async fn start(self) -> Result<(), anyhow::Error> {
         let version = env!("CARGO_PKG_VERSION");
         info!("Starting tedge-agent v{}", version);
-        self.init()?;
+        self.init().await?;
 
         // Runtime
         let mut runtime = Runtime::new();
 
         // Load device profile manager before the workflow actor
         // as it will create the device_profile workflow if it does not already exist
-        DeviceProfileManagerBuilder::try_new(&self.config.operations_dir)?;
+        DeviceProfileManagerBuilder::try_new(&self.config.operations_dir).await?;
 
         // Inotify actor
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();

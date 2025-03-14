@@ -43,12 +43,12 @@ pub struct FirmwareManagerBuilder {
 }
 
 impl FirmwareManagerBuilder {
-    pub fn try_new(
+    pub async fn try_new(
         config: FirmwareManagerConfig,
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         downloader_actor: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
     ) -> Result<FirmwareManagerBuilder, FileError> {
-        Self::init(&config.data_dir)?;
+        Self::init(&config.data_dir).await?;
 
         let (input_sender, input_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
@@ -73,10 +73,10 @@ impl FirmwareManagerBuilder {
         })
     }
 
-    pub fn init(data_dir: &DataDir) -> Result<(), FileError> {
-        create_directory_with_defaults(data_dir.cache_dir())?;
-        create_directory_with_defaults(data_dir.file_transfer_dir())?;
-        create_directory_with_defaults(data_dir.firmware_dir())?;
+    pub async fn init(data_dir: &DataDir) -> Result<(), FileError> {
+        create_directory_with_defaults(data_dir.cache_dir()).await?;
+        create_directory_with_defaults(data_dir.file_transfer_dir()).await?;
+        create_directory_with_defaults(data_dir.firmware_dir()).await?;
         Ok(())
     }
 

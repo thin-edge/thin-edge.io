@@ -5,16 +5,22 @@ use crate::log::MaybeFancy;
 
 pub struct GetConfigCommand {
     pub key: ReadableKey,
-    pub config: tedge_config::TEdgeConfig,
+    pub config_location: tedge_config::TEdgeConfigLocation,
 }
 
+#[async_trait::async_trait]
 impl Command for GetConfigCommand {
     fn description(&self) -> String {
         format!("get the configuration value for key: '{}'", self.key)
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        match self.config.read_string(&self.key) {
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+        let config = self
+            .config_location
+            .load()
+            .await
+            .map_err(anyhow::Error::new)?;
+        match config.read_string(&self.key) {
             Ok(value) => {
                 println!("{}", value);
             }
