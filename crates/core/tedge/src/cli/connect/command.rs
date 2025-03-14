@@ -974,7 +974,8 @@ async fn new_bridge(
                 bridge_config,
                 device_type,
                 mqtt_auth_config,
-            );
+            )
+            .await;
             spinner.finish(res)?;
         }
     }
