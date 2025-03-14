@@ -449,6 +449,16 @@ impl EntityStore {
         Ok(removed_entities)
     }
 
+    pub fn get_twin_data(
+        &self,
+        topic_id: &EntityTopicId,
+        fragment_key: &str,
+    ) -> Option<&JsonValue> {
+        self.entities
+            .get(topic_id)
+            .and_then(|entity| entity.twin_data.get(fragment_key))
+    }
+
     /// Updates the entity twin data with the provided fragment data.
     /// Returns `true`, if the twin data got updated with the new fragment value.
     /// If the provided fragment already existed, `false` is returned.
