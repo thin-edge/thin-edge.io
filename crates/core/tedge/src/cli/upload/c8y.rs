@@ -13,7 +13,7 @@ use reqwest::multipart;
 use reqwest::Identity;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tedge_utils::file_async::path_exists;
+use tedge_utils::file::path_exists;
 
 /// Upload a file to Cumulocity
 pub struct C8yUpload {

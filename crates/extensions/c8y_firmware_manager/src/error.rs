@@ -33,7 +33,7 @@ pub enum FirmwareManagementError {
     FromIoError(#[from] std::io::Error),
 
     #[error(transparent)]
-    FromFileError(#[from] tedge_utils::file_async::FileError),
+    FromFileError(#[from] tedge_utils::file::FileError),
 
     #[error(transparent)]
     FromSMCumulocityMapperError(#[from] c8y_api::smartrest::error::SMCumulocityMapperError),

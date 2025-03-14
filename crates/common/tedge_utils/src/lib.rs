@@ -1,6 +1,5 @@
 pub mod atomic;
 pub mod file;
-pub mod file_async;
 pub mod fs;
 pub mod paths;
 pub mod signals;

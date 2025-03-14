@@ -13,7 +13,10 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use std::path::PathBuf;
-use tedge_utils::file::PermissionEntry;
+use tedge_utils::file::change_mode;
+use tedge_utils::file::change_mode_sync;
+use tedge_utils::file::change_user_and_group;
+use tedge_utils::file::change_user_and_group_sync;
 use tedge_utils::fs::atomically_write_file_async;
 use tedge_utils::fs::atomically_write_file_sync;
 use tracing::debug;
@@ -228,14 +231,14 @@ impl TEdgeConfigLocation {
 
         atomically_write_file_async(toml_path, toml.as_bytes()).await?;
 
-        let entry = PermissionEntry {
-            user: Some("tedge".to_string()),
-            group: Some("tedge".to_string()),
-            mode: Some(0o644),
-        };
+        if let Err(err) =
+            change_user_and_group(toml_path.into(), "tedge".into(), "tedge".into()).await
+        {
+            warn!("failed to set file ownership for '{toml_path}': {err}");
+        }
 
-        if let Err(err) = entry.apply(toml_path.as_std_path()) {
-            warn!("failed to set file ownership and permissions for '{toml_path}': {err}");
+        if let Err(err) = change_mode(toml_path.as_ref(), 0o644).await {
+            warn!("failed to set file permissions for '{toml_path}': {err}");
         }
 
         Ok(())
@@ -253,14 +256,12 @@ impl TEdgeConfigLocation {
 
         atomically_write_file_sync(toml_path, toml.as_bytes())?;
 
-        let entry = PermissionEntry {
-            user: Some("tedge".to_string()),
-            group: Some("tedge".to_string()),
-            mode: Some(0o644),
-        };
+        if let Err(err) = change_user_and_group_sync(toml_path.as_ref(), "tedge", "tedge") {
+            warn!("failed to set file ownership for '{toml_path}': {err}");
+        }
 
-        if let Err(err) = entry.apply(toml_path.as_std_path()) {
-            warn!("failed to set file ownership and permissions for '{toml_path}': {err}");
+        if let Err(err) = change_mode_sync(toml_path.as_ref(), 0o644) {
+            warn!("failed to set file permissions for '{toml_path}': {err}");
         }
 
         Ok(())

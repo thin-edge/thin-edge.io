@@ -51,7 +51,7 @@ use tedge_config::tedge_toml::TEdgeConfigReaderMqtt;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TEdgeConfigLocation;
-use tedge_utils::file_async::path_exists;
+use tedge_utils::file::path_exists;
 use tedge_utils::paths::create_directories;
 use tedge_utils::paths::ok_if_not_found;
 use tedge_utils::paths::DraftFile;
@@ -1030,12 +1030,9 @@ pub async fn chown_certificate_and_key(bridge_config: &BridgeConfig) {
     // - When `tedge cert create` is not run as root, a certificate is created but owned by the user running the command.
     // - A better approach could be to remove this `chown` and run the command as mosquitto.
     let path = &bridge_config.bridge_certfile;
-    if let Err(err) = tedge_utils::file_async::change_user_and_group(
-        path.into(),
-        user.to_owned(),
-        group.to_owned(),
-    )
-    .await
+    if let Err(err) =
+        tedge_utils::file::change_user_and_group(path.into(), user.to_owned(), group.to_owned())
+            .await
     {
         warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
     }
@@ -1046,12 +1043,9 @@ pub async fn chown_certificate_and_key(bridge_config: &BridgeConfig) {
     }
 
     let path = &bridge_config.bridge_keyfile;
-    if let Err(err) = tedge_utils::file_async::change_user_and_group(
-        path.into(),
-        user.to_owned(),
-        group.to_owned(),
-    )
-    .await
+    if let Err(err) =
+        tedge_utils::file::change_user_and_group(path.into(), user.to_owned(), group.to_owned())
+            .await
     {
         warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
     }

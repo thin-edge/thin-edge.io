@@ -24,7 +24,7 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
-use tedge_utils::file_async::FileError;
+use tedge_utils::file::FileError;
 
 #[cfg(target_os = "linux")]
 use nix::fcntl::fallocate;
