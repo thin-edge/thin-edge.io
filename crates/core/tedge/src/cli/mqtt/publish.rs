@@ -14,7 +14,7 @@ pub struct MqttPublishCommand {
     pub port: u16,
     pub topic: Topic,
     pub message: String,
-    pub qos: rumqttc::QoS,
+    pub qos: mqtt_channel::QoS,
     pub client_id: String,
     pub retain: bool,
     pub ca_file: Option<Utf8PathBuf>,

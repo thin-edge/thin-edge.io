@@ -1,5 +1,4 @@
 pub use self::cli::TEdgeMqttCli;
-pub use self::error::MqttError;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
@@ -7,7 +6,6 @@ use tokio::signal::unix;
 use tokio::time;
 
 mod cli;
-mod error;
 mod publish;
 mod subscribe;
 
