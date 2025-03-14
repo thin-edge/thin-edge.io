@@ -1,4 +1,4 @@
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use pad::PadStr;
 use std::io::stdout;
@@ -16,7 +16,7 @@ pub struct ListConfigCommand {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for ListConfigCommand {
+impl Command for ListConfigCommand {
     fn description(&self) -> String {
         "list the configuration keys and values".into()
     }

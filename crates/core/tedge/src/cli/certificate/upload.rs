@@ -1,6 +1,6 @@
 use super::error::get_webpki_error_from_reqwest;
 use super::error::CertError;
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::warning;
 use camino::Utf8PathBuf;
@@ -34,7 +34,7 @@ pub struct UploadCertCmd {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for UploadCertCmd {
+impl Command for UploadCertCmd {
     fn description(&self) -> String {
         "upload root certificate".into()
     }

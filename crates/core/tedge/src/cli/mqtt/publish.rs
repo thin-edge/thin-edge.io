@@ -1,4 +1,4 @@
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
 use mqtt_channel::MqttMessage;
@@ -24,7 +24,7 @@ pub struct MqttPublishCommand {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for MqttPublishCommand {
+impl Command for MqttPublishCommand {
     fn description(&self) -> String {
         format!(
             "publish the message \"{}\" on the topic \"{}\" with QoS \"{:?}\".",

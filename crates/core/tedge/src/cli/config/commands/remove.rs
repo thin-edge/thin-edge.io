@@ -1,4 +1,4 @@
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfigLocation;
@@ -10,7 +10,7 @@ pub struct RemoveConfigCommand {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for RemoveConfigCommand {
+impl Command for RemoveConfigCommand {
     fn description(&self) -> String {
         format!("Remove or unset the configuration value for '{}'", self.key)
     }

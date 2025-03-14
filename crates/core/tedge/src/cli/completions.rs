@@ -46,12 +46,13 @@ struct CompletionsCmd {
     shell: Shell,
 }
 
+#[async_trait::async_trait]
 impl Command for CompletionsCmd {
     fn description(&self) -> String {
         format!("generate shell tab completion script for {}", self.shell)
     }
 
-    fn execute(&self) -> Result<(), super::log::MaybeFancy<anyhow::Error>> {
+    async fn execute(&self) -> Result<(), super::log::MaybeFancy<anyhow::Error>> {
         let cmd = TEdgeCli::command();
         let completer = std::env::current_exe().unwrap();
         let completer = completer.to_str().unwrap();

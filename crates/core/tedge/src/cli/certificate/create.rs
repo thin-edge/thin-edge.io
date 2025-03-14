@@ -1,6 +1,6 @@
 use super::error::CertError;
 use crate::cli::certificate::show::ShowCertCmd;
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
 use certificate::KeyCertPair;
@@ -32,7 +32,7 @@ pub struct CreateCertCmd {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for CreateCertCmd {
+impl Command for CreateCertCmd {
     fn description(&self) -> String {
         format!("create a test certificate for the device {}.", self.id)
     }

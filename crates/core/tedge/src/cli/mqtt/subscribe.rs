@@ -1,4 +1,4 @@
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
 use mqtt_channel::QoS;
@@ -31,7 +31,7 @@ pub struct MqttSubscribeCommand {
 pub struct SimpleTopicFilter(String);
 
 #[async_trait::async_trait]
-impl CommandAsync for MqttSubscribeCommand {
+impl Command for MqttSubscribeCommand {
     fn description(&self) -> String {
         format!(
             "subscribe to the topic \"{:?}\" with QoS \"{:?}\".",

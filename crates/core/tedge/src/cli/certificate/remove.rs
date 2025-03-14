@@ -1,7 +1,7 @@
 use std::io::ErrorKind::NotFound;
 use tokio::fs;
 
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
 
@@ -17,7 +17,7 @@ pub struct RemoveCertCmd {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for RemoveCertCmd {
+impl Command for RemoveCertCmd {
     fn description(&self) -> String {
         "remove the device certificate".into()
     }

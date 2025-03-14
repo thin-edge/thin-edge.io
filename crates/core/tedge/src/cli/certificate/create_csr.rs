@@ -1,5 +1,5 @@
 use super::error::CertError;
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::override_public_key;
 use crate::persist_new_private_key;
@@ -26,7 +26,7 @@ pub struct CreateCsrCmd {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for CreateCsrCmd {
+impl Command for CreateCsrCmd {
     fn description(&self) -> String {
         "Generate a Certificate Signing Request.".into()
     }

@@ -1,4 +1,4 @@
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use anyhow::anyhow;
 use anyhow::Error;
@@ -44,7 +44,7 @@ pub struct C8yUpload {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for C8yUpload {
+impl Command for C8yUpload {
     fn description(&self) -> String {
         "upload a file to Cumulocity".to_string()
     }

@@ -32,11 +32,6 @@ impl TEdgeConfig {
         TEdgeConfig::try_new(config_location).await
     }
 
-    pub fn load_sync(config_dir: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let config_location = TEdgeConfigLocation::from_custom_root(config_dir);
-        TEdgeConfig::try_new_sync(config_location)
-    }
-
     #[cfg(feature = "test")]
     /// A test only method designed for injecting configuration into tests
     ///

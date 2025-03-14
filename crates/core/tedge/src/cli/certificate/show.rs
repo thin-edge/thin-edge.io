@@ -1,4 +1,4 @@
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use anyhow::Context;
 use camino::Utf8PathBuf;
@@ -21,7 +21,7 @@ pub struct ShowCertCmd {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for ShowCertCmd {
+impl Command for ShowCertCmd {
     fn description(&self) -> String {
         "show the device certificate".into()
     }
