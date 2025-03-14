@@ -6,7 +6,7 @@
 
 use anyhow::Context;
 use asn1_rs::ToDer;
-use base64::prelude::*;
+use camino::Utf8PathBuf;
 use cryptoki::context::CInitializeArgs;
 use cryptoki::context::Pkcs11;
 use cryptoki::mechanism::Mechanism;
@@ -16,9 +16,6 @@ use cryptoki::object::KeyType;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
 use cryptoki::types::AuthPin;
-use rustls::client::ResolvesClientCert;
-use rustls::pki_types::CertificateDer;
-use rustls::sign::CertifiedKey;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
@@ -29,10 +26,14 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tracing::debug;
-use tracing::error;
 use tracing::warn;
 
-use super::CryptokiConfig;
+#[derive(Debug, Clone)]
+pub struct CryptokiConfigDirect {
+    pub module_path: Utf8PathBuf,
+    pub pin: Arc<str>,
+    pub serial: Option<Arc<str>>,
+}
 
 #[derive(Debug)]
 pub enum Pkcs11SigningKey {
@@ -42,9 +43,9 @@ pub enum Pkcs11SigningKey {
 
 impl Pkcs11SigningKey {
     pub fn from_cryptoki_config(
-        cryptoki_config: CryptokiConfig,
+        cryptoki_config: &CryptokiConfigDirect,
     ) -> anyhow::Result<Pkcs11SigningKey> {
-        let CryptokiConfig {
+        let CryptokiConfigDirect {
             module_path,
             pin,
             // TODO(marcel): select modules by serial if multiple are connected
@@ -108,17 +109,24 @@ impl SigningKey for Pkcs11SigningKey {
 }
 
 #[derive(Debug, Clone)]
-struct PKCS11 {
-    session: Arc<Mutex<Session>>,
+pub struct PKCS11 {
+    pub session: Arc<Mutex<Session>>,
 }
 
 #[derive(Debug)]
-struct PkcsSigner {
-    pkcs11: PKCS11,
-    scheme: SignatureScheme,
+pub struct PkcsSigner {
+    pub pkcs11: PKCS11,
+    pub scheme: SignatureScheme,
 }
 
 impl PkcsSigner {
+    pub fn from_session(session: PKCS11) -> Self {
+        Self {
+            pkcs11: session,
+            scheme: SignatureScheme::ECDSA_NISTP256_SHA256,
+        }
+    }
+
     fn get_mechanism(&self) -> Result<Mechanism, rustls::Error> {
         trace!("Getting mechanism from chosen scheme: {:?}", self.scheme);
         match self.scheme {
@@ -135,10 +143,8 @@ impl PkcsSigner {
             )),
         }
     }
-}
 
-impl Signer for PkcsSigner {
-    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
+    pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
         let session = self.pkcs11.session.lock().unwrap();
 
         let key_template = vec![
@@ -205,6 +211,12 @@ impl Signer for PkcsSigner {
         );
         Ok(signature_asn1)
     }
+}
+
+impl Signer for PkcsSigner {
+    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
+        Self::sign(self, message)
+    }
 
     fn scheme(&self) -> SignatureScheme {
         trace!("Using Signature scheme: {:?}", self.scheme.as_str());
@@ -213,32 +225,8 @@ impl Signer for PkcsSigner {
 }
 
 #[derive(Debug)]
-pub struct Pkcs11Resolver {
-    pub chain: Vec<CertificateDer<'static>>,
-    pub signing_key: Arc<dyn SigningKey>,
-}
-
-impl ResolvesClientCert for Pkcs11Resolver {
-    fn resolve(
-        &self,
-        _acceptable_issuers: &[&[u8]],
-        _sigschemes: &[SignatureScheme],
-    ) -> Option<Arc<CertifiedKey>> {
-        Some(Arc::new(CertifiedKey {
-            cert: self.chain.clone(),
-            key: self.signing_key.clone(),
-            ocsp: None,
-        }))
-    }
-
-    fn has_certs(&self) -> bool {
-        true
-    }
-}
-
-#[derive(Debug)]
 pub struct ECSigningKey {
-    pkcs11: PKCS11,
+    pub pkcs11: PKCS11,
 }
 
 impl ECSigningKey {
@@ -264,10 +252,6 @@ impl SigningKey for ECSigningKey {
                 }));
             }
         }
-        error!(
-            "Could not find a matching signing scheme. offered={:?}",
-            offered
-        );
         None
     }
 
@@ -278,7 +262,7 @@ impl SigningKey for ECSigningKey {
 
 #[derive(Debug)]
 pub struct RSASigningKey {
-    pkcs11: PKCS11,
+    pub pkcs11: PKCS11,
 }
 
 impl RSASigningKey {
@@ -304,10 +288,6 @@ impl SigningKey for RSASigningKey {
                 }));
             }
         }
-        debug!(
-            "Could not find a matching signing scheme. offered={:?}",
-            offered
-        );
         None
     }
 
@@ -367,7 +347,6 @@ fn format_asn1_ecdsa_signature(r_bytes: &[u8], s_bytes: &[u8]) -> Result<Vec<u8>
 
     let seq = asn1_rs::Sequence::new(writer.into());
     let b = seq.to_der_vec().unwrap();
-    trace!("Encoded ASN.1 Der: {:?}", BASE64_STANDARD_NO_PAD.encode(&b));
     Ok(b)
 }
 

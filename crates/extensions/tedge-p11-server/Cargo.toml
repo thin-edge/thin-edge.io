@@ -1,0 +1,25 @@
+[package]
+name = "tedge-p11-server"
+description = "thin-edge PKCS#11 server"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+asn1-rs.workspace = true
+camino.workspace = true
+clap.workspace = true
+cryptoki.workspace = true
+postcard.workspace = true
+rustls.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
