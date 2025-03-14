@@ -1,4 +1,4 @@
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfigLocation;
@@ -10,7 +10,7 @@ pub struct AddConfigCommand {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for AddConfigCommand {
+impl Command for AddConfigCommand {
     fn description(&self) -> String {
         format!(
             "set the configuration key: '{}' with value: {}.",

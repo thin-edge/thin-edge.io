@@ -1,6 +1,6 @@
 use tedge_config::tedge_toml::ReadableKey;
 
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 
 pub struct GetConfigCommand {
@@ -9,7 +9,7 @@ pub struct GetConfigCommand {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for GetConfigCommand {
+impl Command for GetConfigCommand {
     fn description(&self) -> String {
         format!("get the configuration value for key: '{}'", self.key)
     }

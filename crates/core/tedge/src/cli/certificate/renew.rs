@@ -1,6 +1,6 @@
 use super::create::cn_of_self_signed_certificate;
 use super::error::CertError;
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::override_public_key;
 use crate::reuse_private_key;
@@ -18,7 +18,7 @@ pub struct RenewCertCmd {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for RenewCertCmd {
+impl Command for RenewCertCmd {
     fn description(&self) -> String {
         "Renew the self-signed certificate of the device.".into()
     }

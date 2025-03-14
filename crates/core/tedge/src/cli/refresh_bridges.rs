@@ -11,7 +11,7 @@ use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 use crate::command::BuildContext;
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::system_services::service_manager;
 use crate::system_services::SystemService;
 use crate::system_services::SystemServiceManager;
@@ -23,7 +23,7 @@ pub struct RefreshBridgesCmd {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for RefreshBridgesCmd {
+impl Command for RefreshBridgesCmd {
     fn description(&self) -> String {
         "Refresh all currently active mosquitto bridges (restarts mosquitto)".to_string()
     }

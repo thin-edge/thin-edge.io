@@ -1,5 +1,5 @@
 use crate::command::BuildContext;
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::Component;
 use anyhow::bail;
 use anyhow::Context;
@@ -117,7 +117,7 @@ impl TEdgeInitCmd {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for TEdgeInitCmd {
+impl Command for TEdgeInitCmd {
     fn description(&self) -> String {
         "Initialize tedge".into()
     }

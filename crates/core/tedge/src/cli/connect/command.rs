@@ -12,7 +12,7 @@ use crate::cli::connect::*;
 use crate::cli::log::ConfigLogger;
 use crate::cli::log::Fancy;
 use crate::cli::log::Spinner;
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::system_services::*;
 use crate::warning;
@@ -79,7 +79,7 @@ pub enum DeviceStatus {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for ConnectCommand {
+impl Command for ConnectCommand {
     fn description(&self) -> String {
         if self.is_test_connection {
             format!("test connection to {} cloud.", self.cloud)

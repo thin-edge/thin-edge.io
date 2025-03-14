@@ -1,5 +1,5 @@
 use crate::cli::http::cli::Content;
-use crate::command::CommandAsync;
+use crate::command::Command;
 use crate::log::MaybeFancy;
 use anyhow::anyhow;
 use anyhow::Error;
@@ -44,7 +44,7 @@ pub enum HttpAction {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for HttpCommand {
+impl Command for HttpCommand {
     fn description(&self) -> String {
         let verb = match self.action {
             HttpAction::Post { .. } => "POST",

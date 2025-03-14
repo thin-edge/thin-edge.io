@@ -21,7 +21,7 @@ pub struct DisconnectBridgeCommand {
 }
 
 #[async_trait::async_trait]
-impl CommandAsync for DisconnectBridgeCommand {
+impl Command for DisconnectBridgeCommand {
     fn description(&self) -> String {
         format!("remove the bridge to disconnect {} cloud", self.cloud)
     }

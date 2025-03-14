@@ -217,7 +217,10 @@ impl TEdgeConfigLocation {
         let toml = toml::to_string_pretty(&config)?;
 
         // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
-        if !tokio::fs::try_exists(&self.tedge_config_root_path).await.unwrap_or(false) {
+        if !tokio::fs::try_exists(&self.tedge_config_root_path)
+            .await
+            .unwrap_or(false)
+        {
             tokio::fs::create_dir(self.tedge_config_root_path()).await?;
         }
 

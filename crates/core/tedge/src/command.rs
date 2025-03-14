@@ -57,6 +57,7 @@ use crate::log::MaybeFancy;
 ///     }
 /// }
 /// ```
+#[async_trait::async_trait]
 pub trait Command {
     /// Display that command to the user, telling what will be done.
     ///
@@ -77,7 +78,7 @@ pub trait Command {
     ///     UnknownKey{key: String},
     /// }
     /// ```
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>>;
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>>;
 
     /// Helper method to be used in the `BuildCommand` trait.
     ///
@@ -164,24 +165,5 @@ impl BuildContext {
 
     pub fn load_config(&self) -> Result<tedge_config::TEdgeConfig, tedge_config::TEdgeConfigError> {
         tedge_config::TEdgeConfig::try_new_sync(self.config_location.clone())
-    }
-}
-
-// Temporary wrapper aimed to smooth the refactoring of tedge cli
-// from blocking to async. When all the commands will be updated to async
-// this trait will be renamed Command deprecating the former blocking trait.
-#[async_trait::async_trait]
-pub trait CommandAsync {
-    fn description(&self) -> String;
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>>;
-}
-
-impl<T: CommandAsync> Command for T {
-    fn description(&self) -> String {
-        CommandAsync::description(self)
-    }
-
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        crate::block_on(CommandAsync::execute(self))
     }
 }
