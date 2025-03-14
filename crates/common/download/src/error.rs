@@ -10,7 +10,7 @@ pub enum DownloadError {
     FromIo { context: String, source: io::Error },
 
     #[error("Error while performing a file operation")]
-    FromFileError(#[from] tedge_utils::file_async::FileError),
+    FromFileError(#[from] tedge_utils::file::FileError),
 
     #[error("Not enough disk space")]
     InsufficientSpace,

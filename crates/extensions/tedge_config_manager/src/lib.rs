@@ -34,11 +34,11 @@ use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_utils::file_async::create_directory_with_defaults;
-use tedge_utils::file_async::create_file_with_defaults;
-use tedge_utils::file_async::move_file;
-use tedge_utils::file_async::FileError;
-use tedge_utils::file_async::PermissionEntry;
+use tedge_utils::file::create_directory_with_defaults;
+use tedge_utils::file::create_file_with_defaults;
+use tedge_utils::file::move_file;
+use tedge_utils::file::FileError;
+use tedge_utils::file::PermissionEntry;
 use toml::toml;
 
 /// An instance of the config manager

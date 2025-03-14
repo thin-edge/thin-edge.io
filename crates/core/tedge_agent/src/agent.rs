@@ -62,7 +62,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
-use tedge_utils::file_async::create_directory_with_defaults;
+use tedge_utils::file::create_directory_with_defaults;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;

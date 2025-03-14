@@ -8,9 +8,9 @@ use std::io::ErrorKind;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_utils::file_async::change_user_and_group;
-use tedge_utils::file_async::create_directory;
-use tedge_utils::file_async::PermissionEntry;
+use tedge_utils::file::change_user_and_group;
+use tedge_utils::file::create_directory;
+use tedge_utils::file::PermissionEntry;
 use tracing::debug;
 
 use super::log::MaybeFancy;

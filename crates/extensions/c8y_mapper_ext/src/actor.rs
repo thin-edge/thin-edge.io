@@ -39,8 +39,8 @@ use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
-use tedge_utils::file_async::create_directory_with_defaults;
-use tedge_utils::file_async::FileError;
+use tedge_utils::file::create_directory_with_defaults;
+use tedge_utils::file::FileError;
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 

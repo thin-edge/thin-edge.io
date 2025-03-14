@@ -2,8 +2,8 @@ use crate::error::FirmwareManagementError;
 
 use std::fs;
 use std::path::Path;
-use tedge_utils::file_async::create_file_with_mode;
-use tedge_utils::file_async::overwrite_file;
+use tedge_utils::file::create_file_with_mode;
+use tedge_utils::file::overwrite_file;
 
 #[derive(Debug, Eq, PartialEq, Default, Clone, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]

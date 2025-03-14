@@ -30,9 +30,9 @@ use tedge_api::OperationStatus;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_utils::file_async::move_file;
-use tedge_utils::file_async::FileError;
-use tedge_utils::file_async::PermissionEntry;
+use tedge_utils::file::move_file;
+use tedge_utils::file::FileError;
+use tedge_utils::file::PermissionEntry;
 use tokio::time::timeout;
 
 pub type IdDownloadResult = (String, DownloadResult);

@@ -1,6 +1,6 @@
 use camino::Utf8PathBuf;
-use tedge_utils::file_async::create_file_with_defaults;
-use tedge_utils::file_async::FileError;
+use tedge_utils::file::create_file_with_defaults;
+use tedge_utils::file::FileError;
 
 pub struct DeviceProfileManagerBuilder {}
 
