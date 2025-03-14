@@ -92,7 +92,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && rm -f /usr/local/bin/systemctl \
     #
     # Install rust tools
-    && rustup component add rls rust-analysis rust-src rustfmt clippy \
+    && rustup component add rust-analyzer rust-analysis rust-src rustfmt clippy \
     && rustup toolchain install nightly \
     && rustup component add rustfmt --toolchain nightly \
     # Use cargo-bininstall to improve multi-arch builds
