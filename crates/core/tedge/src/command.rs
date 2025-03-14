@@ -137,7 +137,7 @@ pub trait Command {
 ///                 value,
 ///             }.into_boxed(),
 ///             ConfigCmd::Get { key } => GetConfigCommand {
-///                 config: context.load_config()?,
+///                 config_location: context.config_location,
 ///                 key,
 ///             }.into_boxed(),
 ///         };
@@ -163,7 +163,7 @@ impl BuildContext {
     }
 
     pub fn load_config(&self) -> Result<tedge_config::TEdgeConfig, tedge_config::TEdgeConfigError> {
-        tedge_config::TEdgeConfig::try_new(self.config_location.clone())
+        tedge_config::TEdgeConfig::try_new_sync(self.config_location.clone())
     }
 }
 

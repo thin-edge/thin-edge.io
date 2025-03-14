@@ -138,7 +138,7 @@ impl BuildCommand for ConfigCmd {
         match self {
             ConfigCmd::Get { key, profile } => Ok(GetConfigCommand {
                 key: try_with_profile!(key, profile),
-                config: config_location.load()?,
+                config_location,
             }
             .into_boxed()),
             ConfigCmd::Set {
@@ -183,7 +183,7 @@ impl BuildCommand for ConfigCmd {
             } => Ok(ListConfigCommand {
                 is_all,
                 is_doc,
-                config: config_location.load()?,
+                config_location,
                 filter,
             }
             .into_boxed()),

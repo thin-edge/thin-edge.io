@@ -124,7 +124,7 @@ pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
 
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.common.config_dir);
-    let config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())?;
+    let config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone()).await?;
 
     log_init(
         "tedge-mapper",

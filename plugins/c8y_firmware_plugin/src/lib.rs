@@ -58,7 +58,7 @@ pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::E
         &tedge_config_location.tedge_config_root_path,
     )?;
 
-    let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location)?;
+    let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location).await?;
     let c8y_profile = firmware_plugin_opt.profile.as_deref();
 
     if firmware_plugin_opt.init {

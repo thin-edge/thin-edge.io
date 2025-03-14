@@ -259,7 +259,7 @@ mod tests {
             std::fs::create_dir(root_cert_path.parent().unwrap()).unwrap();
             std::fs::write(&root_cert_path, c8y_cert.serialize_pem().unwrap()).unwrap();
             let tedge_config =
-                TEdgeConfig::try_new(TEdgeConfigLocation::from_custom_root(ttd.path())).unwrap();
+                TEdgeConfig::try_new_sync(TEdgeConfigLocation::from_custom_root(ttd.path())).unwrap();
             let c8y_config = tedge_config.c8y.try_get::<str>(None).unwrap();
 
             use_key_and_cert(&mut opts, c8y_config).unwrap();

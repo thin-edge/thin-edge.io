@@ -1,29 +1,36 @@
-use crate::command::Command;
+use crate::command::CommandAsync;
 use crate::log::MaybeFancy;
 use pad::PadStr;
 use std::io::stdout;
 use std::io::IsTerminal;
 use tedge_config::tedge_toml::READABLE_KEYS;
 use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 use yansi::Paint;
 
 pub struct ListConfigCommand {
     pub is_all: bool,
     pub is_doc: bool,
     pub filter: Option<String>,
-    pub config: TEdgeConfig,
+    pub config_location: TEdgeConfigLocation,
 }
 
-impl Command for ListConfigCommand {
+#[async_trait::async_trait]
+impl CommandAsync for ListConfigCommand {
     fn description(&self) -> String {
         "list the configuration keys and values".into()
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         if self.is_doc {
             print_config_doc(self.filter.as_deref());
         } else {
-            print_config_list(&self.config, self.is_all, self.filter.as_deref())?;
+            let config = self
+                .config_location
+                .load()
+                .await
+                .map_err(anyhow::Error::new)?;
+            print_config_list(&config, self.is_all, self.filter.as_deref())?;
         }
 
         Ok(())

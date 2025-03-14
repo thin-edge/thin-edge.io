@@ -38,6 +38,7 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let c8y_profile = c8y_profile.as_deref();
 
     let tedge_config = TEdgeConfig::try_new(config_dir.clone())
+        .await
         .into_diagnostic()
         .context("Reading tedge config")?;
 
