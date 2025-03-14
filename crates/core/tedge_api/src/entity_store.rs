@@ -449,6 +449,16 @@ impl EntityStore {
         Ok(removed_entities)
     }
 
+    pub fn get_twin_data(
+        &self,
+        topic_id: &EntityTopicId,
+        fragment_key: &str,
+    ) -> Option<&JsonValue> {
+        self.entities
+            .get(topic_id)
+            .and_then(|entity| entity.twin_data.get(fragment_key))
+    }
+
     /// Updates the entity twin data with the provided fragment data.
     /// Returns `true`, if the twin data got updated with the new fragment value.
     /// If the provided fragment already existed, `false` is returned.
@@ -463,8 +473,13 @@ impl EntityStore {
         &mut self,
         twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
-        let fragment_key = twin_message.fragment_key.clone();
-        let fragment_value = twin_message.fragment_value.clone();
+        let fragment_key = twin_message.fragment_key;
+        let fragment_value = twin_message.fragment_value;
+
+        if fragment_key.is_empty() || fragment_key.starts_with('@') || fragment_key.contains('/') {
+            return Err(Error::InvalidTwinData(fragment_key));
+        }
+
         let entity = self.try_get_mut(&twin_message.topic_id)?;
         if fragment_value.is_null() {
             let existing = entity.twin_data.remove(&fragment_key);
@@ -749,6 +764,9 @@ pub enum Error {
 
     #[error(transparent)]
     FromSerdeJson(#[from] serde_json::Error),
+
+    #[error("Invalid twin key: '{0}'. Keys that are empty, containing '/' or starting with '@' are not allowed")]
+    InvalidTwinData(String),
 }
 
 #[derive(thiserror::Error, Debug)]

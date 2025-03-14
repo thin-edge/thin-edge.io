@@ -12,7 +12,6 @@ use super::server::AgentState;
 use crate::entity_manager::server::EntityStoreRequest;
 use crate::entity_manager::server::EntityStoreResponse;
 use crate::entity_manager::server::EntityTwinData;
-use crate::entity_manager::server::InvalidTwinData;
 use axum::extract::Path;
 use axum::extract::Query;
 use axum::extract::State;
@@ -32,7 +31,9 @@ use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::InvalidEntityType;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::entity_store::ListFilters;
+use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::TopicIdError;
 
@@ -113,8 +114,17 @@ enum Error {
     #[error(transparent)]
     InvalidInput(#[from] InputValidationError),
 
-    #[error(transparent)]
-    InvalidTwinData(#[from] InvalidTwinData),
+    #[error("Not Found")]
+    ResourceNotFound,
+
+    #[error("Method Not Allowed")]
+    MethodNotAllowed,
+
+    #[error("Entity twin data for entity: {0} with fragment key: {1} not found")]
+    EntityTwinDataNotFound(EntityTopicId, String),
+
+    #[error("Actions on channel: {0} are not supported")]
+    UnsupportedChannel(String),
 }
 
 impl IntoResponse for Error {
@@ -124,13 +134,17 @@ impl IntoResponse for Error {
             Error::EntityStoreError(err) => match err {
                 entity_store::Error::EntityAlreadyRegistered(_) => StatusCode::CONFLICT,
                 entity_store::Error::UnknownEntity(_) => StatusCode::NOT_FOUND,
+                entity_store::Error::InvalidTwinData(_) => StatusCode::BAD_REQUEST,
                 _ => StatusCode::BAD_REQUEST,
             },
             Error::EntityNotFound(_) => StatusCode::NOT_FOUND,
             Error::ChannelError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::InvalidEntityStoreResponse => StatusCode::INTERNAL_SERVER_ERROR,
             Error::InvalidInput(_) => StatusCode::BAD_REQUEST,
-            Error::InvalidTwinData(_) => StatusCode::BAD_REQUEST,
+            Error::ResourceNotFound => StatusCode::NOT_FOUND,
+            Error::EntityTwinDataNotFound(_, _) => StatusCode::NOT_FOUND,
+            Error::UnsupportedChannel(_) => StatusCode::NOT_FOUND,
+            Error::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
         };
         let error_message = self.to_string();
 
@@ -143,9 +157,10 @@ pub(crate) fn entity_store_router(state: AgentState) -> Router {
         .route("/v1/entities", post(register_entity).get(list_entities))
         .route(
             "/v1/entities/{*path}",
-            get(get_entity)
-                .patch(patch_entity)
-                .delete(deregister_entity),
+            get(get_resource)
+                .put(put_resource)
+                .patch(patch_resource)
+                .delete(delete_resource),
         )
         .with_state(state)
 }
@@ -170,13 +185,117 @@ async fn register_entity(
     ))
 }
 
-async fn patch_entity(
+async fn get_resource(
+    State(state): State<AgentState>,
+    Path(path): Path<String>,
+) -> impl IntoResponse {
+    let (topic_id, channel) = parse_path(&path)?;
+    match channel {
+        Channel::EntityMetadata => Ok(get_entity(state, topic_id).await.into_response()),
+        Channel::EntityTwinData { fragment_key } => {
+            Ok(
+                get_entity_twin_fragment(state, topic_id, fragment_key.to_string())
+                    .await
+                    .into_response(),
+            )
+        }
+        _ => Err(Error::MethodNotAllowed),
+    }
+}
+
+async fn put_resource(
+    State(state): State<AgentState>,
+    Path(path): Path<String>,
+    Json(value): Json<Value>,
+) -> impl IntoResponse {
+    let (topic_id, channel) = parse_path(&path)?;
+    match channel {
+        Channel::EntityTwinData { fragment_key } => {
+            Ok(upsert_entity_twin_fragment(state, topic_id, fragment_key.to_string(), value).await)
+        }
+        _ => Err(Error::MethodNotAllowed),
+    }
+}
+
+async fn patch_resource(
     State(state): State<AgentState>,
     Path(path): Path<String>,
     Json(twin_fragments): Json<Map<String, Value>>,
 ) -> impl IntoResponse {
-    let topic_id = EntityTopicId::from_str(&path)?;
-    let twin_data = EntityTwinData::try_new(topic_id, twin_fragments)?;
+    let (topic_id, channel) = parse_path(&path)?;
+    match channel {
+        Channel::EntityMetadata => Ok(patch_entity(state, topic_id, twin_fragments).await),
+        _ => Err(Error::MethodNotAllowed),
+    }
+}
+
+async fn delete_resource(
+    State(state): State<AgentState>,
+    Path(path): Path<String>,
+) -> Result<Response, Error> {
+    let (topic_id, channel) = parse_path(&path)?;
+    match channel {
+        Channel::EntityMetadata => deregister_entity(state, topic_id).await,
+        Channel::EntityTwinData { fragment_key } => {
+            delete_entity_twin_fragment(state, topic_id, fragment_key.to_string()).await
+        }
+        _ => Err(Error::MethodNotAllowed),
+    }
+}
+
+fn parse_path(path: &str) -> Result<(EntityTopicId, Channel), Error> {
+    let segments = path.split('/').collect::<Vec<&str>>();
+    match segments.as_slice() {
+        [seg1, seg2] => {
+            let topic_id = topic_id_from_path_segments(seg1, Some(seg2), None, None)?;
+            Ok((topic_id, Channel::EntityMetadata))
+        }
+        [seg1, seg2, seg3] => {
+            let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), None)?;
+            Ok((topic_id, Channel::EntityMetadata))
+        }
+        [seg1, seg2, seg3, seg4] => {
+            let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
+            Ok((topic_id, Channel::EntityMetadata))
+        }
+        [seg1, seg2, seg3, seg4, "twin", fragment_key] => {
+            let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
+            Ok((
+                topic_id,
+                Channel::EntityTwinData {
+                    fragment_key: fragment_key.to_string(),
+                },
+            ))
+        }
+        [_, _, _, _, "twin", keys @ ..] => Err(Error::EntityStoreError(
+            entity_store::Error::InvalidTwinData(keys.join("/")),
+        )),
+        [_, _, _, _, channel, ..] => Err(Error::UnsupportedChannel(channel.to_string())),
+        _ => Err(Error::ResourceNotFound),
+    }
+}
+
+fn topic_id_from_path_segments(
+    seg1: &str,
+    seg2: Option<&str>,
+    seg3: Option<&str>,
+    seg4: Option<&str>,
+) -> Result<EntityTopicId, TopicIdError> {
+    EntityTopicId::from_str(&format!(
+        "{}/{}/{}/{}",
+        seg1,
+        seg2.unwrap_or_default(),
+        seg3.unwrap_or_default(),
+        seg4.unwrap_or_default()
+    ))
+}
+
+async fn patch_entity(
+    state: AgentState,
+    topic_id: EntityTopicId,
+    twin_fragments: Map<String, Value>,
+) -> impl IntoResponse {
+    let twin_data = EntityTwinData::try_new(topic_id.clone(), twin_fragments)?;
 
     let response = state
         .entity_store_handle
@@ -188,17 +307,15 @@ async fn patch_entity(
     };
     res?;
 
-    let entity = get_entity(State(state), Path(path)).await?;
+    let entity = get_entity(state, topic_id).await?;
 
     Ok(entity)
 }
 
 async fn get_entity(
-    State(state): State<AgentState>,
-    Path(path): Path<String>,
-) -> Result<Json<EntityMetadata>, Error> {
-    let topic_id = EntityTopicId::from_str(&path)?;
-
+    state: AgentState,
+    topic_id: EntityTopicId,
+) -> Result<impl IntoResponse, Error> {
     let response = state
         .entity_store_handle
         .clone()
@@ -210,18 +327,13 @@ async fn get_entity(
     };
 
     if let Some(entity) = entity_metadata {
-        Ok(Json(entity.clone()))
+        Ok(Json(entity))
     } else {
         Err(Error::EntityNotFound(topic_id))
     }
 }
 
-async fn deregister_entity(
-    State(state): State<AgentState>,
-    Path(path): Path<String>,
-) -> Result<Response, Error> {
-    let topic_id = EntityTopicId::from_str(&path)?;
-
+async fn deregister_entity(state: AgentState, topic_id: EntityTopicId) -> Result<Response, Error> {
     let response = state
         .entity_store_handle
         .clone()
@@ -257,6 +369,73 @@ async fn list_entities(
     Ok(Json(entities))
 }
 
+async fn get_entity_twin_fragment(
+    state: AgentState,
+    topic_id: EntityTopicId,
+    fragment_key: String,
+) -> Result<impl IntoResponse, Error> {
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::GetTwinFragment(
+            topic_id.clone(),
+            fragment_key.clone(),
+        ))
+        .await?;
+    let EntityStoreResponse::GetTwinFragment(fragment_value) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+
+    if fragment_value.is_none() {
+        return Err(Error::EntityTwinDataNotFound(topic_id, fragment_key));
+    }
+
+    Ok(Json(fragment_value))
+}
+
+async fn upsert_entity_twin_fragment(
+    state: AgentState,
+    topic_id: EntityTopicId,
+    fragment_key: String,
+    fragment_value: Value,
+) -> impl IntoResponse {
+    let twin_data = EntityTwinMessage::new(topic_id.clone(), fragment_key, fragment_value.clone());
+
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::SetTwinFragment(twin_data))
+        .await?;
+    let EntityStoreResponse::SetTwinFragment(res) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+    let updated = res?;
+    if updated && !fragment_value.is_null() {
+        return Ok(Json(fragment_value).into_response());
+    }
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+async fn delete_entity_twin_fragment(
+    state: AgentState,
+    topic_id: EntityTopicId,
+    fragment_key: String,
+) -> Result<Response, Error> {
+    let twin_data = EntityTwinMessage::new(topic_id.clone(), fragment_key, Value::Null);
+
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::SetTwinFragment(twin_data))
+        .await?;
+    let EntityStoreResponse::SetTwinFragment(res) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+    res?;
+
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
 #[cfg(test)]
 mod tests {
     use super::AgentState;
@@ -285,6 +464,7 @@ mod tests {
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_test_utils::fs::TempTedgeDir;
+    use test_case::test_case;
     use tower::Service;
 
     #[tokio::test]
@@ -588,7 +768,7 @@ mod tests {
         let entity: Value = serde_json::from_slice(&body).unwrap();
         assert_json_eq!(
             entity,
-            json!({"error":"Invalid key: '@id', as fragment keys starting with '@' are not allowed as twin data"})
+            json!({"error":"Invalid twin key: '@id'. Keys that are empty, containing '/' or starting with '@' are not allowed"})
         );
     }
 
@@ -914,6 +1094,369 @@ mod tests {
         assert_json_eq!(
             entity,
             json!( {"error":"The provided parameters: root and parent are mutually exclusive. Use either one."})
+        );
+    }
+
+    #[tokio::test]
+    async fn entity_twin_get() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            while let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::GetTwinFragment(topic_id, fragment_key) = req.request {
+                    if topic_id == EntityTopicId::default_child_device("test-child").unwrap()
+                        && fragment_key == "foo"
+                    {
+                        req.reply_to
+                            .send(EntityStoreResponse::GetTwinFragment(Some(json!("bar"))))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities/device/test-child///twin/foo")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let fragment_value: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(fragment_value, json!("bar"));
+    }
+
+    #[tokio::test]
+    async fn entity_twin_get_unknown_entity() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::GetTwinFragment(topic_id, fragment_key) = req.request {
+                    if topic_id == EntityTopicId::default_child_device("test-child").unwrap()
+                        && fragment_key == "foo"
+                    {
+                        req.reply_to
+                            .send(EntityStoreResponse::GetTwinFragment(None))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities/device/test-child///twin/foo")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        assert_json_eq!(
+            entity,
+            json!({"error":"Entity twin data for entity: device/test-child// with fragment key: foo not found"})
+        );
+    }
+
+    #[tokio::test]
+    async fn entity_twin_update() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            while let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::SetTwinFragment(twin_data) = req.request {
+                    if twin_data.topic_id
+                        == EntityTopicId::default_child_device("test-child").unwrap()
+                        && twin_data.fragment_key == "foo"
+                    {
+                        req.reply_to
+                            .send(EntityStoreResponse::SetTwinFragment(Ok(true)))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::PUT)
+            .uri("/v1/entities/device/test-child///twin/foo")
+            .header("Content-Type", "application/json")
+            .body(Body::from(json!("bar").to_string()))
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let twin_value: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(twin_value, json!("bar"));
+    }
+
+    #[test_case("@id"; "reserved")]
+    #[test_case("with/slash"; "contains_slash")]
+    #[tokio::test]
+    async fn entity_twin_update_invalid_key(id: &str) {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::SetTwinFragment(twin_data) = req.request {
+                    if twin_data.topic_id
+                        == EntityTopicId::default_child_device("test-child").unwrap()
+                        && twin_data.fragment_key == "@id"
+                    {
+                        req.reply_to
+                            .send(EntityStoreResponse::SetTwinFragment(Err(
+                                entity_store::Error::InvalidTwinData("@id".to_string()),
+                            )))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::PUT)
+            .uri(format!("/v1/entities/device/test-child///twin/{id}"))
+            .header("Content-Type", "application/json")
+            .body(Body::from(json!("new-id").to_string()))
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        let message = format!(
+            "Invalid twin key: '{}'. Keys that are empty, containing '/' or starting with '@' are not allowed",
+            id
+        );
+        assert_json_eq!(entity, json!({"error": message}));
+    }
+
+    #[tokio::test]
+    async fn entity_twin_update_unknown_entity() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::SetTwinFragment(twin_data) = req.request {
+                    if twin_data.topic_id
+                        == EntityTopicId::default_child_device("test-child").unwrap()
+                        && twin_data.fragment_key == "foo"
+                    {
+                        req.reply_to
+                            .send(EntityStoreResponse::SetTwinFragment(Err(
+                                entity_store::Error::UnknownEntity(
+                                    "device/test-child//".to_string(),
+                                ),
+                            )))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::PUT)
+            .uri("/v1/entities/device/test-child///twin/foo")
+            .header("Content-Type", "application/json")
+            .body(Body::from(json!("bar").to_string()))
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        assert_json_eq!(
+            entity,
+            json!({"error":"The specified entity: device/test-child// does not exist in the store"})
+        );
+    }
+
+    #[tokio::test]
+    async fn entity_twin_delete() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            while let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::SetTwinFragment(twin_data) = req.request {
+                    if twin_data.topic_id
+                        == EntityTopicId::default_child_device("test-child").unwrap()
+                        && twin_data.fragment_key == "foo"
+                    {
+                        req.reply_to
+                            .send(EntityStoreResponse::SetTwinFragment(Ok(true)))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::DELETE)
+            .uri("/v1/entities/device/test-child///twin/foo")
+            .header("Content-Type", "application/json")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn entity_twin_delete_non_existent_key() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            while let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::SetTwinFragment(twin_data) = req.request {
+                    if twin_data.topic_id
+                        == EntityTopicId::default_child_device("test-child").unwrap()
+                        && twin_data.fragment_key == "foo"
+                    {
+                        req.reply_to
+                            .send(EntityStoreResponse::SetTwinFragment(Ok(false)))
+                            .await
+                            .unwrap();
+                    }
+                } else if let EntityStoreRequest::Get(topic_id) = req.request {
+                    if topic_id == EntityTopicId::default_child_device("test-child").unwrap() {
+                        let entity =
+                            EntityMetadata::child_device("test-child".to_string()).unwrap();
+
+                        req.reply_to
+                            .send(EntityStoreResponse::Get(Some(entity)))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::DELETE)
+            .uri("/v1/entities/device/test-child///twin/foo")
+            .header("Content-Type", "application/json")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn entity_twin_delete_unknown_entity() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::SetTwinFragment(twin_data) = req.request {
+                    if twin_data.topic_id
+                        == EntityTopicId::default_child_device("test-child").unwrap()
+                        && twin_data.fragment_key == "foo"
+                    {
+                        req.reply_to
+                            .send(EntityStoreResponse::SetTwinFragment(Err(
+                                entity_store::Error::UnknownEntity(
+                                    "device/test-child//".to_string(),
+                                ),
+                            )))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::DELETE)
+            .uri("/v1/entities/device/test-child///twin/foo")
+            .header("Content-Type", "application/json")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        assert_json_eq!(
+            entity,
+            json!({"error":"The specified entity: device/test-child// does not exist in the store"})
+        );
+    }
+
+    #[test_case(Method::GET; "GET")]
+    #[test_case(Method::PUT; "PUT")]
+    #[test_case(Method::DELETE; "DELETE")]
+    #[tokio::test]
+    async fn unsupported_channel(method: Method) {
+        let TestHandle {
+            mut app,
+            entity_store_box: _, // Not used
+        } = setup();
+
+        let req = Request::builder()
+            .method(method)
+            .uri("/v1/entities/device/test-child///cmd/")
+            .header("Content-Type", "application/json")
+            .body(Body::from(json!("bar").to_string()))
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        assert_json_eq!(
+            entity,
+            json!({"error":"Actions on channel: cmd are not supported"})
         );
     }
 

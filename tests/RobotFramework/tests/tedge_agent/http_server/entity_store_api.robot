@@ -126,6 +126,31 @@ Delete entity tree
     ...    {"@topic-id":"device/child2//","@parent":"device/main//","@type":"child-device"}
     ...    ${entities}
 
+Entity twin update apis
+    ${put}=    Execute Command
+    ...    curl -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window -H 'Content-Type: application/json' -d '5'
+    Should Be Equal    ${put}    5
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_window
+    ...    message_contains=5
+
+    ${get}=    Execute Command
+    ...    curl http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
+    Should Be Equal    ${get}    5
+
+    ${timestamp}=    Get Unix Timestamp
+    ${http_code}=    Execute Command
+    ...    curl -o /dev/null --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
+    Should Be Equal    ${http_code}    204
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_window
+    ...    date_from=${timestamp}
+    ${retained_message}=    Execute Command
+    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_window --duration 1
+    ...    ignore_exit_code=${True}
+    ...    strip=${True}
+    Should Be Empty    ${retained_message}
+
 
 *** Keywords ***
 Custom Setup
