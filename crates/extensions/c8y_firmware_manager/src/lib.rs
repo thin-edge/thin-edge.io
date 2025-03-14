@@ -27,8 +27,8 @@ use tedge_api::path::DataDir;
 use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_utils::file::create_directory_with_defaults;
-use tedge_utils::file::FileError;
+use tedge_utils::file_async::create_directory_with_defaults;
+use tedge_utils::file_async::FileError;
 use worker::IdDownloadRequest;
 use worker::IdDownloadResult;
 use worker::OperationOutcome;
@@ -48,8 +48,6 @@ impl FirmwareManagerBuilder {
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         downloader_actor: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
     ) -> Result<FirmwareManagerBuilder, FileError> {
-        Self::init(&config.data_dir)?;
-
         let (input_sender, input_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
         let input_receiver = LoggingReceiver::new(
@@ -73,10 +71,10 @@ impl FirmwareManagerBuilder {
         })
     }
 
-    pub fn init(data_dir: &DataDir) -> Result<(), FileError> {
-        create_directory_with_defaults(data_dir.cache_dir())?;
-        create_directory_with_defaults(data_dir.file_transfer_dir())?;
-        create_directory_with_defaults(data_dir.firmware_dir())?;
+    pub async fn init(data_dir: &DataDir) -> Result<(), FileError> {
+        create_directory_with_defaults(data_dir.cache_dir()).await?;
+        create_directory_with_defaults(data_dir.file_transfer_dir()).await?;
+        create_directory_with_defaults(data_dir.firmware_dir()).await?;
         Ok(())
     }
 

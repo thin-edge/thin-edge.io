@@ -112,6 +112,7 @@ async fn run_with(
     // Instantiate firmware manager actor
     let firmware_manager_config =
         FirmwareManagerConfig::from_tedge_config(&tedge_config, c8y_profile)?;
+    FirmwareManagerBuilder::init(&firmware_manager_config.data_dir).await?;
     let firmware_actor = FirmwareManagerBuilder::try_new(
         firmware_manager_config,
         &mut mqtt_actor,

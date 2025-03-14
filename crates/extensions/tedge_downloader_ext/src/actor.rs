@@ -14,7 +14,7 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
-use tedge_utils::file::PermissionEntry;
+use tedge_utils::file_async::PermissionEntry;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DownloadRequest {
