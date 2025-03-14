@@ -30,9 +30,9 @@ use tedge_api::OperationStatus;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_utils::file::move_file;
-use tedge_utils::file::FileError;
-use tedge_utils::file::PermissionEntry;
+use tedge_utils::file_async::move_file;
+use tedge_utils::file_async::FileError;
+use tedge_utils::file_async::PermissionEntry;
 use tokio::time::timeout;
 
 pub type IdDownloadResult = (String, DownloadResult);
@@ -268,7 +268,9 @@ impl FirmwareManagerWorker {
             attempt: 1,
         };
 
-        operation_entry.create_status_file(self.config.data_dir.firmware_dir())?;
+        operation_entry
+            .create_status_file(self.config.data_dir.firmware_dir())
+            .await?;
 
         self.publish_firmware_update_request(operation_entry)
             .await?;

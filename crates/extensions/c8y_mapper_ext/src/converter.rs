@@ -1340,19 +1340,22 @@ impl CumulocityConverter {
                     OperationType::SoftwareUpdate => {
                         self.register_software_update_operation(&source).await
                     }
-                    OperationType::LogUpload => self.convert_log_metadata(&source, message),
+                    OperationType::LogUpload => self.convert_log_metadata(&source, message).await,
                     OperationType::ConfigSnapshot => {
                         self.convert_config_snapshot_metadata(&source, message)
+                            .await
                     }
                     OperationType::ConfigUpdate => {
-                        self.convert_config_update_metadata(&source, message)
+                        self.convert_config_update_metadata(&source, message).await
                     }
                     OperationType::FirmwareUpdate => {
-                        self.register_firmware_update_operation(&source)
+                        self.register_firmware_update_operation(&source).await
                     }
-                    OperationType::DeviceProfile => self.register_device_profile_operation(&source),
+                    OperationType::DeviceProfile => {
+                        self.register_device_profile_operation(&source).await
+                    }
                     OperationType::Custom(command_name) => {
-                        self.register_custom_operation(&source, command_name)
+                        self.register_custom_operation(&source, command_name).await
                     }
                     _ => Ok(vec![]),
                 }
@@ -1495,7 +1498,7 @@ impl CumulocityConverter {
     ///
     /// Returns a Set Supported Operations (114) message if among registered operations there were new operations that
     /// were not announced to the cloud.
-    pub fn register_operation(
+    pub async fn register_operation(
         &mut self,
         target: &EntityTopicId,
         c8y_operation_name: &str,
@@ -1513,7 +1516,8 @@ impl CumulocityConverter {
         }
 
         self.supported_operations
-            .add_operation(device.external_id.as_ref(), c8y_operation_name)?;
+            .add_operation(device.external_id.as_ref(), c8y_operation_name)
+            .await?;
 
         let need_cloud_update = match device.metadata.r#type {
             // for devices other than the main device, dynamic update of supported operations via file events is
@@ -1550,7 +1554,7 @@ impl CumulocityConverter {
         &mut self,
         target: &EntityTopicId,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        match self.register_operation(target, "c8y_Restart") {
+        match self.register_operation(target, "c8y_Restart").await {
             Err(_) => {
                 error!("Fail to register `restart` operation for unknown device: {target}");
                 Ok(vec![])
@@ -1559,7 +1563,7 @@ impl CumulocityConverter {
         }
     }
 
-    fn register_custom_operation(
+    async fn register_custom_operation(
         &mut self,
         target: &EntityTopicId,
         command_name: &str,
@@ -1568,7 +1572,7 @@ impl CumulocityConverter {
             .supported_operations
             .get_operation_name_by_workflow_operation(command_name)
         {
-            match self.register_operation(target, &c8y_op_name) {
+            match self.register_operation(target, &c8y_op_name).await {
                 Err(_) => {
                     error!("Fail to register `{c8y_op_name}` operation for entity: {target}");
                     Ok(vec![])
@@ -1603,7 +1607,7 @@ impl CumulocityConverter {
         &mut self,
         target: &EntityTopicId,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut registration = match self.register_operation(target, "c8y_SoftwareUpdate") {
+        let mut registration = match self.register_operation(target, "c8y_SoftwareUpdate").await {
             Err(_) => {
                 error!("Fail to register `software-list` operation for unknown device: {target}");
                 return Ok(vec![]);

@@ -647,6 +647,7 @@ async fn spawn_firmware_manager(
 
     let firmware_manager_builder =
         FirmwareManagerBuilder::try_new(config, &mut mqtt_builder, &mut downloader_builder)
+            .await
             .unwrap();
 
     let mqtt_message_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);

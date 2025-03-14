@@ -3323,6 +3323,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
 
     let bridge_health_topic = config.bridge_health_topic.clone();
+    C8yMapperBuilder::init(&config).await.unwrap();
     let mut c8y_mapper_builder = C8yMapperBuilder::try_new(
         config,
         &mut mqtt_builder,

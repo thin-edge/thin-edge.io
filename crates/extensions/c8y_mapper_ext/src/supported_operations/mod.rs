@@ -26,7 +26,7 @@ use tedge_api::substitution::Record;
 use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_utils::file;
+use tedge_utils::file_async;
 
 use anyhow::ensure;
 use anyhow::Context;
@@ -69,7 +69,7 @@ impl SupportedOperations {
     /// Add an operation to the supported operation set for a given device.
     ///
     /// Creates and writes new operation file to the filesystem.
-    pub fn add_operation(
+    pub async fn add_operation(
         &self,
         device_xid: &ExternalIdRef,
         c8y_operation_name: &OperationNameRef,
@@ -81,7 +81,8 @@ impl SupportedOperations {
         };
 
         // Create directory for a device if it doesn't exist yet
-        file::create_directory_with_defaults(ops_file.parent().expect("should never fail"))?;
+        file_async::create_directory_with_defaults(ops_file.parent().expect("should never fail"))
+            .await?;
 
         // if a template for such operation already exists on the main device, that means we should symlink to it,
         // because it should contain properties required for custom operation
@@ -94,9 +95,9 @@ impl SupportedOperations {
             operations.get_template_name_by_operation_name(c8y_operation_name)
         {
             let template_path = self.base_ops_dir.join(template_name);
-            file::create_symlink(template_path, &ops_file)?;
+            file_async::create_symlink(template_path, &ops_file).await?;
         } else {
-            file::create_file_with_defaults(&ops_file, None)?;
+            file_async::create_file_with_defaults(&ops_file, None).await?;
         };
 
         Ok(())

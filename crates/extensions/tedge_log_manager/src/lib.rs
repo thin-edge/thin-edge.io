@@ -31,11 +31,11 @@ use tedge_api::workflow::OperationName;
 use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
-use tedge_utils::file::create_directory_with_defaults;
-use tedge_utils::file::create_file_with_defaults;
-use tedge_utils::file::move_file;
-use tedge_utils::file::FileError;
-use tedge_utils::file::PermissionEntry;
+use tedge_utils::file_async::create_directory_with_defaults;
+use tedge_utils::file_async::create_file_with_defaults;
+use tedge_utils::file_async::move_file;
+use tedge_utils::file_async::FileError;
+use tedge_utils::file_async::PermissionEntry;
 use toml::toml;
 
 /// This is an actor builder.
@@ -93,7 +93,7 @@ impl LogManagerBuilder {
         }
 
         // creating plugin config parent dir
-        create_directory_with_defaults(&config.plugin_config_dir)?;
+        create_directory_with_defaults(&config.plugin_config_dir).await?;
 
         let legacy_plugin_config = config.config_dir.join("c8y").join("c8y-log-plugin.toml");
         if legacy_plugin_config.exists() {
@@ -114,7 +114,7 @@ impl LogManagerBuilder {
             path = agent_logs_path
         }
         .to_string();
-        create_file_with_defaults(&config.plugin_config_path, Some(&example_config))?;
+        create_file_with_defaults(&config.plugin_config_path, Some(&example_config)).await?;
 
         Ok(())
     }

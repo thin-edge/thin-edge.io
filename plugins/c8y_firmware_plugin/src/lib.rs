@@ -116,7 +116,8 @@ async fn run_with(
         firmware_manager_config,
         &mut mqtt_actor,
         &mut downloader_actor,
-    )?;
+    )
+    .await?;
 
     // Shutdown on SIGINT
     let signal_actor = SignalActor::builder(&runtime.get_handle());

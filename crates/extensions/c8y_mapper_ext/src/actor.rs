@@ -39,8 +39,8 @@ use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
-use tedge_utils::file::create_directory_with_defaults;
-use tedge_utils::file::FileError;
+use tedge_utils::file_async::create_directory_with_defaults;
+use tedge_utils::file_async::FileError;
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
@@ -325,8 +325,6 @@ impl C8yMapperBuilder {
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         service_monitor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> Result<Self, FileError> {
-        Self::init(&config)?;
-
         let box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput> =
             SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
 
@@ -367,13 +365,13 @@ impl C8yMapperBuilder {
         })
     }
 
-    fn init(config: &C8yMapperConfig) -> Result<(), FileError> {
+    pub async fn init(config: &C8yMapperConfig) -> Result<(), FileError> {
         // Create c8y operations directory
-        create_directory_with_defaults(config.ops_dir.as_std_path())?;
+        create_directory_with_defaults(config.ops_dir.as_std_path()).await?;
         // Create directory for device custom fragments
-        create_directory_with_defaults(config.config_dir.join("device"))?;
+        create_directory_with_defaults(config.config_dir.join("device")).await?;
         // Create directory for persistent entity store
-        create_directory_with_defaults(config.state_dir.as_std_path())?;
+        create_directory_with_defaults(config.state_dir.as_std_path()).await?;
         Ok(())
     }
 }

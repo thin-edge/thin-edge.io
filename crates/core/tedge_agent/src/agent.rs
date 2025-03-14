@@ -62,7 +62,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
-use tedge_utils::file::create_directory_with_defaults;
+use tedge_utils::file_async::create_directory_with_defaults;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
@@ -236,14 +236,15 @@ impl Agent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub fn init(&self) -> Result<(), anyhow::Error> {
+    pub async fn init(&self) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
-        create_directory_with_defaults(agent_default_state_dir(self.config.config_dir.clone()))?;
-        create_directory_with_defaults(&self.config.agent_log_dir)?;
-        create_directory_with_defaults(&self.config.data_dir)?;
-        create_directory_with_defaults(&self.config.http_config.file_transfer_dir)?;
-        create_directory_with_defaults(self.config.data_dir.cache_dir())?;
-        create_directory_with_defaults(self.config.operations_dir.clone())?;
+        create_directory_with_defaults(agent_default_state_dir(self.config.config_dir.clone()))
+            .await?;
+        create_directory_with_defaults(&self.config.agent_log_dir).await?;
+        create_directory_with_defaults(&self.config.data_dir).await?;
+        create_directory_with_defaults(&self.config.http_config.file_transfer_dir).await?;
+        create_directory_with_defaults(self.config.data_dir.cache_dir()).await?;
+        create_directory_with_defaults(self.config.operations_dir.clone()).await?;
 
         Ok(())
     }
@@ -252,14 +253,14 @@ impl Agent {
     pub async fn start(self) -> Result<(), anyhow::Error> {
         let version = env!("CARGO_PKG_VERSION");
         info!("Starting tedge-agent v{}", version);
-        self.init()?;
+        self.init().await?;
 
         // Runtime
         let mut runtime = Runtime::new();
 
         // Load device profile manager before the workflow actor
         // as it will create the device_profile workflow if it does not already exist
-        DeviceProfileManagerBuilder::try_new(&self.config.operations_dir)?;
+        DeviceProfileManagerBuilder::try_new(&self.config.operations_dir).await?;
 
         // Inotify actor
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
