@@ -4182,7 +4182,6 @@ dependencies = [
  "rumqttc",
  "serde",
  "serde_json",
- "signal-hook",
  "strum_macros",
  "tedge-agent",
  "tedge-apt-plugin",

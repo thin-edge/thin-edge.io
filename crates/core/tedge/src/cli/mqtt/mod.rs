@@ -1,8 +1,10 @@
 pub use self::cli::TEdgeMqttCli;
 pub use self::error::MqttError;
 use std::future::Future;
+use std::pin::Pin;
 use std::time::Duration;
-use tokio::sync::watch;
+use tokio::signal::unix;
+use tokio::time;
 
 mod cli;
 mod error;
@@ -15,47 +17,50 @@ const MAX_PACKET_SIZE: usize = 268435455; // 256 MB
 enum Interruption {
     Timeout,
     Interrupted,
-    Error,
 }
 
-struct TermSignals(watch::Receiver<Option<Interruption>>);
+struct TermSignals {
+    signals: Option<unix::Signal>,
+    timeout: Option<Pin<Box<time::Sleep>>>,
+}
 
 impl TermSignals {
     fn new(timeout: Option<Duration>) -> TermSignals {
-        let (tx, rx) = watch::channel(None);
-        for signal in signal_hook::consts::TERM_SIGNALS {
-            let signal_tx = tx.clone();
-            unsafe {
-                let _ = signal_hook::low_level::register(*signal, move || {
-                    let _ = signal_tx.send(Some(Interruption::Interrupted));
-                });
-            }
-        }
-
-        if let Some(timeout) = timeout {
-            std::thread::spawn(move || {
-                std::thread::sleep(timeout);
-                let _ = tx.send(Some(Interruption::Timeout));
-            });
-        }
-
-        TermSignals(rx)
-    }
-
-    async fn is_interrupted(&mut self) -> Interruption {
-        match self.0.wait_for(Option::is_some).await {
-            Ok(interruption) => *interruption.as_ref().unwrap(),
-            Err(_) => Interruption::Error,
-        }
+        let signals = unix::signal(unix::SignalKind::interrupt())
+            .map_err(|err| eprintln!("failed to set up signal handler: {}", err))
+            .ok();
+        let timeout = timeout.map(|duration| Box::pin(time::sleep(duration)));
+        TermSignals { signals, timeout }
     }
 
     async fn might_interrupt<F, O>(&mut self, future: F) -> Result<O, Interruption>
     where
         F: Future<Output = O>,
     {
-        tokio::select! {
-            interruption = self.is_interrupted() => Err(interruption),
-            outcome = future => Ok(outcome),
+        match (self.timeout.as_mut(), self.signals.as_mut()) {
+            (Some(timeout), Some(signals)) => {
+                tokio::select! {
+                    Some(_) = signals.recv() => Err(Interruption::Interrupted),
+                    _ = timeout => Err(Interruption::Timeout),
+                    outcome = future => Ok(outcome),
+                }
+            }
+
+            (None, Some(signals)) => {
+                tokio::select! {
+                    Some(_) = signals.recv() => Err(Interruption::Interrupted),
+                    outcome = future => Ok(outcome),
+                }
+            }
+
+            (Some(timeout), None) => {
+                tokio::select! {
+                    _ = timeout => Err(Interruption::Timeout),
+                    outcome = future => Ok(outcome),
+                }
+            }
+
+            (None, None) => Ok(future.await),
         }
     }
 }
