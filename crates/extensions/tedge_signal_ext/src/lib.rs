@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use std::convert::Infallible;
-use tokio::signal::unix;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -16,6 +15,7 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tokio::signal::unix;
 
 pub type SignalMessageBox = SimpleMessageBox<NoMessage, RuntimeAction>;
 
