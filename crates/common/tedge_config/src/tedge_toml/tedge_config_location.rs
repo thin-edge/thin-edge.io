@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::Path;
 
 use crate::tedge_toml::figment::ConfigSources;
@@ -15,6 +14,7 @@ use camino::Utf8PathBuf;
 use serde::Serialize;
 use std::path::PathBuf;
 use tedge_utils::file::PermissionEntry;
+use tedge_utils::fs::atomically_write_file_async;
 use tedge_utils::fs::atomically_write_file_sync;
 use tracing::debug;
 use tracing::warn;
@@ -78,23 +78,23 @@ impl TEdgeConfigLocation {
         &self.tedge_config_file_path
     }
 
-    pub fn update_toml(
+    pub async fn update_toml(
         &self,
         update: &impl Fn(&mut TEdgeConfigDto, &TEdgeConfigReader) -> ConfigSettingResult<()>,
     ) -> Result<(), TEdgeConfigError> {
-        let mut config = self.load_dto::<FileOnly>(self.toml_path())?;
+        let mut config = self.load_dto::<FileOnly>(self.toml_path()).await?;
         let reader = TEdgeConfigReader::from_dto(&config, self);
         update(&mut config, &reader)?;
 
-        self.store(&config)
+        self.store(&config).await
     }
 
     fn toml_path(&self) -> &Utf8Path {
         self.tedge_config_file_path()
     }
 
-    pub fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let dto = self.load_dto::<FileAndEnvironment>(self.toml_path())?;
+    pub async fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
+        let dto = self.load_dto_from_toml_and_env().await?;
         debug!(
             "Loading configuration from {:?}",
             self.tedge_config_file_path
@@ -102,15 +102,35 @@ impl TEdgeConfigLocation {
         Ok(TEdgeConfig::from_dto(&dto, self))
     }
 
-    pub fn load_dto_from_toml_and_env(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
-        self.load_dto::<FileAndEnvironment>(self.toml_path())
+    pub fn load_sync(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
+        let dto = self.load_dto_sync::<FileAndEnvironment>(self.toml_path())?;
+        debug!(
+            "Loading configuration from {:?}",
+            self.tedge_config_file_path
+        );
+        Ok(TEdgeConfig::from_dto(&dto, self))
     }
 
-    fn load_dto<Sources: ConfigSources>(
+    pub async fn load_dto_from_toml_and_env(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
+        self.load_dto::<FileAndEnvironment>(self.toml_path()).await
+    }
+
+    async fn load_dto<Sources: ConfigSources>(
         &self,
         path: &Utf8Path,
     ) -> Result<TEdgeConfigDto, TEdgeConfigError> {
-        let (dto, warnings) = self.load_dto_with_warnings::<Sources>(path)?;
+        let (dto, warnings) = self.load_dto_with_warnings::<Sources>(path).await?;
+
+        warnings.emit();
+
+        Ok(dto)
+    }
+
+    fn load_dto_sync<Sources: ConfigSources>(
+        &self,
+        path: &Utf8Path,
+    ) -> Result<TEdgeConfigDto, TEdgeConfigError> {
+        let (dto, warnings) = self.load_dto_with_warnings_sync::<Sources>(path)?;
 
         warnings.emit();
 
@@ -133,7 +153,37 @@ impl TEdgeConfigLocation {
         TEdgeConfig::from_dto(&dto, &TEdgeConfigLocation::default())
     }
 
-    fn load_dto_with_warnings<Sources: ConfigSources>(
+    async fn load_dto_with_warnings<Sources: ConfigSources>(
+        &self,
+        path: &Utf8Path,
+    ) -> Result<(TEdgeConfigDto, UnusedValueWarnings), TEdgeConfigError> {
+        let (mut dto, mut warnings): (TEdgeConfigDto, _) =
+            super::figment::extract_data::<_, Sources>(path)?;
+
+        if let Some(migrations) = dto.config.version.unwrap_or_default().migrations() {
+            'migrate_toml: {
+                let Ok(config) = tokio::fs::read_to_string(self.toml_path()).await else {
+                    break 'migrate_toml;
+                };
+
+                tracing::info!("Migrating tedge.toml configuration to version 2");
+
+                let toml = toml::de::from_str(&config)?;
+                let migrated_toml = migrations
+                    .into_iter()
+                    .fold(toml, |toml, migration| migration.apply_to(toml));
+
+                self.store(&migrated_toml).await?;
+
+                // Reload DTO to get the settings in the right place
+                (dto, warnings) = super::figment::extract_data::<_, Sources>(self.toml_path())?;
+            }
+        }
+
+        Ok((dto, warnings))
+    }
+
+    fn load_dto_with_warnings_sync<Sources: ConfigSources>(
         &self,
         path: &Utf8Path,
     ) -> Result<(TEdgeConfigDto, UnusedValueWarnings), TEdgeConfigError> {
@@ -153,7 +203,7 @@ impl TEdgeConfigLocation {
                     .into_iter()
                     .fold(toml, |toml, migration| migration.apply_to(toml));
 
-                self.store(&migrated_toml)?;
+                self.store_sync(&migrated_toml)?;
 
                 // Reload DTO to get the settings in the right place
                 (dto, warnings) = super::figment::extract_data::<_, Sources>(self.toml_path())?;
@@ -163,12 +213,37 @@ impl TEdgeConfigLocation {
         Ok((dto, warnings))
     }
 
-    fn store<S: Serialize>(&self, config: &S) -> Result<(), TEdgeConfigError> {
+    async fn store<S: Serialize>(&self, config: &S) -> Result<(), TEdgeConfigError> {
+        let toml = toml::to_string_pretty(&config)?;
+
+        // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
+        if !tokio::fs::try_exists(&self.tedge_config_root_path).await.unwrap_or(false) {
+            tokio::fs::create_dir(self.tedge_config_root_path()).await?;
+        }
+
+        let toml_path = self.toml_path();
+
+        atomically_write_file_async(toml_path, toml.as_bytes()).await?;
+
+        let entry = PermissionEntry {
+            user: Some("tedge".to_string()),
+            group: Some("tedge".to_string()),
+            mode: Some(0o644),
+        };
+
+        if let Err(err) = entry.apply(toml_path.as_std_path()) {
+            warn!("failed to set file ownership and permissions for '{toml_path}': {err}");
+        }
+
+        Ok(())
+    }
+
+    fn store_sync<S: Serialize>(&self, config: &S) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config)?;
 
         // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
         if !self.tedge_config_root_path.exists() {
-            fs::create_dir(self.tedge_config_root_path())?;
+            std::fs::create_dir(self.tedge_config_root_path())?;
         }
 
         let toml_path = self.toml_path();
@@ -224,8 +299,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn old_toml_can_be_read_in_its_entirety() {
+    #[tokio::test]
+    async fn old_toml_can_be_read_in_its_entirety() {
         let toml = r#"[device]
 key_path = "/tedge/device-key.pem"
 cert_path = "/tedge/device-cert.pem"
@@ -295,6 +370,7 @@ type = "a-service-type""#;
         let toml_path = config_location.tedge_config_file_path();
         let (dto, warnings) = config_location
             .load_dto_with_warnings::<FileOnly>(toml_path)
+            .await
             .unwrap();
 
         // Figment will warn us if we're not using a field. If we've migrated

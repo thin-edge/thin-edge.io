@@ -177,7 +177,7 @@ impl MaybeBorrowedCloud<'_> {
 /// that is not set
 pub fn profile_completions() -> Vec<CompletionCandidate> {
     let location = TEdgeConfigLocation::from_custom_root(get_config_dir());
-    let Ok(tc) = location.load() else {
+    let Ok(tc) = location.load_sync() else {
         return vec![];
     };
     tc.c8y

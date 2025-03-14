@@ -99,11 +99,12 @@ pub(crate) struct AgentConfig {
 }
 
 impl AgentConfig {
-    pub fn from_config_and_cliopts(
+    pub async fn from_config_and_cliopts(
         tedge_config_location: &tedge_config::TEdgeConfigLocation,
         cliopts: AgentOpt,
     ) -> Result<Self, anyhow::Error> {
-        let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())?;
+        let tedge_config =
+            tedge_config::TEdgeConfig::try_new(tedge_config_location.clone()).await?;
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
         let tmp_dir = Arc::from(tedge_config.tmp.path.as_path());
@@ -145,17 +146,20 @@ impl AgentConfig {
 
         // Restart config
         let restart_config =
-            RestartManagerConfig::from_tedge_config(&mqtt_device_topic_id, tedge_config_location)?;
+            RestartManagerConfig::from_tedge_config(&mqtt_device_topic_id, tedge_config_location)
+                .await?;
 
         // Software update config
-        let sw_update_config = SoftwareManagerConfig::from_tedge_config(tedge_config_location)?;
+        let sw_update_config =
+            SoftwareManagerConfig::from_tedge_config(tedge_config_location).await?;
 
         // Operation Workflow config
         let operation_config = OperationConfig::from_tedge_config(
             mqtt_topic_root.to_string(),
             &mqtt_device_topic_id,
             tedge_config_location,
-        )?;
+        )
+        .await?;
 
         // For flockfile
         let run_dir = tedge_config.run.path.clone();

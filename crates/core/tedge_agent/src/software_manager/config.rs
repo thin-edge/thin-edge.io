@@ -16,10 +16,11 @@ pub struct SoftwareManagerConfig {
 }
 
 impl SoftwareManagerConfig {
-    pub fn from_tedge_config(
+    pub async fn from_tedge_config(
         tedge_config_location: &TEdgeConfigLocation,
     ) -> Result<SoftwareManagerConfig, tedge_config::TEdgeConfigError> {
-        let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())?;
+        let tedge_config =
+            tedge_config::TEdgeConfig::try_new(tedge_config_location.clone()).await?;
         let config_dir = &tedge_config_location.tedge_config_root_path;
 
         let default_plugin_type = tedge_config

@@ -92,7 +92,7 @@ impl Plugins for ExternalPlugins {
 }
 
 impl ExternalPlugins {
-    pub fn open(
+    pub async fn open(
         plugin_dir: impl Into<PathBuf>,
         default_plugin_type: Option<String>,
         sudo: SudoCommandBuilder,
@@ -105,7 +105,7 @@ impl ExternalPlugins {
             sudo,
             config_location,
         };
-        if let Err(e) = plugins.load() {
+        if let Err(e) = plugins.load().await {
             warn!(
                 "Reading the plugins directory ({:?}): failed with: {e:?}",
                 &plugins.plugin_dir
@@ -134,11 +134,12 @@ impl ExternalPlugins {
         Ok(plugins)
     }
 
-    pub fn load(&mut self) -> anyhow::Result<()> {
+    pub async fn load(&mut self) -> anyhow::Result<()> {
         self.plugin_map.clear();
 
-        let config =
-            tedge_config::TEdgeConfig::try_new(self.config_location.clone()).map_err(|err| {
+        let config = tedge_config::TEdgeConfig::try_new(self.config_location.clone())
+            .await
+            .map_err(|err| {
                 io::Error::new(
                     ErrorKind::Other,
                     format!("Failed to load tedge config: {}", err),
@@ -301,8 +302,8 @@ impl ExternalPlugins {
     }
 }
 
-#[test]
-fn test_no_sm_plugin_dir() {
+#[tokio::test]
+async fn test_no_sm_plugin_dir() {
     let plugin_dir = tempfile::TempDir::new().unwrap();
 
     let actual = ExternalPlugins::open(
@@ -310,6 +311,7 @@ fn test_no_sm_plugin_dir() {
         None,
         SudoCommandBuilder::enabled(false),
         TEdgeConfigLocation::default(),
-    );
+    )
+    .await;
     assert!(actual.is_ok());
 }

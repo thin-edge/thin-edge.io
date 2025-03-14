@@ -8,8 +8,8 @@ mod tests {
     use tedge_config::TEdgeConfigLocation;
     use tempfile::NamedTempFile;
 
-    #[test]
-    fn plugin_manager_load_plugins_empty() {
+    #[tokio::test]
+    async fn plugin_manager_load_plugins_empty() {
         // Create empty plugins directory.
         let temp_dir = tempfile::tempdir().unwrap();
         let plugin_dir = temp_dir.path().to_owned();
@@ -21,15 +21,16 @@ mod tests {
             SudoCommandBuilder::enabled(false),
             TEdgeConfigLocation::default(),
         )
+        .await
         .unwrap();
-        let _ = plugins.load();
+        let _ = plugins.load().await;
 
         // Plugins registry should not register any plugin as no files in the directory are present.
         assert!(plugins.empty());
     }
 
-    #[test]
-    fn plugin_manager_load_plugins_some_by_plugins_none() {
+    #[tokio::test]
+    async fn plugin_manager_load_plugins_some_by_plugins_none() {
         // Create empty plugins directory.
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -45,8 +46,9 @@ mod tests {
             SudoCommandBuilder::enabled(false),
             TEdgeConfigLocation::default(),
         )
+        .await
         .unwrap();
-        let _ = plugins.load();
+        let _ = plugins.load().await;
 
         // Check if registry has loaded plugin of type `test`.
         assert!(plugins.by_software_type("test").is_none());
@@ -54,8 +56,8 @@ mod tests {
         assert!(plugins.default().is_none());
     }
 
-    #[test]
-    fn invalid_default_plugin_pass_through() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn invalid_default_plugin_pass_through() -> anyhow::Result<()> {
         let plugin_dir = tempfile::tempdir().unwrap();
         let plugin_file_path = plugin_dir.path().join("apt");
         let _ = File::create(plugin_file_path).unwrap();
@@ -65,7 +67,8 @@ mod tests {
             Some("dummy".into()),
             SudoCommandBuilder::enabled(false),
             TEdgeConfigLocation::default(),
-        )?;
+        )
+        .await?;
         assert!(result.empty());
         assert!(result.default().is_none());
 

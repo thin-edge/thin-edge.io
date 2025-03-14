@@ -95,6 +95,7 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: &Path) {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(tedge_config_dir);
     let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())
+        .await
         .expect("Could not load config");
 
     let mqtt_topic_root = tedge_config.mqtt.topic_root.clone();
@@ -169,7 +170,7 @@ async fn monitor_tedge_service(
     res_topic: Topic,
     interval: Duration,
 ) -> Result<(), WatchdogError> {
-    let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location)?;
+    let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location).await?;
 
     let mqtt_device_topic_id: EntityTopicId = tedge_config
         .mqtt

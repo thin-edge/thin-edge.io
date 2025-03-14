@@ -1291,18 +1291,18 @@ mod tests {
         use tedge_config::TEdgeConfigLocation;
         use tedge_test_utils::fs::TempTedgeDir;
 
-        #[test]
-        fn allows_default_config() {
+        #[tokio::test]
+        async fn allows_default_config() {
             let cloud = Cloud::C8y(None);
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             validate_config(&config, &cloud).unwrap();
         }
 
-        #[test]
-        fn allows_single_named_c8y_profile_without_default_profile() {
+        #[tokio::test]
+        async fn allows_single_named_c8y_profile_without_default_profile() {
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
@@ -1311,14 +1311,15 @@ mod tests {
                     .unwrap();
                 Ok(())
             })
+            .await
             .unwrap();
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             validate_config(&config, &cloud).unwrap();
         }
 
-        #[test]
-        fn disallows_matching_device_id_same_urls() {
+        #[tokio::test]
+        async fn disallows_matching_device_id_same_urls() {
             yansi::disable();
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
@@ -1330,8 +1331,9 @@ mod tests {
                     .unwrap();
                 Ok(())
             })
+            .await
             .unwrap();
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             let err = validate_config(&config, &cloud).unwrap_err();
             assert_eq!(err.to_string(), "You have matching URLs and device IDs for different profiles.
@@ -1341,8 +1343,8 @@ c8y.url, c8y.profiles.new.url are set to the same value, but so are c8y.device.i
 Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud.")
         }
 
-        #[test]
-        fn allows_different_urls() {
+        #[tokio::test]
+        async fn allows_different_urls() {
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
@@ -1363,14 +1365,15 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                     .unwrap();
                 Ok(())
             })
+            .await
             .unwrap();
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             validate_config(&config, &cloud).unwrap();
         }
 
-        #[test]
-        fn allows_different_device_ids() {
+        #[tokio::test]
+        async fn allows_different_device_ids() {
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
@@ -1410,14 +1413,15 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                     .unwrap();
                 Ok(())
             })
+            .await
             .unwrap();
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             validate_config(&config, &cloud).unwrap();
         }
 
-        #[test]
-        fn allows_combination_of_urls_and_device_ids() {
+        #[tokio::test]
+        async fn allows_combination_of_urls_and_device_ids() {
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
@@ -1475,14 +1479,15 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                 .unwrap();
                 Ok(())
             })
+            .await
             .unwrap();
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             validate_config(&config, &cloud).unwrap();
         }
 
-        #[test]
-        fn allows_single_named_az_profile_without_default_profile() {
+        #[tokio::test]
+        async fn allows_single_named_az_profile_without_default_profile() {
             let cloud = Cloud::az(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
@@ -1491,14 +1496,15 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                     .unwrap();
                 Ok(())
             })
+            .await
             .unwrap();
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             validate_config(&config, &cloud).unwrap();
         }
 
-        #[test]
-        fn allows_single_named_aws_profile_without_default_profile() {
+        #[tokio::test]
+        async fn allows_single_named_aws_profile_without_default_profile() {
             let cloud = Cloud::aws(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
@@ -1507,14 +1513,15 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                     .unwrap();
                 Ok(())
             })
+            .await
             .unwrap();
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             validate_config(&config, &cloud).unwrap();
         }
 
-        #[test]
-        fn rejects_conflicting_topic_prefixes() {
+        #[tokio::test]
+        async fn rejects_conflicting_topic_prefixes() {
             let cloud = Cloud::C8y(None);
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
@@ -1527,8 +1534,9 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                     .unwrap();
                 Ok(())
             })
+            .await
             .unwrap();
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             let err = validate_config(&config, &cloud).unwrap_err();
             eprintln!("err={err}");
@@ -1538,8 +1546,8 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                 .contains("c8y.profiles.new.bridge.topic_prefix"));
         }
 
-        #[test]
-        fn rejects_conflicting_bind_ports() {
+        #[tokio::test]
+        async fn rejects_conflicting_bind_ports() {
             let cloud = Cloud::C8y(None);
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
@@ -1555,8 +1563,9 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                 .unwrap();
                 Ok(())
             })
+            .await
             .unwrap();
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             let err = validate_config(&config, &cloud).unwrap_err();
             eprintln!("err={err}");
@@ -1564,8 +1573,8 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             assert!(err.to_string().contains("c8y.profiles.new.proxy.bind.port"));
         }
 
-        #[test]
-        fn ignores_conflicting_configs_for_other_clouds() {
+        #[tokio::test]
+        async fn ignores_conflicting_configs_for_other_clouds() {
             let cloud = Cloud::Azure(None);
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
@@ -1576,14 +1585,15 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                     .unwrap();
                 Ok(())
             })
+            .await
             .unwrap();
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             validate_config(&config, &cloud).unwrap();
         }
 
-        #[test]
-        fn allows_non_conflicting_topic_prefixes() {
+        #[tokio::test]
+        async fn allows_non_conflicting_topic_prefixes() {
             let cloud = Cloud::Azure(None);
             let ttd = TempTedgeDir::new();
             let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
@@ -1595,8 +1605,9 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                 .unwrap();
                 Ok(())
             })
+            .await
             .unwrap();
-            let config = loc.load().unwrap();
+            let config = loc.load().await.unwrap();
 
             validate_config(&config, &cloud).unwrap();
         }

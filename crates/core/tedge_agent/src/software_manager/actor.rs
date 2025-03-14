@@ -106,6 +106,7 @@ impl Actor for SoftwareManagerActor {
             self.config.sudo.clone(),
             self.config.config_location.clone(),
         )
+        .await
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 
         if plugins.empty() {
@@ -243,8 +244,8 @@ impl SoftwareManagerActor {
             return Ok(());
         }
 
-        plugins.load()?;
-        plugins.update_default(&get_default_plugin(&self.config.config_location)?)?;
+        plugins.load().await?;
+        plugins.update_default(&get_default_plugin(&self.config.config_location).await?)?;
 
         self.state_repository.store(&request.clone().into()).await?;
 
@@ -336,10 +337,10 @@ impl SoftwareManagerActor {
     }
 }
 
-fn get_default_plugin(
+async fn get_default_plugin(
     config_location: &tedge_config::TEdgeConfigLocation,
 ) -> Result<Option<SoftwareType>, TEdgeConfigError> {
-    let tedge_config = tedge_config::TEdgeConfig::try_new(config_location.clone())?;
+    let tedge_config = tedge_config::TEdgeConfig::try_new(config_location.clone()).await?;
 
     Ok(tedge_config
         .software

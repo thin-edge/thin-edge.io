@@ -1,4 +1,4 @@
-use crate::command::Command;
+use crate::command::CommandAsync;
 use crate::log::MaybeFancy;
 use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfigLocation;
@@ -9,7 +9,8 @@ pub struct AddConfigCommand {
     pub config_location: TEdgeConfigLocation,
 }
 
-impl Command for AddConfigCommand {
+#[async_trait::async_trait]
+impl CommandAsync for AddConfigCommand {
     fn description(&self) -> String {
         format!(
             "set the configuration key: '{}' with value: {}.",
@@ -18,12 +19,13 @@ impl Command for AddConfigCommand {
         )
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         self.config_location
             .update_toml(&|dto, reader| {
                 dto.try_append_str(reader, &self.key, &self.value)
                     .map_err(|e| e.into())
             })
+            .await
             .map_err(anyhow::Error::new)?;
         Ok(())
     }

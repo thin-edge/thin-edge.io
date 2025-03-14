@@ -19,13 +19,22 @@ pub use tedge_config_macros::all_or_nothing;
 pub use tedge_config_macros::OptionalConfig;
 
 impl TEdgeConfig {
-    pub fn try_new(config_location: TEdgeConfigLocation) -> Result<Self, TEdgeConfigError> {
-        config_location.load()
+    pub async fn try_new(config_location: TEdgeConfigLocation) -> Result<Self, TEdgeConfigError> {
+        config_location.load().await
     }
 
-    pub fn load(config_dir: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
+    pub fn try_new_sync(config_location: TEdgeConfigLocation) -> Result<Self, TEdgeConfigError> {
+        config_location.load_sync()
+    }
+
+    pub async fn load(config_dir: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
         let config_location = TEdgeConfigLocation::from_custom_root(config_dir);
-        TEdgeConfig::try_new(config_location)
+        TEdgeConfig::try_new(config_location).await
+    }
+
+    pub fn load_sync(config_dir: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
+        let config_location = TEdgeConfigLocation::from_custom_root(config_dir);
+        TEdgeConfig::try_new_sync(config_location)
     }
 
     #[cfg(feature = "test")]
