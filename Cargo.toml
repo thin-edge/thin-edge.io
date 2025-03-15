@@ -6,6 +6,7 @@ members = [
     "crates/tests/*",
     "plugins/c8y_firmware_plugin",
     "plugins/c8y_remote_access_plugin",
+    "plugins/netdata-collector",
     "plugins/tedge_apt_plugin",
 ]
 resolver = "2"
