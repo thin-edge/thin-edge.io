@@ -372,7 +372,7 @@ def flake_finder(
     outputdir="output_flake_finder",
     processes=None,
     include="",
-    exclude="test:on_demand OR theme:benchmarks OR theme:remoteaccess",
+    exclude="test:on_demand OR theme:benchmarks",
     clean=False,
 ):
     """Run tests multiple times to find any flakey tests
@@ -460,7 +460,7 @@ def test(
     outputdir=None,
     processes=None,
     include="",
-    exclude="test:on_demand OR theme:benchmarks OR theme:remoteaccess",
+    exclude="test:on_demand OR theme:benchmarks",
 ):
     """Run tests
 
