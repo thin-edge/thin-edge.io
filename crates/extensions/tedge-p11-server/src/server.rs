@@ -1,8 +1,6 @@
 use std::os::unix::net::UnixListener;
 
 use anyhow::Context;
-use camino::Utf8Path;
-use tracing::debug;
 use tracing::error;
 use tracing::info;
 
@@ -25,18 +23,13 @@ impl TedgeP11Server {
     pub fn from_listener(&self, listener: UnixListener) -> anyhow::Result<()> {
         // Accept a connection
         loop {
-            match listener.accept() {
-                Ok((stream, _)) => {
-                    debug!("Accepted a connection");
+            let (stream, _) = listener.accept().context("Failed to accept connection")?;
 
-                    let connection = Connection::new(stream);
+            let connection = Connection::new(stream);
 
-                    match process(&self.config, connection) {
-                        Ok(_) => info!("Incoming request successful"),
-                        Err(e) => error!("Incoming request failed: {e}"),
-                    }
-                }
-                Err(e) => error!("Failed to accept connection: {}", e),
+            match process(&self.config, connection) {
+                Ok(_) => info!("Incoming request successful"),
+                Err(e) => error!("Incoming request failed: {e}"),
             }
         }
     }
