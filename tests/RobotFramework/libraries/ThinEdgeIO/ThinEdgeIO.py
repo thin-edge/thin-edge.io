@@ -773,6 +773,7 @@ class ThinEdgeIO(DeviceLibrary):
             "remoteaccess",
             "configurations",
             "create-passthrough",
+            "--retries=5",
             "--device",
             device,
             f"--port={port}",
