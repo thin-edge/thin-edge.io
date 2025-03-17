@@ -3,7 +3,7 @@ mod service;
 
 /// A server listening on the UNIX domain socket, wrapping the service.
 mod server;
-pub use server::P11SigningServer;
+pub use server::TedgeP11Server;
 
 /// Serialization and framing of messages sent between the client and server.
 mod connection;

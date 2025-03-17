@@ -12,11 +12,11 @@ use crate::connection::Frame;
 use crate::pkcs11::CryptokiConfigDirect;
 use crate::service::P11SignerService;
 
-pub struct P11SigningServer {
+pub struct TedgeP11Server {
     config: CryptokiConfigDirect,
 }
 
-impl P11SigningServer {
+impl TedgeP11Server {
     pub fn from_config(config: CryptokiConfigDirect) -> Self {
         Self { config }
     }

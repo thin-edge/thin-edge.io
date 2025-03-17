@@ -21,7 +21,7 @@ use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use tedge_p11_server::CryptokiConfigDirect;
-use tedge_p11_server::P11SigningServer;
+use tedge_p11_server::TedgeP11Server;
 
 /// thin-edge.io service for passing PKCS#11 cryptographic tokens.
 #[derive(Debug, Clone, PartialEq, Eq, Parser)]
@@ -64,7 +64,7 @@ fn main() -> anyhow::Result<()> {
 
     info!(%socket_path, "Server listening");
 
-    P11SigningServer::from_config(cryptoki_config).serve(&socket_path)?;
+    TedgeP11Server::from_config(cryptoki_config).serve(&socket_path)?;
 
     Ok(())
 }
