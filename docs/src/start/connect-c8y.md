@@ -190,6 +190,38 @@ sudo tedge cert upload c8y --user "$C8Y_USER"
 
 Below shows some common errors that can be experienced when trying to upload the device certificate.
 
+#### Connection closed by peer {#common-errors-closed-by-peer}
+
+If you're using a VPN it is possible that it is blocking the outgoing Cumulocity MQTT port that %%te%% uses, and sometimes it is not so obvious that the communication is being blocked by the VPN or firewall as tools like netcat (`nc`) might show that the port is available, however this does not show what responded to the request (so it could be the VPN responding and not Cumulocity).
+
+Use the following command to check if the Cumulocity URL and MQTT Port are reachable from the device.
+
+```sh
+openssl s_client -connect "$(tedge config get c8y.mqtt)" < /dev/null
+```
+
+The output of the command should print the information about the certificates of the URL and port that you are trying to connect to. If you don't see any information about the certificates (e.g. the `Certificate chain` section is missing), then it is likely that the VPN's configuration or firewall is routing or blocking the communication, so try the same command with the VPN switched off.
+
+Below shows an example of what is expected when communicating with the `eu-latest.cumulocity.com` Cumulocity instance, not that the `CN=*.eu-latest.cumulocity.com` matches the URL that was being checked against.
+
+```text title="Output"
+Connecting to 172.65.163.117
+CONNECTED(00000005)
+depth=2 C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., CN=Go Daddy Root Certificate Authority - G2
+verify return:1
+depth=1 C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2
+verify return:1
+depth=0 CN=*.eu-latest.cumulocity.com
+verify return:1
+---
+Certificate chain
+ 0 s:CN=*.eu-latest.cumulocity.com
+   i:C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2
+   a:PKEY: rsaEncryption, 2048 (bit); sigalg: RSA-SHA256
+   v:NotBefore: Dec 24 16:12:09 2024 GMT; NotAfter: Jan 25 16:12:09 2026 GMT
+# ...
+```
+
 #### InvalidCertificate(NotValidForName) {#common-errors-invalid-certificate}
 
 If you receive the following error, then you are most likely using the [custom domain feature](https://cumulocity.com/docs/enterprise-tenant/customization/#domain-name), and should see the [custom domain instructions](#custom-domain) to configure the correct HTTP and MQTT endpoints.
