@@ -21,9 +21,8 @@ impl TedgeP11Server {
         Self { config }
     }
 
-    pub fn serve(&self, socket_path: &Utf8Path) -> anyhow::Result<()> {
-        let listener = UnixListener::bind(socket_path).context("Failed to bind to socket")?;
-
+    /// Handle multiple requests on a given listener.
+    pub fn from_listener(&self, listener: UnixListener) -> anyhow::Result<()> {
         // Accept a connection
         loop {
             match listener.accept() {
