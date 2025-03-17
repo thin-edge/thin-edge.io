@@ -93,6 +93,7 @@ impl Websocket {
             .header("Connection", "Upgrade")
             .header("Upgrade", "websocket")
             .header("sec-websocket-version", "13")
+            .header("sec-websocket-protocol", "binary")
             .uri(url.to_string())
             .body(())
             .into_diagnostic()
