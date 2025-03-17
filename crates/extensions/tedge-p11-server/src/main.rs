@@ -11,13 +11,17 @@
 //! To avoid extra dependencies and possibly implement new features in the future, it was decided that thin-edge.io will
 //! provide its own bundled p11-kit-like service.
 
+use std::os::unix::net::UnixListener;
 use std::sync::Arc;
 
+use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::command;
 use clap::Parser;
+use tracing::debug;
 use tracing::info;
 use tracing::level_filters::LevelFilter;
+use tracing::warn;
 use tracing_subscriber::EnvFilter;
 
 use tedge_p11_server::CryptokiConfigDirect;
@@ -27,8 +31,8 @@ use tedge_p11_server::TedgeP11Server;
 #[derive(Debug, Clone, PartialEq, Eq, Parser)]
 #[command(version)]
 pub struct Args {
-    /// A path where the service's unix token will be created.
-    #[arg(default_value = "./tedge-p11-server.sock")]
+    /// A path where the UNIX socket listener will be created.
+    #[arg(long, default_value = "./tedge-p11-server.sock")]
     socket_path: Utf8PathBuf,
 
     /// The path to the PKCS#11 module.
@@ -62,9 +66,23 @@ fn main() -> anyhow::Result<()> {
 
     info!(?cryptoki_config, "Using cryptoki configuration");
 
-    info!(%socket_path, "Server listening");
-
-    TedgeP11Server::from_config(cryptoki_config).serve(&socket_path)?;
+    let listener = {
+        let mut systemd_listeners = sd_listen_fds::get()
+            .context("Failed to obtain activated sockets from systemd")?
+            .into_iter();
+        if systemd_listeners.len() > 1 {
+            warn!("Received multiple sockets but only first is used, rest are ignored");
+        }
+        if let Some((name, fd)) = systemd_listeners.next() {
+            debug!(?name, "Using socket passed by systemd");
+            UnixListener::from(fd)
+        } else {
+            debug!("No sockets from systemd, creating a standalone socket");
+            UnixListener::bind(socket_path).context("Failed to bind to socket")?
+        }
+    };
+    info!(listener = ?listener.local_addr().as_ref().ok().and_then(|s| s.as_pathname()), "Server listening");
+    TedgeP11Server::from_config(cryptoki_config).serve(listener)?;
 
     Ok(())
 }

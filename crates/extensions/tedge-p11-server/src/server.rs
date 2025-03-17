@@ -1,7 +1,6 @@
 use std::os::unix::net::UnixListener;
 
 use anyhow::Context;
-use camino::Utf8Path;
 use tracing::error;
 use tracing::info;
 
@@ -20,9 +19,8 @@ impl TedgeP11Server {
         Self { config }
     }
 
-    pub fn serve(&self, socket_path: &Utf8Path) -> anyhow::Result<()> {
-        let listener = UnixListener::bind(socket_path).context("Failed to bind to socket")?;
-
+    /// Handle multiple requests on a given listener.
+    pub fn serve(&self, listener: UnixListener) -> anyhow::Result<()> {
         // Accept a connection
         loop {
             let (stream, _) = listener.accept().context("Failed to accept connection")?;

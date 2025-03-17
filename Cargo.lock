@@ -3756,6 +3756,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sd-listen-fds"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bb51d45a99c1bafff550fd40ce1d2152917dc9908fb3090c283e3f058d39b3f"
+
+[[package]]
 name = "secrecy"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4283,6 +4289,7 @@ dependencies = [
  "cryptoki",
  "postcard",
  "rustls 0.23.22",
+ "sd-listen-fds",
  "serde",
  "tracing",
  "tracing-subscriber",
