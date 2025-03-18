@@ -7,7 +7,7 @@ use crate::override_public_key;
 use crate::read_cert_to_string;
 use crate::CertError;
 use camino::Utf8PathBuf;
-use certificate::NewCertificateConfig;
+use certificate::CsrTemplate;
 pub use download::DownloadCertCmd;
 pub use renew::RenewCertCmd;
 pub use upload::UploadCertCmd;
@@ -19,18 +19,17 @@ async fn create_device_csr(
     common_name: String,
     key_path: Utf8PathBuf,
     csr_path: Utf8PathBuf,
+    csr_template: CsrTemplate,
 ) -> Result<(), CertError> {
-    let config = NewCertificateConfig::default();
     let create_cmd = CreateCsrCmd {
         id: common_name,
         csr_path: csr_path.clone(),
         key_path,
         user: "tedge".to_string(),
         group: "tedge".to_string(),
+        csr_template,
     };
-    create_cmd
-        .create_certificate_signing_request(&config)
-        .await?;
+    create_cmd.create_certificate_signing_request().await?;
     Ok(())
 }
 
