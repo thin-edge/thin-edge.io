@@ -152,7 +152,7 @@ pub struct KeyCertPair {
 
 impl KeyCertPair {
     pub fn new_selfsigned_certificate(
-        config: &NewCertificateConfig,
+        config: &CsrTemplate,
         id: &str,
         key_kind: &KeyKind,
     ) -> Result<KeyCertPair, CertificateError> {
@@ -167,7 +167,7 @@ impl KeyCertPair {
     }
 
     pub fn new_certificate_sign_request(
-        config: &NewCertificateConfig,
+        config: &CsrTemplate,
         id: &str,
         key_kind: &KeyKind,
     ) -> Result<KeyCertPair, CertificateError> {
@@ -180,7 +180,7 @@ impl KeyCertPair {
     }
 
     fn create_selfsigned_certificate_parameters(
-        config: &NewCertificateConfig,
+        config: &CsrTemplate,
         id: &str,
         key_kind: &KeyKind,
         not_before: OffsetDateTime,
@@ -198,7 +198,7 @@ impl KeyCertPair {
     }
 
     fn create_csr_parameters(
-        config: &NewCertificateConfig,
+        config: &CsrTemplate,
         id: &str,
         key_kind: &KeyKind,
     ) -> Result<CertificateParams, CertificateError> {
@@ -309,16 +309,17 @@ pub enum CertificateError {
     Other(#[from] anyhow::Error),
 }
 
-pub struct NewCertificateConfig {
+#[derive(Clone)]
+pub struct CsrTemplate {
     pub max_cn_size: usize,
     pub validity_period_days: u32,
     pub organization_name: String,
     pub organizational_unit_name: String,
 }
 
-impl Default for NewCertificateConfig {
+impl Default for CsrTemplate {
     fn default() -> Self {
-        NewCertificateConfig {
+        CsrTemplate {
             max_cn_size: 64,
             validity_period_days: 365,
             organization_name: "Thin Edge".into(),
@@ -337,7 +338,7 @@ mod tests {
 
     impl KeyCertPair {
         fn new_selfsigned_certificate_with_new_key(
-            config: &NewCertificateConfig,
+            config: &CsrTemplate,
             id: &str,
         ) -> Result<KeyCertPair, CertificateError> {
             KeyCertPair::new_selfsigned_certificate(config, id, &KeyKind::New)
@@ -372,7 +373,7 @@ mod tests {
     #[test]
     fn self_signed_cert_subject_is_the_device() {
         // Create a certificate with a given subject
-        let config = NewCertificateConfig {
+        let config = CsrTemplate {
             organization_name: "Acme".to_owned(),
             organizational_unit_name: "IoT".to_owned(),
             ..Default::default()
@@ -391,7 +392,7 @@ mod tests {
     #[test]
     fn self_signed_cert_common_name_is_the_device_id() {
         // Create a certificate with a given subject
-        let config = NewCertificateConfig {
+        let config = CsrTemplate {
             organization_name: "Acme".to_owned(),
             organizational_unit_name: "IoT".to_owned(),
             ..Default::default()
@@ -412,7 +413,7 @@ mod tests {
     #[test]
     fn self_signed_cert_issuer_is_the_device() {
         // Create a certificate with a given subject
-        let config = NewCertificateConfig {
+        let config = CsrTemplate {
             organization_name: "Acme".to_owned(),
             organizational_unit_name: "IoT".to_owned(),
             ..Default::default()
@@ -431,7 +432,7 @@ mod tests {
     #[test]
     fn self_signed_cert_no_before_is_birthdate() {
         // Create a certificate with a given birthdate.
-        let config = NewCertificateConfig::default();
+        let config = CsrTemplate::default();
         let id = "some-id";
         let birthdate = datetime!(2021-03-31 16:39:57 +01:00);
 
@@ -460,7 +461,7 @@ mod tests {
     #[test]
     fn self_signed_cert_no_after_is_related_to_birthdate() {
         // Create a certificate with a given birthdate.
-        let config = NewCertificateConfig {
+        let config = CsrTemplate {
             validity_period_days: 10,
             ..Default::default()
         };
@@ -490,7 +491,7 @@ mod tests {
     #[test]
     fn create_certificate_sign_request() {
         // Create a certificate with a given birthdate.
-        let config = NewCertificateConfig::default();
+        let config = CsrTemplate::default();
         let id = "some-id";
 
         let params = KeyCertPair::create_csr_parameters(&config, id, &KeyKind::New)
@@ -511,7 +512,7 @@ mod tests {
     fn check_certificate_thumbprint_b64_decode_sha1() {
         // Create a certificate key pair
         let id = "my-device-id";
-        let config = NewCertificateConfig::default();
+        let config = CsrTemplate::default();
         let keypair = KeyCertPair::new_selfsigned_certificate_with_new_key(&config, id)
             .expect("Fail to create a certificate");
 

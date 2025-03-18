@@ -5,8 +5,8 @@ use crate::log::MaybeFancy;
 use crate::override_public_key;
 use crate::reuse_private_key;
 use camino::Utf8PathBuf;
+use certificate::CsrTemplate;
 use certificate::KeyCertPair;
-use certificate::NewCertificateConfig;
 
 /// Renew the self-signed device certificate
 pub struct RenewCertCmd {
@@ -15,6 +15,9 @@ pub struct RenewCertCmd {
 
     /// The path of the private key to re-use
     pub key_path: Utf8PathBuf,
+
+    /// CSR template
+    pub csr_template: CsrTemplate,
 }
 
 #[async_trait::async_trait]
@@ -24,15 +27,14 @@ impl Command for RenewCertCmd {
     }
 
     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let config = NewCertificateConfig::default();
-        self.renew_test_certificate(&config).await?;
+        self.renew_test_certificate(&self.csr_template).await?;
         eprintln!("Certificate was successfully renewed, for un-interrupted service, the certificate has to be uploaded to the cloud");
         Ok(())
     }
 }
 
 impl RenewCertCmd {
-    async fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
+    async fn renew_test_certificate(&self, config: &CsrTemplate) -> Result<(), CertError> {
         let cert_path = &self.cert_path;
         let key_path = &self.key_path;
         let id = certificate_cn(cert_path).await?;
@@ -77,10 +79,11 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
         // First create both cert and key
-        cmd.create_test_certificate(&NewCertificateConfig::default())
+        cmd.create_test_certificate(&CsrTemplate::default())
             .await
             .unwrap();
 
@@ -96,8 +99,9 @@ mod tests {
         let cmd = RenewCertCmd {
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
+            csr_template: CsrTemplate::default(),
         };
-        cmd.renew_test_certificate(&NewCertificateConfig::default())
+        cmd.renew_test_certificate(&CsrTemplate::default())
             .await
             .unwrap();
 
@@ -131,10 +135,11 @@ mod tests {
         let cmd = RenewCertCmd {
             cert_path,
             key_path,
+            csr_template: CsrTemplate::default(),
         };
 
         let cert_error = cmd
-            .renew_test_certificate(&NewCertificateConfig::default())
+            .renew_test_certificate(&CsrTemplate::default())
             .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertificateNotFound { .. });

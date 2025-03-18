@@ -21,11 +21,11 @@ Create the certificate
     ...    collapse_spaces=true
     Should Contain
     ...    ${output}
-    ...    Subject: CN=${DEVICE_SN}, O=Thin Edge, OU=Test Device
+    ...    Subject: CN=${DEVICE_SN}, O=Thin Edge, OU=Device
     ...    collapse_spaces=true
     Should Contain
     ...    ${output}
-    ...    Issuer: CN=${DEVICE_SN}, O=Thin Edge, OU=Test Device
+    ...    Issuer: CN=${DEVICE_SN}, O=Thin Edge, OU=Device
     ...    collapse_spaces=true
     Should Contain    ${output}    Status:
     Should Contain    ${output}    VALID

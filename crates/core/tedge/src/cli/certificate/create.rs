@@ -3,9 +3,9 @@ use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
+use certificate::CsrTemplate;
 use certificate::KeyCertPair;
 use certificate::KeyKind;
-use certificate::NewCertificateConfig;
 use certificate::PemCertificate;
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
@@ -29,6 +29,9 @@ pub struct CreateCertCmd {
     /// The owner of the private key
     pub user: String,
     pub group: String,
+
+    /// CSR template
+    pub csr_template: CsrTemplate,
 }
 
 #[async_trait::async_trait]
@@ -38,11 +41,11 @@ impl Command for CreateCertCmd {
     }
 
     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let config = NewCertificateConfig::default();
-        self.create_test_certificate(&config).await?;
+        self.create_test_certificate(&self.csr_template).await?;
         eprintln!("Certificate was successfully created\n");
         let show_cert_cmd = ShowCertCmd {
             cert_path: self.cert_path.clone(),
+            minimum: humantime::parse_duration("30d").unwrap(),
         };
         show_cert_cmd.show_certificate().await?;
         Ok(())
@@ -50,10 +53,7 @@ impl Command for CreateCertCmd {
 }
 
 impl CreateCertCmd {
-    pub async fn create_test_certificate(
-        &self,
-        config: &NewCertificateConfig,
-    ) -> Result<(), CertError> {
+    pub async fn create_test_certificate(&self, config: &CsrTemplate) -> Result<(), CertError> {
         let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, &KeyKind::New)?;
 
         let cert_path = &self.cert_path;
@@ -233,11 +233,11 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
         assert_matches!(
-            cmd.create_test_certificate(&NewCertificateConfig::default())
-                .await,
+            cmd.create_test_certificate(&CsrTemplate::default()).await,
             Ok(())
         );
         assert_eq!(parse_pem_file(&cert_path).tag(), "CERTIFICATE");
@@ -263,10 +263,11 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
         assert!(cmd
-            .create_test_certificate(&NewCertificateConfig::default())
+            .create_test_certificate(&CsrTemplate::default())
             .await
             .ok()
             .is_none());
@@ -287,10 +288,11 @@ mod tests {
             key_path,
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
         let cert_error = cmd
-            .create_test_certificate(&NewCertificateConfig::default())
+            .create_test_certificate(&CsrTemplate::default())
             .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
@@ -308,10 +310,11 @@ mod tests {
             key_path,
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
         let cert_error = cmd
-            .create_test_certificate(&NewCertificateConfig::default())
+            .create_test_certificate(&CsrTemplate::default())
             .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });

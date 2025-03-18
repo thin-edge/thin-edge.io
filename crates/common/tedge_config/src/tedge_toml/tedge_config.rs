@@ -166,6 +166,28 @@ define_tedge_config! {
         ty: String,
     },
 
+    certificate: {
+        validity: {
+            /// Requested validity duration for a new certificate
+            #[tedge_config(note = "The CA might return certificates valid for period shorter than requested")]
+            #[tedge_config(example = "365d", default(from_str = "365d"))]
+            requested_duration: SecondsOrHumanTime,
+
+            /// Minimum validity duration below which a new certificate should be requested
+            #[tedge_config(note = "This is an advisory setting and the renewal has to be scheduled")]
+            #[tedge_config(example = "30d", default(from_str = "30d"))]
+            minimum_duration: SecondsOrHumanTime,
+        },
+
+        /// Organization name used for certificate signing requests
+        #[tedge_config(example = "ACME", default(value = "Thin Edge"))]
+        organization: Arc<str>,
+
+        /// Organization unit used for certificate signing requests
+        #[tedge_config(example = "IoT", default(value = "Device"))]
+        organization_unit: Arc<str>,
+    },
+
     #[tedge_config(multi)]
     c8y: {
         /// Endpoint URL of Cumulocity tenant

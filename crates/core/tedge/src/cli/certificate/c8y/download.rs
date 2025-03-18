@@ -11,6 +11,7 @@ use anyhow::Error;
 use c8y_api::json_c8y_deserializer::C8yAPIError;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
+use certificate::CsrTemplate;
 use hyper::StatusCode;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::Response;
@@ -51,6 +52,9 @@ pub struct DownloadCertCmd {
 
     /// Maximum time waiting for the device to be registered
     pub max_timeout: Duration,
+
+    /// CSR template
+    pub csr_template: CsrTemplate,
 }
 
 #[async_trait::async_trait]
@@ -75,6 +79,7 @@ impl DownloadCertCmd {
                 common_name.clone(),
                 self.key_path.clone(),
                 self.csr_path.clone(),
+                self.csr_template.clone(),
             )
             .await
             .with_context(|| format!("Fail to create the device CSR {}", self.csr_path))?;
