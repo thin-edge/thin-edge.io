@@ -6,6 +6,7 @@ use std::time::Duration;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_config::models::auth_method::AuthType;
 use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
 use tedge_config::models::MQTT_TLS_PORT;
@@ -104,7 +105,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             ],
             bridge_location,
             connection_check_attempts: 1,
-            auth_method: None,
+            auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval,
             use_cryptoki: false,
@@ -166,7 +167,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 1,
-        auth_method: None,
+        auth_type: AuthType::Certificate,
         mosquitto_version: None,
         keepalive_interval: Duration::from_secs(60),
         use_cryptoki: false,
@@ -232,7 +233,7 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 1,
-        auth_method: None,
+        auth_type: AuthType::Certificate,
         mosquitto_version: None,
         keepalive_interval: Duration::from_secs(60),
         use_cryptoki: false,

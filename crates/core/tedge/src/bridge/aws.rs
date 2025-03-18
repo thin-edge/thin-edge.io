@@ -6,6 +6,7 @@ use std::time::Duration;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_config::models::auth_method::AuthType;
 use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
 use tedge_config::models::MQTT_TLS_PORT;
@@ -108,7 +109,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             // to create the "Thing", so the first connection attempt can fail, but retrying
             // will give it a higher chance of success
             connection_check_attempts: 5,
-            auth_method: None,
+            auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval,
             use_cryptoki: false,
@@ -166,7 +167,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 5,
-        auth_method: None,
+        auth_type: AuthType::Certificate,
         mosquitto_version: None,
         keepalive_interval: Duration::from_secs(60),
         use_cryptoki: false,
@@ -229,7 +230,7 @@ fn test_bridge_config_aws_custom_topic_prefix() -> anyhow::Result<()> {
         bridge_attempt_unsubscribe: false,
         bridge_location: BridgeLocation::Mosquitto,
         connection_check_attempts: 5,
-        auth_method: None,
+        auth_type: AuthType::Certificate,
         mosquitto_version: None,
         keepalive_interval: Duration::from_secs(60),
         use_cryptoki: false,

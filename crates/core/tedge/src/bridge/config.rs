@@ -2,7 +2,7 @@ use camino::Utf8PathBuf;
 use core::fmt;
 use std::borrow::Cow;
 use std::time::Duration;
-use tedge_config::models::auth_method::AuthMethod;
+use tedge_config::models::auth_method::AuthType;
 use tedge_config::models::HostPort;
 use tedge_config::models::MQTT_TLS_PORT;
 use tedge_config::TEdgeConfigLocation;
@@ -39,7 +39,7 @@ pub struct BridgeConfig {
     pub bridge_attempt_unsubscribe: bool,
     pub topics: Vec<String>,
     pub connection_check_attempts: i32,
-    pub auth_method: Option<AuthMethod>,
+    pub auth_type: AuthType,
     pub mosquitto_version: Option<String>,
     pub keepalive_interval: Duration,
     pub use_cryptoki: bool,
@@ -84,8 +84,8 @@ impl BridgeConfig {
         if let Some(name) = &self.remote_username {
             writeln_async!(writer, "remote_username {}", name)?;
         }
-        let use_basic_auth = self.remote_username.is_some() && self.remote_password.is_some();
-        if use_basic_auth {
+
+        if self.auth_type == AuthType::Basic {
             if let Some(password) = &self.remote_password {
                 writeln_async!(writer, "remote_password {}", password)?;
             }
@@ -190,7 +190,7 @@ mod test {
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
-            auth_method: None,
+            auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
             use_cryptoki: false,
@@ -263,7 +263,7 @@ keepalive_interval 60
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
-            auth_method: None,
+            auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
             use_cryptoki: false,
@@ -338,7 +338,7 @@ keepalive_interval 60
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
-            auth_method: None,
+            auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
             use_cryptoki: false,
@@ -413,7 +413,7 @@ keepalive_interval 60
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
-            auth_method: None,
+            auth_type: AuthType::Basic,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
             use_cryptoki: false,
