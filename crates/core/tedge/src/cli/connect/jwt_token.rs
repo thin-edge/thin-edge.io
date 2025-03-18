@@ -117,7 +117,7 @@ pub(crate) fn decode_jwt_token(token: &str) -> Result<String, ConnectError> {
         })?;
 
     let decoded =
-        BASE64_STANDARD_NO_PAD
+        BASE64_URL_SAFE_NO_PAD
             .decode(payload)
             .map_err(|_| ConnectError::InvalidJWTToken {
                 token: token.to_string(),
