@@ -4,7 +4,6 @@ mod tests {
     use plugin_sm::plugin::deserialize_module_info;
     use plugin_sm::plugin::sm_path;
     use plugin_sm::plugin::ExternalPluginCommand;
-    use serial_test::serial;
     use std::io::Write;
     use std::path::Path;
     use std::path::PathBuf;
@@ -52,7 +51,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn plugin_call_name_and_path() -> Result<(), anyhow::Error> {
         let dummy_plugin_path = get_dummy_plugin_path();
 
@@ -78,7 +76,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn plugin_check_module_type_both_same() {
         let dummy_plugin_path = get_dummy_plugin_path();
 
@@ -109,7 +106,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn plugin_check_module_type_both_different() {
         // Create dummy plugin.
         let dummy_plugin_path = get_dummy_plugin_path();
@@ -149,7 +145,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn plugin_check_module_type_default() {
         // Create dummy plugin.
         let dummy_plugin_path = get_dummy_plugin_path();
