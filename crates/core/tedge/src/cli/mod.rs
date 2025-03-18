@@ -1,7 +1,6 @@
 pub use self::certificate::*;
 use self::refresh_bridges::RefreshBridgesCmd;
 use crate::command::BuildCommand;
-use crate::command::BuildContext;
 use crate::command::Command;
 use c8y_firmware_plugin::FirmwarePluginOpt;
 use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
@@ -10,6 +9,8 @@ pub use connect::*;
 use tedge_agent::AgentOpt;
 use tedge_apt_plugin::AptCli;
 use tedge_config::cli::CommonArgs;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 use tedge_mapper::MapperOpt;
 use tedge_watchdog::WatchdogOpt;
 use tedge_write::bin::Args as TedgeWriteOpt;
@@ -182,7 +183,11 @@ fn styles() -> clap::builder::Styles {
 }
 
 impl BuildCommand for TEdgeOpt {
-    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
+    fn build_command(
+        self,
+        config: TEdgeConfig,
+        config_location: TEdgeConfigLocation,
+    ) -> Result<Box<dyn Command>, crate::ConfigError> {
         match self {
             TEdgeOpt::Init {
                 user,
@@ -192,22 +197,25 @@ impl BuildCommand for TEdgeOpt {
                 user,
                 group,
                 relative_links,
-                context,
+                config,
+                config_location,
             ))),
-            TEdgeOpt::Upload(opt) => opt.build_command(context),
-            TEdgeOpt::Cert(opt) => opt.build_command(context),
-            TEdgeOpt::Config(opt) => opt.build_command(context),
-            TEdgeOpt::Connect(opt) => opt.build_command(context),
-            TEdgeOpt::Disconnect(opt) => opt.build_command(context),
-            TEdgeOpt::RefreshBridges => RefreshBridgesCmd::new(&context).map(Command::into_boxed),
-            TEdgeOpt::Mqtt(opt) => opt.build_command(context),
-            TEdgeOpt::Http(opt) => opt.build_command(context),
-            TEdgeOpt::Reconnect(opt) => opt.build_command(context),
+            TEdgeOpt::Upload(opt) => opt.build_command(config, config_location),
+            TEdgeOpt::Cert(opt) => opt.build_command(config, config_location),
+            TEdgeOpt::Config(opt) => opt.build_command(config, config_location),
+            TEdgeOpt::Connect(opt) => opt.build_command(config, config_location),
+            TEdgeOpt::Disconnect(opt) => opt.build_command(config, config_location),
+            TEdgeOpt::RefreshBridges => {
+                RefreshBridgesCmd::new(config, config_location).map(Command::into_boxed)
+            }
+            TEdgeOpt::Mqtt(opt) => opt.build_command(config, config_location),
+            TEdgeOpt::Http(opt) => opt.build_command(config, config_location),
+            TEdgeOpt::Reconnect(opt) => opt.build_command(config, config_location),
             TEdgeOpt::Run(_) => {
                 // This method has to be kept in sync with tedge::redirect_if_multicall()
                 panic!("tedge mapper|agent|write commands are launched as multicall")
             }
-            TEdgeOpt::Completions { shell } => shell.build_command(context),
+            TEdgeOpt::Completions { shell } => shell.build_command(config, config_location),
         }
     }
 }

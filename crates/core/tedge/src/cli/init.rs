@@ -1,4 +1,4 @@
-use crate::command::BuildContext;
+use super::log::MaybeFancy;
 use crate::command::Command;
 use crate::Component;
 use anyhow::bail;
@@ -8,28 +8,35 @@ use std::io::ErrorKind;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 use tedge_utils::file::change_user_and_group;
 use tedge_utils::file::create_directory;
 use tedge_utils::file::PermissionEntry;
 use tracing::debug;
 
-use super::log::MaybeFancy;
-
-#[derive(Debug)]
 pub struct TEdgeInitCmd {
     user: String,
     group: String,
     relative_links: bool,
-    context: BuildContext,
+    config_location: TEdgeConfigLocation,
+    config: TEdgeConfig,
 }
 
 impl TEdgeInitCmd {
-    pub fn new(user: String, group: String, relative_links: bool, context: BuildContext) -> Self {
+    pub fn new(
+        user: String,
+        group: String,
+        relative_links: bool,
+        config: TEdgeConfig,
+        config_location: TEdgeConfigLocation,
+    ) -> Self {
         Self {
             user,
             group,
             relative_links,
-            context,
+            config_location,
+            config,
         }
     }
 }
@@ -79,7 +86,7 @@ impl TEdgeInitCmd {
             create_symlinks_for(component, target, executable_dir, &RealEnv).await?;
         }
 
-        let config_dir = self.context.config_location.tedge_config_root_path.clone();
+        let config_dir = self.config_location.tedge_config_root_path.clone();
         let permissions = {
             PermissionEntry::new(
                 Some(self.user.clone()),
@@ -96,7 +103,7 @@ impl TEdgeInitCmd {
         create_directory(config_dir.join("device-certs"), &permissions).await?;
         create_directory(config_dir.join(".tedge-mapper-c8y"), &permissions).await?;
 
-        let config = self.context.load_config()?;
+        let config = &self.config;
 
         create_directory(&config.logs.path, &permissions).await?;
         create_directory(&config.data.path, &permissions).await?;

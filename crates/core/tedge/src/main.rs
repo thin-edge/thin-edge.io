@@ -14,7 +14,6 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge::command::BuildCommand;
-use tedge::command::BuildContext;
 use tedge::log::MaybeFancy;
 use tedge::Component;
 use tedge::ComponentOpt;
@@ -69,6 +68,7 @@ async fn main() -> anyhow::Result<()> {
         TEdgeOptMulticall::Tedge(TEdgeCli { cmd, common }) => {
             let tedge_config_location =
                 tedge_config::TEdgeConfigLocation::from_custom_root(&common.config_dir);
+            let tedge_config = tedge_config::TEdgeConfig::load(&common.config_dir).await?;
 
             log_init(
                 "tedge",
@@ -76,9 +76,8 @@ async fn main() -> anyhow::Result<()> {
                 &tedge_config_location.tedge_config_root_path,
             )?;
 
-            let build_context = BuildContext::new(common.config_dir);
             let cmd = cmd
-                .build_command(build_context)
+                .build_command(tedge_config, tedge_config_location)
                 .with_context(|| "missing configuration parameter")?;
 
             if !std::io::stdout().is_terminal() {

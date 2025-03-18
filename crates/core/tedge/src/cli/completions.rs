@@ -1,10 +1,11 @@
 use super::TEdgeCli;
 use crate::command::BuildCommand;
-use crate::command::BuildContext;
 use crate::command::Command;
 use crate::ConfigError;
 use clap::CommandFactory;
 use std::io;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, strum_macros::Display)]
 #[strum(serialize_all = "snake_case")]
@@ -36,7 +37,11 @@ impl From<Shell> for Box<dyn clap_complete::env::EnvCompleter> {
 }
 
 impl BuildCommand for Shell {
-    fn build_command(self, _: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(
+        self,
+        _: TEdgeConfig,
+        _: TEdgeConfigLocation,
+    ) -> Result<Box<dyn Command>, ConfigError> {
         Ok(Box::new(CompletionsCmd { shell: self }))
     }
 }

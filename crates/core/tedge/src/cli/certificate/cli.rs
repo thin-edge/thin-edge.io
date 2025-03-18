@@ -11,11 +11,11 @@ use clap::ValueHint;
 use tedge_config::tedge_toml::OptionalConfigError;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
-use crate::command::BuildContext;
 use crate::command::Command;
 use crate::ConfigError;
 
@@ -69,8 +69,11 @@ pub enum TEdgeCertCli {
 }
 
 impl BuildCommand for TEdgeCertCli {
-    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
-        let config = context.load_config()?;
+    fn build_command(
+        self,
+        config: TEdgeConfig,
+        _: TEdgeConfigLocation,
+    ) -> Result<Box<dyn Command>, ConfigError> {
         let (user, group) = if config.mqtt.bridge.built_in {
             ("tedge", "tedge")
         } else {

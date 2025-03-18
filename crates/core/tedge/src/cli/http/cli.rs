@@ -1,7 +1,6 @@
 use crate::cli::http::command::HttpAction;
 use crate::cli::http::command::HttpCommand;
 use crate::command::BuildCommand;
-use crate::command::BuildContext;
 use crate::command::Command;
 use crate::ConfigError;
 use anyhow::anyhow;
@@ -14,6 +13,8 @@ use reqwest::Client;
 use reqwest::Identity;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::OptionalConfig;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 use tokio::fs::File;
 
 #[derive(clap::Subcommand, Debug)]
@@ -194,8 +195,11 @@ impl Content {
 }
 
 impl BuildCommand for TEdgeHttpCli {
-    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
-        let config = context.load_config()?;
+    fn build_command(
+        self,
+        config: TEdgeConfig,
+        _: TEdgeConfigLocation,
+    ) -> Result<Box<dyn Command>, ConfigError> {
         let uri = self.uri();
 
         let (protocol, host, port) = if uri.starts_with("/c8y") {

@@ -10,7 +10,6 @@ use crate::bridge::BridgeConfig;
 use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
-use crate::command::BuildContext;
 use crate::command::Command;
 use crate::system_services::service_manager;
 use crate::system_services::SystemService;
@@ -34,9 +33,10 @@ impl Command for RefreshBridgesCmd {
 }
 
 impl RefreshBridgesCmd {
-    pub fn new(context: &BuildContext) -> Result<Self, crate::ConfigError> {
-        let config = context.load_config()?;
-        let config_location = context.config_location.clone();
+    pub fn new(
+        config: TEdgeConfig,
+        config_location: TEdgeConfigLocation,
+    ) -> Result<Self, crate::ConfigError> {
         let service_manager = service_manager(&config_location.tedge_config_root_path)?;
 
         let cmd = Self {

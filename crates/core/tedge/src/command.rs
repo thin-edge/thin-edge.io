@@ -1,6 +1,6 @@
-use std::path::Path;
-
 use crate::log::MaybeFancy;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 
 /// A trait to be implemented by all tedge sub-commands.
 ///
@@ -121,6 +121,8 @@ pub trait Command {
 /// use tedge::cli::config::*;
 /// use tedge::ConfigError;
 /// use tedge_config::tedge_toml::tedge_config::*;
+/// use tedge_config::TEdgeConfig;
+/// use tedge_config::TEdgeConfigLocation;
 ///
 /// #[derive(clap::Parser, Debug)]
 /// enum ConfigCmd {
@@ -132,15 +134,15 @@ pub trait Command {
 /// }
 ///
 /// impl BuildCommand for ConfigCmd {
-///     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
+///     fn build_command(self, _config: TEdgeConfig, config_location: TEdgeConfigLocation) -> Result<Box<dyn Command>, ConfigError> {
 ///         let cmd = match self {
 ///             ConfigCmd::Set { key, value } => SetConfigCommand {
-///                 config_location: context.config_location,
+///                 config_location,
 ///                 key,
 ///                 value,
 ///             }.into_boxed(),
 ///             ConfigCmd::Get { key } => GetConfigCommand {
-///                 config_location: context.config_location,
+///                 config_location,
 ///                 key,
 ///             }.into_boxed(),
 ///         };
@@ -149,23 +151,13 @@ pub trait Command {
 /// }
 /// ```
 pub trait BuildCommand {
-    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError>;
-}
-
-/// The context for `BuildCommand`
-///
-#[derive(Debug)]
-pub struct BuildContext {
-    pub config_location: tedge_config::TEdgeConfigLocation,
-}
-
-impl BuildContext {
-    pub fn new(config_dir: impl AsRef<Path>) -> Self {
-        let config_location = tedge_config::TEdgeConfigLocation::from_custom_root(config_dir);
-        BuildContext { config_location }
-    }
-
-    pub fn load_config(&self) -> Result<tedge_config::TEdgeConfig, tedge_config::TEdgeConfigError> {
-        tedge_config::TEdgeConfig::try_new_sync(self.config_location.clone())
-    }
+    /// Build a command from the config.
+    ///
+    /// As some commands have to update the config (notably `tedge config set`),
+    /// the command are given not only the config but also the location of that config.
+    fn build_command(
+        self,
+        config: TEdgeConfig,
+        config_location: TEdgeConfigLocation,
+    ) -> Result<Box<dyn Command>, crate::ConfigError>;
 }

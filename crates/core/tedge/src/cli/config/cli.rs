@@ -6,6 +6,8 @@ use clap_complete::ArgValueCandidates;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::WritableKey;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum ConfigCmd {
@@ -132,9 +134,11 @@ macro_rules! try_with_profile {
 }
 
 impl BuildCommand for ConfigCmd {
-    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
-        let config_location = context.config_location;
-
+    fn build_command(
+        self,
+        _: TEdgeConfig,
+        config_location: TEdgeConfigLocation,
+    ) -> Result<Box<dyn Command>, ConfigError> {
         match self {
             ConfigCmd::Get { key, profile } => Ok(GetConfigCommand {
                 key: try_with_profile!(key, profile),
