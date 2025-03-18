@@ -13,6 +13,7 @@ use crate::ConfigError;
 use anyhow::anyhow;
 use c8y_api::http_proxy::C8yEndPoint;
 use camino::Utf8PathBuf;
+use certificate::CsrTemplate;
 use clap::ValueHint;
 use std::time::Duration;
 use tedge_config::tedge_toml::OptionalConfigError;
@@ -99,6 +100,19 @@ impl BuildCommand for TEdgeCertCli {
             (crate::BROKER_USER, crate::BROKER_USER)
         };
 
+        let csr_template = CsrTemplate {
+            max_cn_size: 64,
+            validity_period_days: config
+                .certificate
+                .validity
+                .requested_duration
+                .duration()
+                .as_secs() as u32
+                / (24 * 3600),
+            organization_name: config.certificate.organization.to_string(),
+            organizational_unit_name: config.certificate.organization_unit.to_string(),
+        };
+
         let cmd = match self {
             TEdgeCertCli::Create { id, cloud } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
@@ -109,6 +123,7 @@ impl BuildCommand for TEdgeCertCli {
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
                     user: user.to_owned(),
                     group: group.to_owned(),
+                    csr_template,
                 };
                 cmd.into_boxed()
             }
@@ -131,6 +146,7 @@ impl BuildCommand for TEdgeCertCli {
                     },
                     user: user.to_owned(),
                     group: group.to_owned(),
+                    csr_template,
                 };
                 cmd.into_boxed()
             }
@@ -140,6 +156,7 @@ impl BuildCommand for TEdgeCertCli {
                 let device_cert_path = config.device_cert_path(cloud.as_ref())?.to_owned();
                 let cmd = ShowCertCmd {
                     cert_path: cert_path.unwrap_or(device_cert_path),
+                    minimum: config.certificate.validity.minimum_duration.duration(),
                 };
                 cmd.into_boxed()
             }
@@ -196,6 +213,7 @@ impl BuildCommand for TEdgeCertCli {
                     generate_csr,
                     retry_every,
                     max_timeout,
+                    csr_template,
                 };
                 cmd.into_boxed()
             }
@@ -224,6 +242,7 @@ impl BuildCommand for TEdgeCertCli {
                     let cmd = RenewCertCmd {
                         cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
                         key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
+                        csr_template,
                     };
                     cmd.into_boxed()
                 } else {
@@ -251,6 +270,7 @@ impl BuildCommand for TEdgeCertCli {
                         key_path,
                         csr_path,
                         generate_csr,
+                        csr_template,
                     };
                     cmd.into_boxed()
                 }

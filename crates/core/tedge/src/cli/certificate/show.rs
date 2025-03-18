@@ -4,6 +4,7 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
 use certificate::ValidityStatus;
+use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use yansi::Paint;
 
@@ -20,6 +21,9 @@ macro_rules! print_async {
 pub struct ShowCertCmd {
     /// The path where the device certificate is stored
     pub cert_path: Utf8PathBuf,
+
+    /// Minimum validity duration bellow which a new certificate should be requested
+    pub minimum: Duration,
 }
 
 #[async_trait::async_trait]
@@ -50,7 +54,7 @@ impl ShowCertCmd {
         print_async!(
             stdout,
             "Status:        {}\n",
-            display_status(pem.still_valid()?)
+            display_status(pem.still_valid()?, self.minimum)
         );
         print_async!(stdout, "Valid from:    {}\n", pem.not_before()?);
         print_async!(stdout, "Valid until:   {}\n", pem.not_after()?);
@@ -66,7 +70,7 @@ impl ShowCertCmd {
     }
 }
 
-fn display_status(status: ValidityStatus) -> String {
+fn display_status(status: ValidityStatus, minimum: Duration) -> String {
     let text = match status {
         ValidityStatus::Valid { expired_in } => {
             format!(
@@ -85,9 +89,8 @@ fn display_status(status: ValidityStatus) -> String {
         }
     };
 
-    let threshold = humantime::parse_duration("30d").unwrap();
     match status {
-        ValidityStatus::Valid { expired_in } if expired_in > threshold => {
+        ValidityStatus::Valid { expired_in } if expired_in > minimum => {
             format!("{}", text.green())
         }
         ValidityStatus::Valid { .. } => format!("{}", text.yellow()),

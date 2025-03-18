@@ -10,6 +10,7 @@ use anyhow::Error;
 use c8y_api::http_proxy::C8yEndPoint;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
+use certificate::CsrTemplate;
 use hyper::header::CONTENT_TYPE;
 use hyper::StatusCode;
 use reqwest::Identity;
@@ -38,6 +39,9 @@ pub struct RenewCertCmd {
 
     /// Tell if the CSR has to be generated or is ready to be used
     pub generate_csr: bool,
+
+    /// CSR template
+    pub csr_template: CsrTemplate,
 }
 
 #[async_trait::async_trait]
@@ -60,7 +64,13 @@ impl RenewCertCmd {
     async fn renew_device_certificate(&self) -> Result<(), Error> {
         if self.generate_csr {
             let common_name = certificate_cn(&self.cert_path).await?;
-            create_device_csr(common_name, self.key_path.clone(), self.csr_path.clone()).await?;
+            create_device_csr(
+                common_name,
+                self.key_path.clone(),
+                self.csr_path.clone(),
+                self.csr_template.clone(),
+            )
+            .await?;
         }
         let csr = read_csr_from_file(&self.csr_path).await?;
 
