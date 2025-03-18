@@ -1,6 +1,8 @@
 use crate::auth::Auth;
 use async_compat::CompatExt;
 use async_tungstenite::tokio::ConnectStream;
+use base64::engine::general_purpose::STANDARD;
+use base64::engine::Engine as _;
 use futures::future::join;
 use futures::future::select;
 use futures_util::io::AsyncReadExt;
@@ -77,7 +79,7 @@ fn generate_sec_websocket_key() -> String {
     let mut rng = rand::thread_rng();
     let mut bytes = [0u8; 16];
     rng.fill_bytes(&mut bytes);
-    base64::encode(bytes)
+    STANDARD.encode(bytes)
 }
 
 impl Websocket {
@@ -123,7 +125,7 @@ mod tests {
     fn generated_key_is_base64_encoded_16_byte_sequence() {
         let key = generate_sec_websocket_key();
 
-        let decoded = base64::decode(key).unwrap();
+        let decoded = STANDARD.decode(key).unwrap();
 
         assert_eq!(decoded.len(), 16);
     }
