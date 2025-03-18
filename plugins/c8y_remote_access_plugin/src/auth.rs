@@ -20,4 +20,9 @@ impl Auth {
             .map(Auth)
             .into_diagnostic()
     }
+
+    #[cfg(test)]
+    pub fn test_value(test_value: HeaderValue) -> Self {
+        Self(test_value)
+    }
 }

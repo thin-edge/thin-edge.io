@@ -741,7 +741,9 @@ version = "1.4.2"
 dependencies = [
  "async-compat",
  "async-tungstenite 0.28.0",
+ "axum 0.8.1",
  "base64 0.22.1",
+ "bytes",
  "c8y_api",
  "camino",
  "clap",
@@ -754,6 +756,7 @@ dependencies = [
  "rstest",
  "rustls 0.23.22",
  "serde",
+ "sha1",
  "tedge_config",
  "tedge_utils",
  "tempfile",
