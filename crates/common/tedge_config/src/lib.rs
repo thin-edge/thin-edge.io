@@ -23,10 +23,6 @@ impl TEdgeConfig {
         config_location.load().await
     }
 
-    pub fn try_new_sync(config_location: TEdgeConfigLocation) -> Result<Self, TEdgeConfigError> {
-        config_location.load_sync()
-    }
-
     pub async fn load(config_dir: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
         let config_location = TEdgeConfigLocation::from_custom_root(config_dir);
         TEdgeConfig::try_new(config_location).await

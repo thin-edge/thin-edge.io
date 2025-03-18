@@ -27,7 +27,7 @@ use tracing::warn;
 )]
 pub struct AptCli {
     #[command(flatten)]
-    common: CommonArgs,
+    pub common: CommonArgs,
 
     #[clap(subcommand)]
     operation: PluginOp,
@@ -88,7 +88,7 @@ struct SoftwareModuleUpdate {
     pub path: Option<String>,
 }
 
-fn run_op(apt: AptCli) -> Result<ExitStatus, InternalError> {
+fn run_op(apt: AptCli, tedge_config: Option<TEdgeConfig>) -> Result<ExitStatus, InternalError> {
     if let Err(err) = log_init(
         "tedge-apt-plugin",
         &apt.common.log_args,
@@ -147,7 +147,7 @@ fn run_op(apt: AptCli) -> Result<ExitStatus, InternalError> {
             file_path,
         } => {
             let (installer, _metadata) = get_installer(module, version, file_path)?;
-            let dpk_option = get_dpk_option(apt.common.config_dir.as_std_path());
+            let dpk_option = get_dpk_option(&tedge_config);
             AptGetCmd::Install(dpk_option, vec![installer]).run()?
         }
 
@@ -173,7 +173,7 @@ fn run_op(apt: AptCli) -> Result<ExitStatus, InternalError> {
             // which will get cleaned up once it goes out of scope after this block
             let mut metadata_vec = Vec::new();
             let mut args: Vec<String> = Vec::new();
-            let dpk_option = get_dpk_option(apt.common.config_dir.as_std_path());
+            let dpk_option = get_dpk_option(&tedge_config);
 
             for update_module in updates {
                 match update_module.action {
@@ -319,8 +319,8 @@ impl AptGetCmd {
     }
 }
 
-fn get_dpk_option(config_dir: &Path) -> AptConfig {
-    match get_config(config_dir) {
+fn get_dpk_option(tedge_config: &Option<TEdgeConfig>) -> AptConfig {
+    match tedge_config {
         None => AptConfig::KeepNew,
         Some(config) => config.apt.dpk.options.config.clone(),
     }
@@ -334,10 +334,10 @@ fn get_name_and_version(line: &str) -> (&str, &str) {
     (name, version)
 }
 
-fn get_config(config_dir: &Path) -> Option<TEdgeConfig> {
+pub async fn get_config(config_dir: &Path) -> Option<TEdgeConfig> {
     let tedge_config_location = TEdgeConfigLocation::from_custom_root(config_dir);
 
-    match TEdgeConfig::try_new_sync(tedge_config_location) {
+    match TEdgeConfig::try_new(tedge_config_location).await {
         Ok(config) => Some(config),
         Err(err) => {
             warn!("Failed to load TEdgeConfig: {}", err);
@@ -346,9 +346,9 @@ fn get_config(config_dir: &Path) -> Option<TEdgeConfig> {
     }
 }
 
-pub fn run_and_exit(mut apt: AptCli) -> ! {
+pub fn run_and_exit(mut apt: AptCli, tedge_config: Option<TEdgeConfig>) -> ! {
     if let PluginOp::List { name, maintainer } = &mut apt.operation {
-        if let Some(config) = get_config(apt.common.config_dir.as_std_path()) {
+        if let Some(config) = &tedge_config {
             if name.is_none() {
                 *name = config.apt.name.or_none().cloned();
             }
@@ -359,7 +359,7 @@ pub fn run_and_exit(mut apt: AptCli) -> ! {
         }
     }
 
-    match run_op(apt) {
+    match run_op(apt, tedge_config) {
         Ok(status) if status.success() => {
             std::process::exit(0);
         }
@@ -414,6 +414,6 @@ mod tests {
                 config_dir: "".into(),
             },
         };
-        assert!(run_op(apt).is_ok())
+        assert!(run_op(apt, None).is_ok())
     }
 }

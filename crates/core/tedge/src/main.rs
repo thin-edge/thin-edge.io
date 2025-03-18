@@ -61,7 +61,8 @@ async fn main() -> anyhow::Result<()> {
                 .context("failed to run tedge write process")?
         }
         TEdgeOptMulticall::Component(Component::TedgeAptPlugin(opt)) => {
-            tokio::task::spawn_blocking(move || tedge_apt_plugin::run_and_exit(opt))
+            let config = tedge_apt_plugin::get_config(opt.common.config_dir.as_std_path()).await;
+            tokio::task::spawn_blocking(move || tedge_apt_plugin::run_and_exit(opt, config))
                 .await
                 .context("failed to run tedge apt plugin")?
         }
