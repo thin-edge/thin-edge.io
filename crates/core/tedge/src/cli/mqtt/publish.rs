@@ -71,7 +71,7 @@ async fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
     {
         Ok(Ok(())) => (),
         Ok(err) => err?,
-        Err(signal) => info!("{signal:?}"),
+        Err(signal) => info!(target: "MQTT", "{signal:?}"),
     }
     mqtt.close().await;
 

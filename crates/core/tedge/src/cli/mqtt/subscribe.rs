@@ -7,11 +7,11 @@ use mqtt_channel::TopicFilter;
 use std::time::Duration;
 use tedge_config::tedge_toml::MqttAuthClientConfig;
 use tokio::io::AsyncWriteExt;
+use tracing::error;
 use tracing::info;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
 use super::MAX_PACKET_SIZE;
-use crate::error;
 
 pub struct MqttSubscribeCommand {
     pub host: String,
@@ -76,7 +76,7 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
             Ok(Some(message)) => message,
             Ok(None) => break,
             Err(signal) => {
-                info!("{signal:?}");
+                info!(target: "MQTT", "{signal:?}");
                 break;
             }
         };
@@ -92,11 +92,11 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
                 let _ = stdout.flush().await;
                 n_messages += 1;
                 if matches!(cmd.count, Some(count) if count > 0 && n_messages >= count) {
-                    info!("Received {n_messages} message/s");
+                    info!(target: "MQTT", "Received {n_messages} message/s");
                     break;
                 }
             }
-            Err(err) => error!("{err}"),
+            Err(err) => error!(target: "MQTT", "{err}"),
         }
     }
 
