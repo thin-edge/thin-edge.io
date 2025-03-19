@@ -10,9 +10,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
-#[cfg(feature = "cryptoki")]
 pub use tedge_p11_server::CryptokiConfig;
-#[cfg(feature = "cryptoki")]
 pub use tedge_p11_server::CryptokiConfigDirect;
 
 use crate::CertificateError;
@@ -35,7 +33,6 @@ pub fn create_tls_config(
 ///
 /// This TLS configuration should be used for communication between a device (or bridge) and a cloud
 /// remote MQTT broker, not local MQTT broker.
-#[cfg(feature = "cryptoki")]
 pub fn create_tls_config_cryptoki(
     root_certificates: impl AsRef<Path>,
     client_certificate: impl AsRef<Path>,
