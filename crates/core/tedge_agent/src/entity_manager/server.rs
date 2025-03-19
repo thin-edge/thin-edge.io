@@ -43,7 +43,7 @@ pub enum EntityStoreResponse {
     List(Vec<EntityMetadata>),
     Ok,
     GetTwinFragment(Option<Value>),
-    UpdateTwinFragment(Result<bool, entity_store::Error>),
+    SetTwinFragment(Result<bool, entity_store::Error>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -142,7 +142,7 @@ impl Server for EntityStoreServer {
             }
             EntityStoreRequest::SetTwinFragment(twin_data) => {
                 let res = self.update_twin_data(twin_data).await;
-                EntityStoreResponse::UpdateTwinFragment(res)
+                EntityStoreResponse::SetTwinFragment(res)
             }
             EntityStoreRequest::MqttMessage(mqtt_message) => {
                 self.process_mqtt_message(mqtt_message).await;

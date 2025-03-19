@@ -406,7 +406,7 @@ async fn upsert_entity_twin_fragment(
         .clone()
         .await_response(EntityStoreRequest::SetTwinFragment(twin_data))
         .await?;
-    let EntityStoreResponse::UpdateTwinFragment(res) = response else {
+    let EntityStoreResponse::SetTwinFragment(res) = response else {
         return Err(Error::InvalidEntityStoreResponse);
     };
     let updated = res?;
@@ -428,7 +428,7 @@ async fn delete_entity_twin_fragment(
         .clone()
         .await_response(EntityStoreRequest::SetTwinFragment(twin_data))
         .await?;
-    let EntityStoreResponse::UpdateTwinFragment(res) = response else {
+    let EntityStoreResponse::SetTwinFragment(res) = response else {
         return Err(Error::InvalidEntityStoreResponse);
     };
     res?;
@@ -1190,7 +1190,7 @@ mod tests {
                         && twin_data.fragment_key == "foo"
                     {
                         req.reply_to
-                            .send(EntityStoreResponse::UpdateTwinFragment(Ok(true)))
+                            .send(EntityStoreResponse::SetTwinFragment(Ok(true)))
                             .await
                             .unwrap();
                     }
@@ -1231,7 +1231,7 @@ mod tests {
                         && twin_data.fragment_key == "@id"
                     {
                         req.reply_to
-                            .send(EntityStoreResponse::UpdateTwinFragment(Err(
+                            .send(EntityStoreResponse::SetTwinFragment(Err(
                                 entity_store::Error::InvalidTwinData("@id".to_string()),
                             )))
                             .await
@@ -1276,7 +1276,7 @@ mod tests {
                         && twin_data.fragment_key == "foo"
                     {
                         req.reply_to
-                            .send(EntityStoreResponse::UpdateTwinFragment(Err(
+                            .send(EntityStoreResponse::SetTwinFragment(Err(
                                 entity_store::Error::UnknownEntity(
                                     "device/test-child//".to_string(),
                                 ),
@@ -1322,7 +1322,7 @@ mod tests {
                         && twin_data.fragment_key == "foo"
                     {
                         req.reply_to
-                            .send(EntityStoreResponse::UpdateTwinFragment(Ok(true)))
+                            .send(EntityStoreResponse::SetTwinFragment(Ok(true)))
                             .await
                             .unwrap();
                     }
@@ -1357,7 +1357,7 @@ mod tests {
                         && twin_data.fragment_key == "foo"
                     {
                         req.reply_to
-                            .send(EntityStoreResponse::UpdateTwinFragment(Ok(false)))
+                            .send(EntityStoreResponse::SetTwinFragment(Ok(false)))
                             .await
                             .unwrap();
                     }
@@ -1384,10 +1384,6 @@ mod tests {
 
         let response = app.call(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
-
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        let entity: EntityMetadata = serde_json::from_slice(&body).unwrap();
-        assert_eq!(entity.twin_data.get("foo"), None);
     }
 
     #[tokio::test]
@@ -1406,7 +1402,7 @@ mod tests {
                         && twin_data.fragment_key == "foo"
                     {
                         req.reply_to
-                            .send(EntityStoreResponse::UpdateTwinFragment(Err(
+                            .send(EntityStoreResponse::SetTwinFragment(Err(
                                 entity_store::Error::UnknownEntity(
                                     "device/test-child//".to_string(),
                                 ),
