@@ -50,7 +50,6 @@ assert-json-diff = { workspace = true }
 assert_matches = { workspace = true }
 mockito = { workspace = true }
 proptest = { workspace = true }
-rand = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_config = { workspace = true, features = ["test"] }
 tedge_http_ext = { workspace = true, features = ["test_helpers"] }

@@ -30,7 +30,6 @@ tokio = { workspace = true }
 [dev-dependencies]
 assert-json-diff = { workspace = true }
 assert_matches = { workspace = true }
-mockall = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
 tokio = { workspace = true, default_features = false, features = [

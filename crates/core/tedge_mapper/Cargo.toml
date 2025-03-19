@@ -17,14 +17,12 @@ az_mapper_ext = { workspace = true }
 batcher = { workspace = true }
 c8y_api = { workspace = true }
 c8y_auth_proxy = { workspace = true }
-c8y_http_proxy = { workspace = true }
 c8y_mapper_ext = { workspace = true }
 clap = { workspace = true }
 clock = { workspace = true }
 collectd_ext = { workspace = true }
 flockfile = { workspace = true }
 mqtt_channel = { workspace = true }
-reqwest = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
@@ -37,14 +35,6 @@ tedge_mqtt_ext = { workspace = true }
 tedge_signal_ext = { workspace = true }
 tedge_timer_ext = { workspace = true }
 tedge_uploader_ext = { workspace = true }
-tedge_utils = { workspace = true, features = ["logging"] }
-tokio = { workspace = true, features = [
-    "process",
-    "rt",
-    "rt-multi-thread",
-    "sync",
-    "time",
-] }
 tracing = { workspace = true }
 
 [features]
