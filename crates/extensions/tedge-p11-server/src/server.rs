@@ -29,7 +29,7 @@ impl TedgeP11Server {
 
             match process(&self.config, connection) {
                 Ok(_) => info!("Incoming request successful"),
-                Err(e) => error!("Incoming request failed: {e}"),
+                Err(e) => error!("Incoming request failed: {e:?}"),
             }
         }
     }
