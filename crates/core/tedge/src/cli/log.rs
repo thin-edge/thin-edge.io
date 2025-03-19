@@ -9,7 +9,6 @@ use std::time::Instant;
 use crate::system_services::SystemServiceError;
 use crate::system_services::SystemServiceManager;
 use camino::Utf8Path;
-use tedge_config::models::auth_method::AuthMethod;
 use tedge_config::models::auth_method::AuthType;
 use tedge_config::tedge_toml::MultiError;
 use yansi::Paint as _;
@@ -251,7 +250,7 @@ pub struct ConfigLogger<'a> {
     cloud_host: String,
     cert_path: &'a Utf8Path,
     bridge_location: BridgeLocation,
-    auth_method: Option<AuthMethod>,
+    auth_type: AuthType,
     service_manager: &'a dyn SystemServiceManager,
     mosquitto_version: Option<&'a str>,
     cloud: &'a MaybeBorrowedCloud<'a>,
@@ -275,7 +274,7 @@ impl<'a> ConfigLogger<'a> {
                 cloud_host: config.address.to_string(),
                 cert_path: &config.bridge_certfile,
                 bridge_location: config.bridge_location,
-                auth_method: config.auth_method,
+                auth_type: config.auth_type,
                 credentials_path,
                 service_manager,
                 mosquitto_version: config.mosquitto_version.as_deref(),
@@ -309,18 +308,11 @@ impl fmt::Display for ConfigLogger<'_> {
             self.log_single_entry(f, "cloud profile", &"<none>")?;
         }
         self.log_single_entry(f, "cloud host", &self.cloud_host)?;
-        let mut auth_type = AuthType::Certificate;
-        if let Some(auth_method) = self.auth_method {
-            self.log_single_entry(f, "auth method", &auth_method)?;
-            if let Some(path) = self.credentials_path {
-                auth_type = auth_method.to_type(path);
-                if AuthType::Basic == auth_type {
-                    self.log_single_entry(f, "credentials path", &path)?
-                }
-            }
-        }
-        if AuthType::Certificate == auth_type {
+        self.log_single_entry(f, "auth type", &self.auth_type)?;
+        if self.auth_type == AuthType::Certificate {
             self.log_single_entry(f, "certificate file", &self.cert_path)?;
+        } else if let Some(path) = self.credentials_path {
+            self.log_single_entry(f, "credentials path", &path)?
         }
         self.log_single_entry(f, "bridge", &self.bridge_location)?;
         self.log_single_entry(f, "service manager", &self.service_manager.name())?;

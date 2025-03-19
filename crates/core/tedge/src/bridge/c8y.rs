@@ -7,7 +7,7 @@ use std::time::Duration;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_config::models::auth_method::AuthMethod;
+use tedge_config::models::auth_method::AuthType;
 use tedge_config::models::AutoFlag;
 use tedge_config::models::HostPort;
 use tedge_config::models::TemplatesSet;
@@ -89,8 +89,13 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             format!(r#"error in 1 {topic_prefix}/ """#),
         ];
 
-        let use_basic_auth = remote_username.is_some() && remote_password.is_some();
-        if !use_basic_auth {
+        let auth_type = if remote_username.is_some() {
+            AuthType::Basic
+        } else {
+            AuthType::Certificate
+        };
+
+        if auth_type == AuthType::Certificate {
             topics.extend(vec![
                 // c8y JWT token retrieval
                 format!(r#"s/uat out 0 {topic_prefix}/ """#),
@@ -148,12 +153,6 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             AutoFlag::Auto => is_mosquitto_version_above_2(),
         };
 
-        let auth_method = if remote_username.is_some() {
-            AuthMethod::Basic
-        } else {
-            AuthMethod::Certificate
-        };
-
         let service_name = format!("mosquitto-{topic_prefix}-bridge");
         let health = mqtt_schema.topic_for(
             &EntityTopicId::default_main_service(&service_name).unwrap(),
@@ -193,7 +192,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             topics,
             bridge_location,
             connection_check_attempts: 1,
-            auth_method: Some(auth_method),
+            auth_type,
             mosquitto_version,
             keepalive_interval,
             use_cryptoki,
@@ -326,7 +325,7 @@ mod tests {
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
-            auth_method: Some(AuthMethod::Certificate),
+            auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
             use_cryptoki: false,
@@ -432,7 +431,7 @@ mod tests {
             bridge_attempt_unsubscribe: false,
             bridge_location: BridgeLocation::Mosquitto,
             connection_check_attempts: 1,
-            auth_method: Some(AuthMethod::Basic),
+            auth_type: AuthType::Basic,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
             use_cryptoki: false,

@@ -1022,6 +1022,11 @@ async fn new_bridge(
 }
 
 pub async fn chown_certificate_and_key(bridge_config: &BridgeConfig) {
+    // Skip chown when using Basic Auth
+    if bridge_config.auth_type == AuthType::Basic {
+        return;
+    }
+
     let (user, group) = match bridge_config.bridge_location {
         BridgeLocation::BuiltIn => ("tedge", "tedge"),
         BridgeLocation::Mosquitto => (crate::BROKER_USER, crate::BROKER_GROUP),
