@@ -73,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
 
             log_init(
                 "tedge",
-                &common.log_args,
+                &common.log_args.with_default_level(tracing::Level::WARN),
                 &tedge_config_location.tedge_config_root_path,
             )?;
 
