@@ -1,13 +1,13 @@
 use futures::TryFutureExt;
 use nix::unistd::*;
-use std::fs;
-use std::io;
 use std::io::Error;
-use std::io::Write;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
+use tokio::fs;
+use tokio::io;
+use tokio::io::AsyncWriteExt as _;
 use tracing::debug;
 use uzers::get_group_by_name;
 use uzers::get_user_by_name;
@@ -73,72 +73,57 @@ pub enum FileError {
     },
 }
 
-pub fn create_directory<P: AsRef<Path>>(
+pub async fn create_directory<P: AsRef<Path>>(
     dir: P,
     permissions: &PermissionEntry,
 ) -> Result<(), FileError> {
-    permissions.create_directory(dir.as_ref())
+    permissions.create_directory(dir.as_ref()).await
 }
 /// Create the directory owned by the user running this API with default directory permissions
-pub fn create_directory_with_defaults<P: AsRef<Path>>(dir: P) -> Result<(), FileError> {
-    create_directory(dir, &PermissionEntry::default())
+pub async fn create_directory_with_defaults<P: AsRef<Path>>(dir: P) -> Result<(), FileError> {
+    create_directory(dir, &PermissionEntry::default()).await
 }
 
-pub fn create_directory_with_user_group(
+pub async fn create_directory_with_user_group(
     dir: impl AsRef<Path>,
     user: &str,
     group: &str,
     mode: u32,
 ) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    perm_entry.create_directory(dir.as_ref())
+    perm_entry.create_directory(dir.as_ref()).await
 }
 
-pub fn create_directory_with_mode(dir: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(None, None, Some(mode));
-    perm_entry.create_directory(dir.as_ref())
-}
-
-pub fn create_file<P: AsRef<Path>>(
+pub async fn create_file<P: AsRef<Path>>(
     file: P,
     content: Option<&str>,
     permissions: PermissionEntry,
 ) -> Result<(), FileError> {
-    permissions.create_file(file.as_ref(), content)
+    permissions.create_file(file.as_ref(), content).await
 }
 
 /// Create the directory owned by the user running this API with default file permissions
-pub fn create_file_with_defaults<P: AsRef<Path>>(
+pub async fn create_file_with_defaults<P: AsRef<Path>>(
     file: P,
     content: Option<&str>,
 ) -> Result<(), FileError> {
-    create_file(file, content, PermissionEntry::default())
+    create_file(file, content, PermissionEntry::default()).await
 }
 
-pub fn create_file_with_mode(
+pub async fn create_file_with_mode(
     file: impl AsRef<Path>,
     content: Option<&str>,
     mode: u32,
 ) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(None, None, Some(mode));
-    perm_entry.create_file(file.as_ref(), content)
+    perm_entry.create_file(file.as_ref(), content).await
 }
 
-pub fn create_file_with_mode_or_overwrite(
-    file: impl AsRef<Path>,
-    content: Option<&str>,
-    mode: u32,
-) -> Result<(), FileError> {
-    match content {
-        Some(content) if file.as_ref().exists() => overwrite_file(file.as_ref(), content),
-        _ => {
-            let perm_entry = PermissionEntry::new(None, None, Some(mode));
-            perm_entry.create_file(file.as_ref(), content)
-        }
-    }
+pub async fn path_exists(path: impl AsRef<Path>) -> bool {
+    tokio::fs::try_exists(path).await.unwrap_or(false)
 }
 
-pub fn create_file_with_user_group(
+pub async fn create_file_with_user_group(
     file: impl AsRef<Path>,
     user: &str,
     group: &str,
@@ -146,7 +131,7 @@ pub fn create_file_with_user_group(
     default_content: Option<&str>,
 ) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    perm_entry.create_file(file.as_ref(), default_content)
+    perm_entry.create_file(file.as_ref(), default_content).await
 }
 
 /// Moves a file to a destination path.
@@ -172,7 +157,7 @@ pub async fn move_file(
     let src_path = src_path.as_ref();
     let dest_path = dest_path.as_ref();
 
-    if !dest_path.exists() {
+    if !path_exists(dest_path).await {
         if let Some(dir_to) = dest_path.parent() {
             tokio::fs::create_dir_all(dir_to)
                 .await
@@ -184,6 +169,7 @@ pub async fn move_file(
     let original_permission_mode = match dest_path.is_file() {
         true => {
             let metadata = get_metadata(src_path)
+                .await
                 .map_err(|err| FileMoveError::new(src_path, dest_path, err))?;
             let mode = metadata.permissions().mode();
             Some(mode)
@@ -211,7 +197,9 @@ pub async fn move_file(
     };
 
     file_permissions
+        .clone()
         .apply(dest_path)
+        .await
         .map_err(|err| FileMoveError::new(src_path, dest_path, err))?;
     debug!(
         "Applied permissions: {:?} to {:?}",
@@ -255,44 +243,45 @@ impl PermissionEntry {
         Self { user, group, mode }
     }
 
-    pub fn apply(&self, path: &Path) -> Result<(), FileError> {
-        match (&self.user, &self.group) {
+    pub async fn apply(self, path: &Path) -> Result<(), FileError> {
+        match (self.user, self.group) {
             (Some(user), Some(group)) => {
-                change_user_and_group(path, user, group)?;
+                change_user_and_group(path.to_owned(), user, group).await?;
             }
             (Some(user), None) => {
-                change_user(path, user)?;
+                change_user(path.to_owned(), user).await?;
             }
             (None, Some(group)) => {
-                change_group(path, group)?;
+                change_group(path.to_owned(), group).await?;
             }
             (None, None) => {}
         }
 
         if let Some(mode) = &self.mode {
-            change_mode(path, *mode)?;
+            change_mode(path, *mode).await?;
         }
 
         Ok(())
     }
 
-    fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
+    async fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
         match dir.parent() {
             None => return Ok(()),
             Some(parent) => {
-                if !parent.exists() {
-                    self.create_directory(parent)?;
+                if !path_exists(parent).await {
+                    Box::pin(self.create_directory(parent)).await?;
                 }
             }
         }
         debug!("Creating the directory {:?}", dir);
-        match fs::create_dir(dir) {
+        let dir = dir.to_owned();
+        match fs::create_dir(&dir).await {
             Ok(_) => {
                 debug!(
                     "Applying desired user and group for newly created dir: {:?}",
                     dir
                 );
-                self.apply(dir)?;
+                self.clone().apply(&dir).await?;
                 Ok(())
             }
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
@@ -300,7 +289,7 @@ impl PermissionEntry {
                     "Applying desired user and group for already existing dir: {:?}",
                     dir
                 );
-                self.apply(dir)?;
+                self.clone().apply(&dir).await?;
                 Ok(())
             }
             Err(e) => Err(FileError::DirectoryCreateFailed {
@@ -316,25 +305,26 @@ impl PermissionEntry {
     ///     Ok() when file is created and the content is written successfully into the file.
     ///     Ok() when the file already exists
     ///     Err(_) When it can not create the file with the appropriate owner and access permissions.
-    fn create_file(&self, file: &Path, default_content: Option<&str>) -> Result<(), FileError> {
-        match fs::OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(file)
-        {
+    async fn create_file(
+        &self,
+        file: &Path,
+        default_content: Option<&str>,
+    ) -> Result<(), FileError> {
+        let mut options = fs::OpenOptions::new();
+        match options.create_new(true).write(true).open(file).await {
             Ok(mut f) => {
-                self.apply(file)?;
-                f.sync_all().map_err(|from| FileError::FailedToSync {
+                self.clone().apply(file).await?;
+                f.sync_all().await.map_err(|from| FileError::FailedToSync {
                     file: file.to_path_buf(),
                     from,
                 })?;
                 if let Some(default_content) = default_content {
-                    f.write(default_content.as_bytes()).map_err(|e| {
-                        FileError::WriteContentFailed {
+                    f.write_all(default_content.as_bytes())
+                        .map_err(|e| FileError::WriteContentFailed {
                             file: file.display().to_string(),
                             from: e,
-                        }
-                    })?;
+                        })
+                        .await?;
                 }
                 Ok(())
             }
@@ -349,18 +339,26 @@ impl PermissionEntry {
 }
 
 /// Overwrite the content of existing file. The file permissions will be kept.
-pub fn overwrite_file(file: &Path, content: &str) -> Result<(), FileError> {
-    match fs::OpenOptions::new().write(true).truncate(true).open(file) {
+pub async fn overwrite_file(file: &Path, content: &str) -> Result<(), FileError> {
+    match fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(file)
+        .await
+    {
         Ok(mut f) => {
-            f.sync_all().map_err(|from| FileError::FailedToSync {
-                file: file.to_path_buf(),
-                from,
-            })?;
-            f.write(content.as_bytes())
+            f.sync_all()
+                .map_err(|from| FileError::FailedToSync {
+                    file: file.to_path_buf(),
+                    from,
+                })
+                .await?;
+            f.write_all(content.as_bytes())
                 .map_err(|e| FileError::WriteContentFailed {
                     file: file.display().to_string(),
                     from: e,
-                })?;
+                })
+                .await?;
             Ok(())
         }
         Err(e) => Err(FileError::FileCreateFailed {
@@ -370,24 +368,38 @@ pub fn overwrite_file(file: &Path, content: &str) -> Result<(), FileError> {
     }
 }
 
-pub fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(), FileError> {
-    debug!(
-        "Changing ownership of file: {:?} with user: {} and group: {}",
-        file, user, group
-    );
-    let ud = get_user_by_name(user)
+pub async fn change_user_and_group(
+    file: PathBuf,
+    user: String,
+    group: String,
+) -> Result<(), FileError> {
+    let file = file.to_owned();
+    let user = user.to_owned();
+    let group = group.to_owned();
+    tokio::task::spawn_blocking(move || change_user_and_group_sync(&file, &user, &group))
+        .await
+        .unwrap()
+}
+
+pub fn change_user_and_group_sync(file: &Path, user: &str, group: &str) -> Result<(), FileError> {
+    let metadata = get_metadata_sync(file)?;
+    debug!("Changing ownership of file: {file:?} with user: {user} and group: {group}",);
+    let ud = get_user_by_name(&user)
         .map(|u| u.uid())
-        .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
-
-    let uid = get_metadata(Path::new(file))?.uid();
-
-    let gd = get_group_by_name(group)
-        .map(|g| g.gid())
-        .ok_or_else(|| FileError::GroupNotFound {
-            group: group.into(),
+        .ok_or_else(|| FileError::UserNotFound {
+            user: user.to_owned(),
         })?;
 
-    let gid = get_metadata(Path::new(file))?.gid();
+    let uid = metadata.uid();
+
+    let gd =
+        get_group_by_name(&group)
+            .map(|g| g.gid())
+            .ok_or_else(|| FileError::GroupNotFound {
+                group: group.to_owned(),
+            })?;
+
+    let gid = metadata.gid();
 
     // if user and group are same as existing, then do not change
     if (ud != uid) || (gd != gid) {
@@ -402,12 +414,19 @@ pub fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(),
     Ok(())
 }
 
-fn change_user(file: &Path, user: &str) -> Result<(), FileError> {
-    let ud = get_user_by_name(user)
+async fn change_user(file: PathBuf, user: String) -> Result<(), FileError> {
+    tokio::task::spawn_blocking(move || change_user_sync(&file, &user))
+        .await
+        .unwrap()
+}
+
+fn change_user_sync(file: &Path, user: &str) -> Result<(), FileError> {
+    let metadata = get_metadata_sync(file)?;
+    let ud = get_user_by_name(&user)
         .map(|u| u.uid())
         .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
 
-    let uid = get_metadata(Path::new(file))?.uid();
+    let uid = metadata.uid();
 
     // if user is same as existing, then do not change
     if ud != uid {
@@ -420,18 +439,27 @@ fn change_user(file: &Path, user: &str) -> Result<(), FileError> {
     Ok(())
 }
 
-fn change_group(file: &Path, group: &str) -> Result<(), FileError> {
-    let gd = get_group_by_name(group)
-        .map(|g| g.gid())
-        .ok_or_else(|| FileError::GroupNotFound {
-            group: group.into(),
-        })?;
+async fn change_group(file: impl Into<PathBuf>, group: impl Into<String>) -> Result<(), FileError> {
+    let file = file.into();
+    let group = group.into();
+    tokio::task::spawn_blocking(move || change_group_sync(file, group))
+        .await
+        .unwrap()
+}
 
-    let gid = get_metadata(Path::new(file))?.gid();
+fn change_group_sync(file: impl Into<PathBuf>, group: impl Into<String>) -> Result<(), FileError> {
+    let file = file.into();
+    let group = group.into();
+    let metadata = get_metadata_sync(&file)?;
+    let gd = get_group_by_name(&group)
+        .map(|g| g.gid())
+        .ok_or_else(|| FileError::GroupNotFound { group })?;
+
+    let gid = metadata.gid();
 
     // if group is same as existing, then do not change
     if gd != gid {
-        chown(file, None, Some(Gid::from_raw(gd))).map_err(|e| FileError::MetaDataError {
+        chown(&file, None, Some(Gid::from_raw(gd))).map_err(|e| FileError::MetaDataError {
             name: file.display().to_string(),
             from: e.into(),
         })?;
@@ -440,13 +468,20 @@ fn change_group(file: &Path, group: &str) -> Result<(), FileError> {
     Ok(())
 }
 
-fn change_mode(file: &Path, mode: u32) -> Result<(), FileError> {
-    let mut permissions = get_metadata(Path::new(file))?.permissions();
+pub async fn change_mode(file: &Path, mode: u32) -> Result<(), FileError> {
+    let file = file.to_owned();
+    tokio::task::spawn_blocking(move || change_mode_sync(&file, mode))
+        .await
+        .unwrap()
+}
+
+pub fn change_mode_sync(file: &Path, mode: u32) -> Result<(), FileError> {
+    let mut permissions = get_metadata_sync(Path::new(file))?.permissions();
 
     if permissions.mode() & 0o777 != mode {
         permissions.set_mode(mode);
         debug!("Setting mode of {} to {mode:0o}", file.display());
-        fs::set_permissions(file, permissions).map_err(|e| FileError::ChangeModeError {
+        std::fs::set_permissions(file, permissions).map_err(|e| FileError::ChangeModeError {
             name: file.display().to_string(),
             from: e,
         })
@@ -460,8 +495,16 @@ fn change_mode(file: &Path, mode: u32) -> Result<(), FileError> {
 }
 
 /// Return metadata when the given path exists and accessible by user
-pub fn get_metadata(path: &Path) -> Result<fs::Metadata, FileError> {
-    fs::metadata(path).map_err(|_| FileError::PathNotAccessible {
+pub async fn get_metadata(path: &Path) -> Result<std::fs::Metadata, FileError> {
+    fs::metadata(path)
+        .await
+        .map_err(|_| FileError::PathNotAccessible {
+            path: path.to_path_buf(),
+        })
+}
+
+fn get_metadata_sync(path: &Path) -> Result<std::fs::Metadata, FileError> {
+    std::fs::metadata(path).map_err(|_| FileError::PathNotAccessible {
         path: path.to_path_buf(),
     })
 }
@@ -490,51 +533,34 @@ pub fn get_gid_by_name(group: &str) -> Result<u32, FileError> {
     Ok(gd)
 }
 
-/// Return () if a file of the given file path
-/// - already exists, and has a write permission.
-/// - doesn't exist, but the parent directory has a write permission.
-pub fn has_write_access(path: &Path) -> Result<(), FileError> {
-    let metadata = if path.is_file() {
-        get_metadata(path)?
-    } else {
-        let parent_dir = path.parent().ok_or_else(|| FileError::NoWriteAccess {
-            path: path.to_path_buf(),
-        })?;
-        get_metadata(parent_dir)?
-    };
-
-    if metadata.permissions().readonly() {
-        Err(FileError::NoWriteAccess {
-            path: path.to_path_buf(),
-        })
-    } else {
-        Ok(())
-    }
-}
-
-pub fn create_symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> Result<(), FileError> {
-    match std::os::unix::fs::symlink(&original, &link) {
+pub async fn create_symlink(
+    original: impl AsRef<Path>,
+    link: impl AsRef<Path>,
+) -> Result<(), FileError> {
+    let link = link.as_ref();
+    match fs::symlink(&original, &link).await {
         Ok(_) => Ok(()),
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => match fs::read_link(&link) {
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => match fs::read_link(&link).await {
             Ok(path) if path == original.as_ref() => Ok(()),
             Ok(_) => Err(FileError::CreateSymlinkFailed {
-                link: link.as_ref().to_path_buf(),
+                link: link.to_owned(),
                 source: Error::other(format!(
                     "symlink exists but does not point to {:?}",
                     original.as_ref()
                 )),
             }),
             Err(e) => Err(FileError::CreateSymlinkFailed {
-                link: link.as_ref().to_path_buf(),
+                link: link.to_owned(),
                 source: e,
             }),
         },
         Err(e) => Err(FileError::CreateSymlinkFailed {
-            link: link.as_ref().to_path_buf(),
+            link: link.to_owned(),
             source: e,
         }),
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -551,21 +577,23 @@ mod tests {
             .unwrap()
     });
 
-    #[test]
-    fn create_file_correct_user_group() {
+    #[tokio::test]
+    async fn create_file_correct_user_group() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o644, None).unwrap();
-        assert!(Path::new(file_path.as_str()).exists());
+        create_file_with_user_group(&file_path, &USER, &GROUP, 0o644, None)
+            .await
+            .unwrap();
+        assert!(path_exists(file_path.as_str()).await);
         let meta = std::fs::metadata(file_path.as_str()).unwrap();
         let perm = meta.permissions();
         println!("{:o}", perm.mode());
         assert!(format!("{:o}", perm.mode()).contains("644"));
     }
 
-    #[test]
-    fn create_file_with_default_content() {
+    #[tokio::test]
+    async fn create_file_with_default_content() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
@@ -576,93 +604,102 @@ mod tests {
 
         // Create a new file with default content
         create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, Some(example_config))
+            .await
             .unwrap();
 
-        let content = fs::read(file_path).unwrap();
+        let content = fs::read(file_path).await.unwrap();
         assert_eq!(example_config.as_bytes(), content);
     }
 
-    #[test]
-    fn create_file_wrong_user() {
+    #[tokio::test]
+    async fn create_file_wrong_user() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
         let err = create_file_with_user_group(file_path, "nonexistent_user", &GROUP, 0o775, None)
+            .await
             .unwrap_err();
 
         assert!(err.to_string().contains("User not found"));
     }
 
-    #[test]
-    fn create_file_wrong_group() {
+    #[tokio::test]
+    async fn create_file_wrong_group() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
         let err = create_file_with_user_group(&file_path, &USER, "nonexistent_group", 0o775, None)
+            .await
             .unwrap_err();
 
         assert!(err.to_string().contains("Group not found"));
-        fs::remove_file(file_path.as_str()).unwrap();
+        fs::remove_file(&file_path).await.unwrap();
     }
 
-    #[test]
-    fn create_directory_with_correct_user_group() {
+    #[tokio::test]
+    async fn create_directory_with_correct_user_group() {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir").display().to_string();
 
-        create_directory_with_user_group(&dir_path, &USER, &GROUP, 0o775).unwrap();
+        create_directory_with_user_group(&dir_path, &USER, &GROUP, 0o775)
+            .await
+            .unwrap();
 
-        assert!(Path::new(dir_path.as_str()).exists());
-        let meta = fs::metadata(dir_path.as_str()).unwrap();
+        assert!(path_exists(&dir_path).await);
+        let meta = fs::metadata(&dir_path).await.unwrap();
         let perm = meta.permissions();
         println!("{:o}", perm.mode());
         assert!(format!("{:o}", perm.mode()).contains("775"));
     }
 
-    #[test]
-    fn create_directory_with_wrong_user() {
+    #[tokio::test]
+    async fn create_directory_with_wrong_user() {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir").display().to_string();
 
         let err = create_directory_with_user_group(dir_path, "nonexistent_user", &GROUP, 0o775)
+            .await
             .unwrap_err();
 
         assert!(err.to_string().contains("User not found"));
     }
 
-    #[test]
-    fn create_directory_with_wrong_group() {
+    #[tokio::test]
+    async fn create_directory_with_wrong_group() {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir").display().to_string();
 
         let err = create_directory_with_user_group(dir_path, &USER, "nonexistent_group", 0o775)
+            .await
             .unwrap_err();
 
         assert!(err.to_string().contains("Group not found"));
     }
 
-    #[test]
-    fn change_file_permissions() {
+    #[tokio::test]
+    async fn change_file_permissions() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o644, None).unwrap();
-        assert!(Path::new(file_path.as_str()).exists());
+        create_file_with_user_group(&file_path, &USER, &GROUP, 0o644, None)
+            .await
+            .unwrap();
+        assert!(path_exists(&file_path).await);
 
-        let meta = fs::metadata(file_path.as_str()).unwrap();
+        let meta = fs::metadata(&file_path).await.unwrap();
         let perm = meta.permissions();
         assert!(format!("{:o}", perm.mode()).contains("644"));
 
         let permission_set = PermissionEntry::new(None, None, Some(0o444));
-        permission_set.apply(Path::new(file_path.as_str())).unwrap();
+        permission_set.apply(Path::new(&file_path)).await.unwrap();
 
-        let meta = fs::metadata(file_path.as_str()).unwrap();
+        let meta = fs::metadata(&file_path).await.unwrap();
         let perm = meta.permissions();
         assert!(format!("{:o}", perm.mode()).contains("444"));
     }
 
-    #[test]
-    fn verify_get_file_name() {
+    #[tokio::test]
+    async fn verify_get_file_name() {
         assert_eq!(
             get_filename(PathBuf::from("/it/is/file.txt")),
             Some("file.txt".to_string())
@@ -670,16 +707,20 @@ mod tests {
         assert_eq!(get_filename(PathBuf::from("/")), None);
     }
 
-    #[test]
-    fn overwrite_file_content() {
+    #[tokio::test]
+    async fn overwrite_file_content() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file");
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, None).unwrap();
+        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, None)
+            .await
+            .unwrap();
 
         let new_content = "abc";
-        overwrite_file(file_path.as_path(), new_content).unwrap();
+        overwrite_file(file_path.as_path(), new_content)
+            .await
+            .unwrap();
 
-        let actual_content = fs::read(file_path).unwrap();
+        let actual_content = fs::read(file_path).await.unwrap();
         assert_eq!(actual_content, new_content.as_bytes());
     }
 
@@ -706,8 +747,8 @@ mod tests {
         assert!(err.to_string().contains("Group not found"));
     }
 
-    #[test]
-    fn create_new_symlink() {
+    #[tokio::test]
+    async fn create_new_symlink() {
         let temp_dir = TempDir::new().unwrap();
         let source_path = temp_dir.path().join("source_file").display().to_string();
         let another_source_path = temp_dir
@@ -719,18 +760,24 @@ mod tests {
         let dest_path = temp_dir.path().join("dest_file").display().to_string();
 
         // create symlink
-        create_file_with_user_group(&source_path, &USER, &GROUP, 0o644, None).unwrap();
-        assert!(Path::new(source_path.as_str()).exists());
-        create_symlink(&source_path, &dest_path).unwrap();
-        assert!(Path::new(dest_path.as_str()).exists());
+        create_file_with_user_group(&source_path, &USER, &GROUP, 0o644, None)
+            .await
+            .unwrap();
+        assert!(path_exists(&source_path).await);
+        create_symlink(&source_path, &dest_path).await.unwrap();
+        assert!(path_exists(&dest_path).await);
 
         // creating symlink again should not return error if source is the same
-        assert!(create_symlink(&source_path, &dest_path).is_ok());
+        assert!(create_symlink(&source_path, &dest_path).await.is_ok());
 
         // creating symlink again should  return error if source is different
-        create_file_with_user_group(&another_source_path, &USER, &GROUP, 0o644, None).unwrap();
-        assert!(Path::new(another_source_path.as_str()).exists());
-        let err = create_symlink(&another_source_path, &dest_path).unwrap_err();
+        create_file_with_user_group(&another_source_path, &USER, &GROUP, 0o644, None)
+            .await
+            .unwrap();
+        assert!(path_exists(&another_source_path).await);
+        let err = create_symlink(&another_source_path, &dest_path)
+            .await
+            .unwrap_err();
         assert!(
             err.to_string()
                 .contains("symlink exists but does not point to")
@@ -738,14 +785,18 @@ mod tests {
         );
 
         // creating symlink should not be possible to file that does not exists
-        assert!(create_symlink(invalid_source_path, dest_path).is_err());
+        assert!(create_symlink(invalid_source_path, dest_path)
+            .await
+            .is_err());
     }
 
     #[tokio::test]
     async fn move_file_to_different_filesystem() {
         let file_dir = TempDir::new().unwrap();
         let file_path = file_dir.path().join("file");
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, Some("test")).unwrap();
+        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, Some("test"))
+            .await
+            .unwrap();
 
         let dest_dir = TempDir::new_in(".").unwrap();
         let dest_path = dest_dir.path().join("another-file");
@@ -754,7 +805,7 @@ mod tests {
             .await
             .unwrap();
 
-        let content = fs::read(&dest_path).unwrap();
+        let content = fs::read(&dest_path).await.unwrap();
         assert_eq!("test".as_bytes(), content);
     }
 }

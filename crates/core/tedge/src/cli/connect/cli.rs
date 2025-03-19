@@ -1,9 +1,10 @@
 use crate::cli::common::CloudArg;
 use crate::cli::connect::*;
 use crate::command::BuildCommand;
-use crate::command::BuildContext;
 use crate::command::Command;
 use crate::system_services::service_manager;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 
 #[derive(clap::Args, Debug, Eq, PartialEq)]
 pub struct TEdgeConnectOpt {
@@ -20,19 +21,23 @@ pub struct TEdgeConnectOpt {
 }
 
 impl BuildCommand for TEdgeConnectOpt {
-    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
+    fn build_command(
+        self,
+        config: TEdgeConfig,
+        config_location: TEdgeConfigLocation,
+    ) -> Result<Box<dyn Command>, crate::ConfigError> {
         let Self {
             is_test_connection,
             offline_mode,
             cloud,
         } = self;
         Ok(Box::new(ConnectCommand {
-            config_location: context.config_location.clone(),
-            config: context.load_config()?,
+            config_location: config_location.clone(),
+            config,
             cloud: cloud.try_into()?,
             is_test_connection,
             offline_mode,
-            service_manager: service_manager(&context.config_location.tedge_config_root_path)?,
+            service_manager: service_manager(&config_location.tedge_config_root_path)?,
             is_reconnect: false,
         }))
     }

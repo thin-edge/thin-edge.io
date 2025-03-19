@@ -275,7 +275,9 @@ impl FirmwareManagerActor {
 
                             // Resend a firmware request with incremented attempt.
                             let new_operation_entry = recorded_entry.increment_attempt();
-                            new_operation_entry.overwrite_file(&firmware_dir_path)?;
+                            new_operation_entry
+                                .overwrite_file(&firmware_dir_path)
+                                .await?;
                             self.worker
                                 .publish_firmware_update_request(new_operation_entry)
                                 .await?;
@@ -331,7 +333,7 @@ impl FirmwareManagerActor {
                 let operation_entry =
                     FirmwareOperationEntry::read_from_file(&file_path)?.increment_attempt();
 
-                operation_entry.overwrite_file(&firmware_dir_path)?;
+                operation_entry.overwrite_file(&firmware_dir_path).await?;
                 self.worker
                     .publish_firmware_update_request(operation_entry)
                     .await?;

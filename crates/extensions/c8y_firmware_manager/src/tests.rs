@@ -645,6 +645,9 @@ async fn spawn_firmware_manager(
     let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
         FakeServerBox::builder();
 
+    FirmwareManagerBuilder::init(&config.data_dir)
+        .await
+        .unwrap();
     let firmware_manager_builder =
         FirmwareManagerBuilder::try_new(config, &mut mqtt_builder, &mut downloader_builder)
             .unwrap();

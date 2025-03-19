@@ -263,6 +263,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-tempfile"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8a57b75c36e16f4d015e60e6a177552976a99b6947724403c551bcfa7cb1207"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3341,7 +3350,6 @@ checksum = "a77c62af46e79de0a562e1a9849205ffcb7fc1238876e9bd743357570e04046f"
 dependencies = [
  "base64 0.22.1",
  "bytes",
- "futures-channel",
  "futures-core",
  "futures-util",
  "http 1.2.0",
@@ -3878,34 +3886,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
-name = "signal-hook"
-version = "0.3.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8621587d4798caf8eb44879d42e56b9a93ea5dcd315a6487c357130095b62801"
-dependencies = [
- "libc",
- "signal-hook-registry",
-]
-
-[[package]]
 name = "signal-hook-registry"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8229b473baa5980ac72ef434c4415e70c4b5e71b423043adb4ba059f89c99a1"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "signal-hook-tokio"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "213241f76fb1e37e27de3b6aa1b068a2c333233b59cca6634f634b80a27ecf1e"
-dependencies = [
- "futures-core",
- "libc",
- "signal-hook",
- "tokio",
 ]
 
 [[package]]
@@ -4102,6 +4088,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "assert_matches",
+ "async-trait",
  "base64 0.13.1",
  "c8y-firmware-plugin",
  "c8y-remote-access-plugin",
@@ -4128,7 +4115,6 @@ dependencies = [
  "rumqttc",
  "serde",
  "serde_json",
- "signal-hook",
  "strum_macros",
  "tedge-agent",
  "tedge-apt-plugin",
@@ -4371,6 +4357,7 @@ dependencies = [
  "tempfile",
  "test-case",
  "thiserror 1.0.61",
+ "tokio",
  "toml 0.8.8",
  "tracing",
  "tracing-subscriber",
@@ -4609,8 +4596,6 @@ name = "tedge_signal_ext"
 version = "1.4.2"
 dependencies = [
  "async-trait",
- "signal-hook",
- "signal-hook-tokio",
  "tedge_actors",
  "tokio",
 ]
@@ -4657,6 +4642,7 @@ version = "1.4.2"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "async-tempfile",
  "doku",
  "futures",
  "maplit",
@@ -4665,6 +4651,7 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "once_cell",
+ "pin-project",
  "serde",
  "serde_json",
  "strum",

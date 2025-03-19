@@ -213,7 +213,7 @@ async fn get_internal_id_with_mock() {
 
     let ttd = TempTedgeDir::new();
     let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-    let tedge_config = config_loc.load().unwrap();
+    let tedge_config = config_loc.load().await.unwrap();
     let tls_config = tedge_config.http.client_tls_config().unwrap();
     let mut http_actor = HttpActor::new(tls_config).builder();
 
@@ -278,7 +278,7 @@ async fn request_internal_id_before_posting_new_event() {
 
     let ttd = TempTedgeDir::new();
     let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-    let tedge_config = config_loc.load().unwrap();
+    let tedge_config = config_loc.load().await.unwrap();
     let tls_config = tedge_config.http.client_tls_config().unwrap();
     let mut http_actor = HttpActor::new(tls_config).builder();
 

@@ -1,15 +1,15 @@
 use crate::cli::mqtt::publish::MqttPublishCommand;
 use crate::cli::mqtt::subscribe::MqttSubscribeCommand;
 use crate::cli::mqtt::subscribe::SimpleTopicFilter;
-use crate::cli::mqtt::MqttError;
 use crate::command::BuildCommand;
-use crate::command::BuildContext;
 use crate::command::Command;
 use clap_complete::ArgValueCandidates;
 use clap_complete::CompletionCandidate;
 use mqtt_channel::Topic;
 use rumqttc::QoS;
 use tedge_config::models::SecondsOrHumanTime;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 
 const PUB_CLIENT_PREFIX: &str = "tedge-pub";
 const SUB_CLIENT_PREFIX: &str = "tedge-sub";
@@ -56,8 +56,11 @@ pub enum TEdgeMqttCli {
 }
 
 impl BuildCommand for TEdgeMqttCli {
-    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
-        let config = context.load_config()?;
+    fn build_command(
+        self,
+        config: TEdgeConfig,
+        _: TEdgeConfigLocation,
+    ) -> Result<Box<dyn Command>, crate::ConfigError> {
         let auth_config = config.mqtt_client_auth_config();
 
         let cmd = {
@@ -115,6 +118,12 @@ fn parse_qos(src: &str) -> Result<QoS, MqttError> {
         2 => Ok(QoS::ExactlyOnce),
         _ => Err(MqttError::InvalidQoS),
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum MqttError {
+    #[error("The input QoS should be 0, 1, or 2")]
+    InvalidQoS,
 }
 
 fn qos_completions() -> Vec<CompletionCandidate> {

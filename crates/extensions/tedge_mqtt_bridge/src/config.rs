@@ -235,8 +235,8 @@ mod tests {
         use tedge_config::TEdgeConfig;
         use tedge_config::TEdgeConfigLocation;
 
-        #[test]
-        fn sets_certs_in_the_provided_mqtt_config() {
+        #[tokio::test]
+        async fn sets_certs_in_the_provided_mqtt_config() {
             let mut opts = MqttOptions::new("dummy-device", "127.0.0.1", 1883);
             let device_cert = rcgen::generate_simple_self_signed(["dummy-device".into()]).unwrap();
             let c8y_cert = rcgen::generate_simple_self_signed(["dummy-c8y".into()]).unwrap();
@@ -259,7 +259,9 @@ mod tests {
             std::fs::create_dir(root_cert_path.parent().unwrap()).unwrap();
             std::fs::write(&root_cert_path, c8y_cert.serialize_pem().unwrap()).unwrap();
             let tedge_config =
-                TEdgeConfig::try_new(TEdgeConfigLocation::from_custom_root(ttd.path())).unwrap();
+                TEdgeConfig::try_new(TEdgeConfigLocation::from_custom_root(ttd.path()))
+                    .await
+                    .unwrap();
             let c8y_config = tedge_config.c8y.try_get::<str>(None).unwrap();
 
             use_key_and_cert(&mut opts, c8y_config).unwrap();

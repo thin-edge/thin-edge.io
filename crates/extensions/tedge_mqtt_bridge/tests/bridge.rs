@@ -49,7 +49,7 @@ async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig
         .try_into()
         .unwrap();
     MqttBridgeActorBuilder::new(
-        &tedge_mqtt_config(local_port),
+        &tedge_mqtt_config(local_port).await,
         service_name,
         &health_topic,
         rules,
@@ -658,7 +658,7 @@ async fn next_received_message(event_loop: &mut EventLoop) -> anyhow::Result<Pub
     }
 }
 
-fn tedge_mqtt_config(mqtt_port: u16) -> TEdgeConfig {
+async fn tedge_mqtt_config(mqtt_port: u16) -> TEdgeConfig {
     let ttd = TempTedgeDir::new();
     let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
     config_loc
@@ -667,8 +667,9 @@ fn tedge_mqtt_config(mqtt_port: u16) -> TEdgeConfig {
             dto.mqtt.bridge.reconnect_policy.initial_interval = Some("0s".parse().unwrap());
             Ok(())
         })
+        .await
         .unwrap();
-    TEdgeConfig::try_new(config_loc).unwrap()
+    TEdgeConfig::try_new(config_loc).await.unwrap()
 }
 
 fn get_rumqttd_config(port: u16) -> Config {

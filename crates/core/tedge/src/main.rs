@@ -10,12 +10,10 @@ use clap::FromArgMatches;
 use clap::Parser;
 use std::alloc;
 use std::ffi::OsString;
-use std::future::Future;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge::command::BuildCommand;
-use tedge::command::BuildContext;
 use tedge::log::MaybeFancy;
 use tedge::Component;
 use tedge::ComponentOpt;
@@ -30,60 +28,64 @@ use tracing::log;
 #[global_allocator]
 static ALLOCATOR: Cap<alloc::System> = Cap::new(alloc::System, usize::MAX);
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     clap_complete::CompleteEnv::with_factory(TEdgeCli::command).complete();
     let executable_name = executable_name();
 
     let opt = parse_multicall(&executable_name, std::env::args_os());
     match opt {
         TEdgeOptMulticall::Component(Component::TedgeMapper(opt)) => {
-            let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir)?;
-            block_on_with(
-                tedge_config.run.log_memory_interval.duration(),
-                tedge_mapper::run(opt),
-            )
+            let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;
+            log_memory_usage(tedge_config.run.log_memory_interval.duration());
+            tedge_mapper::run(opt).await
         }
         TEdgeOptMulticall::Component(Component::TedgeAgent(opt)) => {
-            let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir)?;
-            block_on_with(
-                tedge_config.run.log_memory_interval.duration(),
-                tedge_agent::run(opt),
-            )
+            let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;
+            log_memory_usage(tedge_config.run.log_memory_interval.duration());
+            tedge_agent::run(opt).await
         }
         TEdgeOptMulticall::Component(Component::C8yFirmwarePlugin(fp_opt)) => {
-            block_on(c8y_firmware_plugin::run(fp_opt))
+            c8y_firmware_plugin::run(fp_opt).await
         }
         TEdgeOptMulticall::Component(Component::C8yRemoteAccessPlugin(opt)) => {
-            block_on(c8y_remote_access_plugin::run(opt)).unwrap();
+            let _ = c8y_remote_access_plugin::run(opt).await;
             Ok(())
         }
         TEdgeOptMulticall::Component(Component::TedgeWatchdog(opt)) => {
-            block_on(tedge_watchdog::run(opt))
+            tedge_watchdog::run(opt).await
         }
-        TEdgeOptMulticall::Component(Component::TedgeWrite(opt)) => tedge_write::bin::run(opt),
+        TEdgeOptMulticall::Component(Component::TedgeWrite(opt)) => {
+            tokio::task::spawn_blocking(move || tedge_write::bin::run(opt))
+                .await
+                .context("failed to run tedge write process")?
+        }
         TEdgeOptMulticall::Component(Component::TedgeAptPlugin(opt)) => {
-            tedge_apt_plugin::run_and_exit(opt)
+            let config = tedge_apt_plugin::get_config(opt.common.config_dir.as_std_path()).await;
+            tokio::task::spawn_blocking(move || tedge_apt_plugin::run_and_exit(opt, config))
+                .await
+                .context("failed to run tedge apt plugin")?
         }
         TEdgeOptMulticall::Tedge(TEdgeCli { cmd, common }) => {
             let tedge_config_location =
                 tedge_config::TEdgeConfigLocation::from_custom_root(&common.config_dir);
+            let tedge_config = tedge_config::TEdgeConfig::load(&common.config_dir).await?;
 
             log_init(
                 "tedge",
-                &common.log_args,
+                &common.log_args.with_default_level(tracing::Level::WARN),
                 &tedge_config_location.tedge_config_root_path,
             )?;
 
-            let build_context = BuildContext::new(common.config_dir);
             let cmd = cmd
-                .build_command(build_context)
+                .build_command(tedge_config, tedge_config_location)
                 .with_context(|| "missing configuration parameter")?;
 
             if !std::io::stdout().is_terminal() {
                 yansi::disable();
             }
 
-            match cmd.execute() {
+            match cmd.execute().await {
                 Ok(()) => Ok(()),
                 // If the command already prints its own nicely formatted errors
                 // don't also print the error by returning it
@@ -96,25 +98,19 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-fn block_on<T>(future: impl Future<Output = T>) -> T {
-    tokio::runtime::Runtime::new().unwrap().block_on(future)
-}
-
-fn block_on_with<T>(log_memory_interval: Duration, future: impl Future<Output = T>) -> T {
+fn log_memory_usage(log_memory_interval: Duration) {
     if log_memory_interval.is_zero() {
-        block_on(future)
-    } else {
-        block_on(async move {
-            tokio::spawn(async move {
-                loop {
-                    log::info!("Allocated memory: {} Bytes", ALLOCATOR.allocated());
-                    tokio::time::sleep(log_memory_interval).await;
-                }
-            });
-
-            future.await
-        })
+        return;
     }
+    tokio::spawn(async move {
+        loop {
+            log::info!(
+                "Allocated memory: {} Bytes {log_memory_interval:?}",
+                ALLOCATOR.allocated()
+            );
+            tokio::time::sleep(log_memory_interval).await;
+        }
+    });
 }
 
 fn executable_name() -> Option<String> {

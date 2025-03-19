@@ -38,6 +38,7 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let c8y_profile = c8y_profile.as_deref();
 
     let tedge_config = TEdgeConfig::try_new(config_dir.clone())
+        .await
         .into_diagnostic()
         .context("Reading tedge config")?;
 
@@ -56,6 +57,7 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
             &user,
             &group,
         )
+        .await
         .with_context(|| {
             "Failed to initialize c8y-remote-access-plugin. You have to run the command with sudo."
         }),
@@ -84,7 +86,7 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     }
 }
 
-fn declare_supported_operation(
+async fn declare_supported_operation(
     config_dir: &Utf8Path,
     user: &str,
     group: &str,
@@ -96,13 +98,19 @@ fn declare_supported_operation(
         group,
         0o755,
     )
+    .await
     .into_diagnostic()
     .context("Creating supported operations directory")?;
 
     if supported_operation_path.exists() {
-        change_user_and_group(supported_operation_path.as_std_path(), user, group)
-            .into_diagnostic()
-            .context("Changing permissions of supported operations")
+        change_user_and_group(
+            supported_operation_path.into(),
+            user.to_string(),
+            group.to_string(),
+        )
+        .await
+        .into_diagnostic()
+        .context("Changing permissions of supported operations")
     } else {
         create_file_with_user_group(
             supported_operation_path,
@@ -117,6 +125,7 @@ on_message = "530"
 "#,
             ),
         )
+        .await
         .into_diagnostic()
         .context("Declaring supported operations")
     }

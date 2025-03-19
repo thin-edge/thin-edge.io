@@ -93,7 +93,7 @@ impl LogManagerBuilder {
         }
 
         // creating plugin config parent dir
-        create_directory_with_defaults(&config.plugin_config_dir)?;
+        create_directory_with_defaults(&config.plugin_config_dir).await?;
 
         let legacy_plugin_config = config.config_dir.join("c8y").join("c8y-log-plugin.toml");
         if legacy_plugin_config.exists() {
@@ -114,7 +114,7 @@ impl LogManagerBuilder {
             path = agent_logs_path
         }
         .to_string();
-        create_file_with_defaults(&config.plugin_config_path, Some(&example_config))?;
+        create_file_with_defaults(&config.plugin_config_path, Some(&example_config)).await?;
 
         Ok(())
     }

@@ -1,10 +1,11 @@
 use super::TEdgeCli;
 use crate::command::BuildCommand;
-use crate::command::BuildContext;
 use crate::command::Command;
 use crate::ConfigError;
 use clap::CommandFactory;
 use std::io;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, strum_macros::Display)]
 #[strum(serialize_all = "snake_case")]
@@ -36,7 +37,11 @@ impl From<Shell> for Box<dyn clap_complete::env::EnvCompleter> {
 }
 
 impl BuildCommand for Shell {
-    fn build_command(self, _: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(
+        self,
+        _: TEdgeConfig,
+        _: TEdgeConfigLocation,
+    ) -> Result<Box<dyn Command>, ConfigError> {
         Ok(Box::new(CompletionsCmd { shell: self }))
     }
 }
@@ -46,12 +51,13 @@ struct CompletionsCmd {
     shell: Shell,
 }
 
+#[async_trait::async_trait]
 impl Command for CompletionsCmd {
     fn description(&self) -> String {
         format!("generate shell tab completion script for {}", self.shell)
     }
 
-    fn execute(&self) -> Result<(), super::log::MaybeFancy<anyhow::Error>> {
+    async fn execute(&self) -> Result<(), super::log::MaybeFancy<anyhow::Error>> {
         let cmd = TEdgeCli::command();
         let completer = std::env::current_exe().unwrap();
         let completer = completer.to_str().unwrap();

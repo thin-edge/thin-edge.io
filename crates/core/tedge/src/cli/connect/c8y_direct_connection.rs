@@ -7,7 +7,7 @@ use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
 use rumqttc::tokio_rustls::rustls::CertificateError;
 use rumqttc::tokio_rustls::rustls::Error;
-use rumqttc::Client;
+use rumqttc::AsyncClient;
 use rumqttc::ConnectionError;
 use rumqttc::Event;
 use rumqttc::Incoming;
@@ -22,7 +22,7 @@ use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
 const CONNECTION_ERROR_CONTEXT: &str = "Connection error while creating device in Cumulocity";
 
 // Connect directly to the c8y cloud over mqtt and publish device create message.
-pub fn create_device_with_direct_connection(
+pub async fn create_device_with_direct_connection(
     use_basic_auth: bool,
     bridge_config: &BridgeConfig,
     device_type: &str,
@@ -58,23 +58,25 @@ pub fn create_device_with_direct_connection(
     };
     mqtt_options.set_transport(Transport::tls_with_config(tls_config.into()));
 
-    let (mut client, mut connection) = Client::new(mqtt_options, 10);
-    connection
-        .eventloop
+    let (mut client, mut eventloop) = AsyncClient::new(mqtt_options, 10);
+    eventloop
         .network_options
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
 
-    client.subscribe(DEVICE_CREATE_ERROR_TOPIC, QoS::AtLeastOnce)?;
+    client
+        .subscribe(DEVICE_CREATE_ERROR_TOPIC, QoS::AtLeastOnce)
+        .await?;
 
     let mut device_create_try: usize = 0;
-    for event in connection.iter() {
-        match event {
+    loop {
+        match eventloop.poll().await {
             Ok(Event::Incoming(Packet::SubAck(_) | Packet::PubAck(_) | Packet::PubComp(_))) => {
                 publish_device_create_message(
                     &mut client,
                     &bridge_config.remote_clientid.clone(),
                     device_type,
-                )?;
+                )
+                .await?;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
@@ -90,7 +92,8 @@ pub fn create_device_with_direct_connection(
                         &mut client,
                         &bridge_config.remote_clientid.clone(),
                         device_type,
-                    )?;
+                    )
+                    .await?;
                     device_create_try += 1;
                 } else {
                     // No messages have been received for a while
@@ -139,18 +142,20 @@ pub fn create_device_with_direct_connection(
     bail!("Timed-out attempting to create device in Cumulocity")
 }
 
-fn publish_device_create_message(
-    client: &mut Client,
+async fn publish_device_create_message(
+    client: &mut AsyncClient,
     device_id: &str,
     device_type: &str,
 ) -> Result<(), ConnectError> {
     use c8y_api::smartrest::message_ids::DEVICE_CREATION;
     const DEVICE_CREATE_PUBLISH_TOPIC: &str = "s/us";
-    client.publish(
-        DEVICE_CREATE_PUBLISH_TOPIC,
-        QoS::ExactlyOnce,
-        false,
-        format!("{DEVICE_CREATION},{},{}", device_id, device_type).as_bytes(),
-    )?;
+    client
+        .publish(
+            DEVICE_CREATE_PUBLISH_TOPIC,
+            QoS::ExactlyOnce,
+            false,
+            format!("{DEVICE_CREATION},{},{}", device_id, device_type).as_bytes(),
+        )
+        .await?;
     Ok(())
 }

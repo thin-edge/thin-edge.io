@@ -17,35 +17,39 @@ pub struct RenewCertCmd {
     pub key_path: Utf8PathBuf,
 }
 
+#[async_trait::async_trait]
 impl Command for RenewCertCmd {
     fn description(&self) -> String {
         "Renew the self-signed certificate of the device.".into()
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         let config = NewCertificateConfig::default();
-        self.renew_test_certificate(&config)?;
+        self.renew_test_certificate(&config).await?;
         eprintln!("Certificate was successfully renewed, for un-interrupted service, the certificate has to be uploaded to the cloud");
         Ok(())
     }
 }
 
 impl RenewCertCmd {
-    fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
+    async fn renew_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
         let cert_path = &self.cert_path;
         let key_path = &self.key_path;
-        let id = cn_of_self_signed_certificate(cert_path)?;
+        let id = cn_of_self_signed_certificate(cert_path).await?;
 
         // Remove only certificate
-        std::fs::remove_file(&self.cert_path)
+        tokio::fs::remove_file(&self.cert_path)
+            .await
             .map_err(|e| CertError::IoError(e).cert_context(self.cert_path.clone()))?;
 
         // Re-create the certificate from the key, with new validity
         let previous_key = reuse_private_key(key_path)
+            .await
             .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?;
         let cert = KeyCertPair::new_selfsigned_certificate(config, &id, &previous_key)?;
 
         override_public_key(cert_path, cert.certificate_pem_string()?)
+            .await
             .map_err(|err| err.cert_context(cert_path.clone()))?;
         Ok(())
     }
@@ -54,15 +58,15 @@ impl RenewCertCmd {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::certificate::test_helpers::*;
     use crate::CreateCertCmd;
     use assert_matches::assert_matches;
-    use std::path::Path;
     use std::thread::sleep;
     use std::time::Duration;
     use tempfile::*;
 
-    #[test]
-    fn validate_renew_certificate() {
+    #[tokio::test]
+    async fn validate_renew_certificate() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
@@ -77,11 +81,12 @@ mod tests {
 
         // First create both cert and key
         cmd.create_test_certificate(&NewCertificateConfig::default())
+            .await
             .unwrap();
 
         // Keep the cert and key data for validation
         let first_key = std::fs::read_to_string(&key_path).unwrap();
-        let first_pem = parse_pem_file(&cert_path);
+        let first_pem = parse_x509_file(&cert_path);
         let first_x509_cert = first_pem.parse_x509().expect("X.509: decoding DER failed");
 
         // Wait 2 secs to get different timestamp for the certificate validity
@@ -93,11 +98,12 @@ mod tests {
             key_path: key_path.clone(),
         };
         cmd.renew_test_certificate(&NewCertificateConfig::default())
+            .await
             .unwrap();
 
         // Get the cert and key data for validation
         let second_key = std::fs::read_to_string(&key_path).unwrap();
-        let second_pem = parse_pem_file(&cert_path);
+        let second_pem = parse_x509_file(&cert_path);
         let second_x509_cert = second_pem.parse_x509().expect("X.509: decoding DER failed");
 
         // The key must be unchanged
@@ -116,8 +122,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn renew_certificate_without_key() {
+    #[tokio::test]
+    async fn renew_certificate_without_key() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = Utf8PathBuf::from("/non/existent/key/path");
@@ -129,19 +135,8 @@ mod tests {
 
         let cert_error = cmd
             .renew_test_certificate(&NewCertificateConfig::default())
+            .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertificateNotFound { .. });
-    }
-
-    fn temp_file_path(dir: &TempDir, filename: &str) -> Utf8PathBuf {
-        dir.path().join(filename).try_into().unwrap()
-    }
-
-    fn parse_pem_file(path: impl AsRef<Path>) -> x509_parser::pem::Pem {
-        let content = std::fs::read(path).expect("fail to read {path}");
-        x509_parser::pem::Pem::iter_from_buffer(&content)
-            .next()
-            .unwrap()
-            .expect("Reading PEM block failed")
     }
 }

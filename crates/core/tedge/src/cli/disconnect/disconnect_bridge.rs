@@ -20,13 +20,14 @@ pub struct DisconnectBridgeCommand {
     pub service_manager: Arc<dyn SystemServiceManager>,
 }
 
+#[async_trait::async_trait]
 impl Command for DisconnectBridgeCommand {
     fn description(&self) -> String {
         format!("remove the bridge to disconnect {} cloud", self.cloud)
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        match self.stop_bridge() {
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+        match self.stop_bridge().await {
             Ok(())
             | Err(Fancy {
                 err: DisconnectBridgeError::BridgeFileDoesNotExist,
@@ -38,17 +39,13 @@ impl Command for DisconnectBridgeCommand {
 }
 
 impl DisconnectBridgeCommand {
-    fn service_manager(&self) -> &dyn SystemServiceManager {
-        self.service_manager.as_ref()
-    }
-
-    fn stop_bridge(&self) -> Result<(), Fancy<DisconnectBridgeError>> {
+    async fn stop_bridge(&self) -> Result<(), Fancy<DisconnectBridgeError>> {
         // If this fails, do not continue with applying changes and stopping/disabling tedge-mapper.
         let is_fatal_error = |err: &DisconnectBridgeError| {
             !matches!(err, DisconnectBridgeError::BridgeFileDoesNotExist)
         };
         let res = Spinner::start_filter_errors("Removing bridge config file", is_fatal_error)
-            .finish(self.remove_bridge_config_file());
+            .finish(self.remove_bridge_config_file().await);
         if res
             .as_ref()
             .err()
@@ -65,7 +62,7 @@ impl DisconnectBridgeCommand {
         }
 
         if let Err(SystemServiceError::ServiceManagerUnavailable { cmd: _, name }) =
-            self.service_manager.check_operational()
+            self.service_manager.check_operational().await
         {
             println!(
                 "Service manager '{name}' is not available, skipping stopping/disabling of tedge components.",
@@ -74,21 +71,18 @@ impl DisconnectBridgeCommand {
         }
 
         // Ignore failure
-        let _ = self.apply_changes_to_mosquitto();
+        let _ = self.apply_changes_to_mosquitto().await;
 
         // Only C8Y changes the status of tedge-mapper
         if self.use_mapper && which("tedge-mapper").is_ok() {
             let spinner = Spinner::start(format!("Disabling {}", self.cloud.mapper_service()));
-            spinner.finish(
-                self.service_manager()
-                    .stop_and_disable_service(self.cloud.mapper_service()),
-            )?;
+            spinner.finish(self.stop_and_disable_mapper().await)?;
         }
 
         Ok(())
     }
 
-    fn remove_bridge_config_file(&self) -> Result<(), DisconnectBridgeError> {
+    async fn remove_bridge_config_file(&self) -> Result<(), DisconnectBridgeError> {
         let config_file = self.cloud.bridge_config_filename();
         let bridge_conf_path = self
             .config_location
@@ -96,7 +90,7 @@ impl DisconnectBridgeCommand {
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
             .join(config_file.as_ref());
 
-        match std::fs::remove_file(&bridge_conf_path) {
+        match tokio::fs::remove_file(&bridge_conf_path).await {
             // If we find the bridge config file we remove it
             // and carry on to see if we need to restart mosquitto.
             Ok(()) => Ok(()),
@@ -111,21 +105,29 @@ impl DisconnectBridgeCommand {
         }
     }
 
+    async fn stop_and_disable_mapper(&self) -> Result<(), DisconnectBridgeError> {
+        let service = self.cloud.mapper_service();
+        self.service_manager.stop_service(service).await?;
+        self.service_manager.disable_service(service).await?;
+        Ok(())
+    }
+
     // Deviation from specification:
     // Check if mosquitto is running, restart only if it was active before, if not don't do anything.
-    fn apply_changes_to_mosquitto(&self) -> Result<bool, Fancy<DisconnectBridgeError>> {
+    async fn apply_changes_to_mosquitto(&self) -> Result<bool, Fancy<DisconnectBridgeError>> {
         restart_service_if_running(&*self.service_manager, SystemService::Mosquitto)
+            .await
             .map_err(<_>::into)
     }
 }
 
-fn restart_service_if_running(
+async fn restart_service_if_running(
     manager: &dyn SystemServiceManager,
-    service: SystemService,
+    service: SystemService<'_>,
 ) -> Result<bool, Fancy<SystemServiceError>> {
-    if manager.is_service_running(service)? {
+    if manager.is_service_running(service).await? {
         let spinner = Spinner::start("Restarting mosquitto to apply configuration");
-        spinner.finish(manager.restart_service(service))?;
+        spinner.finish(manager.restart_service(service).await)?;
         Ok(true)
     } else {
         Ok(false)

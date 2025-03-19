@@ -50,14 +50,14 @@ mod tests {
         assert_eq!(expected_software_list, software_list);
     }
 
-    #[test]
-    fn plugin_call_name_and_path() -> Result<(), anyhow::Error> {
+    #[tokio::test]
+    async fn plugin_call_name_and_path() -> Result<(), anyhow::Error> {
         let dummy_plugin_path = get_dummy_plugin_path();
 
         let tmpfile = make_config(100)?;
         let config_location =
             TEdgeConfigLocation::from_custom_root(tmpfile.path().to_str().unwrap());
-        let config = tedge_config::TEdgeConfig::try_new(config_location)?;
+        let config = tedge_config::TEdgeConfig::try_new(config_location).await?;
 
         let plugin = ExternalPluginCommand::new(
             "test",

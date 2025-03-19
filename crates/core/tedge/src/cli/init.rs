@@ -1,4 +1,4 @@
-use crate::command::BuildContext;
+use super::log::MaybeFancy;
 use crate::command::Command;
 use crate::Component;
 use anyhow::bail;
@@ -8,42 +8,51 @@ use std::io::ErrorKind;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
 use tedge_utils::file::change_user_and_group;
 use tedge_utils::file::create_directory;
 use tedge_utils::file::PermissionEntry;
 use tracing::debug;
 
-use super::log::MaybeFancy;
-
-#[derive(Debug)]
 pub struct TEdgeInitCmd {
     user: String,
     group: String,
     relative_links: bool,
-    context: BuildContext,
+    config_location: TEdgeConfigLocation,
+    config: TEdgeConfig,
 }
 
 impl TEdgeInitCmd {
-    pub fn new(user: String, group: String, relative_links: bool, context: BuildContext) -> Self {
+    pub fn new(
+        user: String,
+        group: String,
+        relative_links: bool,
+        config: TEdgeConfig,
+        config_location: TEdgeConfigLocation,
+    ) -> Self {
         Self {
             user,
             group,
             relative_links,
-            context,
+            config_location,
+            config,
         }
     }
 }
 
 impl TEdgeInitCmd {
-    fn initialize_tedge(&self) -> anyhow::Result<()> {
+    async fn initialize_tedge(&self) -> anyhow::Result<()> {
         let executable_name =
             std::env::current_exe().context("retrieving the current executable name")?;
-        let stat = std::fs::metadata(&executable_name).with_context(|| {
-            format!(
-                "reading metadata for the current executable ({})",
-                executable_name.display()
-            )
-        })?;
+        let stat = tokio::fs::metadata(&executable_name)
+            .await
+            .with_context(|| {
+                format!(
+                    "reading metadata for the current executable ({})",
+                    executable_name.display()
+                )
+            })?;
         let Some(executable_dir) = executable_name.parent() else {
             bail!(
                 "current executable ({}) does not have a parent directory",
@@ -74,10 +83,10 @@ impl TEdgeInitCmd {
         };
 
         for component in &component_subcommands {
-            create_symlinks_for(component, target, executable_dir, &RealEnv)?;
+            create_symlinks_for(component, target, executable_dir, &RealEnv).await?;
         }
 
-        let config_dir = self.context.config_location.tedge_config_root_path.clone();
+        let config_dir = self.config_location.tedge_config_root_path.clone();
         let permissions = {
             PermissionEntry::new(
                 Some(self.user.clone()),
@@ -85,68 +94,80 @@ impl TEdgeInitCmd {
                 Some(0o775),
             )
         };
-        create_directory(&config_dir, &permissions)?;
-        create_directory(config_dir.join("mosquitto-conf"), &permissions)?;
-        create_directory(config_dir.join("operations"), &permissions)?;
-        create_directory(config_dir.join("operations").join("c8y"), &permissions)?;
-        create_directory(config_dir.join("plugins"), &permissions)?;
-        create_directory(config_dir.join("sm-plugins"), &permissions)?;
-        create_directory(config_dir.join("device-certs"), &permissions)?;
-        create_directory(config_dir.join(".tedge-mapper-c8y"), &permissions)?;
+        create_directory(&config_dir, &permissions).await?;
+        create_directory(config_dir.join("mosquitto-conf"), &permissions).await?;
+        create_directory(config_dir.join("operations"), &permissions).await?;
+        create_directory(config_dir.join("operations").join("c8y"), &permissions).await?;
+        create_directory(config_dir.join("plugins"), &permissions).await?;
+        create_directory(config_dir.join("sm-plugins"), &permissions).await?;
+        create_directory(config_dir.join("device-certs"), &permissions).await?;
+        create_directory(config_dir.join(".tedge-mapper-c8y"), &permissions).await?;
 
-        let config = self.context.load_config()?;
+        let config = &self.config;
 
-        create_directory(&config.logs.path, &permissions)?;
-        create_directory(&config.data.path, &permissions)?;
+        create_directory(&config.logs.path, &permissions).await?;
+        create_directory(&config.data.path, &permissions).await?;
 
         let entity_store_file = config_dir.join(".agent").join("entity_store.jsonl");
 
         if entity_store_file.exists() {
-            change_user_and_group(entity_store_file.as_std_path(), &self.user, &self.group)?;
+            change_user_and_group(
+                entity_store_file.into(),
+                self.user.to_string(),
+                self.group.to_string(),
+            )
+            .await?;
         }
 
         Ok(())
     }
 }
 
+#[async_trait::async_trait]
 impl Command for TEdgeInitCmd {
     fn description(&self) -> String {
         "Initialize tedge".into()
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         self.initialize_tedge()
+            .await
             .with_context(|| "Failed to initialize tedge. You have to run tedge with sudo.")
             .map_err(<_>::into)
     }
 }
 
 #[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 trait FileSystem {
-    fn read_link(&self, link: &Path) -> std::io::Result<PathBuf> {
-        match std::fs::read_link(link) {
+    async fn read_link(&self, link: &Path) -> std::io::Result<PathBuf> {
+        match tokio::fs::read_link(link).await {
             // File exists, but it's not a symlink
             Err(err) if err.kind() == ErrorKind::InvalidInput => Ok(link.to_owned()),
             res => res,
         }
     }
 
-    fn unlink(&self, link: &Path) -> nix::Result<()> {
-        nix::unistd::unlink(link)
+    async fn unlink(&self, link: &Path) -> nix::Result<()> {
+        let link = link.to_path_buf();
+        tokio::task::spawn_blocking(move || nix::unistd::unlink(&link))
+            .await
+            .expect("unlinking failed")
     }
 
-    fn symlink(&self, original: &Path, link: &Path) -> std::io::Result<()> {
-        std::os::unix::fs::symlink(original, link)
+    async fn symlink(&self, original: &Path, link: &Path) -> std::io::Result<()> {
+        tokio::fs::symlink(original, link).await
     }
 
-    fn chown_symlink(&self, link: &Path, uid: u32, gid: u32) -> anyhow::Result<()> {
+    async fn chown_symlink(&self, link: &Path, uid: u32, gid: u32) -> anyhow::Result<()> {
         // Use -h over --no-dereference as the former is supported in more environments,
         // busybox, bsd etc.
-        let res = std::process::Command::new("chown")
+        let res = tokio::process::Command::new("chown")
             .arg("-h")
             .arg(format!("{uid}:{gid}"))
             .arg(link)
             .output()
+            .await
             .with_context(|| {
                 format!(
                     "executing chown to change ownership of symlink at {}",
@@ -170,14 +191,14 @@ struct Target<'a> {
     gid: u32,
 }
 
-fn create_symlinks_for(
+async fn create_symlinks_for(
     component: &str,
     tedge: Target<'_>,
     executable_dir: &Path,
-    fs: &impl FileSystem,
+    fs: &(impl FileSystem + std::marker::Sync),
 ) -> anyhow::Result<()> {
     let link = executable_dir.join(component);
-    match fs.read_link(&link) {
+    match fs.read_link(&link).await {
         Err(e) if e.kind() != ErrorKind::NotFound => bail!(
             "couldn't read metadata for {}. do you need to run with sudo?",
             link.display()
@@ -190,19 +211,19 @@ fn create_symlinks_for(
                     return Ok(());
                 }
 
-                fs.unlink(&link).with_context(|| {
+                fs.unlink(&link).await.with_context(|| {
                     format!("removing old version of {component} at {}", link.display())
                 })?;
             }
 
-            fs.symlink(tedge.path, &link).with_context(|| {
+            fs.symlink(tedge.path, &link).await.with_context(|| {
                 format!(
                     "creating symlink for {component} to {}",
                     tedge.path.display()
                 )
             })?;
 
-            fs.chown_symlink(&link, tedge.uid, tedge.gid)?;
+            fs.chown_symlink(&link, tedge.uid, tedge.gid).await?;
             Ok(())
         }
     }
@@ -219,8 +240,8 @@ mod tests {
     mod create_symlinks_for {
         use super::*;
 
-        #[test]
-        fn replaces_binaries_with_symlinks() {
+        #[tokio::test]
+        async fn replaces_binaries_with_symlinks() {
             let mut fs = MockFileSystem::new();
             // Simulate a non-symlinked file - read link returns the input path
             fs.expect_read_link().return_once(|input| Ok(input.into()));
@@ -245,11 +266,13 @@ mod tests {
                 gid: 986,
             };
 
-            create_symlinks_for("tedge-mapper", target, Path::new("/usr/bin"), &fs).unwrap()
+            create_symlinks_for("tedge-mapper", target, Path::new("/usr/bin"), &fs)
+                .await
+                .unwrap()
         }
 
-        #[test]
-        fn creates_symlinks_if_they_dont_exist() {
+        #[tokio::test]
+        async fn creates_symlinks_if_they_dont_exist() {
             let mut fs = MockFileSystem::new();
             // Simulate a non-symlinked file - read link returns the input path
             fs.expect_read_link().return_once(|_| io_error::not_found());
@@ -270,11 +293,13 @@ mod tests {
                 gid: 986,
             };
 
-            create_symlinks_for("tedge-mapper", target, Path::new("/usr/bin"), &fs).unwrap()
+            create_symlinks_for("tedge-mapper", target, Path::new("/usr/bin"), &fs)
+                .await
+                .unwrap()
         }
 
-        #[test]
-        fn replaces_symlinks_if_they_differ_from_the_configured_target() {
+        #[tokio::test]
+        async fn replaces_symlinks_if_they_differ_from_the_configured_target() {
             let mut fs = MockFileSystem::new();
             // Simulate a non-symlinked file - read link returns the input path
             fs.expect_read_link()
@@ -300,11 +325,13 @@ mod tests {
                 gid: 986,
             };
 
-            create_symlinks_for("tedge-mapper", target, Path::new("/usr/bin"), &fs).unwrap()
+            create_symlinks_for("tedge-mapper", target, Path::new("/usr/bin"), &fs)
+                .await
+                .unwrap()
         }
 
-        #[test]
-        fn leaves_up_to_date_symlinks_unchanged() {
+        #[tokio::test]
+        async fn leaves_up_to_date_symlinks_unchanged() {
             let mut fs = MockFileSystem::new();
             // Simulate a non-symlinked file - read link returns the input path
             fs.expect_read_link()
@@ -315,7 +342,9 @@ mod tests {
                 gid: 986,
             };
 
-            create_symlinks_for("tedge-mapper", target, Path::new("/usr/bin"), &fs).unwrap()
+            create_symlinks_for("tedge-mapper", target, Path::new("/usr/bin"), &fs)
+                .await
+                .unwrap()
         }
     }
 

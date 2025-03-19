@@ -27,25 +27,6 @@ impl CloudRootCerts {
             .build()
             .expect("Valid reqwest client builder configuration")
     }
-
-    #[allow(clippy::disallowed_types)]
-    #[cfg(feature = "reqwest-blocking")]
-    pub fn blocking_client_builder(&self) -> reqwest::blocking::ClientBuilder {
-        self.certificates
-            .iter()
-            .cloned()
-            .fold(reqwest::blocking::ClientBuilder::new(), |builder, cert| {
-                builder.add_root_certificate(cert)
-            })
-    }
-
-    #[allow(clippy::disallowed_types)]
-    #[cfg(feature = "reqwest-blocking")]
-    pub fn blocking_client(&self) -> reqwest::blocking::Client {
-        self.blocking_client_builder()
-            .build()
-            .expect("Valid reqwest client builder configuration")
-    }
 }
 
 impl From<Arc<[Certificate]>> for CloudRootCerts {

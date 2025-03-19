@@ -1,11 +1,11 @@
 use std::ffi::OsString;
-use std::fs::File;
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 
-use std::io::Write;
-use tempfile::NamedTempFile;
-use tempfile::PersistError;
+use async_tempfile::TempFile;
+use tokio::io::AsyncWrite;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PathsError {
@@ -13,7 +13,7 @@ pub enum PathsError {
     DirCreationFailed(#[source] std::io::Error, PathBuf),
 
     #[error("File Error. Check permissions for {1}.")]
-    FileCreationFailed(#[source] PersistError, PathBuf),
+    FileCreationFailed(#[source] std::io::Error, PathBuf),
 
     #[error("User's Home Directory not found.")]
     HomeDirNotFound,
@@ -25,7 +25,7 @@ pub enum PathsError {
     PathToStringFailed { path: OsString },
 
     #[error("Couldn't write configuration file, check permissions.")]
-    PersistError(#[from] PersistError),
+    PersistError(#[from] async_tempfile::Error),
 
     #[error("Directory: {path:?} not found")]
     DirNotFound { path: OsString },
@@ -43,11 +43,10 @@ pub fn create_directories(dir_path: impl AsRef<Path>) -> Result<(), PathsError> 
         .map_err(|error| PathsError::DirCreationFailed(error, dir_path.into()))
 }
 
-pub fn persist_tempfile(file: NamedTempFile, path_to: impl AsRef<Path>) -> Result<(), PathsError> {
-    let path_to = path_to.as_ref();
-    let _ = file
-        .persist(path_to)
-        .map_err(|error| PathsError::FileCreationFailed(error, path_to.into()))?;
+pub async fn persist_tempfile(file: TempFile, path_to: impl AsRef<Path>) -> Result<(), PathsError> {
+    tokio::fs::rename(file.file_path(), &path_to)
+        .await
+        .map_err(|error| PathsError::FileCreationFailed(error, path_to.as_ref().into()))?;
 
     Ok(())
 }
@@ -63,15 +62,17 @@ pub fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
 /// that can be populated using the `Write` trait
 /// then finally and atomically persisted to a target file
 /// with permission set to given mode if provided
+#[pin_project::pin_project]
 pub struct DraftFile {
-    file: NamedTempFile,
+    #[pin]
+    file: TempFile,
     target: PathBuf,
     mode: Option<u32>,
 }
 
 impl DraftFile {
     /// Create a draft for a file
-    pub fn new(target: impl AsRef<Path>) -> Result<DraftFile, PathsError> {
+    pub async fn new(target: impl AsRef<Path>) -> Result<DraftFile, PathsError> {
         let target = target.as_ref();
 
         // Since the persist method will rename the temp file into the target,
@@ -81,7 +82,7 @@ impl DraftFile {
             .ok_or_else(|| PathsError::ParentDirNotFound {
                 path: target.as_os_str().into(),
             })?;
-        let file = NamedTempFile::new_in(dir)?;
+        let file = TempFile::new_in(dir).await?;
 
         let target = target.to_path_buf();
 
@@ -101,65 +102,59 @@ impl DraftFile {
     }
 
     /// Atomically persist the file into its target path and apply permission if provided
-    pub fn persist(self) -> Result<(), PathsError> {
+    pub async fn persist(self) -> Result<(), PathsError> {
         let target = &self.target;
-        let file = self
-            .file
-            .persist(target)
-            .map_err(|error| PathsError::FileCreationFailed(error, target.into()))?;
+        persist_tempfile(self.file, target).await?;
 
         if let Some(mode) = self.mode {
-            set_permission(&file, mode)?;
+            let perm = Permissions::from_mode(mode);
+            tokio::fs::set_permissions(&target, perm).await?;
         }
 
         Ok(())
     }
 }
 
-impl Write for DraftFile {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.file.write(buf)
+impl AsyncWrite for DraftFile {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        let this = self.project();
+        this.file.poll_write(cx, buf)
     }
-    #[inline]
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.file.flush()
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let this = self.project();
+        this.file.poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        let this = self.project();
+        this.file.poll_shutdown(cx)
     }
 }
 
-/// Set the permission modes of a Unix file.
-#[cfg(not(windows))]
-pub fn set_permission(file: &File, mode: u32) -> Result<(), std::io::Error> {
-    use std::os::unix::fs::PermissionsExt;
-    let mut perm = file.metadata()?.permissions();
-    perm.set_mode(mode);
-    file.set_permissions(perm)
-}
-
-/// On windows, no file permission modes are changed.
-///
-/// So Windows might be used for dev even if not supported.
-#[cfg(windows)]
-pub fn set_permission(_file: &File, _mode: u32) -> Result<(), std::io::Error> {
-    Ok(())
-}
-
-pub fn validate_parent_dir_exists(path: impl AsRef<Path>) -> Result<(), PathsError> {
+pub async fn validate_parent_dir_exists(path: impl AsRef<Path>) -> Result<(), PathsError> {
     let path = path.as_ref();
     if path.is_relative() {
-        Err(PathsError::RelativePathNotPermitted { path: path.into() })
-    } else {
-        match path.parent() {
-            None => Err(PathsError::ParentDirNotFound { path: path.into() }),
-            Some(parent) => {
-                if !parent.exists() {
-                    Err(PathsError::DirNotFound {
-                        path: parent.into(),
-                    })
-                } else {
-                    Ok(())
-                }
-            }
-        }
+        return Err(PathsError::RelativePathNotPermitted { path: path.into() });
+    };
+    match path.parent() {
+        None => Err(PathsError::ParentDirNotFound { path: path.into() }),
+        Some(parent) => match tokio::fs::try_exists(parent).await {
+            Ok(true) => Ok(()),
+            _ => Err(PathsError::DirNotFound {
+                path: parent.into(),
+            }),
+        },
     }
 }
 
@@ -168,23 +163,23 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
 
-    #[test]
+    #[tokio::test]
     #[cfg(unix)] // On windows the error is unexpectedly RelativePathNotPermitted
-    fn validate_path_non_existent() {
-        let result = validate_parent_dir_exists(Path::new("/non/existent/path"));
+    async fn validate_path_non_existent() {
+        let result = validate_parent_dir_exists(Path::new("/non/existent/path")).await;
         assert_matches!(result.unwrap_err(), PathsError::DirNotFound { .. });
     }
 
-    #[test]
+    #[tokio::test]
     #[cfg(unix)] // On windows the error is unexpectedly RelativePathNotPermitted
-    fn validate_parent_dir_non_existent() {
-        let result = validate_parent_dir_exists(Path::new("/"));
+    async fn validate_parent_dir_non_existent() {
+        let result = validate_parent_dir_exists(Path::new("/")).await;
         assert_matches!(result.unwrap_err(), PathsError::ParentDirNotFound { .. });
     }
 
-    #[test]
-    fn validate_parent_dir_relative_path() {
-        let result = validate_parent_dir_exists(Path::new("test.txt"));
+    #[tokio::test]
+    async fn validate_parent_dir_relative_path() {
+        let result = validate_parent_dir_exists(Path::new("test.txt")).await;
         assert_matches!(
             result.unwrap_err(),
             PathsError::RelativePathNotPermitted { .. }

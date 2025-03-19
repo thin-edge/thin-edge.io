@@ -2,7 +2,15 @@
 retries = 0
 test-threads = "num-cpus"
 
+[test-groups]
+serial = { max-threads = 1 }
+
 [[profile.default.overrides]]
 # Remove once https://github.com/thin-edge/thin-edge.io/issues/3030 is resolved
 filter = 'test(uploaded_file_can_be_downloaded_from_the_api)'
 retries = 4
+
+[[profile.default.overrides]]
+filter = 'package(c8y_firmware_manager)'
+test-group = 'serial'
+

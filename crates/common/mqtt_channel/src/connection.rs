@@ -10,6 +10,7 @@ use futures::SinkExt;
 use futures::StreamExt;
 use log::error;
 use log::info;
+use log::warn;
 use rumqttc::AsyncClient;
 use rumqttc::Event;
 use rumqttc::EventLoop;
@@ -132,17 +133,17 @@ impl Connection {
         const SECURE_MQTT_PORT: u16 = 8883;
 
         if config.broker.port == INSECURE_MQTT_PORT && config.broker.authentication.is_some() {
-            eprintln!("WARNING: Connecting on port 1883 for insecure MQTT using a TLS connection");
+            warn!(target: "MQTT", "Connecting on port 1883 for insecure MQTT using a TLS connection");
         }
         if config.broker.port == SECURE_MQTT_PORT && config.broker.authentication.is_none() {
-            eprintln!("WARNING: Connecting on port 8883 for secure MQTT without a CA file");
+            warn!(target: "MQTT", "Connecting on port 8883 for secure MQTT without a CA file");
         }
 
         let mqtt_options = config.rumqttc_options()?;
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
 
-        info!(
-            "MQTT connecting to broker: host={}:{}, session_name={:?}",
+        info!(target: "MQTT",
+            "Connecting to broker: host={}:{}, session_name={:?}",
             config.broker.host, config.broker.port, config.session_name
         );
 
@@ -152,7 +153,7 @@ impl Connection {
                     if let Some(err) = MqttError::maybe_connection_error(&ack) {
                         return Err(err);
                     };
-                    info!("MQTT connection established");
+                    info!(target: "MQTT", "Connection established");
 
                     let subscriptions = config.subscriptions.filters();
 
@@ -175,7 +176,7 @@ impl Connection {
                     // Messages can be received before a sub ack
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
                     if msg.payload.len() > config.max_packet_size {
-                        error!("Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}", 
+                        error!(target: "MQTT", "Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}",
                             msg.topic, msg.payload.len(), config.max_packet_size);
                         continue;
                     }
@@ -183,8 +184,8 @@ impl Connection {
                 }
 
                 Err(err) => {
-                    error!(
-                        "MQTT: failed to connect to broker at '{host}:{port}': {err}",
+                    error!(target: "MQTT",
+                        "Failed to connect to broker at '{host}:{port}': {err}",
                         host = config.broker.host,
                         port = config.broker.port
                     );
@@ -244,7 +245,7 @@ impl Connection {
             match event {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     if msg.payload.len() > config.max_packet_size {
-                        error!("Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}", 
+                        error!(target: "MQTT", "Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}",
                             msg.topic, msg.payload.len(), config.max_packet_size);
                         continue;
                     }
@@ -255,9 +256,9 @@ impl Connection {
 
                 Ok(Event::Incoming(Packet::ConnAck(ack))) => {
                     if let Some(err) = MqttError::maybe_connection_error(&ack) {
-                        error!("MQTT connection Error {err}");
+                        error!(target: "MQTT", "Connection Error {err}");
                     } else {
-                        info!("MQTT connection re-established");
+                        info!(target: "MQTT", "Connection re-established");
                         if let Some(ref imsg_fn) = config.initial_message {
                             // publish the initial message on connect
                             let message = imsg_fn.new_init_message();
@@ -288,12 +289,11 @@ impl Connection {
 
                 Ok(Event::Incoming(Incoming::Disconnect))
                 | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
-                    info!("MQTT connection closed");
                     break;
                 }
 
                 Err(err) => {
-                    error!("MQTT connection error: {err}");
+                    error!(target: "MQTT", "Connection error: {err}");
 
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
                     let _ = error_sender.send(err.into()).await;
@@ -303,6 +303,16 @@ impl Connection {
                 _ => (),
             }
         }
+
+        // Wait for Err(MqttState(ConnectionAborted))
+        // to make sure the disconnect is effective
+        loop {
+            if (event_loop.poll().await).is_err() {
+                info!(target: "MQTT", "Connection closed");
+                break;
+            }
+        }
+
         // No more messages will be forwarded to the client
         let _ = message_sender.close().await;
         let _ = error_sender.close().await;

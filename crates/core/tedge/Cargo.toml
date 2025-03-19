@@ -14,13 +14,14 @@ default-run = "tedge"
 [dependencies]
 anstyle = { workspace = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 base64 = { workspace = true }
 c8y-firmware-plugin = { workspace = true }
 c8y-remote-access-plugin = { workspace = true }
 c8y_api = { workspace = true }
 camino = { workspace = true }
 cap = { workspace = true }
-certificate = { workspace = true, features = ["reqwest-blocking"] }
+certificate = { workspace = true }
 clap = { workspace = true }
 clap_complete = { version = "4.5.42", features = ["unstable-dynamic"] }
 doku = { workspace = true }
@@ -30,7 +31,6 @@ mqtt_channel = { workspace = true }
 nix = { workspace = true }
 pad = { workspace = true }
 reqwest = { workspace = true, features = [
-    "blocking",
     "json",
     "multipart",
     "rustls-tls-native-roots",
@@ -40,7 +40,6 @@ rpassword = { workspace = true }
 rumqttc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-signal-hook = { workspace = true }
 strum_macros = { workspace = true }
 tedge-agent = { workspace = true }
 tedge-apt-plugin = { workspace = true }

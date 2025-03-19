@@ -9,11 +9,11 @@ use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::OffsetDateTime;
 use certificate::CloudRootCerts;
-use reqwest::blocking;
-use reqwest::blocking::multipart;
+use reqwest::multipart;
 use reqwest::Identity;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tedge_utils::file::path_exists;
 
 /// Upload a file to Cumulocity
 pub struct C8yUpload {
@@ -43,18 +43,19 @@ pub struct C8yUpload {
     pub mime_type: String,
 }
 
+#[async_trait::async_trait]
 impl Command for C8yUpload {
     fn description(&self) -> String {
         "upload a file to Cumulocity".to_string()
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<Error>> {
-        if !self.file.exists() {
+    async fn execute(&self) -> Result<(), MaybeFancy<Error>> {
+        if !path_exists(&self.file).await {
             return Err(anyhow!("Failed to open file: {:?}", self.file))?;
         }
-        let internal_id = self.get_internal_id()?;
-        let event_id = self.create_event(&internal_id)?;
-        self.upload_file(&event_id)?;
+        let internal_id = self.get_internal_id().await?;
+        let event_id = self.create_event(&internal_id).await?;
+        self.upload_file(&event_id).await?;
 
         println!("{event_id}");
         Ok(())
@@ -62,8 +63,8 @@ impl Command for C8yUpload {
 }
 
 impl C8yUpload {
-    fn client(&self) -> Result<blocking::Client, Error> {
-        let builder = self.cloud_root_certs.blocking_client_builder();
+    fn client(&self) -> Result<reqwest::Client, Error> {
+        let builder = self.cloud_root_certs.client_builder();
         let builder = if let Some(identity) = &self.identity {
             builder.identity(identity.clone())
         } else {
@@ -72,15 +73,15 @@ impl C8yUpload {
         Ok(builder.build()?)
     }
 
-    pub fn get_internal_id(&self) -> Result<String, Error> {
+    pub async fn get_internal_id(&self) -> Result<String, Error> {
         let url_get_id: String = self.c8y.proxy_url_for_internal_id(&self.device_id);
-        let http_result = self.client()?.get(url_get_id).send()?;
+        let http_result = self.client()?.get(url_get_id).send().await?;
         let http_response = http_result.error_for_status()?;
-        let object: InternalIdResponse = http_response.json()?;
+        let object: InternalIdResponse = http_response.json().await?;
         Ok(object.id())
     }
 
-    pub fn create_event(&self, internal_id: &str) -> Result<String, Error> {
+    pub async fn create_event(&self, internal_id: &str) -> Result<String, Error> {
         let c8y_event = C8yCreateEvent {
             source: Some(C8yManagedObject {
                 id: internal_id.to_string(),
@@ -97,16 +98,19 @@ impl C8yUpload {
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .json(&c8y_event)
-            .send()?;
+            .send()
+            .await?;
         let http_response = http_result.error_for_status()?;
-        let event_response: C8yEventResponse = http_response.json()?;
+        let event_response: C8yEventResponse = http_response.json().await?;
         Ok(event_response.id)
     }
 
-    pub fn upload_file(&self, event_id: &str) -> Result<(), Error> {
+    pub async fn upload_file(&self, event_id: &str) -> Result<(), Error> {
         let upload_file_url = self.c8y.proxy_url_for_event_binary_upload(event_id);
         let mime_type: String = self.mime_type.clone();
-        let file = multipart::Part::file(&self.file)?.mime_str(&mime_type)?;
+        let file = multipart::Part::file(&self.file)
+            .await?
+            .mime_str(&mime_type)?;
         let form = multipart::Form::new()
             .text("type", mime_type)
             .part("file", file);
@@ -117,7 +121,8 @@ impl C8yUpload {
             .header("Accept", "application/json")
             .header("Content-Type", "multipart/form-data")
             .multipart(form)
-            .send()?;
+            .send()
+            .await?;
         let _ = http_result.error_for_status()?;
         Ok(())
     }
@@ -133,8 +138,8 @@ mod tests {
     use serde_json::json;
     use tedge_test_utils::fs::TempTedgeDir;
 
-    #[test]
-    fn create_event() {
+    #[tokio::test]
+    async fn create_event() {
         let dir = TempTedgeDir::new();
         let file = dir
             .file("uploaded-file.txt")
@@ -149,19 +154,22 @@ mod tests {
             extras: HashMap::default(),
         };
 
-        let c8y = mock_auth_proxy("test-device", "event-123", &c8y_event);
+        let c8y = mock_auth_proxy("test-device", "event-123", &c8y_event).await;
         let upload = upload_cmd(&c8y, file.to_path_buf(), "test-device", c8y_event);
 
         // Step by step
-        assert_eq!(upload.get_internal_id().unwrap(), "internal-test-device");
         assert_eq!(
-            upload.create_event("internal-test-device").unwrap(),
+            upload.get_internal_id().await.unwrap(),
+            "internal-test-device"
+        );
+        assert_eq!(
+            upload.create_event("internal-test-device").await.unwrap(),
             "event-123"
         );
-        assert!(upload.upload_file("event-123").is_ok());
+        assert!(upload.upload_file("event-123").await.is_ok());
 
         // In one go
-        assert!(upload.execute().is_ok());
+        assert!(upload.execute().await.is_ok());
     }
 
     fn upload_cmd(
@@ -189,8 +197,12 @@ mod tests {
         }
     }
 
-    fn mock_auth_proxy(device_id: &str, event_id: &str, c8y_event: &C8yCreateEvent) -> ServerGuard {
-        let mut c8y = mockito::Server::new();
+    async fn mock_auth_proxy(
+        device_id: &str,
+        event_id: &str,
+        c8y_event: &C8yCreateEvent,
+    ) -> ServerGuard {
+        let mut c8y = mockito::Server::new_async().await;
 
         // Mock external id requests
         let xid = c8y_event.source.as_ref().unwrap().id.clone();
@@ -206,7 +218,8 @@ mod tests {
             .to_string(),
         )
         .with_status(200)
-        .create();
+        .create_async()
+        .await;
 
         // Mock event creation
         let mut expected_event = serde_json::to_value(c8y_event).unwrap();
@@ -217,7 +230,8 @@ mod tests {
             .match_body(Matcher::PartialJson(expected_event))
             .with_body(json!({ "id": event_id}).to_string())
             .with_status(200)
-            .create();
+            .create_async()
+            .await;
 
         // Mock file upload
         c8y.mock(
@@ -226,7 +240,8 @@ mod tests {
         )
         .match_body(Matcher::Regex("uploaded-file.txt".to_string()))
         .with_status(200)
-        .create();
+        .create_async()
+        .await;
 
         c8y
     }

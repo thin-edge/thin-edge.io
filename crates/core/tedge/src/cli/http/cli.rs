@@ -1,7 +1,6 @@
 use crate::cli::http::command::HttpAction;
 use crate::cli::http::command::HttpCommand;
 use crate::command::BuildCommand;
-use crate::command::BuildContext;
 use crate::command::Command;
 use crate::ConfigError;
 use anyhow::anyhow;
@@ -9,11 +8,14 @@ use anyhow::Error;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
 use clap::Args;
-use reqwest::blocking;
+use reqwest::Body;
+use reqwest::Client;
 use reqwest::Identity;
-use std::fs::File;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::OptionalConfig;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigLocation;
+use tokio::fs::File;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeHttpCli {
@@ -176,16 +178,14 @@ fn parse_mime_type(input: &str) -> Result<String, Error> {
     Ok(input.parse::<mime_guess::mime::Mime>()?.to_string())
 }
 
-impl TryFrom<Content> for blocking::Body {
-    type Error = std::io::Error;
-
-    fn try_from(content: Content) -> Result<Self, Self::Error> {
-        let body: blocking::Body = if let Some(data) = content.arg2 {
+impl Content {
+    pub async fn into_body(self) -> Result<Body, std::io::Error> {
+        let body: Body = if let Some(data) = self.arg2 {
             data.into()
-        } else if let Some(data) = content.data {
+        } else if let Some(data) = self.data {
             data.into()
-        } else if let Some(file) = content.file {
-            File::open(file)?.into()
+        } else if let Some(file) = self.file {
+            File::open(file).await?.into()
         } else {
             "".into()
         };
@@ -195,8 +195,11 @@ impl TryFrom<Content> for blocking::Body {
 }
 
 impl BuildCommand for TEdgeHttpCli {
-    fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
-        let config = context.load_config()?;
+    fn build_command(
+        self,
+        config: TEdgeConfig,
+        _: TEdgeConfigLocation,
+    ) -> Result<Box<dyn Command>, ConfigError> {
         let uri = self.uri();
 
         let (protocol, host, port) = if uri.starts_with("/c8y") {
@@ -291,11 +294,8 @@ fn https_if_some<T>(cert_path: &OptionalConfig<T>) -> &'static str {
     cert_path.or_none().map_or("http", |_| "https")
 }
 
-fn http_client(
-    root_certs: CloudRootCerts,
-    identity: Option<&Identity>,
-) -> Result<blocking::Client, Error> {
-    let builder = root_certs.blocking_client_builder();
+fn http_client(root_certs: CloudRootCerts, identity: Option<&Identity>) -> Result<Client, Error> {
+    let builder = root_certs.client_builder();
     let builder = if let Some(identity) = identity {
         builder.identity(identity.clone())
     } else {

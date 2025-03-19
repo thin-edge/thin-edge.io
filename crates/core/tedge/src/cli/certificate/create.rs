@@ -7,12 +7,13 @@ use certificate::KeyCertPair;
 use certificate::KeyKind;
 use certificate::NewCertificateConfig;
 use certificate::PemCertificate;
-use std::fs::File;
-use std::fs::OpenOptions;
-use std::io::prelude::*;
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use tedge_utils::paths::set_permission;
 use tedge_utils::paths::validate_parent_dir_exists;
+use tokio::fs::File;
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
 
 /// Create self-signed device certificate
 pub struct CreateCertCmd {
@@ -30,25 +31,29 @@ pub struct CreateCertCmd {
     pub group: String,
 }
 
+#[async_trait::async_trait]
 impl Command for CreateCertCmd {
     fn description(&self) -> String {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         let config = NewCertificateConfig::default();
-        self.create_test_certificate(&config)?;
+        self.create_test_certificate(&config).await?;
         eprintln!("Certificate was successfully created\n");
         let show_cert_cmd = ShowCertCmd {
             cert_path: self.cert_path.clone(),
         };
-        show_cert_cmd.execute()?;
+        show_cert_cmd.show_certificate().await?;
         Ok(())
     }
 }
 
 impl CreateCertCmd {
-    pub fn create_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
+    pub async fn create_test_certificate(
+        &self,
+        config: &NewCertificateConfig,
+    ) -> Result<(), CertError> {
         let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, &KeyKind::New)?;
 
         let cert_path = &self.cert_path;
@@ -58,6 +63,7 @@ impl CreateCertCmd {
             &self.user,
             &self.group,
         )
+        .await
         .map_err(|err| err.cert_context(cert_path.clone()))?;
 
         let key_path = &self.key_path;
@@ -67,99 +73,116 @@ impl CreateCertCmd {
             &self.user,
             &self.group,
         )
+        .await
         .map_err(|err| err.key_context(key_path.clone()))?;
         Ok(())
     }
 }
 
-pub fn persist_new_public_key(
+pub async fn persist_new_public_key(
     cert_path: &Utf8PathBuf,
     pem_string: String,
     user: &str,
     group: &str,
 ) -> Result<(), CertError> {
-    validate_parent_dir_exists(cert_path).map_err(CertError::CertPathError)?;
-    persist_public_key(create_new_file(cert_path, user, group)?, pem_string)?;
+    validate_parent_dir_exists(cert_path)
+        .await
+        .map_err(CertError::CertPathError)?;
+    let key_file = create_new_file(cert_path, user, group).await?;
+    persist_public_key(key_file, pem_string).await?;
     Ok(())
 }
 
-pub fn persist_new_private_key(
+pub async fn persist_new_private_key(
     key_path: &Utf8PathBuf,
     key: certificate::Zeroizing<String>,
     user: &str,
     group: &str,
 ) -> Result<(), CertError> {
-    validate_parent_dir_exists(key_path).map_err(CertError::KeyPathError)?;
-    persist_private_key(create_new_file(key_path, user, group)?, key)?;
+    validate_parent_dir_exists(key_path)
+        .await
+        .map_err(CertError::KeyPathError)?;
+    let key_file = create_new_file(key_path, user, group).await?;
+    persist_private_key(key_file, key).await?;
     Ok(())
 }
 
-pub fn override_public_key(cert_path: &Utf8PathBuf, pem_string: String) -> Result<(), CertError> {
-    validate_parent_dir_exists(cert_path).map_err(CertError::CertPathError)?;
-    persist_public_key(override_file(cert_path)?, pem_string)?;
+pub async fn override_public_key(
+    cert_path: &Utf8PathBuf,
+    pem_string: String,
+) -> Result<(), CertError> {
+    validate_parent_dir_exists(cert_path)
+        .await
+        .map_err(CertError::CertPathError)?;
+    let key_file = override_file(cert_path).await?;
+    persist_public_key(key_file, pem_string).await?;
     Ok(())
 }
 
-fn create_new_file(
-    path: impl AsRef<Path>,
+async fn create_new_file(
+    path: &Utf8PathBuf,
     user: &str,
     group: &str,
 ) -> Result<File, std::io::Error> {
     let file = OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(path.as_ref())?;
+        .open(path)
+        .await?;
 
     // Ignore errors - This was the behavior with the now deprecated user manager.
     // - When `tedge cert create` is not run as root, a certificate is created but owned by the user running the command.
     // - A better approach could be to remove this `chown` and run the command as mosquitto.
-    let _ = tedge_utils::file::change_user_and_group(path.as_ref(), user, group);
+    let _ =
+        tedge_utils::file::change_user_and_group(path.into(), user.to_string(), group.to_string())
+            .await;
 
     Ok(file)
 }
 
-fn override_file(path: impl AsRef<Path>) -> Result<File, std::io::Error> {
+async fn override_file(path: impl AsRef<Path>) -> Result<File, std::io::Error> {
     OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .open(path.as_ref())
+        .await
 }
 
-pub fn reuse_private_key(key_path: &Utf8PathBuf) -> Result<KeyKind, std::io::Error> {
-    std::fs::read_to_string(key_path).map(|keypair_pem| KeyKind::Reuse { keypair_pem })
+pub async fn reuse_private_key(key_path: &Utf8PathBuf) -> Result<KeyKind, std::io::Error> {
+    tokio::fs::read_to_string(key_path)
+        .await
+        .map(|keypair_pem| KeyKind::Reuse { keypair_pem })
 }
 
-fn persist_private_key(
+async fn persist_private_key(
     mut key_file: File,
     cert_key: certificate::Zeroizing<String>, // Zero the private key on drop
 ) -> Result<(), std::io::Error> {
     // Make sure the key is secret, before write
-    set_permission(&key_file, 0o600)?;
-    key_file.write_all(cert_key.as_bytes())?;
-    key_file.sync_all()?;
+    File::set_permissions(&key_file, Permissions::from_mode(0o600)).await?;
+    key_file.write_all(cert_key.as_bytes()).await?;
+    key_file.sync_all().await?;
 
     // Prevent the key to be overwritten
-    set_permission(&key_file, 0o400)?;
+    File::set_permissions(&key_file, Permissions::from_mode(0o400)).await?;
     Ok(())
 }
 
-fn persist_public_key(mut key_file: File, cert_pem: String) -> Result<(), std::io::Error> {
-    key_file.write_all(cert_pem.as_bytes())?;
-    key_file.sync_all()?;
+async fn persist_public_key(mut key_file: File, cert_pem: String) -> Result<(), std::io::Error> {
+    key_file.write_all(cert_pem.as_bytes()).await?;
+    key_file.sync_all().await?;
 
     // Make the file public
-    set_permission(&key_file, 0o444)?;
+    File::set_permissions(&key_file, Permissions::from_mode(0o444)).await?;
     Ok(())
 }
 
-pub fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
-    let pem = PemCertificate::from_pem_file(cert_path).map_err(|err| match err {
-        certificate::CertificateError::IoError { error, .. } => {
-            CertError::IoError(error).cert_context(cert_path.clone())
-        }
-        from => CertError::CertificateError(from),
-    })?;
+pub async fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
+    let cert = tokio::fs::read_to_string(cert_path)
+        .await
+        .map_err(|err| CertError::IoError(err).cert_context(cert_path.clone()))?;
+    let pem = PemCertificate::from_pem_string(&cert)?;
 
     if pem.issuer()? == pem.subject()? {
         Ok(pem.subject_common_name()?)
@@ -173,12 +196,13 @@ pub fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<String, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::certificate::test_helpers::*;
     use assert_matches::assert_matches;
     use std::fs;
     use tempfile::*;
 
-    #[test]
-    fn basic_usage() {
+    #[tokio::test]
+    async fn basic_usage() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
@@ -193,15 +217,16 @@ mod tests {
         };
 
         assert_matches!(
-            cmd.create_test_certificate(&NewCertificateConfig::default()),
+            cmd.create_test_certificate(&NewCertificateConfig::default())
+                .await,
             Ok(())
         );
-        assert_eq!(parse_pem_file(&cert_path).unwrap().tag, "CERTIFICATE");
-        assert_eq!(parse_pem_file(&key_path).unwrap().tag, "PRIVATE KEY");
+        assert_eq!(parse_pem_file(&cert_path).tag, "CERTIFICATE");
+        assert_eq!(parse_pem_file(&key_path).tag, "PRIVATE KEY");
     }
 
-    #[test]
-    fn check_certificate_is_not_overwritten() {
+    #[tokio::test]
+    async fn check_certificate_is_not_overwritten() {
         let dir = tempdir().unwrap();
 
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
@@ -223,6 +248,7 @@ mod tests {
 
         assert!(cmd
             .create_test_certificate(&NewCertificateConfig::default())
+            .await
             .ok()
             .is_none());
 
@@ -230,8 +256,8 @@ mod tests {
         assert_eq!(fs::read(&key_path).unwrap(), key_content.as_bytes());
     }
 
-    #[test]
-    fn create_certificate_in_non_existent_directory() {
+    #[tokio::test]
+    async fn create_certificate_in_non_existent_directory() {
         let dir = tempdir().unwrap();
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let cert_path = Utf8PathBuf::from("/non/existent/cert/path");
@@ -246,12 +272,13 @@ mod tests {
 
         let cert_error = cmd
             .create_test_certificate(&NewCertificateConfig::default())
+            .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
     }
 
-    #[test]
-    fn create_key_in_non_existent_directory() {
+    #[tokio::test]
+    async fn create_key_in_non_existent_directory() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = Utf8PathBuf::from("/non/existent/key/path");
@@ -266,16 +293,8 @@ mod tests {
 
         let cert_error = cmd
             .create_test_certificate(&NewCertificateConfig::default())
+            .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
-    }
-
-    fn temp_file_path(dir: &TempDir, filename: &str) -> Utf8PathBuf {
-        dir.path().join(filename).try_into().unwrap()
-    }
-
-    fn parse_pem_file(path: impl AsRef<Path>) -> Result<pem::Pem, String> {
-        let content = fs::read(path).map_err(|err| err.to_string())?;
-        pem::parse(content).map_err(|err| err.to_string())
     }
 }

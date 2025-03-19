@@ -19,23 +19,26 @@ pub struct FirmwareOperationEntry {
 }
 
 impl FirmwareOperationEntry {
-    pub fn create_status_file(
+    pub async fn create_status_file(
         &self,
         firmware_dir: impl AsRef<Path>,
     ) -> Result<(), FirmwareManagementError> {
         let path = firmware_dir.as_ref().join(&self.operation_id);
         let content = serde_json::to_string(self)?;
         create_file_with_mode(path, Some(content.as_str()), 0o644)
+            .await
             .map_err(FirmwareManagementError::FromFileError)
     }
 
-    pub fn overwrite_file(
+    pub async fn overwrite_file(
         &self,
         firmware_dir: impl AsRef<Path>,
     ) -> Result<(), FirmwareManagementError> {
         let path = firmware_dir.as_ref().join(&self.operation_id);
         let content = serde_json::to_string(self)?;
-        overwrite_file(&path, &content).map_err(FirmwareManagementError::FromFileError)
+        overwrite_file(&path, &content)
+            .await
+            .map_err(FirmwareManagementError::FromFileError)
     }
 
     pub fn increment_attempt(self) -> Self {
