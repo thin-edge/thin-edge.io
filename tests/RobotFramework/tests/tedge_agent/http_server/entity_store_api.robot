@@ -1,6 +1,5 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
-Library             Collections
 Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
@@ -128,10 +127,9 @@ Delete entity tree
     ...    ${entities}
 
 Entity twin update apis
-    ${entity}=    Execute Command
+    ${put}=    Execute Command
     ...    curl -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window -H 'Content-Type: application/json' -d '5'
-    ${entity}=    Evaluate    ${entity}
-    Should Be Equal    ${entity["maintenance_window"]}    ${5}
+    Should Be Equal    ${put}    5
     Should Have MQTT Messages
     ...    te/device/main///twin/maintenance_window
     ...    message_contains=5
@@ -141,13 +139,17 @@ Entity twin update apis
     Should Be Equal    ${get}    5
 
     ${timestamp}=    Get Unix Timestamp
-    ${entity}=    Execute Command
-    ...    curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
-    ${entity}=    Evaluate    ${entity}
-    Should Not Contain    ${entity}    maintenance_window
+    ${http_code}=    Execute Command
+    ...    curl -o /dev/null --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
+    Should Be Equal    ${http_code}    204
     Should Have MQTT Messages
     ...    te/device/main///twin/maintenance_window
     ...    date_from=${timestamp}
+    ${retained_message}=    Execute Command
+    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_window --duration 1
+    ...    ignore_exit_code=${True}
+    ...    strip=${True}
+    Should Be Empty    ${retained_message}
 
 
 *** Keywords ***

@@ -31,7 +31,7 @@ pub enum EntityStoreRequest {
     List(ListFilters),
     MqttMessage(MqttMessage),
     GetTwinFragment(EntityTopicId, String),
-    UpdateTwinFragment(EntityTwinMessage),
+    SetTwinFragment(EntityTwinMessage),
 }
 
 #[derive(Debug)]
@@ -57,10 +57,10 @@ impl EntityTwinData {
     pub fn try_new(
         topic_id: EntityTopicId,
         twin_data: Map<String, Value>,
-    ) -> Result<Self, InvalidTwinData> {
+    ) -> Result<Self, entity_store::Error> {
         for key in twin_data.keys() {
             if key.starts_with('@') {
-                return Err(InvalidTwinData(key.clone()));
+                return Err(entity_store::Error::InvalidTwinData(key.clone()));
             }
         }
         Ok(Self {
@@ -69,10 +69,6 @@ impl EntityTwinData {
         })
     }
 }
-
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("Invalid key: '{0}', as fragment keys starting with '@' are not allowed as twin data")]
-pub struct InvalidTwinData(String);
 
 pub struct EntityStoreServer {
     entity_store: EntityStore,
@@ -144,7 +140,7 @@ impl Server for EntityStoreServer {
                 let twin = self.entity_store.get_twin_data(&topic_id, &fragment_key);
                 EntityStoreResponse::GetTwinFragment(twin.cloned())
             }
-            EntityStoreRequest::UpdateTwinFragment(twin_data) => {
+            EntityStoreRequest::SetTwinFragment(twin_data) => {
                 let res = self.update_twin_data(twin_data).await;
                 EntityStoreResponse::UpdateTwinFragment(res)
             }
@@ -247,7 +243,12 @@ impl EntityStoreServer {
     ) {
         let twin_channel = Channel::EntityTwinData { fragment_key };
         let topic = self.mqtt_schema.topic_for(topic_id, &twin_channel);
-        let message = MqttMessage::new(&topic, fragment_value.to_string()).with_retain();
+        let payload = if fragment_value.is_null() {
+            "".to_string()
+        } else {
+            fragment_value.to_string()
+        };
+        let message = MqttMessage::new(&topic, payload).with_retain();
         self.publish_message(message).await;
     }
 
