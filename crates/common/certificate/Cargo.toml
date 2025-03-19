@@ -11,14 +11,12 @@ repository = { workspace = true }
 [features]
 default = []
 reqwest = ["dep:reqwest"]
-cryptoki = ["dep:cryptoki"]
 
 [dependencies]
 anyhow = { workspace = true }
 asn1-rs = { workspace = true }
 base64 = { workspace = true }
 camino = { workspace = true }
-cryptoki = { workspace = true, optional = true }
 rcgen = { workspace = true }
 reqwest = { workspace = true, optional = true, features = [
     "rustls-tls-native-roots",
