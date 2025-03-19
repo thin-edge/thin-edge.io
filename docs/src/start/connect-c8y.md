@@ -43,6 +43,10 @@ You can now use the [`tedge` command](../references/cli/index.md) to:
 * [connect the device](connect-c8y.md#connect-the-device), and
 * [send your first telemetry data](#sending-your-first-telemetry-data).
 
+:::tip
+If you run into any errors, check the [Common errors](#common-errors) section to help diagnose and fix the problem.
+:::
+
 ## Configure the device
 
 To connect the device to the Cumulocity, one needs to set the URL of your Cumulocity tenant and the root certificate as below.
@@ -186,111 +190,6 @@ sudo tedge cert upload c8y --user "$C8Y_USER"
 
 </UserContext>
 
-### Common errors
-
-Below shows some common errors that can be experienced when trying to upload the device certificate.
-
-#### Connection closed by peer {#common-errors-closed-by-peer}
-
-If you're using a VPN it is possible that it is blocking the outgoing Cumulocity MQTT port that %%te%% uses, and sometimes it is not so obvious that the communication is being blocked by the VPN or firewall as tools like netcat (`nc`) might show that the port is available, however this does not show what responded to the request (so it could be the VPN responding and not Cumulocity).
-
-Use the following command to check if the Cumulocity URL and MQTT Port are reachable from the device.
-
-```sh
-openssl s_client -connect "$(tedge config get c8y.mqtt)" < /dev/null
-```
-
-The output of the command should print the information about the certificates of the URL and port that you are trying to connect to. If you don't see any information about the certificates (e.g. the `Certificate chain` section is missing), then it is likely that the VPN's configuration or firewall is routing or blocking the communication, so try the same command with the VPN switched off.
-
-Below shows an example of what is expected when communicating with the `eu-latest.cumulocity.com` Cumulocity instance, not that the `CN=*.eu-latest.cumulocity.com` matches the URL that was being checked against.
-
-```text title="Output"
-Connecting to 172.65.163.117
-CONNECTED(00000005)
-depth=2 C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., CN=Go Daddy Root Certificate Authority - G2
-verify return:1
-depth=1 C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2
-verify return:1
-depth=0 CN=*.eu-latest.cumulocity.com
-verify return:1
----
-Certificate chain
- 0 s:CN=*.eu-latest.cumulocity.com
-   i:C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2
-   a:PKEY: rsaEncryption, 2048 (bit); sigalg: RSA-SHA256
-   v:NotBefore: Dec 24 16:12:09 2024 GMT; NotAfter: Jan 25 16:12:09 2026 GMT
-# ...
-```
-
-#### InvalidCertificate(NotValidForName) {#common-errors-invalid-certificate}
-
-If you receive the following error, then you are most likely using the [custom domain feature](https://cumulocity.com/docs/enterprise-tenant/customization/#domain-name), and should see the [custom domain instructions](#custom-domain) to configure the correct HTTP and MQTT endpoints.
-
-```sh
-ERROR: Custom { kind: InvalidData, error: InvalidCertificate(NotValidForName) }
-Error: failed to connect to Cumulocity cloud.
-
-Caused by:
-    Connection check failed
-```
-
-#### 401 - Unauthorized {#common-errors-401}
-
-The 401 (Unauthorized) error means either the user and/or password is invalid for the configured Cumulocity url that was set in the `tedge config set c8y.url <url>` command.
-
-Check the following items to help you diagnose the root cause of the problem:
-
-* Check the configured `c8y.url`. Copy/paste the url into a Web Browser to validate that it does open the intended Cumulocity tenant
-* Check your username. The user/email is case-sensitive, so make sure the user matches your configured Cumulocity user
-* Check your password. Use copy/paste to enter your password as this eliminates typos
-* Check that you are not using a SSO user. SSO users are not permitted to use the REST API calls which the `tedge cert upload c8y` command is using. Please create a new Cumulocity user via the [Administration Page](https://cumulocity.com/docs/standard-tenant/managing-users/#to-add-a-user)
-
-
-#### 403 - Forbidden {#common-errors-403}
-
-The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the %%te%%'s device certificate to the Cumulocity's [Trusted certificates](https://cumulocity.com/docs/device-integration/device-certificates/).
-
-Your Cumulocity user **MUST** be assigned the **Tenant Manager** Global Role in order to add new trusted certificates to Cumulocity. Global roles can be assigned to users via the Cumulocity **Administration** application under Accounts &rarr; Users &rarr; `<your username>` &rarr; Global Roles section. Below shows a screenshot of the **Tenant Manager** role that your user needs to be assigned to.
-
-![User Global Roles](./c8y-user-globl-roles.png)
-
-Alternatively, you can explicitly add one of the following permissions to your Cumulocity user: `ROLE_TENANT_MANAGEMENT_ADMIN` OR `ROLE_TENANT_ADMIN`, however this method requires you to be familiar with the [Cumulocity OpenAPI](https://cumulocity.com/api/core/#operation/postTrustedCertificateCollectionResource).
-
-If you are still having trouble, please check out the official [Cumulocity documentation](https://cumulocity.com/docs/device-integration/device-certificates/#upload-your-ca-certificate).
-
-
-#### Address is unreachable {#common-errors-unreachable}
-
-If you are unable to reach Cumulocity, then it is likely that your device's network is not properly configured. This could be for many different reasons, however the following checks might help you spot where the mistake is:
-
-* Can you ping a well known DNS server?
-
-  ```
-  ping 8.8.8.8
-  ```
-
-  The exact address is not that important, it used to see if a well established/reliable IP address is reachable from your device. You may need to adjust the IP address if your ISP (Internet Service Provider) blocks it for some reason.
-
-* Can you reach another website?
-
-  Using Google is helpful here, as it is generally available, though you can also choose another popular/highly available website for your test.
-
-  ```sh
-  curl google.com
-  ```
-
-* Check if the configured `c8y.url` is reachable by using curl
-
-    ```sh title="bash"
-    curl "https://$(tedge config get c8y.url)/tenant/loginOptions"
-    ```
-
-    If you are having problems resolving the `c8y.url` to an IP address, then it might be worthwhile considering manually adding a nameserver to the DNS configuration file as shown below:
-
-    ```sh title="file: /etc/resolv.conf"
-    nameserver 8.8.8.8
-    ```
-
 ## Connect the device
 
 Now, you are ready to run `tedge connect c8y`.
@@ -413,6 +312,112 @@ navigate to:
 Device Management &rarr; Devices &rarr; All devices &rarr; `device_id` &rarr; Measurements
 
 You should observe a "temperature measurement" graph with the new data point.
+
+## Common errors {#common-errors}
+
+Below shows some common errors that can be experienced when trying to upload the device certificate or connect to Cumulocity.
+
+### Connection closed by peer {#common-errors-closed-by-peer}
+
+If you're using a VPN it is possible that it is blocking the outgoing Cumulocity MQTT port that %%te%% uses, and sometimes it is not so obvious that the communication is being blocked by the VPN or firewall as tools like netcat (`nc`) might show that the port is available, however this does not show what responded to the request (so it could be the VPN responding and not Cumulocity).
+
+Use the following command to check if the Cumulocity URL and MQTT Port are reachable from the device.
+
+```sh
+openssl s_client -connect "$(tedge config get c8y.mqtt)" < /dev/null
+```
+
+The output of the command should print the information about the certificates of the URL and port that you are trying to connect to. If you don't see any information about the certificates (e.g. the `Certificate chain` section is missing), then it is likely that the VPN's configuration or firewall is routing or blocking the communication, so try the same command with the VPN switched off.
+
+Below shows an example of what is expected when communicating with the `eu-latest.cumulocity.com` Cumulocity instance, not that the `CN=*.eu-latest.cumulocity.com` matches the URL that was being checked against.
+
+```text title="Output"
+Connecting to 172.65.163.117
+CONNECTED(00000005)
+depth=2 C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., CN=Go Daddy Root Certificate Authority - G2
+verify return:1
+depth=1 C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2
+verify return:1
+depth=0 CN=*.eu-latest.cumulocity.com
+verify return:1
+---
+Certificate chain
+ 0 s:CN=*.eu-latest.cumulocity.com
+   i:C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2
+   a:PKEY: rsaEncryption, 2048 (bit); sigalg: RSA-SHA256
+   v:NotBefore: Dec 24 16:12:09 2024 GMT; NotAfter: Jan 25 16:12:09 2026 GMT
+# ...
+```
+
+### InvalidCertificate(NotValidForName) {#common-errors-invalid-certificate}
+
+If you receive the following error, then you are most likely using the [custom domain feature](https://cumulocity.com/docs/enterprise-tenant/customization/#domain-name), and should see the [custom domain instructions](#custom-domain) to configure the correct HTTP and MQTT endpoints.
+
+```sh
+ERROR: Custom { kind: InvalidData, error: InvalidCertificate(NotValidForName) }
+Error: failed to connect to Cumulocity cloud.
+
+Caused by:
+    Connection check failed
+```
+
+### 401 - Unauthorized {#common-errors-401}
+
+The 401 (Unauthorized) error means either the user and/or password is invalid for the configured Cumulocity url that was set in the `tedge config set c8y.url <url>` command.
+
+Check the following items to help you diagnose the root cause of the problem:
+
+* Check the configured `c8y.url`. Copy/paste the url into a Web Browser to validate that it does open the intended Cumulocity tenant
+* Check your username. The user/email is case-sensitive, so make sure the user matches your configured Cumulocity user
+* Check your password. Use copy/paste to enter your password as this eliminates typos
+* Check that you are not using a SSO user. SSO users are not permitted to use the REST API calls which the `tedge cert upload c8y` command is using. Please create a new Cumulocity user via the [Administration Page](https://cumulocity.com/docs/standard-tenant/managing-users/#to-add-a-user)
+
+
+### 403 - Forbidden {#common-errors-403}
+
+The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the %%te%%'s device certificate to the Cumulocity's [Trusted certificates](https://cumulocity.com/docs/device-integration/device-certificates/).
+
+Your Cumulocity user **MUST** be assigned the **Tenant Manager** Global Role in order to add new trusted certificates to Cumulocity. Global roles can be assigned to users via the Cumulocity **Administration** application under Accounts &rarr; Users &rarr; `<your username>` &rarr; Global Roles section. Below shows a screenshot of the **Tenant Manager** role that your user needs to be assigned to.
+
+![User Global Roles](./c8y-user-globl-roles.png)
+
+Alternatively, you can explicitly add one of the following permissions to your Cumulocity user: `ROLE_TENANT_MANAGEMENT_ADMIN` OR `ROLE_TENANT_ADMIN`, however this method requires you to be familiar with the [Cumulocity OpenAPI](https://cumulocity.com/api/core/#operation/postTrustedCertificateCollectionResource).
+
+If you are still having trouble, please check out the official [Cumulocity documentation](https://cumulocity.com/docs/device-integration/device-certificates/#upload-your-ca-certificate).
+
+
+### Address is unreachable {#common-errors-unreachable}
+
+If you are unable to reach Cumulocity, then it is likely that your device's network is not properly configured. This could be for many different reasons, however the following checks might help you spot where the mistake is:
+
+* Can you ping a well known DNS server?
+
+  ```
+  ping 8.8.8.8
+  ```
+
+  The exact address is not that important, it used to see if a well established/reliable IP address is reachable from your device. You may need to adjust the IP address if your ISP (Internet Service Provider) blocks it for some reason.
+
+* Can you reach another website?
+
+  Using Google is helpful here, as it is generally available, though you can also choose another popular/highly available website for your test.
+
+  ```sh
+  curl google.com
+  ```
+
+* Check if the configured `c8y.url` is reachable by using curl
+
+    ```sh title="bash"
+    curl "https://$(tedge config get c8y.url)/tenant/loginOptions"
+    ```
+
+    If you are having problems resolving the `c8y.url` to an IP address, then it might be worthwhile considering manually adding a nameserver to the DNS configuration file as shown below:
+
+    ```sh title="file: /etc/resolv.conf"
+    nameserver 8.8.8.8
+    ```
+
 
 ## Next Steps
 
