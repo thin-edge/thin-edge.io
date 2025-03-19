@@ -34,7 +34,6 @@ mod config;
 mod connection;
 mod errors;
 mod messages;
-mod session;
 mod topics;
 
 #[cfg(test)]
@@ -45,7 +44,6 @@ pub use config::*;
 pub use connection::*;
 pub use errors::*;
 pub use messages::*;
-pub use session::*;
 pub use topics::*;
 
 pub use futures::channel::mpsc::UnboundedReceiver;
