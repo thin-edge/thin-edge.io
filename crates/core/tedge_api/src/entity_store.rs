@@ -195,7 +195,8 @@ impl EntityStore {
                                             fragment_key,
                                             fragment_value,
                                         );
-                                        if let Err(err) = self.register_twin_data(twin_data.clone())
+                                        if let Err(err) =
+                                            self.register_twin_fragment(twin_data.clone())
                                         {
                                             error!("Failed to restore twin fragment: {twin_data:?} from the persistent entity store due to {err}");
                                             continue;
@@ -463,14 +464,14 @@ impl EntityStore {
     /// Updates the entity twin data with the provided fragment data.
     /// Returns `true`, if the twin data got updated with the new fragment value.
     /// If the provided fragment already existed, `false` is returned.
-    pub fn update_twin_data(
+    pub fn update_twin_fragment(
         &mut self,
         twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
-        self.register_and_persist_twin_data(twin_message.clone())
+        self.register_and_persist_twin_fragment(twin_message.clone())
     }
 
-    pub fn register_twin_data(
+    pub fn register_twin_fragment(
         &mut self,
         twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
@@ -499,11 +500,11 @@ impl EntityStore {
         Ok(true)
     }
 
-    pub fn register_and_persist_twin_data(
+    pub fn register_and_persist_twin_fragment(
         &mut self,
         twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
-        let updated = self.register_twin_data(twin_message.clone())?;
+        let updated = self.register_twin_fragment(twin_message.clone())?;
         if updated {
             self.message_log
                 .append_message(&twin_message.to_mqtt_message(&self.mqtt_schema))?;
@@ -1552,7 +1553,7 @@ mod tests {
 
         let topic_id = EntityTopicId::default_main_device();
         let updated = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "hardware".into(),
                 json!({ "version": 5 }),
@@ -1577,7 +1578,7 @@ mod tests {
 
         let topic_id = EntityTopicId::default_main_device();
         let _ = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "hardware".into(),
                 json!({ "version": 5 }),
@@ -1585,7 +1586,7 @@ mod tests {
             .unwrap();
 
         let updated = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "hardware".into(),
                 json!({ "version": 6 }),
@@ -1611,7 +1612,7 @@ mod tests {
         let topic_id = EntityTopicId::default_main_device();
 
         let _ = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "foo".into(),
                 json!("bar"),
@@ -1619,7 +1620,7 @@ mod tests {
             .unwrap();
 
         let updated = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "foo".into(),
                 json!(null),
@@ -1659,7 +1660,7 @@ mod tests {
 
         // Add some additional fragments to the device twin data
         let _ = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "hardware".into(),
                 json!({ "version": 5 }),
@@ -1747,7 +1748,7 @@ mod tests {
 
         // Update the entity twin data
         store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 entity_topic_id.clone(),
                 "foo".into(),
                 json!("bar"),
@@ -1832,7 +1833,7 @@ mod tests {
                 )
                 .unwrap();
             store
-                .update_twin_data(EntityTwinMessage::new(
+                .update_twin_fragment(EntityTwinMessage::new(
                     child1_topic_id.clone(),
                     twin_fragment_key.clone(),
                     twin_fragment_value.clone(),

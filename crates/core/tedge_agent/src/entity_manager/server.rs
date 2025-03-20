@@ -204,7 +204,9 @@ impl EntityStoreServer {
         &mut self,
         twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
-        let updated = self.entity_store.update_twin_data(twin_message.clone())?;
+        let updated = self
+            .entity_store
+            .update_twin_fragment(twin_message.clone())?;
         if updated {
             self.publish_twin_data(
                 &twin_message.topic_id,
