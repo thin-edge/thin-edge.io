@@ -2,7 +2,7 @@
 Resource            ../../resources/common.resource
 Library             ThinEdgeIO
 
-Suite Teardown      Get Logs
+Suite Teardown      Get Suite Logs
 Test Setup          Custom Setup
 
 Test Tags           theme:cli

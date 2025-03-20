@@ -5,7 +5,7 @@ Resource            ../../../resources/common.resource
 Library             Cumulocity
 Library             ThinEdgeIO
 
-Suite Teardown      Get Logs
+Suite Teardown      Get Suite Logs
 Test Setup          Custom Setup
 
 Test Tags           theme:c8y    theme:cli

@@ -3,7 +3,7 @@ Resource            ../../../resources/common.resource
 Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
-Suite Teardown      Get Logs    name=${PARENT_SN}
+Suite Teardown      Get Suite Logs    name=${PARENT_SN}
 
 Test Tags           theme:tedge_agent
 
