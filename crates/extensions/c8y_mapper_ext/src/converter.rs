@@ -48,8 +48,6 @@ use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
-use clock::MonotonicClock;
-use clock::TedgeInstant;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
 use serde_json::json;
@@ -95,6 +93,7 @@ use tedge_utils::file::FileError;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
 use tokio::time::Duration;
+use tokio::time::Instant;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -188,12 +187,11 @@ pub struct CumulocityConverter {
 
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
-    pub active_commands: HashMap<CmdId, TedgeInstant>,
-    active_commands_last_cleared: TedgeInstant,
+    pub active_commands: HashMap<CmdId, Instant>,
+    active_commands_last_cleared: Instant,
 
     supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
-    clock: Box<dyn MonotonicClock>,
 }
 
 impl CumulocityConverter {
@@ -203,7 +201,6 @@ impl CumulocityConverter {
         http_proxy: C8YHttpProxy,
         uploader: ClientMessageBox<(String, UploadRequest), (String, UploadResult)>,
         downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
-        clock: Box<dyn MonotonicClock>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
         let device_topic_id = config.device_topic_id.clone();
@@ -283,9 +280,8 @@ impl CumulocityConverter {
             entity_cache,
             command_id,
             active_commands: HashMap::new(),
-            active_commands_last_cleared: clock.now(),
+            active_commands_last_cleared: Instant::now(),
             operation_handler,
-            clock,
         })
     }
 
@@ -671,7 +667,7 @@ impl CumulocityConverter {
                 .await;
             let result = self.handle_c8y_operation_result(&result, Some(operation.op_id.clone()));
             if !result.is_empty() {
-                self.active_commands.insert(cmd_id, self.clock.now());
+                self.active_commands.insert(cmd_id, Instant::now());
             }
             output.extend(result);
         }
@@ -788,7 +784,7 @@ impl CumulocityConverter {
 
         let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
         if !output.is_empty() {
-            self.active_commands.insert(cmd_id, self.clock.now());
+            self.active_commands.insert(cmd_id, Instant::now());
         }
 
         Ok(output)
@@ -1410,19 +1406,18 @@ impl CumulocityConverter {
         &mut self,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if dbg!(self.active_commands_last_cleared.elapsed(&*self.clock)) > Duration::from_secs(3600)
-        {
+        if self.active_commands_last_cleared.elapsed() > Duration::from_secs(3600) {
             let mut to_remove = vec![];
             for (id, time) in &self.active_commands {
                 // Expire tasks after 12 hours
-                if dbg!(time.elapsed(&*self.clock)) > Duration::from_secs(3600 * 12) {
+                if time.elapsed() > Duration::from_secs(3600 * 12) {
                     to_remove.push(id.to_owned());
                 }
             }
             for id in to_remove {
                 self.active_commands.remove(&id);
             }
-            self.active_commands_last_cleared = self.clock.now();
+            self.active_commands_last_cleared = Instant::now();
         }
 
         let messages = match &message.topic {
@@ -1679,13 +1674,10 @@ pub(crate) mod tests {
     use c8y_api::proxy_url::Protocol;
     use c8y_api::smartrest::topic::C8yTopic;
     use c8y_http_proxy::handle::C8YHttpProxy;
-    use clock::ManuallyDrivenClock;
-    use clock::SystemClock;
     use serde_json::json;
     use serde_json::Value;
     use std::str::FromStr;
     use std::time::Duration;
-    use std::time::Instant;
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
@@ -2370,7 +2362,7 @@ pub(crate) mod tests {
         config.service = tedge_config.service.clone();
         config.bridge_config.c8y_prefix = "custom-topic".try_into().unwrap();
 
-        let (mut converter, _) = create_c8y_converter_from_config(config, Box::new(SystemClock));
+        let (mut converter, _) = create_c8y_converter_from_config(config);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2518,7 +2510,7 @@ pub(crate) mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
-        let now = std::time::Instant::now();
+        let now = Instant::now();
         converter
             .execute_operation(
                 ShellScript::from_str("sleep 5").unwrap(),
@@ -2648,11 +2640,9 @@ pub(crate) mod tests {
         let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
         f.with_raw_content(custom_op);
 
-        let start_time = Instant::now();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
-        let (clock, update_time) = ManuallyDrivenClock::new(start_time);
-        let (mut converter, _http_proxy) =
-            create_c8y_converter_with_clock(&tmp_dir, Box::new(clock));
+        tokio::time::pause();
 
         let operation = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
             {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
@@ -2667,9 +2657,10 @@ pub(crate) mod tests {
         );
 
         assert_eq!(converter.active_commands.len(), 1);
-        update_time
-            .send(start_time + Duration::from_secs(24 * 3600))
-            .unwrap();
+        // update_time
+        //     .send(start_time + Duration::from_secs(24 * 3600))
+        //     .unwrap();
+        tokio::time::advance(Duration::from_secs(24 * 3600)).await;
 
         let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
 
@@ -2687,11 +2678,9 @@ pub(crate) mod tests {
         let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
         f.with_raw_content(custom_op);
 
-        let start_time = Instant::now();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
-        let (clock, update_time) = ManuallyDrivenClock::new(start_time);
-        let (mut converter, _http_proxy) =
-            create_c8y_converter_with_clock(&tmp_dir, Box::new(clock));
+        tokio::time::pause();
 
         let operation = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
             {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
@@ -2707,9 +2696,7 @@ pub(crate) mod tests {
 
         assert_eq!(converter.active_commands.len(), 1);
         // After a minute, the operation id should still exist
-        update_time
-            .send(start_time + Duration::from_secs(60))
-            .unwrap();
+        tokio::time::advance(Duration::from_secs(60)).await;
 
         let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
         converter.try_convert(&random_message).await.unwrap();
@@ -2856,7 +2843,7 @@ pub(crate) mod tests {
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
         config.service = tedge_config.service.clone();
 
-        let (mut converter, _) = create_c8y_converter_from_config(config, Box::new(SystemClock));
+        let (mut converter, _) = create_c8y_converter_from_config(config);
 
         let service_health_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/service1/status/health"),
@@ -2979,8 +2966,7 @@ pub(crate) mod tests {
         config.enable_auto_register = false;
         config.bridge_config.c8y_prefix = "custom-c8y-prefix".try_into().unwrap();
 
-        let (mut converter, _http_proxy) =
-            create_c8y_converter_from_config(config, Box::new(SystemClock));
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
 
         // Publish some measurements that are only cached and not converted
         for i in 0..3 {
@@ -3063,8 +3049,7 @@ pub(crate) mod tests {
         let mut config = c8y_converter_config(&tmp_dir);
         config.enable_auto_register = false;
 
-        let (mut converter, _http_proxy) =
-            create_c8y_converter_from_config(config, Box::new(SystemClock));
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
 
         // Publish great-grand-child registration before grand-child and child
         let reg_message = MqttMessage::new(
@@ -3181,8 +3166,7 @@ pub(crate) mod tests {
         let mut config = c8y_converter_config(&tmp_dir);
         config.enable_auto_register = false;
 
-        let (mut converter, _http_proxy) =
-            create_c8y_converter_from_config(config, Box::new(SystemClock));
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
 
         // main device command
         let main_device = converter.device_topic_id.clone();
@@ -3279,15 +3263,7 @@ pub(crate) mod tests {
         tmp_dir: &TempTedgeDir,
     ) -> (CumulocityConverter, FakeServerBox<HttpRequest, HttpResult>) {
         let config = c8y_converter_config(tmp_dir);
-        create_c8y_converter_from_config(config, Box::new(SystemClock))
-    }
-
-    pub(crate) fn create_c8y_converter_with_clock(
-        tmp_dir: &TempTedgeDir,
-        clock: Box<dyn MonotonicClock>,
-    ) -> (CumulocityConverter, FakeServerBox<HttpRequest, HttpResult>) {
-        let config = c8y_converter_config(tmp_dir);
-        create_c8y_converter_from_config(config, clock)
+        create_c8y_converter_from_config(config)
     }
 
     fn c8y_converter_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
@@ -3348,7 +3324,6 @@ pub(crate) mod tests {
 
     fn create_c8y_converter_from_config(
         config: C8yMapperConfig,
-        clock: Box<dyn MonotonicClock>,
     ) -> (CumulocityConverter, FakeServerBox<HttpRequest, HttpResult>) {
         let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
             SimpleMessageBoxBuilder::new("MQTT", 5);
@@ -3366,15 +3341,9 @@ pub(crate) mod tests {
             FakeServerBox::builder();
         let downloader = ClientMessageBox::new(&mut downloader_builder);
 
-        let converter = CumulocityConverter::new(
-            config,
-            mqtt_publisher,
-            http_proxy,
-            uploader,
-            downloader,
-            clock,
-        )
-        .unwrap();
+        let converter =
+            CumulocityConverter::new(config, mqtt_publisher, http_proxy, uploader, downloader)
+                .unwrap();
 
         (converter, http_builder.build())
     }

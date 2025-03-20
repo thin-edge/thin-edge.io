@@ -4,7 +4,6 @@ use super::dynamic_discovery::process_inotify_events;
 use crate::service_monitor::is_c8y_bridge_established;
 use async_trait::async_trait;
 use c8y_http_proxy::handle::C8YHttpProxy;
-use clock::SystemClock;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -416,7 +415,6 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             self.http_proxy,
             self.uploader,
             self.downloader,
-            Box::new(SystemClock),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 
