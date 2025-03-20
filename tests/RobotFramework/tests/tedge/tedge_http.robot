@@ -26,7 +26,7 @@ Updating entities from a child device
     Should Contain    ${entity}    "@parent":"device/${CHILD_SN}//"
     Should Contain    ${entity}    "@type":"service"
     Execute Command
-    ...    tedge http patch /tedge/entity-store/v1/entities/device/${CHILD_SN} '{"name": "Child 01", "type": "Raspberry Pi 4"}'
+    ...    tedge http put /tedge/entity-store/v1/entities/device/${CHILD_SN}///twin '{"name": "Child 01", "type": "Raspberry Pi 4"}'
     ${entity}=    Execute Command    tedge http get /tedge/entity-store/v1/entities/device/${CHILD_SN}/
     Should Contain    ${entity}    "@topic-id":"device/${CHILD_SN}//"
     Should Contain    ${entity}    "@parent":"device/main//"
