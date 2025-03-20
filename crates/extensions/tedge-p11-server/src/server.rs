@@ -20,7 +20,7 @@ impl TedgeP11Server {
     }
 
     /// Handle multiple requests on a given listener.
-    pub fn from_listener(&self, listener: UnixListener) -> anyhow::Result<()> {
+    pub fn serve(&self, listener: UnixListener) -> anyhow::Result<()> {
         // Accept a connection
         loop {
             let (stream, _) = listener.accept().context("Failed to accept connection")?;
