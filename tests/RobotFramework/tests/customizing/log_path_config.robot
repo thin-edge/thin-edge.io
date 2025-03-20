@@ -6,8 +6,8 @@
 Resource            ../../resources/common.resource
 Library             ThinEdgeIO
 
-Suite Setup         Custom Setup
-Suite Teardown      Custom Teardown
+Test Setup          Custom Setup
+Test Teardown       Custom Teardown
 
 Test Tags           theme:cli    theme:configuration
 
