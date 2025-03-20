@@ -10,6 +10,7 @@ use std::os::unix::net::UnixStream;
 
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::warn;
 
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
@@ -33,6 +34,9 @@ impl Connection {
         self.stream.read_to_end(&mut buf)?;
         let frame = postcard::from_bytes(&buf)?;
         self.stream.shutdown(Shutdown::Read)?;
+        if let Err(err) = self.stream.shutdown(Shutdown::Read) {
+            warn!("Failed to shutdown connection reading half: {err:?}");
+        }
 
         Ok(frame)
     }
@@ -44,7 +48,9 @@ impl Connection {
         let buf = postcard::to_allocvec(&frame)?;
         self.stream.write_all(&buf)?;
         self.stream.flush()?;
-        self.stream.shutdown(Shutdown::Write)?;
+        if let Err(err) = self.stream.shutdown(Shutdown::Write) {
+            warn!("Failed to shutdown connection writing half: {err:?}");
+        }
 
         Ok(())
     }
