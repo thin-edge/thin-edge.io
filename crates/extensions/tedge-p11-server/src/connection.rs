@@ -29,10 +29,15 @@ impl Connection {
     /// Reads a frame and closes the reading half of the connection.
     ///
     /// NOTE: can only be called once
-    pub fn read_frame(&mut self) -> anyhow::Result<Frame> {
+    pub fn read_frame(&mut self) -> anyhow::Result<Frame1> {
         let mut buf = Vec::new();
         self.stream.read_to_end(&mut buf)?;
-        let frame = postcard::from_bytes(&buf)?;
+
+        // will fail if not version 1
+        let frame: Frame = postcard::from_bytes(&buf)?;
+
+        let Frame::Version1(frame) = frame;
+
         self.stream.shutdown(Shutdown::Read)?;
         if let Err(err) = self.stream.shutdown(Shutdown::Read) {
             warn!("Failed to shutdown connection reading half: {err:?}");
@@ -44,8 +49,11 @@ impl Connection {
     /// Writes a frame and closes the writing half of the connection.
     ///
     /// NOTE: can only be called once
-    pub fn write_frame(&mut self, frame: &Frame) -> anyhow::Result<()> {
+    pub fn write_frame(&mut self, frame: &Frame1) -> anyhow::Result<()> {
+        let frame = Frame::Version1(frame.clone());
+
         let buf = postcard::to_allocvec(&frame)?;
+
         self.stream.write_all(&buf)?;
         self.stream.flush()?;
         if let Err(err) = self.stream.shutdown(Shutdown::Write) {
@@ -56,32 +64,18 @@ impl Connection {
     }
 }
 
+/// The actual frame that we serialize and send/receive.
+///
+/// This essentially just adds a version tag and should deal with cases when
+/// non-backwards compatible changes are added to new versions.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Frame {
-    /// A version tag for possible future versions, currently ignored.
-    // although i'm not sure if it's actually necessary now because we can always add it later if need be; it's because
-    // we know that 1) we're having one connection/one call, so we read until EOF and know we have a valid message (so
-    // don't have use a scheme like TLV) and 2) we can always add new fields
-    pub version: Version,
-    pub payload: Payload,
-}
-
-impl Frame {
-    pub fn new(payload: Payload) -> Self {
-        Self {
-            version: Version::Version1,
-            payload,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Version {
-    Version1,
+enum Frame {
+    Version1(Frame1),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Payload {
+pub enum Frame1 {
     ChooseSchemeRequest(ChooseSchemeRequest),
     SignRequest(SignRequest),
     ChooseSchemeResponse(ChooseSchemeResponse),

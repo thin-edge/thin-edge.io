@@ -5,8 +5,7 @@ use tracing::error;
 use tracing::info;
 
 use super::connection::Connection;
-use super::connection::Payload;
-use crate::connection::Frame;
+use crate::connection::Frame1;
 use crate::pkcs11::CryptokiConfigDirect;
 use crate::service::P11SignerService;
 
@@ -38,18 +37,17 @@ impl TedgeP11Server {
 fn process(config: &CryptokiConfigDirect, mut connection: Connection) -> anyhow::Result<()> {
     let service = P11SignerService::new(config);
 
-    let request = connection.read_frame()?.payload;
+    let request = connection.read_frame()?;
 
     let response = match request {
-        Payload::ChooseSchemeResponse { .. } | Payload::SignResponse { .. } => {
+        Frame1::ChooseSchemeResponse { .. } | Frame1::SignResponse { .. } => {
             anyhow::bail!("protocol error")
         }
-        Payload::ChooseSchemeRequest(request) => {
-            Payload::ChooseSchemeResponse(service.choose_scheme(request))
+        Frame1::ChooseSchemeRequest(request) => {
+            Frame1::ChooseSchemeResponse(service.choose_scheme(request))
         }
-        Payload::SignRequest(request) => Payload::SignResponse(service.sign(request)),
+        Frame1::SignRequest(request) => Frame1::SignResponse(service.sign(request)),
     };
-    let response = Frame::new(response);
 
     connection.write_frame(&response)?;
 

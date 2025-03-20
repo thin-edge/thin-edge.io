@@ -10,9 +10,7 @@ use anyhow::bail;
 use tracing::debug;
 use tracing::trace;
 
-use crate::connection::Payload;
-
-use super::connection::Frame;
+use super::connection::Frame1;
 use super::service::ChooseSchemeRequest;
 use super::service::SignRequest;
 
@@ -32,18 +30,18 @@ impl TedgeP11Client {
 
         debug!("Connected to socket");
 
-        let request = Frame::new(Payload::ChooseSchemeRequest(ChooseSchemeRequest {
+        let request = Frame1::ChooseSchemeRequest(ChooseSchemeRequest {
             offered: offered
                 .iter()
                 .copied()
                 .map(super::service::SignatureScheme)
                 .collect::<Vec<_>>(),
-        }));
+        });
         connection.write_frame(&request)?;
 
-        let response = connection.read_frame()?.payload;
+        let response = connection.read_frame()?;
 
-        let Payload::ChooseSchemeResponse(response) = response else {
+        let Frame1::ChooseSchemeResponse(response) = response else {
             bail!("protocol error: bad response, expected chose scheme");
         };
 
@@ -66,14 +64,12 @@ impl TedgeP11Client {
         debug!("Connected to socket");
 
         // if passed empty set of schemes, service doesn't return a scheme but returns an algorithm
-        let request = Frame::new(Payload::ChooseSchemeRequest(ChooseSchemeRequest {
-            offered: vec![],
-        }));
+        let request = Frame1::ChooseSchemeRequest(ChooseSchemeRequest { offered: vec![] });
         connection.write_frame(&request)?;
 
-        let response = connection.read_frame()?.payload;
+        let response = connection.read_frame()?;
 
-        let Payload::ChooseSchemeResponse(response) = response else {
+        let Frame1::ChooseSchemeResponse(response) = response else {
             bail!("protocol error: bad response, expected chose scheme");
         };
 
@@ -87,14 +83,14 @@ impl TedgeP11Client {
         let mut connection = crate::connection::Connection::new(stream);
         debug!("Connected to socket");
 
-        let request = Frame::new(Payload::SignRequest(SignRequest {
+        let request = Frame1::SignRequest(SignRequest {
             to_sign: message.to_vec(),
-        }));
+        });
         connection.write_frame(&request)?;
 
-        let response = connection.read_frame()?.payload;
+        let response = connection.read_frame()?;
 
-        let Payload::SignResponse(response) = response else {
+        let Frame1::SignResponse(response) = response else {
             bail!("protocol error: bad response, expected sign");
         };
 
