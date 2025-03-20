@@ -198,7 +198,7 @@ mod tests {
     #[tokio::test]
     async fn convert_entity_twin_data_json_object() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let twin_topic = "te/device/main///twin/device_os";
         let twin_payload = json!({
@@ -227,7 +227,7 @@ mod tests {
     #[tokio::test]
     async fn convert_entity_twin_data_string_value() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/foo"),
@@ -250,7 +250,7 @@ mod tests {
     #[tokio::test]
     async fn duplicate_twin_name_and_type_updates_ignored_after_registration() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         // Register a child with a name and type upfront
         let reg_message = &MqttMessage::new(
@@ -318,7 +318,7 @@ mod tests {
     #[tokio::test]
     async fn unquoted_string_value_invalid() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/foo"),
@@ -331,7 +331,7 @@ mod tests {
     #[tokio::test]
     async fn convert_entity_twin_data_numeric_value() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/foo"),
@@ -354,7 +354,7 @@ mod tests {
     #[tokio::test]
     async fn convert_entity_twin_data_boolean_value() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/enabled"),
@@ -377,7 +377,7 @@ mod tests {
     #[tokio::test]
     async fn clear_inventory_fragment() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         // Register a twin data fragment first
         let twin_message = MqttMessage::new(
@@ -402,7 +402,7 @@ mod tests {
     #[tokio::test]
     async fn convert_entity_twin_data_ignores_duplicate_fragment() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let twin_topic = "te/device/main///twin/device_os";
         let twin_payload = json!({
@@ -451,7 +451,7 @@ mod tests {
     #[tokio::test]
     async fn convert_entity_twin_data_with_duplicate_fragment_after_clearing_it() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let twin_topic = "te/device/main///twin/device_os";
         let twin_payload = json!({
@@ -486,7 +486,7 @@ mod tests {
     #[tokio::test]
     async fn convert_entity_twin_data_with_firmware_update_for_main_device() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main///twin/firmware"),
@@ -507,7 +507,7 @@ mod tests {
     #[tokio::test]
     async fn convert_entity_twin_data_with_firmware_update_for_child_device() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let twin_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///twin/firmware"),
@@ -535,7 +535,7 @@ mod tests {
     #[tokio::test]
     async fn convert_service_type() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let reg_message = &MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/service01"),

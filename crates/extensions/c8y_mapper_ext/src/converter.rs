@@ -48,6 +48,8 @@ use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
+use clock::MonotonicClock;
+use clock::TedgeInstant;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
 use serde_json::json;
@@ -186,10 +188,12 @@ pub struct CumulocityConverter {
 
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
-    pub active_commands: HashSet<CmdId>,
+    pub active_commands: HashMap<CmdId, TedgeInstant>,
+    active_commands_last_cleared: TedgeInstant,
 
     supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
+    clock: Box<dyn MonotonicClock>,
 }
 
 impl CumulocityConverter {
@@ -199,6 +203,7 @@ impl CumulocityConverter {
         http_proxy: C8YHttpProxy,
         uploader: ClientMessageBox<(String, UploadRequest), (String, UploadResult)>,
         downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+        clock: Box<dyn MonotonicClock>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
         let device_topic_id = config.device_topic_id.clone();
@@ -277,8 +282,10 @@ impl CumulocityConverter {
             mqtt_schema: mqtt_schema.clone(),
             entity_cache,
             command_id,
-            active_commands: HashSet::new(),
+            active_commands: HashMap::new(),
+            active_commands_last_cleared: clock.now(),
             operation_handler,
+            clock,
         })
     }
 
@@ -645,7 +652,7 @@ impl CumulocityConverter {
             let device_xid = operation.external_source.external_id;
             let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
 
-            if self.active_commands.contains(&cmd_id) {
+            if self.active_commands.contains_key(&cmd_id) {
                 info!("{cmd_id} is already addressed");
                 return Ok(vec![]);
             }
@@ -664,7 +671,7 @@ impl CumulocityConverter {
                 .await;
             let result = self.handle_c8y_operation_result(&result, Some(operation.op_id.clone()));
             if !result.is_empty() {
-                self.active_commands.insert(cmd_id);
+                self.active_commands.insert(cmd_id, self.clock.now());
             }
             output.extend(result);
         }
@@ -764,7 +771,7 @@ impl CumulocityConverter {
         let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
         let device_xid = operation.external_source.external_id;
 
-        if self.active_commands.contains(&cmd_id) {
+        if self.active_commands.contains_key(&cmd_id) {
             info!("{cmd_id} is already addressed");
             return Ok(vec![]);
         }
@@ -781,7 +788,7 @@ impl CumulocityConverter {
 
         let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
         if !output.is_empty() {
-            self.active_commands.insert(cmd_id);
+            self.active_commands.insert(cmd_id, self.clock.now());
         }
 
         Ok(output)
@@ -1403,6 +1410,21 @@ impl CumulocityConverter {
         &mut self,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if dbg!(self.active_commands_last_cleared.elapsed(&*self.clock)) > Duration::from_secs(3600)
+        {
+            let mut to_remove = vec![];
+            for (id, time) in &self.active_commands {
+                // Expire tasks after 12 hours
+                if dbg!(time.elapsed(&*self.clock)) > Duration::from_secs(3600 * 12) {
+                    to_remove.push(id.to_owned());
+                }
+            }
+            for id in to_remove {
+                self.active_commands.remove(&id);
+            }
+            self.active_commands_last_cleared = self.clock.now();
+        }
+
         let messages = match &message.topic {
             topic if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) => {
                 self.alarm_converter.process_internal_alarm(message);
@@ -1639,7 +1661,7 @@ pub fn get_local_child_devices_list(path: &Path) -> Result<HashSet<String>, Cumu
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::CumulocityConverter;
+    use super::*;
     use crate::actor::IdDownloadRequest;
     use crate::actor::IdDownloadResult;
     use crate::actor::IdUploadRequest;
@@ -1657,9 +1679,13 @@ pub(crate) mod tests {
     use c8y_api::proxy_url::Protocol;
     use c8y_api::smartrest::topic::C8yTopic;
     use c8y_http_proxy::handle::C8YHttpProxy;
+    use clock::ManuallyDrivenClock;
+    use clock::SystemClock;
     use serde_json::json;
     use serde_json::Value;
     use std::str::FromStr;
+    use std::time::Duration;
+    use std::time::Instant;
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
@@ -1693,7 +1719,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_sync_alarms() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let alarm_topic = "te/device/main///a/temperature_alarm";
         let alarm_payload = r#"{ "severity": "critical", "text": "Temperature very high" }"#;
@@ -1748,7 +1774,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_sync_child_alarms() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let alarm_topic = "te/device/external_sensor///a/temperature_alarm";
         let alarm_payload = r#"{ "severity": "critical", "text": "Temperature very high" }"#;
@@ -1806,7 +1832,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_child_device_registration() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let in_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/child1//"),
@@ -1838,7 +1864,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_child_id() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let in_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///m/"),
@@ -1878,7 +1904,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_nested_child_device() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let reg_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/immediate_child//"),
             json!({
@@ -1930,7 +1956,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_nested_child_service() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let reg_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/immediate_child//"),
             json!({
@@ -1996,7 +2022,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_for_child_device_service() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let in_topic = "te/device/child1/service/app1/m/m_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -2024,7 +2050,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_for_main_device_service() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let in_topic = "te/device/main/service/appm/m/m_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -2053,7 +2079,7 @@ pub(crate) mod tests {
     #[ignore = "FIXME: the registration is currently done even if the message is ill-formed"]
     async fn convert_first_measurement_invalid_then_valid_with_child_id() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let in_topic = "te/device/child1///m/";
         let in_invalid_payload = r#"{"temp": invalid}"#;
@@ -2094,7 +2120,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_two_measurement_messages_given_different_child_id() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
 
         // First message from "child1"
@@ -2135,7 +2161,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_main_id_with_measurement_type() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let in_topic = "te/device/main///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -2161,7 +2187,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_main_id_with_measurement_type_in_payload() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let in_topic = "te/device/main///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#;
@@ -2187,7 +2213,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_child_id_with_measurement_type() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let in_topic = "te/device/child///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -2213,7 +2239,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_child_id_with_measurement_type_in_payload() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let in_topic = "te/device/child2///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#;
@@ -2239,7 +2265,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let alarm_topic = "te/device/main///a/temperature_alarm";
         let big_alarm_text = create_packet(1024 * 20);
@@ -2258,7 +2284,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_without_given_event_type() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let event_topic = "te/device/main///e/";
         let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2277,7 +2303,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_use_event_type_from_payload_to_c8y_smartrest() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let event_topic = "te/device/main///e/topic_event";
         let event_payload = r#"{ "type": "payload event", "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2296,7 +2322,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_use_event_type_from_payload_to_c8y_json() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "type": "payload event", "text": "tick", "foo": "bar" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2320,7 +2346,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_with_known_fields_to_c8y_smartrest() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2344,7 +2370,7 @@ pub(crate) mod tests {
         config.service = tedge_config.service.clone();
         config.bridge_config.c8y_prefix = "custom-topic".try_into().unwrap();
 
-        let (mut converter, _) = create_c8y_converter_from_config(config);
+        let (mut converter, _) = create_c8y_converter_from_config(config, Box::new(SystemClock));
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2363,7 +2389,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_with_extra_fields_to_c8y_json() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "text": "tick", "foo": "bar" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2387,7 +2413,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_big_event() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, http_proxy) = create_c8y_converter(&tmp_dir);
         spawn_dummy_c8y_http_proxy(http_proxy);
 
         let event_topic = "te/device/main///e/click_event";
@@ -2402,7 +2428,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_big_event_for_child_device() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, http_proxy) = create_c8y_converter(&tmp_dir);
         spawn_dummy_c8y_http_proxy(http_proxy);
 
         let event_topic = "te/device/child1///e/click_event";
@@ -2422,7 +2448,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_big_measurement() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let measurement_topic = "te/device/main///m/";
         let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
 
@@ -2442,7 +2468,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_small_measurement() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let measurement_topic = "te/device/main///m/";
         let big_measurement_payload = create_thin_edge_measurement(20); // Measurement payload size is 20 bytes
 
@@ -2466,7 +2492,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_big_measurement_for_child_device() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let measurement_topic = "te/device/child1///m/";
         let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
 
@@ -2490,7 +2516,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_execute_operation_is_not_blocked() {
         let tmp_dir = TempTedgeDir::new();
-        let (converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let now = std::time::Instant::now();
         converter
@@ -2526,19 +2552,13 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn operations_are_deduplicated() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
-        let original = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
-            {"delivery":{"log":[],"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
-        ).to_string());
-        let redelivery = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
-            {"delivery":{"log":[{"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},{"time":"2025-03-05T08:49:25.000Z","status":"SEND"},{"time":"2025-03-05T08:49:25.162Z","status":"DELIVERED"}],"time":"2025-03-05T08:49:25.707Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        let operation = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
+            {"id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
         ).to_string());
         assert_eq!(
-            converter
-                .parse_c8y_devicecontrol_topic(&original)
-                .await
-                .unwrap(),
+            converter.try_convert(&operation).await.unwrap(),
             vec![MqttMessage {
                 topic: Topic {
                     name: "te/device/main///cmd/restart/c8y-mapper-16574089".into(),
@@ -2548,13 +2568,7 @@ pub(crate) mod tests {
                 retain: true,
             },]
         );
-        assert_eq!(
-            converter
-                .parse_c8y_devicecontrol_topic(&redelivery)
-                .await
-                .unwrap(),
-            vec![]
-        );
+        assert_eq!(converter.try_convert(&operation).await.unwrap(), vec![]);
     }
 
     #[tokio::test]
@@ -2565,27 +2579,18 @@ pub(crate) mod tests {
         exec.command = "/etc/tedge/operations/command ${.payload.my_op.text}""#;
         let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
         f.with_raw_content(custom_op);
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
-        let original = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
-            {"delivery":{"log":[],"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
-        ).to_string());
-        let redelivery = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
-            {"delivery":{"log":[{"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},{"time":"2025-03-05T08:49:25.000Z","status":"SEND"},{"time":"2025-03-05T08:49:25.162Z","status":"DELIVERED"}],"time":"2025-03-05T08:49:25.707Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        let operation = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
+            {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
         ).to_string());
         assert_ne!(
-            converter
-                .parse_json_custom_operation_topic(&original)
-                .await
-                .unwrap(),
+            converter.try_convert(&operation).await.unwrap(),
             vec![],
             "Initial operation delivery produces outgoing message"
         );
         assert_eq!(
-            converter
-                .parse_json_custom_operation_topic(&redelivery)
-                .await
-                .unwrap(),
+            converter.try_convert(&operation).await.unwrap(),
             vec![],
             "Operation redelivery is ignored by converter"
         );
@@ -2593,13 +2598,17 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn custom_operations_are_not_deduplicated_before_registration() {
+        // We could potentially receive a custom operation before we have
+        // registered a handler for it. If we then register a suitable handler
+        // and the operation is redelivered to the mapper, this should be
+        // processed
         let tmp_dir = TempTedgeDir::new();
         let custom_op = r#"exec.topic = "my/custom/topic"
         exec.on_fragment = "my_op"
         exec.command = "/etc/tedge/operations/command ${.payload.my_op.text}""#;
         let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
         f.with_raw_content(custom_op);
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
         let before_registration = SupportedOperations {
             device_id: converter.supported_operations.device_id.clone(),
             base_ops_dir: converter.supported_operations.base_ops_dir.clone(),
@@ -2608,17 +2617,11 @@ pub(crate) mod tests {
         let after_registration =
             std::mem::replace(&mut converter.supported_operations, before_registration);
 
-        let original = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
-            {"delivery":{"log":[],"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
-        ).to_string());
-        let redelivery = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
-            {"delivery":{"log":[{"time":"2025-03-05T08:49:24.986Z","status":"PENDING"},{"time":"2025-03-05T08:49:25.000Z","status":"SEND"},{"time":"2025-03-05T08:49:25.162Z","status":"DELIVERED"}],"time":"2025-03-05T08:49:25.707Z","status":"PENDING"},"agentId":"1916574062","creationTime":"2025-03-05T08:49:24.967Z","deviceId":"1916574062","id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        let operation = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
+            {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
         ).to_string());
         assert_eq!(
-            converter
-                .parse_json_custom_operation_topic(&original)
-                .await
-                .unwrap(),
+            converter.try_convert(&operation).await.unwrap(),
             vec![],
             "Operation is ignored before the operation is registered"
         );
@@ -2626,19 +2629,89 @@ pub(crate) mod tests {
         converter.supported_operations = after_registration;
 
         assert_ne!(
-            converter
-                .parse_json_custom_operation_topic(&redelivery)
-                .await
-                .unwrap(),
+            converter.try_convert(&operation).await.unwrap(),
             vec![],
             "First delivery after registration produces outgoing message"
         );
     }
 
     #[tokio::test]
+    async fn custom_operation_ids_are_not_cached_indefinitely() {
+        let tmp_dir = TempTedgeDir::new();
+        let custom_op = r#"exec.topic = "my/custom/topic"
+        exec.on_fragment = "my_op"
+        exec.command = "/etc/tedge/operations/command ${.payload.my_op.text}""#;
+        let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
+        f.with_raw_content(custom_op);
+
+        let start_time = Instant::now();
+
+        let (clock, update_time) = ManuallyDrivenClock::new(start_time);
+        let (mut converter, _http_proxy) =
+            create_c8y_converter_with_clock(&tmp_dir, Box::new(clock));
+
+        let operation = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
+            {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+
+        assert_ne!(
+            converter.try_convert(&operation).await.unwrap(),
+            vec![],
+            "First delivery after registration produces outgoing message"
+        );
+
+        assert_eq!(converter.active_commands.len(), 1);
+        update_time
+            .send(start_time + Duration::from_secs(24 * 3600))
+            .unwrap();
+
+        let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
+
+        // Trigger the converter since it performs cache eviction only when it's converting c8y messages
+        converter.try_convert(&random_message).await.unwrap();
+        assert_eq!(converter.active_commands.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn custom_operation_ids_are_not_evicted_from_cache_prematurely() {
+        let tmp_dir = TempTedgeDir::new();
+        let custom_op = r#"exec.topic = "my/custom/topic"
+        exec.on_fragment = "my_op"
+        exec.command = "/etc/tedge/operations/command ${.payload.my_op.text}""#;
+        let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
+        f.with_raw_content(custom_op);
+
+        let start_time = Instant::now();
+
+        let (clock, update_time) = ManuallyDrivenClock::new(start_time);
+        let (mut converter, _http_proxy) =
+            create_c8y_converter_with_clock(&tmp_dir, Box::new(clock));
+
+        let operation = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
+            {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+
+        assert_ne!(
+            converter.try_convert(&operation).await.unwrap(),
+            vec![],
+            "First delivery after registration produces outgoing message"
+        );
+
+        assert_eq!(converter.active_commands.len(), 1);
+        // After a minute, the operation id should still exist
+        update_time
+            .send(start_time + Duration::from_secs(60))
+            .unwrap();
+
+        let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
+        converter.try_convert(&random_message).await.unwrap();
+        assert_eq!(converter.active_commands.len(), 1);
+    }
+
+    #[tokio::test]
     async fn handle_operations_for_child_device() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         // The child has first to declare its capabilities
         let mqtt_schema = MqttSchema::default();
@@ -2740,7 +2813,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn default_device_name_from_external_id(external_id: &str, device_name: &str) {
         let tmp_dir = TempTedgeDir::new();
-        let (converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         assert_eq!(
             converter.default_device_name_from_external_id(&external_id.into()),
@@ -2751,7 +2824,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn duplicate_registration_messages_not_mapped_2311() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         let in_topic = "te/device/main/service/my_measurement_service";
         register_source_entities(in_topic, &mut converter).await;
@@ -2775,7 +2848,7 @@ pub(crate) mod tests {
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
         config.service = tedge_config.service.clone();
 
-        let (mut converter, _) = create_c8y_converter_from_config(config);
+        let (mut converter, _) = create_c8y_converter_from_config(config, Box::new(SystemClock));
 
         let service_health_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/service1/status/health"),
@@ -2813,7 +2886,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn operations_not_supported_for_services(op_type: &str) {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
         // Register main device service
         let _ = converter
@@ -2898,7 +2971,8 @@ pub(crate) mod tests {
         config.enable_auto_register = false;
         config.bridge_config.c8y_prefix = "custom-c8y-prefix".try_into().unwrap();
 
-        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+        let (mut converter, _http_proxy) =
+            create_c8y_converter_from_config(config, Box::new(SystemClock));
 
         // Publish some measurements that are only cached and not converted
         for i in 0..3 {
@@ -2981,7 +3055,8 @@ pub(crate) mod tests {
         let mut config = c8y_converter_config(&tmp_dir);
         config.enable_auto_register = false;
 
-        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+        let (mut converter, _http_proxy) =
+            create_c8y_converter_from_config(config, Box::new(SystemClock));
 
         // Publish great-grand-child registration before grand-child and child
         let reg_message = MqttMessage::new(
@@ -3098,7 +3173,8 @@ pub(crate) mod tests {
         let mut config = c8y_converter_config(&tmp_dir);
         config.enable_auto_register = false;
 
-        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+        let (mut converter, _http_proxy) =
+            create_c8y_converter_from_config(config, Box::new(SystemClock));
 
         // main device command
         let main_device = converter.device_topic_id.clone();
@@ -3191,11 +3267,19 @@ pub(crate) mod tests {
         messages
     }
 
-    pub(crate) async fn create_c8y_converter(
+    pub(crate) fn create_c8y_converter(
         tmp_dir: &TempTedgeDir,
     ) -> (CumulocityConverter, FakeServerBox<HttpRequest, HttpResult>) {
         let config = c8y_converter_config(tmp_dir);
-        create_c8y_converter_from_config(config)
+        create_c8y_converter_from_config(config, Box::new(SystemClock))
+    }
+
+    pub(crate) fn create_c8y_converter_with_clock(
+        tmp_dir: &TempTedgeDir,
+        clock: Box<dyn MonotonicClock>,
+    ) -> (CumulocityConverter, FakeServerBox<HttpRequest, HttpResult>) {
+        let config = c8y_converter_config(tmp_dir);
+        create_c8y_converter_from_config(config, clock)
     }
 
     fn c8y_converter_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
@@ -3256,6 +3340,7 @@ pub(crate) mod tests {
 
     fn create_c8y_converter_from_config(
         config: C8yMapperConfig,
+        clock: Box<dyn MonotonicClock>,
     ) -> (CumulocityConverter, FakeServerBox<HttpRequest, HttpResult>) {
         let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
             SimpleMessageBoxBuilder::new("MQTT", 5);
@@ -3273,9 +3358,15 @@ pub(crate) mod tests {
             FakeServerBox::builder();
         let downloader = ClientMessageBox::new(&mut downloader_builder);
 
-        let converter =
-            CumulocityConverter::new(config, mqtt_publisher, http_proxy, uploader, downloader)
-                .unwrap();
+        let converter = CumulocityConverter::new(
+            config,
+            mqtt_publisher,
+            http_proxy,
+            uploader,
+            downloader,
+            clock,
+        )
+        .unwrap();
 
         (converter, http_builder.build())
     }
