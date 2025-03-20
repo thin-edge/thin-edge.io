@@ -19,19 +19,16 @@ nix = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 rustls = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
 tedge_utils = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
-url = { workspace = true }
 
 [dev-dependencies]
 axum = { workspace = true }
 axum_tls = { workspace = true }
 mockito = { workspace = true }
 rcgen = { workspace = true }
-regex = { workspace = true }
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 

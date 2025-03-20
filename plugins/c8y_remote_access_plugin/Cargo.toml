@@ -15,7 +15,6 @@ async-tungstenite = { workspace = true }
 base64 = { workspace = true }
 c8y_api = { workspace = true }
 camino = { workspace = true }
-certificate = { workspace = true }
 clap = { workspace = true }
 csv = { workspace = true }
 futures = { workspace = true }
@@ -36,7 +35,6 @@ tokio = { workspace = true, features = [
     "time",
     "process",
 ] }
-toml = { workspace = true }
 url = { workspace = true }
 ws_stream_tungstenite = { workspace = true }
 

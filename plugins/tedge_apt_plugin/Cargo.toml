@@ -10,7 +10,6 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-camino = { workspace = true }
 clap = { workspace = true }
 csv = { workspace = true }
 regex = { workspace = true }
@@ -20,8 +19,6 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-anyhow = { workspace = true }
-tedge_utils = { workspace = true }
 test-case = { workspace = true }
 
 [lints]

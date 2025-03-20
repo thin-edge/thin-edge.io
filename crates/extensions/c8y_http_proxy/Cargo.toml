@@ -11,21 +11,13 @@ repository = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true }
-base64 = { workspace = true }
 c8y_api = { workspace = true }
-certificate = { workspace = true, features = ["reqwest"] }
-download = { workspace = true }
 http = { workspace = true }
-hyper = { workspace = true }
-log = { workspace = true }
-mqtt_channel = { workspace = true }
 reqwest = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_config = { workspace = true }
 tedge_http_ext = { workspace = true }
-tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["macros"] }

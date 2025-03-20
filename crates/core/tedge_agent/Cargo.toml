@@ -23,7 +23,6 @@ futures = { workspace = true }
 http-body = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true, features = ["full"] }
-lazy_static = { workspace = true }
 log = { workspace = true }
 path-clean = { workspace = true }
 plugin_sm = { workspace = true }
@@ -51,17 +50,14 @@ tokio = { workspace = true, features = ["rt-multi-thread"] }
 tokio-util = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true }
-which = { workspace = true }
 
 [dev-dependencies]
 assert-json-diff = { workspace = true }
 axum_tls = { workspace = true, features = ["test-helpers"] }
-bytes = { workspace = true }
 http-body = { workspace = true }
 proptest = { workspace = true }
 rcgen = { workspace = true }
 ron = { workspace = true }
-rustls-pemfile = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }

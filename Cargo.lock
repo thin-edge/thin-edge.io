@@ -352,10 +352,8 @@ version = "1.4.2"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
- "async-trait",
  "clock",
  "log",
- "rand",
  "serde",
  "serde_json",
  "tedge_actors",
@@ -365,7 +363,6 @@ dependencies = [
  "tedge_utils",
  "thiserror 1.0.61",
  "time",
- "tokio",
 ]
 
 [[package]]
@@ -565,10 +562,8 @@ version = "1.4.2"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
- "async-trait",
  "clock",
  "log",
- "rand",
  "serde",
  "serde_json",
  "tedge_actors",
@@ -578,7 +573,6 @@ dependencies = [
  "test-case",
  "thiserror 1.0.61",
  "time",
- "tokio",
 ]
 
 [[package]]
@@ -729,7 +723,6 @@ name = "c8y-firmware-plugin"
 version = "1.4.2"
 dependencies = [
  "anyhow",
- "c8y_api",
  "c8y_firmware_manager",
  "clap",
  "tedge_actors",
@@ -739,7 +732,6 @@ dependencies = [
  "tedge_health_ext",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
- "tokio",
  "tracing",
 ]
 
@@ -752,7 +744,6 @@ dependencies = [
  "base64 0.13.1",
  "c8y_api",
  "camino",
- "certificate",
  "clap",
  "csv",
  "futures",
@@ -768,7 +759,6 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.61",
  "tokio",
- "toml 0.8.8",
  "url",
  "ws_stream_tungstenite 0.14.0",
 ]
@@ -782,10 +772,8 @@ dependencies = [
  "assert_matches",
  "base64 0.13.1",
  "camino",
- "clock",
  "csv",
  "download",
- "futures",
  "maplit",
  "mqtt_channel",
  "reqwest",
@@ -793,8 +781,6 @@ dependencies = [
  "serde_json",
  "tedge_api",
  "tedge_config",
- "tedge_utils",
- "tempfile",
  "test-case",
  "thiserror 1.0.61",
  "time",
@@ -845,7 +831,6 @@ dependencies = [
  "c8y_api",
  "camino",
  "log",
- "mockall",
  "nanoid",
  "serde",
  "serde_json",
@@ -866,16 +851,9 @@ name = "c8y_http_proxy"
 version = "1.4.2"
 dependencies = [
  "anyhow",
- "async-trait",
- "base64 0.13.1",
  "c8y_api",
- "certificate",
- "download",
  "http 1.2.0",
- "hyper 1.6.0",
- "log",
  "mockito",
- "mqtt_channel",
  "reqwest",
  "serde",
  "serde_json",
@@ -883,7 +861,6 @@ dependencies = [
  "tedge_config",
  "tedge_http_ext",
  "tedge_test_utils",
- "tedge_utils",
  "thiserror 1.0.61",
  "time",
  "tokio",
@@ -906,7 +883,6 @@ dependencies = [
  "mockito",
  "plugin_sm",
  "proptest",
- "rand",
  "serde",
  "serde_json",
  "tedge_actors",
@@ -1408,17 +1384,14 @@ dependencies = [
  "mockito",
  "nix",
  "rcgen",
- "regex",
  "reqwest",
  "rustls 0.23.22",
  "serde",
- "serde_json",
  "tedge_utils",
  "tempfile",
  "test-case",
  "thiserror 1.0.61",
  "tokio",
- "url",
 ]
 
 [[package]]
@@ -4147,7 +4120,6 @@ dependencies = [
  "axum 0.8.1",
  "axum-server",
  "axum_tls",
- "bytes",
  "camino",
  "certificate",
  "clap",
@@ -4156,7 +4128,6 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.6.0",
- "lazy_static",
  "log",
  "path-clean",
  "plugin_sm",
@@ -4165,7 +4136,6 @@ dependencies = [
  "reqwest",
  "ron 0.8.1",
  "rustls 0.23.22",
- "rustls-pemfile 2.2.0",
  "serde",
  "serde_json",
  "sha256",
@@ -4192,21 +4162,17 @@ dependencies = [
  "toml 0.8.8",
  "tower 0.4.13",
  "tracing",
- "which",
 ]
 
 [[package]]
 name = "tedge-apt-plugin"
 version = "1.4.2"
 dependencies = [
- "anyhow",
- "camino",
  "clap",
  "csv",
  "regex",
  "serde",
  "tedge_config",
- "tedge_utils",
  "test-case",
  "thiserror 1.0.61",
  "tracing",
@@ -4223,14 +4189,12 @@ dependencies = [
  "batcher",
  "c8y_api",
  "c8y_auth_proxy",
- "c8y_http_proxy",
  "c8y_mapper_ext",
  "clap",
  "clock",
  "collectd_ext",
  "flockfile",
  "mqtt_channel",
- "reqwest",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
@@ -4243,8 +4207,6 @@ dependencies = [
  "tedge_signal_ext",
  "tedge_timer_ext",
  "tedge_uploader_ext",
- "tedge_utils",
- "tokio",
  "tracing",
 ]
 
@@ -4275,12 +4237,10 @@ dependencies = [
  "anyhow",
  "camino",
  "clap",
- "nix",
  "path-clean",
  "tedge_config",
  "tedge_utils",
  "tempfile",
- "tracing",
  "uzers",
  "which",
 ]
@@ -4348,7 +4308,6 @@ dependencies = [
  "rustls 0.23.22",
  "serde",
  "serde_ignored",
- "serde_json",
  "strum",
  "strum_macros",
  "tedge_config_macros",
@@ -4419,7 +4378,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "camino",
- "http 1.2.0",
  "log",
  "serde",
  "serde_json",
@@ -4445,7 +4403,6 @@ name = "tedge_downloader_ext"
 version = "1.4.2"
 dependencies = [
  "async-trait",
- "camino",
  "certificate",
  "download",
  "log",
@@ -4455,7 +4412,6 @@ dependencies = [
  "tedge_test_utils",
  "tedge_utils",
  "tokio",
- "uzers",
 ]
 
 [[package]]
@@ -4477,14 +4433,12 @@ version = "1.4.2"
 dependencies = [
  "anyhow",
  "async-trait",
- "log",
  "serde",
  "serde_json",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
  "tedge_mqtt_ext",
- "thiserror 1.0.61",
  "tokio",
 ]
 
@@ -4493,7 +4447,6 @@ name = "tedge_http_ext"
 version = "1.4.2"
 dependencies = [
  "async-trait",
- "futures",
  "http 1.2.0",
  "http-body-util",
  "hyper 1.6.0",
@@ -4513,7 +4466,6 @@ name = "tedge_log_manager"
 version = "1.4.2"
 dependencies = [
  "anyhow",
- "assert-json-diff",
  "async-trait",
  "camino",
  "easy_reader",
@@ -4631,7 +4583,6 @@ dependencies = [
  "reqwest",
  "tedge_actors",
  "tedge_test_utils",
- "tedge_utils",
  "tokio",
  "upload",
 ]

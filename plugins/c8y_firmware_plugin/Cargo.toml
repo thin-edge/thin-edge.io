@@ -11,7 +11,6 @@ repository = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-c8y_api = { workspace = true }
 c8y_firmware_manager = { workspace = true }
 clap = { workspace = true }
 tedge_actors = { workspace = true }
@@ -21,7 +20,6 @@ tedge_downloader_ext = { workspace = true }
 tedge_health_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 tedge_signal_ext = { workspace = true }
-tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 tracing = { workspace = true }
 
 [lints]
