@@ -2584,9 +2584,11 @@ pub(crate) mod tests {
         let operation = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
             {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
         ).to_string());
-        assert_ne!(
-            converter.try_convert(&operation).await.unwrap(),
-            vec![],
+        assert!(
+            matches!(
+                dbg!(converter.try_convert(&operation).await.unwrap().as_slice()),
+                [MqttMessage { topic, .. }, ..] if topic.to_string() == "c8y/s/us"
+            ),
             "Initial operation delivery produces outgoing message"
         );
         assert_eq!(
@@ -2628,9 +2630,11 @@ pub(crate) mod tests {
 
         converter.supported_operations = after_registration;
 
-        assert_ne!(
-            converter.try_convert(&operation).await.unwrap(),
-            vec![],
+        assert!(
+            matches!(
+                dbg!(converter.try_convert(&operation).await.unwrap().as_slice()),
+                [MqttMessage { topic, .. }, ..] if topic.to_string() == "c8y/s/us"
+            ),
             "First delivery after registration produces outgoing message"
         );
     }
@@ -2654,9 +2658,11 @@ pub(crate) mod tests {
             {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
         ).to_string());
 
-        assert_ne!(
-            converter.try_convert(&operation).await.unwrap(),
-            vec![],
+        assert!(
+            matches!(
+                dbg!(converter.try_convert(&operation).await.unwrap().as_slice()),
+                [MqttMessage { topic, .. }, ..] if topic.to_string() == "c8y/s/us"
+            ),
             "First delivery after registration produces outgoing message"
         );
 
@@ -2691,9 +2697,11 @@ pub(crate) mod tests {
             {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
         ).to_string());
 
-        assert_ne!(
-            converter.try_convert(&operation).await.unwrap(),
-            vec![],
+        assert!(
+            matches!(
+                dbg!(converter.try_convert(&operation).await.unwrap().as_slice()),
+                [MqttMessage { topic, .. }, ..] if topic.to_string() == "c8y/s/us"
+            ),
             "First delivery after registration produces outgoing message"
         );
 
