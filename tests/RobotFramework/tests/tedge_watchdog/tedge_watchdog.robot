@@ -130,7 +130,7 @@ Custom Setup
 Custom Teardown
     Execute Command    rm /setup/health_check_respond.sh
     Execute Command    mv /lib/systemd/system/tedge-agent.service.bak /lib/systemd/system/tedge-agent.service
-    Get Logs
+    Get Suite Logs
 
 Set Service health check response
     [Arguments]    ${respond}

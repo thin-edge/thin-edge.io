@@ -136,4 +136,4 @@ Custom Setup
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
 Custom Teardown
-    Get Logs
+    Get Suite Logs

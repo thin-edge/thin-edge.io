@@ -79,7 +79,7 @@ Custom Setup
     Execute Command    sudo rm -rf /var/log/tedge
 
 Custom Teardown
-    Get Logs
+    Get Suite Logs
 
 Check Owner of Directory
     [Arguments]    ${directory_path}    ${expected_owner}

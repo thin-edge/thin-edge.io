@@ -29,5 +29,5 @@ Custom Setup
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
 Custom Teardown
-    Get Logs
+    Get Suite Logs
     Execute Command    sudo tedge config unset c8y.topics

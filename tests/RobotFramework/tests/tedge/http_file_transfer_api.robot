@@ -54,4 +54,4 @@ Custom Setup
 Custom Teardown
     Set Device Context    ${DEVICE_SN}
     Execute Command    sudo rm -rf /var/tedge/file-transfer
-    Get Logs
+    Get Suite Logs
