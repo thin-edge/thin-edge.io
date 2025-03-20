@@ -294,7 +294,7 @@ impl Default for NewCertificateConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::Engine as _;
+    use base64::prelude::*;
     use std::error::Error;
     use time::macros::datetime;
     use x509_parser::der_parser::asn1_rs::FromDer;
@@ -498,7 +498,7 @@ mod tests {
         let footer_len = "-----END CERTIFICATE-----".len();
 
         // just decode the key contents
-        let b64_bytes = base64::engine::general_purpose::STANDARD
+        let b64_bytes = BASE64_STANDARD
             .decode(&cert_cont[header_len..cert_cont.len() - footer_len])
             .unwrap();
         let expected_thumbprint = format!("{:x}", sha1::Sha1::digest(b64_bytes));

@@ -324,7 +324,8 @@ async fn proxy(
     let client_config = config.cloud_client_tls_config();
 
     let proxy =
-        WebsocketSocketProxy::connect(&url, command.target_address(), auth, client_config).await?;
+        WebsocketSocketProxy::connect(&url, command.target_address(), auth, Some(client_config))
+            .await?;
 
     proxy.run().await;
     Ok(())

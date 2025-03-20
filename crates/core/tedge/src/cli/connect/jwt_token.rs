@@ -2,6 +2,7 @@ use crate::cli::connect::ConnectError;
 use crate::cli::connect::CONNECTION_TIMEOUT;
 use crate::cli::connect::RESPONSE_TIMEOUT;
 use anyhow::anyhow;
+use base64::prelude::*;
 use rumqttc::Event;
 use rumqttc::Incoming;
 use rumqttc::Outgoing;
@@ -115,10 +116,14 @@ pub(crate) fn decode_jwt_token(token: &str) -> Result<String, ConnectError> {
             reason: "JWT token format must be <header>.<payload>.<signature>.".to_string(),
         })?;
 
-    let decoded = base64::decode(payload).map_err(|_| ConnectError::InvalidJWTToken {
-        token: token.to_string(),
-        reason: "Cannot decode the payload of JWT token by Base64.".to_string(),
-    })?;
+    let decoded =
+        BASE64_URL_SAFE_NO_PAD
+            .decode(payload)
+            .map_err(|_| ConnectError::InvalidJWTToken {
+                token: token.to_string(),
+                reason: "Cannot decode the payload of JWT token by Base64 without padding."
+                    .to_string(),
+            })?;
 
     let json: serde_json::Value =
         serde_json::from_slice(decoded.as_slice()).map_err(|_| ConnectError::InvalidJWTToken {
@@ -146,10 +151,20 @@ mod test {
         assert_eq!(decode_jwt_token(token).unwrap(), expected_url.to_string());
     }
 
+    #[test]
+    fn check_decode_jwt_token_missing_base64_padding() {
+        // JWTs don't pad base64-encoded strings to make them more compact. This
+        // JWT has a 215 byte payload, so if our parsing disallows non-padded
+        // input (base64 that isn't a multiple of 4 bytes long), we will fail on this valid JWT
+        let token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJ0ZXN0LmN1bXVsb2NpdHkuY29tIiwiaWF0IjoxNzQyMjI3NjY4LCJleHAiOjE3NDIyMzEyNjgsImF1ZCI6InRlc3QuY3VtdWxvY2l0eS5jb20iLCJzdWIiOiJkZXZpY2VfdGVzdDAwNSIsIm5iZiI6IjE3NDIyMjc2NjgiLCJ0Y2kiOiJkZXZpY2VfdG9rZW5fY29uZmlnIn0.JgoTORxZk8LN51e9-gHzfpr59JlaIT5oHFXuGQxP2zY";
+        let expected_url = "test.cumulocity.com";
+        assert_eq!(decode_jwt_token(token).unwrap(), expected_url.to_string());
+    }
+
     #[test_case(
-    "dGVzdC5jdW11bG9jaXR5LmNvbQ==",
+    "dGVzdC5jdW11bG9jaXR5LmNvbQ",
     "The JWT token received from Cumulocity is invalid.\n\
-    Token: dGVzdC5jdW11bG9jaXR5LmNvbQ==\n\
+    Token: dGVzdC5jdW11bG9jaXR5LmNvbQ\n\
     Reason: JWT token format must be <header>.<payload>.<signature>."
     ; "not jwt token"
     )]
@@ -157,20 +172,27 @@ mod test {
     "aaa.bbb.ccc",
     "The JWT token received from Cumulocity is invalid.\n\
     Token: aaa.bbb.ccc\n\
-    Reason: Cannot decode the payload of JWT token by Base64."
+    Reason: Cannot decode the payload of JWT token by Base64 without padding."
     ; "payload is not base64 encoded"
     )]
     #[test_case(
-    "aaa.dGVzdC5jdW11bG9jaXR5LmNvbQ==.ccc",
+    "aaa.eyJpc3MiOiJ0ZXN0LmN1bXVsb2NpdHkuY29tIn0=.ccc",
     "The JWT token received from Cumulocity is invalid.\n\
-    Token: aaa.dGVzdC5jdW11bG9jaXR5LmNvbQ==.ccc\n\
+    Token: aaa.eyJpc3MiOiJ0ZXN0LmN1bXVsb2NpdHkuY29tIn0=.ccc\n\
+    Reason: Cannot decode the payload of JWT token by Base64 without padding."
+    ; "payload has base64 padding"
+    )]
+    #[test_case(
+    "aaa.dGVzdC5jdW11bG9jaXR5LmNvbQ.ccc",
+    "The JWT token received from Cumulocity is invalid.\n\
+    Token: aaa.dGVzdC5jdW11bG9jaXR5LmNvbQ.ccc\n\
     Reason: The payload of JWT token is not JSON."
     ; "payload is not json"
     )]
     #[test_case(
-    "aaa.eyJqdGkiOm51bGwsImF1ZCI6InRlc3QuY3VtdWxvY2l0eS5jb20iLCJzdWIiOiJkZXZpY2VfdGVzdDAwMDUiLCJ0Y2kiOiJkZXZpY2VfdG9rZW5fY29uZmlnIiwiaWF0IjoxNjM4NDQyOTk3LCJuYmYiOjE2Mzg0NDI5OTcsImV4cCI6MTYzODQ0NjU5NywidGZhIjpmYWxzZSwidGVuIjoidDMxNzA0OCIsInhzcmZUb2tlbiI6IktzZUFVRkFMYXVpSmVkUU1HZnNGIn0=.ccc",
+    "aaa.eyJqdGkiOm51bGwsImF1ZCI6InRlc3QuY3VtdWxvY2l0eS5jb20iLCJzdWIiOiJkZXZpY2VfdGVzdDAwMDUiLCJ0Y2kiOiJkZXZpY2VfdG9rZW5fY29uZmlnIiwiaWF0IjoxNjM4NDQyOTk3LCJuYmYiOjE2Mzg0NDI5OTcsImV4cCI6MTYzODQ0NjU5NywidGZhIjpmYWxzZSwidGVuIjoidDMxNzA0OCIsInhzcmZUb2tlbiI6IktzZUFVRkFMYXVpSmVkUU1HZnNGIn0.ccc",
     "The JWT token received from Cumulocity is invalid.\n\
-    Token: aaa.eyJqdGkiOm51bGwsImF1ZCI6InRlc3QuY3VtdWxvY2l0eS5jb20iLCJzdWIiOiJkZXZpY2VfdGVzdDAwMDUiLCJ0Y2kiOiJkZXZpY2VfdG9rZW5fY29uZmlnIiwiaWF0IjoxNjM4NDQyOTk3LCJuYmYiOjE2Mzg0NDI5OTcsImV4cCI6MTYzODQ0NjU5NywidGZhIjpmYWxzZSwidGVuIjoidDMxNzA0OCIsInhzcmZUb2tlbiI6IktzZUFVRkFMYXVpSmVkUU1HZnNGIn0=.ccc\n\
+    Token: aaa.eyJqdGkiOm51bGwsImF1ZCI6InRlc3QuY3VtdWxvY2l0eS5jb20iLCJzdWIiOiJkZXZpY2VfdGVzdDAwMDUiLCJ0Y2kiOiJkZXZpY2VfdG9rZW5fY29uZmlnIiwiaWF0IjoxNjM4NDQyOTk3LCJuYmYiOjE2Mzg0NDI5OTcsImV4cCI6MTYzODQ0NjU5NywidGZhIjpmYWxzZSwidGVuIjoidDMxNzA0OCIsInhzcmZUb2tlbiI6IktzZUFVRkFMYXVpSmVkUU1HZnNGIn0.ccc\n\
     Reason: The JSON decoded from JWT token doesn't contain 'iss' field."
     ; "payload is json but not contains iss field"
     )]

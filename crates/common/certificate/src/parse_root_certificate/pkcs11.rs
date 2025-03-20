@@ -6,7 +6,7 @@
 
 use anyhow::Context;
 use asn1_rs::ToDer;
-use base64::Engine;
+use base64::prelude::*;
 use cryptoki::context::CInitializeArgs;
 use cryptoki::context::Pkcs11;
 use cryptoki::mechanism::Mechanism;
@@ -359,7 +359,6 @@ fn get_key_type(pkcs11: PKCS11) -> anyhow::Result<KeyType> {
 }
 
 fn format_asn1_ecdsa_signature(r_bytes: &[u8], s_bytes: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
-    use base64::prelude::BASE64_STANDARD_NO_PAD;
     let mut writer = Vec::new();
 
     write_asn1_integer(&mut writer, r_bytes);

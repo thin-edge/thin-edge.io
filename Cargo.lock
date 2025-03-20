@@ -741,7 +741,9 @@ version = "1.4.2"
 dependencies = [
  "async-compat",
  "async-tungstenite 0.28.0",
- "base64 0.13.1",
+ "axum 0.8.1",
+ "base64 0.22.1",
+ "bytes",
  "c8y_api",
  "camino",
  "clap",
@@ -754,6 +756,7 @@ dependencies = [
  "rstest",
  "rustls 0.23.22",
  "serde",
+ "sha1",
  "tedge_config",
  "tedge_utils",
  "tempfile",
@@ -770,7 +773,7 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "assert_matches",
- "base64 0.13.1",
+ "base64 0.22.1",
  "camino",
  "csv",
  "download",
@@ -945,7 +948,7 @@ dependencies = [
  "rustls 0.23.22",
  "rustls-native-certs",
  "rustls-pemfile 2.2.0",
- "sha-1",
+ "sha1",
  "tempfile",
  "thiserror 1.0.61",
  "time",
@@ -3792,17 +3795,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha-1"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5058ada175748e33390e40e872bd0fe59a19f265d0158daa551c5a88a76009c"
-dependencies = [
- "cfg-if",
- "cpufeatures",
- "digest",
-]
-
-[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4062,7 +4054,7 @@ dependencies = [
  "assert_cmd",
  "assert_matches",
  "async-trait",
- "base64 0.13.1",
+ "base64 0.22.1",
  "c8y-firmware-plugin",
  "c8y-remote-access-plugin",
  "c8y_api",

@@ -2,6 +2,7 @@ use crate::proxy_url::Protocol;
 use crate::proxy_url::ProxyUrlGenerator;
 use crate::smartrest::error::SmartRestDeserializerError;
 use crate::smartrest::smartrest_deserializer::SmartRestJwtResponse;
+use base64::prelude::*;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use mqtt_channel::Connection;
@@ -301,7 +302,11 @@ impl C8yAuthRetriever {
             Self::Basic { credentials_path } => {
                 debug!("Using basic authentication.");
                 let (username, password) = read_c8y_credentials(credentials_path)?;
-                format!("Basic {}", base64::encode(format!("{username}:{password}"))).parse()?
+                format!(
+                    "Basic {}",
+                    BASE64_STANDARD.encode(format!("{username}:{password}"))
+                )
+                .parse()?
             }
             Self::Jwt {
                 mqtt_config,
