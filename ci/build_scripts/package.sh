@@ -119,6 +119,7 @@ fi
 
 if [ -z "$PACKAGE_TYPES" ]; then
     case "$TARGET" in
+        *android*) PACKAGE_TYPES="tarball" ;;
         *linux*|all) PACKAGE_TYPES="deb,apk,rpm,tarball" ;;
         *apple*) PACKAGE_TYPES="tarball" ;;
         *) PACKAGE_TYPES="tarball" ;;
@@ -210,10 +211,10 @@ get_package_arch() {
     # which uses the GOARCH to abstract across the different
     # arch names used in different linux packages (e.g. deb != rpm != apk)
     case "$1" in
-        x86_64-unknown-linux-*) pkg_arch=amd64 ;;
-        i686-unknown-linux-*) pkg_arch=386 ;;
-        aarch64-unknown-linux-*) pkg_arch=arm64 ;;
-        armv7-unknown-linux-*eabihf) pkg_arch=arm7 ;;
+        x86_64-unknown-linux-*|x86_64-linux-android) pkg_arch=amd64 ;;
+        i686-unknown-linux-*|i686-linux-android) pkg_arch=386 ;;
+        aarch64-unknown-linux-*|aarch64-linux-android) pkg_arch=arm64 ;;
+        armv7-unknown-linux-*eabihf|armv7-linux-androideabi) pkg_arch=arm7 ;;
         arm-unknown-linux-*eabihf) pkg_arch=arm6 ;;
         arm-unknown-linux-*eabi) pkg_arch=arm6 ;;
         armv5te-unknown-linux-*eabi) pkg_arch=arm5 ;;
