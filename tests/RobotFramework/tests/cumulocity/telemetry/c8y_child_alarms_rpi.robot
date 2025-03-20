@@ -4,7 +4,7 @@ Library             ThinEdgeIO
 Library             Cumulocity
 
 Suite Setup         Custom Setup
-Suite Teardown      Get Logs
+Suite Teardown      Get Suite Logs
 
 Test Tags           theme:telemetry    theme:childdevices
 

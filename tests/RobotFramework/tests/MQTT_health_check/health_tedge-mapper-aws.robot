@@ -3,7 +3,7 @@ Resource            ../../resources/common.resource
 Library             ThinEdgeIO
 
 Suite Setup         Setup
-Suite Teardown      Get Logs
+Suite Teardown      Get Suite Logs
 
 Test Tags           theme:monitoring    theme:az
 

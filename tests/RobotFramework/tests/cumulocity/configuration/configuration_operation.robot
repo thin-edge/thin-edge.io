@@ -5,7 +5,7 @@ Library             ThinEdgeIO
 Library             Cumulocity
 
 Suite Setup         Suite Setup
-Suite Teardown      Get Logs    name=${PARENT_SN}
+Suite Teardown      Get Suite Logs    name=${PARENT_SN}
 Test Setup          Test Setup
 
 Test Tags           theme:configuration    theme:childdevices

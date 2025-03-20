@@ -4,7 +4,7 @@ Library             OperatingSystem
 Library             String
 Library             ThinEdgeIO
 
-Suite Teardown      Get Logs
+Suite Teardown      Get Suite Logs
 Test Setup          Setup    skip_bootstrap=True
 
 Test Tags           theme:mqtt

@@ -159,6 +159,26 @@ class ThinEdgeIO(DeviceLibrary):
             "dpkg --print-architecture", strip=True, stdout=True, stderr=False
         )
 
+    @keyword("Get Suite Logs")
+    def get_suite_logs(
+            self, name: str = None, show=True
+    ):
+        """Get device logs from the start of the suite.
+
+        See 'Get Logs' Keyword for the full details.
+
+        Args:
+            name (str, optional): Device name to get logs for. Defaults to None.
+            show (boolean, optional): Show/Display the log entries
+
+        Returns:
+            List[str]: List of log lines
+
+        *Example:*
+        | `Suite Teardown` | Get Suite Logs | name=${PARENT_SN} |
+        """
+        self.get_logs(name=name, date_from=self.suite_start_time, show=show)
+
     @keyword("Get Logs")
     def get_logs(
             self, name: str = None, date_from: Union[datetime, float] = None, show=True

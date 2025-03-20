@@ -8,7 +8,7 @@ Library             String
 Library             ThinEdgeIO
 Library             Cumulocity
 
-Suite Teardown      Get Logs
+Suite Teardown      Get Suite Logs
 
 
 *** Variables ***

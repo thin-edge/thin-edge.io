@@ -3,8 +3,8 @@ Resource            ../../resources/common.resource
 Library             ThinEdgeIO
 Library             Cumulocity
 
-Suite Setup         Custom Setup
-Suite Teardown      Custom Teardown
+Test Setup          Custom Setup
+Test Teardown       Custom Teardown
 
 Test Tags           theme:mqtt    theme:c8y    adapter:docker
 
@@ -53,7 +53,7 @@ Custom Setup
     # Container 1 running mqtt host and mapper
     ${CONTAINER_1}=    Setup    skip_bootstrap=${True}
     Execute Command    ./bootstrap.sh --no-connect --bootstrap --no-secure
-    Set Suite Variable    $CONTAINER_1
+    Set Test Variable    $CONTAINER_1
     ${CONTAINER_1_IP}=    Get IP Address
     Disconnect Mapper    c8y
     Execute Command    sudo tedge config set mqtt.client.host ${CONTAINER_1_IP}
@@ -72,7 +72,7 @@ Custom Setup
     # container 2 running all other services
     ${CONTAINER_2}=    Setup    skip_bootstrap=${True}
     Execute Command    ./bootstrap.sh --no-connect --no-bootstrap --no-secure
-    Set Suite Variable    $CONTAINER_2
+    Set Test Variable    $CONTAINER_2
 
     # Stop services that don't need to be running on the second device
     Stop Service    mosquitto

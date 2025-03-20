@@ -30,5 +30,5 @@ Custom Setup
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-az
 
 Custom Teardown
-    Get Logs
+    Get Suite Logs
     Execute Command    sudo tedge config unset az.topics

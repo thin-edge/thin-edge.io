@@ -11,8 +11,8 @@ Library             JSONLibrary
 Library             ThinEdgeIO
 Library             Cumulocity
 
-Suite Setup         Custom Setup
-Suite Teardown      Get Logs    name=${PARENT_SN}
+Test Setup          Custom Setup
+Test Teardown       Get Logs    name=${PARENT_SN}
 
 Test Tags           theme:tedge_agent
 

@@ -22,7 +22,7 @@ Resource            ../resources/common.resource
 Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
-Suite Teardown      Get Logs
+Suite Teardown      Get Suite Logs
 Test Teardown       Remove temporary test directories
 
 Test Tags           adapter:docker    theme:tedge-write
