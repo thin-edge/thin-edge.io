@@ -28,13 +28,18 @@ impl P11SignerService {
         let offered = request.offered.into_iter().map(|s| s.0).collect::<Vec<_>>();
 
         let signer = self.signing_key.choose_scheme(&offered);
+        let algorithm = SignatureAlgorithm(self.signing_key.algorithm());
 
         let Some(signer) = signer else {
-            return ChooseSchemeResponse { scheme: None };
+            return ChooseSchemeResponse {
+                scheme: None,
+                algorithm,
+            };
         };
 
         ChooseSchemeResponse {
             scheme: Some(SignatureScheme(signer.scheme())),
+            algorithm,
         }
     }
 
@@ -58,6 +63,7 @@ pub struct ChooseSchemeRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChooseSchemeResponse {
     pub scheme: Option<SignatureScheme>,
+    pub algorithm: SignatureAlgorithm,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,5 +93,27 @@ impl<'de> Deserialize<'de> for SignatureScheme {
     {
         let value = u16::deserialize(deserializer)?;
         Ok(Self(rustls::SignatureScheme::from(value)))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignatureAlgorithm(pub rustls::SignatureAlgorithm);
+
+impl Serialize for SignatureAlgorithm {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        u8::from(self.0).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for SignatureAlgorithm {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = u8::deserialize(deserializer)?;
+        Ok(Self(rustls::SignatureAlgorithm::from(value)))
     }
 }

@@ -5,6 +5,7 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
+use tracing::instrument;
 
 use crate::client::TedgeP11Client;
 use crate::pkcs11::CryptokiConfigDirect;
@@ -38,6 +39,7 @@ pub struct TedgeP11ClientSigningKey {
 }
 
 impl SigningKey for TedgeP11ClientSigningKey {
+    #[instrument(skip_all)]
     fn choose_scheme(
         &self,
         offered: &[rustls::SignatureScheme],
@@ -54,31 +56,12 @@ impl SigningKey for TedgeP11ClientSigningKey {
         }))
     }
 
-    // TODO(marcel): algorithm
     fn algorithm(&self) -> rustls::SignatureAlgorithm {
-        todo!()
-        // let client = TedgeP11Client {
-        //     socket_path: self.socket_path.clone(),
-        // };
-        // let response = client.choose_scheme(offered).unwrap();
-        // let scheme = response.unwrap();
+        let client = TedgeP11Client {
+            socket_path: self.socket_path.clone(),
+        };
 
-        // match scheme {
-        //     SignatureScheme::RSA_PKCS1_SHA1
-        //     | SignatureScheme::RSA_PKCS1_SHA256
-        //     | SignatureScheme::RSA_PKCS1_SHA384
-        //     | SignatureScheme::RSA_PKCS1_SHA512
-        //     | SignatureScheme::RSA_PSS_SHA256
-        //     | SignatureScheme::RSA_PSS_SHA384
-        //     | SignatureScheme::RSA_PSS_SHA512 => SignatureAlgorithm::RSA,
-        //     SignatureScheme::ECDSA_SHA1_Legacy
-        //     | SignatureScheme::ECDSA_NISTP256_SHA256
-        //     | SignatureScheme::ECDSA_NISTP384_SHA384
-        //     | SignatureScheme::ECDSA_NISTP521_SHA512 => SignatureAlgorithm::ECDSA,
-        //     SignatureScheme::ED25519 => SignatureAlgorithm::ED25519,
-        //     SignatureScheme::ED448 => SignatureAlgorithm::ED448,
-        //     _ => SignatureAlgorithm::Unknown(0),
-        // }
+        client.algorithm().unwrap()
     }
 }
 

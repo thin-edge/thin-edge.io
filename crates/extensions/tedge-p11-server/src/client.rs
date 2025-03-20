@@ -1,3 +1,7 @@
+// TODO:
+// - documentation
+// - reintroduce tedge config loading (with config directory override)
+
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::sync::Arc;
@@ -50,6 +54,32 @@ impl TedgeP11Client {
         };
 
         Ok(Some(scheme.0))
+    }
+
+    // this function is called only on the server when handling ClientHello message, so
+    // realistically it won't ever be called in our case
+    pub fn algorithm(&self) -> anyhow::Result<rustls::SignatureAlgorithm> {
+        trace!("Connecting to socket...");
+        let stream = UnixStream::connect(&self.socket_path)?;
+        let mut connection = crate::connection::Connection::new(stream);
+
+        debug!("Connected to socket");
+
+        // if passed empty set of schemes, service doesn't return a scheme but returns an algorithm
+        let request = Frame::new(Payload::ChooseSchemeRequest(ChooseSchemeRequest {
+            offered: vec![],
+        }));
+        connection.write_frame(&request)?;
+
+        let response = connection.read_frame()?.payload;
+
+        let Payload::ChooseSchemeResponse(response) = response else {
+            bail!("protocol error: bad response, expected chose scheme");
+        };
+
+        debug!("Choose scheme complete");
+
+        Ok(response.algorithm.0)
     }
 
     pub fn sign(&self, message: &[u8]) -> anyhow::Result<Vec<u8>> {

@@ -26,7 +26,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tracing::debug;
-use tracing::error;
 use tracing::warn;
 
 #[derive(Debug, Clone)]
@@ -253,10 +252,6 @@ impl SigningKey for ECSigningKey {
                 }));
             }
         }
-        error!(
-            "Could not find a matching signing scheme. offered={:?}",
-            offered
-        );
         None
     }
 
@@ -293,10 +288,6 @@ impl SigningKey for RSASigningKey {
                 }));
             }
         }
-        debug!(
-            "Could not find a matching signing scheme. offered={:?}",
-            offered
-        );
         None
     }
 
