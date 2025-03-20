@@ -34,6 +34,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::mem;
 use std::path::Path;
 
 // In the future, root will be read from config
@@ -449,7 +450,7 @@ impl EntityStore {
         Ok(removed_entities)
     }
 
-    pub fn get_twin_data(
+    pub fn get_twin_fragment(
         &self,
         topic_id: &EntityTopicId,
         fragment_key: &str,
@@ -509,6 +510,24 @@ impl EntityStore {
         }
 
         Ok(updated)
+    }
+
+    pub fn get_twin_fragments(
+        &mut self,
+        topic_id: &EntityTopicId,
+    ) -> Result<&Map<String, JsonValue>, entity_store::Error> {
+        let entity = self.try_get(topic_id)?;
+        Ok(&entity.twin_data)
+    }
+
+    pub fn set_twin_fragments(
+        &mut self,
+        topic_id: &EntityTopicId,
+        fragments: Map<String, JsonValue>,
+    ) -> Result<Map<String, JsonValue>, entity_store::Error> {
+        let entity = self.try_get_mut(topic_id)?;
+        let old = mem::replace(&mut entity.twin_data, fragments);
+        Ok(old)
     }
 
     pub fn cache_early_data_message(&mut self, message: MqttMessage) {
@@ -983,7 +1002,12 @@ impl EntityTwinMessage {
                 fragment_key: self.fragment_key,
             },
         );
-        MqttMessage::new(&message_topic, self.fragment_value.to_string()).with_retain()
+        let payload = if self.fragment_value.is_null() {
+            "".to_string()
+        } else {
+            self.fragment_value.to_string()
+        };
+        MqttMessage::new(&message_topic, payload).with_retain()
     }
 }
 
