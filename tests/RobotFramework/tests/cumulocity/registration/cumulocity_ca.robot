@@ -1,8 +1,8 @@
 *** Settings ***
 Resource        ../../../../resources/common.resource
+Library         String
 Library         Cumulocity
 Library         ThinEdgeIO
-Library         String
 
 Test Setup      Custom Setup
 
