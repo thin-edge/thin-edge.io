@@ -5,6 +5,7 @@
 //! reads correct fields from tedge_config and provides correct rustls configuration for these
 //! different clients.
 
+use crate::models::Cryptoki;
 use crate::TEdgeConfig;
 use anyhow::Context;
 use camino::Utf8PathBuf;
@@ -192,33 +193,25 @@ impl TEdgeConfig {
 }
 
 impl TEdgeConfigReaderDeviceCryptoki {
-    pub fn config_direct(&self) -> Result<Option<CryptokiConfigDirect>, anyhow::Error> {
-        if !self.enable {
-            return Ok(None);
-        }
-
-        Ok(Some(CryptokiConfigDirect {
-            module_path: self.module_path.or_config_not_set().unwrap().clone(),
-            pin: self.pin.clone(),
-            serial: self.serial.or_none().cloned(),
-        }))
-    }
-
     pub fn config(&self) -> Result<Option<CryptokiConfig>, anyhow::Error> {
-        if !self.enable {
-            return Ok(None);
+        match self.mode {
+            Cryptoki::Off => Ok(None),
+            Cryptoki::Module => Ok(Some(CryptokiConfig::Direct(CryptokiConfigDirect {
+                module_path: self
+                    .module_path
+                    .or_config_not_set()
+                    .context("required because `device.cryptoki.mode` is set to `module`")?
+                    .clone(),
+                pin: self.pin.clone(),
+                serial: None,
+            }))),
+            Cryptoki::Socket => Ok(Some(CryptokiConfig::SocketService {
+                socket_path: self
+                    .socket_path
+                    .or_config_not_set()
+                    .context("required because `device.cryptoki.mode` is set to `socket`")?
+                    .clone(),
+            })),
         }
-
-        if let Some(socket_path) = self.socket_path.or_none() {
-            return Ok(Some(CryptokiConfig::SocketService {
-                socket_path: socket_path.clone(),
-            }));
-        }
-
-        Ok(Some(CryptokiConfig::Direct(CryptokiConfigDirect {
-            module_path: self.module_path.or_config_not_set().unwrap().clone(),
-            pin: self.pin.clone(),
-            serial: self.serial.or_none().cloned(),
-        })))
     }
 }

@@ -54,7 +54,8 @@ impl_append_remove_for_single_value!(
     u32,
     AptConfig,
     MqttPayloadLimit,
-    AuthMethod
+    AuthMethod,
+    Cryptoki
 );
 
 impl AppendRemoveItem for TemplatesSet {
