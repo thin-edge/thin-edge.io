@@ -34,7 +34,7 @@ Converter and file transfer service are not running on a child device
     ...    exp_exit_code=7
 
     # check that tedge-to-te-converter is not working while on a child device
-    Execute Command    mosquitto_pub -t tedge/measurements -h ${PARENT_IP} -m ''
+    Execute Command    tedge mqtt pub tedge/measurements ''
 
     Set Device Context    ${PARENT_SN}
     # Only parent converter should convert the message

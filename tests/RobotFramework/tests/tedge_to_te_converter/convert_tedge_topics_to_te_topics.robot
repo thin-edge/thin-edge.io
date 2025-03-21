@@ -104,7 +104,7 @@ Convert main device alarm topic and retain
     ${message}=    Convert String To Json    ${messages[0]}
     Should Be Equal    ${message["severity"]}    minor
     # Check if the retained message received with new client or not
-    ${result}=    Execute Command    tedge mqtt sub te/device/main///a/test_alarm & sleep 2s; kill $!
+    ${result}=    Execute Command    tedge mqtt sub --duration 2s --count 1 te/device/main///a/test_alarm
     Should Contain    ${result}    "severity":"minor"
 
 Convert child device alarm topic
