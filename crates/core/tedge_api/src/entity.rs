@@ -68,7 +68,7 @@ pub struct EntityMetadata {
     #[serde(rename = "@id", skip_serializing_if = "Option::is_none")]
     pub external_id: Option<EntityExternalId>,
 
-    #[serde(flatten)]
+    #[serde(skip)]
     pub twin_data: Map<String, JsonValue>,
 }
 

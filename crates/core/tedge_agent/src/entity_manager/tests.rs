@@ -1,5 +1,4 @@
 use crate::entity_manager::server::EntityStoreResponse;
-use crate::entity_manager::server::EntityTwinData;
 use crate::entity_manager::tests::model::Action;
 use crate::entity_manager::tests::model::Action::AddDevice;
 use crate::entity_manager::tests::model::Action::AddService;
@@ -64,15 +63,16 @@ async fn removing_a_child_using_mqtt() {
 #[tokio::test]
 async fn patched_twin_fragments_published_to_mqtt() {
     let (mut entity_store, mut mqtt_box) = entity::server("device-under-test");
-    let twin_data = EntityTwinData::try_new(
+    entity::set_twin_fragments(
+        &mut entity_store,
         EntityTopicId::default_main_device(),
         json!({"x": 9, "y": true, "z": "foo"})
             .as_object()
             .unwrap()
             .clone(),
     )
+    .await
     .unwrap();
-    entity::patch(&mut entity_store, twin_data).await.unwrap();
     assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/x", "9")]).await;
     assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/y", "true")]).await;
     assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/z", "foo")]).await;
@@ -186,7 +186,8 @@ mod entity {
     use crate::entity_manager::server::EntityStoreRequest;
     use crate::entity_manager::server::EntityStoreResponse;
     use crate::entity_manager::server::EntityStoreServer;
-    use crate::entity_manager::server::EntityTwinData;
+    use serde_json::Map;
+    use serde_json::Value;
     use std::str::FromStr;
     use tedge_actors::Builder;
     use tedge_actors::NoMessage;
@@ -214,12 +215,13 @@ mod entity {
         None
     }
 
-    pub async fn patch(
+    pub async fn set_twin_fragments(
         entity_store: &mut EntityStoreServer,
-        twin_data: EntityTwinData,
+        topic_id: EntityTopicId,
+        fragments: Map<String, Value>,
     ) -> Result<(), anyhow::Error> {
-        if let EntityStoreResponse::Patch(result) = entity_store
-            .handle(EntityStoreRequest::Patch(twin_data))
+        if let EntityStoreResponse::SetTwinFragments(result) = entity_store
+            .handle(EntityStoreRequest::SetTwinFragments(topic_id, fragments))
             .await
         {
             return result.map_err(Into::into);
