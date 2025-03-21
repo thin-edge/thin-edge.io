@@ -1,4 +1,3 @@
-use camino::Utf8PathBuf;
 use rustls::pki_types::pem::PemObject as _;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::PrivateKeyDer;
@@ -10,12 +9,11 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use std::sync::Arc;
+
+pub use tedge_p11_server::CryptokiConfig;
+pub use tedge_p11_server::CryptokiConfigDirect;
 
 use crate::CertificateError;
-
-#[cfg(feature = "cryptoki")]
-mod pkcs11;
 
 pub fn create_tls_config(
     root_certificates: impl AsRef<Path>,
@@ -35,38 +33,31 @@ pub fn create_tls_config(
 ///
 /// This TLS configuration should be used for communication between a device (or bridge) and a cloud
 /// remote MQTT broker, not local MQTT broker.
-#[cfg(feature = "cryptoki")]
 pub fn create_tls_config_cryptoki(
     root_certificates: impl AsRef<Path>,
     client_certificate: impl AsRef<Path>,
     cryptoki_config: CryptokiConfig,
 ) -> Result<ClientConfig, CertificateError> {
-    use anyhow::Context;
-    use pkcs11::Pkcs11Resolver;
-    use pkcs11::Pkcs11SigningKey;
+    use rustls::sign::CertifiedKey;
+    use std::sync::Arc;
+    use tedge_p11_server::single_cert_and_key::SingleCertAndKey;
 
     let root_cert_store = new_root_store(root_certificates.as_ref())?;
     let cert_chain = read_cert_chain(client_certificate)?;
-    let pkcs11_signing_key = Pkcs11SigningKey::from_cryptoki_config(cryptoki_config)
-        .context("failed to create a TLS signer using PKCS#11 device")?;
+    let key = tedge_p11_server::signing_key(cryptoki_config)?;
 
-    let resolver = Arc::new(Pkcs11Resolver {
-        chain: cert_chain,
-        signing_key: Arc::new(pkcs11_signing_key),
-    });
+    let certified_key = CertifiedKey {
+        cert: cert_chain,
+        key,
+        ocsp: None,
+    };
+    let resolver: SingleCertAndKey = certified_key.into();
 
     let config = ClientConfig::builder()
         .with_root_certificates(root_cert_store)
-        .with_client_cert_resolver(resolver);
+        .with_client_cert_resolver(Arc::new(resolver));
 
     Ok(config)
-}
-
-#[derive(Debug, Clone)]
-pub struct CryptokiConfig {
-    pub module_path: Utf8PathBuf,
-    pub pin: Arc<str>,
-    pub serial: Option<Arc<str>>,
 }
 
 pub fn client_config_for_ca_certificates<P>(

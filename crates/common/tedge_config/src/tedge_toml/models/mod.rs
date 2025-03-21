@@ -3,6 +3,7 @@ pub mod auth_method;
 pub mod auto;
 pub mod c8y_software_management;
 pub mod connect_url;
+pub mod cryptoki;
 pub mod flag;
 pub mod host_port;
 pub mod ipaddress;
@@ -25,6 +26,7 @@ pub use self::apt_config::*;
 pub use self::auto::*;
 pub use self::c8y_software_management::*;
 pub use self::connect_url::*;
+pub use self::cryptoki::Cryptoki;
 pub use self::flag::*;
 #[doc(inline)]
 pub use self::host_port::HostPort;
