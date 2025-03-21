@@ -2657,9 +2657,6 @@ pub(crate) mod tests {
         );
 
         assert_eq!(converter.active_commands.len(), 1);
-        // update_time
-        //     .send(start_time + Duration::from_secs(24 * 3600))
-        //     .unwrap();
         tokio::time::advance(Duration::from_secs(24 * 3600)).await;
 
         let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
