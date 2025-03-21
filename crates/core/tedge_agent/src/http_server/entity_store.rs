@@ -35,6 +35,7 @@ use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::TopicIdError;
+use tedge_config::MQTT_MAX_PAYLOAD_SIZE;
 
 #[derive(Debug, Default, Deserialize)]
 pub struct ListParams {
@@ -212,20 +213,26 @@ async fn get_resource(
 async fn put_resource(
     State(state): State<AgentState>,
     Path(path): Path<String>,
-    Json(value): Json<Value>,
+    payload: String,
 ) -> impl IntoResponse {
+    if payload.len() > MQTT_MAX_PAYLOAD_SIZE as usize {
+        return Err(Error::EntityStoreError(
+            entity_store::Error::PayloadSizeExceeded(payload.len()),
+        ));
+    }
     let (topic_id, channel) = parse_path(&path)?;
     match channel {
         Channel::EntityTwinData { fragment_key } => {
             if fragment_key.is_empty() {
-                let fragments = serde_json::from_value(value)?;
+                let fragments = serde_json::from_str(&payload)?;
                 return Ok(set_entity_twin_fragments(state, topic_id, fragments)
                     .await
                     .into_response());
             }
 
+            let fragment_value: Value = serde_json::from_str(&payload)?;
             Ok(
-                set_entity_twin_fragment(state, topic_id, fragment_key.to_string(), value)
+                set_entity_twin_fragment(state, topic_id, fragment_key.to_string(), fragment_value)
                     .await
                     .into_response(),
             )
@@ -1560,6 +1567,47 @@ mod tests {
             .expect("request builder");
         let response = app.call(req).await.unwrap();
         assert_non_existent_entity_response(response).await;
+    }
+
+    #[tokio::test]
+    async fn set_twin_fragments_payload_too_large() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::SetTwinFragments(topic_id, _) = req.request {
+                    if topic_id == EntityTopicId::default_child_device("test-child").unwrap() {
+                        req.reply_to
+                            .send(EntityStoreResponse::SetTwinFragments(Err(
+                                entity_store::Error::PayloadSizeExceeded(268435456),
+                            )))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::PUT)
+            .uri("/v1/entities/device/test-child///twin")
+            .header("Content-Type", "application/json")
+            .body(Body::from(r#"{"@id": "new-id"}"#))
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        assert_json_eq!(
+            entity,
+            json!({"error":"Payload size: 268435456 exceeds the threshold size of 268435455 bytes"})
+        );
     }
 
     async fn assert_non_existent_entity_response(response: Response<Body>) {

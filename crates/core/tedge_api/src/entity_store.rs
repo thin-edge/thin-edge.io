@@ -787,6 +787,9 @@ pub enum Error {
 
     #[error("Invalid twin key: '{0}'. Keys that are empty, containing '/' or starting with '@' are not allowed")]
     InvalidTwinData(String),
+
+    #[error("Payload size: {0} exceeds the threshold size of 268435455 bytes")]
+    PayloadSizeExceeded(usize),
 }
 
 #[derive(thiserror::Error, Debug)]

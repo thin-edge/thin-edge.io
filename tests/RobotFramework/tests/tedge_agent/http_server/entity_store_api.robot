@@ -166,6 +166,9 @@ Entity twin apis
     ${new_payload}=    Set Variable    {"maintenance_mode":false}
     ${put}=    Execute Command
     ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_mode
+    ...    message_contains=false
     Should Be Equal    ${put}    ${new_payload}|200
 
     # Assert PUT is idempotent
@@ -231,7 +234,7 @@ Entity twin api errors
     ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' -d '${payload}'
     Should Be Equal
     ...    ${resp}
-    ...    {"error":"invalid type: boolean `true`, expected a map"}|400
+    ...    {"error":"invalid type: boolean `true`, expected a map at line 1 column 4"}|400
 
     # Unsupported PATCH method on twin path
     ${url}=    Set Variable    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
@@ -249,6 +252,46 @@ Entity twin api errors
     Should Be Equal
     ...    ${resp}
     ...    {"error":"Invalid twin key: 'multi/path/key'. Keys that are empty, containing '/' or starting with '@' are not allowed"}|400
+
+    # Set twin fragment with bad value
+    ${url}=    Set Variable
+    ...    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/test_key
+    ${payload}=    Set Variable    1.2.3
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"trailing characters at line 1 column 4"}|400
+
+    # Set twin fragment with bad value
+    ${url}=    Set Variable
+    ...    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/test_key
+    ${payload}=    Set Variable    1-2
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"trailing characters at line 1 column 2"}|400
+
+    # Set twin fragment with bad value
+    ${url}=    Set Variable
+    ...    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/test_key
+    ${payload}=    Set Variable    true true
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"trailing characters at line 1 column 6"}|400
+
+    # Set twin fragment with bad value
+    ${url}=    Set Variable
+    ...    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/test_key
+    ${payload}=    Set Variable    {"a":1}{"b":2}
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"trailing characters at line 1 column 8"}|400
 
     # Unsupported PATCH method on twin fragment path
     ${url}=    Set Variable    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_mode
