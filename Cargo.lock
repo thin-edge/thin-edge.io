@@ -4284,7 +4284,6 @@ version = "1.4.2"
 dependencies = [
  "anyhow",
  "asn1-rs 0.7.0",
- "base64 0.22.1",
  "camino",
  "clap",
  "cryptoki",
