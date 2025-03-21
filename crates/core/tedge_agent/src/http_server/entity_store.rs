@@ -407,11 +407,9 @@ async fn set_entity_twin_fragment(
     let EntityStoreResponse::SetTwinFragment(res) = response else {
         return Err(Error::InvalidEntityStoreResponse);
     };
-    let updated = res?;
-    if updated && !fragment_value.is_null() {
-        return Ok(Json(fragment_value).into_response());
-    }
-    Ok(StatusCode::NO_CONTENT.into_response())
+    res?;
+
+    Ok(Json(fragment_value))
 }
 
 async fn delete_entity_twin_fragment(

@@ -110,19 +110,24 @@ Delete entity tree
 
 Entity twin fragment apis
     ${put}=    Execute Command
-    ...    curl -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window -H 'Content-Type: application/json' -d '5'
-    Should Be Equal    ${put}    5
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window -H 'Content-Type: application/json' -d '5'
+    Should Be Equal    ${put}    5|200
     Should Have MQTT Messages
     ...    te/device/main///twin/maintenance_window
     ...    message_contains=5
 
+    # Assert PUT is idempotent
+    ${put}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window -H 'Content-Type: application/json' -d '5'
+    Should Be Equal    ${put}    5|200
+
     ${get}=    Execute Command
-    ...    curl http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
-    Should Be Equal    ${get}    5
+    ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
+    Should Be Equal    ${get}    5|200
 
     ${timestamp}=    Get Unix Timestamp
     ${http_code}=    Execute Command
-    ...    curl -o /dev/null --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
+    ...    curl --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
     Should Be Equal    ${http_code}    204
     Should Have MQTT Messages
     ...    te/device/main///twin/maintenance_window
@@ -132,6 +137,11 @@ Entity twin fragment apis
     ...    ignore_exit_code=${True}
     ...    strip=${True}
     Should Be Empty    ${retained_message}
+
+    # Assert DELETE is idempotent
+    ${http_code}=    Execute Command
+    ...    curl --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
+    Should Be Equal    ${http_code}    204
 
 Entity twin apis
     ${new_payload}=    Set Variable    {"maintainer":"John Doe","maintenance_mode":true,"maintenance_window":5}
