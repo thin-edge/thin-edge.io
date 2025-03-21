@@ -3,7 +3,10 @@ use crate::log::MaybeFancy;
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
+use certificate::ValidityStatus;
+use std::time::Duration;
 use tokio::io::AsyncWriteExt;
+use yansi::Paint;
 
 macro_rules! print_async {
     ($out:expr, $fmt:literal) => (
@@ -16,8 +19,11 @@ macro_rules! print_async {
 
 /// Show the device certificate, if any
 pub struct ShowCertCmd {
-    /// The path where the device certificate will be stored
+    /// The path where the device certificate is stored
     pub cert_path: Utf8PathBuf,
+
+    /// Minimum validity duration bellow which a new certificate should be requested
+    pub minimum: Duration,
 }
 
 #[async_trait::async_trait]
@@ -42,13 +48,53 @@ impl ShowCertCmd {
             .with_context(|| format!("decoding certificate from {cert_path}"))?;
 
         let mut stdout = tokio::io::stdout();
-        print_async!(stdout, "Device certificate: {}\n", self.cert_path);
-        print_async!(stdout, "Subject: {}\n", pem.subject()?);
-        print_async!(stdout, "Issuer: {}\n", pem.issuer()?);
-        print_async!(stdout, "Valid from: {}\n", pem.not_before()?);
-        print_async!(stdout, "Valid up to: {}\n", pem.not_after()?);
-        print_async!(stdout, "Thumbprint: {}\n", pem.thumbprint()?);
+        print_async!(stdout, "Certificate:   {}\n", self.cert_path);
+        print_async!(stdout, "Subject:       {}\n", pem.subject()?);
+        print_async!(stdout, "Issuer:        {}\n", pem.issuer()?);
+        print_async!(
+            stdout,
+            "Status:        {}\n",
+            display_status(pem.still_valid()?, self.minimum)
+        );
+        print_async!(stdout, "Valid from:    {}\n", pem.not_before()?);
+        print_async!(stdout, "Valid until:   {}\n", pem.not_after()?);
+        print_async!(
+            stdout,
+            "Serial number: {} (0x{})\n",
+            pem.serial()?,
+            pem.serial_hex()?
+        );
+        print_async!(stdout, "Thumbprint:    {}\n", pem.thumbprint()?);
         let _ = stdout.flush().await;
         Ok(())
+    }
+}
+
+fn display_status(status: ValidityStatus, minimum: Duration) -> String {
+    let text = match status {
+        ValidityStatus::Valid { expired_in } => {
+            format!(
+                "VALID (expires in: {})",
+                humantime::format_duration(expired_in)
+            )
+        }
+        ValidityStatus::Expired { since } => {
+            format!("EXPIRED (since: {})", humantime::format_duration(since))
+        }
+        ValidityStatus::NotValidYet { valid_in } => {
+            format!(
+                "NOT VALID YET (will be in: {})",
+                humantime::format_duration(valid_in)
+            )
+        }
+    };
+
+    match status {
+        ValidityStatus::Valid { expired_in } if expired_in > minimum => {
+            format!("{}", text.green())
+        }
+        ValidityStatus::Valid { .. } => format!("{}", text.yellow()),
+        ValidityStatus::Expired { .. } => format!("{}", text.red()),
+        ValidityStatus::NotValidYet { .. } => format!("{}", text.red()),
     }
 }

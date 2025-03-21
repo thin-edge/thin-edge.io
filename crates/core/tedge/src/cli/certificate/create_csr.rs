@@ -5,9 +5,9 @@ use crate::override_public_key;
 use crate::persist_new_private_key;
 use crate::reuse_private_key;
 use camino::Utf8PathBuf;
+use certificate::CsrTemplate;
 use certificate::KeyCertPair;
 use certificate::KeyKind;
-use certificate::NewCertificateConfig;
 
 /// Create a certificate signing request (CSR)
 pub struct CreateCsrCmd {
@@ -23,6 +23,9 @@ pub struct CreateCsrCmd {
     /// The owner of the private key
     pub user: String,
     pub group: String,
+
+    /// CSR template
+    pub csr_template: CsrTemplate,
 }
 
 #[async_trait::async_trait]
@@ -32,24 +35,21 @@ impl Command for CreateCsrCmd {
     }
 
     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let config = NewCertificateConfig::default();
-        self.create_certificate_signing_request(&config).await?;
+        self.create_certificate_signing_request().await?;
         eprintln!("Certificate Signing Request was successfully created.");
         Ok(())
     }
 }
 
 impl CreateCsrCmd {
-    pub async fn create_certificate_signing_request(
-        &self,
-        config: &NewCertificateConfig,
-    ) -> Result<(), CertError> {
+    pub async fn create_certificate_signing_request(&self) -> Result<(), CertError> {
         let id = &self.id;
         let csr_path = &self.csr_path;
         let key_path = &self.key_path;
 
         let previous_key = reuse_private_key(key_path).await.unwrap_or(KeyKind::New);
-        let cert = KeyCertPair::new_certificate_sign_request(config, id, &previous_key)?;
+        let cert =
+            KeyCertPair::new_certificate_sign_request(&self.csr_template, id, &previous_key)?;
 
         if let KeyKind::New = previous_key {
             persist_new_private_key(
@@ -89,13 +89,10 @@ mod tests {
             csr_path: csr_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
-        assert_matches!(
-            cmd.create_certificate_signing_request(&NewCertificateConfig::default())
-                .await,
-            Ok(())
-        );
+        assert_matches!(cmd.create_certificate_signing_request().await, Ok(()));
 
         assert_eq!(parse_x509_file(&csr_path).label, "CERTIFICATE REQUEST");
         assert_eq!(parse_x509_file(&key_path).label, "PRIVATE KEY");
@@ -115,12 +112,12 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
         // create private key and public cert with standard command
         assert_matches!(
-            cmd.create_test_certificate(&NewCertificateConfig::default())
-                .await,
+            cmd.create_test_certificate(&CsrTemplate::default()).await,
             Ok(())
         );
 
@@ -135,14 +132,11 @@ mod tests {
             csr_path: csr_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
         // create csr using existing private key and device_id from public cert
-        assert_matches!(
-            cmd.create_certificate_signing_request(&NewCertificateConfig::default())
-                .await,
-            Ok(())
-        );
+        assert_matches!(cmd.create_certificate_signing_request().await, Ok(()));
 
         // Get the csr and key data for validation
         let second_key = parse_x509_file(&key_path);
