@@ -25,6 +25,7 @@ pub struct MqttSubscribeCommand {
     pub client_auth_config: Option<MqttAuthClientConfig>,
     pub duration: Option<Duration>,
     pub count: Option<u32>,
+    pub retained_only: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -83,6 +84,10 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
 
         match message.payload_str() {
             Ok(payload) => {
+                if cmd.retained_only && !message.retain {
+                    info!(target: "MQTT", "Received first non-retained message. topic={}", message.topic.name);
+                    break;
+                }
                 let line = if cmd.hide_topic {
                     format!("{payload}\n")
                 } else {

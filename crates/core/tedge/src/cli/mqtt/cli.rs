@@ -52,6 +52,10 @@ pub enum TEdgeMqttCli {
         /// Disconnect and exit after receiving the specified number of messages
         #[clap(long, short = 'C')]
         count: Option<u32>,
+        /// Only show retained messages and disconnect and exit after receiving
+        /// the first non-retained message
+        #[clap(long)]
+        retained_only: bool,
     },
 }
 
@@ -89,6 +93,7 @@ impl BuildCommand for TEdgeMqttCli {
                     hide_topic,
                     duration,
                     count,
+                    retained_only,
                 } => MqttSubscribeCommand {
                     host: config.mqtt.client.host.clone(),
                     port: config.mqtt.client.port.into(),
@@ -101,6 +106,7 @@ impl BuildCommand for TEdgeMqttCli {
                     client_auth_config: auth_config.client,
                     duration: duration.map(|v| v.duration()),
                     count,
+                    retained_only,
                 }
                 .into_boxed(),
             }

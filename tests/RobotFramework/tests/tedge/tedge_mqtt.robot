@@ -24,6 +24,27 @@ tedge mqtt sub breaks after receiving 3 packets
     Should Contain    ${output}    two
     Should Contain    ${output}    three
 
+tedge mqtt sub breaks after receiving first non-retailed message
+    Execute Command    tedge mqtt pub -r foo/1 "bar1"
+    Execute Command    tedge mqtt pub -r foo/2 "bar2"
+    # clear any retained message
+    Execute Command    tedge mqtt pub -r foo/non_retained ""
+
+    # Start a subscription in the background (but it will still write to stdout), then send a
+    # non-retained message which should stop the subscription early
+    ${start_timestamp}=    Get Unix Timestamp
+    ${output}=    Execute Command
+    ...    tedge mqtt sub "foo/+" --duration 10s --retained-only & sleep 2 && tedge mqtt pub foo/non_retained "3" && wait
+    ${end_timestamp}=    Get Unix Timestamp
+
+    Should Be True
+    ...    (${end_timestamp} - ${start_timestamp}) < 8
+    ...    Duration should be less than the 10 second duration
+    ${messages}=    Set Variable    ${output.splitlines()}
+    Length Should Be    ${messages}    2
+    Should Contain    ${messages[0]}    [foo/1] bar1
+    Should Contain    ${messages[1]}    [foo/2] bar2
+
 
 *** Keywords ***
 Validate duration
