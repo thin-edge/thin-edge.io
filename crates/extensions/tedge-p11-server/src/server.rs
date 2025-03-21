@@ -6,6 +6,7 @@ use tracing::info;
 
 use super::connection::Connection;
 use crate::connection::Frame1;
+use crate::connection::ProtocolError;
 use crate::pkcs11::CryptokiConfigDirect;
 use crate::service::P11SignerService;
 
@@ -40,8 +41,10 @@ fn process(config: &CryptokiConfigDirect, mut connection: Connection) -> anyhow:
     let request = connection.read_frame()?;
 
     let response = match request {
-        Frame1::ChooseSchemeResponse { .. } | Frame1::SignResponse { .. } => {
-            anyhow::bail!("protocol error")
+        Frame1::Error(_) | Frame1::ChooseSchemeResponse { .. } | Frame1::SignResponse { .. } => {
+            let error = ProtocolError("invalid request".to_string());
+            let _ = connection.write_frame(&Frame1::Error(error));
+            anyhow::bail!("protocol error: invalid request")
         }
         Frame1::ChooseSchemeRequest(request) => {
             Frame1::ChooseSchemeResponse(service.choose_scheme(request))
