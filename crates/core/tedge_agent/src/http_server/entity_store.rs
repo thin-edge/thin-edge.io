@@ -243,7 +243,7 @@ async fn delete_resource(
         Channel::EntityMetadata => deregister_entity(state, topic_id).await,
         Channel::EntityTwinData { fragment_key } => {
             if fragment_key.is_empty() {
-                return Ok(set_entity_twin_fragments(state, topic_id, Map::new())
+                return Ok(delete_entity_twin_fragments(state, topic_id)
                     .await
                     .into_response());
             }
@@ -469,11 +469,24 @@ async fn set_entity_twin_fragments(
     };
     res?;
 
-    if fragments.is_empty() {
-        return Ok(StatusCode::NO_CONTENT.into_response());
-    }
+    Ok(Json(fragments))
+}
 
-    Ok(Json(fragments).into_response())
+async fn delete_entity_twin_fragments(
+    state: AgentState,
+    topic_id: EntityTopicId,
+) -> impl IntoResponse {
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::SetTwinFragments(topic_id, Map::new()))
+        .await?;
+    let EntityStoreResponse::SetTwinFragments(res) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+    res?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]

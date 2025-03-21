@@ -25,22 +25,17 @@ CRUD apis
     ...    ${get}
     ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device"}
 
-    ${get}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
-    Should Be Equal
-    ...    ${get}
-    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device"}
-
     ${entities}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities
     Should Contain
     ...    ${entities}
-    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","maintenance_mode":true,"maintenance_window":5}
+    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device"}
 
     ${timestamp}=    Get Unix Timestamp
     ${delete}=    Execute Command
     ...    curl --silent -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
     Should Be Equal
     ...    ${delete}
-    ...    [{"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","maintenance_mode":true,"maintenance_window":5}]
+    ...    [{"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device"}]
     Should Have MQTT Messages
     ...    te/device/child01//
     ...    date_from=${timestamp}
@@ -171,28 +166,32 @@ Entity twin apis
     ...    message_contains=${False}
     ...    date_from=${timestamp}
     ${retained_message}=    Execute Command
-    ...    tedge mqtt sub --no-topic te/device/main///twin/maintainer --duration 1
+    ...    tedge mqtt sub --no-topic te/device/main///twin/maintainer --duration 1s
     ...    ignore_exit_code=${True}
     ...    strip=${True}
     Should Be Empty    ${retained_message}
     ${retained_message}=    Execute Command
-    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_window --duration 1
+    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_window --duration 1s
     ...    ignore_exit_code=${True}
     ...    strip=${True}
     Should Be Empty    ${retained_message}
 
     ${timestamp}=    Get Unix Timestamp
     ${http_code}=    Execute Command
-    ...    curl -o /dev/null --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
+    ...    curl --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
     Should Be Equal    ${http_code}    204
     Should Have MQTT Messages
     ...    te/device/main///twin/maintenance_mode
     ...    date_from=${timestamp}
     ${retained_message}=    Execute Command
-    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_mode --duration 1
+    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_mode --duration 1s
     ...    ignore_exit_code=${True}
     ...    strip=${True}
     Should Be Empty    ${retained_message}
+
+    ${put}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d {}
+    Should Be Equal    ${put}    {}|200
 
 Entity twin api errors
     # Get twin data of non-existent entity
