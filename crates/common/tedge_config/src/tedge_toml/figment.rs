@@ -208,8 +208,14 @@ impl TEdgeEnv {
     }
 
     fn provider(&self) -> figment::providers::Env {
+        let prefix = self.prefix;
         static WARNINGS: Lazy<Mutex<HashSet<String>>> = Lazy::new(<_>::default);
-        figment::providers::Env::prefixed(self.prefix).ignore(&["CONFIG_DIR", "CLOUD_PROFILE"]).map(move |name| {
+        figment::providers::Env::prefixed(self.prefix).ignore(&["CONFIG_DIR", "CLOUD_PROFILE"])
+        .filter(move |key| {
+            std::env::vars()
+            .find(|(k, _)| k.strip_prefix(prefix).is_some_and(|k| k == key))
+            .map_or(true, |(_, val)| !val.is_empty())})
+        .map(move |name| {
             let lowercase_name = name.as_str().to_ascii_lowercase();
             Uncased::new(
                 tracing::subscriber::with_default(
@@ -415,6 +421,35 @@ mod tests {
         })
     }
 
+    #[test]
+    fn empty_environment_variables_are_ignored() {
+        use tedge_config_macros::*;
+
+        define_tedge_config!(
+            c8y: {
+                url: String,
+            }
+        );
+
+        figment::Jail::expect_with(|jail| {
+            jail.create_file(
+                "tedge.toml",
+                r#"
+            [c8y]
+            url = "test.c8y.io"
+            "#,
+            )?;
+
+            jail.set_env("TEDGE_C8Y_URL", "");
+
+            let dto =
+                extract_data::<TEdgeConfigDto, FileAndEnvironment>(&PathBuf::from("tedge.toml"))
+                    .unwrap()
+                    .0;
+            assert_eq!(dto.c8y.url.as_deref(), Some("test.c8y.io"));
+            Ok(())
+        })
+    }
     #[test]
     fn environment_variable_profile_warnings_use_key_with_correct_format() {
         use tedge_config_macros::*;
