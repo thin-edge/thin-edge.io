@@ -146,8 +146,8 @@ Entity twin fragment apis
 Entity twin apis
     ${new_payload}=    Set Variable    {"maintainer":"John Doe","maintenance_mode":true,"maintenance_window":5}
     ${put}=    Execute Command
-    ...    curl -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
-    Should Be Equal    ${put}    ${new_payload}
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
+    Should Be Equal    ${put}    ${new_payload}|200
     Should Have MQTT Messages
     ...    te/device/main///twin/maintenance_mode
     ...    message_contains=true
@@ -156,16 +156,23 @@ Entity twin apis
     ...    message_contains=5
 
     ${get}=    Execute Command
-    ...    curl http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
+    ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
     Should Be Equal
     ...    ${get}
-    ...    ${new_payload}
+    ...    ${new_payload}|200
 
     # Replace existing twins
     ${timestamp}=    Get Unix Timestamp
     ${new_payload}=    Set Variable    {"maintenance_mode":false}
     ${put}=    Execute Command
-    ...    curl -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
+    Should Be Equal    ${put}    ${new_payload}|200
+
+    # Assert PUT is idempotent
+    ${put}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
+    Should Be Equal    ${put}    ${new_payload}|200
+
     ${get}=    Execute Command
     ...    curl http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
     Should Be Equal
@@ -198,6 +205,11 @@ Entity twin apis
     ...    ignore_exit_code=${True}
     ...    strip=${True}
     Should Be Empty    ${retained_message}
+
+    # Assert DELETE is idempotent
+    ${http_code}=    Execute Command
+    ...    curl --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
+    Should Be Equal    ${http_code}    204
 
     ${put}=    Execute Command
     ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d {}
