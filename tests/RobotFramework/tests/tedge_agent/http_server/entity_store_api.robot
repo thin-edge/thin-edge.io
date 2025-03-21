@@ -133,7 +133,7 @@ Entity twin fragment apis
     ...    te/device/main///twin/maintenance_window
     ...    date_from=${timestamp}
     ${retained_message}=    Execute Command
-    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_window --duration 1
+    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_window --duration 1s
     ...    ignore_exit_code=${True}
     ...    strip=${True}
     Should Be Empty    ${retained_message}

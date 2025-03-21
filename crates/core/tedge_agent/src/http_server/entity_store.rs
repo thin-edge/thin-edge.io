@@ -225,7 +225,7 @@ async fn put_resource(
             }
 
             Ok(
-                upsert_entity_twin_fragment(state, topic_id, fragment_key.to_string(), value)
+                set_entity_twin_fragment(state, topic_id, fragment_key.to_string(), value)
                     .await
                     .into_response(),
             )
@@ -391,7 +391,7 @@ async fn get_entity_twin_fragment(
     Ok(Json(fragment_value))
 }
 
-async fn upsert_entity_twin_fragment(
+async fn set_entity_twin_fragment(
     state: AgentState,
     topic_id: EntityTopicId,
     fragment_key: String,
