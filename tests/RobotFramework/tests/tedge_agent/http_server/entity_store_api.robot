@@ -300,6 +300,13 @@ Entity twin api errors
     ...    curl --silent --write-out "%\{http_code\}" -X PATCH ${url} -H 'Content-Type: application/json' -d '${payload}'
     Should Be Equal    ${resp}    405
 
+    # Unsupported PATCH method on twin path
+    ${url}=    Set Variable    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
+    ${payload}=    Set Variable    true
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "%\{http_code\}" -X PATCH ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal    ${resp}    405
+
     # Unsupported channel
     ${url}=    Set Variable    http://localhost:8000/tedge/entity-store/v1/entities/device/bad-child///cmd/123
     ${resp}=    Execute Command    curl --silent --write-out "|%\{http_code\}" ${url}

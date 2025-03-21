@@ -35,7 +35,7 @@ use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::TopicIdError;
-use tedge_config::MQTT_MAX_PAYLOAD_SIZE;
+use tedge_config::models::MQTT_MAX_PAYLOAD_SIZE;
 
 #[derive(Debug, Default, Deserialize)]
 pub struct ListParams {
