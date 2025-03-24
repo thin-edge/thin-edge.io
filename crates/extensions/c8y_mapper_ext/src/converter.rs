@@ -187,7 +187,7 @@ pub struct CumulocityConverter {
 
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
-    pub active_commands: HashMap<CmdId, Instant>,
+    pub active_commands: HashMap<CmdId, Option<Instant>>,
     active_commands_last_cleared: Instant,
 
     supported_operations: SupportedOperations,
@@ -667,7 +667,7 @@ impl CumulocityConverter {
                 .await;
             let result = self.handle_c8y_operation_result(&result, Some(operation.op_id.clone()));
             if !result.is_empty() {
-                self.active_commands.insert(cmd_id, Instant::now());
+                self.active_commands.insert(cmd_id, Some(Instant::now()));
             }
             output.extend(result);
         }
@@ -784,7 +784,7 @@ impl CumulocityConverter {
 
         let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
         if !output.is_empty() {
-            self.active_commands.insert(cmd_id, Instant::now());
+            self.active_commands.insert(cmd_id, Some(Instant::now()));
         }
 
         Ok(output)
@@ -1371,6 +1371,11 @@ impl CumulocityConverter {
             }
 
             Channel::Command { cmd_id, .. } if self.command_id.is_generator_of(cmd_id) => {
+                // Keep track of operation if we've received it through a retain message
+                // If we've already got the operation in `active_commands`, set the insertion
+                // time to `None` to disable the time-based expiry
+                self.active_commands.insert(cmd_id.clone(), None);
+
                 let entity = self.entity_cache.try_get(&source)?;
                 let entity = operations::EntityTarget {
                     topic_id: entity.metadata.topic_id.clone(),
@@ -1412,9 +1417,11 @@ impl CumulocityConverter {
         if self.active_commands_last_cleared.elapsed() > Duration::from_secs(3600) {
             let mut to_remove = vec![];
             for (id, time) in &self.active_commands {
-                // Expire tasks after 12 hours
-                if time.elapsed() > Duration::from_secs(3600 * 12) {
-                    to_remove.push(id.to_owned());
+                if let Some(time) = time {
+                    // Expire tasks after 12 hours
+                    if time.elapsed() > Duration::from_secs(3600 * 12) {
+                        to_remove.push(id.to_owned());
+                    }
                 }
             }
             for id in to_remove {
@@ -2636,6 +2643,45 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
+    async fn te_topic_operations_do_not_have_time_based_expiry() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+
+        tokio::time::pause();
+
+        let operation = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
+            {"id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+        let expected_message = MqttMessage {
+            topic: Topic {
+                name: "te/device/main///cmd/restart/c8y-mapper-16574089".into(),
+            },
+            payload: json!({"status":"init"}).to_string().into(),
+            qos: QoS::AtLeastOnce,
+            retain: true,
+        };
+
+        assert_eq!(
+            converter.try_convert(&operation).await.unwrap().first(),
+            Some(&expected_message),
+            "First delivery after registration produces outgoing message"
+        );
+        assert_eq!(converter.active_commands.len(), 1);
+
+        // Converter should disable time-based expiry when the `te` topic
+        // message is processed
+        converter.try_convert(&expected_message).await.unwrap();
+
+        tokio::time::advance(Duration::from_secs(24 * 3600)).await;
+
+        let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
+
+        // Trigger the converter since it performs cache eviction only when it's converting c8y messages
+        converter.try_convert(&random_message).await.unwrap();
+        assert_eq!(converter.active_commands.len(), 1);
+    }
+
+    #[tokio::test]
     async fn custom_operation_ids_are_not_cached_indefinitely() {
         let tmp_dir = TempTedgeDir::new();
         let custom_op = r#"exec.topic = "my/custom/topic"
@@ -2668,6 +2714,35 @@ pub(crate) mod tests {
         // Trigger the converter since it performs cache eviction only when it's converting c8y messages
         converter.try_convert(&random_message).await.unwrap();
         assert_eq!(converter.active_commands.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn active_commands_is_populated_with_existing_commands_from_retain_messages() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+
+        let existing_pending_operation = MqttMessage {
+            topic: Topic {
+                name: "te/device/main///cmd/restart/c8y-mapper-16574089".into(),
+            },
+            payload: json!({"status":"init"}).to_string().into(),
+            qos: QoS::AtLeastOnce,
+            retain: true,
+        };
+        converter
+            .try_convert(&existing_pending_operation)
+            .await
+            .unwrap();
+
+        let operation = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
+            {"id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+
+        assert_eq!(
+            converter.try_convert(&operation).await.unwrap().as_slice(),
+            [],
+            "Existing tedge operation should trigger de-duplication"
+        );
     }
 
     #[tokio::test]
