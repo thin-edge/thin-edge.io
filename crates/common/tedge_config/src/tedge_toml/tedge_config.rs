@@ -10,6 +10,7 @@ use super::models::AptConfig;
 use super::models::AutoFlag;
 use super::models::AutoLogUpload;
 use super::models::ConnectUrl;
+use super::models::Cryptoki;
 use super::models::HostPort;
 use super::models::MqttPayloadLimit;
 use super::models::SecondsOrHumanTime;
@@ -132,14 +133,17 @@ define_tedge_config! {
         csr_path: Utf8PathBuf,
 
         cryptoki: {
-            /// Use a Hardware Security Module for authenticating the MQTT connection with the cloud.
+            /// Whether to use a Hardware Security Module for authenticating the MQTT connection with the cloud.
             ///
-            /// When set to true, `key_path` option is ignored as PKCS#11 module is used for signing.
-            #[tedge_config(default(value = false))]
-            #[tedge_config(example = "true", example = "false")]
-            enable: bool,
+            /// "off" to not use the HSM, "module" to use the provided cryptoki dynamic module, "socket" to access the
+            /// HSM via tedge-p11-server signing service.
+            #[tedge_config(default(variable = Cryptoki::Off))]
+            #[tedge_config(example = "off", example = "module", example = "socket")]
+            mode: Cryptoki,
 
             /// A path to the PKCS#11 module used for interaction with the HSM.
+            ///
+            /// Needs to be set when `device.cryptoki.mode` is set to `module`
             #[tedge_config(example = "/usr/lib/x86_64-linux-gnu/opensc-pkcs11.so")]
             #[doku(as = "PathBuf")]
             module_path: Utf8PathBuf,
@@ -148,11 +152,12 @@ define_tedge_config! {
             #[tedge_config(example = "123456", default(value = "123456"))]
             pin: Arc<str>,
 
-            /// A serial number of a Personal Identity Verification (PIV) device to be used.
+            /// A path to the tedge-p11-server socket.
             ///
-            /// Necessary if two or more modules are connected.
-            #[tedge_config(example = "123456789")]
-            serial: Arc<str>,
+            /// Needs to be set when `device.cryptoki.mode` is set to `module`
+            #[tedge_config(example = "./thin-edge-pkcs11.sock")]
+            #[doku(as = "PathBuf")]
+            socket_path: Utf8PathBuf,
         },
 
         /// The default device type

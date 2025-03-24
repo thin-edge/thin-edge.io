@@ -42,6 +42,7 @@ use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::service_health_topic;
 use tedge_config;
 use tedge_config::models::auth_method::AuthType;
+use tedge_config::models::Cryptoki;
 use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
 use tedge_config::tedge_toml::MultiError;
@@ -546,7 +547,7 @@ pub fn bridge_config(
                 profile_name: profile.clone().map(Cow::into_owned),
                 mqtt_schema,
                 keepalive_interval: c8y_config.bridge.keepalive_interval.duration(),
-                use_cryptoki: config.device.cryptoki.enable,
+                use_cryptoki: config.device.cryptoki.mode != Cryptoki::Off,
             };
 
             Ok(BridgeConfig::from(params))
