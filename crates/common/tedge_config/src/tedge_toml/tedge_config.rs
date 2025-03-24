@@ -153,6 +153,11 @@ define_tedge_config! {
             /// Necessary if two or more modules are connected.
             #[tedge_config(example = "123456789")]
             serial: Arc<str>,
+
+            /// A path to the tedge-p11-server socket.
+            #[tedge_config(example = "./thin-edge-pkcs11.sock")]
+            #[doku(as = "PathBuf")]
+            socket_path: Utf8PathBuf,
         },
 
         /// The default device type
