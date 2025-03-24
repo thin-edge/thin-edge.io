@@ -4554,6 +4554,7 @@ dependencies = [
  "tedge_config",
  "tedge_downloader_ext",
  "tedge_file_system_ext",
+ "tedge_gen_mapper",
  "tedge_health_ext",
  "tedge_http_ext",
  "tedge_mqtt_bridge",
@@ -4801,6 +4802,15 @@ dependencies = [
  "tedge_utils",
  "tokio",
  "try-traits",
+]
+
+[[package]]
+name = "tedge_gen_mapper"
+version = "1.6.0"
+dependencies = [
+ "async-trait",
+ "tedge_actors",
+ "tedge_mqtt_ext",
 ]
 
 [[package]]
