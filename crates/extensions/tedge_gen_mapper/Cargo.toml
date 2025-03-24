@@ -1,0 +1,17 @@
+[package]
+name = "tedge_gen_mapper"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+tedge_actors = { workspace = true }
+tedge_mqtt_ext = { workspace = true }
+
+[lints]
+workspace = true
