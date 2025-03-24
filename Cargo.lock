@@ -4474,6 +4474,7 @@ dependencies = [
  "tedge_config",
  "tedge_downloader_ext",
  "tedge_file_system_ext",
+ "tedge_gen_mapper",
  "tedge_health_ext",
  "tedge_http_ext",
  "tedge_mqtt_bridge",
@@ -4721,6 +4722,15 @@ dependencies = [
  "tedge_utils",
  "tokio",
  "try-traits",
+]
+
+[[package]]
+name = "tedge_gen_mapper"
+version = "1.5.1"
+dependencies = [
+ "async-trait",
+ "tedge_actors",
+ "tedge_mqtt_ext",
 ]
 
 [[package]]
@@ -6206,3 +6216,8 @@ dependencies = [
  "quote",
  "syn 2.0.96",
 ]
+
+[[patch.unused]]
+name = "deno_media_type"
+version = "0.2.6"
+source = "git+https://github.com/denoland/deno_media_type?tag=0.2.6#86c7dd22da3602529ce686826ee4ce58975260be"

@@ -8,6 +8,7 @@ use crate::az::mapper::AzureMapper;
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
+use crate::gen::GenMapper;
 use anyhow::Context;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
@@ -24,6 +25,7 @@ mod az;
 mod c8y;
 mod collectd;
 mod core;
+mod gen;
 
 /// Set the cloud profile either from the CLI argument or env variable,
 /// then set the environment variable so child processes automatically
@@ -59,6 +61,7 @@ fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
         MapperName::C8y { profile } => Box::new(CumulocityMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
+        MapperName::Gen => Box::new(GenMapper),
     }
 }
 
@@ -108,6 +111,7 @@ pub enum MapperName {
         profile: Option<ProfileName>,
     },
     Collectd,
+    Gen,
 }
 
 impl fmt::Display for MapperName {
@@ -132,6 +136,7 @@ impl fmt::Display for MapperName {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-c8y@{profile}"),
             MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
+            MapperName::Gen => write!(f, "tedge-mapper-gen"),
         }
     }
 }
