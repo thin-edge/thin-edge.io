@@ -4473,6 +4473,7 @@ dependencies = [
  "tedge_signal_ext",
  "tedge_timer_ext",
  "tedge_uploader_ext",
+ "tedge_wasm_mapper",
  "tracing",
 ]
 
@@ -4898,6 +4899,15 @@ dependencies = [
  "tracing",
  "uzers",
  "whoami",
+]
+
+[[package]]
+name = "tedge_wasm_mapper"
+version = "1.4.2"
+dependencies = [
+ "async-trait",
+ "tedge_actors",
+ "tedge_mqtt_ext",
 ]
 
 [[package]]
