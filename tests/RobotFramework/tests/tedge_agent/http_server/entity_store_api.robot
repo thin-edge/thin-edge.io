@@ -25,35 +25,17 @@ CRUD apis
     ...    ${get}
     ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device"}
 
-    ${payload}=    Set Variable    '{"maintenance_mode":true,"maintenance_window":5}'
-    ${patch}=    Execute Command
-    ...    curl -X PATCH http://localhost:8000/tedge/entity-store/v1/entities/device/child01// -H 'Content-Type: application/json' -d ${payload}
-    Should Be Equal
-    ...    ${patch}
-    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","maintenance_mode":true,"maintenance_window":5}
-    Should Have MQTT Messages
-    ...    te/device/child01///twin/maintenance_mode
-    ...    message_contains=true
-    Should Have MQTT Messages
-    ...    te/device/child01///twin/maintenance_window
-    ...    message_contains=5
-
-    ${get}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
-    Should Be Equal
-    ...    ${get}
-    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","maintenance_mode":true,"maintenance_window":5}
-
     ${entities}=    Execute Command    curl http://localhost:8000/tedge/entity-store/v1/entities
     Should Contain
     ...    ${entities}
-    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","maintenance_mode":true,"maintenance_window":5}
+    ...    {"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device"}
 
     ${timestamp}=    Get Unix Timestamp
     ${delete}=    Execute Command
     ...    curl --silent -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child01//
     Should Be Equal
     ...    ${delete}
-    ...    [{"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device","maintenance_mode":true,"maintenance_window":5}]
+    ...    [{"@topic-id":"device/child01//","@parent":"device/main//","@type":"child-device"}]
     Should Have MQTT Messages
     ...    te/device/child01//
     ...    date_from=${timestamp}
@@ -125,6 +107,221 @@ Delete entity tree
     Should Contain Entity
     ...    {"@topic-id":"device/child2//","@parent":"device/main//","@type":"child-device"}
     ...    ${entities}
+
+Entity twin fragment apis
+    ${put}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window -H 'Content-Type: application/json' -d '5'
+    Should Be Equal    ${put}    5|200
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_window
+    ...    message_contains=5
+
+    # Assert PUT is idempotent
+    ${put}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window -H 'Content-Type: application/json' -d '5'
+    Should Be Equal    ${put}    5|200
+
+    ${get}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
+    Should Be Equal    ${get}    5|200
+
+    ${timestamp}=    Get Unix Timestamp
+    ${http_code}=    Execute Command
+    ...    curl --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
+    Should Be Equal    ${http_code}    204
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_window
+    ...    date_from=${timestamp}
+    ${retained_message}=    Execute Command
+    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_window --duration 1s
+    ...    ignore_exit_code=${True}
+    ...    strip=${True}
+    Should Be Empty    ${retained_message}
+
+    # Assert DELETE is idempotent
+    ${http_code}=    Execute Command
+    ...    curl --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_window
+    Should Be Equal    ${http_code}    204
+
+Entity twin apis
+    ${new_payload}=    Set Variable    {"maintainer":"John Doe","maintenance_mode":true,"maintenance_window":5}
+    ${put}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
+    Should Be Equal    ${put}    ${new_payload}|200
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_mode
+    ...    message_contains=true
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_window
+    ...    message_contains=5
+
+    ${get}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
+    Should Be Equal
+    ...    ${get}
+    ...    ${new_payload}|200
+
+    # Replace existing twins
+    ${timestamp}=    Get Unix Timestamp
+    ${new_payload}=    Set Variable    {"maintenance_mode":false}
+    ${put}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_mode
+    ...    message_contains=false
+    Should Be Equal    ${put}    ${new_payload}|200
+
+    # Assert PUT is idempotent
+    ${put}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
+    Should Be Equal    ${put}    ${new_payload}|200
+
+    ${get}=    Execute Command
+    ...    curl http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
+    Should Be Equal
+    ...    ${get}
+    ...    ${new_payload}
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_mode
+    ...    message_contains=${False}
+    ...    date_from=${timestamp}
+    ${retained_message}=    Execute Command
+    ...    tedge mqtt sub --no-topic te/device/main///twin/maintainer --duration 1s
+    ...    ignore_exit_code=${True}
+    ...    strip=${True}
+    Should Be Empty    ${retained_message}
+    ${retained_message}=    Execute Command
+    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_window --duration 1s
+    ...    ignore_exit_code=${True}
+    ...    strip=${True}
+    Should Be Empty    ${retained_message}
+
+    ${timestamp}=    Get Unix Timestamp
+    ${http_code}=    Execute Command
+    ...    curl --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
+    Should Be Equal    ${http_code}    204
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintenance_mode
+    ...    date_from=${timestamp}
+    ${retained_message}=    Execute Command
+    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_mode --duration 1s
+    ...    ignore_exit_code=${True}
+    ...    strip=${True}
+    Should Be Empty    ${retained_message}
+
+    # Assert DELETE is idempotent
+    ${http_code}=    Execute Command
+    ...    curl --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
+    Should Be Equal    ${http_code}    204
+
+    ${put}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin -H 'Content-Type: application/json' -d {}
+    Should Be Equal    ${put}    {}|200
+
+Entity twin api errors
+    # Get twin data of non-existent entity
+    ${url}=    Set Variable    http://localhost:8000/tedge/entity-store/v1/entities/device/bad-child///twin
+    ${resp}=    Execute Command    curl --silent --write-out "|%\{http_code\}" ${url}
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"The specified entity: device/bad-child// does not exist in the store"}|404
+
+    # Set twin fragments with non JSON map payload
+    ${url}=    Set Variable
+    ...    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
+    ${payload}=    Set Variable    true
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"invalid type: boolean `true`, expected a map at line 1 column 4"}|400
+
+    # Unsupported PATCH method on twin path
+    ${url}=    Set Variable    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
+    ${payload}=    Set Variable    {"maintenance_mode":true}
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "%\{http_code\}" -X PATCH ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal    ${resp}    405
+
+    # Set twin fragment with bad key
+    ${url}=    Set Variable
+    ...    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/multi/path/key
+    ${payload}=    Set Variable    true
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"Invalid twin key: 'multi/path/key'. Keys that are empty, containing '/' or starting with '@' are not allowed"}|400
+
+    # Set twin fragment with bad value
+    ${url}=    Set Variable
+    ...    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/test_key
+    ${payload}=    Set Variable    1.2.3
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"trailing characters at line 1 column 4"}|400
+
+    # Set twin fragment with bad value
+    ${url}=    Set Variable
+    ...    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/test_key
+    ${payload}=    Set Variable    1-2
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"trailing characters at line 1 column 2"}|400
+
+    # Set twin fragment with bad value
+    ${url}=    Set Variable
+    ...    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/test_key
+    ${payload}=    Set Variable    true true
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"trailing characters at line 1 column 6"}|400
+
+    # Set twin fragment with bad value
+    ${url}=    Set Variable
+    ...    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/test_key
+    ${payload}=    Set Variable    {"a":1}{"b":2}
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"trailing characters at line 1 column 8"}|400
+
+    # Unsupported PATCH method on twin fragment path
+    ${url}=    Set Variable    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/maintenance_mode
+    ${payload}=    Set Variable    true
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "%\{http_code\}" -X PATCH ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal    ${resp}    405
+
+    # Unsupported PATCH method on twin path
+    ${url}=    Set Variable    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin
+    ${payload}=    Set Variable    true
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "%\{http_code\}" -X PATCH ${url} -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal    ${resp}    405
+
+    # Unsupported channel
+    ${url}=    Set Variable    http://localhost:8000/tedge/entity-store/v1/entities/device/bad-child///cmd/123
+    ${resp}=    Execute Command    curl --silent --write-out "|%\{http_code\}" ${url}
+    Should Be Equal    ${resp}    {"error":"Actions on channel: cmd are not supported"}|404
+
+    # Payload exceeds 1MB size limit
+    ${url}=    Set Variable    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/key
+    Execute Command    echo -n '"' > payload.txt
+    Execute Command    yes x | head -n 1048576 | tr -d '\n' >> payload.txt
+    Execute Command    echo -n '"' >> payload.txt
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' --data-binary @payload.txt
+    Should Be Equal
+    ...    ${resp}
+    ...    Failed to buffer the request body: length limit exceeded|413
 
 
 *** Keywords ***

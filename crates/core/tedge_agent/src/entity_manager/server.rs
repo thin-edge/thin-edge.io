@@ -1,6 +1,4 @@
 use async_trait::async_trait;
-use serde::Deserialize;
-use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value;
 use tedge_actors::LoggingSender;
@@ -26,49 +24,27 @@ use tracing::error;
 pub enum EntityStoreRequest {
     Get(EntityTopicId),
     Create(EntityRegistrationMessage),
-    Patch(EntityTwinData),
     Delete(EntityTopicId),
     List(ListFilters),
     MqttMessage(MqttMessage),
+    GetTwinFragment(EntityTopicId, String),
+    SetTwinFragment(EntityTwinMessage),
+    GetTwinFragments(EntityTopicId),
+    SetTwinFragments(EntityTopicId, Map<String, Value>),
 }
 
 #[derive(Debug)]
 pub enum EntityStoreResponse {
     Get(Option<EntityMetadata>),
     Create(Result<Vec<RegisteredEntityData>, entity_store::Error>),
-    Patch(Result<(), entity_store::Error>),
     Delete(Vec<EntityMetadata>),
     List(Vec<EntityMetadata>),
     Ok,
+    GetTwinFragment(Option<Value>),
+    SetTwinFragment(Result<bool, entity_store::Error>),
+    GetTwinFragments(Result<Map<String, Value>, entity_store::Error>),
+    SetTwinFragments(Result<(), entity_store::Error>),
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EntityTwinData {
-    pub topic_id: EntityTopicId,
-    #[serde(flatten)]
-    pub fragments: Map<String, Value>,
-}
-
-impl EntityTwinData {
-    pub fn try_new(
-        topic_id: EntityTopicId,
-        twin_data: Map<String, Value>,
-    ) -> Result<Self, InvalidTwinData> {
-        for key in twin_data.keys() {
-            if key.starts_with('@') {
-                return Err(InvalidTwinData(key.clone()));
-            }
-        }
-        Ok(Self {
-            topic_id,
-            fragments: twin_data,
-        })
-    }
-}
-
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("Invalid key: '{0}', as fragment keys starting with '@' are not allowed as twin data")]
-pub struct InvalidTwinData(String);
 
 pub struct EntityStoreServer {
     entity_store: EntityStore,
@@ -124,10 +100,6 @@ impl Server for EntityStoreServer {
                 let res = self.register_entity(entity).await;
                 EntityStoreResponse::Create(res)
             }
-            EntityStoreRequest::Patch(twin_data) => {
-                let res = self.patch_entity(twin_data).await;
-                EntityStoreResponse::Patch(res)
-            }
             EntityStoreRequest::Delete(topic_id) => {
                 let deleted_entities = self.deregister_entity(topic_id).await;
                 EntityStoreResponse::Delete(deleted_entities)
@@ -135,6 +107,24 @@ impl Server for EntityStoreServer {
             EntityStoreRequest::List(filters) => {
                 let entities = self.entity_store.list_entity_tree(filters);
                 EntityStoreResponse::List(entities.into_iter().cloned().collect())
+            }
+            EntityStoreRequest::GetTwinFragment(topic_id, fragment_key) => {
+                let twin = self
+                    .entity_store
+                    .get_twin_fragment(&topic_id, &fragment_key);
+                EntityStoreResponse::GetTwinFragment(twin.cloned())
+            }
+            EntityStoreRequest::SetTwinFragment(twin_data) => {
+                let res = self.set_twin_fragment(twin_data).await;
+                EntityStoreResponse::SetTwinFragment(res)
+            }
+            EntityStoreRequest::GetTwinFragments(topic_id) => {
+                let res = self.entity_store.get_twin_fragments(&topic_id);
+                EntityStoreResponse::GetTwinFragments(res.cloned())
+            }
+            EntityStoreRequest::SetTwinFragments(topic_id, fragments) => {
+                let res = self.set_entity_twin_data(&topic_id, fragments).await;
+                EntityStoreResponse::SetTwinFragments(res)
             }
             EntityStoreRequest::MqttMessage(mqtt_message) => {
                 self.process_mqtt_message(mqtt_message).await;
@@ -210,6 +200,25 @@ impl EntityStoreServer {
         }
     }
 
+    async fn set_twin_fragment(
+        &mut self,
+        twin_message: EntityTwinMessage,
+    ) -> Result<bool, entity_store::Error> {
+        let updated = self
+            .entity_store
+            .update_twin_fragment(twin_message.clone())?;
+        if updated {
+            self.publish_twin_data(
+                &twin_message.topic_id,
+                twin_message.fragment_key,
+                twin_message.fragment_value,
+            )
+            .await;
+        }
+
+        Ok(updated)
+    }
+
     async fn publish_twin_data(
         &mut self,
         topic_id: &EntityTopicId,
@@ -218,7 +227,12 @@ impl EntityStoreServer {
     ) {
         let twin_channel = Channel::EntityTwinData { fragment_key };
         let topic = self.mqtt_schema.topic_for(topic_id, &twin_channel);
-        let message = MqttMessage::new(&topic, fragment_value.to_string()).with_retain();
+        let payload = if fragment_value.is_null() {
+            "".to_string()
+        } else {
+            fragment_value.to_string()
+        };
+        let message = MqttMessage::new(&topic, payload).with_retain();
         self.publish_message(message).await;
     }
 
@@ -256,21 +270,6 @@ impl EntityStoreServer {
         Ok(registered)
     }
 
-    async fn patch_entity(&mut self, twin_data: EntityTwinData) -> Result<(), entity_store::Error> {
-        for (fragment_key, fragment_value) in twin_data.fragments.into_iter() {
-            let twin_message =
-                EntityTwinMessage::new(twin_data.topic_id.clone(), fragment_key, fragment_value);
-            let updated = self.entity_store.update_twin_data(twin_message.clone())?;
-
-            if updated {
-                let message = twin_message.to_mqtt_message(&self.mqtt_schema);
-                self.publish_message(message).await;
-            }
-        }
-
-        Ok(())
-    }
-
     async fn deregister_entity(&mut self, topic_id: EntityTopicId) -> Vec<EntityMetadata> {
         let deleted = self.entity_store.deregister_entity(&topic_id);
         for entity in deleted.iter() {
@@ -285,6 +284,34 @@ impl EntityStoreServer {
         }
 
         deleted
+    }
+
+    async fn set_entity_twin_data(
+        &mut self,
+        topic_id: &EntityTopicId,
+        fragments: Map<String, Value>,
+    ) -> Result<(), entity_store::Error> {
+        let old_fragments = self
+            .entity_store
+            .set_twin_fragments(topic_id, fragments.clone())?;
+
+        // Clear all old twin messages
+        for (fragment_key, _) in old_fragments.into_iter() {
+            let twin_message = EntityTwinMessage::new(topic_id.clone(), fragment_key, Value::Null);
+            let message = twin_message.to_mqtt_message(&self.mqtt_schema);
+            self.publish_message(message).await;
+        }
+
+        // Publish new twin messages
+        for (fragment_key, fragment_value) in fragments.into_iter() {
+            let twin_message =
+                EntityTwinMessage::new(topic_id.clone(), fragment_key, fragment_value);
+
+            let message = twin_message.to_mqtt_message(&self.mqtt_schema);
+            self.publish_message(message).await;
+        }
+
+        Ok(())
     }
 }
 

@@ -433,77 +433,6 @@ curl 'http://localhost:8000/tedge/entity-store/v1/entities?parent=device/child2/
 ]
 ```
 
-## Update entity twin data
-
-Update an exiting entity, adding new twin data fragments or removing existing fragments.
-
-**Endpoint**
-
-```
-PATCH /v1/entities/{topic-id}
-```
-
-**Payload**
-
-Any fragments to be inserted/updated are specified with their desired values.
-Fragments to be removed are specified with a `null` value.
-
-```json
-{
-    "new-fragment": {
-        "new-key": "new-value"
-    },
-    "fragment-to-update": "updated-value",
-    "fragment-to-delete": null
-}
-```
-
-**Example**
-
-Update existing fragment: `name`, add new fragment: `hardware` and remove existing fragment: `maintenanceMode` with a `null` value:
-
-```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01 \
-  -X PATCH \
-  -H "Content-Type: application/json" \
-  -d '{
-    "Child": "Child 01",
-    "hardware": {
-        "serialNo": "98761234"
-    },
-    "maintenanceMode": null
-  }'
-```
-
-**Responses**
-
-* 200: OK
-  ```json
-  {
-      "@topic-id": "device/child01//",
-      "@parent":"device/main//",
-      "@type": "child-device",
-      "@id": "child01",
-      "name": "Child 01",
-      "type": "Raspberry Pi 4",
-      "hardware": {
-          "serialNo": "98761234"
-      },
-  }
-  ```
-* 400: Bad Request (Invalid JSON payload or payload with fragment keys starting with the reserved `@` character)
-  ```json
-  {
-      "error": "Fragment keys starting with '@' are not allowed as twin data"
-  }
-  ```
-* 404: Not Found
-  ```json
-  {
-      "error": "The specified entity: device/test-child// does not exist in the store"
-  }
-  ```
-
 ## Delete entity
 
 Deleting an entity results in the deletion of its immediate and nested child entities as well, to avoid leaving orphans behind.
@@ -544,3 +473,249 @@ curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child
   ]
   ```
 * 204: No Content, when nothing is deleted
+
+## Set entity twin data
+
+The twin data fragments for an entity can be set either individually or together in a single message.
+The twin data set/deleted with these HTTP APIs are published as retained `twin` messages to the MQTT broker as well.
+
+### Set a single twin fragment
+
+Set a single twin fragment value for an existing entity.
+
+**Endpoint**
+
+```
+PUT /v1/entities/{topic-id}/twin/{fragment-key}
+```
+
+**Payload**
+
+Any JSON value.
+
+**Examples**
+
+* Set `name` fragment with a `string` value (Additional `"` quotes are required for JSON strings):
+
+  ```shell
+  curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/name \
+    -X PUT \
+    -H "Content-Type: application/json" \
+    -d '"Child 01"'
+  ```
+* Set `maintenanceMode` fragment with a `boolean` value:
+  ```shell
+  curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/maintenanceMode \
+    -X PUT \
+    -H "Content-Type: application/json" \
+    -d 'true'
+  ```
+* Set `hardware` fragment with an `object` value:
+  ```shell
+  curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/hardware \
+    -X PUT \
+    -H "Content-Type: application/json" \
+    -d '{"serialNo": "98761234"}'
+  ```
+
+**Responses**
+
+* 200: OK (Return the current value of the twin fragment)
+  ```json
+  {
+      "serialNo": "98761234"
+  }
+  ```
+* 400: Bad Request (When the fragment key starts with the reserved `@` character)
+  ```json
+  {
+      "error": "Invalid twin key: '@id'. Keys that are empty, containing '/' or starting with '@' are not allowed"
+  }
+  ```
+* 404: Not Found
+  ```json
+  {
+      "error": "The specified entity: device/test-child// does not exist in the store"
+  }
+  ```
+
+### Set all twin fragments
+
+Set all entity twin fragments at once.
+All previous values are replaced at once with the provided values.
+
+**Endpoint**
+
+```
+PUT /v1/entities/{topic-id}/twin
+```
+
+**Payload**
+
+Any fragments to be inserted/updated are specified with their desired values.
+Fragments to be removed are specified with a `null` value.
+
+```json
+{
+    "new-fragment": {
+        "new-key": "new-value"
+    },
+    "fragment-to-update": "updated-value",
+    "fragment-to-delete": null
+}
+```
+
+**Example**
+
+Update existing fragment: `name`, add new fragment: `hardware` and remove existing fragment: `maintenanceMode` (with a `null` value):
+
+```shell
+curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin \
+  -X PUT \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Child 01",
+    "hardware": {
+        "serialNo": "98761234"
+    },
+    "maintenanceMode": null
+  }'
+```
+
+**Responses**
+
+* 200: OK
+  ```json
+  {
+      "name": "Child 01",
+      "hardware": {
+          "serialNo": "98761234"
+      },
+  }
+  ```
+* 400: Bad Request (Invalid JSON payload or payload with fragment keys starting with the reserved `@` character)
+  ```json
+  {
+      "error": "Fragment keys starting with '@' are not allowed as twin data"
+  }
+  ```
+* 404: Not Found
+  ```json
+  {
+      "error": "The specified entity: device/test-child// does not exist in the store"
+  }
+  ```
+
+## Get entity twin data
+
+The twin fragments of an entity can be queried individually or as a whole.
+
+### Get a single twin fragment
+
+**Endpoint**
+
+```
+GET /v1/entities/{topic-id}/twin/{fragment-key}
+```
+
+**Example**
+
+```shell
+curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/hardware
+```
+
+**Responses**
+
+* 200: OK
+  ```json
+  {
+      "serialNo": "98761234"
+  }
+  ```
+* 404: Not Found
+  ```json
+  {
+      "error": "The specified entity: device/test-child// does not exist in the store"
+  }
+  ```
+
+### Get all twin fragments
+
+**Endpoint**
+
+```
+GET /v1/entities/{topic-id}/twin
+```
+
+**Example**
+
+```shell
+curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin
+```
+
+**Responses**
+
+* 200: OK
+  ```json
+  {
+      "name": "Child 01",
+      "hardware": {
+          "serialNo": "98761234"
+      },
+  }
+  ```
+* 404: Not Found
+  ```json
+  {
+      "error": "The specified entity: device/test-child// does not exist in the store"
+  }
+  ```
+
+## Delete entity twin data
+
+The twin fragments of an entity can be deleted either individually or all at once.
+
+### Delete a single twin fragment
+
+**Endpoint**
+
+```
+DELETE /v1/entities/{topic-id}/twin/{fragment-key}
+```
+
+**Example**
+
+```shell
+curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/maintenanceMode
+```
+
+This is equivalent to using the `PUT` API with a `null` value as follows:
+
+```shell
+curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/maintenanceMode \
+  -X PUT \
+  -H "Content-Type: application/json" \
+  -d 'null'
+```
+
+**Responses**
+
+* 204: No Content (Whether the target twin data was deleted or did not exist already)
+
+### Delete all twin fragments
+
+**Endpoint**
+
+```
+DELETE /v1/entities/{topic-id}/twin
+```
+
+**Example**
+
+```shell
+curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin
+```
+
+**Responses**
+
+* 204: No Content (Whether the target twin data was deleted or did not exist already)

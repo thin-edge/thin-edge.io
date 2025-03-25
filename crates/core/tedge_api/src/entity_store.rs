@@ -34,6 +34,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::mem;
 use std::path::Path;
 
 // In the future, root will be read from config
@@ -194,7 +195,8 @@ impl EntityStore {
                                             fragment_key,
                                             fragment_value,
                                         );
-                                        if let Err(err) = self.register_twin_data(twin_data.clone())
+                                        if let Err(err) =
+                                            self.register_twin_fragment(twin_data.clone())
                                         {
                                             error!("Failed to restore twin fragment: {twin_data:?} from the persistent entity store due to {err}");
                                             continue;
@@ -449,22 +451,37 @@ impl EntityStore {
         Ok(removed_entities)
     }
 
+    pub fn get_twin_fragment(
+        &self,
+        topic_id: &EntityTopicId,
+        fragment_key: &str,
+    ) -> Option<&JsonValue> {
+        self.entities
+            .get(topic_id)
+            .and_then(|entity| entity.twin_data.get(fragment_key))
+    }
+
     /// Updates the entity twin data with the provided fragment data.
     /// Returns `true`, if the twin data got updated with the new fragment value.
     /// If the provided fragment already existed, `false` is returned.
-    pub fn update_twin_data(
+    pub fn update_twin_fragment(
         &mut self,
         twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
-        self.register_and_persist_twin_data(twin_message.clone())
+        self.register_and_persist_twin_fragment(twin_message.clone())
     }
 
-    pub fn register_twin_data(
+    pub fn register_twin_fragment(
         &mut self,
         twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
-        let fragment_key = twin_message.fragment_key.clone();
-        let fragment_value = twin_message.fragment_value.clone();
+        let fragment_key = twin_message.fragment_key;
+        let fragment_value = twin_message.fragment_value;
+
+        if fragment_key.is_empty() || fragment_key.starts_with('@') || fragment_key.contains('/') {
+            return Err(Error::InvalidTwinData(fragment_key));
+        }
+
         let entity = self.try_get_mut(&twin_message.topic_id)?;
         if fragment_value.is_null() {
             let existing = entity.twin_data.remove(&fragment_key);
@@ -483,17 +500,35 @@ impl EntityStore {
         Ok(true)
     }
 
-    pub fn register_and_persist_twin_data(
+    pub fn register_and_persist_twin_fragment(
         &mut self,
         twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
-        let updated = self.register_twin_data(twin_message.clone())?;
+        let updated = self.register_twin_fragment(twin_message.clone())?;
         if updated {
             self.message_log
                 .append_message(&twin_message.to_mqtt_message(&self.mqtt_schema))?;
         }
 
         Ok(updated)
+    }
+
+    pub fn get_twin_fragments(
+        &mut self,
+        topic_id: &EntityTopicId,
+    ) -> Result<&Map<String, JsonValue>, entity_store::Error> {
+        let entity = self.try_get(topic_id)?;
+        Ok(&entity.twin_data)
+    }
+
+    pub fn set_twin_fragments(
+        &mut self,
+        topic_id: &EntityTopicId,
+        fragments: Map<String, JsonValue>,
+    ) -> Result<Map<String, JsonValue>, entity_store::Error> {
+        let entity = self.try_get_mut(topic_id)?;
+        let old = mem::replace(&mut entity.twin_data, fragments);
+        Ok(old)
     }
 
     pub fn cache_early_data_message(&mut self, message: MqttMessage) {
@@ -749,6 +784,9 @@ pub enum Error {
 
     #[error(transparent)]
     FromSerdeJson(#[from] serde_json::Error),
+
+    #[error("Invalid twin key: '{0}'. Keys that are empty, containing '/' or starting with '@' are not allowed")]
+    InvalidTwinData(String),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -965,7 +1003,12 @@ impl EntityTwinMessage {
                 fragment_key: self.fragment_key,
             },
         );
-        MqttMessage::new(&message_topic, self.fragment_value.to_string()).with_retain()
+        let payload = if self.fragment_value.is_null() {
+            "".to_string()
+        } else {
+            self.fragment_value.to_string()
+        };
+        MqttMessage::new(&message_topic, payload).with_retain()
     }
 }
 
@@ -1510,7 +1553,7 @@ mod tests {
 
         let topic_id = EntityTopicId::default_main_device();
         let updated = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "hardware".into(),
                 json!({ "version": 5 }),
@@ -1535,7 +1578,7 @@ mod tests {
 
         let topic_id = EntityTopicId::default_main_device();
         let _ = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "hardware".into(),
                 json!({ "version": 5 }),
@@ -1543,7 +1586,7 @@ mod tests {
             .unwrap();
 
         let updated = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "hardware".into(),
                 json!({ "version": 6 }),
@@ -1569,7 +1612,7 @@ mod tests {
         let topic_id = EntityTopicId::default_main_device();
 
         let _ = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "foo".into(),
                 json!("bar"),
@@ -1577,7 +1620,7 @@ mod tests {
             .unwrap();
 
         let updated = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "foo".into(),
                 json!(null),
@@ -1617,7 +1660,7 @@ mod tests {
 
         // Add some additional fragments to the device twin data
         let _ = store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 topic_id.clone(),
                 "hardware".into(),
                 json!({ "version": 5 }),
@@ -1705,7 +1748,7 @@ mod tests {
 
         // Update the entity twin data
         store
-            .update_twin_data(EntityTwinMessage::new(
+            .update_twin_fragment(EntityTwinMessage::new(
                 entity_topic_id.clone(),
                 "foo".into(),
                 json!("bar"),
@@ -1790,7 +1833,7 @@ mod tests {
                 )
                 .unwrap();
             store
-                .update_twin_data(EntityTwinMessage::new(
+                .update_twin_fragment(EntityTwinMessage::new(
                     child1_topic_id.clone(),
                     twin_fragment_key.clone(),
                     twin_fragment_value.clone(),
