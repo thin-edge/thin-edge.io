@@ -38,7 +38,7 @@ impl LoggingChild {
                Self::update_and_log_outcome(cmd_line, outcome, command_log, graceful_timeout, &status).await
             }
             _ = Self::timeout_operation(&mut status, cid, graceful_timeout, forceful_timeout) => {
-                Err(std::io::Error::new(std::io::ErrorKind::Other,"failed to kill the process: {cmd_line}"))
+                Err(std::io::Error::new(std::io::ErrorKind::Other, format!("failed to kill the process: {cmd_line}")))
             }
         }
     }
