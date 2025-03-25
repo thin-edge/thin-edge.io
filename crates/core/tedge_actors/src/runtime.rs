@@ -92,7 +92,7 @@ impl Runtime {
     /// I.e until
     /// - Either, a `Shutdown` action is sent to the runtime
     /// - Or, all the runtime handler clones have been dropped
-    ///       and all the running tasks have reach completion (successfully or not).
+    ///   and all the running tasks have reach completion (successfully or not).
     pub async fn run_to_completion(self) -> Result<(), RuntimeError> {
         if let Err(err) = Runtime::wait_for_completion(self.bg_task).await {
             error!("Aborted due to {err}");

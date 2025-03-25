@@ -87,6 +87,7 @@ fn not_tedge_config(attr: &syn::Attribute) -> bool {
     !is_tedge_config
 }
 
+#[allow(clippy::large_enum_variant)] // macro code, low impact
 #[derive(Debug)]
 pub enum FieldOrGroup {
     Field(ConfigurableField),

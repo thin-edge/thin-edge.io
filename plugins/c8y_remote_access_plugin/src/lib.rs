@@ -296,10 +296,9 @@ async fn read_from_stream(unix_stream: &mut UnixStream) -> miette::Result<()> {
     }
 
     Err(UnixSocketError(
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("sock: Did not receive expected response from socket. Expected = '{SUCCESS_MESSAGE}'"),
-        ),
+        io::Error::other(format!(
+            "sock: Did not receive expected response from socket. Expected = '{SUCCESS_MESSAGE}'"
+        )),
         "checking the response from the unix socket",
     )
     .into())

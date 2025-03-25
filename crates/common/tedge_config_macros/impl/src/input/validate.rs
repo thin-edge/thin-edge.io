@@ -93,6 +93,7 @@ impl TryFrom<super::parse::ConfigurationGroup> for ConfigurationGroup {
     }
 }
 
+#[allow(clippy::large_enum_variant)] // macro code, low impact
 #[derive(Debug)]
 pub enum FieldOrGroup {
     Field(ConfigurableField),

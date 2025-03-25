@@ -139,12 +139,7 @@ impl ExternalPlugins {
 
         let config = tedge_config::TEdgeConfig::try_new(self.config_location.clone())
             .await
-            .map_err(|err| {
-                io::Error::new(
-                    ErrorKind::Other,
-                    format!("Failed to load tedge config: {}", err),
-                )
-            })?;
+            .map_err(|err| io::Error::other(format!("Failed to load tedge config: {}", err)))?;
 
         for maybe_entry in fs::read_dir(&self.plugin_dir)? {
             let entry = maybe_entry?;
