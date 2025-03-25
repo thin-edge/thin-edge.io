@@ -13,7 +13,7 @@ use time::OffsetDateTime;
 
 fn fix_timezone_offset(time: &str) -> String {
     let str_size = time.len();
-    let split = time.split(['+', '-']).last();
+    let split = time.split(['+', '-']).next_back();
     match split {
         Some(value) if !value.contains(':') => {
             time[0..str_size - 2].to_string() + ":" + &time[str_size - 2..str_size]

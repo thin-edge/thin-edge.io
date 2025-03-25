@@ -106,10 +106,7 @@ async fn kill_on_timeout(
     let _ = nix::sys::signal::kill(pid, nix::sys::signal::SIGKILL);
 
     tokio::time::sleep(Duration::from_secs(1)).await;
-    std::io::Error::new(
-        std::io::ErrorKind::Other,
-        "failed to kill the process after timeout",
-    )
+    std::io::Error::other("failed to kill the process after timeout")
 }
 
 impl ScriptActor {
