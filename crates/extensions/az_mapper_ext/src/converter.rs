@@ -7,14 +7,11 @@ use serde_json::Value;
 use std::convert::Infallible;
 use tedge_actors::Converter;
 use tedge_api::mqtt_topics::Channel;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::models::timestamp::TimeFormat;
 use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
-
-const MOSQUITTO_BRIDGE_TOPIC_ID: &str = "device/main/service/mosquitto-az-bridge";
 
 #[derive(Debug)]
 pub struct MapperConfig {
@@ -64,7 +61,7 @@ impl AzureConverter {
 
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
         let messages = match self.mqtt_schema.entity_channel_of(&input.topic) {
-            Ok((entity, channel)) => self.try_convert_te_topics(input, &entity, channel),
+            Ok((_, channel)) => self.try_convert_te_topics(input, channel),
             Err(_) => Ok(Vec::new()),
         }?;
 
@@ -82,12 +79,17 @@ impl AzureConverter {
     fn try_convert_te_topics(
         &mut self,
         input: &MqttMessage,
-        entity: &EntityTopicId,
         channel: Channel,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         // don't convert mosquitto bridge notification topic
         // https://github.com/thin-edge/thin-edge.io/issues/2236
-        if entity.as_str() == MOSQUITTO_BRIDGE_TOPIC_ID {
+        if input
+            .payload
+            .as_str()?
+            .parse::<u8>()
+            .is_ok_and(|n| n == 0 || n == 1)
+            && channel == Channel::Health
+        {
             return Ok(vec![]);
         }
 
@@ -447,12 +449,25 @@ mod tests {
     }
 
     #[test]
-    fn converting_bridge_health_status() {
+    fn skip_converting_bridge_health_status() {
         let mut converter = create_test_converter(false);
 
         let input = "0";
         let result = converter.try_convert(&MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/mosquitto-az-bridge/status/health"),
+            input,
+        ));
+        let res = result.unwrap();
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn skip_converting_bridge_health_status_for_different_bridge_topic() {
+        let mut converter = create_test_converter(false);
+
+        let input = "0";
+        let result = converter.try_convert(&MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/mosquitto-xyz-bridge/status/health"),
             input,
         ));
         let res = result.unwrap();

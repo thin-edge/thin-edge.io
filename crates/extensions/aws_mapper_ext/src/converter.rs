@@ -15,8 +15,6 @@ use tedge_utils::timestamp::TimeFormat;
 use crate::error::ConversionError;
 use crate::size_threshold::SizeThreshold;
 
-const MOSQUITTO_BRIDGE_TOPIC_ID: &str = "device/main/service/mosquitto-aws-bridge";
-
 pub struct AwsConverter {
     pub(crate) add_timestamp: bool,
     pub(crate) clock: Box<dyn Clock>,
@@ -74,7 +72,13 @@ impl AwsConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         // don't convert mosquitto bridge notification topic
         // https://github.com/thin-edge/thin-edge.io/issues/2236
-        if source.as_str() == MOSQUITTO_BRIDGE_TOPIC_ID {
+        if input
+            .payload
+            .as_str()?
+            .parse::<u8>()
+            .is_ok_and(|n| n == 0 || n == 1)
+            && channel == Channel::Health
+        {
             return Ok(vec![]);
         }
 
@@ -89,7 +93,7 @@ impl AwsConverter {
                 alarm_type: type_name,
             } => self.convert_telemetry_message(input, source, &type_name),
 
-            Channel::Health => self.convert_health_message(&source, &channel, input),
+            Channel::Health => self.convert_health_message(&source, input),
 
             _ => Ok(vec![]),
         }
@@ -98,14 +102,8 @@ impl AwsConverter {
     fn convert_health_message(
         &self,
         source: &EntityTopicId,
-        channel: &Channel,
         input: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        match channel {
-            Channel::Health => (),
-            _ => panic!("Not a health message"),
-        }
-
         let topic_prefix = &self.topic_prefix;
         let source = normalize_name(source);
         let out_topic = format!("{topic_prefix}/td/{source}/status/health");
@@ -511,12 +509,25 @@ mod tests {
     }
 
     #[test]
-    fn converting_bridge_health_status() {
+    fn skip_converting_bridge_health_status() {
         let mut converter = create_test_converter(false);
 
         let input = "0";
         let result = converter.try_convert(&MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/mosquitto-aws-bridge/status/health"),
+            input,
+        ));
+        let res = result.unwrap();
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn skip_converting_bridge_health_status_for_different_bridge_topic() {
+        let mut converter = create_test_converter(false);
+
+        let input = "0";
+        let result = converter.try_convert(&MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/mosquitto-xyz-bridge/status/health"),
             input,
         ));
         let res = result.unwrap();
