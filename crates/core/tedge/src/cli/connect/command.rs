@@ -260,6 +260,11 @@ impl ConnectCommand {
                         .or_none()
                         .map(|u| u.host().to_string())
                         .unwrap_or_default(),
+                    &c8y_config
+                        .http
+                        .or_none()
+                        .map(|u| u.host().to_string())
+                        .unwrap_or_default(),
                 )
                 .await
                 .map(Some)
@@ -1233,18 +1238,20 @@ fn get_common_mosquitto_config_file_path(
 async fn tenant_matches_configured_url(
     tedge_config: &TEdgeConfig,
     c8y_prefix: Option<&str>,
-    configured_url: &str,
+    configured_mqtt_url: &str,
+    configured_http_url: &str,
 ) -> Result<bool, Fancy<ConnectError>> {
     let spinner = Spinner::start("Checking Cumulocity is connected to intended tenant");
     let res = get_connected_c8y_url(tedge_config, c8y_prefix).await;
     match spinner.finish(res) {
-        Ok(url) if url == configured_url => Ok(true),
+        Ok(url) if url == configured_mqtt_url || url == configured_http_url => Ok(true),
         Ok(url) => {
             warning!(
-            "The device is connected to {}, but the configured URL is {}.\
+            "The device is connected to {}, but the configured URL is (mqtt={}, http={}).\
             \n    To connect the device to the intended tenant, remove the device certificate from {url}, and then run `tedge reconnect c8y`", 
             url.bold(),
-            configured_url.bold(),
+            configured_mqtt_url.bold(),
+            configured_http_url.bold(),
         );
             Ok(false)
         }
