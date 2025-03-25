@@ -4913,8 +4913,15 @@ name = "tedge_wasm_mapper"
 version = "1.4.2"
 dependencies = [
  "async-trait",
+ "camino",
+ "serde",
  "tedge_actors",
  "tedge_mqtt_ext",
+ "thiserror 1.0.61",
+ "time",
+ "tokio",
+ "toml 0.8.8",
+ "tracing",
 ]
 
 [[package]]
