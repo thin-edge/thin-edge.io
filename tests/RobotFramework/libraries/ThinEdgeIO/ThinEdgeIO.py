@@ -697,6 +697,68 @@ class ThinEdgeIO(DeviceLibrary):
         )
         return result
 
+    @keyword("Should Have Retained MQTT Messages")
+    def should_have_retained_mqtt_messages(
+            self,
+            topic: str,
+            device_name: str = None 
+    ) -> str:
+        """
+        Check for a retained message on the given topic
+
+        Args:
+            topic (str): Filter by topic. Supports MQTT wildcard patterns
+
+        *Example:*
+        | ${messages}= | `Should Have Retained MQTT Messages` | te/device/child01/# |
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to execute the command as the device: '{device_name}' has not been setup"
+            )
+        
+        command = f"tedge mqtt sub {topic} --retained-only --duration 1s"
+        output = device.execute_command(command).stdout
+        lines = output.splitlines()
+        assert lines, f"Expected at least one retained message, but received none"
+        return lines
+
+    @keyword("Should Not Have Retained MQTT Messages")
+    def should_not_have_retained_mqtt_messages(
+            self,
+            topic: str,
+            duration: str = "1s",
+            device_name: str = None 
+    ) -> str:
+        """
+        Assert that there are no retained messages on the given topic
+
+        Args:
+            topic (str): Filter by topic. Supports MQTT wildcard patterns
+
+        *Example:*
+        | ${messages}= | `Should Not Have Retained MQTT Messages` | te/device/child01/# |
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to execute the command as the device: '{device_name}' has not been setup"
+            )
+        
+        command = f"tedge mqtt sub {topic} --retained-only --duration {duration}"
+        output = device.execute_command(command).stdout
+        assert output == "", f"Expected no messages, but received: {output}"
+        return output
+
     @keyword("Register Child Device")
     def register_child(
             self,
