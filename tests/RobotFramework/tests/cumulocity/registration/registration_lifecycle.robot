@@ -516,6 +516,18 @@ Unexpected message doesn't cause a panic #3134
     Device Should Exist    ${DEVICE_SN}:device:child2:service:foo
     Service Health Status Should Be Up    tedge-mapper-c8y
 
+Deregister clears all entity retained messages
+    Execute Command    tedge mqtt pub --retain 'te/device/child_xyz//' '{"@type":"child-device", "name": "Child XYZ"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child_xyz///twin/foo' '"bar"'
+
+    Should Have Retained MQTT Messages    te/device/child_xyz///twin/name
+    Should Have Retained MQTT Messages    te/device/child_xyz///twin/foo
+
+    # Delete entity
+    Execute Command    tedge mqtt pub --retain 'te/device/child_xyz//' ""
+
+    Should Not Have Retained MQTT Messages    te/device/child_xyz//#
+
 
 *** Keywords ***
 Should Have Retained Message Count

@@ -140,7 +140,10 @@ impl EntityStoreServer {
             if let Channel::EntityMetadata = channel {
                 self.process_entity_registration(topic_id, message).await;
             } else {
-                self.process_entity_data(topic_id).await;
+                let res = self.process_entity_data(topic_id, channel, message).await;
+                if let Err(err) = res {
+                    error!("Failed to process entity data message: {err}");
+                }
             }
         } else {
             error!("Ignoring the message: {message} received on unsupported topic",);
@@ -177,27 +180,32 @@ impl EntityStoreServer {
         }
     }
 
-    async fn process_entity_data(&mut self, topic_id: EntityTopicId) {
+    async fn process_entity_data(
+        &mut self,
+        topic_id: EntityTopicId,
+        channel: Channel,
+        message: MqttMessage,
+    ) -> Result<(), entity_store::Error> {
         // if the target entity is unregistered, try to register it first using auto-registration
         if self.entity_store.get(&topic_id).is_none()
             && self.entity_auto_register
             && topic_id.matches_default_topic_scheme()
+            && !message.payload().is_empty()
         {
-            match self.entity_store.auto_register_entity(&topic_id) {
-                Ok(entities) => {
-                    for entity in entities {
-                        let message = entity.to_mqtt_message(&self.mqtt_schema).with_retain();
-                        self.publish_message(message).await;
-                    }
-                }
-                Err(err) => {
-                    error!(
-                        "Failed to auto-register entities for the topic: {} due to: {err}",
-                        &topic_id
-                    );
-                }
+            let entities = self.entity_store.auto_register_entity(&topic_id)?;
+            for entity in entities {
+                let message = entity.to_mqtt_message(&self.mqtt_schema).with_retain();
+                self.publish_message(message).await;
             }
         }
+
+        if let Channel::EntityTwinData { fragment_key } = channel {
+            let fragment_value = serde_json::from_slice(message.payload_bytes())?;
+            let twin_message = EntityTwinMessage::new(topic_id, fragment_key, fragment_value);
+            self.entity_store.update_twin_fragment(twin_message)?;
+        }
+
+        Ok(())
     }
 
     async fn set_twin_fragment(
@@ -272,7 +280,18 @@ impl EntityStoreServer {
 
     async fn deregister_entity(&mut self, topic_id: EntityTopicId) -> Vec<EntityMetadata> {
         let deleted = self.entity_store.deregister_entity(&topic_id);
-        for entity in deleted.iter() {
+        for entity in deleted.iter().rev() {
+            for twin_key in entity.twin_data.keys() {
+                let topic = self.mqtt_schema.topic_for(
+                    &entity.topic_id,
+                    &Channel::EntityTwinData {
+                        fragment_key: twin_key.to_string(),
+                    },
+                );
+                let clear_twin_msg = MqttMessage::new(&topic, "").with_retain();
+
+                self.publish_message(clear_twin_msg).await;
+            }
             let topic = self
                 .mqtt_schema
                 .topic_for(&entity.topic_id, &Channel::EntityMetadata);
