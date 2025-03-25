@@ -312,6 +312,17 @@ Entity twin api errors
     ${resp}=    Execute Command    curl --silent --write-out "|%\{http_code\}" ${url}
     Should Be Equal    ${resp}    {"error":"Actions on channel: cmd are not supported"}|404
 
+    # Payload exceeds 1MB size limit
+    ${url}=    Set Variable    http://localhost:8000/tedge/entity-store/v1/entities/device/main///twin/key
+    Execute Command    echo -n '"' > payload.txt
+    Execute Command    yes x | head -n 1048576 | tr -d '\n' >> payload.txt
+    Execute Command    echo -n '"' >> payload.txt
+    ${resp}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT ${url} -H 'Content-Type: application/json' --data-binary @payload.txt
+    Should Be Equal
+    ...    ${resp}
+    ...    Failed to buffer the request body: length limit exceeded|413
+
 
 *** Keywords ***
 Custom Setup

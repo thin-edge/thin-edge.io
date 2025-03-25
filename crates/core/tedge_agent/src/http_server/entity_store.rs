@@ -11,6 +11,7 @@
 use super::server::AgentState;
 use crate::entity_manager::server::EntityStoreRequest;
 use crate::entity_manager::server::EntityStoreResponse;
+use axum::extract::DefaultBodyLimit;
 use axum::extract::Path;
 use axum::extract::Query;
 use axum::extract::State;
@@ -35,6 +36,8 @@ use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::TopicIdError;
+
+pub const HTTP_MAX_PAYLOAD_SIZE: usize = 1048576; // 1 MB
 
 #[derive(Debug, Default, Deserialize)]
 pub struct ListParams {
@@ -162,6 +165,7 @@ pub(crate) fn entity_store_router(state: AgentState) -> Router {
             "/v1/entities/{*path}",
             get(get_resource).put(put_resource).delete(delete_resource),
         )
+        .layer(DefaultBodyLimit::max(HTTP_MAX_PAYLOAD_SIZE))
         .with_state(state)
 }
 
@@ -1561,6 +1565,27 @@ mod tests {
             .expect("request builder");
         let response = app.call(req).await.unwrap();
         assert_non_existent_entity_response(response).await;
+    }
+
+    #[tokio::test]
+    async fn set_twin_fragments_payload_too_large() {
+        let TestHandle {
+            mut app,
+            entity_store_box: _,
+        } = setup();
+
+        let large_value = "x".repeat(1048576);
+        let twin_payload = json!({"foo": large_value}).to_string();
+
+        let req = Request::builder()
+            .method(Method::PUT)
+            .uri("/v1/entities/device/test-child///twin")
+            .header("Content-Type", "application/json")
+            .body(Body::from(twin_payload))
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 
     async fn assert_non_existent_entity_response(response: Response<Body>) {
