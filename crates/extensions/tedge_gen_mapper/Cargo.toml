@@ -10,8 +10,15 @@ repository.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
+camino = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 tedge_actors = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true, features = ["fs", "macros", "time"] }
+toml = { workspace = true, features = ["parse"] }
+tracing = { workspace = true }
 
 [lints]
 workspace = true

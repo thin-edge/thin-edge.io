@@ -15,10 +15,11 @@ impl TEdgeComponent for GenMapper {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors("tedge-gen-mapper", &tedge_config).await?;
 
-        let mut wasm_mapper = GenMapperBuilder::new("/etc/tedge/gen-mapper");
-        wasm_mapper.connect(&mut mqtt_actor);
+        let mut gen_mapper = GenMapperBuilder::default();
+        gen_mapper.load("/etc/tedge/gen-mapper").await;
+        gen_mapper.connect(&mut mqtt_actor);
 
-        runtime.spawn(wasm_mapper).await?;
+        runtime.spawn(gen_mapper).await?;
         runtime.spawn(mqtt_actor).await?;
         runtime.run_to_completion().await?;
         Ok(())
