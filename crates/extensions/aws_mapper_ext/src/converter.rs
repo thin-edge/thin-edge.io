@@ -107,10 +107,16 @@ impl AwsConverter {
         let topic_prefix = &self.topic_prefix;
         let source = normalize_name(source);
         let out_topic = format!("{topic_prefix}/td/{source}/status/health");
-        let payload = self.with_timestamp(input)?;
-        let output = MqttMessage::new(&Topic::new(&out_topic).unwrap(), payload);
-
-        Ok(vec![output])
+        match self.with_timestamp(input) {
+            Ok(payload) => {
+                let output = MqttMessage::new(&Topic::new(&out_topic).unwrap(), payload);
+                Ok(vec![output])
+            }
+            Err(err) => {
+                error!("Could not add timestamp to payload for {out_topic}: {err}. Skipping");
+                Ok(vec![])
+            }
+        }
     }
 
     fn convert_telemetry_message(
@@ -120,7 +126,13 @@ impl AwsConverter {
         telemetry_type: &String,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let topic_prefix = &self.topic_prefix;
-        let payload = self.with_timestamp(input)?;
+        let payload = match self.with_timestamp(input) {
+            Ok(payload) => payload,
+            Err(err) => {
+                error!("Could not add timestamp to payload: {err}. Skipping");
+                return Ok(vec![]);
+            }
+        };
         let source = normalize_name(&source);
         // XXX: should match on `Channel` instead
         let out_topic = match input.topic.name.split('/').collect::<Vec<_>>()[..] {
@@ -199,7 +211,6 @@ impl Converter for AwsConverter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::ConversionError::FromSerdeJson;
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;
@@ -223,27 +234,13 @@ mod tests {
     }
 
     #[test]
-    fn convert_error() {
-        let mut converter = create_test_converter(true);
-
-        let input = "Invalid JSON";
-
-        let output = converter.convert(&new_tedge_message(input)).unwrap();
-
-        assert_eq!(output.first().unwrap().topic.name, "te/errors");
-        assert_eq!(
-            extract_first_message_payload(output),
-            "expected value at line 1 column 1"
-        );
-    }
-
-    #[test]
-    fn try_convert_invalid_json_returns_error() {
+    fn try_convert_invalid_json_skips_message() {
         let mut converter = create_test_converter(false);
 
         let input = "This is not Thin Edge JSON";
         let result = converter.try_convert(&new_tedge_message(input));
-        assert_matches!(result, Err(FromSerdeJson(_)))
+
+        assert!(result.unwrap().is_empty());
     }
 
     #[test]

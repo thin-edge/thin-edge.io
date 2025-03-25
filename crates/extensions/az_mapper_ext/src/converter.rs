@@ -97,11 +97,19 @@ impl AzureConverter {
             Channel::Measurement { .. }
             | Channel::Event { .. }
             | Channel::Alarm { .. }
-            | Channel::Health => {
-                let payload = self.with_timestamp(input)?;
-                let output = MqttMessage::new(&self.mapper_config.out_topic, payload);
-                Ok(vec![output])
-            }
+            | Channel::Health => match self.with_timestamp(input) {
+                Ok(payload) => {
+                    let output = MqttMessage::new(&self.mapper_config.out_topic, payload);
+                    Ok(vec![output])
+                }
+                Err(err) => {
+                    error!(
+                        "Could not add timestamp to payload for {}: {err}. Skipping",
+                        self.mapper_config.out_topic
+                    );
+                    Ok(vec![])
+                }
+            },
             _ => Ok(vec![]),
         }
     }
@@ -151,7 +159,6 @@ impl Converter for AzureConverter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::ConversionError::FromSerdeJson;
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;
@@ -176,28 +183,13 @@ mod tests {
     }
 
     #[test]
-    fn convert_error() {
-        let mut converter = create_test_converter(false);
-
-        let input = "Invalid JSON";
-
-        let output = converter.convert(&new_tedge_message(input)).unwrap();
-
-        assert_eq!(output.first().unwrap().topic.name, "te/errors");
-        assert_eq!(
-            extract_first_message_payload(output),
-            "expected value at line 1 column 1"
-        );
-    }
-
-    #[test]
-    fn try_convert_invalid_json_returns_error() {
+    fn try_convert_invalid_json_skips_message() {
         let mut converter = create_test_converter(false);
 
         let input = "This is not Thin Edge JSON";
         let result = converter.try_convert(&new_tedge_message(input));
 
-        assert_matches!(result, Err(FromSerdeJson(_)))
+        assert!(result.unwrap().is_empty());
     }
 
     #[test]
