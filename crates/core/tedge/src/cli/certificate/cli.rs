@@ -70,7 +70,7 @@ pub enum TEdgeCertCli {
     ///         or it will expire within the duration, `certificate.validity.minimum_duration`
     /// * `1` - certificate is still valid and does not need renewal
     /// * `2` - unexpected error (e.g. certificate does not exist, or can't be read)
-    NeedRenewal {
+    NeedsRenewal {
         /// Path to the certificate - default to the configured device certificate
         #[clap(long = "cert-path", value_hint = ValueHint::FilePath)]
         cert_path: Option<Utf8PathBuf>,
@@ -178,7 +178,7 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::NeedRenewal { cloud, cert_path } => {
+            TEdgeCertCli::NeedsRenewal { cloud, cert_path } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let device_cert_path = config.device_cert_path(cloud.as_ref())?.to_owned();
                 let cmd = ShowCertCmd {
