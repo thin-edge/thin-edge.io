@@ -49,7 +49,7 @@ pub enum TEdgeHttpCli {
     ///   tedge http post /c8y/inventory/managedObjects '{"name":"test"}' --accept-type application/json
     ///
     ///   # Create a new child device
-    ///   tedge http post /tedge/entity-store/v1/entities '{
+    ///   tedge http post /tedge/v1/entities '{
     ///       "@topic-id": "device/a//",
     ///       "@type": "child-device",
     ///       "@parent": "device/main//"
@@ -114,7 +114,7 @@ pub enum TEdgeHttpCli {
     ///
     /// Examples:
     ///   # Patch child device twin data
-    ///   tedge http patch /tedge/entity-store/v1/entities/device/child01 '{"type": "Raspberry Pi 4", "serialNo": "98761234"}'
+    ///   tedge http patch /tedge/v1/entities/device/child01 '{"type": "Raspberry Pi 4", "serialNo": "98761234"}'
     #[clap(verbatim_doc_comment)]
     Patch {
         /// Target URI

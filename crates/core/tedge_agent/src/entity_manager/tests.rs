@@ -41,7 +41,7 @@ async fn removing_an_unknown_child_using_mqtt() {
 #[tokio::test]
 async fn removing_a_child_using_mqtt() {
     let registrations = vec![
-        // tedge http post /tedge/entity-store/v1/entities '{"@parent":"device/main//","@topic-id":"device/a//","@type":"child-device"}'
+        // tedge http post /tedge/v1/entities '{"@parent":"device/main//","@topic-id":"device/a//","@type":"child-device"}'
         Command {
             protocol: HTTP,
             action: Action::AddDevice {
@@ -283,7 +283,7 @@ mod model {
             // mimicking a sequence of cli commands, with no extra quotes
             // e.g:
             //     tedge mqtt pub -r device/main/service/a '{"@parent":"device/main//","@type":"service","x":"9"}' \
-            //  && tedge http post /tedge/entity-store/v1/entities '{"@parent":"device/main//","@topic-id":"device/c//","@type":"child-device","z":"5"}'
+            //  && tedge http post /tedge/v1/entities '{"@parent":"device/main//","@topic-id":"device/c//","@type":"child-device","z":"5"}'
             let mut sep = if f.alternate() {
                 "\n    " // On test unit output, print each command on a new line
             } else {
@@ -333,7 +333,7 @@ mod model {
                             let mut payload = payload;
                             payload.insert("@topic-id".to_string(), topic.into());
                             let payload = serde_json::Value::Object(payload).to_string();
-                            format!("tedge http post /tedge/entity-store/v1/entities '{payload}'")
+                            format!("tedge http post /tedge/v1/entities '{payload}'")
                         }
                         Protocol::MQTT => {
                             let payload = serde_json::Value::Object(payload).to_string();
@@ -343,7 +343,7 @@ mod model {
                 }
                 Action::RemDevice { .. } | Action::RemService { .. } => match self.protocol {
                     Protocol::HTTP => {
-                        format!("tedge http delete /tedge/entity-store/v1/entities/{topic}")
+                        format!("tedge http delete /tedge/v1/entities/{topic}")
                     }
                     Protocol::MQTT => {
                         format!("tedge mqtt pub -r te/{topic} ''")

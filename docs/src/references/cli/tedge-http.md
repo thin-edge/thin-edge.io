@@ -54,10 +54,10 @@ The requests are forwarded to the appropriate service depending on the URL prefi
    tedge http put /tedge/file-transfer/target.txt --file source.txt
    ```
   
-- URIs starting with `/tedge/entity-store` are directed to the [Entity Store Service](../../../operate/registration/register)
+- URIs starting with `/tedge/v1/entities` are directed to the [Entity Store Service](../../../operate/registration/register)
 
    ```sh title="Listing all entities"
-   tedge http get /tedge/entity-store/v1/entities
+   tedge http get /tedge/v1/entities
    ```
 
 

@@ -88,7 +88,7 @@ POST /v1/entities
 **Example**
 
 ```bash
-curl http://localhost:8000/tedge/entity-store/v1/entities \
+curl http://localhost:8000/tedge/v1/entities \
   -X POST \
   -H "Content-Type: application/json" \
   -d '{
@@ -146,7 +146,7 @@ Add new fragments `type` and `new-fragment` and remove existing `extra-fragment`
 **Example**
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01 \
+curl http://localhost:8000/tedge/v1/entities/device/child01 \
   -X PATCH \
   -H "Content-Type: application/json" \
   -d '{
@@ -212,7 +212,7 @@ PUT /v1/entities/{topic-id}
 **Example**
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01 \
+curl http://localhost:8000/tedge/v1/entities/device/child01 \
   -X PATCH \
   -H "Content-Type: application/json" \
   -d '{
@@ -259,7 +259,7 @@ DELETE /v1/entities/{topic-id}
 **Example**
 
 ```shell
-curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child01
+curl -X DELETE http://localhost:8000/tedge/v1/entities/device/child01
 ```
 
 **Responses**
@@ -289,7 +289,7 @@ GET /v1/entities/{topic-id}
 **Example**
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01
+curl http://localhost:8000/tedge/v1/entities/device/child01
 ```
 
 **Responses**
