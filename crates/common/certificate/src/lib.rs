@@ -133,6 +133,7 @@ impl PemCertificate {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum ValidityStatus {
     Valid { expired_in: std::time::Duration },
     Expired { since: std::time::Duration },

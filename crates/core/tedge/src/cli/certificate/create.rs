@@ -46,6 +46,7 @@ impl Command for CreateCertCmd {
         let show_cert_cmd = ShowCertCmd {
             cert_path: self.cert_path.clone(),
             minimum: humantime::parse_duration("30d").unwrap(),
+            validity_check_only: false,
         };
         show_cert_cmd.show_certificate().await?;
         Ok(())
