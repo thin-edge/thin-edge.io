@@ -18,3 +18,6 @@ disable tedge-mapper-collectd.service
 
 # Misc
 disable tedge-watchdog.service
+
+# pkcs11 server for HSM support
+disable tedge-p11-server.socket

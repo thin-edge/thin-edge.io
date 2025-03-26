@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+# Automatically added by thin-edge.io
+if [ -d /run/systemd/system ]; then
+	systemctl --system daemon-reload >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by thin-edge.io
+if [ "$1" = "remove" ]; then
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		deb-systemd-helper mask tedge-p11-server.socket >/dev/null || true
+	elif command -v systemctl >/dev/null 2>&1; then
+		systemctl mask tedge-p11-server.socket >/dev/null || true
+	fi
+fi
+
+if [ "$1" = "purge" ]; then
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		deb-systemd-helper purge tedge-p11-server.socket >/dev/null || true
+		deb-systemd-helper unmask tedge-p11-server.socket >/dev/null || true
+	elif command -v systemctl >/dev/null 2>&1; then
+		systemctl unmask tedge-p11-server.socket >/dev/null || true
+	fi
+fi
+# End automatically added section

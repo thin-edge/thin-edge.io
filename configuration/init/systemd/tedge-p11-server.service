@@ -1,0 +1,14 @@
+[Unit]
+Description=tedge-p11-server
+Requires=tedge-p11-server.socket
+
+[Service]
+Type=simple
+StandardError=journal
+EnvironmentFile=-/etc/tedge/plugins/tedge-p11-server.conf
+ExecStart=/usr/bin/tedge-p11-server --module-path "${TEDGE_DEVICE_CRYPTOKI_MODULE_PATH}" --pin "${TEDGE_DEVICE_CRYPTOKI_PIN}"
+Restart=on-failure
+
+[Install]
+Also=tedge-p11-server.socket
+WantedBy=default.target
