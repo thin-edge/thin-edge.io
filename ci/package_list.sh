@@ -12,6 +12,13 @@ RELEASE_PACKAGES=(
 )
 export RELEASE_PACKAGES
 
+# Package which should only be dynamically compiled
+RELEASE_PACKAGES_NON_STATIC=(
+    # requires loading pkcs11 .so files
+    tedge-p11-server
+)
+export RELEASE_PACKAGES_NON_STATIC
+
 # Deprecated packages are still built but not explicitly tested
 # This allows users to still access the packages if needed, however
 # it is only reserved for packages with a more public facing API
