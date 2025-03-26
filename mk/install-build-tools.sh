@@ -178,7 +178,7 @@ powerpc64le-unknown-linux-gnu)
     libc6-dev-ppc64el-cross \
     qemu-user
   ;;
-riscv64gc-unknown-linux-gnu)
+riscv64gc-unknown-linux-gnu|riscv64gc-unknown-linux-musl)
   use_clang=1
   install_packages \
     gcc-riscv64-linux-gnu \

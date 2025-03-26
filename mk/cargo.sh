@@ -88,6 +88,12 @@ case $target in
     export CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABI_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABI_RUNNER="$qemu_arm_gnueabi"
     ;;
+  armv5te-unknown-linux-gnueabi)
+    export CC_armv5te_unknown_linux_gnueabi=arm-linux-gnueabi-gcc
+    export AR_armv5te_unknown_linux_gnueabi=arm-linux-gnueabi-gcc-ar
+    export CARGO_TARGET_ARMV5TE_UNKNOWN_LINUX_GNUEABI_LINKER=arm-linux-gnueabi-gcc
+    export CARGO_TARGET_ARMV5TE_UNKNOWN_LINUX_GNUEABI_RUNNER="$qemu_arm_gnueabi"
+    ;;
   armv5te-unknown-linux-musleabi)
     use_clang=1
     export CARGO_TARGET_ARMV5TE_UNKNOWN_LINUX_MUSLEABI_RUSTFLAGS="$rustflags_self_contained"
@@ -180,6 +186,11 @@ case $target in
     use_clang=1
     export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER=riscv64-linux-gnu-gcc
     export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_RUNNER="$qemu_riscv64"
+    ;;
+  riscv64gc-unknown-linux-musl)
+    use_clang=1
+    export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_RUSTFLAGS="$rustflags_self_contained"
+    export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_RUNNER="$qemu_riscv64"
     ;;
   s390x-unknown-linux-gnu)
     use_clang=1
