@@ -26,6 +26,7 @@ Flags:
     --repo <string>             Name of the debian repository to publish to, e.g. buster, or stable
     --distribution <string>     Name of the debian distribution to publish to, e.g. stable, raspbian. Defaults to stable
     --component <string>        Currently not supported, waiting for cloudsmith api to support it! Name of the debian component to publish to, e.g. main, unstable etc. Defaults to main.
+    --filter <string>           Package filter. Use if you want to only publish a subset of packages from the source directory. Defaults to '*'
     --help|-h                   Show this help
 
 Optional Environment variables (instead of flags)
@@ -79,6 +80,7 @@ PUBLISH_REPO="${PUBLISH_REPO:-tedge-main}"
 PUBLISH_DISTRIBUTION="${PUBLISH_DISTRIBUTION:-any-distro}"
 PUBLISH_DISTRIBUTION_VERSION="${PUBLISH_DISTRIBUTION_VERSION:-any-version}"
 PUBLISH_COMPONENT="${PUBLISH_COMPONENT:-main}"
+PACKAGE_FILTER="${PACKAGE_FILTER:-*}"
 
 CLOUDSMITH_COMMON_ARGS=()
 
@@ -124,6 +126,14 @@ do
             shift
             ;;
 
+        # Only include packages matching the given wildcard pattern (supported by find)
+        --filter)
+            if [ -n "$2" ]; then
+                PACKAGE_FILTER="$2"
+            fi
+            shift
+            ;;
+
         # Which Debian component to publish to (accepts csv list)
         --component)
             PUBLISH_COMPONENT="$2"
@@ -163,6 +173,7 @@ echo "PUBLISH_REPO:                    $PUBLISH_REPO"
 echo "PUBLISH_DISTRIBUTION:            $PUBLISH_DISTRIBUTION"
 echo "PUBLISH_DISTRIBUTION_VERSION:    $PUBLISH_DISTRIBUTION_VERSION"
 echo "PUBLISH_COMPONENT:               $PUBLISH_COMPONENT"
+echo "PACKAGE_FILTER:                  $PACKAGE_FILTER"
 echo "-----------------------------------------------------"
 
 get_user_friendly_arch() {
@@ -342,8 +353,8 @@ publish_raw() {
     done
 }
 
-publish_raw "$SOURCE_PATH" "*.tar.gz"
+publish_raw "$SOURCE_PATH" "${PACKAGE_FILTER}.tar.gz"
 
-publish_linux "$SOURCE_PATH" "deb" "*.deb" "any-distro/any-version"
-publish_linux "$SOURCE_PATH" "rpm" "*.rpm" "any-distro/any-version"
-publish_linux "$SOURCE_PATH" "alpine" "*.apk" "alpine/any-version"
+publish_linux "$SOURCE_PATH" "deb" "${PACKAGE_FILTER}.deb" "any-distro/any-version"
+publish_linux "$SOURCE_PATH" "rpm" "${PACKAGE_FILTER}.rpm" "any-distro/any-version"
+publish_linux "$SOURCE_PATH" "alpine" "${PACKAGE_FILTER}.apk" "alpine/any-version"
