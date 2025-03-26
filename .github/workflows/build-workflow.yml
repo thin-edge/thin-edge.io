@@ -57,6 +57,15 @@ jobs:
           - riscv64gc-unknown-linux-gnu
           - aarch64-apple-darwin
           - x86_64-apple-darwin
+
+          # glibc targets
+          - aarch64-unknown-linux-gnu
+          - armv7-unknown-linux-gnueabihf
+          - arm-unknown-linux-gnueabihf
+          - arm-unknown-linux-gnueabi
+          - armv5te-unknown-linux-gnueabi
+          - x86_64-unknown-linux-gnu
+          - i686-unknown-linux-gnu
         mode:
           - --release
 
@@ -101,6 +110,34 @@ jobs:
 
           - target: x86_64-apple-darwin
             host_os: macos-14
+          
+          # GNU Targets (Currently only used to build the tedge-p11-server)
+          - target: aarch64-unknown-linux-gnu
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+          
+          - target: armv7-unknown-linux-gnueabihf
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+
+          - target: arm-unknown-linux-gnueabihf
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+
+          - target: arm-unknown-linux-gnueabi
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+
+          - target: armv5te-unknown-linux-gnueabi
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
+
+          - target: x86_64-unknown-linux-gnu
+            host_os: ubuntu-22.04
+
+          - target: i686-unknown-linux-gnu
+            host_os: ubuntu-22.04
+            cargo_options: --no-run
 
     steps:
       - if: ${{ contains(matrix.host_os, 'ubuntu') }}
@@ -282,6 +319,13 @@ jobs:
           - { target: aarch64-apple-darwin,      repo_suffix: '',          component: main }
           - { target: x86_64-apple-darwin,       repo_suffix: '',          component: main }
 
+          # GNU Targets, but only the tedge-p11-server
+          - { target: x86_64-unknown-linux-gnu,      repo_suffix: '',        component: main,  filter: 'tedge-p11-server*' }
+          - { target: aarch64-unknown-linux-gnu,     repo_suffix: '',        component: main,  filter: 'tedge-p11-server*' }
+          - { target: arm-unknown-linux-gnueabi,     repo_suffix: '-armv6',  component: main,  filter: 'tedge-p11-server*' }
+          - { target: armv7-unknown-linux-gnueabihf, repo_suffix: '',        component: main,  filter: 'tedge-p11-server*' }
+          - { target: i686-unknown-linux-gnu,        repo_suffix: '',        component: main,  filter: 'tedge-p11-server*' }
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -304,6 +348,7 @@ jobs:
           PUBLISH_REPO: ${{ secrets.PUBLISH_REPO }}${{ matrix.job.repo_suffix }}
           PUBLISH_OWNER: ${{ secrets.PUBLISH_OWNER }}
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+          PACKAGE_FILTER: ${{ matrix.job.filter }}
         run: |
           just publish-linux-target "${{ matrix.job.target }}" \
             --repo "${PUBLISH_REPO}" \
