@@ -64,12 +64,13 @@ async fn store_device_cert(cert_path: &Utf8PathBuf, pk7_base64: String) -> Resul
 /// - base64-encoded
 /// - BER [SignedData object](https://datatracker.ietf.org/doc/html/rfc2315.html#section-9.1)
 fn pk7_to_x509(pk7_base64: String) -> Result<String, IllFormedPk7Cert> {
+    use base64::prelude::*;
     use rasn::ber;
     use rasn::der;
     use rasn_cms::ContentInfo;
     use rasn_cms::SignedData;
 
-    let pk7_ber = base64::decode(pk7_base64.replace(['\n', '\r'], ""))?;
+    let pk7_ber = BASE64_STANDARD.decode(pk7_base64.replace(['\n', '\r'], ""))?;
     let content_info = ber::decode::<ContentInfo>(&pk7_ber)?;
     let pk7 = ber::decode::<SignedData>(content_info.content.as_bytes())?;
     let x509_pem: Result<Vec<_>, IllFormedPk7Cert> = if let Some(certificates) = pk7.certificates {
