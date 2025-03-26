@@ -9,6 +9,7 @@ use asn1_rs::ToDer;
 use camino::Utf8PathBuf;
 use cryptoki::context::CInitializeArgs;
 use cryptoki::context::Pkcs11;
+use cryptoki::error::Error;
 use cryptoki::mechanism::Mechanism;
 use cryptoki::object::Attribute;
 use cryptoki::object::AttributeType;
@@ -54,7 +55,17 @@ impl Pkcs11SigningKey {
 
         debug!(%module_path, "Loading PKCS#11 module");
         // can fail with Pkcs11(GeneralError, GetFunctionList) if P11_KIT_SERVER_ADDRESS is wrong
-        let pkcs11client = Pkcs11::new(module_path)?;
+        let pkcs11client = match Pkcs11::new(module_path) {
+            Ok(p) => p,
+            // i want to get inner error but i don't know if there is a better way to do this
+            Err(Error::LibraryLoading(e)) => {
+                return Err(e).context("Failed to load PKCS#11 dynamic object");
+            }
+            Err(e) => {
+                return Err(e).context("Failed to load PKCS#11 dynamic object");
+            }
+        };
+
         pkcs11client.initialize(CInitializeArgs::OsThreads)?;
 
         // Select first available slot. If it's not the one we want, the token

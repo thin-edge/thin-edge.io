@@ -82,7 +82,7 @@ fn main() -> anyhow::Result<()> {
         }
     };
     info!(listener = ?listener.local_addr().as_ref().ok().and_then(|s| s.as_pathname()), "Server listening");
-    TedgeP11Server::from_config(cryptoki_config).serve(listener)?;
+    TedgeP11Server::from_config(cryptoki_config)?.serve(listener)?;
 
     Ok(())
 }

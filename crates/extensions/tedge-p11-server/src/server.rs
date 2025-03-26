@@ -11,12 +11,14 @@ use crate::pkcs11::CryptokiConfigDirect;
 use crate::service::P11SignerService;
 
 pub struct TedgeP11Server {
-    config: CryptokiConfigDirect,
+    service: P11SignerService,
 }
 
 impl TedgeP11Server {
-    pub fn from_config(config: CryptokiConfigDirect) -> Self {
-        Self { config }
+    pub fn from_config(config: CryptokiConfigDirect) -> anyhow::Result<Self> {
+        let service =
+            P11SignerService::new(&config).context("Failed to start the signing service")?;
+        Ok(Self { service })
     }
 
     /// Handle multiple requests on a given listener.
@@ -27,32 +29,32 @@ impl TedgeP11Server {
 
             let connection = Connection::new(stream);
 
-            match process(&self.config, connection) {
+            match self.process(connection) {
                 Ok(_) => info!("Incoming request successful"),
                 Err(e) => error!("Incoming request failed: {e:?}"),
             }
         }
     }
-}
 
-fn process(config: &CryptokiConfigDirect, mut connection: Connection) -> anyhow::Result<()> {
-    let service = P11SignerService::new(config);
+    fn process(&self, mut connection: Connection) -> anyhow::Result<()> {
+        let request = connection.read_frame()?;
 
-    let request = connection.read_frame()?;
+        let response = match request {
+            Frame1::Error(_)
+            | Frame1::ChooseSchemeResponse { .. }
+            | Frame1::SignResponse { .. } => {
+                let error = ProtocolError("invalid request".to_string());
+                let _ = connection.write_frame(&Frame1::Error(error));
+                anyhow::bail!("protocol error: invalid request")
+            }
+            Frame1::ChooseSchemeRequest(request) => {
+                Frame1::ChooseSchemeResponse(self.service.choose_scheme(request))
+            }
+            Frame1::SignRequest(request) => Frame1::SignResponse(self.service.sign(request)),
+        };
 
-    let response = match request {
-        Frame1::Error(_) | Frame1::ChooseSchemeResponse { .. } | Frame1::SignResponse { .. } => {
-            let error = ProtocolError("invalid request".to_string());
-            let _ = connection.write_frame(&Frame1::Error(error));
-            anyhow::bail!("protocol error: invalid request")
-        }
-        Frame1::ChooseSchemeRequest(request) => {
-            Frame1::ChooseSchemeResponse(service.choose_scheme(request))
-        }
-        Frame1::SignRequest(request) => Frame1::SignResponse(service.sign(request)),
-    };
+        connection.write_frame(&response)?;
 
-    connection.write_frame(&response)?;
-
-    Ok(())
+        Ok(())
+    }
 }
