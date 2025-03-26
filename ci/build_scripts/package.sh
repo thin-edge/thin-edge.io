@@ -234,6 +234,7 @@ get_package_arch() {
 build_tarball() {
     local name="$1"
     local target="$2"
+    local binary="$3"
     source_dir="target/$target/release"
 
     rm -f "$source_dir/$name"*tar.gz
@@ -261,11 +262,11 @@ build_tarball() {
         bsdtar)
             # bsd tar requires different options to prevent adding extra "AppleDouble" files, e.g. `._` files, to the archive
             echo "Using bsdtar, but please consider using gnu-tar instead. Install via: brew install gnu-tar"
-            COPYFILE_DISABLE=1 tar cfz "$TAR_FILE" --no-xattrs --no-mac-metadata -C "$source_dir" --files-from <(printf "%s\n" "tedge")
+            COPYFILE_DISABLE=1 tar cfz "$TAR_FILE" --no-xattrs --no-mac-metadata -C "$source_dir" --files-from <(printf "%s\n" "$binary")
             ;;
         *)
             # Default to gnu tar (as this is generally the default)
-            "$tar_cmd" cfz "$TAR_FILE" --no-xattrs --owner=0 --group=0 --mode='0755' -C "$source_dir" --files-from <(printf "%s\n" "tedge")
+            "$tar_cmd" cfz "$TAR_FILE" --no-xattrs --owner=0 --group=0 --mode='0755' -C "$source_dir" --files-from <(printf "%s\n" "$binary")
             ;;
     esac
 
@@ -278,7 +279,7 @@ cmd_build() {
     done
 
     if [[ "$PACKAGE_TYPES" =~ tarball ]]; then
-        build_tarball "tedge" "$TARGET" "${PACKAGES[@]}"
+        build_tarball "tedge" "$TARGET" "tedge"
     fi
 }
 
