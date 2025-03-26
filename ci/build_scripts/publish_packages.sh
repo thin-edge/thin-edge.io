@@ -177,19 +177,19 @@ get_user_friendly_arch() {
         *aarch64-unknown-linux-*)
             easy_arch=arm64
             ;;
-        *armv7-unknown-linux-musleabihf*)
+        *armv7-unknown-linux-*eabihf*)
             easy_arch=armv7
             ;;
-        *arm-unknown-linux-musleabihf*)
+        *arm-unknown-linux-*eabihf*)
             easy_arch=armv6
             ;;
-        *arm-unknown-linux-musleabi*)
+        *arm-unknown-linux-*eabi*)
             easy_arch=armv6
             ;;
         *armv5te-unknown-linux-*)
             easy_arch=armv5
             ;;
-        *i686-unknown-linux-musl*)
+        *i686-unknown-linux-*)
             easy_arch=i386
             ;;
         *riscv64gc-unknown-linux-*)
