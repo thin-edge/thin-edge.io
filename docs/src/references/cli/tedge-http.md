@@ -57,7 +57,7 @@ The requests are forwarded to the appropriate service depending on the URL prefi
 - URIs starting with `/tedge/entity-store` are directed to the [Entity Store Service](../../../operate/registration/register)
 
    ```sh title="Listing all entities"
-   tedge http get /tedge/entity-store/v1/entities
+   tedge http get /tedge/v1/entities
    ```
 
 
