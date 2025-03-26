@@ -269,18 +269,18 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - { target: x86_64-unknown-linux-musl,      repo: tedge-main,          component: main }
-          - { target: aarch64-unknown-linux-musl,     repo: tedge-main,          component: main }
+          - { target: x86_64-unknown-linux-musl,      repo_suffix: '',          component: main }
+          - { target: aarch64-unknown-linux-musl,     repo_suffix: '',          component: main }
           # Keep arm-unknown-linux-musleabi in separate repo due to armhf conflict between raspbian and debian
-          - { target: arm-unknown-linux-musleabi,   repo: tedge-main-armv6,    component: main }
-          - { target: armv7-unknown-linux-musleabihf, repo: tedge-main,          component: main }
-          - { target: arm-unknown-linux-musleabi,     repo: tedge-main,          component: main }
-          - { target: i686-unknown-linux-musl,        repo: tedge-main,          component: main }
+          - { target: arm-unknown-linux-musleabi,   repo_suffix: '-armv6',    component: main }
+          - { target: armv7-unknown-linux-musleabihf, repo_suffix: '',          component: main }
+          - { target: arm-unknown-linux-musleabi,     repo_suffix: '',          component: main }
+          - { target: i686-unknown-linux-musl,        repo_suffix: '',          component: main }
           # Debian also calls this "armel" (conflict with arm-unknown-linux-musleabi)
-          # - { target: armv5te-unknown-linux-musleabi, repo: tedge-main,          component: main }
-          - { target: riscv64gc-unknown-linux-gnu,    repo: tedge-main,          component: main }
-          - { target: aarch64-apple-darwin,      repo: tedge-main,          component: main }
-          - { target: x86_64-apple-darwin,       repo: tedge-main,          component: main }
+          # - { target: armv5te-unknown-linux-musleabi, repo_suffix: '',          component: main }
+          - { target: riscv64gc-unknown-linux-gnu,    repo_suffix: '',          component: main }
+          - { target: aarch64-apple-darwin,      repo_suffix: '',          component: main }
+          - { target: x86_64-apple-darwin,       repo_suffix: '',          component: main }
 
     steps:
       - name: Checkout
@@ -301,11 +301,12 @@ jobs:
       - uses: taiki-e/install-action@just
       - name: Publish packages
         env:
+          PUBLISH_REPO: ${{ secrets.PUBLISH_REPO }}${{ matrix.job.repo_suffix }}
           PUBLISH_OWNER: ${{ secrets.PUBLISH_OWNER }}
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
         run: |
           just publish-linux-target "${{ matrix.job.target }}" \
-            --repo "${{ matrix.job.repo }}" \
+            --repo "${PUBLISH_REPO}" \
             --component "${{ matrix.job.component }}"
 
   # Wait until all other publishing jobs are finished
@@ -412,11 +413,12 @@ jobs:
         run: just release-linux-virtual
       - name: Publish packages
         env:
+          PUBLISH_REPO: ${{ secrets.PUBLISH_REPO }}
           PUBLISH_OWNER: ${{ secrets.PUBLISH_OWNER }}
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
         run: |
-          just publish-linux-virtual --repo tedge-main
-          just publish-linux-virtual --repo tedge-main-armv6
+          just publish-linux-virtual --repo "${PUBLISH_REPO}"
+          just publish-linux-virtual --repo "${PUBLISH_REPO}-armv6"
 
   release:
     runs-on: ubuntu-latest
