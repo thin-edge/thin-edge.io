@@ -178,3 +178,13 @@ publish-linux-target TARGET=DEFAULT_TARGET *ARGS='':
 # Generate changelog for a release
 generate-changelog *ARGS:
     ./ci/changelog/changelog.sh {{ARGS}}
+
+# Compile WASM Components
+build-wasm: wasm_deps
+    #!/usr/bin/env bash
+    set -e
+    cd crates/extensions/tedge_wasm_mapper/components
+    cargo build --target wasm32-wasip2 --release
+
+wasm_deps:
+    rustup target add wasm32-wasip2
