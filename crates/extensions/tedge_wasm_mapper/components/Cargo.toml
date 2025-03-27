@@ -1,0 +1,22 @@
+[workspace]
+members = [ "rust/*" ]
+resolver = "2"
+
+[workspace.package]
+version = "1.4.2"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
+edition = "2021"
+rust-version = "1.82"  # See https://github.com/bytecodealliance/wit-bindgen?tab=readme-ov-file#guest-rust
+
+[workspace.dependencies]
+serde_json = "1.0"
+wit-bindgen = { version = "0.41.0" }
+wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
+
+
+[profile.release]
+codegen-units = 1
+opt-level = "s"
+debug = false
+strip = true
+lto = true
