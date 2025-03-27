@@ -19,6 +19,7 @@ postcard.workspace = true
 rustls.workspace = true
 sd-listen-fds.workspace = true
 serde.workspace = true
+tokio = { workspace = true, features = ["rt", "macros", "net", "signal"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

@@ -1,4 +1,4 @@
-use std::os::unix::net::UnixListener;
+use tokio::net::UnixListener;
 
 use anyhow::Context;
 use tracing::error;
@@ -22,11 +22,15 @@ impl TedgeP11Server {
     }
 
     /// Handle multiple requests on a given listener.
-    pub fn serve(&self, listener: UnixListener) -> anyhow::Result<()> {
+    pub async fn serve(&self, listener: UnixListener) -> anyhow::Result<()> {
         // Accept a connection
         loop {
-            let (stream, _) = listener.accept().context("Failed to accept connection")?;
+            let (stream, _) = listener
+                .accept()
+                .await
+                .context("Failed to accept connection")?;
 
+            let stream = stream.into_std()?;
             let connection = Connection::new(stream);
 
             match self.process(connection) {

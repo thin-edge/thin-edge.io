@@ -18,6 +18,7 @@ use camino::Utf8PathBuf;
 use clap::command;
 use clap::Parser;
 use cryptoki::types::AuthPin;
+use tokio::signal::unix::SignalKind;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -51,7 +52,8 @@ pub struct Args {
     log_level: Option<Level>,
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     tracing_subscriber::fmt()
@@ -74,7 +76,8 @@ fn main() -> anyhow::Result<()> {
 
     info!(?cryptoki_config, "Using cryptoki configuration");
 
-    let listener = {
+    // make sure that if we bind to unix socket in the program, it's removed on exit
+    let (listener, _drop_guard) = {
         let mut systemd_listeners = sd_listen_fds::get()
             .context("Failed to obtain activated sockets from systemd")?
             .into_iter();
@@ -83,14 +86,40 @@ fn main() -> anyhow::Result<()> {
         }
         if let Some((name, fd)) = systemd_listeners.next() {
             debug!(?name, "Using socket passed by systemd");
-            UnixListener::from(fd)
+            let listener = UnixListener::from(fd);
+            (listener, None)
         } else {
             debug!("No sockets from systemd, creating a standalone socket");
-            UnixListener::bind(socket_path).context("Failed to bind to socket")?
+            let listener = UnixListener::bind(&socket_path)
+                .with_context(|| format!("Failed to bind to socket at '{socket_path}'"))?;
+            (
+                listener,
+                Some(OwnedSocketFileDropGuard(socket_path.clone())),
+            )
         }
     };
     info!(listener = ?listener.local_addr().as_ref().ok().and_then(|s| s.as_pathname()), "Server listening");
-    TedgeP11Server::from_config(cryptoki_config)?.serve(listener)?;
+    let listener = tokio::net::UnixListener::from_std(listener)?;
+    let server = TedgeP11Server::from_config(cryptoki_config)?;
+    tokio::spawn(async move { server.serve(listener).await });
+
+    // by capturing SIGINT and SIGERM, we allow owned socket drop guard to run before exit
+    let mut sigint = tokio::signal::unix::signal(SignalKind::interrupt()).unwrap();
+    let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate()).unwrap();
+
+    tokio::select! {
+        _ = sigint.recv() => {}
+        _ = sigterm.recv() => {}
+    }
 
     Ok(())
+}
+
+struct OwnedSocketFileDropGuard(Utf8PathBuf);
+
+// necessary for correct unix socket deletion when server exits with an error
+impl Drop for OwnedSocketFileDropGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
 }
