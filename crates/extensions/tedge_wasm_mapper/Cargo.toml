@@ -19,6 +19,8 @@ time = { workspace = true }
 tokio = { workspace = true, features = ["fs", "macros", "time"] }
 toml = { workspace = true, features = ["parse"] }
 tracing = { workspace = true }
+wasmtime = { version = "30.0", features = ["runtime", "component-model"]}
+wasmtime-wasi = "30.0"
 
 [lints]
 workspace = true

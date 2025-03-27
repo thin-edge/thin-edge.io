@@ -1,8 +1,9 @@
+use crate::engine::HostEngine;
 use crate::pipeline::Pipeline;
 use crate::pipeline::Stage;
-use crate::wasm::WasmFilter;
+use crate::LoadError;
+use camino::Utf8PathBuf;
 use serde::Deserialize;
-use std::path::PathBuf;
 use tedge_mqtt_ext::TopicFilter;
 
 #[derive(Deserialize)]
@@ -22,7 +23,7 @@ pub struct StageConfig {
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum FilterSpec {
-    Wasm(PathBuf),
+    Wasm(Utf8PathBuf),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -31,31 +32,30 @@ pub enum ConfigError {
     IncorrectTopicFilter(String),
 }
 
-impl TryFrom<PipelineConfig> for Pipeline {
-    type Error = ConfigError;
-
-    fn try_from(config: PipelineConfig) -> Result<Self, Self::Error> {
-        let input = topic_filters(&config.input_topics)?;
-        let stages = config
+impl PipelineConfig {
+    pub fn instantiate(self, engine: &HostEngine) -> Result<Pipeline, LoadError> {
+        let input = topic_filters(&self.input_topics)?;
+        let stages = self
             .stages
             .into_iter()
-            .map(Stage::try_from)
+            .map(|stage| stage.instantiate(engine))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Pipeline { input_topics: input, stages })
+        Ok(Pipeline {
+            input_topics: input,
+            stages,
+        })
     }
 }
 
-impl TryFrom<StageConfig> for Stage {
-    type Error = ConfigError;
-
-    fn try_from(config: StageConfig) -> Result<Self, Self::Error> {
-        let filter = match config.filter {
-            FilterSpec::Wasm(path) => WasmFilter::new(path),
+impl StageConfig {
+    fn instantiate(self, engine: &HostEngine) -> Result<Stage, LoadError> {
+        let filter = match self.filter {
+            FilterSpec::Wasm(path) => engine.instantiate(path.as_path())?,
         };
-        let config = topic_filters(&config.config_topics)?;
+        let config_topics = topic_filters(&self.config_topics)?;
         Ok(Stage {
             filter: Box::new(filter),
-            config_topics: config,
+            config_topics,
         })
     }
 }
