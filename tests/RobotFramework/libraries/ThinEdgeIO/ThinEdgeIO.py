@@ -701,8 +701,10 @@ class ThinEdgeIO(DeviceLibrary):
     def should_have_retained_mqtt_messages(
             self,
             topic: str,
+            message_pattern: str = None,
+            message_contains: str = None,
             device_name: str = None 
-    ) -> str:
+    ) -> List[str]:
         """
         Check for a retained message on the given topic
 
@@ -722,17 +724,29 @@ class ThinEdgeIO(DeviceLibrary):
                 f"Unable to execute the command as the device: '{device_name}' has not been setup"
             )
         
-        command = f"tedge mqtt sub {topic} --retained-only --duration 1s"
+        command = f"tedge mqtt sub {topic} --retained-only --no-topic --duration 1s"
         output = device.execute_command(command).stdout
         lines = output.splitlines()
-        assert lines, f"Expected at least one retained message, but received none"
-        return lines
+
+        if message_contains:
+            message_pattern = r".*" + re.escape(message_contains) + r".*"
+
+        message_pattern_re = None
+        if message_pattern:
+            message_pattern_re = re.compile(message_pattern, re.IGNORECASE)
+
+        messages = []
+        for line in lines:
+            if message_pattern_re is None or message_pattern_re.match(line):
+                messages.append(line)
+
+        assert messages, f"Expected at least one retained message, but received none"
+        return messages
 
     @keyword("Should Not Have Retained MQTT Messages")
     def should_not_have_retained_mqtt_messages(
             self,
             topic: str,
-            duration: str = "1s",
             device_name: str = None 
     ) -> str:
         """
@@ -754,7 +768,7 @@ class ThinEdgeIO(DeviceLibrary):
                 f"Unable to execute the command as the device: '{device_name}' has not been setup"
             )
         
-        command = f"tedge mqtt sub {topic} --retained-only --duration {duration}"
+        command = f"tedge mqtt sub {topic} --retained-only --no-topic --duration 1s"
         output = device.execute_command(command).stdout
         assert output == "", f"Expected no messages, but received: {output}"
         return output

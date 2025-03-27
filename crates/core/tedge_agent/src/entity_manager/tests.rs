@@ -121,36 +121,35 @@ async fn delete_entity_clears_twin_data() {
 #[tokio::test]
 async fn delete_entity_tree_clears_entity_data_bottom_up() {
     let (mut entity_store, mut mqtt_box) = entity::server("device-under-test");
-    entity::create_entity(
-        &mut entity_store,
-        "device/child0//",
-        EntityType::ChildDevice,
-        None,
-    )
-    .await
-    .unwrap();
-    entity::create_entity(
-        &mut entity_store,
-        "device/child00//",
-        EntityType::ChildDevice,
-        Some("device/child0//"),
-    )
-    .await
-    .unwrap();
-    entity::create_entity(
-        &mut entity_store,
-        "device/child000//",
-        EntityType::ChildDevice,
-        Some("device/child00//"),
-    )
-    .await
-    .unwrap();
-    mqtt_box.skip(3).await; // Skip the registration messages
+    for entity in [
+        ("device/child0//", EntityType::ChildDevice, None),
+        ("device/child1//", EntityType::ChildDevice, None),
+        (
+            "device/child00//",
+            EntityType::ChildDevice,
+            Some("device/child0//"),
+        ),
+        (
+            "device/child000//",
+            EntityType::ChildDevice,
+            Some("device/child00//"),
+        ),
+        (
+            "device/child000/service/service0",
+            EntityType::Service,
+            Some("device/child000//"),
+        ),
+    ]
+    .into_iter()
+    {
+        entity::create_entity(&mut entity_store, entity.0, entity.1, entity.2)
+            .await
+            .unwrap();
+        mqtt_box.skip(1).await; // Skip the registration message
 
-    for entity in ["device/child0//", "device/child00//", "device/child000//"].into_iter() {
         entity::set_twin_fragments(
             &mut entity_store,
-            entity,
+            entity.0,
             json!({"x": 9, "y": true, "z": "foo"})
                 .as_object()
                 .unwrap()
@@ -166,6 +165,10 @@ async fn delete_entity_tree_clears_entity_data_bottom_up() {
         .unwrap();
     mqtt_box
         .assert_received([
+            MqttMessage::from(("te/device/child000/service/service0/twin/x", "")).with_retain(),
+            MqttMessage::from(("te/device/child000/service/service0/twin/y", "")).with_retain(),
+            MqttMessage::from(("te/device/child000/service/service0/twin/z", "")).with_retain(),
+            MqttMessage::from(("te/device/child000/service/service0", "")).with_retain(),
             MqttMessage::from(("te/device/child000///twin/x", "")).with_retain(),
             MqttMessage::from(("te/device/child000///twin/y", "")).with_retain(),
             MqttMessage::from(("te/device/child000///twin/z", "")).with_retain(),

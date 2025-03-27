@@ -337,12 +337,12 @@ Delete entity clears entity registration and twin messages
     Execute Command    tedge mqtt pub --retain 'te/device/child00///twin/foo' '"bar"'
     Execute Command    tedge mqtt pub --retain 'te/device/child000///twin/foo' '"bar"'
 
-    Should Have Retained MQTT Messages    te/device/child0///twin/foo
-    Should Have Retained MQTT Messages    te/device/child0///twin/x
-    Should Have Retained MQTT Messages    te/device/child0///twin/y
-    Should Have Retained MQTT Messages    te/device/child0///twin/z
-    Should Have Retained MQTT Messages    te/device/child00///twin/foo
-    Should Have Retained MQTT Messages    te/device/child000///twin/foo
+    Should Have Retained MQTT Messages    te/device/child0///twin/foo    message_contains="bar"
+    Should Have Retained MQTT Messages    te/device/child0///twin/x    message_contains=1
+    Should Have Retained MQTT Messages    te/device/child0///twin/y    message_contains=2
+    Should Have Retained MQTT Messages    te/device/child0///twin/z    message_contains=3
+    Should Have Retained MQTT Messages    te/device/child00///twin/foo    message_contains="bar"
+    Should Have Retained MQTT Messages    te/device/child000///twin/foo    message_contains="bar"
 
     ${deleted}=    Deregister Entity    device/child0//
 
