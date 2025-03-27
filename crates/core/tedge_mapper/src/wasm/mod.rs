@@ -15,7 +15,7 @@ impl TEdgeComponent for WasmMapper {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors("tedge-wasm-mapper", &tedge_config).await?;
 
-        let mut wasm_mapper = WasmMapperBuilder::default();
+        let mut wasm_mapper = WasmMapperBuilder::try_new()?;
         wasm_mapper.load("/etc/tedge/wasm-mapper").await;
         wasm_mapper.connect(&mut mqtt_actor);
 

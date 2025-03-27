@@ -1,11 +1,8 @@
-use serde::Deserialize;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use time::OffsetDateTime;
 
 /// A chain of transformation of MQTT messages
-#[derive(Deserialize)]
-#[serde(try_from = "crate::config::PipelineConfig")]
 pub struct Pipeline {
     /// The source topics
     pub input_topics: TopicFilter,
