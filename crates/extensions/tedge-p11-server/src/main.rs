@@ -12,12 +12,12 @@
 //! provide its own bundled p11-kit-like service.
 
 use std::os::unix::net::UnixListener;
-use std::sync::Arc;
 
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::command;
 use clap::Parser;
+use cryptoki::types::AuthPin;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -41,7 +41,7 @@ pub struct Args {
 
     /// The PIN for the PKCS#11 token.
     #[arg(long, default_value = "123456")]
-    pin: Arc<str>,
+    pin: String,
 
     /// Configures the logging level.
     ///
@@ -68,7 +68,7 @@ fn main() -> anyhow::Result<()> {
     let socket_path = args.socket_path;
     let cryptoki_config = CryptokiConfigDirect {
         module_path: args.module_path,
-        pin: args.pin,
+        pin: AuthPin::new(args.pin),
         serial: None,
     };
 
