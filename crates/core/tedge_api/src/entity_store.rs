@@ -919,7 +919,7 @@ impl EntityRegistrationMessage {
         self
     }
 
-    pub fn with_other_fragment(mut self, key: String, value: JsonValue) -> Self {
+    pub fn with_twin_fragment(mut self, key: String, value: JsonValue) -> Self {
         let _ = self.twin_data.insert(key, value);
         self
     }

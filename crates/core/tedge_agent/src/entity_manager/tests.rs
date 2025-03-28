@@ -9,10 +9,12 @@ use crate::entity_manager::tests::model::Protocol::MQTT;
 use proptest::proptest;
 use serde_json::json;
 use std::collections::HashSet;
+use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Server;
 use tedge_api::entity::EntityMetadata;
-use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::entity::EntityType;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
+use tedge_mqtt_ext::MqttMessage;
 
 #[tokio::test]
 async fn new_entity_store() {
@@ -61,11 +63,11 @@ async fn removing_a_child_using_mqtt() {
 }
 
 #[tokio::test]
-async fn patched_twin_fragments_published_to_mqtt() {
+async fn twin_fragment_updates_published_to_mqtt() {
     let (mut entity_store, mut mqtt_box) = entity::server("device-under-test");
     entity::set_twin_fragments(
         &mut entity_store,
-        EntityTopicId::default_main_device(),
+        "device/main//",
         json!({"x": 9, "y": true, "z": "foo"})
             .as_object()
             .unwrap()
@@ -76,6 +78,111 @@ async fn patched_twin_fragments_published_to_mqtt() {
     assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/x", "9")]).await;
     assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/y", "true")]).await;
     assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/z", "foo")]).await;
+}
+
+#[tokio::test]
+async fn delete_entity_clears_twin_data() {
+    let (mut entity_store, mut mqtt_box) = entity::server("device-under-test");
+    entity::create_entity(
+        &mut entity_store,
+        "device/child0//",
+        EntityType::ChildDevice,
+        None,
+    )
+    .await
+    .unwrap();
+    mqtt_box.skip(1).await; // Skip the registration message
+
+    entity::set_twin_fragments(
+        &mut entity_store,
+        "device/child0//",
+        json!({"x": 9, "y": true, "z": "foo"})
+            .as_object()
+            .unwrap()
+            .clone(),
+    )
+    .await
+    .unwrap();
+    mqtt_box.skip(3).await; // Skip the twin messages
+
+    entity::delete_entity(&mut entity_store, "device/child0//")
+        .await
+        .unwrap();
+    mqtt_box
+        .assert_received([
+            MqttMessage::from(("te/device/child0///twin/x", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///twin/y", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///twin/z", "")).with_retain(),
+            MqttMessage::from(("te/device/child0//", "")).with_retain(),
+        ])
+        .await;
+}
+
+#[tokio::test]
+async fn delete_entity_tree_clears_entity_data_bottom_up() {
+    let (mut entity_store, mut mqtt_box) = entity::server("device-under-test");
+    for entity in [
+        ("device/child0//", EntityType::ChildDevice, None),
+        ("device/child1//", EntityType::ChildDevice, None),
+        (
+            "device/child00//",
+            EntityType::ChildDevice,
+            Some("device/child0//"),
+        ),
+        (
+            "device/child000//",
+            EntityType::ChildDevice,
+            Some("device/child00//"),
+        ),
+        (
+            "device/child000/service/service0",
+            EntityType::Service,
+            Some("device/child000//"),
+        ),
+    ]
+    .into_iter()
+    {
+        entity::create_entity(&mut entity_store, entity.0, entity.1, entity.2)
+            .await
+            .unwrap();
+        mqtt_box.skip(1).await; // Skip the registration message
+
+        entity::set_twin_fragments(
+            &mut entity_store,
+            entity.0,
+            json!({"x": 9, "y": true, "z": "foo"})
+                .as_object()
+                .unwrap()
+                .clone(),
+        )
+        .await
+        .unwrap();
+        mqtt_box.skip(3).await; // Skip the twin messages
+    }
+
+    entity::delete_entity(&mut entity_store, "device/child0//")
+        .await
+        .unwrap();
+    mqtt_box
+        .assert_received([
+            MqttMessage::from(("te/device/child000/service/service0/twin/x", "")).with_retain(),
+            MqttMessage::from(("te/device/child000/service/service0/twin/y", "")).with_retain(),
+            MqttMessage::from(("te/device/child000/service/service0/twin/z", "")).with_retain(),
+            MqttMessage::from(("te/device/child000/service/service0", "")).with_retain(),
+            MqttMessage::from(("te/device/child000///twin/x", "")).with_retain(),
+            MqttMessage::from(("te/device/child000///twin/y", "")).with_retain(),
+            MqttMessage::from(("te/device/child000///twin/z", "")).with_retain(),
+            MqttMessage::from(("te/device/child000//", "")).with_retain(),
+            MqttMessage::from(("te/device/child00///twin/x", "")).with_retain(),
+            MqttMessage::from(("te/device/child00///twin/y", "")).with_retain(),
+            MqttMessage::from(("te/device/child00///twin/z", "")).with_retain(),
+            MqttMessage::from(("te/device/child00//", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///twin/x", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///twin/y", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///twin/z", "")).with_retain(),
+            MqttMessage::from(("te/device/child0//", "")).with_retain(),
+        ])
+        .await;
 }
 
 proptest! {
@@ -195,6 +302,7 @@ mod entity {
     use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_api::entity::EntityMetadata;
+    use tedge_api::entity::EntityType;
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
@@ -217,14 +325,51 @@ mod entity {
 
     pub async fn set_twin_fragments(
         entity_store: &mut EntityStoreServer,
-        topic_id: EntityTopicId,
+        topic_id: &str,
         fragments: Map<String, Value>,
     ) -> Result<(), anyhow::Error> {
+        let topic_id = EntityTopicId::from_str(topic_id).unwrap();
         if let EntityStoreResponse::SetTwinFragments(result) = entity_store
             .handle(EntityStoreRequest::SetTwinFragments(topic_id, fragments))
             .await
         {
             return result.map_err(Into::into);
+        };
+        anyhow::bail!("Unexpected response");
+    }
+
+    pub async fn create_entity(
+        entity_store: &mut EntityStoreServer,
+        topic_id: &str,
+        entity_type: EntityType,
+        parent: Option<&str>,
+    ) -> Result<(), anyhow::Error> {
+        let topic_id = EntityTopicId::from_str(topic_id).unwrap();
+        let parent = parent
+            .map(|v| EntityTopicId::from_str(v).unwrap())
+            .unwrap_or_else(EntityTopicId::default_main_device);
+        let reg_message =
+            EntityRegistrationMessage::new_custom(topic_id, entity_type).with_parent(parent);
+        if let EntityStoreResponse::Create(_) = entity_store
+            .handle(EntityStoreRequest::Create(reg_message))
+            .await
+        {
+            return Ok(());
+        };
+        anyhow::bail!("Unexpected response");
+    }
+
+    pub async fn delete_entity(
+        entity_store: &mut EntityStoreServer,
+        topic_id: &str,
+    ) -> Result<(), anyhow::Error> {
+        if let EntityStoreResponse::Delete(_) = entity_store
+            .handle(EntityStoreRequest::Delete(
+                EntityTopicId::from_str(topic_id).unwrap(),
+            ))
+            .await
+        {
+            return Ok(());
         };
         anyhow::bail!("Unexpected response");
     }
