@@ -9,6 +9,7 @@ use crate::TEdgeConfig;
 use crate::TEdgeConfigDto;
 use crate::TEdgeConfigError;
 use crate::TEdgeConfigReader;
+use anyhow::Context as _;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde::Serialize;
@@ -21,6 +22,8 @@ use tedge_utils::fs::atomically_write_file_async;
 use tedge_utils::fs::atomically_write_file_sync;
 use tracing::debug;
 use tracing::warn;
+
+use super::tedge_config;
 
 const DEFAULT_TEDGE_CONFIG_PATH: &str = "/etc/tedge";
 const ENV_TEDGE_CONFIG_DIR: &str = "TEDGE_CONFIG_DIR";
@@ -181,6 +184,31 @@ impl TEdgeConfigLocation {
                 // Reload DTO to get the settings in the right place
                 (dto, warnings) = super::figment::extract_data::<_, Sources>(self.toml_path())?;
             }
+        }
+
+        for (key, value) in std::env::vars() {
+            let writable_key = match key.strip_prefix("TEDGE_") {
+                Some("CONFIG_DIR") => continue,
+                Some("CLOUD_PROFILE") => continue,
+                // TODO failure to parse should be a warning
+                Some(key) => key
+                    .to_ascii_lowercase()
+                    .parse::<tedge_config::WritableKey>()
+                    .with_context(|| format!("Failed to parse `TEDGE_{key}`"))
+                    .unwrap(),
+                None => continue,
+            };
+            // TODO error context
+            if value.starts_with('"') || value.starts_with('[') {
+                if let Ok(mut tmp_dto) =
+                    toml::from_str::<TEdgeConfigDto>(&format!("{writable_key} = {value}"))
+                {
+                    // TODO error handling and testing
+                    dto.take_value_from(&mut tmp_dto, &writable_key).unwrap();
+                    continue;
+                }
+            }
+            dto.try_update_str(&writable_key, &value).unwrap()
         }
 
         Ok((dto, warnings))
