@@ -7,14 +7,11 @@ use serde_json::Value;
 use std::convert::Infallible;
 use tedge_actors::Converter;
 use tedge_api::mqtt_topics::Channel;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::models::timestamp::TimeFormat;
 use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
-
-const MOSQUITTO_BRIDGE_TOPIC_ID: &str = "device/main/service/mosquitto-az-bridge";
 
 #[derive(Debug)]
 pub struct MapperConfig {
@@ -64,7 +61,7 @@ impl AzureConverter {
 
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
         let messages = match self.mqtt_schema.entity_channel_of(&input.topic) {
-            Ok((entity, channel)) => self.try_convert_te_topics(input, &entity, channel),
+            Ok((_, channel)) => self.try_convert_te_topics(input, channel),
             Err(_) => Ok(Vec::new()),
         }?;
 
@@ -82,12 +79,17 @@ impl AzureConverter {
     fn try_convert_te_topics(
         &mut self,
         input: &MqttMessage,
-        entity: &EntityTopicId,
         channel: Channel,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         // don't convert mosquitto bridge notification topic
         // https://github.com/thin-edge/thin-edge.io/issues/2236
-        if entity.as_str() == MOSQUITTO_BRIDGE_TOPIC_ID {
+        if input
+            .payload
+            .as_str()?
+            .parse::<u8>()
+            .is_ok_and(|n| n == 0 || n == 1)
+            && channel == Channel::Health
+        {
             return Ok(vec![]);
         }
 
@@ -95,11 +97,19 @@ impl AzureConverter {
             Channel::Measurement { .. }
             | Channel::Event { .. }
             | Channel::Alarm { .. }
-            | Channel::Health => {
-                let payload = self.with_timestamp(input)?;
-                let output = MqttMessage::new(&self.mapper_config.out_topic, payload);
-                Ok(vec![output])
-            }
+            | Channel::Health => match self.with_timestamp(input) {
+                Ok(payload) => {
+                    let output = MqttMessage::new(&self.mapper_config.out_topic, payload);
+                    Ok(vec![output])
+                }
+                Err(err) => {
+                    error!(
+                        "Could not add timestamp to payload for {}: {err}. Skipping",
+                        self.mapper_config.out_topic
+                    );
+                    Ok(vec![])
+                }
+            },
             _ => Ok(vec![]),
         }
     }
@@ -149,7 +159,6 @@ impl Converter for AzureConverter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::ConversionError::FromSerdeJson;
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;
@@ -174,28 +183,13 @@ mod tests {
     }
 
     #[test]
-    fn convert_error() {
-        let mut converter = create_test_converter(false);
-
-        let input = "Invalid JSON";
-
-        let output = converter.convert(&new_tedge_message(input)).unwrap();
-
-        assert_eq!(output.first().unwrap().topic.name, "te/errors");
-        assert_eq!(
-            extract_first_message_payload(output),
-            "expected value at line 1 column 1"
-        );
-    }
-
-    #[test]
-    fn try_convert_invalid_json_returns_error() {
+    fn try_convert_invalid_json_skips_message() {
         let mut converter = create_test_converter(false);
 
         let input = "This is not Thin Edge JSON";
         let result = converter.try_convert(&new_tedge_message(input));
 
-        assert_matches!(result, Err(FromSerdeJson(_)))
+        assert!(result.unwrap().is_empty());
     }
 
     #[test]
@@ -447,12 +441,25 @@ mod tests {
     }
 
     #[test]
-    fn converting_bridge_health_status() {
+    fn skip_converting_bridge_health_status() {
         let mut converter = create_test_converter(false);
 
         let input = "0";
         let result = converter.try_convert(&MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/mosquitto-az-bridge/status/health"),
+            input,
+        ));
+        let res = result.unwrap();
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn skip_converting_bridge_health_status_for_different_bridge_topic() {
+        let mut converter = create_test_converter(false);
+
+        let input = "0";
+        let result = converter.try_convert(&MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/mosquitto-xyz-bridge/status/health"),
             input,
         ));
         let res = result.unwrap();
