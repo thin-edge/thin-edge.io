@@ -54,7 +54,5 @@ fn router(state: AgentState) -> Router {
     let file_transfer_router = file_transfer_router(state.file_transfer_dir.clone());
     let entity_store_router = entity_store_router(state);
 
-    Router::new()
-        .nest("/tedge", entity_store_router)
-        .merge(file_transfer_router)
+    Router::new().nest("/tedge", entity_store_router.merge(file_transfer_router))
 }
