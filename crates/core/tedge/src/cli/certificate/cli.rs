@@ -59,6 +59,19 @@ pub enum TEdgeCertCli {
         #[clap(long = "csr-path", global = true, value_hint = ValueHint::FilePath)]
         csr_path: Option<Utf8PathBuf>,
 
+        /// Force the renewal of self-signed certificates as self-signed
+        ///
+        /// This can be used to bypass the default behavior
+        /// which is to forward the renewal request to the cloud CA
+        /// even if the current certificate has not been signed by this CA.
+        /// In most cases, the default behavior is what you want:
+        /// substitute a proper CA-signed certificate for a self-signed certificate.
+        ///
+        /// However, if this is not the case, or if the cloud endpoint doesn't provide a CA:
+        /// use `--self-signed` to get a renewed self-signed certificate.
+        #[clap(long = "self-signed", default_value_t = false)]
+        self_signed_only: bool,
+
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
     },
@@ -246,7 +259,11 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Renew { csr_path, cloud } => {
+            TEdgeCertCli::Renew {
+                csr_path,
+                cloud,
+                self_signed_only,
+            } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cert_path = config.device_cert_path(cloud.as_ref())?.to_owned();
                 let key_path = config.device_key_path(cloud.as_ref())?.to_owned();
@@ -257,7 +274,8 @@ impl BuildCommand for TEdgeCertCli {
                 // only supports self-signed certificates and certificates signed by c8y
                 // and more precisely by the CA of the c8y tenant the device is connected to.
                 //
-                // - if the certificate is self signed => create a new self-signed certificate
+                // - if the certificate is self_signed and self_signed_only is set => create a new self-signed certificate
+                // - if the certificate is self_signed but self_signed_only is not set => try to use the CA of the tenant
                 // - if not => assume that the device tenant and its CA tenant are the same.
                 let is_self_signed = match certificate_is_self_signed(&cert_path) {
                     Ok(is_self_signed) => is_self_signed,
@@ -266,13 +284,17 @@ impl BuildCommand for TEdgeCertCli {
                     }
                 };
 
-                if is_self_signed {
+                if is_self_signed && self_signed_only {
                     let cmd = RenewCertCmd {
                         cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
                         key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
                         csr_template,
                     };
                     cmd.into_boxed()
+                } else if self_signed_only {
+                    return Err(
+                        anyhow!("Cannot renew certificate with `--self-signed`: {cert_path} is not self-signed").into()
+                    );
                 } else {
                     let (csr_path, generate_csr) = match csr_path {
                         None => (config.device_csr_path(cloud.as_ref())?.to_owned(), true),

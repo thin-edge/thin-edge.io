@@ -38,7 +38,7 @@ Renew the certificate
     [Setup]    Setup With Self-Signed Certificate
     Execute Command    sudo tedge disconnect c8y
     ${output}=    Execute Command
-    ...    sudo tedge cert renew
+    ...    sudo tedge cert renew --self-signed
     ...    stderr=${True}
     ...    stdout=${False}
     ...    ignore_exit_code=${True}
@@ -57,7 +57,7 @@ Cert upload prompts for username (from stdin)
     [Setup]    Setup With Self-Signed Certificate
     Execute Command    sudo tedge disconnect c8y
     ${output}=    Execute Command
-    ...    sudo tedge cert renew
+    ...    sudo tedge cert renew --self-signed
     ...    stderr=${True}
     ...    stdout=${False}
     ...    ignore_exit_code=${True}
@@ -75,7 +75,7 @@ Cert upload supports reading username/password from go-c8y-cli env variables
     [Setup]    Setup With Self-Signed Certificate
     Execute Command    sudo tedge disconnect c8y
     ${output}=    Execute Command
-    ...    sudo tedge cert renew
+    ...    sudo tedge cert renew --self-signed
     ...    stderr=${True}
     ...    stdout=${False}
     ...    ignore_exit_code=${True}
@@ -93,7 +93,7 @@ Renew certificate fails
     [Setup]    Setup Without Certificate
     Execute Command    sudo tedge cert remove
     ${output}=    Execute Command
-    ...    sudo tedge cert renew
+    ...    sudo tedge cert renew --self-signed
     ...    stderr=${True}
     ...    stdout=${False}
     ...    ignore_exit_code=${True}
