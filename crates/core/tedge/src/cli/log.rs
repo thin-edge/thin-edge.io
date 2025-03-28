@@ -255,6 +255,7 @@ pub struct ConfigLogger<'a> {
     mosquitto_version: Option<&'a str>,
     cloud: &'a MaybeBorrowedCloud<'a>,
     credentials_path: Option<&'a Utf8Path>,
+    cryptoki: bool,
 }
 
 impl<'a> ConfigLogger<'a> {
@@ -279,6 +280,7 @@ impl<'a> ConfigLogger<'a> {
                 service_manager,
                 mosquitto_version: config.mosquitto_version.as_deref(),
                 cloud,
+                cryptoki: config.use_cryptoki
             }
         )
     }
@@ -311,6 +313,7 @@ impl fmt::Display for ConfigLogger<'_> {
         self.log_single_entry(f, "auth type", &self.auth_type)?;
         if self.auth_type == AuthType::Certificate {
             self.log_single_entry(f, "certificate file", &self.cert_path)?;
+            self.log_single_entry(f, "cryptoki", &self.cryptoki)?;
         } else if let Some(path) = self.credentials_path {
             self.log_single_entry(f, "credentials path", &path)?
         }

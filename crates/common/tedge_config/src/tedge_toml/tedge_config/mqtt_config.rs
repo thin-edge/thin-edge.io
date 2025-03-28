@@ -9,6 +9,7 @@ use crate::models::Cryptoki;
 use crate::TEdgeConfig;
 use anyhow::Context;
 use camino::Utf8PathBuf;
+use certificate::parse_root_certificate::AuthPin;
 use certificate::CertificateError;
 use tedge_config_macros::all_or_nothing;
 
@@ -202,7 +203,7 @@ impl TEdgeConfigReaderDeviceCryptoki {
                     .or_config_not_set()
                     .context("required because `device.cryptoki.mode` is set to `module`")?
                     .clone(),
-                pin: self.pin.clone(),
+                pin: AuthPin::new(self.pin.to_string()),
                 serial: None,
             }))),
             Cryptoki::Socket => Ok(Some(CryptokiConfig::SocketService {

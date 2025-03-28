@@ -12,16 +12,16 @@
 //! provide its own bundled p11-kit-like service.
 
 use std::os::unix::net::UnixListener;
-use std::sync::Arc;
 
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::command;
 use clap::Parser;
+use cryptoki::types::AuthPin;
 use tracing::debug;
 use tracing::info;
-use tracing::level_filters::LevelFilter;
 use tracing::warn;
+use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
 use tedge_p11_server::CryptokiConfigDirect;
@@ -41,26 +41,34 @@ pub struct Args {
 
     /// The PIN for the PKCS#11 token.
     #[arg(long, default_value = "123456")]
-    pin: Arc<str>,
+    pin: String,
+
+    /// Configures the logging level.
+    ///
+    /// One of error/warn/info/debug/trace. Logs with verbosity lower or equal to the selected level
+    /// will be printed, i.e. warn prints ERROR and WARN logs and trace prints logs of all levels.
+    #[arg(long)]
+    log_level: Option<Level>,
 }
 
 fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+
     tracing_subscriber::fmt()
         .with_file(true)
         .with_line_number(true)
         .with_env_filter(
             EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
+                .with_default_directive(args.log_level.unwrap_or(Level::INFO).into())
                 .from_env()
                 .unwrap(),
         )
         .init();
 
-    let args = Args::parse();
     let socket_path = args.socket_path;
     let cryptoki_config = CryptokiConfigDirect {
         module_path: args.module_path,
-        pin: args.pin,
+        pin: AuthPin::new(args.pin),
         serial: None,
     };
 
@@ -82,7 +90,7 @@ fn main() -> anyhow::Result<()> {
         }
     };
     info!(listener = ?listener.local_addr().as_ref().ok().and_then(|s| s.as_pathname()), "Server listening");
-    TedgeP11Server::from_config(cryptoki_config).serve(listener)?;
+    TedgeP11Server::from_config(cryptoki_config)?.serve(listener)?;
 
     Ok(())
 }

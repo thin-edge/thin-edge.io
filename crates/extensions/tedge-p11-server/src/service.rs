@@ -4,6 +4,7 @@ use crate::pkcs11::CryptokiConfigDirect;
 use crate::pkcs11::Pkcs11SigningKey;
 use crate::pkcs11::PkcsSigner;
 
+use anyhow::Context;
 use rustls::sign::SigningKey;
 use serde::Deserialize;
 use serde::Serialize;
@@ -16,11 +17,11 @@ pub struct P11SignerService {
 
 impl P11SignerService {
     // TODO(marcel): would be nice to check if there are any keys upon starting the server and warn the user if there is not
-    pub fn new(config: &CryptokiConfigDirect) -> Self {
+    pub fn new(config: &CryptokiConfigDirect) -> anyhow::Result<Self> {
         let signing_key = pkcs11::Pkcs11SigningKey::from_cryptoki_config(config)
-            .expect("failed to get pkcs11 signing key");
+            .context("Failed to get handle of pkcs11 signing key")?;
 
-        Self { signing_key }
+        Ok(Self { signing_key })
     }
 
     #[instrument]

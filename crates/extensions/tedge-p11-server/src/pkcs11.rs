@@ -9,20 +9,21 @@ use asn1_rs::ToDer;
 use camino::Utf8PathBuf;
 use cryptoki::context::CInitializeArgs;
 use cryptoki::context::Pkcs11;
+use cryptoki::error::Error;
 use cryptoki::mechanism::Mechanism;
 use cryptoki::object::Attribute;
 use cryptoki::object::AttributeType;
 use cryptoki::object::KeyType;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
-use cryptoki::types::AuthPin;
+pub use cryptoki::types::AuthPin;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
 use rustls::SignatureScheme;
 use tracing::trace;
 
-use std::ops::Deref;
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tracing::debug;
@@ -31,7 +32,7 @@ use tracing::warn;
 #[derive(Debug, Clone)]
 pub struct CryptokiConfigDirect {
     pub module_path: Utf8PathBuf,
-    pub pin: Arc<str>,
+    pub pin: AuthPin,
     pub serial: Option<Arc<str>>,
 }
 
@@ -54,7 +55,17 @@ impl Pkcs11SigningKey {
 
         debug!(%module_path, "Loading PKCS#11 module");
         // can fail with Pkcs11(GeneralError, GetFunctionList) if P11_KIT_SERVER_ADDRESS is wrong
-        let pkcs11client = Pkcs11::new(module_path)?;
+        let pkcs11client = match Pkcs11::new(module_path) {
+            Ok(p) => p,
+            // i want to get inner error but i don't know if there is a better way to do this
+            Err(Error::LibraryLoading(e)) => {
+                return Err(e).context("Failed to load PKCS#11 dynamic object");
+            }
+            Err(e) => {
+                return Err(e).context("Failed to load PKCS#11 dynamic object");
+            }
+        };
+
         pkcs11client.initialize(CInitializeArgs::OsThreads)?;
 
         // Select first available slot. If it's not the one we want, the token
@@ -68,9 +79,8 @@ impl Pkcs11SigningKey {
         let token_info = pkcs11client.get_token_info(slot)?;
         debug!(?slot_info, ?token_info, "Selected slot");
 
-        debug!(%pin, "Attempting to login to PKCS#11 module");
         let session = pkcs11client.open_ro_session(slot)?;
-        session.login(UserType::User, Some(&AuthPin::new(pin.deref().into())))?;
+        session.login(UserType::User, Some(pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
 
