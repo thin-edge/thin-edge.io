@@ -576,6 +576,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "te_to_c8y"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "wit-bindgen",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "time"
 version = "0.3.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
