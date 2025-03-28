@@ -162,6 +162,12 @@ pub enum LoadError {
     #[error(transparent)]
     WasmError(#[from] wasmtime::Error),
 
+    #[error("Failed to import {import}: {error}")]
+    WasmFailedImport {
+        import: String,
+        error: wasmtime::Error,
+    },
+
     #[error(transparent)]
     ConfigError(#[from] config::ConfigError),
 }

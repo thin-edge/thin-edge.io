@@ -184,6 +184,7 @@ build-wasm: wasm_deps
     #!/usr/bin/env bash
     set -e
     cd crates/extensions/tedge_wasm_mapper/components
+    cargo +nightly fmt
     cargo build --target wasm32-wasip2 --release
 
 wasm_deps:

@@ -5,7 +5,6 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tedge_mqtt_ext::MqttMessage;
-use time::format_description;
 use time::OffsetDateTime;
 use tracing::debug;
 use wasmtime::component::TypedFunc;
@@ -14,7 +13,7 @@ use wasmtime::Store;
 wasmtime::component::bindgen!();
 
 pub type TransformedMessages = Result<Vec<Message>, FilterError>;
-pub type ProcessFunc = TypedFunc<(Timestamp, Message), (TransformedMessages,)>;
+pub type ProcessFunc = TypedFunc<(Datetime, Message), (TransformedMessages,)>;
 
 pub struct WasmFilter {
     store: Arc<Mutex<Store<HostState>>>,
@@ -39,20 +38,13 @@ impl Filter for WasmFilter {
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, pipeline::FilterError> {
         debug!(target: "WASM", "process({timestamp}, {message:?})");
-        let now_utc = timestamp
-            .format(&format_description::well_known::Rfc3339)
-            .map_err(|err| {
-                pipeline::FilterError::IncorrectSetting(format!(
-                    "failed to format timestamp: {}",
-                    err
-                ))
-            })?;
+        let timestamp = timestamp.try_into()?;
         let message = message.try_into()?;
 
         let mut store = self.store.lock().unwrap();
         let (result,) = self
             .process_func
-            .call(store.deref_mut(), (now_utc, message))
+            .call(store.deref_mut(), (timestamp, message))
             .map_err(|err| {
                 pipeline::FilterError::IncorrectSetting(format!(
                     "failed to call the process function: {}",
@@ -86,6 +78,24 @@ impl Filter for WasmFilter {
     ) -> Result<Vec<MqttMessage>, pipeline::FilterError> {
         debug!(target: "WASM", "tick({timestamp})");
         Ok(vec![])
+    }
+}
+
+impl TryFrom<OffsetDateTime> for Datetime {
+    type Error = pipeline::FilterError;
+
+    fn try_from(value: OffsetDateTime) -> Result<Self, Self::Error> {
+        let seconds = u64::try_from(value.unix_timestamp()).map_err(|err| {
+            pipeline::FilterError::UnsupportedMessage(format!(
+                "failed to convert timestamp: {}",
+                err
+            ))
+        })?;
+
+        Ok(Datetime {
+            seconds,
+            nanoseconds: value.nanosecond(),
+        })
     }
 }
 
