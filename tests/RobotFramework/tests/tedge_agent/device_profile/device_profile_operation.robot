@@ -71,7 +71,7 @@ Send device profile operation from Cumulocity
     Should Be Equal    ${mo["c8y_Configuration_tedge-configuration-plugin"]["url"]}    ${config_url}
 
 Send device profile operation locally
-    ${config_url}=    Set Variable    http://localhost:8000/tedge/file-transfer/main/config_update/robot-123
+    ${config_url}=    Set Variable    http://localhost:8000/tedge/v1/files/main/config_update/robot-123
 
     Execute Command    curl -X PUT --data-binary "bad toml" "${config_url}"
 

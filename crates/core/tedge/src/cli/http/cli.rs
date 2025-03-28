@@ -23,7 +23,7 @@ pub enum TEdgeHttpCli {
     ///
     /// Examples:
     ///   # Download file from the file transfer service
-    ///   tedge http get /tedge/file-transfer/target.txt
+    ///   tedge http get /tedge/v1/files/target.txt
     ///
     ///   # Download file from Cumulocity's binary api
     ///   tedge http get /c8y/inventory/binaries/104332 > my_file.bin
@@ -49,7 +49,7 @@ pub enum TEdgeHttpCli {
     ///   tedge http post /c8y/inventory/managedObjects '{"name":"test"}' --accept-type application/json
     ///
     ///   # Create a new child device
-    ///   tedge http post /tedge/entity-store/v1/entities '{
+    ///   tedge http post /tedge/v1/entities '{
     ///       "@topic-id": "device/a//",
     ///       "@type": "child-device",
     ///       "@parent": "device/main//"
@@ -82,7 +82,7 @@ pub enum TEdgeHttpCli {
     ///
     /// Examples:
     ///   # Upload file to the file transfer service
-    ///   tedge http put /tedge/file-transfer/target.txt --file source.txt
+    ///   tedge http put /tedge/v1/files/target.txt --file source.txt
     ///
     ///   # Update a Cumulocity Managed Object. Note: Assuming tedge is the owner of the managed object
     ///   tedge http put /c8y/inventory/managedObjects/2343978440 '{"name":"item A"}' --accept-type application/json
@@ -114,7 +114,7 @@ pub enum TEdgeHttpCli {
     ///
     /// Examples:
     ///   # Patch child device twin data
-    ///   tedge http patch /tedge/entity-store/v1/entities/device/child01 '{"type": "Raspberry Pi 4", "serialNo": "98761234"}'
+    ///   tedge http patch /tedge/v1/entities/device/child01 '{"type": "Raspberry Pi 4", "serialNo": "98761234"}'
     #[clap(verbatim_doc_comment)]
     Patch {
         /// Target URI
@@ -143,7 +143,7 @@ pub enum TEdgeHttpCli {
     ///
     /// Examples:
     ///   # Delete a file from the file transfer service
-    ///   tedge http delete /tedge/file-transfer/target.txt
+    ///   tedge http delete /tedge/v1/files/target.txt
     ///
     ///   # Delete a Cumulocity managed object. Note: Assuming tedge is the owner of the managed object
     ///   tedge http delete /c8y/inventory/managedObjects/2343978440

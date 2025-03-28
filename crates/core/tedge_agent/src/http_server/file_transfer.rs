@@ -1,9 +1,9 @@
 //! This module defines the axum routes and handlers for the file transfer service REST APIs.
 //! The following endpoints are currently supported:
 //!
-//! - `PUT /tedge/file-transfer/*path`: Upload a new file
-//! - `GET /tedge/file-transfer/*path`: Retrieves an existing file
-//! - `DELETE /tedge/file-transfer/*path`: Deletes a file
+//! - `PUT /tedge/v1/files/*path`: Upload a new file
+//! - `GET /tedge/v1/files/*path`: Retrieves an existing file
+//! - `DELETE /tedge/v1/files/*path`: Deletes a file
 use super::error::HttpRequestError as Error;
 use super::request_files::FileTransferDir;
 use super::request_files::FileTransferPath;
@@ -11,6 +11,8 @@ use super::request_files::RequestPath;
 use anyhow::anyhow;
 use anyhow::Context;
 use axum::body::Body;
+use axum::http::HeaderName;
+use axum::http::HeaderValue;
 use axum::routing::get;
 use axum::Router;
 use camino::Utf8Path;
@@ -29,11 +31,28 @@ use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
 use tokio::io::BufWriter;
 use tokio_util::io::ReaderStream;
+use tower_http::set_header::SetResponseHeaderLayer;
 
 pub(crate) fn file_transfer_router(file_transfer_dir: Utf8PathBuf) -> Router {
     Router::new()
         .route(
-            "/tedge/file-transfer/{*path}",
+            "/file-transfer/{*path}",
+            get(download_file).put(upload_file).delete(delete_file),
+        )
+        .layer(SetResponseHeaderLayer::if_not_present(
+            HeaderName::from_static("deprecation"),
+            HeaderValue::from_static("true"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            HeaderName::from_static("sunset"),
+            HeaderValue::from_static("Thu, 31 Dec 2025 23:59:59 GMT"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            HeaderName::from_static("link"),
+            HeaderValue::from_static("</tedge/v1/files>; rel=\"deprecation\""),
+        ))
+        .route(
+            "/v1/files/{*path}",
             get(download_file).put(upload_file).delete(delete_file),
         )
         .with_state(FileTransferDir::new(file_transfer_dir))
@@ -258,7 +277,7 @@ mod tests {
 
         let req = Request::builder()
             .method(method)
-            .uri(format!("/tedge/file-transfer/{path}"))
+            .uri(format!("/v1/files/{path}"))
             .body(Body::empty())
             .expect("request builder");
         let response = app.call(req).await.unwrap();
@@ -266,7 +285,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    const VALID_TEST_URI: &str = "/tedge/file-transfer/another/dir/test-file";
+    const VALID_TEST_URI: &str = "/v1/files/another/dir/test-file";
     const INVALID_TEST_URI: &str = "/wrong/place/test-file";
 
     #[test_case(Method::GET, VALID_TEST_URI, StatusCode::OK)]
@@ -350,7 +369,7 @@ mod tests {
     ) -> Response<axum::body::Body> {
         let req = Request::builder()
             .method(method)
-            .uri(format!("/tedge/file-transfer/{path}"))
+            .uri(format!("/v1/files/{path}"))
             .body(body.into())
             .expect("request builder");
 
