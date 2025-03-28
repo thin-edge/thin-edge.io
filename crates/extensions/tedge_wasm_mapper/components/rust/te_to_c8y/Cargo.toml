@@ -1,0 +1,15 @@
+[package]
+name = "te_to_c8y"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+wit-bindgen = { workspace = true }
+wit-bindgen-rt = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
+
+
