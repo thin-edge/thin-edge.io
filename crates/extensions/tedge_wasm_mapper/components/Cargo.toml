@@ -10,9 +10,9 @@ rust-version = "1.82"  # See https://github.com/bytecodealliance/wit-bindgen?tab
 
 [workspace.dependencies]
 serde_json = "1.0"
+time = { version = "0.3", features = ["formatting", "parsing"] }
 wit-bindgen = { version = "0.41.0" }
 wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
-
 
 [profile.release]
 codegen-units = 1
