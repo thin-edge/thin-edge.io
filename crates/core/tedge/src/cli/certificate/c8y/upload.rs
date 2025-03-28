@@ -1,8 +1,8 @@
-use super::error::get_webpki_error_from_reqwest;
-use super::error::CertError;
 use crate::command::Command;
+use crate::get_webpki_error_from_reqwest;
 use crate::log::MaybeFancy;
 use crate::warning;
+use crate::CertError;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
 use reqwest::StatusCode;

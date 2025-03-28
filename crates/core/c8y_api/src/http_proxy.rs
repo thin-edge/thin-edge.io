@@ -95,13 +95,17 @@ impl C8yEndPoint {
         }
     }
 
-    fn get_base_url(&self) -> String {
+    pub fn get_base_url(&self) -> String {
         let c8y_host = &self.c8y_host;
         if c8y_host.starts_with("http") {
             c8y_host.to_string()
         } else {
             format!("https://{c8y_host}")
         }
+    }
+
+    pub fn get_proxy_url(&self) -> String {
+        self.proxy.base_url()
     }
 
     pub fn proxy_url_for_internal_id(&self, device_id: &str) -> String {
