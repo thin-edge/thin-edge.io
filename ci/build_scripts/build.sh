@@ -225,4 +225,16 @@ if [ "$INCLUDE_DEPRECATED_PACKAGES" = "1" ]; then
     )
 fi
 
+# Add gnu specific packages for all targets but musl
+case "$ARCH" in
+    *musl*)
+        # build by default except
+        ;;
+    *)
+        PACKAGES+=(
+            "${RELEASE_PACKAGES_NON_STATIC[@]}"
+        )
+        ;;
+esac
+
 ./ci/build_scripts/package.sh build "$ARCH" "${PACKAGES[@]}" --output "$OUTPUT_DIR"

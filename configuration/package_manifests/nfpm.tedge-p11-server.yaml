@@ -1,0 +1,80 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/static/schema.json
+---
+name: tedge-p11-server
+description: |
+  thin-edge.io service to interface with PKCS11 cryptoki modules
+arch: "${PKG_ARCH}"
+platform: "linux"
+version: "${GIT_SEMVER}"
+release: "${RELEASE}"
+section: misc
+priority: "optional"
+maintainer: "thin-edge.io team <info@thin-edge.io>"
+vendor: "thin-edge.io"
+homepage: "https://thin-edge.io"
+license: "Apache-2.0"
+
+deb:
+  fields:
+    Vcs-Browser: ${CI_PROJECT_URL}
+    Vcs-Git: ${CI_PROJECT_URL}
+  compression: xz
+
+contents:
+  # binary
+  - src: .build/tedge-p11-server
+    dst: /usr/bin/
+
+  # service definitions
+  - src: ./configuration/init/systemd/tedge-p11-server.socket
+    dst: /lib/systemd/system/tedge-p11-server.socket
+    file_info:
+      mode: 0644
+    packager: deb
+
+  - src: ./configuration/init/systemd/tedge-p11-server.socket
+    dst: /lib/systemd/system/tedge-p11-server.socket
+    file_info:
+      mode: 0644
+    packager: rpm
+  
+  - src: ./configuration/init/systemd/tedge-p11-server.service
+    dst: /lib/systemd/system/tedge-p11-server.service
+    file_info:
+      mode: 0644
+    packager: deb
+
+  - src: ./configuration/init/systemd/tedge-p11-server.service
+    dst: /lib/systemd/system/tedge-p11-server.service
+    file_info:
+      mode: 0644
+    packager: rpm
+  
+  # Config
+  - src: ./configuration/contrib/tedge-p11-server/tedge-p11-server.conf
+    dst: /etc/tedge/plugins/tedge-p11-server.conf
+    type: config
+    file_info:
+      mode: 0644
+
+overrides:
+  apk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-p11-server/apk/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-p11-server/apk/postinst
+      preremove: configuration/package_scripts/_generated/tedge-p11-server/apk/prerm
+      postremove: configuration/package_scripts/_generated/tedge-p11-server/apk/postrm
+
+  rpm:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-p11-server/rpm/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-p11-server/rpm/postinst
+      preremove: configuration/package_scripts/_generated/tedge-p11-server/rpm/prerm
+      postremove: configuration/package_scripts/_generated/tedge-p11-server/rpm/postrm
+
+  deb:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-p11-server/deb/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-p11-server/deb/postinst
+      preremove: configuration/package_scripts/_generated/tedge-p11-server/deb/prerm
+      postremove: configuration/package_scripts/_generated/tedge-p11-server/deb/postrm

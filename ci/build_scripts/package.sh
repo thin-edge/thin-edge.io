@@ -280,6 +280,11 @@ cmd_build() {
 
     if [[ "$PACKAGE_TYPES" =~ tarball ]]; then
         build_tarball "tedge" "$TARGET" "tedge"
+
+        # Optionally build tedge-p11-server to allow users to package it
+        if [[ " ${PACKAGES[*]} " =~ [[:space:]]tedge-p11-server[[:space:]] ]]; then
+            build_tarball "tedge-p11-server" "$TARGET" "tedge-p11-server"
+        fi
     fi
 }
 
