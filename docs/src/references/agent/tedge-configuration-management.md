@@ -135,7 +135,7 @@ To start a new config snapshot with the ID "1234" on the device named "example",
 ```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/config_snapshot/1234' '{
   "status": "init",
-  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_snapshot/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/tedge/v1/files/example/config_snapshot/mosquitto-1234",
   "type": "mosquitto"
 }'
 ```
@@ -164,7 +164,7 @@ As a result, the operation status update message for the example above looks lik
 ```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/config_snapshot/1234' '{
   "status": "successful",
-  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_snapshot/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/tedge/v1/files/example/config_snapshot/mosquitto-1234",
   "type": "mosquitto",
   "path": "/etc/mosquitto/mosquitto.conf"
 }'
@@ -206,7 +206,7 @@ To start a new config update with the ID "1234" on the device named "example", a
 ```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/config_update/1234' '{
   "status": "init",
-  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_update/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/tedge/v1/files/example/config_update/mosquitto-1234",
   "remoteUrl": "http://www.my.url",
   "type": "mosquitto"
 }'
@@ -234,7 +234,7 @@ As a result, the operation status update message for the example above looks lik
 ```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/config_update/1234' '{
   "status": "successful",
-  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_update/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/tedge/v1/files/example/config_update/mosquitto-1234",
   "remoteUrl": "http://www.my.url",
   "type": "mosquitto",
   "path": "/etc/mosquitto/mosquitto.conf"

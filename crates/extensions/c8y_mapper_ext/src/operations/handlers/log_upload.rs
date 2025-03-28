@@ -179,7 +179,7 @@ mod tests {
                 "te/device/main///cmd/log_upload/c8y-mapper-123456",
                 json!({
                     "status": "init",
-                    "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/log_upload/logfileA-c8y-mapper-123456",
+                    "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/log_upload/logfileA-c8y-mapper-123456",
                     "type": "logfileA",
                     "dateFrom": "2023-11-28T16:33:50+01:00",
                     "dateTo": "2023-11-29T16:33:50+01:00",
@@ -247,7 +247,7 @@ mod tests {
                 "te/device/child1///cmd/log_upload/c8y-mapper-123456",
                 json!({
                     "status": "init",
-                    "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device:device:child1/log_upload/logfileA-c8y-mapper-123456",
+                    "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device:device:child1/log_upload/logfileA-c8y-mapper-123456",
                     "type": "logfileA",
                     "dateFrom": "2023-11-28T16:33:50+01:00",
                     "dateTo": "2023-11-29T16:33:50+01:00",
@@ -372,7 +372,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/v1/files/test-device/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -392,7 +392,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/v1/files/test-device/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -436,7 +436,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/v1/files/child1/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -463,7 +463,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/v1/files/child1/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -506,7 +506,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/v1/files/test-device/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -526,7 +526,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/v1/files/test-device/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -561,7 +561,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/log_upload/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/log_upload/typeA-c8y-mapper-1234",
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -646,7 +646,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/child1/log_upload/typeA-c8y-mapper-1234",
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -726,7 +726,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/log_upload/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/log_upload/typeA-c8y-mapper-1234",
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",

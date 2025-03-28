@@ -144,11 +144,11 @@ Validate firmware update request
     Should Be Equal    ${message["sha256"]}    4b0126519dfc1a3023851bfcc5b312b20fc80452256f7f40a5d8722765500ba9
     Should Match Regexp
     ...    ${message["url"]}
-    ...    ^http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/firmware_update/[0-9A-Za-z]+$
+    ...    ^http://${PARENT_IP}:${HTTP_PORT}/tedge/v1/files/${CHILD_SN}/firmware_update/[0-9A-Za-z]+$
 
     ${cache_key}=    Get Regexp Matches
     ...    ${message["url"]}
-    ...    ^http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/firmware_update/([0-9A-Za-z]+)$
+    ...    ^http://${PARENT_IP}:${HTTP_PORT}/tedge/v1/files/${CHILD_SN}/firmware_update/([0-9A-Za-z]+)$
     ...    1
 
     Set Suite Variable    $op_id    ${message["id"]}
