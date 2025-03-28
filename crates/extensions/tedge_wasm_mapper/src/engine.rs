@@ -1,5 +1,6 @@
+use crate::wasm::Datetime;
 use crate::wasm::Message;
-use crate::wasm::Timestamp;
+use crate::wasm::TransformedMessages;
 use crate::wasm::WasmFilter;
 use crate::LoadError;
 use camino::Utf8Path;
@@ -53,9 +54,11 @@ impl HostEngine {
         let mut store = Store::new(&self.engine, state);
         let instance = self.linker.instantiate(&mut store, component)?;
         let process_func = instance
-            .get_typed_func::<(Timestamp, Message), (crate::wasm::TransformedMessages,)>(
-                &mut store, "process",
-            )?;
+            .get_typed_func::<(Datetime, Message), (TransformedMessages,)>(&mut store, "process")
+            .map_err(|error| LoadError::WasmFailedImport {
+                import: "'process' function".to_owned(),
+                error,
+            })?;
 
         Ok(WasmFilter::new(store, process_func))
     }

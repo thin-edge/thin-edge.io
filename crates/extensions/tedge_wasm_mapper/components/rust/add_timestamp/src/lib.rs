@@ -8,7 +8,7 @@ wit_bindgen::generate!({
 pub struct Component;
 
 impl Guest for Component {
-    fn process(timestamp: Timestamp, message: Message) -> Result<Vec<Message>, FilterError> {
+    fn process(timestamp: Datetime, message: Message) -> Result<Vec<Message>, FilterError> {
         let Ok(Value::Object(mut json)) = serde_json::from_str(&message.payload) else {
             return Err(FilterError::UnsupportedMessage(
                 "Expect JSON input".to_string(),
@@ -19,7 +19,11 @@ impl Guest for Component {
             return Ok(vec![message]);
         }
 
-        json.insert("time".to_string(), Value::String(timestamp));
+        let seconds = timestamp.seconds as f64;
+        let milliseconds = (timestamp.nanoseconds / 1_000_000) as f64;
+        let time = serde_json::Number::from_f64(seconds + milliseconds / 1000.0).unwrap();
+
+        json.insert("time".to_string(), Value::Number(time));
 
         let updated_message = Message {
             payload: Value::Object(json).to_string(),
@@ -33,7 +37,7 @@ impl Guest for Component {
         Ok(())
     }
 
-    fn tick(_timestamp: Timestamp) -> Result<Vec<Message>, FilterError> {
+    fn tick(_timestamp: Datetime) -> Result<Vec<Message>, FilterError> {
         Ok(vec![])
     }
 }
