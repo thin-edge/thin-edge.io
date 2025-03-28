@@ -284,7 +284,7 @@ impl ConfigManagerWorker {
             };
 
         Ok(format!(
-            "http://{}/tedge/file-transfer/{}/{}/{}-{}",
+            "http://{}/tedge/v1/files/{}/{}/{}-{}",
             &self.config.tedge_http_host,
             device_name,
             operation_type,

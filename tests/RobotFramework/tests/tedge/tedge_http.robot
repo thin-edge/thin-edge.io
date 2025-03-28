@@ -52,11 +52,11 @@ Accessing c8y from a child device
 
 Accessing file-transfer from a child device
     Execute Command    printf "source file content" >/tmp/source-file.txt
-    Execute Command    tedge http put /tedge/file-transfer/target --file /tmp/source-file.txt --content-type text/plain
-    ${content}=    Execute Command    tedge http get /tedge/file-transfer/target
+    Execute Command    tedge http put /tedge/v1/files/target --file /tmp/source-file.txt --content-type text/plain
+    ${content}=    Execute Command    tedge http get /tedge/v1/files/target
     Should Be Equal    ${content}    source file content
-    Execute Command    tedge http delete /tedge/file-transfer/target
-    Execute Command    tedge http get /tedge/file-transfer/target    exp_exit_code=1
+    Execute Command    tedge http delete /tedge/v1/files/target
+    Execute Command    tedge http get /tedge/v1/files/target    exp_exit_code=1
 
 Displaying server errors
     ${error_msg}=    Execute Command

@@ -2807,7 +2807,7 @@ async fn mapper_processes_operations_concurrently() {
     let _mock = fts_server
         .mock(
             "GET",
-            "/tedge/file-transfer/test-device/config_snapshot/c8y-mapper-1234",
+            "/tedge/v1/files/test-device/config_snapshot/c8y-mapper-1234",
         )
         // make each download block so it doesn't complete before we submit all operations
         .with_chunked_body(|_w| {
@@ -2843,7 +2843,7 @@ async fn mapper_processes_operations_concurrently() {
             &Topic::new_unchecked(&format!("te/device/main///cmd/log_upload/c8y-mapper-{i}")),
             json!({
             "status": "successful",
-            "tedgeUrl": format!("http://{host_port}/tedge/file-transfer/test-device/log_upload/c8y-mapper-1234"),
+            "tedgeUrl": format!("http://{host_port}/tedge/v1/files/test-device/log_upload/c8y-mapper-1234"),
             "type": "mosquitto",
             "dateFrom": "2023-11-28T16:33:50+01:00",
             "dateTo": "2023-11-29T16:33:50+01:00",
@@ -2859,7 +2859,7 @@ async fn mapper_processes_operations_concurrently() {
             &Topic::new_unchecked(&format!("te/device/main///cmd/config_snapshot/c8y-mapper-{i}")),
             json!({
             "status": "successful",
-            "tedgeUrl": format!("http://{host_port}/tedge/file-transfer/test-device/config_snapshot/c8y-mapper-1234"),
+            "tedgeUrl": format!("http://{host_port}/tedge/v1/files/test-device/config_snapshot/c8y-mapper-1234"),
             "type": "path/type/A",
         })
                 .to_string(),
@@ -2898,19 +2898,20 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
 
     // simulate many successful operations that needs to be handled by the mapper
     mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1"),
-            json!({
+        &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1"),
+        json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/log_upload/c8y-mapper-1",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/log_upload/c8y-mapper-1",
             "type": "mosquitto",
             "dateFrom": "2023-11-28T16:33:50+01:00",
             "dateTo": "2023-11-29T16:33:50+01:00",
             "searchText": "ERROR",
             "lines": 1000
         })
-                .to_string(),
-        ))
-            .await.unwrap();
+        .to_string(),
+    ))
+    .await
+    .unwrap();
 
     let (download_id, download_request) = dl
         .recv()
@@ -2919,7 +2920,7 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
     assert_eq!(download_id, "c8y-mapper-1");
     assert_eq!(
         download_request.url,
-        "http://localhost:8888/tedge/file-transfer/test-device/log_upload/c8y-mapper-1"
+        "http://localhost:8888/tedge/v1/files/test-device/log_upload/c8y-mapper-1"
     );
 
     // here it would be good to assert that upload message hasn't been sent yet, but due to the
@@ -2928,7 +2929,7 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
     dl.send((
         "c8y-mapper-1".to_string(),
         Ok(DownloadResponse {
-            url: "http://localhost:8888/tedge/file-transfer/test-device/log_upload/c8y-mapper-1"
+            url: "http://localhost:8888/tedge/v1/files/test-device/log_upload/c8y-mapper-1"
                 .to_string(),
             file_path: "whatever".into(),
         }),
@@ -2947,7 +2948,7 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-2"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/c8y-mapper-2",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_snapshot/c8y-mapper-2",
             "type": "typeA",
         })
                 .to_string(),

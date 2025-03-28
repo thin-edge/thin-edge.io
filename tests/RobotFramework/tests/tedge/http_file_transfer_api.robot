@@ -23,14 +23,14 @@ Get Put Delete legacy
     Setup    skip_bootstrap=True    # Setup child device
 
     ${put}=    Execute Command
-    ...    curl -v -X PUT -d "test of put" http://${DEVICE_IP}:${PORT}/tedge/file-transfer/file_a
+    ...    curl -v -X PUT -d "test of put" http://${DEVICE_IP}:${PORT}/tedge/v1/files/file_a
     ...    stderr=True
     Should Contain    ${put}[1]    deprecation: true
     Should Contain    ${put}[1]    sunset: Thu, 31 Dec 2025 23:59:59 GMT
     Should Contain    ${put}[1]    link: </tedge/v1/files>; rel="deprecation"
 
     ${get}=    Execute Command
-    ...    curl --silent -v http://${DEVICE_IP}:${PORT}/tedge/file-transfer/file_a
+    ...    curl --silent -v http://${DEVICE_IP}:${PORT}/tedge/v1/files/file_a
     ...    stderr=True
     Should Contain    ${get}[0]    test of put
     Should Contain    ${get}[1]    deprecation: true
@@ -38,7 +38,7 @@ Get Put Delete legacy
     Should Contain    ${get}[1]    link: </tedge/v1/files>; rel="deprecation"
 
     ${delete}=    Execute Command
-    ...    curl -v -X DELETE http://${DEVICE_IP}:${PORT}/tedge/file-transfer/file_a
+    ...    curl -v -X DELETE http://${DEVICE_IP}:${PORT}/tedge/v1/files/file_a
     ...    stderr=True
     Should Contain    ${delete}[1]    deprecation: true
     Should Contain    ${delete}[1]    sunset: Thu, 31 Dec 2025 23:59:59 GMT
@@ -60,11 +60,11 @@ Get Put Delete
 File transfer using tedge cli
     Setup    skip_bootstrap=False
 
-    Execute Command    tedge http put /tedge/file-transfer/file_b "content to be transferred"
-    ${content}=    Execute Command    tedge http get /tedge/file-transfer/file_b
+    Execute Command    tedge http put /tedge/v1/files/file_b "content to be transferred"
+    ${content}=    Execute Command    tedge http get /tedge/v1/files/file_b
     Should Be Equal    ${content}    content to be transferred
-    Execute Command    tedge http delete /tedge/file-transfer/file_b
-    Execute Command    tedge http get /tedge/file-transfer/file_b    exp_exit_code=1
+    Execute Command    tedge http delete /tedge/v1/files/file_b
+    Execute Command    tedge http get /tedge/v1/files/file_b    exp_exit_code=1
 
 
 *** Keywords ***

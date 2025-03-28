@@ -197,7 +197,7 @@ async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> 
     let log_request = r#"
         {
             "status": "init",
-            "tedgeUrl": "http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234",
+            "tedgeUrl": "http://127.0.0.1:3000/tedge/v1/files/main/log_upload/type_two-1234",
             "type": "type_two",
             "dateFrom": "1970-01-01T00:00:00+00:00",
             "dateTo": "1970-01-01T00:00:30+00:00",
@@ -212,7 +212,7 @@ async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> 
         executing_message,
         Some(MqttMessage::new(
                 &logfile_topic,
-                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234","type":"type_two","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
+                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/log_upload/type_two-1234","type":"type_two","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
             ).with_retain())
         );
     // This message being published over MQTT is also received by the log-manager itself
@@ -225,7 +225,7 @@ async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> 
 
     assert_eq!(
         upload_request.url,
-        "http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234"
+        "http://127.0.0.1:3000/tedge/v1/files/main/log_upload/type_two-1234"
     );
     assert!(
         upload_request.file_path.starts_with(tempdir.path()),
@@ -251,7 +251,7 @@ async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> 
             mqtt.recv().await,
             Some(MqttMessage::new(
                 &logfile_topic,
-                r#"{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234","type":"type_two","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
+                r#"{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/log_upload/type_two-1234","type":"type_two","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
             ).with_retain())
         );
 
@@ -272,7 +272,7 @@ async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
     let log_request = r#"
             {
                 "status": "init",
-                "tedgeUrl": "http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_four-1234",
+                "tedgeUrl": "http://127.0.0.1:3000/tedge/v1/files/main/log_upload/type_four-1234",
                 "type": "type_four",
                 "dateFrom": "1970-01-01T00:00:00+00:00",
                 "dateTo": "1970-01-01T00:00:30+00:00",
@@ -287,7 +287,7 @@ async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
         executing_message,
         Some(MqttMessage::new(
             &logfile_topic,
-            r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_four-1234","type":"type_four","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
+            r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/log_upload/type_four-1234","type":"type_four","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
         ).with_retain())
     );
     // This message being published over MQTT is also received by the log-manager itself
@@ -298,7 +298,7 @@ async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
         mqtt.recv().await,
         Some(MqttMessage::new(
             &logfile_topic,
-            r#"{"status":"failed","reason":"Failed to initiate log file upload: No logs found for log type \"type_four\"","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_four-1234","type":"type_four","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
+            r#"{"status":"failed","reason":"Failed to initiate log file upload: No logs found for log type \"type_four\"","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/log_upload/type_four-1234","type":"type_four","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
         ).with_retain())
     );
 
@@ -320,7 +320,7 @@ async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
     let log_request = r#"
         {
             "status": "init",
-            "tedgeUrl": "http://127.0.0.1:3000/tedge/file-transfer/child01/log_upload/type_two-1234",
+            "tedgeUrl": "http://127.0.0.1:3000/tedge/v1/files/child01/log_upload/type_two-1234",
             "type": "type_two",
             "dateFrom": "1970-01-01T00:00:00+00:00",
             "dateTo": "1970-01-01T00:00:30+00:00",
@@ -349,7 +349,7 @@ async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
     let log_request = r#"
         {
             "status": "init",
-            "url": "http://127.0.0.1:3000/tedge/file-transfer/child01/log_upload/type_two-1234",
+            "url": "http://127.0.0.1:3000/tedge/v1/files/child01/log_upload/type_two-1234",
             "type": "type_two",
             "dateFrom": "1970-01-01T00:00:00+00:00",
             "dateTo": "1970-01-01T00:00:30+00:00",
@@ -378,7 +378,7 @@ async fn read_log_from_file_that_does_not_exist() -> Result<(), anyhow::Error> {
     let log_request = r#"
         {
             "status": "init",
-            "tedgeUrl": "http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_three-1234",
+            "tedgeUrl": "http://127.0.0.1:3000/tedge/v1/files/main/log_upload/type_three-1234",
             "type": "type_three",
             "dateFrom": "1970-01-01T00:00:00+00:00",
             "dateTo": "1970-01-01T00:00:30+00:00",
@@ -393,7 +393,7 @@ async fn read_log_from_file_that_does_not_exist() -> Result<(), anyhow::Error> {
         executing_message,
         Some(MqttMessage::new(
                 &logfile_topic,
-                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_three-1234","type":"type_three","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
+                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/log_upload/type_three-1234","type":"type_three","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
             ).with_retain())
         );
     // This message being published over MQTT is also received by the log-manager itself
@@ -404,7 +404,7 @@ async fn read_log_from_file_that_does_not_exist() -> Result<(), anyhow::Error> {
         mqtt.recv().await,
         Some(MqttMessage::new(
             &logfile_topic,
-            r#"{"status":"failed","reason":"Failed to initiate log file upload: No logs found for log type \"type_three\"","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_three-1234","type":"type_three","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
+            r#"{"status":"failed","reason":"Failed to initiate log file upload: No logs found for log type \"type_three\"","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/log_upload/type_three-1234","type":"type_three","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
         ).with_retain())
     );
 

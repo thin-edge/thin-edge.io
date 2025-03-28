@@ -616,7 +616,7 @@ tedge mqtt pub -r 'te/device/child01///cmd/firmware_update/123' '{
   "attempt": 1,
   "name": "OpenWRT",
   "version": "22.03",
-  "url":"http://127.0.0.1:8000/tedge/file-transfer/tedge-child/firmware_update/93d50a297a8c235",
+  "url":"http://127.0.0.1:8000/tedge/v1/files/tedge-child/firmware_update/93d50a297a8c235",
   "sha256":"c036cbb7553a909f8b8877d4461924307f27ecb66cff928eeeafd569c3887e29"
 }'
 ```
@@ -630,7 +630,7 @@ tedge mqtt pub -r 'te/device/main/service/collectd/cmd/config_update/123' '{
   "status": "init",
   "type": "collectd",
   "path": "/etc/collectd/collectd.conf",
-  "url": "http://127.0.0.1:8000/tedge/file-transfer/collectd/config_update/collectd"
+  "url": "http://127.0.0.1:8000/tedge/v1/files/collectd/config_update/collectd"
 }'
 ```
 

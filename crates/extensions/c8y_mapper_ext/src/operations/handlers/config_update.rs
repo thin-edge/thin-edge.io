@@ -204,7 +204,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "serverUrl": "http://www.my.url",
             "type": "typeA",
@@ -222,7 +222,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "serverUrl": "http://www.my.url",
             "type": "typeA",
@@ -268,7 +268,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/child1/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "serverUrl": "http://www.my.url",
             "type": "typeA",
@@ -290,7 +290,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/child1/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "serverUrl": "http://www.my.url",
             "type": "typeA",
@@ -330,7 +330,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "serverUrl": "http://www.my.url",
             "type": "typeA",
@@ -348,7 +348,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "serverUrl": "http://www.my.url",
             "type": "typeA",
@@ -378,7 +378,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/path:type:A-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_update/path:type:A-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "serverUrl": "http://www.my.url",
             "type": "path/type/A",
@@ -423,7 +423,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/child1/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "serverUrl": "http://www.my.url",
             "type": "typeA",
@@ -466,7 +466,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/path:type:A-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_update/path:type:A-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "serverUrl": "http://www.my.url",
             "type": "path/type/A",

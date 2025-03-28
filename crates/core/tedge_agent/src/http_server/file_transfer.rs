@@ -1,9 +1,9 @@
 //! This module defines the axum routes and handlers for the file transfer service REST APIs.
 //! The following endpoints are currently supported:
 //!
-//! - `PUT /tedge/file-transfer/*path`: Upload a new file
-//! - `GET /tedge/file-transfer/*path`: Retrieves an existing file
-//! - `DELETE /tedge/file-transfer/*path`: Deletes a file
+//! - `PUT /tedge/v1/files/*path`: Upload a new file
+//! - `GET /tedge/v1/files/*path`: Retrieves an existing file
+//! - `DELETE /tedge/v1/files/*path`: Deletes a file
 use super::error::HttpRequestError as Error;
 use super::request_files::FileTransferDir;
 use super::request_files::FileTransferPath;
@@ -277,7 +277,7 @@ mod tests {
 
         let req = Request::builder()
             .method(method)
-            .uri(format!("/file-transfer/{path}"))
+            .uri(format!("/v1/files/{path}"))
             .body(Body::empty())
             .expect("request builder");
         let response = app.call(req).await.unwrap();
@@ -285,7 +285,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
-    const VALID_TEST_URI: &str = "/file-transfer/another/dir/test-file";
+    const VALID_TEST_URI: &str = "/v1/files/another/dir/test-file";
     const INVALID_TEST_URI: &str = "/wrong/place/test-file";
 
     #[test_case(Method::GET, VALID_TEST_URI, StatusCode::OK)]
@@ -369,7 +369,7 @@ mod tests {
     ) -> Response<axum::body::Body> {
         let req = Request::builder()
             .method(method)
-            .uri(format!("/file-transfer/{path}"))
+            .uri(format!("/v1/files/{path}"))
             .body(body.into())
             .expect("request builder");
 
