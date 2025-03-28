@@ -51,11 +51,11 @@ pub fn extract_data<T: DeserializeOwned, Sources: ConfigSources>(
     let env = TEdgeEnv::default();
     let figment = Figment::new().merge(Toml::file(path));
 
-    let figment = if Sources::INCLUDE_ENVIRONMENT {
-        figment.merge(env.provider())
-    } else {
-        figment
-    };
+    // let figment = if Sources::INCLUDE_ENVIRONMENT {
+    //     figment.merge(env.provider())
+    // } else {
+    //     figment
+    // };
 
     let data = extract_exact(&figment, &env);
 

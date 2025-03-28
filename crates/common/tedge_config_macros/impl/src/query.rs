@@ -711,7 +711,8 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
 
 fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     let enum_variants = paths.iter().map(enum_variant);
-    let (update_arms, unset_arms, append_arms, remove_arms): (
+    let (update_arms, copy_arms, unset_arms, append_arms, remove_arms): (
+        Vec<syn::Arm>,
         Vec<syn::Arm>,
         Vec<syn::Arm>,
         Vec<syn::Arm>,
@@ -760,6 +761,10 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                         .#convert_to_field_ty
                         .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
                 },
+                // TODO can we really do this with write_segments?
+                parse_quote_spanned! {ty.span()=>
+                    WritableKey::#match_variant => self.#(#write_segments).* = other.#(#write_segments).*.take(),
+                },
                 parse_quote_spanned! {ty.span()=>
                     WritableKey::#match_variant => {
                         self.#(#write_segments).* = None;
@@ -796,6 +801,15 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             pub fn try_update_str(&mut self, key: &WritableKey, value: &str) -> Result<(), WriteError> {
                 match key {
                     #(#update_arms)*
+                    #fallback_branch
+                };
+                Ok(())
+            }
+
+            // TODO can this be made &self easily?
+            pub(crate) fn take_value_from(&mut self, other: &mut TEdgeConfigDto, key: &WritableKey) -> Result<(), WriteError> {
+                match key {
+                    #(#copy_arms)*
                     #fallback_branch
                 };
                 Ok(())
