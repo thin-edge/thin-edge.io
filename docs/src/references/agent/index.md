@@ -32,8 +32,8 @@ title: System components enabling device management
 ---
 graph LR
     mapper_daemon <-- JSON/MQTT --> agent_daemon -- System Calls --> device_os
-    mapper_start <-- JSON/MQTT --- agent_start
-    http_proxy <-- HTTP --- http_callback
+    mapper_start <-- JSON/MQTT --> agent_start
+    http_proxy <-- HTTP --> http_callback
 
     subgraph mapper
       mapper_start(report to the cloud<br/>available operations across devices)
