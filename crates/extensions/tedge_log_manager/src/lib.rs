@@ -32,10 +32,11 @@ use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
 use tedge_utils::file::create_directory_with_defaults;
-use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
+use tedge_utils::fs::atomically_write_file_sync;
+use tedge_utils::fs::AtomFileError;
 use toml::toml;
 
 /// This is an actor builder.
@@ -114,7 +115,12 @@ impl LogManagerBuilder {
             path = agent_logs_path
         }
         .to_string();
-        create_file_with_defaults(&config.plugin_config_path, Some(&example_config)).await?;
+        atomically_write_file_sync(&config.plugin_config_path, example_config.as_bytes()).map_err(
+            |AtomFileError::WriteError { source, .. }| FileError::FileCreateFailed {
+                file: config.plugin_config_path.to_string_lossy().to_string(),
+                from: source,
+            },
+        )?;
 
         Ok(())
     }
