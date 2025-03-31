@@ -35,10 +35,11 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
-use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
+use tedge_utils::fs::atomically_write_file_sync;
+use tedge_utils::fs::AtomFileError;
 use toml::toml;
 
 /// An instance of the config manager
@@ -135,7 +136,12 @@ impl ConfigManagerBuilder {
             mode = 0o644
         }
         .to_string();
-        create_file_with_defaults(&config.plugin_config_path, Some(&example_config)).await?;
+        atomically_write_file_sync(&config.plugin_config_path, example_config.as_bytes()).map_err(
+            |AtomFileError::WriteError { source, .. }| FileError::FileCreateFailed {
+                file: config.plugin_config_path.to_string_lossy().to_string(),
+                from: source,
+            },
+        )?;
 
         Ok(())
     }
