@@ -13,16 +13,16 @@ Files can be uploaded, downloaded and deleted from this repository via the follo
 
 |Type|Method|Endpoint|
 |----|------|--------|
-|Upload|PUT|`http://{fts-address}:8000/tedge/file-transfer/{path}/{to}/{resource}`|
-|Download|GET|`http://{fts-address}:8000/tedge/file-transfer/{path}/{to}/{resource}`|
-|Delete|DELETE|`http://{fts-address}:8000/tedge/file-transfer/{path}/{to}/{resource}`|
+|Upload|PUT|`http://{fts-address}:8000/tedge/v1/files/{path}/{to}/{resource}`|
+|Download|GET|`http://{fts-address}:8000/tedge/v1/files/{path}/{to}/{resource}`|
+|Delete|DELETE|`http://{fts-address}:8000/tedge/v1/files/{path}/{to}/{resource}`|
 
 The `fts-address` is derived from `http.client.host` config setting with a default value of `127.0.0.1`.
 
 The files uploaded to this repository are stored at `/var/tedge/file-transfer` directory.
 The `{path}/{to}/{resource}` specified in the URL is replicated under this directory.
 
-For example, a file uploaded to `http://{fts-address}/tedge/file-transfer/config_update/mosquitto/mosquitto.conf`
+For example, a file uploaded to `http://{fts-address}/tedge/v1/files/config_update/mosquitto/mosquitto.conf`
 is stored at `/var/tedge/file-transfer/config_update/mosquitto/mosquitto.conf`.
 
 An existing file at a given path is replaced on subsequent uploads using the same URL path.
@@ -53,6 +53,6 @@ provided [proper configuration](../references/cli/tedge-http.md#configuration).
 
 |Type| Command                                                                               |
 |----|---------------------------------------------------------------------------------------|
-|Upload| `tedge http put tedge/file-transfer/{path}/{to}/{resource} --file /{path}/{to}/{file}` |
-|Download| `tedge http get /tedge/file-transfer/{path}/{to}/{resource} >/{path}/{to}/{file}`     |
-|Delete| `tedge http delete /tedge/file-transfer/{path}/{to}/{resource}`                       |
+|Upload| `tedge http put /tedge/v1/files/{path}/{to}/{resource} --file /{path}/{to}/{file}` |
+|Download| `tedge http get /tedge/v1/files/{path}/{to}/{resource} >/{path}/{to}/{file}`     |
+|Delete| `tedge http delete /tedge/v1/files/{path}/{to}/{resource}`                       |

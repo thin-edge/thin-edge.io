@@ -1026,7 +1026,7 @@ class ThinEdgeIO(DeviceLibrary):
         json_payload = json.dumps(payload)
         
         command = (
-            "curl -X POST http://localhost:8000/tedge/entity-store/v1/entities "
+            "curl -X POST http://localhost:8000/tedge/v1/entities "
             "-H 'Content-Type: application/json' "
             f"-d '{json_payload}'"
         )
@@ -1065,7 +1065,7 @@ class ThinEdgeIO(DeviceLibrary):
             )
         
         command = (
-            f"curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/{topic_id}"
+            f"curl -X DELETE http://localhost:8000/tedge/v1/entities/{topic_id}"
         )
         output = device.execute_command(command)
         json_output = json.loads(output.stdout)
@@ -1110,7 +1110,7 @@ class ThinEdgeIO(DeviceLibrary):
                 f"Unable to query the entity store as the device: '{device_name}' has not been setup"
             )
 
-        url = "http://localhost:8000/tedge/entity-store/v1/entities"
+        url = "http://localhost:8000/tedge/v1/entities"
         params = {}
         if root:
             params["root"] = root

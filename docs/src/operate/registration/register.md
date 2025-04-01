@@ -50,7 +50,7 @@ POST /v1/entities
 **Example**
 
 ```bash
-curl http://localhost:8000/tedge/entity-store/v1/entities \
+curl http://localhost:8000/tedge/v1/entities \
   -X POST \
   -H "Content-Type: application/json" \
   -d '{
@@ -82,7 +82,7 @@ GET /v1/entities/{topic-id}
 **Example**
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01
+curl http://localhost:8000/tedge/v1/entities/device/child01
 ```
 
 ## Query entities
@@ -166,7 +166,7 @@ List all entities registered with thin-edge starting from the `main` device at t
 **Request**
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities
+curl http://localhost:8000/tedge/v1/entities
 ```
 
 **Response**
@@ -257,7 +257,7 @@ Query the entity tree from a given root node.
 **Request**
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities?root=device/child2//
+curl http://localhost:8000/tedge/v1/entities?root=device/child2//
 ```
 
 **Response**
@@ -314,7 +314,7 @@ Query only the immediate child entities of a `parent`, excluding any nested enti
 **Request**
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities?parent=device/child2//
+curl http://localhost:8000/tedge/v1/entities?parent=device/child2//
 ```
 
 **Response**
@@ -351,7 +351,7 @@ Query all entities of type: `child-device`
 **Request**
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities?type=child-device
+curl http://localhost:8000/tedge/v1/entities?type=child-device
 ```
 
 **Response**
@@ -413,7 +413,7 @@ Query all child services of the parent: `device/child2//`.
 **Request**
 
 ```shell
-curl 'http://localhost:8000/tedge/entity-store/v1/entities?parent=device/child2//&type=service'
+curl 'http://localhost:8000/tedge/v1/entities?parent=device/child2//&type=service'
 ```
 
 **Response**
@@ -447,7 +447,7 @@ DELETE /v1/entities/{topic-id}
 **Example**
 
 ```shell
-curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child21
+curl -X DELETE http://localhost:8000/tedge/v1/entities/device/child21
 ```
 
 **Responses**
@@ -498,21 +498,21 @@ Any JSON value.
 * Set `name` fragment with a `string` value (Additional `"` quotes are required for JSON strings):
 
   ```shell
-  curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/name \
+  curl http://localhost:8000/tedge/v1/entities/device/child01///twin/name \
     -X PUT \
     -H "Content-Type: application/json" \
     -d '"Child 01"'
   ```
 * Set `maintenanceMode` fragment with a `boolean` value:
   ```shell
-  curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/maintenanceMode \
+  curl http://localhost:8000/tedge/v1/entities/device/child01///twin/maintenanceMode \
     -X PUT \
     -H "Content-Type: application/json" \
     -d 'true'
   ```
 * Set `hardware` fragment with an `object` value:
   ```shell
-  curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/hardware \
+  curl http://localhost:8000/tedge/v1/entities/device/child01///twin/hardware \
     -X PUT \
     -H "Content-Type: application/json" \
     -d '{"serialNo": "98761234"}'
@@ -570,7 +570,7 @@ Fragments to be removed are specified with a `null` value.
 Update existing fragment: `name`, add new fragment: `hardware` and remove existing fragment: `maintenanceMode` (with a `null` value):
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin \
+curl http://localhost:8000/tedge/v1/entities/device/child01///twin \
   -X PUT \
   -H "Content-Type: application/json" \
   -d '{
@@ -621,7 +621,7 @@ GET /v1/entities/{topic-id}/twin/{fragment-key}
 **Example**
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/hardware
+curl http://localhost:8000/tedge/v1/entities/device/child01///twin/hardware
 ```
 
 **Responses**
@@ -650,7 +650,7 @@ GET /v1/entities/{topic-id}/twin
 **Example**
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin
+curl http://localhost:8000/tedge/v1/entities/device/child01///twin
 ```
 
 **Responses**
@@ -686,13 +686,13 @@ DELETE /v1/entities/{topic-id}/twin/{fragment-key}
 **Example**
 
 ```shell
-curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/maintenanceMode
+curl -X DELETE http://localhost:8000/tedge/v1/entities/device/child01///twin/maintenanceMode
 ```
 
 This is equivalent to using the `PUT` API with a `null` value as follows:
 
 ```shell
-curl http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin/maintenanceMode \
+curl http://localhost:8000/tedge/v1/entities/device/child01///twin/maintenanceMode \
   -X PUT \
   -H "Content-Type: application/json" \
   -d 'null'
@@ -713,7 +713,7 @@ DELETE /v1/entities/{topic-id}/twin
 **Example**
 
 ```shell
-curl -X DELETE http://localhost:8000/tedge/entity-store/v1/entities/device/child01///twin
+curl -X DELETE http://localhost:8000/tedge/v1/entities/device/child01///twin
 ```
 
 **Responses**

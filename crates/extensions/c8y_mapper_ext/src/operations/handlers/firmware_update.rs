@@ -519,7 +519,7 @@ mod tests {
             "name": "myFirmware",
             "version": "1.0",
             "remoteUrl": "http://www.my.url",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/firmware_update/myFirmware-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/firmware_update/myFirmware-c8y-mapper-1234",
         })
                 .to_string(),
         ))
@@ -568,7 +568,7 @@ mod tests {
                 "name": "myFirmware",
                 "version": "1.0",
                 "remoteUrl": "http://www.my.url",
-                "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/firmware_update/myFirmware-c8y-mapper-1234",
+                "tedgeUrl": "http://localhost:8888/tedge/v1/files/child1/firmware_update/myFirmware-c8y-mapper-1234",
         })
                 .to_string(),
         ))
@@ -612,7 +612,7 @@ mod tests {
             "name": "myFirmware",
             "version": "1.0",
             "remoteUrl": "http://www.my.url",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/firmware_update/myFirmware-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/firmware_update/myFirmware-c8y-mapper-1234",
         })
                 .to_string(),
         ))

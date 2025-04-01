@@ -75,7 +75,7 @@ async fn handle_request_child_device_without_new_download() -> Result<(), DynErr
         "attempt": 1,
         "name": FIRMWARE_NAME,
         "version": FIRMWARE_VERSION,
-        "url": format!("http://{TEDGE_HOST}:{TEDGE_HTTP_PORT}/tedge/file-transfer/{CHILD_DEVICE_ID}/firmware_update/{DOWNLOADED_FILE_NAME}")
+        "url": format!("http://{TEDGE_HOST}:{TEDGE_HTTP_PORT}/tedge/v1/files/{CHILD_DEVICE_ID}/firmware_update/{DOWNLOADED_FILE_NAME}")
     });
     assert_json_include!(actual: received_json, expected: expected_json);
 
@@ -129,7 +129,7 @@ async fn resend_firmware_update_request_child_device() -> Result<(), DynError> {
         "attempt": 1,
         "name": FIRMWARE_NAME,
         "version": FIRMWARE_VERSION,
-        "url": format!("http://{TEDGE_HOST}:{TEDGE_HTTP_PORT}/tedge/file-transfer/{CHILD_DEVICE_ID}/firmware_update/{DOWNLOADED_FILE_NAME}")
+        "url": format!("http://{TEDGE_HOST}:{TEDGE_HTTP_PORT}/tedge/v1/files/{CHILD_DEVICE_ID}/firmware_update/{DOWNLOADED_FILE_NAME}")
     });
     assert_json_include!(actual: received_json, expected: expected_json);
 
@@ -159,7 +159,7 @@ async fn resend_firmware_update_request_child_device() -> Result<(), DynError> {
         "attempt": 2,
         "name": FIRMWARE_NAME,
         "version": FIRMWARE_VERSION,
-        "url": format!("http://{TEDGE_HOST}:{TEDGE_HTTP_PORT}/tedge/file-transfer/{CHILD_DEVICE_ID}/firmware_update/{DOWNLOADED_FILE_NAME}")
+        "url": format!("http://{TEDGE_HOST}:{TEDGE_HTTP_PORT}/tedge/v1/files/{CHILD_DEVICE_ID}/firmware_update/{DOWNLOADED_FILE_NAME}")
     });
     assert_json_include!(actual: received_json, expected: expected_json);
 
@@ -218,7 +218,7 @@ async fn handle_request_child_device_with_new_download() -> Result<(), DynError>
         "attempt": 1,
         "name": FIRMWARE_NAME,
         "version": FIRMWARE_VERSION,
-        "url": format!("http://{TEDGE_HOST}:{TEDGE_HTTP_PORT}/tedge/file-transfer/{CHILD_DEVICE_ID}/firmware_update/{DOWNLOADED_FILE_NAME}")
+        "url": format!("http://{TEDGE_HOST}:{TEDGE_HTTP_PORT}/tedge/v1/files/{CHILD_DEVICE_ID}/firmware_update/{DOWNLOADED_FILE_NAME}")
     });
     assert_json_include!(actual: received_json, expected: expected_json);
 

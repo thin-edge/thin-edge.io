@@ -38,7 +38,7 @@ Manual log_upload operation request
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%SZ
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/log_upload/example-1234
-    ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"first","lines":10}
+    ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/v1/files/${DEVICE_SN}/log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"first","lines":10}
     ...    c8y_fragment=c8y_LogfileRequest
 
 Trigger log_upload operation from another operation
@@ -46,19 +46,19 @@ Trigger log_upload operation from another operation
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%SZ
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/sub_log_upload/example-1234
-    ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/sub_log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"repeated","lines":3}
+    ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/v1/files/${DEVICE_SN}/sub_log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"repeated","lines":3}
     ${log_excerpt}=    Execute Command
-    ...    curl http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/sub_log_upload/example-1234
+    ...    curl http://127.0.0.1:8000/tedge/v1/files/${DEVICE_SN}/sub_log_upload/example-1234
     Should Be Equal    ${log_excerpt}    filename: example.log\n13 repeated line\n14 repeated line\n15 repeated line\n
 
 Trigger custom log_upload operation
     Customize log_upload operation
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/log_upload/custom-1234
-    ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/custom-1234","type":"example","searchText":"first","lines":10}
+    ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/v1/files/${DEVICE_SN}/log_upload/custom-1234","type":"example","searchText":"first","lines":10}
     ...    c8y_fragment=c8y_LogfileRequest
     ${log_excerpt}=    Execute Command
-    ...    curl http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/custom-1234
+    ...    curl http://127.0.0.1:8000/tedge/v1/files/${DEVICE_SN}/log_upload/custom-1234
     ${expected_log}=    Get File    ${CURDIR}/example.log
     Should Be Equal    ${log_excerpt}    ${expected_log}
     [Teardown]    Restore log_upload operation
@@ -108,7 +108,7 @@ Log file request not processed if operation is disabled for tedge-agent
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%SZ
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/log_upload/example-1234
-    ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"first","lines":10}
+    ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/v1/files/${DEVICE_SN}/log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"first","lines":10}
     ...    expected_status=init
     ...    c8y_fragment=c8y_LogfileRequest
     [Teardown]    Enable log upload capability of tedge-agent

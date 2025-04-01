@@ -137,7 +137,7 @@ Manual config_snapshot operation request
     Set Device Context    ${PARENT_SN}
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_snapshot/local-1111
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/local-1111","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/config_snapshot/local-1111","type":"tedge-configuration-plugin"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_UploadConfigFile
 
@@ -145,11 +145,11 @@ Trigger config_snapshot operation from another operation
     Set Device Context    ${PARENT_SN}
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/sub_config_snapshot/sub-1111
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_snapshot/sub-1111","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/sub_config_snapshot/sub-1111","type":"tedge-configuration-plugin"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_UploadConfigFile
     ${snapshot}=    Execute Command
-    ...    curl http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_snapshot/sub-1111
+    ...    curl http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/sub_config_snapshot/sub-1111
     ${config}=    Get File    ${CURDIR}/tedge-configuration-plugin.toml
     Should Be Equal    ${snapshot}    ${config}
 
@@ -158,11 +158,11 @@ Trigger custom config_snapshot operation
     Customize config operations
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_snapshot/custom-1111
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/custom-1111","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/config_snapshot/custom-1111","type":"tedge-configuration-plugin"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_UploadConfigFile
     ${snapshot}=    Execute Command
-    ...    curl http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/custom-1111
+    ...    curl http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/config_snapshot/custom-1111
     ${config}=    Get File    ${CURDIR}/tedge-configuration-plugin.toml
     Should Be Equal    ${snapshot}    ${config}
     [Teardown]    Restore config operations
@@ -178,11 +178,11 @@ Config_snapshot operation request with the tedgeUrl created by agent
 
     ${messages}=    Should Have MQTT Messages
     ...    te/device/main///cmd/config_snapshot/local-3333
-    ...    message_contains=http://${PARENT_IP}:8000/tedge/file-transfer/main/config_snapshot/tedge-configuration-plugin-local-3333
+    ...    message_contains=http://${PARENT_IP}:8000/tedge/v1/files/main/config_snapshot/tedge-configuration-plugin-local-3333
     ...    date_from=${timestamp}
 
     ${output}=    Execute Command
-    ...    curl -sSLf "http://${PARENT_IP}:8000/tedge/file-transfer/main/config_snapshot/tedge-configuration-plugin-local-3333"
+    ...    curl -sSLf "http://${PARENT_IP}:8000/tedge/v1/files/main/config_snapshot/tedge-configuration-plugin-local-3333"
     ...    strip=${True}
     Should Match Regexp    ${output}    pattern=files\\s*=\\s*\\[.*\\]    flags=DOTALL
 
@@ -191,7 +191,7 @@ Manual config_update operation request
     # Don't worry about the command failing, that is expected since the tedgeUrl path does not exist
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/local-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/local-2222","remoteUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/config_update/local-2222","remoteUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
     ...    expected_status=failed
     ...    c8y_fragment=c8y_DownloadConfigFile
 
@@ -199,10 +199,10 @@ Trigger config_update operation from another workflow
     Set Device Context    ${PARENT_SN}
 
     Execute Command
-    ...    curl -X PUT --data-binary 'new content for CONFIG1' "http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_update/sub-2222"
+    ...    curl -X PUT --data-binary 'new content for CONFIG1' "http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/sub_config_update/sub-2222"
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/sub_config_update/sub-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/sub_config_update/sub-2222","remoteUrl":"","serverUrl":"","type":"CONFIG1"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/sub_config_update/sub-2222","remoteUrl":"","serverUrl":"","type":"CONFIG1"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_DownloadConfigFile
 
@@ -213,10 +213,10 @@ Trigger custom config_update operation
     Customize config operations
 
     Execute Command
-    ...    curl -X PUT --data-binary 'updated config' "http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/custom-2222"
+    ...    curl -X PUT --data-binary 'updated config' "http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/config_update/custom-2222"
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/custom-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/custom-2222","remoteUrl":"","serverUrl":"","type":"/tmp/config_update_target"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/config_update/custom-2222","remoteUrl":"","serverUrl":"","type":"/tmp/config_update_target"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_DownloadConfigFile
 
@@ -229,7 +229,7 @@ Config update request not processed when operation is disabled for tedge-agent
     Disable config update capability of tedge-agent
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/local-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/local-2222","remoteUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/config_update/local-2222","remoteUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
     ...    expected_status=init
     ...    c8y_fragment=c8y_DownloadConfigFile
     [Teardown]    Enable config update capability of tedge-agent
@@ -239,7 +239,7 @@ Config snapshot request not processed when operation is disabled for tedge-agent
     Disable config snapshot capability of tedge-agent
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_snapshot/local-1111
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/local-1111","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/v1/files/${PARENT_SN}/config_snapshot/local-1111","type":"tedge-configuration-plugin"}
     ...    expected_status=init
     ...    c8y_fragment=c8y_UploadConfigFile
     [Teardown]    Enable config snapshot capability of tedge-agent
