@@ -1,5 +1,5 @@
 /// The signer service that handles requests.
-mod service;
+pub mod service;
 
 /// A server listening on the UNIX domain socket, wrapping the service.
 mod server;

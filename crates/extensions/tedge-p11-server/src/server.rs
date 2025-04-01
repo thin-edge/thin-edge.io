@@ -7,18 +7,20 @@ use tracing::info;
 use super::connection::Connection;
 use crate::connection::Frame1;
 use crate::connection::ProtocolError;
-use crate::pkcs11::CryptokiConfigDirect;
-use crate::service::P11SignerService;
+use crate::service::SigningService;
 
 pub struct TedgeP11Server {
-    service: P11SignerService,
+    service: Box<dyn SigningService + Send + Sync>,
 }
 
 impl TedgeP11Server {
-    pub fn from_config(config: CryptokiConfigDirect) -> anyhow::Result<Self> {
-        let service =
-            P11SignerService::new(&config).context("Failed to start the signing service")?;
-        Ok(Self { service })
+    pub fn new<S>(service: S) -> anyhow::Result<Self>
+    where
+        S: SigningService + Send + Sync + 'static,
+    {
+        Ok(Self {
+            service: Box::new(service),
+        })
     }
 
     /// Handle multiple requests on a given listener.
@@ -31,7 +33,9 @@ impl TedgeP11Server {
                 .context("Failed to accept connection")?;
 
             let stream = stream.into_std()?;
-            stream.set_nonblocking(false)?;
+            stream
+                .set_nonblocking(false)
+                .context("Failed to set nonblocking=false")?;
             let connection = Connection::new(stream);
 
             match self.process(connection) {
@@ -42,7 +46,7 @@ impl TedgeP11Server {
     }
 
     fn process(&self, mut connection: Connection) -> anyhow::Result<()> {
-        let request = connection.read_frame()?;
+        let request = connection.read_frame().context("read")?;
 
         let response = match request {
             Frame1::Error(_)
@@ -80,8 +84,118 @@ impl TedgeP11Server {
             }
         };
 
-        connection.write_frame(&response)?;
+        connection.write_frame(&response).context("write")?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::client::TedgeP11Client;
+    use crate::service::*;
+    use std::io::Read;
+    use std::os::unix::net::UnixStream;
+    use std::time::Duration;
+
+    use super::*;
+
+    const SCHEME: rustls::SignatureScheme = rustls::SignatureScheme::ECDSA_NISTP256_SHA256;
+    const SIGNATURE: [u8; 2] = [0x21, 0x37];
+
+    struct TestSigningService;
+
+    impl SigningService for TestSigningService {
+        fn choose_scheme(
+            &self,
+            _request: ChooseSchemeRequest,
+        ) -> anyhow::Result<ChooseSchemeResponse> {
+            Ok(ChooseSchemeResponse {
+                scheme: Some(SignatureScheme(SCHEME)),
+                algorithm: SignatureAlgorithm(rustls::SignatureAlgorithm::ECDSA),
+            })
+        }
+
+        fn sign(&self, _request: SignRequest) -> anyhow::Result<SignResponse> {
+            Ok(SignResponse(SIGNATURE.to_vec()))
+        }
+    }
+
+    /// Check that client successfully receives responses from the server about the requests. Tests the
+    /// connection, framing, serialization, but not PKCS#11 layer itself.
+    #[tokio::test]
+    async fn server_works_with_client() {
+        let service = TestSigningService;
+        let server = TedgeP11Server::new(service).unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let socket_path = tmpdir.path().join("test_socket.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+
+        tokio::spawn(async move { server.serve(listener).await });
+        // wait until the server calls accept()
+        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        let client = TedgeP11Client {
+            socket_path: socket_path.into(),
+        };
+
+        tokio::task::spawn_blocking(move || {
+            assert_eq!(client.choose_scheme(&[]).unwrap().unwrap(), SCHEME);
+            assert_eq!(&client.sign(&[]).unwrap(), &SIGNATURE[..]);
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn server_responds_with_error_to_invalid_request() {
+        let service = TestSigningService;
+        let server = TedgeP11Server::new(service).unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let socket_path = tmpdir.path().join("test_socket.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+
+        tokio::spawn(async move { server.serve(listener).await });
+        // wait until the server calls accept()
+        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        let mut client_connection = Connection::new(UnixStream::connect(&socket_path).unwrap());
+        let mut client_connection = tokio::task::spawn_blocking(move || {
+            client_connection
+                .write_frame(&Frame1::SignResponse(SignResponse(vec![])))
+                .unwrap();
+            client_connection
+        })
+        .await
+        .unwrap();
+        let response = client_connection.read_frame().unwrap();
+        assert!(matches!(response, Frame1::Error(_)));
+    }
+
+    #[tokio::test]
+    async fn server_responds_with_error_to_garbage() {
+        use std::io::Write as _;
+
+        let service = TestSigningService;
+        let server = TedgeP11Server::new(service).unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let socket_path = tmpdir.path().join("test_socket.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+
+        tokio::spawn(async move { server.serve(listener).await });
+        // wait until the server calls accept()
+        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        // the reader should exit
+        tokio::task::spawn_blocking(move || {
+            let mut stream = UnixStream::connect(&socket_path).unwrap();
+            write!(stream, "garbage").unwrap();
+            stream.shutdown(std::net::Shutdown::Write).unwrap();
+            let mut response = Vec::new();
+            stream.read_to_end(&mut response).unwrap();
+            response
+        })
+        .await
+        .unwrap();
     }
 }
