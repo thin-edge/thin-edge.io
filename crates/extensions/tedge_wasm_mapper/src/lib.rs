@@ -3,6 +3,7 @@ mod config;
 mod engine;
 mod pipeline;
 mod wasm;
+mod wasm_filter;
 
 use crate::actor::WasmMapper;
 use crate::config::PipelineConfig;

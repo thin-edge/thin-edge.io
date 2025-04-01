@@ -1,11 +1,15 @@
+use crate::pipeline::Filter;
 use crate::wasm::Datetime;
 use crate::wasm::Message;
 use crate::wasm::TransformedMessages;
 use crate::wasm::WasmFilter;
+use crate::wasm_filter::WasmFilterResource;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use wasmtime::component::Component;
 use wasmtime::component::Linker;
 use wasmtime::component::ResourceTable;
@@ -43,7 +47,19 @@ impl HostEngine {
         Ok(())
     }
 
-    pub fn instantiate(&self, component: &Utf8Path) -> Result<WasmFilter, LoadError> {
+    pub fn instantiate(&self, component: &Utf8Path) -> Result<Box<dyn Filter>, LoadError> {
+        self.instantiate_filter(component)
+            .map(WasmFilter::into_dyn)
+            .or_else(|_| {
+                // FIXME: should read the config file
+                let config_topic = Topic::new_unchecked("config");
+                let no_config = MqttMessage::new(&config_topic, "");
+                self.instantiate_resource(component, &no_config)
+                    .map(WasmFilterResource::into_dyn)
+            })
+    }
+
+    pub fn instantiate_filter(&self, component: &Utf8Path) -> Result<WasmFilter, LoadError> {
         let Some(component) = self.components.get(component) else {
             return Err(LoadError::FileNotFound {
                 path: component.into(),
@@ -61,6 +77,22 @@ impl HostEngine {
             })?;
 
         Ok(WasmFilter::new(store, process_func))
+    }
+
+    pub fn instantiate_resource(
+        &self,
+        component: &Utf8Path,
+        config: &MqttMessage,
+    ) -> Result<WasmFilterResource, LoadError> {
+        let Some(component) = self.components.get(component) else {
+            return Err(LoadError::FileNotFound {
+                path: component.into(),
+            });
+        };
+
+        let state = HostState::default();
+        let store = Store::new(&self.engine, state);
+        WasmFilterResource::try_new(store, component, &self.linker, config)
     }
 }
 

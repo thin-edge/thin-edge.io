@@ -10,7 +10,7 @@ repository.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
-camino = { workspace = true }
+camino = { workspace = true, features = ["serde1"] }
 serde = { workspace = true, features = ["derive"] }
 tedge_actors = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
