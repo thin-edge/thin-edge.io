@@ -54,7 +54,7 @@ impl StageConfig {
         };
         let config_topics = topic_filters(&self.config_topics)?;
         Ok(Stage {
-            filter: Box::new(filter),
+            filter,
             config_topics,
         })
     }

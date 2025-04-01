@@ -10,7 +10,10 @@ use tracing::debug;
 use wasmtime::component::TypedFunc;
 use wasmtime::Store;
 
-wasmtime::component::bindgen!();
+wasmtime::component::bindgen!({
+    path: "wit/world.wit",
+    world: "tedge",
+});
 
 pub type TransformedMessages = Result<Vec<Message>, FilterError>;
 pub type ProcessFunc = TypedFunc<(Datetime, Message), (TransformedMessages,)>;
@@ -28,6 +31,10 @@ impl WasmFilter {
             store,
             process_func,
         }
+    }
+
+    pub fn into_dyn(self) -> Box<dyn Filter> {
+        Box::new(self)
     }
 }
 

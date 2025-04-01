@@ -9,7 +9,6 @@ dependencies = [
  "serde_json",
  "time",
  "wit-bindgen",
- "wit-bindgen-rt",
 ]
 
 [[package]]
@@ -201,6 +200,16 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "slab",
+]
+
+[[package]]
+name = "group_by_timestamp"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "time",
+ "wit-bindgen",
 ]
 
 [[package]]
@@ -583,7 +592,6 @@ dependencies = [
  "serde",
  "serde_json",
  "wit-bindgen",
- "wit-bindgen-rt",
 ]
 
 [[package]]
