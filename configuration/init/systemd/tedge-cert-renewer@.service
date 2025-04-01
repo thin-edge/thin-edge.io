@@ -1,0 +1,18 @@
+[Unit]
+Description=Certificate renewer for %I
+After=network-online.target
+StartLimitIntervalSec=0
+PartOf=tedge-cert-renewer.target
+
+[Service]
+Type=oneshot
+User=root
+
+; Only run service is if the certificate needs renewal
+ExecCondition=/usr/bin/tedge-cert-renewer.sh needs-renewal %i
+
+; Run renewal
+ExecStart=/usr/bin/tedge-cert-renewer.sh renew %i
+
+[Install]
+WantedBy=multi-user.target
