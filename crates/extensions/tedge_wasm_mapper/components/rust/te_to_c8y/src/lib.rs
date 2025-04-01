@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use serde::Serialize;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -96,7 +95,7 @@ impl Guest for Component {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 struct Measurements {
     #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Timestamp>,
@@ -105,7 +104,7 @@ struct Measurements {
     pub extras: HashMap<String, Measurement>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 #[serde(untagged)]
 enum Measurement {
     Number(serde_json::Number),
