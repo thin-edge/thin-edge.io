@@ -18,6 +18,7 @@ use camino::Utf8PathBuf;
 use clap::command;
 use clap::Parser;
 use cryptoki::types::AuthPin;
+use tedge_p11_server::service::TedgeP11Service;
 use tokio::signal::unix::SignalKind;
 use tracing::debug;
 use tracing::info;
@@ -101,7 +102,9 @@ async fn main() -> anyhow::Result<()> {
     info!(listener = ?listener.local_addr().as_ref().ok().and_then(|s| s.as_pathname()), "Server listening");
     listener.set_nonblocking(true)?;
     let listener = tokio::net::UnixListener::from_std(listener)?;
-    let server = TedgeP11Server::from_config(cryptoki_config)?;
+    let service =
+        TedgeP11Service::new(cryptoki_config).context("Failed to create the signing service")?;
+    let server = TedgeP11Server::new(service)?;
     tokio::spawn(async move { server.serve(listener).await });
 
     // by capturing SIGINT and SIGERM, we allow owned socket drop guard to run before exit

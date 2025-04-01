@@ -10,25 +10,29 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::instrument;
 
+pub trait SigningService {
+    fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse>;
+    fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse>;
+}
+
 #[derive(Debug)]
-pub struct P11SignerService {
+pub struct TedgeP11Service {
     signing_key: Pkcs11SigningKey,
 }
 
-impl P11SignerService {
+impl TedgeP11Service {
     // TODO(marcel): would be nice to check if there are any keys upon starting the server and warn the user if there is not
-    pub fn new(config: &CryptokiConfigDirect) -> anyhow::Result<Self> {
-        let signing_key = pkcs11::Pkcs11SigningKey::from_cryptoki_config(config)
+    pub fn new(config: CryptokiConfigDirect) -> anyhow::Result<Self> {
+        let signing_key = pkcs11::Pkcs11SigningKey::from_cryptoki_config(&config)
             .context("Failed to get handle of pkcs11 signing key")?;
 
         Ok(Self { signing_key })
     }
+}
 
+impl SigningService for TedgeP11Service {
     #[instrument(skip_all)]
-    pub fn choose_scheme(
-        &self,
-        request: ChooseSchemeRequest,
-    ) -> anyhow::Result<ChooseSchemeResponse> {
+    fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse> {
         let offered = request.offered.into_iter().map(|s| s.0).collect::<Vec<_>>();
 
         let signer = self.signing_key.choose_scheme(&offered);
@@ -48,7 +52,7 @@ impl P11SignerService {
     }
 
     #[instrument(skip_all)]
-    pub fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse> {
+    fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse> {
         let session = match &self.signing_key {
             Pkcs11SigningKey::Ecdsa(key) => &key.pkcs11,
             Pkcs11SigningKey::Rsa(key) => &key.pkcs11,
