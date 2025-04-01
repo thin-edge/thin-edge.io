@@ -143,7 +143,7 @@ notify-debouncer-full = { version = "0.3.1", default-features = false }
 once_cell = "1.8"
 pad = "0.1"
 path-clean = "0.1"
-pem = "1.0"
+pem = "3.0"
 pin-project = { version = "1.1.3", features = [] }
 postcard = { version = "1.1.0", features = ["alloc"] }
 predicates = "2.1"
@@ -153,6 +153,8 @@ proc-macro2 = "1"
 proptest = "1.0"
 quote = "1"
 rand = "0.8"
+rasn = "0.18" # Not using the latest version which requires rust 1.85
+rasn-cms = "0.18" # Not using the latest version which requires rust 1.85
 rcgen = { version = "0.12", features = ["pem", "zeroize"] }
 regex = "1.4"
 reqwest = { version = "0.12", default-features = false }

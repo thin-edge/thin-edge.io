@@ -15,18 +15,30 @@ Create the certificate
     [Setup]    Setup With Self-Signed Certificate
     # You can then check the content of that certificate.
     ${output}=    Execute Command    sudo tedge cert show    # You can then check the content of that certificate.
-    Should Contain    ${output}    Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
-    Should Contain    ${output}    Subject: CN=${DEVICE_SN}, O=Thin Edge, OU=Test Device
-    Should Contain    ${output}    Issuer: CN=${DEVICE_SN}, O=Thin Edge, OU=Test Device
+    Should Contain
+    ...    ${output}
+    ...    Certificate: /etc/tedge/device-certs/tedge-certificate.pem
+    ...    collapse_spaces=true
+    Should Contain
+    ...    ${output}
+    ...    Subject: CN=${DEVICE_SN}, O=Thin Edge, OU=Device
+    ...    collapse_spaces=true
+    Should Contain
+    ...    ${output}
+    ...    Issuer: CN=${DEVICE_SN}, O=Thin Edge, OU=Device
+    ...    collapse_spaces=true
+    Should Contain    ${output}    Status:
+    Should Contain    ${output}    VALID
     Should Contain    ${output}    Valid from:
-    Should Contain    ${output}    Valid up to:
+    Should Contain    ${output}    Valid until:
+    Should Contain    ${output}    Serial number:
     Should Contain    ${output}    Thumbprint:
 
 Renew the certificate
     [Setup]    Setup With Self-Signed Certificate
     Execute Command    sudo tedge disconnect c8y
     ${output}=    Execute Command
-    ...    sudo tedge cert renew
+    ...    sudo tedge cert renew --self-signed
     ...    stderr=${True}
     ...    stdout=${False}
     ...    ignore_exit_code=${True}
@@ -45,7 +57,7 @@ Cert upload prompts for username (from stdin)
     [Setup]    Setup With Self-Signed Certificate
     Execute Command    sudo tedge disconnect c8y
     ${output}=    Execute Command
-    ...    sudo tedge cert renew
+    ...    sudo tedge cert renew --self-signed
     ...    stderr=${True}
     ...    stdout=${False}
     ...    ignore_exit_code=${True}
@@ -63,7 +75,7 @@ Cert upload supports reading username/password from go-c8y-cli env variables
     [Setup]    Setup With Self-Signed Certificate
     Execute Command    sudo tedge disconnect c8y
     ${output}=    Execute Command
-    ...    sudo tedge cert renew
+    ...    sudo tedge cert renew --self-signed
     ...    stderr=${True}
     ...    stdout=${False}
     ...    ignore_exit_code=${True}
@@ -81,7 +93,7 @@ Renew certificate fails
     [Setup]    Setup Without Certificate
     Execute Command    sudo tedge cert remove
     ${output}=    Execute Command
-    ...    sudo tedge cert renew
+    ...    sudo tedge cert renew --self-signed
     ...    stderr=${True}
     ...    stdout=${False}
     ...    ignore_exit_code=${True}

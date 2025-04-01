@@ -3,9 +3,9 @@ use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8PathBuf;
+use certificate::CsrTemplate;
 use certificate::KeyCertPair;
 use certificate::KeyKind;
-use certificate::NewCertificateConfig;
 use certificate::PemCertificate;
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
@@ -15,7 +15,7 @@ use tokio::fs::File;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 
-/// Create self-signed device certificate
+/// Create a self-signed device certificate
 pub struct CreateCertCmd {
     /// The device identifier
     pub id: String,
@@ -29,6 +29,9 @@ pub struct CreateCertCmd {
     /// The owner of the private key
     pub user: String,
     pub group: String,
+
+    /// CSR template
+    pub csr_template: CsrTemplate,
 }
 
 #[async_trait::async_trait]
@@ -38,11 +41,12 @@ impl Command for CreateCertCmd {
     }
 
     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let config = NewCertificateConfig::default();
-        self.create_test_certificate(&config).await?;
+        self.create_test_certificate(&self.csr_template).await?;
         eprintln!("Certificate was successfully created\n");
         let show_cert_cmd = ShowCertCmd {
             cert_path: self.cert_path.clone(),
+            minimum: humantime::parse_duration("30d").unwrap(),
+            validity_check_only: false,
         };
         show_cert_cmd.show_certificate().await?;
         Ok(())
@@ -50,10 +54,7 @@ impl Command for CreateCertCmd {
 }
 
 impl CreateCertCmd {
-    pub async fn create_test_certificate(
-        &self,
-        config: &NewCertificateConfig,
-    ) -> Result<(), CertError> {
+    pub async fn create_test_certificate(&self, config: &CsrTemplate) -> Result<(), CertError> {
         let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, &KeyKind::New)?;
 
         let cert_path = &self.cert_path;
@@ -140,12 +141,24 @@ async fn create_new_file(
     Ok(file)
 }
 
+// Allow permissions_set_readonly_false as the file will be make readonly once its content updated
+#[allow(clippy::permissions_set_readonly_false)]
 async fn override_file(path: impl AsRef<Path>) -> Result<File, std::io::Error> {
+    let path = path.as_ref();
+
+    // If the file already exists, make sure it can be overwritten.
+    // However, defer any error to the open step, to give better context to the user
+    if let Ok(metadata) = tokio::fs::metadata(path).await {
+        let mut perm = metadata.permissions();
+        perm.set_readonly(false);
+        let _ = tokio::fs::set_permissions(path, perm).await;
+    };
+
     OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(path.as_ref())
+        .open(path)
         .await
 }
 
@@ -178,19 +191,26 @@ async fn persist_public_key(mut key_file: File, cert_pem: String) -> Result<(), 
     Ok(())
 }
 
-pub async fn cn_of_self_signed_certificate(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
-    let cert = tokio::fs::read_to_string(cert_path)
-        .await
-        .map_err(|err| CertError::IoError(err).cert_context(cert_path.clone()))?;
-    let pem = PemCertificate::from_pem_string(&cert)?;
-
-    if pem.issuer()? == pem.subject()? {
-        Ok(pem.subject_common_name()?)
-    } else {
-        Err(CertError::NotASelfSignedCertificate {
-            path: cert_path.clone(),
-        })
+pub fn certificate_is_self_signed(cert_path: &Utf8PathBuf) -> Result<bool, CertError> {
+    fn get_certificate_ca(cert_path: &Utf8PathBuf) -> Result<bool, CertError> {
+        let cert = std::fs::read_to_string(cert_path)?;
+        let pem = PemCertificate::from_pem_string(&cert)?;
+        let self_signed = pem.issuer()? == pem.subject()?;
+        Ok(self_signed)
     }
+    get_certificate_ca(cert_path).map_err(|err| err.cert_context(cert_path.clone()))
+}
+
+pub async fn certificate_cn(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
+    async fn get_certificate_cn(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
+        let cert = tokio::fs::read_to_string(cert_path).await?;
+        let pem = PemCertificate::from_pem_string(&cert)?;
+
+        Ok(pem.subject_common_name()?)
+    }
+    get_certificate_cn(cert_path)
+        .await
+        .map_err(|err| err.cert_context(cert_path.clone()))
 }
 
 #[cfg(test)]
@@ -214,15 +234,15 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
         assert_matches!(
-            cmd.create_test_certificate(&NewCertificateConfig::default())
-                .await,
+            cmd.create_test_certificate(&CsrTemplate::default()).await,
             Ok(())
         );
-        assert_eq!(parse_pem_file(&cert_path).tag, "CERTIFICATE");
-        assert_eq!(parse_pem_file(&key_path).tag, "PRIVATE KEY");
+        assert_eq!(parse_pem_file(&cert_path).tag(), "CERTIFICATE");
+        assert_eq!(parse_pem_file(&key_path).tag(), "PRIVATE KEY");
     }
 
     #[tokio::test]
@@ -244,10 +264,11 @@ mod tests {
             key_path: key_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
         assert!(cmd
-            .create_test_certificate(&NewCertificateConfig::default())
+            .create_test_certificate(&CsrTemplate::default())
             .await
             .ok()
             .is_none());
@@ -268,10 +289,11 @@ mod tests {
             key_path,
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
         let cert_error = cmd
-            .create_test_certificate(&NewCertificateConfig::default())
+            .create_test_certificate(&CsrTemplate::default())
             .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertPathError { .. });
@@ -289,10 +311,11 @@ mod tests {
             key_path,
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
+            csr_template: CsrTemplate::default(),
         };
 
         let cert_error = cmd
-            .create_test_certificate(&NewCertificateConfig::default())
+            .create_test_certificate(&CsrTemplate::default())
             .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyPathError { .. });
