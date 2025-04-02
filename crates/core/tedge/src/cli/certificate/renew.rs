@@ -39,11 +39,6 @@ impl RenewCertCmd {
         let key_path = &self.key_path;
         let id = certificate_cn(cert_path).await?;
 
-        // Remove only certificate
-        tokio::fs::remove_file(&self.cert_path)
-            .await
-            .map_err(|e| CertError::IoError(e).cert_context(self.cert_path.clone()))?;
-
         // Re-create the certificate from the key, with new validity
         let previous_key = reuse_private_key(key_path)
             .await
