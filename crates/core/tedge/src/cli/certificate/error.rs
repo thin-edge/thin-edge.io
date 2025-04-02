@@ -71,6 +71,12 @@ pub enum CertError {
     #[error(transparent)]
     PathsError(#[from] PathsError),
 
+    #[error("Connection error: {0}")]
+    ReqwestConnect(String),
+
+    #[error("Request time out")]
+    ReqwestTimeout,
+
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
 
@@ -153,6 +159,16 @@ pub fn get_webpki_error_from_reqwest(err: reqwest::Error) -> CertError {
     {
         CertError::CertificateError(tls_error)
     } else {
-        CertError::ReqwestError(err) // any other Error type than `hyper::Error`
+        // any other Error type than `hyper::Error`
+        if err.is_connect() {
+            match err.source().and_then(|err| err.source()) {
+                Some(io_error) => CertError::ReqwestConnect(format!("{io_error}")),
+                None => CertError::ReqwestError(err),
+            }
+        } else if err.is_timeout() {
+            CertError::ReqwestTimeout
+        } else {
+            CertError::ReqwestError(err)
+        }
     }
 }
