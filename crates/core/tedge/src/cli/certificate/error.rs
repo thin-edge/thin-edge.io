@@ -25,6 +25,13 @@ pub enum CertError {
     )]
     CertificateNotFound { path: Utf8PathBuf },
 
+    #[error("I/O error accessing the certificate: {path:?}")]
+    CertificateIoError {
+        path: Utf8PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error(
         r#"No private key has been attached to that device.
         Missing file: {path:?}
@@ -40,6 +47,13 @@ pub enum CertError {
     "#
     )]
     KeyAlreadyExists { path: Utf8PathBuf },
+
+    #[error("I/O error accessing the private key: {path:?}")]
+    KeyIoError {
+        path: Utf8PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 
     #[error(transparent)]
     ConfigError(#[from] crate::ConfigError),
@@ -61,12 +75,6 @@ pub enum CertError {
 
     #[error(transparent)]
     CertificateError(#[from] certificate::CertificateError),
-
-    #[error(
-        r#"Certificate read error at: {1:?}
-        Run `tedge cert create` if you want to create a new certificate."#
-    )]
-    CertificateReadFailed(#[source] std::io::Error, String),
 
     #[error(transparent)]
     PathsError(#[from] PathsError),
@@ -106,10 +114,10 @@ impl CertError {
     /// Improve the error message in case the error in a IO error on the certificate file.
     pub fn cert_context(self, path: Utf8PathBuf) -> CertError {
         match self {
-            CertError::IoError(ref err) => match err.kind() {
+            CertError::IoError(err) => match err.kind() {
                 std::io::ErrorKind::AlreadyExists => CertError::CertificateAlreadyExists { path },
                 std::io::ErrorKind::NotFound => CertError::CertificateNotFound { path },
-                _ => self,
+                _ => CertError::CertificateIoError { path, source: err },
             },
             _ => self,
         }
@@ -118,10 +126,10 @@ impl CertError {
     /// Improve the error message in case the error in a IO error on the private key file.
     pub fn key_context(self, path: Utf8PathBuf) -> CertError {
         match self {
-            CertError::IoError(ref err) => match err.kind() {
+            CertError::IoError(err) => match err.kind() {
                 std::io::ErrorKind::AlreadyExists => CertError::KeyAlreadyExists { path },
                 std::io::ErrorKind::NotFound => CertError::KeyNotFound { path },
-                _ => self,
+                _ => CertError::KeyIoError { path, source: err },
             },
             _ => self,
         }

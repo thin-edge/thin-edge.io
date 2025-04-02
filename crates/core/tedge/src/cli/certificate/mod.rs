@@ -1,5 +1,5 @@
 pub use self::cli::TEdgeCertCli;
-use std::path::Path;
+use camino::Utf8Path;
 use tokio::io::AsyncReadExt;
 
 mod c8y;
@@ -15,10 +15,12 @@ pub use self::cli::*;
 pub use self::create::*;
 pub use self::error::*;
 
-pub(crate) async fn read_cert_to_string(path: impl AsRef<Path>) -> Result<String, CertError> {
+pub(crate) async fn read_cert_to_string(path: impl AsRef<Utf8Path>) -> Result<String, CertError> {
     let mut file = tokio::fs::File::open(path.as_ref()).await.map_err(|err| {
-        let path = path.as_ref().display().to_string();
-        CertError::CertificateReadFailed(err, path)
+        CertError::CertificateIoError {
+            source: err,
+            path: path.as_ref().to_owned(),
+        }
     })?;
     let mut content = String::new();
     file.read_to_string(&mut content).await?;

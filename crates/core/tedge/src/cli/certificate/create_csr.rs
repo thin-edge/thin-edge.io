@@ -47,7 +47,10 @@ impl CreateCsrCmd {
         let csr_path = &self.csr_path;
         let key_path = &self.key_path;
 
-        let previous_key = reuse_private_key(key_path).await.unwrap_or(KeyKind::New);
+        let previous_key = reuse_private_key(key_path)
+            .await
+            .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?;
+
         let cert =
             KeyCertPair::new_certificate_sign_request(&self.csr_template, id, &previous_key)?;
 
