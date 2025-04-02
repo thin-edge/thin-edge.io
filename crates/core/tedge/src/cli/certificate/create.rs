@@ -166,6 +166,13 @@ pub async fn reuse_private_key(key_path: &Utf8PathBuf) -> Result<KeyKind, std::i
     tokio::fs::read_to_string(key_path)
         .await
         .map(|keypair_pem| KeyKind::Reuse { keypair_pem })
+        .or_else(|err| {
+            if key_path.exists() {
+                Err(err)
+            } else {
+                Ok(KeyKind::New)
+            }
+        })
 }
 
 async fn persist_private_key(

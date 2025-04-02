@@ -3,9 +3,9 @@ use crate::cli::certificate::c8y::create_device_csr;
 use crate::cli::certificate::c8y::read_csr_from_file;
 use crate::cli::certificate::c8y::store_device_cert;
 use crate::command::Command;
-use crate::error;
 use crate::get_webpki_error_from_reqwest;
 use crate::log::MaybeFancy;
+use anyhow::anyhow;
 use anyhow::Error;
 use c8y_api::http_proxy::C8yEndPoint;
 use camino::Utf8PathBuf;
@@ -47,7 +47,10 @@ pub struct RenewCertCmd {
 #[async_trait::async_trait]
 impl Command for RenewCertCmd {
     fn description(&self) -> String {
-        format!("Renew the device certificate from {}", self.c8y_url())
+        format!(
+            "renew the device certificate via Cumulocity HTTP proxy {}",
+            self.c8y_url()
+        )
     }
 
     async fn execute(&self) -> Result<(), MaybeFancy<Error>> {
@@ -89,29 +92,23 @@ impl RenewCertCmd {
         let url = Url::parse(&url)?;
         let result = self.post_device_csr(&http, &url, &csr).await;
         match result {
-            Ok(response) if response.status() == StatusCode::OK => {
-                if let Ok(cert) = response.text().await {
+            Ok(response) if response.status() == StatusCode::OK => match response.text().await {
+                Ok(cert) => {
                     store_device_cert(&self.cert_path, cert).await?;
-                    return Ok(());
+                    Ok(())
                 }
-                error!("Fail to extract a certificate from the response returned by {url}");
-            }
-            Ok(response) => {
-                error!(
-                    "The device certificate cannot be renewed from {url}:\n\t{} {}",
-                    response.status(),
-                    response.text().await.unwrap_or("".to_string())
-                );
-            }
-            Err(err) => {
-                error!(
-                    "Fail to connect to {url}: {:?}",
-                    get_webpki_error_from_reqwest(err)
-                )
-            }
+                Err(err) => Err(anyhow!(
+                    "Fail to extract a certificate from the response: {err}"
+                )),
+            },
+            Ok(response) => Err(anyhow!(
+                "The request failed with {}:\n\t{}",
+                response.status(),
+                response.text().await.unwrap_or("".to_string())
+            )),
+            Err(err) => Err(Error::new(get_webpki_error_from_reqwest(err))
+                .context(format!("Fail to connect to Cumulocity HTTP proxy {url}"))),
         }
-
-        Ok(())
     }
 
     /// Post the device CSR

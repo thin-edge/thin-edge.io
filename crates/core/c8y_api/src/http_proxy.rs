@@ -69,8 +69,6 @@ impl C8yEndPoint {
         c8y_profile: Option<&str>,
     ) -> Result<Self, C8yEndPointConfigError> {
         let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
-        let c8y_host = c8y_config.proxy.client.host.to_string();
-        let c8y_mqtt_host = c8y_host.clone();
         let auth_proxy_addr = c8y_config.proxy.client.host.clone();
         let auth_proxy_port = c8y_config.proxy.client.port;
         let auth_proxy_protocol = c8y_config
@@ -78,8 +76,12 @@ impl C8yEndPoint {
             .cert_path
             .or_none()
             .map_or(Protocol::Http, |_| Protocol::Https);
+        let c8y_host = format!(
+            "{}://{auth_proxy_addr}:{auth_proxy_port}",
+            auth_proxy_protocol.as_str()
+        );
+        let c8y_mqtt_host = c8y_host.clone();
         let proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port, auth_proxy_protocol);
-
         Ok(C8yEndPoint {
             c8y_host,
             c8y_mqtt_host,
