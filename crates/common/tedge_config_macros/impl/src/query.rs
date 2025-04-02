@@ -19,8 +19,9 @@ use syn::parse_quote_spanned;
 use syn::spanned::Spanned;
 
 pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
-    let mut paths = configuration_paths_from(items);
-    let (readonly_destr, write_error): (Vec<_>, Vec<_>) = paths
+    let dto_paths = configuration_paths_from(items, Mode::Dto);
+    let mut reader_paths = configuration_paths_from(items, Mode::Reader);
+    let (readonly_destr, write_error): (Vec<_>, Vec<_>) = reader_paths
         .iter()
         .filter_map(|field| {
             let configuration = enum_variant(field);
@@ -36,9 +37,12 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
             ))
         })
         .multiunzip();
-    let readable_args = configuration_strings(paths.iter());
-    let readonly_args = configuration_strings(paths.iter().filter(|path| !is_read_write(path)));
-    let writable_args = configuration_strings(paths.iter().filter(|path| is_read_write(path)));
+    let readable_args = configuration_strings(reader_paths.iter());
+    let readonly_args =
+        configuration_strings(reader_paths.iter().filter(|path| !is_read_write(path)));
+    let writable_args =
+        configuration_strings(reader_paths.iter().filter(|path| is_read_write(path)));
+    let dto_args = configuration_strings(dto_paths.iter());
     let readable_keys = keys_enum(parse_quote!(ReadableKey), &readable_args, "read from");
     let readonly_keys = keys_enum(
         parse_quote!(ReadOnlyKey),
@@ -46,33 +50,35 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         "read from, but not written to,",
     );
     let writable_keys = keys_enum(parse_quote!(WritableKey), &writable_args, "written to");
+    let dto_keys = keys_enum(parse_quote!(DtoKey), &dto_args, "written to");
     let fromstr_readable = generate_fromstr_readable(parse_quote!(ReadableKey), &readable_args);
     let fromstr_readonly = generate_fromstr_readable(parse_quote!(ReadOnlyKey), &readonly_args);
     let fromstr_writable = generate_fromstr_writable(parse_quote!(WritableKey), &writable_args);
-    let read_string = generate_string_readers(&paths);
+    let fromstr_dto = generate_fromstr_writable(parse_quote!(DtoKey), &dto_args);
+    let read_string = generate_string_readers(&reader_paths);
     let write_string = generate_string_writers(
-        &paths
+        &reader_paths
             .iter()
             .filter(|path| is_read_write(path))
             .cloned()
             .collect::<Vec<_>>(),
     );
 
-    let paths_vec = paths
+    let reader_paths_vec = reader_paths
         .iter_mut()
         .map(|vd| &*vd.make_contiguous())
         .collect::<Vec<_>>();
     let readable_keys_iter = key_iterators(
         parse_quote!(TEdgeConfigReader),
         parse_quote!(ReadableKey),
-        &paths_vec,
+        &reader_paths_vec,
         "",
         &[],
     );
     let readonly_keys_iter = key_iterators(
         parse_quote!(TEdgeConfigReader),
         parse_quote!(ReadOnlyKey),
-        &paths_vec
+        &reader_paths_vec
             .iter()
             .copied()
             .filter(|r| r.last().unwrap().field().unwrap().read_only().is_some())
@@ -83,7 +89,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let writable_keys_iter = key_iterators(
         parse_quote!(TEdgeConfigReader),
         parse_quote!(WritableKey),
-        &paths_vec
+        &reader_paths_vec
             .iter()
             .copied()
             .filter(|r| r.last().unwrap().field().unwrap().read_only().is_none())
@@ -92,7 +98,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         &[],
     );
 
-    let (static_alias, deprecated_keys) = deprecated_keys(paths.iter());
+    let (static_alias, deprecated_keys) = deprecated_keys(reader_paths.iter());
     let iter_updated = deprecated_keys.iter().map(|k| &k.iter_field);
 
     let fallback_branch: Option<syn::Arm> = readonly_args
@@ -104,9 +110,11 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         #readable_keys
         #readonly_keys
         #writable_keys
+        #dto_keys
         #fromstr_readable
         #fromstr_readonly
         #fromstr_writable
+        #fromstr_dto
         #read_string
         #write_string
         #readable_keys_iter
@@ -711,13 +719,14 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
 
 fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     let enum_variants = paths.iter().map(enum_variant);
-    let (update_arms, copy_arms, unset_arms, append_arms, remove_arms): (
+    type Arms = (
         Vec<syn::Arm>,
         Vec<syn::Arm>,
         Vec<syn::Arm>,
         Vec<syn::Arm>,
         Vec<syn::Arm>,
-    ) = paths
+    );
+    let (update_arms, copy_arms, unset_arms, append_arms, remove_arms): Arms  = paths
         .iter()
         .zip(enum_variants)
         .map(|(path, configuration_key)| {
@@ -806,7 +815,6 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 Ok(())
             }
 
-            // TODO can this be made &self easily?
             pub(crate) fn take_value_from(&mut self, other: &mut TEdgeConfigDto, key: &WritableKey) -> Result<(), WriteError> {
                 match key {
                     #(#copy_arms)*
@@ -1014,15 +1022,30 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Mode {
+    Dto,
+    Reader,
+}
+
+impl Mode {
+    pub fn skip(self, item: &FieldOrGroup) -> bool {
+        match self {
+            Self::Dto => item.dto_skip(),
+            Self::Reader => item.reader().skip,
+        }
+    }
+}
+
 /// Generates a list of the toml paths for each of the keys in the provided
 /// configuration
-fn configuration_paths_from(items: &[FieldOrGroup]) -> Vec<VecDeque<&FieldOrGroup>> {
+fn configuration_paths_from(items: &[FieldOrGroup], mode: Mode) -> Vec<VecDeque<&FieldOrGroup>> {
     let mut res = vec![];
-    for item in items.iter().filter(|item| !item.reader().skip) {
+    for item in items.iter().filter(|item| !mode.skip(item)) {
         match item {
             FieldOrGroup::Field(_) => res.push(VecDeque::from([item])),
             FieldOrGroup::Group(group) | FieldOrGroup::Multi(group) => {
-                for mut fields in configuration_paths_from(&group.contents) {
+                for mut fields in configuration_paths_from(&group.contents, mode) {
                     fields.push_front(item);
                     res.push(fields);
                 }
@@ -1070,7 +1093,7 @@ mod tests {
                 url: String,
             }
         );
-        let paths = configuration_paths_from(&input.groups);
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
         let c = configuration_strings(paths.iter());
         let generated = generate_fromstr(
             syn::Ident::new("ReadableKey", Span::call_site()),
@@ -1135,7 +1158,7 @@ mod tests {
                 url: String,
             }
         );
-        let paths = configuration_paths_from(&input.groups);
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
         let c = configuration_strings(paths.iter());
         let generated = generate_fromstr(
             syn::Ident::new("ReadableKey", Span::call_site()),
@@ -1182,7 +1205,7 @@ mod tests {
                 }
             }
         );
-        let mut paths = configuration_paths_from(&input.groups);
+        let mut paths = configuration_paths_from(&input.groups, Mode::Reader);
         let paths = paths.iter_mut().map(|vd| &*vd.make_contiguous());
         let generated = key_iterators(
             parse_quote!(TEdgeConfigReader),
@@ -1248,7 +1271,7 @@ mod tests {
                 url: String,
             }
         );
-        let mut paths = configuration_paths_from(&input.groups);
+        let mut paths = configuration_paths_from(&input.groups, Mode::Reader);
         let paths = paths.iter_mut().map(|vd| &*vd.make_contiguous());
         let generated = key_iterators(
             parse_quote!(TEdgeConfigReader),
@@ -1310,7 +1333,7 @@ mod tests {
                 }
             }
         );
-        let mut paths = configuration_paths_from(&input.groups);
+        let mut paths = configuration_paths_from(&input.groups, Mode::Reader);
         let paths = paths.iter_mut().map(|vd| &*vd.make_contiguous());
         let generated = key_iterators(
             parse_quote!(TEdgeConfigReader),
@@ -1363,7 +1386,39 @@ mod tests {
                 url: String,
             }
         );
-        let paths = configuration_paths_from(&input.groups);
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let config_keys = configuration_strings(paths.iter());
+        let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
+
+        let expected = parse_quote! {
+            impl ReadableKey {
+                pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
+                    match self {
+                        Self::C8yUrl => ::std::borrow::Cow::Borrowed("c8y.url"),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#impl_block)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn impl_ignores_skipped_groups() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(reader(skip))]
+            config: {
+                version: String,
+            },
+
+            c8y: {
+                url: String,
+            }
+        );
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
         let config_keys = configuration_strings(paths.iter());
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
@@ -1391,7 +1446,7 @@ mod tests {
                 url: String,
             }
         );
-        let paths = configuration_paths_from(&input.groups);
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
         let config_keys = configuration_strings(paths.iter());
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
@@ -1423,7 +1478,7 @@ mod tests {
                 }
             }
         );
-        let paths = configuration_paths_from(&input.groups);
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
         let config_keys = configuration_strings(paths.iter());
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
@@ -1462,7 +1517,7 @@ mod tests {
                 enable: bool,
             },
         );
-        let paths = configuration_paths_from(&input.groups);
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
         let config_keys = configuration_strings(paths.iter());
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "try_with_profile");
 
@@ -1503,7 +1558,7 @@ mod tests {
                 enable: bool,
             },
         );
-        let paths = configuration_paths_from(&input.groups);
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
         let writers = generate_string_writers(&paths);
         let impl_dto_block = syn::parse2(writers).unwrap();
         let impl_dto_block = retain_fn(impl_dto_block, "try_unset_key");
@@ -1548,7 +1603,7 @@ mod tests {
                 },
             }
         );
-        let paths = configuration_paths_from(&input.groups);
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
         let writers = generate_string_writers(&paths);
         let impl_dto_block = syn::parse2(writers).unwrap();
         let impl_dto_block = retain_fn(impl_dto_block, "try_append_str");
