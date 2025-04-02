@@ -117,9 +117,15 @@ impl ShowCertCmd {
 
 fn display_status(status: ValidityStatus, minimum: Duration) -> String {
     let text = match status {
-        ValidityStatus::Valid { expired_in } => {
+        ValidityStatus::Valid { expired_in } if expired_in > minimum => {
             format!(
                 "VALID (expires in: {})",
+                humantime::format_duration(expired_in)
+            )
+        }
+        ValidityStatus::Valid { expired_in } => {
+            format!(
+                "EXPIRES SOON (expires in: {})",
                 humantime::format_duration(expired_in)
             )
         }
