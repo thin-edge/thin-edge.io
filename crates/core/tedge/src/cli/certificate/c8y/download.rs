@@ -73,7 +73,7 @@ impl Command for DownloadCertCmd {
 
 impl DownloadCertCmd {
     async fn download_device_certificate(&self) -> Result<(), Error> {
-        let (common_name, security_token) = self.get_registration_data()?;
+        let (common_name, security_token) = self.get_registration_data().await?;
         if self.generate_csr {
             create_device_csr(
                 common_name.clone(),
@@ -129,25 +129,30 @@ impl DownloadCertCmd {
     /// Prompt the user for the device id and the security token
     ///
     /// - unless already set on the command line or using env variables.
-    fn get_registration_data(&self) -> Result<(String, String), std::io::Error> {
-        let device_id = if self.device_id.is_empty() {
-            print!("Enter device id: ");
-            std::io::stdout().flush()?;
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input)?;
-            input.trim_end_matches(['\n', '\r']).to_string()
-        } else {
-            self.device_id.clone()
-        };
+    async fn get_registration_data(&self) -> Result<(String, String), std::io::Error> {
+        let self_device_id = self.device_id.clone();
+        let self_security_token = self.security_token.clone();
+        tokio::task::spawn_blocking(move || {
+            let device_id = if self_device_id.is_empty() {
+                print!("Enter device id: ");
+                std::io::stdout().flush()?;
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                input.trim_end_matches(['\n', '\r']).to_string()
+            } else {
+                self_device_id
+            };
 
-        // Read the security token from /dev/tty
-        let security_token = if self.security_token.is_empty() {
-            rpassword::read_password_from_tty(Some("Enter security token: "))?
-        } else {
-            self.security_token.clone()
-        };
+            // Read the security token from /dev/tty
+            let security_token = if self_security_token.is_empty() {
+                rpassword::read_password_from_tty(Some("Enter security token: "))?
+            } else {
+                self_security_token
+            };
 
-        Ok((device_id, security_token))
+            Ok((device_id, security_token))
+        })
+        .await?
     }
 
     /// Post the device CSR
