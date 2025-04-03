@@ -7,9 +7,15 @@ use std::sync::Mutex;
 
 use figment::providers::Format;
 use figment::providers::Toml;
+use figment::util::nest;
+use figment::value::Dict;
+use figment::value::Map;
 use figment::value::Uncased;
+use figment::value::Value;
 use figment::Figment;
 use figment::Metadata;
+use figment::Profile;
+use figment::Provider;
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 
@@ -207,10 +213,10 @@ impl TEdgeEnv {
         })
     }
 
-    fn provider(&self) -> figment::providers::Env {
+    fn provider(&self) -> TEdgeEnvProvider {
         let prefix = self.prefix;
         static WARNINGS: Lazy<Mutex<HashSet<String>>> = Lazy::new(<_>::default);
-        figment::providers::Env::prefixed(self.prefix).ignore(&["CONFIG_DIR", "CLOUD_PROFILE"])
+        let provider = figment::providers::Env::prefixed(self.prefix).ignore(&["CONFIG_DIR", "CLOUD_PROFILE"])
         .filter(move |key| {
             std::env::vars()
             .find(|(k, _)| k.strip_prefix(prefix).is_some_and(|k| k == key))
@@ -234,7 +240,72 @@ impl TEdgeEnv {
                 })
                 .unwrap_or(lowercase_name),
             )
-        })
+        });
+        TEdgeEnvProvider { inner: provider }
+    }
+}
+
+struct TEdgeEnvProvider {
+    inner: figment::providers::Env,
+}
+
+impl Provider for TEdgeEnvProvider {
+    fn metadata(&self) -> Metadata {
+        self.inner.metadata()
+    }
+
+    fn data(&self) -> Result<figment::value::Map<figment::Profile, Dict>, figment::Error> {
+        let mut dict = Dict::new();
+        for (k, v) in self.inner.iter() {
+            let value = if v.len() > 1 && v.starts_with('0') && !v.contains('.') {
+                Value::from(v)
+            } else {
+                v.parse().expect("infallible")
+            };
+            let nested_dict = nest(k.as_str(), value)
+                .into_dict()
+                .expect("key is non-empty: must have dict");
+
+            dict = dict.merge(nested_dict);
+        }
+
+        Ok(self.inner.profile.collect(dict))
+    }
+}
+
+pub trait Mergeable: Sized {
+    fn merge(self, other: Self) -> Self;
+}
+
+impl Mergeable for Profile {
+    fn merge(self, other: Self) -> Self {
+        other
+    }
+}
+
+impl Mergeable for Value {
+    fn merge(self, other: Self) -> Self {
+        use Value::Dict as D;
+        match (self, other) {
+            (D(_, a), D(t, b)) => D(t, a.merge(b)),
+            (_, v) => v,
+        }
+    }
+}
+
+impl<K: Eq + std::hash::Hash + Ord, V: Mergeable> Mergeable for Map<K, V> {
+    fn merge(self, mut other: Self) -> Self {
+        let mut joined = Map::new();
+        for (a_key, a_val) in self {
+            match other.remove(&a_key) {
+                Some(b_val) => joined.insert(a_key, a_val.merge(b_val)),
+                None => joined.insert(a_key, a_val),
+            };
+        }
+
+        // `b` contains `b - a`, i.e, additions. keep them all.
+        joined.extend(other);
+        joined
     }
 }
 
@@ -265,6 +336,90 @@ mod tests {
             let warnings = unused_value_warnings::<Config>(&figment, &env).unwrap();
             assert_eq!(dbg!(warnings).len(), 0);
 
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn integer_environment_variables_are_parsed_as_integers() {
+        #[derive(Deserialize)]
+        struct Config {
+            value: u32,
+        }
+
+        figment::Jail::expect_with(|jail| {
+            jail.set_env("TEDGE_VALUE", "1234");
+
+            assert_eq!(
+                extract_data::<Config, FileAndEnvironment>(&PathBuf::from("tedge.toml"))
+                    .unwrap()
+                    .0
+                    .value,
+                1234
+            );
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn environment_variables_with_leading_zeroes_are_parsed_as_strings() {
+        #[derive(Deserialize)]
+        struct Config {
+            value: String,
+        }
+
+        figment::Jail::expect_with(|jail| {
+            jail.set_env("TEDGE_VALUE", "01234");
+
+            assert_eq!(
+                extract_data::<Config, FileAndEnvironment>(&PathBuf::from("tedge.toml"))
+                    .unwrap()
+                    .0
+                    .value,
+                "01234",
+            );
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn environment_variable_zero_is_parsed_as_number() {
+        #[derive(Deserialize)]
+        struct Config {
+            value: u32,
+        }
+
+        figment::Jail::expect_with(|jail| {
+            jail.set_env("TEDGE_VALUE", "0");
+
+            assert_eq!(
+                extract_data::<Config, FileAndEnvironment>(&PathBuf::from("tedge.toml"))
+                    .unwrap()
+                    .0
+                    .value,
+                0,
+            );
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn environment_variable_float_is_parsed_as_number() {
+        #[derive(Deserialize)]
+        struct Config {
+            value: f64,
+        }
+
+        figment::Jail::expect_with(|jail| {
+            jail.set_env("TEDGE_VALUE", "0.123");
+
+            assert_eq!(
+                extract_data::<Config, FileAndEnvironment>(&PathBuf::from("tedge.toml"))
+                    .unwrap()
+                    .0
+                    .value,
+                0.123,
+            );
             Ok(())
         })
     }
