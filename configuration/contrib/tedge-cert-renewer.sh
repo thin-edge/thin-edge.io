@@ -46,6 +46,7 @@ COMMAND="$1"
 CLOUD="$2"
 CERT_PATH=$(tedge config get "${CLOUD}.device.cert_path")
 BACKUP_CERTIFICATE="${CERT_PATH}.bak"
+RENEW_TYPE=${RENEW_TYPE:-c8y-ca}
 
 #
 # Helpers
@@ -91,6 +92,35 @@ needs_renewal() {
     /usr/bin/tedge cert needs-renewal "$CLOUD"
 }
 
+renew_self_signed() {
+    #
+    # Renew using a Cumulocity trusted-certificate proxy microservice
+    #
+    tedge cert renew --self-signed || tedge cert renew
+    MICROSERVICE_URL="/c8y/service/devicecert/certificates/upload"
+    if tedge http --help >/dev/null 2>&1; then
+        tedge http post "$MICROSERVICE_URL" --file "$(tedge config get "${CLOUD}.device.cert_path")"
+    else
+        curl -f -XPOST "http://$(tedge config get c8y.proxy.client.host):$(tedge config get c8y.proxy.client.port)$MICROSERVICE_URL" -d@"$(tedge config get "${CLOUD}.device.cert_path")"
+    fi 
+}
+
+renew_cert() {
+    #
+    # Extendable cert renewal (allowing other processes to provide the certificate)
+    #
+    case "$RENEW_TYPE" in
+        c8y-self-signed)
+            echo "Renewing self-signed certificate using the c8y-devicecert microservice" >&2
+            renew_self_signed
+            ;;
+        c8y-ca|*)
+            echo "Trying to renew using the Cumulocity certificate-authority" >&2
+            tedge cert renew "$CLOUD"
+            ;;
+    esac
+}
+
 renew() {
     # If a backup file already exists, than the script may of been interrupted, so check if the
     # current connection is ok or not, and revert to the backup if necessary
@@ -108,7 +138,7 @@ renew() {
     echo "Backup up certificate file. $BACKUP_CERTIFICATE" >&2
     cp "$CERT_PATH" "$BACKUP_CERTIFICATE"
 
-    if ! tedge cert renew "$CLOUD"; then
+    if ! renew_cert; then
         # Check if the existing certificate has been overwritten by
         # the renew command, if so, then the backup should be restored
         if is_backup_same; then
