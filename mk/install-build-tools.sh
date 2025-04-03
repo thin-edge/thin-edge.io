@@ -32,7 +32,9 @@ for arg in "$@"; do
 done
 
 function install_packages {
-  sudo apt-get -yq --no-install-suggests --no-install-recommends install "$@"
+  if command -V apt-get >/dev/null 2>&1; then
+    sudo apt-get -yq --no-install-suggests --no-install-recommends install "$@"
+  fi
 }
 
 use_clang=
