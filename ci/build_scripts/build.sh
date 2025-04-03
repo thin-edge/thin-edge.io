@@ -137,6 +137,9 @@ do
             ARTIFACT_DIR="$2"
             shift
             ;;
+        # deprecated option. To be removed after usage of it is removed from the build-workflow
+        --skip-deprecated-packages)
+            ;;
         -h|--help)
             help
             exit 0
