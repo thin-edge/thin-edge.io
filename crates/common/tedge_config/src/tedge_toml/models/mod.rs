@@ -6,6 +6,7 @@ pub mod connect_url;
 pub mod cryptoki;
 pub mod flag;
 pub mod host_port;
+pub mod http_or_s;
 pub mod ipaddress;
 pub mod path;
 pub mod port;

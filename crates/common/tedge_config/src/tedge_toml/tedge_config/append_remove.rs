@@ -1,3 +1,5 @@
+use crate::models::http_or_s::HttpOrS;
+
 use super::*;
 
 #[diagnostic::on_unimplemented(
@@ -13,7 +15,7 @@ pub trait AppendRemoveItem {
 }
 
 macro_rules! impl_append_remove_for_single_value {
-    ($($type:ty),*) => {
+    ($($type:ty),* $(,)?) => {
         $(
             impl AppendRemoveItem for $type {
                 type Item = $type;
@@ -56,7 +58,9 @@ impl_append_remove_for_single_value!(
     AptConfig,
     MqttPayloadLimit,
     AuthMethod,
-    Cryptoki
+    Cryptoki,
+    HostPort<8000>,
+    HttpOrS,
 );
 
 impl AppendRemoveItem for TemplatesSet {
