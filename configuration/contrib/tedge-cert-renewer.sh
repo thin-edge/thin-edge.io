@@ -137,5 +137,9 @@ case "$COMMAND" in
     renew)
         renew
         ;;
+    *)
+        echo "ERROR: Unknown subcommand. $COMMAND" >&2
+        usage
+        exit 1
+        ;;
 esac
-
