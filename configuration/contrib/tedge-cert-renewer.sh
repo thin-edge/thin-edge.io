@@ -44,6 +44,8 @@ fi
 
 COMMAND="$1"
 CLOUD="$2"
+shift
+shift
 CERT_PATH=$(tedge config get "${CLOUD}.device.cert_path")
 BACKUP_CERTIFICATE="${CERT_PATH}.bak"
 RENEW_TYPE=${RENEW_TYPE:-c8y-ca}
@@ -54,7 +56,7 @@ RENEW_TYPE=${RENEW_TYPE:-c8y-ca}
 verify_certificate_or_rollback() {
     if tedge reconnect "$CLOUD"; then
         echo "Successfully reconnected to $CLOUD. Removing backup certificate" >&2
-        rm -f "${CERT_PATH}.bak"
+        rm -f "$BACKUP_CERTIFICATE"
         return
     fi
 
@@ -63,7 +65,7 @@ verify_certificate_or_rollback() {
     echo "------ BEGIN Failed Certificate ------" >&2 ||:
     head -n 100 "$CERT_PATH" >&2 ||:
     echo "------ END Failed Certificate ------" >&2 ||:
-    mv "${CERT_PATH}.bak" "$CERT_PATH"
+    mv "$BACKUP_CERTIFICATE" "$CERT_PATH"
     tedge reconnect "$CLOUD" || echo "WARNING: Failed to reconnect after restoring previous certificate. Maybe it is just an transient error" >&2
 }
 
