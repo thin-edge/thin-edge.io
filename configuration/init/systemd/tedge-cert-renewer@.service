@@ -9,11 +9,10 @@ Type=oneshot
 User=root
 
 ; Only run service is if the certificate needs renewal
-; TODO: Also run if a backup certificate exists (in case the renewal failed mid-way through)
-ExecCondition=/usr/bin/tedge cert needs-renewal
+ExecCondition=/usr/bin/tedge-cert-renewer.sh needs-renewal %i
 
 ; Run renewal
-ExecStart=/usr/bin/tedge-cert-renewer.sh %i
+ExecStart=/usr/bin/tedge-cert-renewer.sh renew %i
 
 [Install]
 WantedBy=multi-user.target
