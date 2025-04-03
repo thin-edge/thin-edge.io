@@ -227,7 +227,7 @@ linux*)
   fi
   ;;
 darwin*)
-  brew install llvm
+  brew list llvm >/dev/null 2>&1 || brew install llvm
   ;;
 esac
 
