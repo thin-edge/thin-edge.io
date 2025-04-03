@@ -1036,7 +1036,7 @@ mod tests {
         let body = "A body";
         let res = reqwest_client()
             .put(format!("https://localhost:{port}/c8y/hello"))
-            .header("Content-Length", body.bytes().len())
+            .header("Content-Length", body.len())
             .body(body)
             .send()
             .await

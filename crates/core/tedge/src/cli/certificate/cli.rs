@@ -80,7 +80,7 @@ pub enum TEdgeCertCli {
     ///
     /// Exit code:
     /// * `0` - certificate needs renewal as it is no longer valid,
-    ///         or it will expire within the duration, `certificate.validity.minimum_duration`
+    ///   or it will expire within the duration, `certificate.validity.minimum_duration`
     /// * `1` - certificate is still valid and does not need renewal
     /// * `2` - unexpected error (e.g. certificate does not exist, or can't be read)
     NeedsRenewal {
