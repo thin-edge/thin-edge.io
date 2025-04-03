@@ -269,6 +269,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-http-proxy"
+version = "1.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29faa5d4d308266048bd7505ba55484315a890102f9345b9ff4b87de64201592"
+dependencies = [
+ "base64 0.13.1",
+ "httparse",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "async-tempfile"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3677,6 +3689,7 @@ name = "rumqttc"
 version = "0.24.0"
 source = "git+https://github.com/jarhodes314/rumqtt?rev=8c489faf6af910956c97b55587ff3ecb2ac4e96f#8c489faf6af910956c97b55587ff3ecb2ac4e96f"
 dependencies = [
+ "async-http-proxy",
  "bytes",
  "fixedbitset",
  "flume",
