@@ -26,6 +26,9 @@ RUN apt-get -y update \
     bash-completion \
     zsh \
     fish \
+    # PKCS11 / cryptoki support
+    gnutls-bin \
+    softhsm2 \
     # mosquitto (default version used by Debian, see below for more details)
     mosquitto \
     mosquitto-clients
@@ -74,6 +77,9 @@ COPY files/secure-listener.conf .
 COPY files/http-server/nginx.conf /etc/nginx/nginx.conf
 COPY files/http-server/*.sh /usr/bin/
 RUN systemctl disable nginx
+
+# HSM
+# RUN usermod -a -G softhsm tedge
 
 # Enable tab completions (note: fish does not require any changes)
 RUN echo '[ -f /etc/bash_completion ] && source /etc/bash_completion' >> ~/.bashrc \
