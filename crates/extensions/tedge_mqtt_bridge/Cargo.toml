@@ -22,7 +22,7 @@ certificate = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }
 mutants = { workspace = true }
-rumqttc = { workspace = true, features = ["proxy"] }
+rumqttc = { workspace = true, features = ["proxy", "websocket"] }
 tedge_actors = { workspace = true }
 tedge_config = { workspace = true }
 thiserror = { workspace = true }

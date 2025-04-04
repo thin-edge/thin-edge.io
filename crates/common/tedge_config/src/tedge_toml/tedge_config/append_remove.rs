@@ -61,6 +61,7 @@ impl_append_remove_for_single_value!(
     Cryptoki,
     HostPort<8000>,
     HttpOrS,
+    MqttProtocol,
 );
 
 impl AppendRemoveItem for TemplatesSet {

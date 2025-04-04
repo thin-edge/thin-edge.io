@@ -3690,10 +3690,12 @@ version = "0.24.0"
 source = "git+https://github.com/jarhodes314/rumqtt?rev=8c489faf6af910956c97b55587ff3ecb2ac4e96f#8c489faf6af910956c97b55587ff3ecb2ac4e96f"
 dependencies = [
  "async-http-proxy",
+ "async-tungstenite 0.28.0",
  "bytes",
  "fixedbitset",
  "flume",
  "futures-util",
+ "http 1.2.0",
  "log",
  "rustls-native-certs",
  "rustls-pemfile 2.2.0",
@@ -3703,6 +3705,7 @@ dependencies = [
  "tokio-rustls 0.26.1",
  "tokio-stream",
  "tokio-util",
+ "ws_stream_tungstenite 0.14.0",
 ]
 
 [[package]]
@@ -6037,6 +6040,7 @@ dependencies = [
  "futures-util",
  "pharos",
  "rustc_version",
+ "tokio",
  "tracing",
  "tungstenite 0.24.0",
 ]

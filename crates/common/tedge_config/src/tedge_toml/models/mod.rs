@@ -8,6 +8,7 @@ pub mod flag;
 pub mod host_port;
 pub mod http_or_s;
 pub mod ipaddress;
+pub mod mqtt_protocol;
 pub mod path;
 pub mod port;
 pub mod seconds;
