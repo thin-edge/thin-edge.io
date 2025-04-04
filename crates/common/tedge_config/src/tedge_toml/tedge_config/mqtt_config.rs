@@ -207,11 +207,7 @@ impl TEdgeConfigReaderDeviceCryptoki {
                 serial: None,
             }))),
             Cryptoki::Socket => Ok(Some(CryptokiConfig::SocketService {
-                socket_path: self
-                    .socket_path
-                    .or_config_not_set()
-                    .context("required because `device.cryptoki.mode` is set to `socket`")?
-                    .clone(),
+                socket_path: self.socket_path.clone(),
             })),
         }
     }
