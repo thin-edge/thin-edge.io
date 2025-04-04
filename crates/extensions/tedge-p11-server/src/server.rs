@@ -7,18 +7,20 @@ use tracing::info;
 use super::connection::Connection;
 use crate::connection::Frame1;
 use crate::connection::ProtocolError;
-use crate::pkcs11::CryptokiConfigDirect;
-use crate::service::P11SignerService;
+use crate::service::SigningService;
 
 pub struct TedgeP11Server {
-    service: P11SignerService,
+    service: Box<dyn SigningService + Send + Sync>,
 }
 
 impl TedgeP11Server {
-    pub fn from_config(config: CryptokiConfigDirect) -> anyhow::Result<Self> {
-        let service =
-            P11SignerService::new(&config).context("Failed to start the signing service")?;
-        Ok(Self { service })
+    pub fn new<S>(service: S) -> anyhow::Result<Self>
+    where
+        S: SigningService + Send + Sync + 'static,
+    {
+        Ok(Self {
+            service: Box::new(service),
+        })
     }
 
     /// Handle multiple requests on a given listener.
@@ -31,6 +33,9 @@ impl TedgeP11Server {
                 .context("Failed to accept connection")?;
 
             let stream = stream.into_std()?;
+            stream
+                .set_nonblocking(false)
+                .context("Failed to set nonblocking=false")?;
             let connection = Connection::new(stream);
 
             match self.process(connection) {
@@ -41,7 +46,7 @@ impl TedgeP11Server {
     }
 
     fn process(&self, mut connection: Connection) -> anyhow::Result<()> {
-        let request = connection.read_frame()?;
+        let request = connection.read_frame().context("read")?;
 
         let response = match request {
             Frame1::Error(_)
@@ -57,7 +62,7 @@ impl TedgeP11Server {
             Frame1::SignRequest(request) => Frame1::SignResponse(self.service.sign(request)),
         };
 
-        connection.write_frame(&response)?;
+        connection.write_frame(&response).context("write")?;
 
         Ok(())
     }
