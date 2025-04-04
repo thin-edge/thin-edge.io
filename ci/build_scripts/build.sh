@@ -9,6 +9,11 @@
 # References: https://stackoverflow.com/questions/7577052/bash-empty-array-expansion-with-set-u
 set -eo pipefail
 
+# enable debugging  by default in ci
+if [ "$CI" = "true" ]; then
+    set -x
+fi
+
 help() {
   cat <<EOF
 Compile and build the tedge components and linux packages.
@@ -22,15 +27,15 @@ Alternatively, if you would like to set a custom version (for development/testin
 the 'GIT_SEMVER' environment variable before calling this script.
 
 Usage:
-    $0 [ARCH]
+    $0 [TARGET]
 
 Args:
-    ARCH     RUST target architecture which can be a value listed from the command 'rustc --print target-list'
+    TARGET   RUST target architecture which can be a value listed from the command 'rustc --print target-list'
              If left blank then the TARGET will be set to the linux musl variant appropriate for your machine.
              For example, if building on MacOS M1, 'aarch64-unknown-linux-musl' will be selected, for linux x86_64,
              'x86_64-unknown-linux-musl' will be selected.
 
-    Example ARCH (target) values:
+    Example TARGET values:
 
         Linux MUSL variants
         * x86_64-unknown-linux-musl
@@ -44,17 +49,16 @@ Args:
         * armv7-unknown-linux-gnueabihf
         * arm-unknown-linux-gnueabihf
 
-        Linux GNU variants (controlling GNU libc version)
-        # Be aware of the caveats: https://github.com/rust-cross/cargo-zigbuild?tab=readme-ov-file#specify-glibc-version
-        * aarch64-unknown-linux-gnu.2.17
-        * aarch64-unknown-linux-gnu.2.27
-
         Apple
         * aarch64-apple-darwin
         * x86_64-apple-darwin
 
 Flags:
     --help|-h   Show this help
+    --build-with <auto|zig|clang|native>    Choose which tooling to use to build the binaries. If set to 'auto',
+                                            then the build tool will be selected based on the binary
+    --bin <name>    Override which binary to build. By default the binaries form the package_list.sh will be used
+    --glibc-version <version>   GLIBC version to use when compiling for libc targets
     --skip-build    Skip building the binaries and only package them (e.g. just create the linux packages)
 
 Env:
@@ -66,6 +70,9 @@ Examples:
 
     $0 aarch64-unknown-linux-musl
     # Build for arm64 linux (musl)
+
+    $0 aarch64-unknown-linux-musl --build-with clang
+    # Build for arm64 linux (musl) using clang (for linux only)
 
     $0 x86_64-unknown-linux-musl
     # Build for x86_64 linux (musl)
@@ -85,32 +92,58 @@ Examples:
 EOF
 }
 
-ARCH=
-TARGET=()
-BUILD_OPTIONS=()
+# Load the release package list as $RELEASE_PACKAGES, BINARIES
+# shellcheck disable=SC1091
+source ./ci/package_list.sh
+
+TARGET="${TARGET:-}"
+BUILD_WITH="${BUILD_WITH:-zig}"
+COMMON_BUILD_OPTIONS=(
+    "--release"
+)
+TOOLCHAIN="${TOOLCHAIN:-+1.78}"
+# Note: Minimum version that is supported with riscv64gc-unknown-linux-gnu is 2.27
+GLIBC_VERSION="${GLIBC_VERSION:-2.17}"
+RISCV_GLIBC_VERSION="${RISCV_GLIBC_VERSION:-2.27}"
+OVERRIDE_BINARIES=()
+ARTIFACT_DIR="${ARTIFACT_DIR:-}"
+
 BUILD=1
-INCLUDE_DEPRECATED_PACKAGES=0
 
 REST_ARGS=()
 while [ $# -gt 0 ]
 do
     case "$1" in
+        --build-with)
+            BUILD_WITH="$2"
+            shift
+            ;;
+        --bin)
+            OVERRIDE_BINARIES=( "$2" )
+            shift
+            ;;
+        --toolchain)
+            TOOLCHAIN="+$2"
+            shift
+            ;;
+        --glibc-version)
+            GLIBC_VERSION="$2"
+            shift
+            ;;
         --skip-build)
             BUILD=0
             ;;
-
-        --include-deprecated-packages)
-            INCLUDE_DEPRECATED_PACKAGES=1
+        --artifact-dir)
+            ARTIFACT_DIR="$2"
+            shift
             ;;
+        # deprecated option. To be removed after usage of it is removed from the build-workflow
         --skip-deprecated-packages)
-            INCLUDE_DEPRECATED_PACKAGES=0
             ;;
-
         -h|--help)
             help
             exit 0
             ;;
-
         *)
             REST_ARGS+=("$1")
             ;;
@@ -123,59 +156,36 @@ if [ ${#REST_ARGS[@]} -gt 0 ]; then
     set -- "${REST_ARGS[@]}"
 fi
 
+if [ ${#OVERRIDE_BINARIES[@]} -gt 0 ]; then
+    # Override the list of binaries to build
+    BINARIES=("${OVERRIDE_BINARIES[@]}")
+fi
+
 if [ $# -eq 1 ]; then
-    ARCH="$1"
+    TARGET="$1"
+fi
+
+if [ -z "$TARGET" ]; then
+    TARGET=$(./ci/build_scripts/detect_target.sh)
 fi
 
 # Set version from scm
 # Run before installing any dependencies so that it
 # can be called from other tools without requiring cargo
 # shellcheck disable=SC1091
-. ./ci/build_scripts/version.sh
+source ./ci/build_scripts/version.sh
 
-if [ -z "$ARCH" ]; then
-    # If no target has been given, choose the target triple based on the
-    # host's architecture, however use the musl builds by default!
-    HOST_ARCH="$(uname -m || true)"
-    case "$HOST_ARCH" in
-        x86_64*|amd64*)
-            ARCH=x86_64-unknown-linux-musl
-            ;;
-
-        aarch64|arm64)
-            ARCH=aarch64-unknown-linux-musl
-            ;;
-
-        armv7*)
-            ARCH=armv7-unknown-linux-musleabihf
-            ;;
-
-        armv6*)
-            ARCH=arm-unknown-linux-musleabi
-            ;;
-    esac
-fi
-
-
-# Load the release package list as $RELEASE_PACKAGES, $DEPRECATED_PACKAGES
-# shellcheck disable=SC1091
-source ./ci/package_list.sh
-
-# Note: cargo-zigbuild supports specifying the specific gnu libc version to use
-# but Rust doesn't, so the target needs to be normalized to match the target without
-# the gnu libc version information
-ZIG_TARGET="$ARCH"
-ARCH=$(echo "$ZIG_TARGET" | cut -d. -f1)
-
-# build release for target
-# GIT_SEMVER should be referenced in the build.rs scripts
-if [ "$BUILD" = 1 ]; then
-    # Install stable toolchain if missing
+install_rust() {
+    # Install toolchain if missing
     if command -V rustup >/dev/null 2>&1; then
-        rustup toolchain install stable --no-self-update
+        rustup toolchain install "${TOOLCHAIN//+/}" --no-self-update
     fi
-    # Use zig to build as it is provides better cross compiling support
-    cargo +stable install cargo-zigbuild --version ">=0.17.3"
+}
+
+install_zig_tools() {
+    # zig provides better cross compiling support
+    # shellcheck disable=SC2086
+    cargo $TOOLCHAIN install cargo-zigbuild --version ">=0.17.3"
 
     # Allow users to install zig by other package managers
     if ! zig --help &>/dev/null; then
@@ -186,43 +196,115 @@ if [ "$BUILD" = 1 ]; then
 
     # Display zig version to help with debugging
     echo "zig version: $(zig version 2>/dev/null || python3 -m ziglang version 2>/dev/null ||:)"
+}
 
-    if [ -n "$ARCH" ]; then
-        echo "Using target: $ARCH (zig target=$ZIG_TARGET)"
-        TARGET+=("--target=$ZIG_TARGET")
-        rustup target add "$ARCH"
-    else
-        # Note: This will build the artifacts under target/release and not target/<triple>/release !
-        HOST_TARGET=$(rustc --version --verbose | grep host: | cut -d' ' -f2)
-        echo "Using host target: $HOST_TARGET"
-    fi
-
-    # Custom options for different targets
-    case "$ARCH" in
-        *)
-            BUILD_OPTIONS+=(
-                --release
-            )
+build() {
+    build_tool="$1"
+    shift
+    case "$build_tool" in
+        zig|ziglang|cargo-zigbuild)
+            # shellcheck disable=SC2086
+            cargo-zigbuild $TOOLCHAIN zigbuild "$@"
+            ;;
+        clang)
+            # shellcheck disable=SC2086
+            mk/cargo.sh $TOOLCHAIN build "$@"
+            ;;
+        native|*)
+            # shellcheck disable=SC2086
+            cargo $TOOLCHAIN build "$@"
             ;;
     esac
+}
 
-    cargo zigbuild "${TARGET[@]}" "${BUILD_OPTIONS[@]}"
+get_build_tool_for_binary() {
+    # Different binaries have different requirements / build dependencies
+    # which influence which build tools can be used.
+    # Previously tedge has been using clang to build the binaries, so clang
+    # should still be preferred to reduce risk of unexpected differences between
+    # different compiler optimizations (not sure if this is true, but less changes are generally safer)
+    binary="$1"
+    case "$binary" in
+        tedge-p11-server)
+            echo "zig"
+            ;;
+        *)
+            echo "clang"
+    esac
+}
+
+get_target_for_binary() {
+    binary_name="$1"
+    target="$2"
+    case "$binary_name" in
+        tedge-p11-server)
+            # requires gnu target as loading .so files requires to be dynamically compiled
+            # This can return the same output, but this is fine as apple targets support
+            # loading by default
+            echo "${target//musl/gnu}"
+            ;;
+        *)
+            echo "$target"
+            ;;
+    esac
+}
+
+if [ -z "$ARTIFACT_DIR" ]; then
+    ARTIFACT_DIR="target/$TARGET/release"
+fi
+mkdir -p "$ARTIFACT_DIR"
+
+# build release for target
+# GIT_SEMVER should be referenced in the build.rs scripts
+if [ "$BUILD" = 1 ] && [ ${#BINARIES[@]} -gt 0 ]; then
+    install_rust
+
+    for name in "${BINARIES[@]}"; do
+        BINARY_TARGET=$(get_target_for_binary "$name" "$TARGET")
+        # shellcheck disable=SC2086
+        rustup $TOOLCHAIN target add "$BINARY_TARGET"
+        BUILD_DIR="target/$BINARY_TARGET/release"
+
+        # Each binary should have its preferred build tool (unless if the user overrides this)
+        BUILD_TOOL=$(get_build_tool_for_binary "$name")
+        if [ -n "$BUILD_WITH" ] && [ "$BUILD_WITH" != "auto" ]; then
+            BUILD_TOOL="$BUILD_WITH"
+        fi
+
+        case "$BUILD_TOOL" in
+            zig)
+                install_zig_tools
+
+                case "$BINARY_TARGET" in
+                    riscv64gc-unknown-linux-gnu)
+                        # riscv is a newer processor so the minimum glibc version is higher than for other targets
+                        if [ -n "$RISCV_GLIBC_VERSION" ]; then
+                            BINARY_TARGET="${BINARY_TARGET}.${RISCV_GLIBC_VERSION}"
+                        fi
+                        ;;
+                    *gnu*)
+                        if [ -n "$GLIBC_VERSION" ]; then
+                            BINARY_TARGET="${BINARY_TARGET}.${GLIBC_VERSION}"
+                        fi
+                        ;;
+                esac
+                ;;
+            clang)
+                # shellcheck disable=SC2086
+                ./mk/install-build-tools.sh $TOOLCHAIN --target="$BINARY_TARGET"
+                ;;
+            *)
+                ;;
+        esac
+
+        build "$BUILD_TOOL" --target="$BINARY_TARGET" "${COMMON_BUILD_OPTIONS[@]}" --bin "$name"
+        if [ "$BUILD_DIR" != "$ARTIFACT_DIR" ]; then
+            cp "$BUILD_DIR/$name" "$ARTIFACT_DIR/"
+        fi
+    done
 fi
 
-# Create release packages
-OUTPUT_DIR="target/$ARCH/packages"
-
-# Remove deprecated debian folder to avoid confusion with newly built linux packages
-if [ -d "target/$ARCH/debian" ]; then
-    echo "Removing deprecated debian folder created by cargo-deb: target/$ARCH/debian" >&2
-    rm -rf "target/$ARCH/debian"
-fi
-
+# Create release packages (e.g. linux packages like rpm, deb, apk etc.)
+OUTPUT_DIR="$(dirname "$ARTIFACT_DIR")/packages"
 PACKAGES=( "${RELEASE_PACKAGES[@]}" )
-if [ "$INCLUDE_DEPRECATED_PACKAGES" = "1" ]; then
-    PACKAGES+=(
-        "${DEPRECATED_PACKAGES[@]}"
-    )
-fi
-
-./ci/build_scripts/package.sh build "$ARCH" "${PACKAGES[@]}" --output "$OUTPUT_DIR"
+./ci/build_scripts/package.sh build "$TARGET" "${PACKAGES[@]}" --output "$OUTPUT_DIR"

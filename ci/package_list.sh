@@ -12,8 +12,8 @@ RELEASE_PACKAGES=(
 )
 export RELEASE_PACKAGES
 
-# Deprecated packages are still built but not explicitly tested
-# This allows users to still access the packages if needed, however
-# it is only reserved for packages with a more public facing API
-DEPRECATED_PACKAGES=()
-export DEPRECATED_PACKAGES
+# List of binaries which should be built
+BINARIES=(
+    tedge
+)
+export BINARIES
