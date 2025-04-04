@@ -1,5 +1,6 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
+use anyhow::ensure;
 use anyhow::Context;
 use async_trait::async_trait;
 use c8y_api::http_proxy::read_c8y_credentials;
@@ -168,7 +169,7 @@ impl TEdgeComponent for CumulocityMapper {
 
             if use_certificate {
                 ensure!(
-                    c8y_config.bridge.mqtt_protocol == MqttProtocol::Tcp,
+                    c8y_config.bridge.protocol == MqttProtocol::Tcp,
                     "To use MQTT over websockets, please enable basic authentication"
                 );
                 let cloud_broker_auth_config = tedge_config
