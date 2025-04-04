@@ -770,7 +770,6 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                         .#convert_to_field_ty
                         .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
                 },
-                // TODO can we really do this with write_segments?
                 parse_quote_spanned! {ty.span()=>
                     WritableKey::#match_variant => self.#(#write_segments).* = other.#(#write_segments).*.take(),
                 },
@@ -1022,6 +1021,13 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
     }
 }
 
+/// Which type (`TEdgeConfigDto`/`TEdgeConfigReader`) we should generate a key
+/// enum for
+///
+/// For the CLI, we allow keys based on the reader, so values like
+/// `config.version` aren't configured by or visible to the user. For detecting
+/// unknown keys in the TOML file however, we need to generate keys from the
+/// DTO since `config.version` is allowed in the TOML file.
 #[derive(Debug, Clone, Copy)]
 enum Mode {
     Dto,

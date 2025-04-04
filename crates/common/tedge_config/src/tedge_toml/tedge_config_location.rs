@@ -6,6 +6,7 @@ use crate::TEdgeConfig;
 use crate::TEdgeConfigDto;
 use crate::TEdgeConfigError;
 use crate::TEdgeConfigReader;
+use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde::Deserialize as _;
@@ -183,7 +184,7 @@ impl TEdgeConfigLocation {
         }
 
         if Sources::INCLUDE_ENVIRONMENT {
-            update_with_environment_variables(&mut dto, &mut warnings);
+            update_with_environment_variables(&mut dto, &mut warnings)?;
         }
 
         Ok((dto, warnings))
@@ -218,7 +219,7 @@ impl TEdgeConfigLocation {
         }
 
         if Sources::INCLUDE_ENVIRONMENT {
-            update_with_environment_variables(&mut dto, &mut warnings);
+            update_with_environment_variables(&mut dto, &mut warnings)?;
         }
 
         Ok((dto, warnings))
@@ -309,7 +310,10 @@ impl UnusedValueWarnings {
     }
 }
 
-fn update_with_environment_variables(dto: &mut TEdgeConfigDto, warnings: &mut UnusedValueWarnings) {
+fn update_with_environment_variables(
+    dto: &mut TEdgeConfigDto,
+    warnings: &mut UnusedValueWarnings,
+) -> anyhow::Result<()> {
     for (key, value) in std::env::vars() {
         let tedge_key = match key.strip_prefix("TEDGE_") {
             Some("CONFIG_DIR") => continue,
@@ -344,13 +348,16 @@ fn update_with_environment_variables(dto: &mut TEdgeConfigDto, warnings: &mut Un
             }
         }
         if value.is_empty() {
-            if let Err(e) = dto.try_unset_key(&tedge_key) {
-                warnings.push(format!("Failed to process {key}: {e}"))
-            }
-        } else if let Err(e) = dto.try_update_str(&tedge_key, &value) {
-            warnings.push(format!("Failed to process {key}: {e}"))
+            dto.try_unset_key(&tedge_key).with_context(|| {
+                format!("Failed to reset value for {tedge_key} from environment variable {key}")
+            })?;
+        } else {
+            dto.try_update_str(&tedge_key, &value).with_context(|| {
+                format!("Failed to set value for {tedge_key} to {value:?} from environment variable {key}")
+            })?;
         }
     }
+    Ok(())
 }
 
 fn deserialize_toml(
@@ -677,6 +684,30 @@ type = "a-service-type""#;
             .await
             .unwrap();
         assert_eq!(warnings.0, ["Unknown configuration field \"unknown_value\" from environment variable TEDGE_UNKNOWN_VALUE"]);
+    }
+
+    #[tokio::test]
+    async fn unsetting_configuration_for_unknown_profile_does_not_warn_or_error() {
+        let (_dir, t) = create_temp_tedge_config("").unwrap();
+        let mut env = EnvSandbox::new().await;
+        env.set_var("TEDGE_C8Y_PROFILES_TEST_URL", "");
+        let (_config, warnings) = t
+            .load_dto_with_warnings::<FileAndEnvironment>()
+            .await
+            .unwrap();
+        assert_eq!(warnings.0, &[] as &[&'static str]);
+    }
+
+    #[tokio::test]
+    async fn environment_variable_causes_error_if_its_value_cannot_be_parsed() {
+        let (_dir, t) = create_temp_tedge_config("").unwrap();
+        let mut env = EnvSandbox::new().await;
+        env.set_var("TEDGE_SUDO_ENABLE", "yes");
+        let err = t
+            .load_dto_with_warnings::<FileAndEnvironment>()
+            .await
+            .unwrap_err();
+        assert!(dbg!(err.to_string()).contains("TEDGE_SUDO_ENABLE"));
     }
 
     #[tokio::test]
