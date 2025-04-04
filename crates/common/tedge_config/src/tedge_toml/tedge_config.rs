@@ -155,7 +155,7 @@ define_tedge_config! {
             /// A path to the tedge-p11-server socket.
             ///
             /// Needs to be set when `device.cryptoki.mode` is set to `module`
-            #[tedge_config(example = "/run/tedge-p11-server/tedge-p11-server.sock")]
+            #[tedge_config(default(value = "/run/tedge-p11-server/tedge-p11-server.sock"), example = "/run/tedge-p11-server/tedge-p11-server.sock")]
             #[doku(as = "PathBuf")]
             socket_path: Utf8PathBuf,
         },
