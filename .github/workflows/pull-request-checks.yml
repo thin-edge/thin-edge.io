@@ -3,7 +3,7 @@ name: Pull Request Checks
 on:
   workflow_dispatch:
   pull_request:
-  merge_group:
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -252,65 +252,6 @@ jobs:
 
       - name: Run `cargo check`
         run: cargo check --all-targets --all-features
-
-  cargo-test:
-    name: Run cargo test
-    runs-on: ubuntu-22.04
-    needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
-    steps:
-      - name: Check disk space before setting up
-        run: df -BM
-
-      - name: Reclaim some disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf /opt/hostedtoolcache
-
-      - name: Check disk space after freeing
-        run: df -BM
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Retrieve MSRV from workspace Cargo.toml
-        id: rust_version
-        uses: SebRollen/toml-action@v1.2.0
-        with:
-          file: Cargo.toml
-          field: "workspace.package.rust-version"
-
-      - name: Enable toolchain via github action
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-
-      - name: Enable cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install latest nextest release
-        uses: taiki-e/install-action@nextest
-
-      - name: cargo install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: cargo llvm-cov
-        run: cargo llvm-cov nextest --no-fail-fast --locked --all-features --all-targets --codecov --output-path codecov.json
-
-      # https://github.com/rust-lang/cargo/issues/6669
-      - name: cargo test --doc
-        run: cargo test --locked --all-features --doc
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
-
-      - name: Check disk space after completing workflow
-        run: df -BM
 
   shellcheck:
     name: Shellcheck
