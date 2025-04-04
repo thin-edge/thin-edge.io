@@ -104,3 +104,10 @@ impl std::fmt::Display for TemplatesSet {
         write!(f, "{:?}", self.0)
     }
 }
+
+#[cfg(test)]
+impl<'a, const N: usize> PartialEq<[&'a str; N]> for TemplatesSet {
+    fn eq(&self, other: &[&'a str; N]) -> bool {
+        self.0 == other
+    }
+}

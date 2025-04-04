@@ -35,6 +35,9 @@ pub enum TEdgeConfigError {
 
     #[error(transparent)]
     FromAtomFileError(#[from] tedge_utils::fs::AtomFileError),
+
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
 }
 
 pub type ConfigSettingResult<T> = Result<T, ConfigSettingError>;
