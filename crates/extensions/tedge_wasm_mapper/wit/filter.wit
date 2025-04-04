@@ -1,0 +1,38 @@
+package tedge:filter;
+
+interface filtering {
+    record datetime {
+        seconds: u64,
+        nanoseconds: u32,
+    }
+
+    record message {
+        topic: string,
+        payload: string,
+    }
+
+    variant filter-error {
+        unsupported-message(string),
+        incorrect-setting(string),
+    }
+
+    resource filter {
+        // Create a new instance
+        constructor(config: message);
+
+        // Process a single message; producing zero, one or more transformed messages
+        process: func(timestamp: datetime, message: message) -> result< list<message>, filter-error >;
+
+        // Update the filter configuration
+        update-config: func(config: message) -> result< _, filter-error >;
+
+        // Close the current time-window; producing zero, one or more accumulated messages
+        tick: func(timestamp: datetime) -> result< list<message>, filter-error >;
+    }
+
+    new-filter: func(config: message) -> filter;
+}
+
+world tedge {
+    export filtering;
+}
