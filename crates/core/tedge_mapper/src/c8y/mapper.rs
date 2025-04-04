@@ -17,6 +17,7 @@ use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::all_or_nothing;
 use tedge_config::models::http_or_s::HttpOrS;
+use tedge_config::models::mqtt_protocol::MqttProtocol;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
@@ -150,9 +151,15 @@ impl TEdgeComponent for CumulocityMapper {
             }
 
             let c8y = c8y_config.mqtt.or_config_not_set()?;
+            let mqtt_host = match c8y_config.bridge.protocol {
+                MqttProtocol::Websocket => format!("wss://{}/mqtt", c8y.host()),
+                MqttProtocol::Tcp => c8y.host().to_string(),
+            };
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 c8y_config.device.id()?,
-                c8y.host().to_string(),
+                mqtt_host,
+                // The port is ignored in websocket mode, so this only applies
+                // to MQTT/TCP connections
                 c8y.port().into(),
             );
             // Cumulocity tells us not to not set clean session to false, so don't
@@ -160,6 +167,10 @@ impl TEdgeComponent for CumulocityMapper {
             cloud_config.set_clean_session(true);
 
             if use_certificate {
+                ensure!(
+                    c8y_config.bridge.mqtt_protocol == MqttProtocol::Tcp,
+                    "To use MQTT over websockets, please enable basic authentication"
+                );
                 let cloud_broker_auth_config = tedge_config
                     .mqtt_auth_config_cloud_broker(c8y_profile)
                     .expect("error getting cloud broker auth config");
@@ -172,6 +183,7 @@ impl TEdgeComponent for CumulocityMapper {
                 let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
                 use_credentials(
                     &mut cloud_config,
+                    c8y_config.bridge.protocol,
                     &c8y_config.root_cert_path,
                     username,
                     password,
