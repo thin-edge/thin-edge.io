@@ -288,7 +288,7 @@ pub enum EntityTopicError {
 ///
 /// # Reference
 /// https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-identifier
-#[derive(Debug, Clone, Hash, Eq, Serialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialOrd, Ord, Serialize)]
 #[serde(transparent)]
 pub struct EntityTopicId(String);
 

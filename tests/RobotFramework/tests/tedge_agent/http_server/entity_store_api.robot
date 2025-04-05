@@ -1,5 +1,6 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
+Library             Collections
 Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
@@ -43,6 +44,39 @@ CRUD apis
     ${get}=    Execute Command
     ...    curl -o /dev/null --silent --write-out "%\{http_code\}" http://localhost:8000/te/v1/entities/device/child01//
     Should Be Equal    ${get}    404
+
+Update entity parent
+    Register Entity    device/child_a//    child-device    device/main//
+    Register Entity    device/child_ab//    child-device    device/child_a//
+
+    # Child00 and hence its children registered wrongly under the root device/main// instead of device/child0//
+    Register Entity    device/child_aa//    child-device    device/main//
+    Register Entity    device/child_aaa//    child-device    device/child_aa//
+
+    # Update entity parent
+    ${patch}=    Execute Command
+    ...    curl -X PATCH http://localhost:8000/te/v1/entities/device/child_aa// -H 'Content-Type: application/json' -d '{"@parent": "device/child_a//"}'
+    Should Be Equal
+    ...    ${patch}
+    ...    {"@topic-id":"device/child_aa//","@parent":"device/child_a//","@type":"child-device"}
+    Should Have MQTT Messages
+    ...    te/device/child_aa//
+    ...    message_contains={"@parent":"device/child_a//","@type":"child-device"}
+
+    ${get}=    Get Entity    device/child_aa//
+    ${parent}=    Get From Dictionary    ${get}    @parent
+    Should Be Equal    ${parent}    device/child_a//
+
+    ${entities}=    List Entities    root=device/child_a//
+    Should Contain Entity
+    ...    {"@topic-id":"device/child_aa//","@parent":"device/child_a//","@type":"child-device"}
+    ...    ${entities}
+    Should Contain Entity
+    ...    {"@topic-id":"device/child_aaa//","@parent":"device/child_aa//","@type":"child-device"}
+    ...    ${entities}
+    Should Contain Entity
+    ...    {"@topic-id":"device/child_ab//","@parent":"device/child_a//","@type":"child-device"}
+    ...    ${entities}
 
 MQTT HTTP interoperability
     Execute Command    tedge mqtt pub --retain 'te/device/child_abc//' '{"@type":"child-device"}'
@@ -244,7 +278,7 @@ Entity twin api errors
     ${payload}=    Set Variable    {"maintenance_mode":true}
     ${resp}=    Execute Command
     ...    curl --silent --write-out "%\{http_code\}" -X PATCH ${url} -H 'Content-Type: application/json' -d '${payload}'
-    Should Be Equal    ${resp}    405
+    Should Be Equal    ${resp}    {"error":"Method Not Allowed"}405
 
     # Set twin fragment with bad key
     ${url}=    Set Variable
@@ -301,14 +335,14 @@ Entity twin api errors
     ${payload}=    Set Variable    true
     ${resp}=    Execute Command
     ...    curl --silent --write-out "%\{http_code\}" -X PATCH ${url} -H 'Content-Type: application/json' -d '${payload}'
-    Should Be Equal    ${resp}    405
+    Should Be Equal    ${resp}    {"error":"Method Not Allowed"}405
 
     # Unsupported PATCH method on twin path
     ${url}=    Set Variable    http://localhost:8000/te/v1/entities/device/main///twin
     ${payload}=    Set Variable    true
     ${resp}=    Execute Command
     ...    curl --silent --write-out "%\{http_code\}" -X PATCH ${url} -H 'Content-Type: application/json' -d '${payload}'
-    Should Be Equal    ${resp}    405
+    Should Be Equal    ${resp}    {"error":"Method Not Allowed"}405
 
     # Unsupported channel
     ${url}=    Set Variable    http://localhost:8000/te/v1/entities/device/bad-child///cmd/123

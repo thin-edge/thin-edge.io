@@ -31,8 +31,8 @@ use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::mem;
 use std::path::Path;
@@ -390,6 +390,18 @@ impl EntityStore {
         Ok(affected_entities)
     }
 
+    pub fn update_parent(
+        &mut self,
+        topic_id: &EntityTopicId,
+        new_parent: &EntityTopicId,
+    ) -> Result<&EntityMetadata, Error> {
+        self.entities.update_parent(topic_id, new_parent)
+    }
+
+    pub fn ancestors(&self, topic_id: &EntityTopicId) -> Result<Vec<&EntityTopicId>, Error> {
+        self.entities.ancestors(topic_id)
+    }
+
     /// Performs auto-registration process for an entity under a given
     /// identifier.
     ///
@@ -587,14 +599,14 @@ struct EntityTree {
 #[derive(Debug)]
 struct EntityNode {
     metadata: EntityMetadata,
-    children: HashSet<EntityTopicId>,
+    children: BTreeSet<EntityTopicId>,
 }
 
 impl EntityNode {
     pub fn new(metadata: EntityMetadata) -> Self {
         EntityNode {
             metadata,
-            children: HashSet::new(),
+            children: BTreeSet::new(),
         }
     }
 
@@ -634,6 +646,22 @@ impl EntityTree {
         self.entities
             .get_mut(entity_topic_id)
             .map(EntityNode::mut_metadata)
+    }
+
+    /// Tries to get information about an entity using its `EntityTopicId`,
+    /// returning an error if the entity is not registered.
+    fn try_get(&self, topic_id: &EntityTopicId) -> Result<&EntityMetadata, Error> {
+        self.get(topic_id)
+            .ok_or_else(|| Error::UnknownEntity(topic_id.to_string()))
+    }
+
+    fn try_get_entity_node_mut(
+        &mut self,
+        topic_id: &EntityTopicId,
+    ) -> Result<&mut EntityNode, Error> {
+        self.entities
+            .get_mut(topic_id)
+            .ok_or_else(|| Error::UnknownEntity(topic_id.to_string()))
     }
 
     /// All the entities with a given parent.
@@ -751,6 +779,71 @@ impl EntityTree {
             vec![]
         }
     }
+
+    fn get_parent(&self, topic_id: &EntityTopicId) -> Result<&EntityTopicId, Error> {
+        let parent = self
+            .try_get(topic_id)?
+            .parent
+            .as_ref()
+            .unwrap_or(&self.main_device);
+        Ok(parent)
+    }
+
+    pub fn update_parent(
+        &mut self,
+        topic_id: &EntityTopicId,
+        new_parent: &EntityTopicId,
+    ) -> Result<&EntityMetadata, Error> {
+        if topic_id == new_parent {
+            return Err(Error::InvalidSelfParent(new_parent.clone()));
+        }
+
+        if topic_id == &self.main_device {
+            return Err(Error::ImmutableMainDevice);
+        }
+
+        let entity = self.try_get(new_parent)?;
+        if entity.r#type == EntityType::Service {
+            return Err(Error::InvalidServiceParent(
+                new_parent.clone(),
+                topic_id.clone(),
+            ));
+        }
+
+        if self.ancestors(new_parent)?.contains(&topic_id) {
+            return Err(Error::InvalidDescendentParent(
+                new_parent.clone(),
+                topic_id.clone(),
+            ));
+        }
+
+        let current_parent = self.get_parent(topic_id)?.clone();
+        if current_parent != new_parent {
+            let current_node = self.try_get_entity_node_mut(topic_id)?;
+            current_node.metadata.parent = Some(new_parent.clone());
+
+            let new_parent_node = self.try_get_entity_node_mut(new_parent)?;
+            new_parent_node.children.insert(topic_id.clone());
+
+            self.entities
+                .get_mut(&current_parent)
+                .expect("Parent entity should exist")
+                .children
+                .remove(topic_id);
+        }
+
+        self.try_get(topic_id)
+    }
+
+    pub fn ancestors(&self, topic_id: &EntityTopicId) -> Result<Vec<&EntityTopicId>, Error> {
+        let mut ancestors = vec![];
+        let mut current = topic_id;
+        while let Some(parent) = self.try_get(current)?.parent.as_ref() {
+            ancestors.push(parent);
+            current = parent;
+        }
+        Ok(ancestors)
+    }
 }
 
 /// Represents an error encountered while updating the store.
@@ -787,6 +880,18 @@ pub enum Error {
 
     #[error("Invalid twin key: '{0}'. Keys that are empty, containing '/' or starting with '@' are not allowed")]
     InvalidTwinData(String),
+
+    #[error("Entity: '{0}' can not be its own parent")]
+    InvalidSelfParent(EntityTopicId),
+
+    #[error("Entity: '{0}' can not be a parent of '{1}' because it is a service. Only devices can be parents")]
+    InvalidServiceParent(EntityTopicId, EntityTopicId),
+
+    #[error("Entity: '{0}' can not be a parent of '{1}' because '{0}' is a descendent of '{1}'")]
+    InvalidDescendentParent(EntityTopicId, EntityTopicId),
+
+    #[error("Main device entity metadata can not be updated")]
+    ImmutableMainDevice,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -965,6 +1070,18 @@ impl TryFrom<&MqttMessage> for EntityRegistrationMessage {
         EntityRegistrationMessage::new(value).ok_or(serde::de::Error::custom(
             "Failed to parse entity registration message: {value}",
         ))
+    }
+}
+
+impl From<&EntityMetadata> for EntityRegistrationMessage {
+    fn from(value: &EntityMetadata) -> Self {
+        EntityRegistrationMessage {
+            topic_id: value.topic_id.clone(),
+            r#type: value.r#type.clone(),
+            external_id: value.external_id.clone(),
+            parent: value.parent.clone(),
+            twin_data: Map::new(),
+        }
     }
 }
 
@@ -1275,18 +1392,20 @@ mod tests {
         build_test_entity_tree(&mut store);
 
         // List entity tree from root
-        let entities = list_entity_tree_topics(&mut store, filters);
+        let entities: BTreeSet<&str> = list_entity_tree_topics(&mut store, filters);
         assert_eq!(entities, expected);
     }
 
-    fn list_entity_tree_topics(store: &mut EntityStore, filters: ListFilters) -> BTreeSet<&str> {
+    fn list_entity_tree_topics<'a, C: FromIterator<&'a str>>(
+        store: &'a mut EntityStore,
+        filters: ListFilters,
+    ) -> C {
         store
             .list_entity_tree(filters)
             .iter()
             .map(|e| e.topic_id.as_str())
             .collect()
     }
-
     /// Build the test entity tree:
     ///
     /// main
@@ -1931,6 +2050,197 @@ mod tests {
         assert!(store.get(&entity("device/main/service/004")).is_some());
         assert!(store.get(&entity("device/00D//")).is_some());
         assert!(store.get(&entity("device/00E//")).is_some());
+    }
+
+    #[test]
+    fn update_parent() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        build_entity_tree(
+            &mut store,
+            vec![
+                ("device/child0//", "child-device", None),
+                ("device/child00//", "child-device", Some("device/child0//")),
+                (
+                    "device/child000//",
+                    "child-device",
+                    Some("device/child00//"),
+                ),
+                (
+                    "device/child001//",
+                    "child-device",
+                    Some("device/child00//"),
+                ),
+                ("device/child01//", "child-device", Some("device/child0//")),
+                ("device/child1//", "child-device", None),
+                ("device/child10//", "child-device", Some("device/child1//")),
+            ],
+        );
+
+        // Assert sub-trees of `child0` and `child1` before the update
+        assert_eq!(
+            list_entity_tree_topics::<Vec<&str>>(
+                &mut store,
+                ListFilters::default().root("device/child0//".parse().unwrap()),
+            ),
+            [
+                "device/child0//",
+                "device/child00//",
+                "device/child01//",
+                "device/child000//",
+                "device/child001//",
+            ]
+        );
+        assert_eq!(
+            list_entity_tree_topics::<Vec<&str>>(
+                &mut store,
+                ListFilters::default().root("device/child1//".parse().unwrap()),
+            ),
+            ["device/child1//", "device/child10//"]
+        );
+
+        let entity = store
+            .update_parent(
+                &"device/child00//".parse().unwrap(),
+                &"device/child1//".parse().unwrap(),
+            )
+            .unwrap();
+
+        let expected = EntityMetadata::new(
+            "device/child00//".parse().unwrap(),
+            EntityType::ChildDevice,
+            Some("device/child1//".parse().unwrap()),
+            None,
+        );
+        assert_eq!(entity, &expected);
+
+        // Assert sub-trees of `child0` and `child1` after the update
+        assert_eq!(
+            list_entity_tree_topics::<Vec<&str>>(
+                &mut store,
+                ListFilters::default().root("device/child0//".parse().unwrap()),
+            ),
+            ["device/child0//", "device/child01//"]
+        );
+        assert_eq!(
+            list_entity_tree_topics::<Vec<&str>>(
+                &mut store,
+                ListFilters::default().root("device/child1//".parse().unwrap()),
+            ),
+            [
+                "device/child1//",
+                "device/child00//",
+                "device/child10//",
+                "device/child000//",
+                "device/child001//",
+            ]
+        );
+    }
+
+    #[test_case(
+        "device/child0//",
+        "device/child0//",
+        "Entity: 'device/child0//' can not be its own parent";
+        "invalid_self_parent"
+    )]
+    #[test_case(
+        "device/main//",
+        "device/child0//",
+        "Main device entity metadata can not be updated";
+        "immutable_main_device"
+    )]
+    #[test_case(
+        "device/child0//",
+        "device/main/service/tedge-agent",
+        "Entity: 'device/main/service/tedge-agent' can not be a parent of 'device/child0//' because it is a service. Only devices can be parents";
+        "invalid_service_parent"
+    )]
+    #[test_case(
+        "device/child0//",
+        "device/child000//",
+        "Entity: 'device/child000//' can not be a parent of 'device/child0//' because 'device/child000//' is a descendent of 'device/child0//'";
+        "invalid_descendent_parent"
+    )]
+    fn invalid_update_parent(topic_id: &str, new_parent: &str, error_msg: &str) {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        build_entity_tree(
+            &mut store,
+            vec![
+                (
+                    "device/main/service/tedge-agent",
+                    "service",
+                    Some("device/main//"),
+                ),
+                ("device/child0//", "child-device", None),
+                ("device/child00//", "child-device", Some("device/child0//")),
+                (
+                    "device/child000//",
+                    "child-device",
+                    Some("device/child00//"),
+                ),
+            ],
+        );
+
+        let entity_topic_id = EntityTopicId::from_str(topic_id).unwrap();
+        let parent_topic_id = EntityTopicId::from_str(new_parent).unwrap();
+        assert_eq!(
+            store
+                .update_parent(&entity_topic_id, &parent_topic_id)
+                .unwrap_err()
+                .to_string(),
+            error_msg
+        );
+    }
+
+    #[test_case(
+        "device/child000//",
+        vec!["device/child00//", "device/child0//", "device/main//"];
+        "leaf_node"
+    )]
+    #[test_case(
+        "device/child00//",
+        vec!["device/child0//", "device/main//"];
+        "nested_child"
+    )]
+    #[test_case(
+        "device/child0//",
+        vec!["device/main//"];
+        "immediate_child"
+    )]
+    #[test_case(
+        "device/main//",
+        vec![];
+        "main_device"
+    )]
+    fn ancestors(topic_id: &str, expected: Vec<&str>) {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        build_entity_tree(
+            &mut store,
+            vec![
+                (
+                    "device/main/service/tedge-agent",
+                    "service",
+                    Some("device/main//"),
+                ),
+                ("device/child0//", "child-device", None),
+                ("device/child00//", "child-device", Some("device/child0//")),
+                (
+                    "device/child000//",
+                    "child-device",
+                    Some("device/child00//"),
+                ),
+            ],
+        );
+        let ancestors: Vec<&str> = store
+            .ancestors(&EntityTopicId::from_str(topic_id).unwrap())
+            .unwrap()
+            .iter()
+            .map(|e| e.as_str())
+            .collect();
+
+        assert_eq!(ancestors, expected);
     }
 
     fn new_entity_store(temp_dir: &TempDir, clean_start: bool) -> EntityStore {

@@ -23,6 +23,7 @@ use axum::Json;
 use axum::Router;
 use hyper::StatusCode;
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::json;
 use serde_json::Map;
 use serde_json::Value;
@@ -163,7 +164,10 @@ pub(crate) fn entity_store_router(state: AgentState) -> Router {
         .route("/v1/entities", post(register_entity).get(list_entities))
         .route(
             "/v1/entities/{*path}",
-            get(get_resource).put(put_resource).delete(delete_resource),
+            get(get_resource)
+                .put(put_resource)
+                .patch(patch_resource)
+                .delete(delete_resource),
         )
         .layer(DefaultBodyLimit::max(HTTP_MAX_PAYLOAD_SIZE))
         .with_state(state)
@@ -234,6 +238,23 @@ async fn put_resource(
                     .await
                     .into_response(),
             )
+        }
+        _ => Err(Error::MethodNotAllowed),
+    }
+}
+
+async fn patch_resource(
+    State(state): State<AgentState>,
+    Path(path): Path<String>,
+    payload: String,
+) -> impl IntoResponse {
+    let (topic_id, channel) = parse_path(&path)?;
+    match channel {
+        Channel::EntityMetadata => {
+            let entity_update: EntityUpdateMessage = serde_json::from_str(&payload)?;
+            Ok(update_entity(state, topic_id, entity_update)
+                .await
+                .into_response())
         }
         _ => Err(Error::MethodNotAllowed),
     }
@@ -334,6 +355,32 @@ async fn get_entity(
     } else {
         Err(Error::EntityNotFound(topic_id))
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntityUpdateMessage {
+    #[serde(rename = "@parent")]
+    pub parent: EntityTopicId,
+}
+
+async fn update_entity(
+    state: AgentState,
+    topic_id: EntityTopicId,
+    payload: EntityUpdateMessage,
+) -> impl IntoResponse {
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::UpdateParent {
+            topic_id,
+            new_parent: payload.parent,
+        })
+        .await?;
+    let EntityStoreResponse::Update(res) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+
+    Ok(Json(res?))
 }
 
 async fn deregister_entity(state: AgentState, topic_id: EntityTopicId) -> Result<Response, Error> {
