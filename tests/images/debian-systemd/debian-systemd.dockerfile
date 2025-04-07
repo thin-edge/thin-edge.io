@@ -26,6 +26,9 @@ RUN apt-get -y update \
     bash-completion \
     zsh \
     fish \
+    # PKCS11 / cryptoki support
+    gnutls-bin \
+    softhsm2 \
     # mosquitto (default version used by Debian, see below for more details)
     mosquitto \
     mosquitto-clients
