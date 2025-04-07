@@ -99,6 +99,7 @@ async fn main() -> anyhow::Result<()> {
         }
     };
     info!(listener = ?listener.local_addr().as_ref().ok().and_then(|s| s.as_pathname()), "Server listening");
+    listener.set_nonblocking(true)?;
     let listener = tokio::net::UnixListener::from_std(listener)?;
     let server = TedgeP11Server::from_config(cryptoki_config)?;
     tokio::spawn(async move { server.serve(listener).await });
