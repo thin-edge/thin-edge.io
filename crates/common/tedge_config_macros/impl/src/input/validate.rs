@@ -146,6 +146,14 @@ impl FieldOrGroup {
         }
     }
 
+    pub fn dto_skip(&self) -> bool {
+        match self {
+            Self::Field(field) => field.dto().skip,
+            Self::Group(group) => group.dto.skip,
+            Self::Multi(group) => group.dto.skip,
+        }
+    }
+
     pub fn doc(&self) -> Option<String> {
         let attrs = match self {
             Self::Field(field) => field.attrs(),
