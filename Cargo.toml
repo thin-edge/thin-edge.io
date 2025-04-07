@@ -184,7 +184,7 @@ tempfile = "3.12"
 test-case = "3.2"
 thiserror = "1.0"
 time = "0.3"
-tokio = { version = "1.37", default-features = false }
+tokio = { version = "1.44", default-features = false }
 tokio-rustls = { version = "0.26.1", default-features = false }
 tokio-tungstenite = { version = "0.26.1" }
 tokio-util = { version = "0.7", features = ["codec"] }
