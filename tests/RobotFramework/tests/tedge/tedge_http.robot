@@ -47,8 +47,8 @@ Updating entities from a child device
 
 Accessing c8y from a child device
     ${external_id}=    Execute Command
-    ...    tedge http get /c8y/identity/externalIds/c8y_Serial/${PARENT_SN} | jq .externalId
-    Should Be Equal    ${external_id}    "${PARENT_SN}"\n
+    ...    bash -o pipefail -c "tedge http get /c8y/identity/externalIds/c8y_Serial/${PARENT_SN} | jq -r .externalId"
+    Should Be Equal    ${external_id}    ${PARENT_SN}\n
 
 Accessing file-transfer from a child device
     Execute Command    printf "source file content" >/tmp/source-file.txt
