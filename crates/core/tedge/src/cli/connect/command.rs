@@ -84,40 +84,48 @@ impl Command for ConnectCommand {
     fn description(&self) -> String {
         if self.is_test_connection {
             format!("test connection to {} cloud.", self.cloud)
+        } else if self.is_reconnect {
+            format!("reconnect to {} cloud.", self.cloud)
         } else {
             format!("connect to {} cloud.", self.cloud)
         }
     }
 
     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        if self.is_test_connection {
-            self.check_bridge().await.map_err(<_>::into)
-        } else {
-            self.connect_bridge().await.map_err(<_>::into)
-        }
-    }
-}
-
-impl ConnectCommand {
-    async fn check_bridge(&self) -> Result<(), Fancy<ConnectError>> {
         let config = &self.config;
-        let bridge_config = bridge_config(config, &self.cloud)?;
-        let credentials_path = credentials_path_for(config, &self.cloud)?;
+        let bridge_config = bridge_config(config, &self.cloud).map_err(anyhow::Error::new)?;
+        let credentials_path =
+            credentials_path_for(config, &self.cloud).map_err(anyhow::Error::new)?;
 
         ConfigLogger::log(
-            format!("Testing {} connection with config", self.cloud),
+            self.description(),
             &bridge_config,
             &*self.service_manager,
             &self.cloud,
             credentials_path,
         );
+
+        validate_config(config, &self.cloud)?;
+
+        if self.is_test_connection {
+            self.check_bridge(bridge_config).await.map_err(<_>::into)
+        } else {
+            fail_if_already_connected(&self.config_location, &bridge_config)
+                .map_err(anyhow::Error::new)?;
+            self.connect_bridge(bridge_config).await.map_err(<_>::into)
+        }
+    }
+}
+
+impl ConnectCommand {
+    async fn check_bridge(&self, bridge_config: BridgeConfig) -> Result<(), Fancy<ConnectError>> {
         // If the bridge is part of the mapper, the bridge config file won't exist
         // TODO tidy me up once mosquitto is no longer required for bridge
         if self.check_if_bridge_exists(&bridge_config).await {
-            match self.check_connection(config).await {
+            match self.check_connection().await {
                 Ok(DeviceStatus::AlreadyExists) => {
                     let cloud = bridge_config.cloud_name;
-                    match self.tenant_matches_configured_url(config).await? {
+                    match self.tenant_matches_configured_url().await? {
                         // Check failed, warning has been printed already
                         // Don't tell them the connection test succeeded because that's not true
                         Some(false) => {}
@@ -140,25 +148,9 @@ impl ConnectCommand {
         }
     }
 
-    async fn connect_bridge(&self) -> Result<(), Fancy<ConnectError>> {
+    async fn connect_bridge(&self, bridge_config: BridgeConfig) -> Result<(), Fancy<ConnectError>> {
         let config = &self.config;
-        let bridge_config = bridge_config(config, &self.cloud)?;
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
-        let credentials_path = credentials_path_for(config, &self.cloud)?;
-
-        validate_config(config, &self.cloud)?;
-
-        let title = match self.is_reconnect {
-            false => format!("Connecting to {} with config", self.cloud),
-            true => "Reconnecting with config".into(),
-        };
-        ConfigLogger::log(
-            title,
-            &bridge_config,
-            &*self.service_manager,
-            &self.cloud,
-            credentials_path,
-        );
 
         let device_type = &config.device.ty;
 
@@ -200,7 +192,7 @@ impl ConnectCommand {
         let mut connection_check_success = true;
         if !self.offline_mode {
             match self
-                .check_connection_with_retries(config, bridge_config.connection_check_attempts)
+                .check_connection_with_retries(bridge_config.connection_check_attempts)
                 .await
             {
                 Ok(DeviceStatus::AlreadyExists) => {}
@@ -227,7 +219,7 @@ impl ConnectCommand {
                 .auth_method
                 .is_basic(&c8y_config.credentials_path);
             if !use_basic_auth && !self.offline_mode && connection_check_success {
-                let _ = self.tenant_matches_configured_url(config).await;
+                let _ = self.tenant_matches_configured_url().await;
             }
             enable_software_management(&bridge_config, &*self.service_manager).await;
         }
@@ -249,10 +241,8 @@ fn credentials_path_for<'a>(
 }
 
 impl ConnectCommand {
-    async fn tenant_matches_configured_url(
-        &self,
-        config: &TEdgeConfig,
-    ) -> Result<Option<bool>, Fancy<ConnectError>> {
+    async fn tenant_matches_configured_url(&self) -> Result<Option<bool>, Fancy<ConnectError>> {
+        let config = &self.config;
         if let Cloud::C8y(profile) = &self.cloud {
             let c8y_config = config.c8y.try_get(profile.as_deref())?;
 
@@ -286,11 +276,10 @@ impl ConnectCommand {
 
     async fn check_connection_with_retries(
         &self,
-        config: &TEdgeConfig,
         max_attempts: i32,
     ) -> Result<DeviceStatus, Fancy<ConnectError>> {
         for i in 1..max_attempts {
-            let result = self.check_connection(config).await;
+            let result = self.check_connection().await;
             if let Ok(DeviceStatus::AlreadyExists) = result {
                 return result;
             }
@@ -300,13 +289,11 @@ impl ConnectCommand {
             );
             std::thread::sleep(std::time::Duration::from_secs(2));
         }
-        self.check_connection(config).await
+        self.check_connection().await
     }
 
-    async fn check_connection(
-        &self,
-        config: &TEdgeConfig,
-    ) -> Result<DeviceStatus, Fancy<ConnectError>> {
+    async fn check_connection(&self) -> Result<DeviceStatus, Fancy<ConnectError>> {
+        let config = &self.config;
         let spinner = Spinner::start("Verifying device is connected to cloud");
         let res = match &self.cloud {
             Cloud::Azure(profile) => check_device_status_azure(config, profile.as_deref()).await,
@@ -971,8 +958,6 @@ async fn new_bridge(
     {
         warning!("'{name}' service manager is not available on the system.",);
     }
-
-    fail_if_already_connected(config_location, bridge_config)?;
 
     let use_basic_auth =
         bridge_config.remote_username.is_some() && bridge_config.remote_password.is_some();
