@@ -90,55 +90,63 @@ impl Command for ConnectCommand {
     }
 
     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        self.execute_inner().await.map_err(<_>::into)
+        if self.is_test_connection {
+            self.check_bridge().await.map_err(<_>::into)
+        } else {
+            self.connect_bridge().await.map_err(<_>::into)
+        }
     }
 }
 
 impl ConnectCommand {
-    async fn execute_inner(&self) -> Result<(), Fancy<ConnectError>> {
+    async fn check_bridge(&self) -> Result<(), Fancy<ConnectError>> {
+        let config = &self.config;
+        let bridge_config = bridge_config(config, &self.cloud)?;
+        let credentials_path = credentials_path_for(config, &self.cloud)?;
+
+        ConfigLogger::log(
+            format!("Testing {} connection with config", self.cloud),
+            &bridge_config,
+            &*self.service_manager,
+            &self.cloud,
+            credentials_path,
+        );
+        // If the bridge is part of the mapper, the bridge config file won't exist
+        // TODO tidy me up once mosquitto is no longer required for bridge
+        if self.check_if_bridge_exists(&bridge_config).await {
+            match self.check_connection(config).await {
+                Ok(DeviceStatus::AlreadyExists) => {
+                    let cloud = bridge_config.cloud_name;
+                    match self.tenant_matches_configured_url(config).await? {
+                        // Check failed, warning has been printed already
+                        // Don't tell them the connection test succeeded because that's not true
+                        Some(false) => {}
+                        // Either the check succeeded or it wasn't relevant (e.g. non-Cumulocity connection)
+                        Some(true) | None => {
+                            println!("Connection check to {cloud} cloud is successful.")
+                        }
+                    }
+
+                    Ok(())
+                }
+                Ok(DeviceStatus::Unknown) => Err(ConnectError::UnknownDeviceStatus.into()),
+                Err(err) => Err(err),
+            }
+        } else {
+            Err((ConnectError::DeviceNotConnected {
+                cloud: self.cloud.to_string(),
+            })
+            .into())
+        }
+    }
+
+    async fn connect_bridge(&self) -> Result<(), Fancy<ConnectError>> {
         let config = &self.config;
         let bridge_config = bridge_config(config, &self.cloud)?;
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
         let credentials_path = credentials_path_for(config, &self.cloud)?;
 
         validate_config(config, &self.cloud)?;
-
-        if self.is_test_connection {
-            ConfigLogger::log(
-                format!("Testing {} connection with config", self.cloud),
-                &bridge_config,
-                &*self.service_manager,
-                &self.cloud,
-                credentials_path,
-            );
-            // If the bridge is part of the mapper, the bridge config file won't exist
-            // TODO tidy me up once mosquitto is no longer required for bridge
-            return if self.check_if_bridge_exists(&bridge_config).await {
-                match self.check_connection(config).await {
-                    Ok(DeviceStatus::AlreadyExists) => {
-                        let cloud = bridge_config.cloud_name;
-                        match self.tenant_matches_configured_url(config).await? {
-                            // Check failed, warning has been printed already
-                            // Don't tell them the connection test succeeded because that's not true
-                            Some(false) => {}
-                            // Either the check succeeded or it wasn't relevant (e.g. non-Cumulocity connection)
-                            Some(true) | None => {
-                                println!("Connection check to {cloud} cloud is successful.")
-                            }
-                        }
-
-                        Ok(())
-                    }
-                    Ok(DeviceStatus::Unknown) => Err(ConnectError::UnknownDeviceStatus.into()),
-                    Err(err) => Err(err),
-                }
-            } else {
-                Err((ConnectError::DeviceNotConnected {
-                    cloud: self.cloud.to_string(),
-                })
-                .into())
-            };
-        }
 
         let title = match self.is_reconnect {
             false => format!("Connecting to {} with config", self.cloud),
@@ -294,6 +302,7 @@ impl ConnectCommand {
         }
         self.check_connection(config).await
     }
+
     async fn check_connection(
         &self,
         config: &TEdgeConfig,
