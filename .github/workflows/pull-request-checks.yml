@@ -3,7 +3,7 @@ name: Pull Request Checks
 on:
   workflow_dispatch:
   pull_request:
-
+  merge_group:
 env:
   CARGO_TERM_COLOR: always
 
@@ -24,6 +24,7 @@ jobs:
   changes:
     name: Filter changes
     runs-on: ubuntu-22.04
+    if: ${{ github.event_name != 'merge_group' }}
     # Set job outputs to values from filter step
     outputs:
       rust: ${{ steps.filter.outputs.rust || 'true' }}
@@ -42,6 +43,7 @@ jobs:
               - 'crates/**'
               - 'plugins/**'
               - 'Cargo.*'
+              - '**/Cargo.toml'
             workflows:
               - '.github/workflows/**'
             docs:
@@ -53,9 +55,8 @@ jobs:
   check-lockfile-uptodate:
     name: Check whether Cargo.lock is up to date
     runs-on: ubuntu-22.04
-    if: ${{ github.event_name == 'pull_request' }}
-    outputs:
-      locks: ${{ steps.filter.outputs.locks }}
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -74,15 +75,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            locks:
-              - '**/Cargo.toml'
-
       - name: Check whether lockfile is up to date
-        if: steps.filter.outputs.locks == 'true'
         run: cargo check --locked
 
   udeps:
