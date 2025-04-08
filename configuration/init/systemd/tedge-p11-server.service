@@ -6,7 +6,7 @@ Requires=tedge-p11-server.socket
 Type=simple
 StandardError=journal
 EnvironmentFile=-/etc/tedge/plugins/tedge-p11-server.conf
-ExecStart=/usr/bin/tedge-p11-server --module-path "${TEDGE_DEVICE_CRYPTOKI_MODULE_PATH}" --pin "${TEDGE_DEVICE_CRYPTOKI_PIN}"
+ExecStart=/usr/bin/tedge-p11-server --module-path "${TEDGE_DEVICE_CRYPTOKI_MODULE_PATH}" --pin "${TEDGE_DEVICE_CRYPTOKI_PIN}" --serial "${TEDGE_DEVICE_CRYPTOKI_SERIAL}"
 Restart=on-failure
 
 [Install]

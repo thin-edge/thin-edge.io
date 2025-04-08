@@ -12,6 +12,7 @@
 //! provide its own bundled p11-kit-like service.
 
 use std::os::unix::net::UnixListener;
+use std::sync::Arc;
 
 use anyhow::Context;
 use camino::Utf8PathBuf;
@@ -44,6 +45,10 @@ pub struct Args {
     #[arg(long, default_value = "123456")]
     pin: String,
 
+    /// The serial number of the cryptographic token to use.
+    #[arg(long)]
+    serial: Option<Arc<str>>,
+
     /// Configures the logging level.
     ///
     /// One of error/warn/info/debug/trace. Logs with verbosity lower or equal to the selected level
@@ -71,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
     let cryptoki_config = CryptokiConfigDirect {
         module_path: args.module_path,
         pin: AuthPin::new(args.pin),
-        serial: None,
+        serial: args.serial.filter(|s| !s.is_empty()),
     };
 
     info!(?cryptoki_config, "Using cryptoki configuration");

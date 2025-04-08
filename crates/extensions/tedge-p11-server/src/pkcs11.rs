@@ -21,13 +21,13 @@ use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
 use rustls::SignatureScheme;
+use tracing::debug;
 use tracing::trace;
+use tracing::warn;
 
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::Mutex;
-use tracing::debug;
-use tracing::warn;
 
 #[derive(Debug, Clone)]
 pub struct CryptokiConfigDirect {
@@ -43,14 +43,20 @@ pub enum Pkcs11SigningKey {
 }
 
 impl Pkcs11SigningKey {
+    /// Find and return a handle to a signing key located on a cryptoki token.
+    ///
+    /// 1. We dynamically load cryptoki library under `module_path`
+    /// 2. We select a cryptographic token. If `serial` is given, we attempt to find a token with this serial number, if
+    ///    not we use the first available token.
+    /// 3. From the selected cryptographic token, we try to find a private key that can be used for signing, and if it
+    ///    exists, we return a handle to it that can be used for signing messages.
     pub fn from_cryptoki_config(
         cryptoki_config: &CryptokiConfigDirect,
     ) -> anyhow::Result<Pkcs11SigningKey> {
         let CryptokiConfigDirect {
             module_path,
             pin,
-            // TODO(marcel): select modules by serial if multiple are connected
-            serial: _,
+            serial,
         } = cryptoki_config;
 
         debug!(%module_path, "Loading PKCS#11 module");
@@ -68,13 +74,33 @@ impl Pkcs11SigningKey {
 
         pkcs11client.initialize(CInitializeArgs::OsThreads)?;
 
-        // Select first available slot. If it's not the one we want, the token
-        // used in p11-kit-server should be adjusted.
-        let slot = pkcs11client
-            .get_slots_with_token()?
-            .into_iter()
-            .next()
-            .context("Didn't find a slot to use. The device may be disconnected.")?;
+        // select a slot that contains a cryptographic token with a given serial number if given, or any if not
+        let slots_with_tokens = pkcs11client
+            .get_slots_with_token()
+            .context("Failed to enumerate slots with tokens")?;
+        let slot = match serial {
+            Some(serial) => {
+                let mut chosen_slot = None;
+                for slot in slots_with_tokens {
+                    let info = pkcs11client
+                        .get_token_info(slot)
+                        .context("Failed to get slot info")?;
+                    if serial.as_ref() == info.serial_number() {
+                        chosen_slot = Some(slot);
+                        break;
+                    }
+                }
+                match chosen_slot {
+                    Some(slot) => slot,
+                    None => anyhow::bail!("Didn't find a token with serial {serial}"),
+                }
+            }
+            None => slots_with_tokens
+                .into_iter()
+                .next()
+                .context("Didn't find a slot to use. The device may be disconnected.")?,
+        };
+
         let slot_info = pkcs11client.get_slot_info(slot)?;
         let token_info = pkcs11client.get_token_info(slot)?;
         debug!(?slot_info, ?token_info, "Selected slot");
