@@ -1,0 +1,23 @@
+package tedge:filter;
+
+world tedge {
+    include wasi:cli/imports@0.2.0;
+
+    record datetime {
+        seconds: u64,
+        nanoseconds: u32,
+    }
+
+    record message {
+        topic: string,
+        payload: string,
+    }
+
+    variant filter-error {
+        unsupported-message(string),
+        incorrect-setting(string),
+    }
+
+    // Process a single message; producing zero, one or more transformed messages
+    export process: func(timestamp: datetime, message: message) -> result< list<message>, filter-error >;
+}
