@@ -38,7 +38,7 @@ impl TedgeP11Client {
         let response = connection.read_frame()?;
 
         let Frame1::ChooseSchemeResponse(response) = response else {
-            bail!("protocol error: bad response, expected chose scheme");
+            bail!("protocol error: bad response, expected chose scheme, received: {response:?}");
         };
 
         debug!("Choose scheme complete");
@@ -66,7 +66,7 @@ impl TedgeP11Client {
         let response = connection.read_frame()?;
 
         let Frame1::ChooseSchemeResponse(response) = response else {
-            bail!("protocol error: bad response, expected chose scheme");
+            bail!("protocol error: bad response, expected chose scheme, received: {response:?}");
         };
 
         debug!("Choose scheme complete");
@@ -87,7 +87,7 @@ impl TedgeP11Client {
         let response = connection.read_frame()?;
 
         let Frame1::SignResponse(response) = response else {
-            bail!("protocol error: bad response, expected sign");
+            bail!("protocol error: bad response, expected sign, received: {response:?}");
         };
 
         debug!("Sign complete");
