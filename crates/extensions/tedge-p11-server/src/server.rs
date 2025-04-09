@@ -31,6 +31,7 @@ impl TedgeP11Server {
                 .context("Failed to accept connection")?;
 
             let stream = stream.into_std()?;
+            stream.set_nonblocking(false)?;
             let connection = Connection::new(stream);
 
             match self.process(connection) {
@@ -52,9 +53,31 @@ impl TedgeP11Server {
                 anyhow::bail!("protocol error: invalid request")
             }
             Frame1::ChooseSchemeRequest(request) => {
-                Frame1::ChooseSchemeResponse(self.service.choose_scheme(request))
+                let response = self.service.choose_scheme(request);
+                match response {
+                    Ok(response) => Frame1::ChooseSchemeResponse(response),
+                    Err(err) => {
+                        let response = Frame1::Error(ProtocolError(format!(
+                            "PKCS #11 service failed: {err:#}"
+                        )));
+                        connection.write_frame(&response)?;
+                        anyhow::bail!(err);
+                    }
+                }
             }
-            Frame1::SignRequest(request) => Frame1::SignResponse(self.service.sign(request)),
+            Frame1::SignRequest(request) => {
+                let response = self.service.sign(request);
+                match response {
+                    Ok(response) => Frame1::SignResponse(response),
+                    Err(err) => {
+                        let response = Frame1::Error(ProtocolError(format!(
+                            "PKCS #11 service failed: {err:#}"
+                        )));
+                        connection.write_frame(&response)?;
+                        anyhow::bail!(err);
+                    }
+                }
+            }
         };
 
         connection.write_frame(&response)?;

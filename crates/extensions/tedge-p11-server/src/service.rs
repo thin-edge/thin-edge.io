@@ -24,35 +24,40 @@ impl P11SignerService {
         Ok(Self { signing_key })
     }
 
-    #[instrument]
-    pub fn choose_scheme(&self, request: ChooseSchemeRequest) -> ChooseSchemeResponse {
+    #[instrument(skip_all)]
+    pub fn choose_scheme(
+        &self,
+        request: ChooseSchemeRequest,
+    ) -> anyhow::Result<ChooseSchemeResponse> {
         let offered = request.offered.into_iter().map(|s| s.0).collect::<Vec<_>>();
 
         let signer = self.signing_key.choose_scheme(&offered);
         let algorithm = SignatureAlgorithm(self.signing_key.algorithm());
 
         let Some(signer) = signer else {
-            return ChooseSchemeResponse {
+            return Ok(ChooseSchemeResponse {
                 scheme: None,
                 algorithm,
-            };
+            });
         };
 
-        ChooseSchemeResponse {
+        Ok(ChooseSchemeResponse {
             scheme: Some(SignatureScheme(signer.scheme())),
             algorithm,
-        }
+        })
     }
 
-    #[instrument]
-    pub fn sign(&self, request: SignRequest) -> SignResponse {
+    #[instrument(skip_all)]
+    pub fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse> {
         let session = match &self.signing_key {
             Pkcs11SigningKey::Ecdsa(key) => &key.pkcs11,
             Pkcs11SigningKey::Rsa(key) => &key.pkcs11,
         };
         let signer = PkcsSigner::from_session(session.clone());
-        let signature = signer.sign(&request.to_sign).unwrap();
-        SignResponse(signature)
+        let signature = signer
+            .sign(&request.to_sign)
+            .context("Failed to sign using PKCS #11")?;
+        Ok(SignResponse(signature))
     }
 }
 
