@@ -29,11 +29,21 @@ use std::sync::Mutex;
 use tracing::debug;
 use tracing::warn;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CryptokiConfigDirect {
     pub module_path: Utf8PathBuf,
     pub pin: AuthPin,
     pub serial: Option<Arc<str>>,
+}
+
+impl Debug for CryptokiConfigDirect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CryptokiConfigDirect")
+            .field("module_path", &self.module_path)
+            .field("pin", &"[REDACTED]")
+            .field("serial", &self.serial)
+            .finish()
+    }
 }
 
 #[derive(Debug)]
