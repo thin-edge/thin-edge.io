@@ -152,25 +152,9 @@ impl ConnectCommand {
         let config = &self.config;
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
 
-        let device_type = &config.device.ty;
-
-        let profile_name = if let Cloud::C8y(profile_name) = &self.cloud {
-            profile_name.as_ref().map(|p| p.to_string())
-        } else {
-            None
-        };
-
-        match new_bridge(
-            &bridge_config,
-            &updated_mosquitto_config,
-            &*self.service_manager,
-            &self.config_location,
-            device_type,
-            self.offline_mode,
-            config,
-            profile_name.as_deref(),
-        )
-        .await
+        match self
+            .new_bridge(&bridge_config, &updated_mosquitto_config)
+            .await
         {
             Ok(()) => (),
             Err(Fancy {
@@ -938,87 +922,85 @@ async fn check_device_status_aws(
     }
 }
 
-// TODO: too many args
-#[allow(clippy::too_many_arguments)]
-async fn new_bridge(
-    bridge_config: &BridgeConfig,
-    common_mosquitto_config: &CommonMosquittoConfig,
-    service_manager: &dyn SystemServiceManager,
-    config_location: &TEdgeConfigLocation,
-    device_type: &str,
-    offline_mode: bool,
-    tedge_config: &TEdgeConfig,
-    // TODO(marcel): remove this argument
-    profile_name: Option<&str>,
-) -> Result<(), Fancy<ConnectError>> {
-    let service_manager_result = service_manager.check_operational().await;
+impl ConnectCommand {
+    async fn new_bridge(
+        &self,
+        bridge_config: &BridgeConfig,
+        common_mosquitto_config: &CommonMosquittoConfig,
+    ) -> Result<(), Fancy<ConnectError>> {
+        let service_manager = &self.service_manager;
+        let service_manager_result = service_manager.check_operational().await;
 
-    if let Err(SystemServiceError::ServiceManagerUnavailable { cmd: _, name }) =
-        &service_manager_result
-    {
-        warning!("'{name}' service manager is not available on the system.",);
-    }
-
-    let use_basic_auth =
-        bridge_config.remote_username.is_some() && bridge_config.remote_password.is_some();
-
-    let mqtt_auth_config = tedge_config.mqtt_auth_config_cloud_broker(profile_name)?;
-
-    if bridge_config.cloud_name.eq("c8y") {
-        if offline_mode {
-            println!("Offline mode. Skipping device creation in Cumulocity cloud.")
-        } else {
-            let spinner = Spinner::start("Creating device in Cumulocity cloud");
-            let res = c8y_direct_connection::create_device_with_direct_connection(
-                use_basic_auth,
-                bridge_config,
-                device_type,
-                mqtt_auth_config,
-            )
-            .await;
-            spinner.finish(res)?;
+        if let Err(SystemServiceError::ServiceManagerUnavailable { cmd: _, name }) =
+            &service_manager_result
+        {
+            warning!("'{name}' service manager is not available on the system.",);
         }
-    }
 
-    if let Err(err) =
-        write_generic_mosquitto_config_to_file(config_location, common_mosquitto_config).await
-    {
-        // We want to preserve previous errors and therefore discard result of this function.
-        let _ = clean_up(config_location, bridge_config);
-        return Err(err.into());
-    }
+        let tedge_config = &self.config;
+        let config_location = &self.config_location;
 
-    if bridge_config.bridge_location == BridgeLocation::Mosquitto {
-        if let Err(err) = write_bridge_config_to_file(config_location, bridge_config).await {
+        let use_basic_auth =
+            bridge_config.remote_username.is_some() && bridge_config.remote_password.is_some();
+
+        if let Cloud::C8y(profile_name) = &self.cloud {
+            if self.offline_mode {
+                println!("Offline mode. Skipping device creation in Cumulocity cloud.")
+            } else {
+                let profile_name = profile_name.as_deref().map(|p| p.as_ref());
+                let mqtt_auth_config = tedge_config.mqtt_auth_config_cloud_broker(profile_name)?;
+                let spinner = Spinner::start("Creating device in Cumulocity cloud");
+                let res = create_device_with_direct_connection(
+                    use_basic_auth,
+                    bridge_config,
+                    &self.config.device.ty,
+                    mqtt_auth_config,
+                )
+                .await;
+                spinner.finish(res)?;
+            }
+        }
+
+        if let Err(err) =
+            write_generic_mosquitto_config_to_file(config_location, common_mosquitto_config).await
+        {
             // We want to preserve previous errors and therefore discard result of this function.
             let _ = clean_up(config_location, bridge_config);
             return Err(err.into());
         }
-    } else {
-        use_built_in_bridge(config_location, bridge_config).await?;
+
+        if bridge_config.bridge_location == BridgeLocation::Mosquitto {
+            if let Err(err) = write_bridge_config_to_file(config_location, bridge_config).await {
+                // We want to preserve previous errors and therefore discard result of this function.
+                let _ = clean_up(config_location, bridge_config);
+                return Err(err.into());
+            }
+        } else {
+            use_built_in_bridge(config_location, bridge_config).await?;
+        }
+
+        if let Err(err) = service_manager_result {
+            println!("'tedge connect' configured the necessary tedge components, but you will have to start the required services on your own.");
+            println!("Start/restart mosquitto and other thin edge components.");
+            println!("thin-edge.io works seamlessly with 'systemd'.\n");
+            return Err(err.into());
+        }
+
+        restart_mosquitto(bridge_config, service_manager.as_ref(), config_location).await?;
+
+        let spinner = Spinner::start("Waiting for mosquitto to be listening for connections");
+        spinner.finish(wait_for_mosquitto_listening(&tedge_config.mqtt).await)?;
+
+        if let Err(err) = service_manager
+            .enable_service(SystemService::Mosquitto)
+            .await
+        {
+            clean_up(config_location, bridge_config)?;
+            return Err(err.into());
+        }
+
+        Ok(())
     }
-
-    if let Err(err) = service_manager_result {
-        println!("'tedge connect' configured the necessary tedge components, but you will have to start the required services on your own.");
-        println!("Start/restart mosquitto and other thin edge components.");
-        println!("thin-edge.io works seamlessly with 'systemd'.\n");
-        return Err(err.into());
-    }
-
-    restart_mosquitto(bridge_config, service_manager, config_location).await?;
-
-    let spinner = Spinner::start("Waiting for mosquitto to be listening for connections");
-    spinner.finish(wait_for_mosquitto_listening(&tedge_config.mqtt).await)?;
-
-    if let Err(err) = service_manager
-        .enable_service(SystemService::Mosquitto)
-        .await
-    {
-        clean_up(config_location, bridge_config)?;
-        return Err(err.into());
-    }
-
-    Ok(())
 }
 
 pub async fn chown_certificate_and_key(bridge_config: &BridgeConfig) {
