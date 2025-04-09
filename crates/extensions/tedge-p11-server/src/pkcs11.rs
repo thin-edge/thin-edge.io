@@ -46,26 +46,17 @@ impl Debug for CryptokiConfigDirect {
     }
 }
 
-#[derive(Debug)]
-pub enum Pkcs11SigningKey {
-    Rsa(RSASigningKey),
-    Ecdsa(ECSigningKey),
+#[derive(Debug, Clone)]
+pub struct Cryptoki {
+    context: Pkcs11,
+    config: CryptokiConfigDirect,
 }
 
-impl Pkcs11SigningKey {
-    pub fn from_cryptoki_config(
-        cryptoki_config: &CryptokiConfigDirect,
-    ) -> anyhow::Result<Pkcs11SigningKey> {
-        let CryptokiConfigDirect {
-            module_path,
-            pin,
-            // TODO(marcel): select modules by serial if multiple are connected
-            serial: _,
-        } = cryptoki_config;
-
-        debug!(%module_path, "Loading PKCS#11 module");
+impl Cryptoki {
+    pub fn new(config: CryptokiConfigDirect) -> anyhow::Result<Self> {
+        debug!(module_path = %config.module_path, "Loading PKCS#11 module");
         // can fail with Pkcs11(GeneralError, GetFunctionList) if P11_KIT_SERVER_ADDRESS is wrong
-        let pkcs11client = match Pkcs11::new(module_path) {
+        let pkcs11client = match Pkcs11::new(&config.module_path) {
             Ok(p) => p,
             // i want to get inner error but i don't know if there is a better way to do this
             Err(Error::LibraryLoading(e)) => {
@@ -78,18 +69,33 @@ impl Pkcs11SigningKey {
 
         pkcs11client.initialize(CInitializeArgs::OsThreads)?;
 
+        Ok(Self {
+            context: pkcs11client,
+            config,
+        })
+    }
+
+    pub fn signing_key(&self) -> anyhow::Result<Pkcs11SigningKey> {
+        let CryptokiConfigDirect {
+            pin,
+            // TODO(marcel): select modules by serial if multiple are connected
+            serial: _,
+            ..
+        } = &self.config;
+
         // Select first available slot. If it's not the one we want, the token
         // used in p11-kit-server should be adjusted.
-        let slot = pkcs11client
+        let slot = self
+            .context
             .get_slots_with_token()?
             .into_iter()
             .next()
             .context("Didn't find a slot to use. The device may be disconnected.")?;
-        let slot_info = pkcs11client.get_slot_info(slot)?;
-        let token_info = pkcs11client.get_token_info(slot)?;
+        let slot_info = self.context.get_slot_info(slot)?;
+        let token_info = self.context.get_token_info(slot)?;
         debug!(?slot_info, ?token_info, "Selected slot");
 
-        let session = pkcs11client.open_ro_session(slot)?;
+        let session = self.context.open_ro_session(slot)?;
         session.login(UserType::User, Some(pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
@@ -110,6 +116,12 @@ impl Pkcs11SigningKey {
 
         Ok(key)
     }
+}
+
+#[derive(Debug)]
+pub enum Pkcs11SigningKey {
+    Rsa(RSASigningKey),
+    Ecdsa(ECSigningKey),
 }
 
 impl SigningKey for Pkcs11SigningKey {

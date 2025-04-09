@@ -9,8 +9,8 @@ use tracing::error;
 use tracing::instrument;
 
 use crate::client::TedgeP11Client;
+use crate::pkcs11::Cryptoki;
 use crate::pkcs11::CryptokiConfigDirect;
-use crate::pkcs11::Pkcs11SigningKey;
 
 #[derive(Debug, Clone)]
 pub enum CryptokiConfig {
@@ -22,10 +22,15 @@ pub enum CryptokiConfig {
 /// tedge-p11-server or calls cryptoki module directly.
 pub fn signing_key(config: CryptokiConfig) -> anyhow::Result<Arc<dyn SigningKey>> {
     let signing_key: Arc<dyn SigningKey> = match config {
-        CryptokiConfig::Direct(config_direct) => Arc::new(
-            Pkcs11SigningKey::from_cryptoki_config(&config_direct)
-                .context("failed to create a TLS signer using PKCS#11 device")?,
-        ),
+        CryptokiConfig::Direct(config_direct) => {
+            let cryptoki =
+                Cryptoki::new(config_direct).context("Failed to load cryptoki library")?;
+            Arc::new(
+                cryptoki
+                    .signing_key()
+                    .context("failed to create a TLS signer using PKCS#11 device")?,
+            )
+        }
         CryptokiConfig::SocketService { socket_path } => Arc::new(TedgeP11ClientSigningKey {
             socket_path: Arc::from(Path::new(&socket_path)),
         }),
