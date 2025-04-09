@@ -12,6 +12,7 @@ use crate::cli::connect::*;
 use crate::cli::log::ConfigLogger;
 use crate::cli::log::Fancy;
 use crate::cli::log::Spinner;
+use crate::cli::CertificateShift;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::system_services::*;
@@ -112,6 +113,12 @@ impl Command for ConnectCommand {
         } else {
             fail_if_already_connected(&self.config_location, &bridge_config)
                 .map_err(anyhow::Error::new)?;
+            if let Some(certificate_shift) = bridge_config.certificate_awaits_validation().await {
+                let _ = self
+                    .validate_new_certificate(&bridge_config, certificate_shift)
+                    .await
+                    .unwrap();
+            }
             self.connect_bridge(bridge_config).await.map_err(<_>::into)
         }
     }
@@ -210,6 +217,106 @@ impl ConnectCommand {
 
         Ok(())
     }
+
+    /// Validate that the new certificate is actually accepted by the cloud endpoint
+    ///
+    /// Return:
+    /// - Ok(true) when the new certificate has been promoted as the current one
+    /// - Ok(false) when it's safer to keep the current certificate untouched
+    /// - Err(err) when the endpoint is not correctly configured
+    async fn validate_new_certificate(
+        &self,
+        bridge_config: &BridgeConfig,
+        certificate_shift: CertificateShift,
+    ) -> Result<bool, ConfigError> {
+        if self.offline_mode {
+            println!("Offline mode. Skipping new device certificate validation");
+            println!(
+                "  => use current certificate {}",
+                &certificate_shift.active_cert_path
+            );
+            println!(
+                "  => ignoring new certificate {}",
+                &certificate_shift.new_cert_path
+            );
+            return Ok(false);
+        }
+
+        let mut attempt = 0;
+        let max_attempts = bridge_config.connection_check_attempts;
+        let res = loop {
+            attempt += 1;
+            let banner = if attempt == 1 {
+                format!(
+                    "Validating new certificate: {}",
+                    &certificate_shift.new_cert_path
+                )
+            } else {
+                format!("Validating new certificate: attempt {attempt} of {max_attempts}")
+            };
+
+            let spinner = Spinner::start(banner);
+            let res = self
+                .connect_with_new_certificate(bridge_config, &certificate_shift)
+                .await;
+            match spinner.finish(res) {
+                Ok(()) => break Ok(()),
+                Err(err) if attempt >= max_attempts => break Err(err),
+                Err(_) => std::thread::sleep(Duration::from_secs(2)),
+            }
+        };
+
+        if let Err(err) = res {
+            println!("Error validating the new certificate: {err}");
+            println!(
+                "  => keep using the current certificate unchanged {}",
+                &certificate_shift.active_cert_path
+            );
+            return Ok(false);
+        }
+
+        if let Err(err) = certificate_shift.promote_new_certificate().await {
+            println!("Error replacing the device certificate by the new one: {err}");
+            println!(
+                "  => keep using the current certificate unchanged{}",
+                certificate_shift.active_cert_path
+            );
+            return Ok(false);
+        }
+
+        println!(
+            "The new certificate is now the active certificate {}",
+            certificate_shift.active_cert_path
+        );
+        Ok(true)
+    }
+
+    async fn connect_with_new_certificate(
+        &self,
+        bridge_config: &BridgeConfig,
+        certificate_shift: &CertificateShift,
+    ) -> anyhow::Result<()> {
+        if bridge_config.cloud_name.eq("c8y") {
+            let use_basic_auth = false;
+            let device_type = &self.config.device.ty;
+            let profile_name = self.cloud.profile_name().map(|p| p.as_ref());
+            let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(profile_name)?;
+            if let Some(client_config) = mqtt_auth_config.client.as_mut() {
+                client_config.cert_file = certificate_shift.new_cert_path.to_owned()
+            }
+
+            create_device_with_direct_connection(
+                use_basic_auth,
+                bridge_config,
+                device_type,
+                mqtt_auth_config,
+            )
+            .await
+        } else {
+            // TODO: check for az and aws
+            Ok(())
+        }
+    }
 }
 
 fn credentials_path_for<'a>(
@@ -260,7 +367,7 @@ impl ConnectCommand {
 
     async fn check_connection_with_retries(
         &self,
-        max_attempts: i32,
+        max_attempts: u32,
     ) -> Result<DeviceStatus, Fancy<ConnectError>> {
         for i in 1..max_attempts {
             let result = self.check_connection().await;

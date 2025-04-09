@@ -9,11 +9,13 @@ mod create_csr;
 mod error;
 mod remove;
 mod renew;
+mod shift;
 mod show;
 
 pub use self::cli::*;
 pub use self::create::*;
 pub use self::error::*;
+pub use self::shift::*;
 
 pub(crate) async fn read_cert_to_string(path: impl AsRef<Utf8Path>) -> Result<String, CertError> {
     let mut file = tokio::fs::File::open(path.as_ref()).await.map_err(|err| {
