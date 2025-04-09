@@ -1,3 +1,5 @@
+use super::TEDGE_BRIDGE_CONF_DIR_PATH;
+use crate::cli::CertificateShift;
 use camino::Utf8PathBuf;
 use core::fmt;
 use std::borrow::Cow;
@@ -8,8 +10,6 @@ use tedge_config::models::MQTT_TLS_PORT;
 use tedge_config::TEdgeConfigLocation;
 use tedge_utils::paths::DraftFile;
 use tokio::io::AsyncWriteExt;
-
-use super::TEDGE_BRIDGE_CONF_DIR_PATH;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfig {
@@ -124,6 +124,19 @@ impl BridgeConfig {
         }
 
         Ok(())
+    }
+
+    /// Returns a pair of certificates, the first being the primary active certificate
+    /// and the second one being a candidate that has to be validated first
+    /// before being promoted as the active certificate.
+    ///
+    /// Return `None` if the bridge doesn't use certificate or if there is no new certificate.
+    pub async fn certificate_awaits_validation(&self) -> Option<CertificateShift> {
+        if self.auth_type == AuthType::Basic {
+            return None;
+        }
+
+        CertificateShift::exists_new_certificate(&self.bridge_certfile).await
     }
 
     /// Write the configuration file in a mosquitto configuration directory relative to the main
