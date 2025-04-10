@@ -1,6 +1,7 @@
 use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
+use crate::entity_cache::UpdateOutcome;
 use crate::service_monitor::is_c8y_bridge_established;
 use async_trait::async_trait;
 use c8y_http_proxy::handle::C8YHttpProxy;
@@ -24,6 +25,7 @@ use tedge_actors::Sender;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::entity::EntityMetadata;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::pending_entity_store::RegisteredEntityData;
@@ -153,9 +155,16 @@ impl C8yMapperActor {
                     .process_entity_metadata_message(&message)
                     .await
                 {
-                    Ok(pending_entities) => {
-                        self.process_registered_entities(pending_entities).await?;
-                    }
+                    Ok((outcome, pending_entities)) => match outcome {
+                        UpdateOutcome::Inserted => {
+                            self.process_registered_entities(pending_entities).await?
+                        }
+                        UpdateOutcome::Updated(updated_entity, old_entity) => {
+                            self.process_entity_update(updated_entity, old_entity)
+                                .await?
+                        }
+                        UpdateOutcome::Deleted | UpdateOutcome::Unchanged => (),
+                    },
                     Err(err) => {
                         self.mqtt_publisher
                             .send(self.converter.new_error_message(err))
@@ -191,6 +200,49 @@ impl C8yMapperActor {
             for pending_data_message in pending_entity.data_messages {
                 self.process_message(pending_data_message).await?;
             }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn process_entity_update(
+        &mut self,
+        updated_entity: EntityMetadata,
+        old_entity: EntityMetadata,
+    ) -> Result<(), RuntimeError> {
+        if updated_entity.parent == old_entity.parent {
+            return Ok(());
+        }
+
+        let device_xid = self
+            .converter
+            .entity_cache
+            .try_get_external_id(&updated_entity.topic_id)
+            .expect("Device external id should be present");
+        let old_parent_xid = self
+            .converter
+            .entity_cache
+            .try_get_external_id(&old_entity.parent.unwrap())
+            .expect("Device external id should be present");
+        let new_parent_xid = self
+            .converter
+            .entity_cache
+            .try_get_external_id(&updated_entity.parent.unwrap())
+            .expect("Device external id should be present");
+
+        if let Err(err) = self
+            .converter
+            .http_proxy
+            .update_managed_object_parent(
+                device_xid.as_ref(),
+                old_parent_xid.as_ref(),
+                new_parent_xid.as_ref(),
+            )
+            .await
+        {
+            self.mqtt_publisher
+                .send(self.converter.new_error_message(err))
+                .await?;
         }
 
         Ok(())

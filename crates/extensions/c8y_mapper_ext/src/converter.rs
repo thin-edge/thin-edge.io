@@ -8,6 +8,7 @@ use crate::actor::IdDownloadResult;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::entity_cache::EntityCache;
 use crate::entity_cache::InvalidExternalIdError;
+use crate::entity_cache::UpdateOutcome;
 use crate::error::ConversionError;
 use crate::error::MessageConversionError;
 use crate::json;
@@ -298,19 +299,17 @@ impl CumulocityConverter {
     pub async fn process_entity_metadata_message(
         &mut self,
         message: &MqttMessage,
-    ) -> Result<Vec<RegisteredEntityData>, ConversionError> {
+    ) -> Result<(UpdateOutcome, Vec<RegisteredEntityData>), ConversionError> {
         let (topic_id, channel) = self.mqtt_schema.entity_channel_of(&message.topic).unwrap();
         assert!(channel == Channel::EntityMetadata);
         if message.payload().is_empty() {
             // Clear cached entity
             self.entity_cache.delete(&topic_id);
-            return Ok(vec![]);
+            return Ok((UpdateOutcome::Deleted, vec![]));
         }
 
         let register_message = EntityRegistrationMessage::try_from(message)?;
-        Ok(self
-            .entity_cache
-            .register_entity(register_message.clone())?)
+        Ok(self.entity_cache.upsert_entity(register_message.clone())?)
     }
 
     /// Convert an entity registration message into its C8y counterpart
@@ -1801,7 +1800,8 @@ pub(crate) mod tests {
         let entities = converter
             .process_entity_metadata_message(&in_message)
             .await
-            .unwrap();
+            .unwrap()
+            .1;
 
         assert_eq!(entities.len(), 1);
 
@@ -2892,7 +2892,8 @@ pub(crate) mod tests {
         let entities = converter
             .process_entity_metadata_message(&reg_message)
             .await
-            .unwrap();
+            .unwrap()
+            .1;
 
         assert!(entities.is_empty(), "Duplicate entry not registered");
     }
@@ -3062,7 +3063,8 @@ pub(crate) mod tests {
         let entities = converter
             .process_entity_metadata_message(&reg_message)
             .await
-            .unwrap();
+            .unwrap()
+            .1;
 
         let messages = registered_entities_into_mqtt_messages(entities);
 
@@ -3119,7 +3121,8 @@ pub(crate) mod tests {
         let entities = converter
             .process_entity_metadata_message(&reg_message)
             .await
-            .unwrap();
+            .unwrap()
+            .1;
         assert!(
             entities.is_empty(),
             "Expected child device registration messages to be cached and not mapped"
@@ -3140,7 +3143,8 @@ pub(crate) mod tests {
         let entities = converter
             .process_entity_metadata_message(&reg_message)
             .await
-            .unwrap();
+            .unwrap()
+            .1;
         assert!(
             entities.is_empty(),
             "Expected child device registration messages to be cached and not mapped"
@@ -3160,7 +3164,8 @@ pub(crate) mod tests {
         let entities = converter
             .process_entity_metadata_message(&reg_message)
             .await
-            .unwrap();
+            .unwrap()
+            .1;
         let messages = registered_entities_into_mqtt_messages(entities);
         assert_messages_matching(
             &messages,

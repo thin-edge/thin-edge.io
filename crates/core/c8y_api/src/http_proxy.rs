@@ -127,6 +127,18 @@ impl C8yEndPoint {
         Url::parse(&url).unwrap()
     }
 
+    pub fn proxy_url_for_child_device_addition(&self, device_id: &str) -> String {
+        Self::url_for_child_device_addition(&self.proxy.base_url(), device_id)
+    }
+
+    pub fn proxy_url_for_child_device_deletion(
+        &self,
+        device_id: &str,
+        child_device_id: &str,
+    ) -> String {
+        Self::url_for_child_device_deletion(&self.proxy.base_url(), device_id, child_device_id)
+    }
+
     fn url_for_sw_list(host: &str, internal_id: &str) -> String {
         format!("{host}/inventory/managedObjects/{internal_id}")
     }
@@ -141,6 +153,14 @@ impl C8yEndPoint {
 
     fn url_for_event_binary_upload(host: &str, event_id: &str) -> String {
         format!("{host}/event/events/{event_id}/binaries")
+    }
+
+    fn url_for_child_device_addition(host: &str, device_id: &str) -> String {
+        format!("{host}/inventory/managedObjects/{device_id}/childDevices")
+    }
+
+    fn url_for_child_device_deletion(host: &str, device_id: &str, child_device_id: &str) -> String {
+        format!("{host}/inventory/managedObjects/{device_id}/childDevices/{child_device_id}")
     }
 
     pub fn c8y_url_for_internal_id(&self, device_id: &str) -> String {

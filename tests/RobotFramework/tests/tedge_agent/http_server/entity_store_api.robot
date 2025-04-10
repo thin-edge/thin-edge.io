@@ -1,6 +1,7 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
 Library             Collections
+Library             Cumulocity
 Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
@@ -48,9 +49,11 @@ CRUD apis
 Update entity parent
     Register Entity    device/child_a//    child-device    device/main//
     Register Entity    device/child_ab//    child-device    device/child_a//
+    Register Entity    device/child_b//    child-device    device/main//
+    Register Entity    device/child_ba//    child-device    device/child_b//
 
     # Child00 and hence its children registered wrongly under the root device/main// instead of device/child0//
-    Register Entity    device/child_aa//    child-device    device/main//
+    Register Entity    device/child_aa//    child-device    device/child_b//
     Register Entity    device/child_aaa//    child-device    device/child_aa//
 
     # Update entity parent
@@ -77,6 +80,69 @@ Update entity parent
     Should Contain Entity
     ...    {"@topic-id":"device/child_ab//","@parent":"device/child_a//","@type":"child-device"}
     ...    ${entities}
+
+    ${child_a}=    Set Variable    ${DEVICE_SN}:device:child_a
+    ${child_b}=    Set Variable    ${DEVICE_SN}:device:child_b
+    ${child_aa}=    Set Variable    ${DEVICE_SN}:device:child_aa
+    ${child_ab}=    Set Variable    ${DEVICE_SN}:device:child_ab
+    ${child_ba}=    Set Variable    ${DEVICE_SN}:device:child_ba
+    Set Device    ${child_b}
+    Device Should Have A Child Devices    ${child_ba}
+    Set Device    ${child_a}
+    Device Should Have A Child Devices    ${child_aa}    ${child_ab}
+
+Update entity errors
+    Register Entity    device/child_x//    child-device    device/main//
+    Register Entity    device/child_x/service/service0    service    device/child_x//
+    Register Entity    device/child_xx//    child-device    device/child_x//
+    Register Entity    device/child_xxx//    child-device    device/child_xx//
+    Register Entity    device/child_xy//    child-device    device/child_x//
+    Register Entity    device/child_y//    child-device    device/main//
+
+    # Self parent
+    ${url}=    Set Variable    http://localhost:8000/te/v1/entities/device/child_x//
+    ${payload}=    Set Variable    {"@parent": "device/child_x//"}
+    ${resp}=    Execute Command
+    ...    curl ${url} -X PATCH --silent --write-out "|%\{http_code\}" -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"Entity: 'device/child_x//' can not be its own parent"}|400
+
+    # New parent is a service
+    ${url}=    Set Variable    http://localhost:8000/te/v1/entities/device/child_xy//
+    ${payload}=    Set Variable    {"@parent": "device/child_x/service/service0"}
+    ${resp}=    Execute Command
+    ...    curl ${url} -X PATCH --silent --write-out "|%\{http_code\}" -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"Entity: 'device/child_x/service/service0' can not be a parent of 'device/child_xy//' because it is a service. Only devices can be parents"}|400
+
+    # Target is a main device
+    ${url}=    Set Variable    http://localhost:8000/te/v1/entities/device/main//
+    ${payload}=    Set Variable    {"@parent": "device/child_x//"}
+    ${resp}=    Execute Command
+    ...    curl ${url} -X PATCH --silent --write-out "|%\{http_code\}" -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"Main device entity metadata can not be updated"}|400
+
+    # New parent is a descendent of target
+    ${url}=    Set Variable    http://localhost:8000/te/v1/entities/device/child_x//
+    ${payload}=    Set Variable    {"@parent": "device/child_xxx//"}
+    ${resp}=    Execute Command
+    ...    curl ${url} -X PATCH --silent --write-out "|%\{http_code\}" -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"Entity: 'device/child_xxx//' can not be a parent of 'device/child_x//' because 'device/child_xxx//' is a descendent of 'device/child_x//'"}|400
+
+    # Change type instead of parent
+    ${url}=    Set Variable    http://localhost:8000/te/v1/entities/device/child_y//
+    ${payload}=    Set Variable    {"@type": "service"}
+    ${resp}=    Execute Command
+    ...    curl ${url} -X PATCH --silent --write-out "|%\{http_code\}" -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"unknown field `@type`, expected `@parent` at line 1 column 8"}|400
 
 MQTT HTTP interoperability
     Execute Command    tedge mqtt pub --retain 'te/device/child_abc//' '{"@type":"child-device"}'

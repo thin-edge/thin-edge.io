@@ -56,6 +56,17 @@ impl C8YHttpProxy {
         self.c8y.create_event(c8y_event).await
     }
 
+    pub async fn update_managed_object_parent(
+        &mut self,
+        device_xid: &str,
+        old_parent_xid: &str,
+        new_parent_xid: &str,
+    ) -> Result<(), C8YRestError> {
+        self.c8y
+            .update_managed_object_parent(device_xid, old_parent_xid, new_parent_xid)
+            .await
+    }
+
     pub async fn send_software_list_http(
         &mut self,
         c8y_software_list: C8yUpdateSoftwareListResponse,
