@@ -120,7 +120,10 @@ pub enum TEdgeCertCli {
         cloud: Option<CloudArg>,
     },
 
-    /// Upload root certificate
+    /// Upload the device certificate to the cloud
+    ///
+    /// If the device certificate has been renewed,
+    /// then the new certificate is uploaded.
     #[clap(subcommand)]
     Upload(UploadCertCli),
 
