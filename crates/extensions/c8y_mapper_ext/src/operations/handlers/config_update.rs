@@ -139,6 +139,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mapper_replaces_remote_url_with_proxy_url_3545() {
+        let ttd = TempTedgeDir::new();
+        let config = C8yMapperConfig {
+            c8y_host: "my.custom.domain.com:443".into(),
+            c8y_mqtt: "t12345.cumulocity.com:8883".into(),
+            ..test_mapper_config(&ttd)
+        };
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        skip_init_messages(&mut mqtt).await;
+
+        // Simulate c8y_DownloadConfigFile operation delivered via JSON over MQTT
+        mqtt.send(MqttMessage::new(
+            &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
+            json!({
+                "id": "123456",
+                "c8y_DownloadConfigFile": {
+                    "type": "path/config/A",
+                    "url": "https://t12345.cumulocity.com/inventory/binaries/654321"
+                },
+                "externalSource": {
+                    "externalId": "test-device",
+                    "type": "c8y_Serial"
+                }
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        assert_received_includes_json(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/config_update/c8y-mapper-123456",
+                json!({
+                    "status": "init",
+                    "remoteUrl": "http://127.0.0.1:8001/c8y/inventory/binaries/654321",
+                    "serverUrl": "https://t12345.cumulocity.com/inventory/binaries/654321",
+                    "type": "path/config/A",
+                }),
+            )],
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn mapper_converts_config_download_op_for_child_device() {
         let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
