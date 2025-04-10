@@ -106,6 +106,10 @@ pub enum TEdgeCertCli {
         #[clap(long = "cert-path", value_hint = ValueHint::FilePath)]
         cert_path: Option<Utf8PathBuf>,
 
+        /// Show the new certificate, if any, instead of the current one
+        #[clap(long = "new", default_value_t = false, global = true)]
+        show_new: bool,
+
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
     },
@@ -188,14 +192,24 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Show { cloud, cert_path } => {
+            TEdgeCertCli::Show {
+                cloud,
+                cert_path,
+                show_new,
+            } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let device_cert_path = config.device_cert_path(cloud.as_ref())?.to_owned();
+                let cert_path = cert_path.unwrap_or(device_cert_path);
                 let cmd = ShowCertCmd {
-                    cert_path: cert_path.unwrap_or(device_cert_path),
+                    cert_path: if show_new {
+                        CertificateShift::new_certificate_path(&cert_path)
+                    } else {
+                        cert_path
+                    },
                     minimum: config.certificate.validity.minimum_duration.duration(),
                     validity_check_only: false,
                 };
+
                 cmd.into_boxed()
             }
 
