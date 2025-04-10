@@ -8,6 +8,7 @@ use rumqttc::MqttOptions;
 use rumqttc::Transport;
 use std::borrow::Cow;
 use std::path::Path;
+use tedge_config::models::mqtt_protocol::MqttProtocol;
 use tedge_config::tedge_toml::CloudConfig;
 
 pub fn use_key_and_cert(
@@ -25,12 +26,18 @@ pub fn use_key_and_cert(
 
 pub fn use_credentials(
     config: &mut MqttOptions,
+    protocol: MqttProtocol,
     root_cert_path: impl AsRef<Path>,
     username: String,
     password: String,
 ) -> anyhow::Result<()> {
     let tls_config = create_tls_config_without_client_cert(root_cert_path)?;
-    config.set_transport(Transport::tls_with_config(tls_config.into()));
+    match protocol {
+        MqttProtocol::Tcp => config.set_transport(Transport::tls_with_config(tls_config.into())),
+        MqttProtocol::Websocket => {
+            config.set_transport(Transport::wss_with_config(tls_config.into()))
+        }
+    };
     config.set_credentials(username, password);
     Ok(())
 }
