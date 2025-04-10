@@ -9,6 +9,7 @@ use rustls::sign::SigningKey;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::instrument;
+use tracing::warn;
 
 #[derive(Debug)]
 pub struct P11SignerService {
@@ -19,6 +20,11 @@ impl P11SignerService {
     // TODO(marcel): would be nice to check if there are any keys upon starting the server and warn the user if there is not
     pub fn new(config: &CryptokiConfigDirect) -> anyhow::Result<Self> {
         let cryptoki = Cryptoki::new(config.clone()).context("Failed to load cryptoki library")?;
+
+        // try to find a key on startup to see if requests succeed if nothing changes
+        if cryptoki.signing_key().is_err() {
+            warn!("No signing key found");
+        }
 
         Ok(Self { cryptoki })
     }

@@ -34,6 +34,7 @@ pub struct CryptokiConfigDirect {
     pub module_path: Utf8PathBuf,
     pub pin: AuthPin,
     pub serial: Option<Arc<str>>,
+    pub uri: Option<Arc<str>>,
 }
 
 impl Debug for CryptokiConfigDirect {
@@ -76,21 +77,40 @@ impl Cryptoki {
     }
 
     pub fn signing_key(&self) -> anyhow::Result<Pkcs11SigningKey> {
-        let CryptokiConfigDirect {
-            pin,
-            // TODO(marcel): select modules by serial if multiple are connected
-            serial: _,
-            ..
-        } = &self.config;
+        let CryptokiConfigDirect { pin, uri, .. } = &self.config;
 
-        // Select first available slot. If it's not the one we want, the token
-        // used in p11-kit-server should be adjusted.
-        let slot = self
-            .context
-            .get_slots_with_token()?
+        let uri_attributes = uri
+            .as_deref()
+            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
+            .transpose()?;
+        dbg!(&uri_attributes);
+
+        let wanted_label = uri_attributes.as_ref().and_then(|u| u.token);
+        let wanted_serial = uri_attributes.as_ref().and_then(|u| u.serial);
+
+        let slots_with_tokens = self.context.get_slots_with_token()?;
+        let tokens: Result<Vec<_>, _> = slots_with_tokens
+            .iter()
+            .map(|s| {
+                self.context
+                    .get_token_info(*s)
+                    .context("Failed to get slot info")
+            })
+            .collect();
+        let tokens = tokens?;
+
+        // if token/serial attributes are passed, find a token that has these attributes, otherwise any token will do
+        let mut tokens = slots_with_tokens
             .into_iter()
+            .zip(tokens)
+            .filter(|(_, t)| wanted_label.is_none() || wanted_label.is_some_and(|l| t.label() == l))
+            .filter(|(_, t)| {
+                wanted_serial.is_none() || wanted_serial.is_some_and(|s| t.serial_number() == s)
+            });
+        let (slot, _) = tokens
             .next()
             .context("Didn't find a slot to use. The device may be disconnected.")?;
+
         let slot_info = self.context.get_slot_info(slot)?;
         let token_info = self.context.get_token_info(slot)?;
         debug!(?slot_info, ?token_info, "Selected slot");
@@ -100,19 +120,73 @@ impl Cryptoki {
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
 
-        let pkcs11 = PKCS11 {
-            session: Arc::new(Mutex::new(session)),
-        };
-
-        let key_type = get_key_type(pkcs11.clone()).context("Failed to read key")?;
-        trace!("Key Type: {:?}", key_type.to_string());
-        let key = match key_type {
-            KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey { pkcs11 }),
-            KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey { pkcs11 }),
+        // get the signing key
+        let key = match uri_attributes {
+            Some(uri::Pkcs11Uri {
+                id: Some(_),
+                object: Some(_),
+                ..
+            }) => {
+                let key = Self::find_key_by_attributes(&uri_attributes.unwrap(), &session)?;
+                let key_type = session
+                    .get_attributes(key, &[AttributeType::KeyType])?
+                    .into_iter()
+                    .next()
+                    .context("no keytype attribute")?;
+                let Attribute::KeyType(keytype) = key_type else {
+                    anyhow::bail!("can't get key type");
+                };
+                let pkcs11 = PKCS11 {
+                    session: Arc::new(Mutex::new(session)),
+                };
+                match keytype {
+                    KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey { pkcs11 }),
+                    KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey { pkcs11 }),
+                    _ => panic!("unsupported key type"),
+                }
+            }
             _ => {
-                panic!("Unsupported key type. Only EC and RSA keys are supported");
+                let pkcs11 = PKCS11 {
+                    session: Arc::new(Mutex::new(session)),
+                };
+                let key_type = get_key_type(pkcs11.clone()).context("Failed to read key")?;
+                trace!("Key Type: {:?}", key_type.to_string());
+                match key_type {
+                    KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey { pkcs11 }),
+                    KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey { pkcs11 }),
+                    _ => {
+                        panic!("Unsupported key type. Only EC and RSA keys are supported");
+                    }
+                }
             }
         };
+
+        Ok(key)
+    }
+
+    fn find_key_by_attributes(
+        uri: &uri::Pkcs11Uri,
+        session: &Session,
+    ) -> anyhow::Result<cryptoki::object::ObjectHandle> {
+        let mut key_template = vec![
+            Attribute::Token(true),
+            Attribute::Private(true),
+            Attribute::Sign(true),
+        ];
+        if let Some(object) = uri.object {
+            key_template.push(Attribute::Label(object.as_bytes().to_vec()));
+        }
+        if let Some(id) = uri.id {
+            key_template.push(Attribute::Id(vec![id]));
+        }
+
+        trace!(?key_template, "Finding a key");
+        let key = session
+            .find_objects(&key_template)
+            .context("Failed to find object")?
+            .into_iter()
+            .next()
+            .context("Failed to find a key")?;
 
         Ok(key)
     }
@@ -394,4 +468,47 @@ fn write_asn1_integer(writer: &mut dyn std::io::Write, b: &[u8]) {
     let i = i.to_signed_bytes_be();
     let i = asn1_rs::Integer::new(&i);
     let _ = i.write_der(writer);
+}
+
+pub mod uri {
+    use std::collections::HashMap;
+
+    /// Attributes decoded from a PKCS #11 URL.
+    ///
+    /// Attributes only relevant to us shall be put into fields and the rest is in `other` hashmap.
+    ///
+    /// https://www.rfc-editor.org/rfc/rfc7512.html
+    #[derive(Debug, Clone)]
+    pub struct Pkcs11Uri<'a> {
+        pub token: Option<&'a str>,
+        pub serial: Option<&'a str>,
+        pub id: Option<u8>,
+        pub object: Option<&'a str>,
+        pub other: HashMap<&'a str, &'a str>,
+    }
+
+    impl<'a> Pkcs11Uri<'a> {
+        pub fn parse(uri: &'a str) -> anyhow::Result<Self> {
+            let path = uri
+                .strip_prefix("pkcs11:")
+                .ok_or(anyhow::anyhow!("missing PKCS #11 URI scheme"))?;
+
+            let pairs = path.split(';').filter_map(|pair| pair.split_once('='));
+
+            let mut pairs = HashMap::from_iter(pairs);
+
+            let token = pairs.remove("token");
+            let serial = pairs.remove("serial");
+            let id = pairs.remove("id").and_then(|id| id.parse().ok());
+            let object = pairs.remove("object");
+
+            Ok(Self {
+                token,
+                serial,
+                id,
+                object,
+                other: pairs,
+            })
+        }
+    }
 }

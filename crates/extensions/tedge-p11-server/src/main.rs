@@ -79,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
         module_path: args.module_path,
         pin: AuthPin::new(args.pin),
         serial: None,
-        // uri: args.uri,
+        uri: args.uri,
     };
 
     info!(?cryptoki_config, "Using cryptoki configuration");
