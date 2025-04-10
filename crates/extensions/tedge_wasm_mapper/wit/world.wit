@@ -18,10 +18,4 @@ world tedge {
 
     // Process a single message; producing zero, one or more transformed messages
     export process: func(timestamp: datetime, message: message) -> result< list<message>, filter-error >;
-
-    // Update the filter configuration
-    export update-config: func(config: message) -> result< _, filter-error >;
-
-    // Close the current time-window; producing zero, one or more accumulated messages
-    export tick: func(timestamp: datetime) -> result< list<message>, filter-error >;
 }

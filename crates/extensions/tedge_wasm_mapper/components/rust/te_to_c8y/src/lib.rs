@@ -83,16 +83,6 @@ impl Guest for Component {
             Err(err) => Err(FilterError::UnsupportedMessage(format!("{err}"))),
         }
     }
-
-    /// Not configurable
-    fn update_config(_config: Message) -> Result<(), FilterError> {
-        Ok(())
-    }
-
-    /// Stateless
-    fn tick(_timestamp: Datetime) -> Result<Vec<Message>, FilterError> {
-        Ok(vec![])
-    }
 }
 
 #[derive(Deserialize)]

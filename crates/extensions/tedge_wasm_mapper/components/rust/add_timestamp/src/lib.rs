@@ -32,16 +32,6 @@ impl Guest for Component {
 
         Ok(vec![updated_message])
     }
-
-    /// Not configurable
-    fn update_config(_config: Message) -> Result<(), FilterError> {
-        Ok(())
-    }
-
-    /// Stateless
-    fn tick(_timestamp: Datetime) -> Result<Vec<Message>, FilterError> {
-        Ok(vec![])
-    }
 }
 
 export!(Component);
