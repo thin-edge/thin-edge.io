@@ -5,8 +5,8 @@ Resource            ../../resources/common.resource
 Library             ThinEdgeIO
 Library             JSONLibrary
 
-Test Setup         Custom Setup
-Test Teardown      Get Logs
+Test Setup          Custom Setup
+Test Teardown       Get Logs
 
 Test Tags           theme:mqtt    theme:tedge_to_te
 
