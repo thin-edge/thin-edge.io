@@ -3,6 +3,7 @@ use crate::get_webpki_error_from_reqwest;
 use crate::log::MaybeFancy;
 use crate::warning;
 use crate::CertError;
+use crate::CertificateShift;
 use camino::Utf8PathBuf;
 use certificate::CloudRootCerts;
 use reqwest::StatusCode;
@@ -103,11 +104,15 @@ impl UploadCertCmd {
         username: &str,
         password: &str,
     ) -> Result<(), CertError> {
+        let cert_path = match CertificateShift::exists_new_certificate(&self.path).await {
+            Some(certificate_shift) => certificate_shift.new_cert_path,
+            None => self.path.to_path_buf(),
+        };
         let post_url = build_upload_certificate_url(&self.host.to_string(), tenant_id)?;
 
         let post_body = UploadCertBody {
             auto_registration_enabled: true,
-            cert_in_pem_format: tokio::fs::read_to_string(&self.path).await?,
+            cert_in_pem_format: tokio::fs::read_to_string(&cert_path).await?,
             name: self.device_id.clone(),
             status: "ENABLED".into(),
         };
