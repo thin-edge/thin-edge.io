@@ -9,6 +9,7 @@ use rustls::sign::SigningKey;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::instrument;
+use tracing::warn;
 
 pub trait SigningService {
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse>;
@@ -24,6 +25,11 @@ impl TedgeP11Service {
     // TODO(marcel): would be nice to check if there are any keys upon starting the server and warn the user if there is not
     pub fn new(config: CryptokiConfigDirect) -> anyhow::Result<Self> {
         let cryptoki = Cryptoki::new(config).context("Failed to load cryptoki library")?;
+
+        // try to find a key on startup to see if requests succeed if nothing changes
+        if cryptoki.signing_key().is_err() {
+            warn!("No signing key found");
+        }
 
         Ok(Self { cryptoki })
     }
