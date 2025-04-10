@@ -49,9 +49,11 @@ CRUD apis
 Update entity parent
     Register Entity    device/child_a//    child-device    device/main//
     Register Entity    device/child_ab//    child-device    device/child_a//
+    Register Entity    device/child_b//    child-device    device/main//
+    Register Entity    device/child_ba//    child-device    device/child_b//
 
     # Child00 and hence its children registered wrongly under the root device/main// instead of device/child0//
-    Register Entity    device/child_aa//    child-device    device/main//
+    Register Entity    device/child_aa//    child-device    device/child_b//
     Register Entity    device/child_aaa//    child-device    device/child_aa//
 
     # Update entity parent
@@ -77,10 +79,12 @@ Update entity parent
     ...    ${entities}
 
     ${child_a}=    Set Variable    ${DEVICE_SN}:device:child_a
+    ${child_b}=    Set Variable    ${DEVICE_SN}:device:child_b
     ${child_aa}=    Set Variable    ${DEVICE_SN}:device:child_aa
     ${child_ab}=    Set Variable    ${DEVICE_SN}:device:child_ab
-    Set Device    ${DEVICE_SN}
-    Device Should Have A Child Devices    ${child_a}
+    ${child_ba}=    Set Variable    ${DEVICE_SN}:device:child_ba
+    Set Device    ${child_b}
+    Device Should Have A Child Devices    ${child_ba}
     Set Device    ${child_a}
     Device Should Have A Child Devices    ${child_aa}    ${child_ab}
 
