@@ -7,7 +7,7 @@ use crate::bridge::CommonMosquittoConfig;
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 use crate::cli::common::Cloud;
 use crate::cli::common::MaybeBorrowedCloud;
-use crate::cli::connect::jwt_token::*;
+use crate::cli::connect::c8y::*;
 use crate::cli::connect::*;
 use crate::cli::log::ConfigLogger;
 use crate::cli::log::Fancy;
