@@ -9,6 +9,7 @@ use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
 use crate::command::Command;
+use crate::CertificateShift;
 use crate::ConfigError;
 use anyhow::anyhow;
 use c8y_api::http_proxy::C8yEndPoint;
@@ -48,6 +49,13 @@ pub enum TEdgeCertCli {
     },
 
     /// Renew the device certificate
+    ///
+    /// The current certificate is left unchanged and a new certificate file is created,
+    /// of which path is derived from the current certificate path by adding a `.new` suffix.
+    ///
+    /// The device certificate will be replaced by the new certificate, after proper validation,
+    /// by the `tedge connect` command.
+    ///
     Renew {
         /// Path to a Certificate Signing Request (CSR) ready to be used
         ///
@@ -267,6 +275,7 @@ impl BuildCommand for TEdgeCertCli {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cert_path = config.device_cert_path(cloud.as_ref())?.to_owned();
                 let key_path = config.device_key_path(cloud.as_ref())?.to_owned();
+                let new_cert_path = CertificateShift::new_certificate_path(&cert_path);
 
                 // The CA to renew a certificate is determined from the certificate
                 //
@@ -286,8 +295,9 @@ impl BuildCommand for TEdgeCertCli {
 
                 if is_self_signed && self_signed_only {
                     let cmd = RenewCertCmd {
-                        cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
-                        key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
+                        cert_path,
+                        new_cert_path,
+                        key_path,
                         csr_template,
                     };
                     cmd.into_boxed()
@@ -317,6 +327,7 @@ impl BuildCommand for TEdgeCertCli {
                         root_certs: config.cloud_root_certs(),
                         identity: config.http.client.auth.identity()?,
                         cert_path,
+                        new_cert_path,
                         key_path,
                         csr_path,
                         generate_csr,

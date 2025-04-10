@@ -13,6 +13,9 @@ pub struct RenewCertCmd {
     /// The path of the certificate to be updated
     pub cert_path: Utf8PathBuf,
 
+    /// The path where the new certificate will be stored
+    pub new_cert_path: Utf8PathBuf,
+
     /// The path of the private key to re-use
     pub key_path: Utf8PathBuf,
 
@@ -36,6 +39,7 @@ impl Command for RenewCertCmd {
 impl RenewCertCmd {
     async fn renew_test_certificate(&self, config: &CsrTemplate) -> Result<(), CertError> {
         let cert_path = &self.cert_path;
+        let new_cert_path = &self.new_cert_path;
         let key_path = &self.key_path;
         let id = certificate_cn(cert_path).await?;
 
@@ -45,9 +49,9 @@ impl RenewCertCmd {
             .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?;
         let cert = KeyCertPair::new_selfsigned_certificate(config, &id, &previous_key)?;
 
-        override_public_key(cert_path, cert.certificate_pem_string()?)
+        override_public_key(new_cert_path, cert.certificate_pem_string()?)
             .await
-            .map_err(|err| err.cert_context(cert_path.clone()))?;
+            .map_err(|err| err.cert_context(new_cert_path.clone()))?;
         Ok(())
     }
 }
@@ -66,6 +70,7 @@ mod tests {
     async fn validate_renew_certificate() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
+        let new_cert_path = temp_file_path(&dir, "my-device-cert.pem.new");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let id = "my-device-id";
         let cmd = CreateCertCmd {
@@ -93,6 +98,7 @@ mod tests {
         // Renew the certificate from the existing key
         let cmd = RenewCertCmd {
             cert_path: cert_path.clone(),
+            new_cert_path: new_cert_path.clone(),
             key_path: key_path.clone(),
             csr_template: CsrTemplate::default(),
         };
@@ -102,7 +108,7 @@ mod tests {
 
         // Get the cert and key data for validation
         let second_key = std::fs::read_to_string(&key_path).unwrap();
-        let second_pem = parse_x509_file(&cert_path);
+        let second_pem = parse_x509_file(&new_cert_path);
         let second_x509_cert = second_pem.parse_x509().expect("X.509: decoding DER failed");
 
         // The key must be unchanged
@@ -125,10 +131,12 @@ mod tests {
     async fn renew_certificate_without_key() {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
+        let new_cert_path = temp_file_path(&dir, "my-device-cert.pem.new");
         let key_path = Utf8PathBuf::from("/non/existent/key/path");
 
         let cmd = RenewCertCmd {
             cert_path,
+            new_cert_path,
             key_path,
             csr_template: CsrTemplate::default(),
         };
