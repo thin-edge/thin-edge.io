@@ -5,8 +5,8 @@ Resource            ../../resources/common.resource
 Library             ThinEdgeIO
 Library             JSONLibrary
 
-Suite Setup         Custom Setup
-Suite Teardown      Custom Teardown
+Test Setup         Custom Setup
+Test Teardown      Get Logs
 
 Test Tags           theme:mqtt    theme:tedge_to_te
 
@@ -134,6 +134,3 @@ Convert empty alarm message
 Custom Setup
     Setup
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
-
-Custom Teardown
-    Get Suite Logs
