@@ -36,14 +36,27 @@ async fn create_device_csr(
 /// Return the CSR in the format expected by c8y CA
 async fn read_csr_from_file(csr_path: &Utf8PathBuf) -> Result<String, CertError> {
     let csr = read_cert_to_string(csr_path).await?;
+    Ok(parse_csr_contents(csr))
+}
+
+fn parse_csr_contents(csr: String) -> String {
+    let pem_header = if csr.contains("-----BEGIN NEW CERTIFICATE REQUEST-----\n") {
+        "NEW CERTIFICATE REQUEST"
+    } else {
+        "CERTIFICATE REQUEST"
+    };
+    // Don't assume that the CSR starts with the BEGIN block, as some tools
+    // like gnutls certtool add details about the CSR in plain text by default.
     let csr = csr
-        .strip_prefix("-----BEGIN CERTIFICATE REQUEST-----\n")
+        .split(format!("-----BEGIN {pem_header}-----\n").as_str())
+        .last()
         .unwrap_or(&csr);
     let csr = csr
-        .strip_suffix("-----END CERTIFICATE REQUEST-----\n")
+        .split(format!("-----END {pem_header}-----\n").as_str())
+        .next()
         .unwrap_or(csr)
         .to_string();
-    Ok(csr)
+    csr
 }
 
 /// Store the certificate received from c8y CA
@@ -170,6 +183,106 @@ cTenAfPZf0sCCXUCIAPSdprLGJ4fRFUTW8m10PeIIkevMs0zcR9/aA06G7Mk
         assert_eq!(
             cert.thumbprint().unwrap(),
             "9C68C7EC9A860366FB8D2697C53B2543D9EA525C".to_string()
+        );
+    }
+
+    #[test]
+    fn parse_csr_contents_from_tools() {
+        // Computed using `$ gnutls-certtool --generate-request --template cert.template --load-privkey '<pkcs_url>' --load-pubkey tedge.pub`
+        let gntls_certtool_csr = r#"
+PKCS #10 Certificate Request Information:
+	Version: 1
+	Subject: CN=test001,OU=Test Device,O=Thin Edge
+	Subject Public Key Algorithm: EC/ECDSA
+	Algorithm Security Level: High (256 bits)
+		Curve:	SECP256R1
+		X:
+			00:d3:18:d2:54:e4:1c:d8:d0:38:46:01:b3:e0:89:2c
+			39:ce:09:b3:8f:23:4c:20:f6:b8:4d:4d:e1:1a:1e:b5
+			a8
+		Y:
+			4f:84:a9:df:bf:97:f5:f6:8d:81:f4:1e:13:71:4b:6d
+			40:52:e9:40:81:ba:e5:84:b6:38:0c:e4:90:cf:b4:3f
+	Signature Algorithm: ECDSA-SHA256
+	Attributes:
+		Extensions:
+			Basic Constraints (critical):
+				Certificate Authority (CA): TRUE
+			Key Usage (critical):
+				Digital signature.
+Other Information:
+	Public Key ID:
+		sha1:8b6aa6928b774d16fcb2bf967072b09ff68cd521
+		sha256:4bae00d825d04602c4fed9fcec2887e5ae4a8b97d7f42580fbe24f9c72ef67ef
+	Public Key PIN:
+		pin-sha256:S64A2CXQRgLE/tn87CiH5a5Ki5fX9CWA++JPnHLvZ+8=
+
+Self signature: verified
+
+-----BEGIN NEW CERTIFICATE REQUEST-----
+MIIBKTCB0AIBADA8MRIwEAYDVQQKEwlUaGluIEVkZ2UxFDASBgNVBAsTC1Rlc3Qg
+RGV2aWNlMRAwDgYDVQQDEwd0ZXN0MDAxMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcD
+QgAE0xjSVOQc2NA4RgGz4IksOc4Js48jTCD2uE1N4RoetahPhKnfv5f19o2B9B4T
+cUttQFLpQIG65YS2OAzkkM+0P6AyMDAGCSqGSIb3DQEJDjEjMCEwDwYDVR0TAQH/
+BAUwAwEB/zAOBgNVHQ8BAf8EBAMCB4AwCgYIKoZIzj0EAwIDSAAwRQIhALxYCCHa
+9ZdaZCd7YhhWmVcq+/KSLPK/PUvfV83PDy5TAiAA/e9yrH6rrLGhkhEPtTbyBbBe
+yzaWmqSb64bH/x0TjQ==
+-----END NEW CERTIFICATE REQUEST-----
+"#
+        .to_string();
+
+        // Computed using `$ gnutls-certtool --generate-request --no-text --template cert.template --load-privkey '<pkcs_url>' --load-pubkey tedge.pub`
+        let gntls_certtool_csr_without_text = r#"
+-----BEGIN NEW CERTIFICATE REQUEST-----
+MIIBKTCB0AIBADA8MRIwEAYDVQQKEwlUaGluIEVkZ2UxFDASBgNVBAsTC1Rlc3Qg
+RGV2aWNlMRAwDgYDVQQDEwd0ZXN0MDAxMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcD
+QgAE0xjSVOQc2NA4RgGz4IksOc4Js48jTCD2uE1N4RoetahPhKnfv5f19o2B9B4T
+cUttQFLpQIG65YS2OAzkkM+0P6AyMDAGCSqGSIb3DQEJDjEjMCEwDwYDVR0TAQH/
+BAUwAwEB/zAOBgNVHQ8BAf8EBAMCB4AwCgYIKoZIzj0EAwIDSAAwRQIhALxYCCHa
+9ZdaZCd7YhhWmVcq+/KSLPK/PUvfV83PDy5TAiAA/e9yrH6rrLGhkhEPtTbyBbBe
+yzaWmqSb64bH/x0TjQ==
+-----END NEW CERTIFICATE REQUEST-----
+        "#
+        .to_string();
+
+        // Computed using `$ tedge cert renew --self-signed`
+        let tedge_csr = r#"
+-----BEGIN CERTIFICATE REQUEST-----
+MIIBKTCB0AIBADA8MRIwEAYDVQQKEwlUaGluIEVkZ2UxFDASBgNVBAsTC1Rlc3Qg
+RGV2aWNlMRAwDgYDVQQDEwd0ZXN0MDAxMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcD
+QgAE0xjSVOQc2NA4RgGz4IksOc4Js48jTCD2uE1N4RoetahPhKnfv5f19o2B9B4T
+cUttQFLpQIG65YS2OAzkkM+0P6AyMDAGCSqGSIb3DQEJDjEjMCEwDwYDVR0TAQH/
+BAUwAwEB/zAOBgNVHQ8BAf8EBAMCB4AwCgYIKoZIzj0EAwIDSAAwRQIhALxYCCHa
+9ZdaZCd7YhhWmVcq+/KSLPK/PUvfV83PDy5TAiAA/e9yrH6rrLGhkhEPtTbyBbBe
+yzaWmqSb64bH/x0TjQ==
+-----END CERTIFICATE REQUEST-----
+        "#
+        .to_string();
+
+        let expected_contents = r#"
+MIIBKTCB0AIBADA8MRIwEAYDVQQKEwlUaGluIEVkZ2UxFDASBgNVBAsTC1Rlc3Qg
+RGV2aWNlMRAwDgYDVQQDEwd0ZXN0MDAxMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcD
+QgAE0xjSVOQc2NA4RgGz4IksOc4Js48jTCD2uE1N4RoetahPhKnfv5f19o2B9B4T
+cUttQFLpQIG65YS2OAzkkM+0P6AyMDAGCSqGSIb3DQEJDjEjMCEwDwYDVR0TAQH/
+BAUwAwEB/zAOBgNVHQ8BAf8EBAMCB4AwCgYIKoZIzj0EAwIDSAAwRQIhALxYCCHa
+9ZdaZCd7YhhWmVcq+/KSLPK/PUvfV83PDy5TAiAA/e9yrH6rrLGhkhEPtTbyBbBe
+yzaWmqSb64bH/x0TjQ==
+"#
+        .to_string();
+
+        assert_eq!(
+            parse_csr_contents(gntls_certtool_csr).replace(['\n', '\r'], ""),
+            expected_contents.replace(['\n', '\r'], "")
+        );
+
+        assert_eq!(
+            parse_csr_contents(gntls_certtool_csr_without_text).replace(['\n', '\r'], ""),
+            expected_contents.replace(['\n', '\r'], "")
+        );
+
+        assert_eq!(
+            parse_csr_contents(tedge_csr).replace(['\n', '\r'], ""),
+            expected_contents.replace(['\n', '\r'], "")
         );
     }
 }
