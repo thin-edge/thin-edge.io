@@ -22,15 +22,23 @@ pub struct CertificateShift {
 }
 
 impl CertificateShift {
-    pub async fn exists_new_certificate(cert_path: &Utf8Path) -> Option<CertificateShift> {
-        let active_cert_path = cert_path.to_owned();
-        let mut new_cert_path = active_cert_path.clone();
-        new_cert_path.set_file_name(match active_cert_path.as_path().file_name() {
+    /// Return the path where a renewed version of a certificate is expected to be store
+    pub fn new_certificate_path(cert_path: &Utf8Path) -> Utf8PathBuf {
+        let mut new_cert_path = cert_path.to_owned();
+        new_cert_path.set_file_name(match cert_path.file_name() {
             None => "certificate.new".to_string(),
             Some(filename) => format!("{filename}.new"),
         });
+        new_cert_path
+    }
 
+    /// Check if a new version of certificate exists
+    ///
+    /// Return the pair of (current, new) certificate if this is the case.
+    pub async fn exists_new_certificate(cert_path: &Utf8Path) -> Option<CertificateShift> {
+        let new_cert_path = Self::new_certificate_path(cert_path);
         if let Ok(true) = tokio::fs::try_exists(new_cert_path.as_path()).await {
+            let active_cert_path = cert_path.to_owned();
             Some(CertificateShift {
                 active_cert_path,
                 new_cert_path,
@@ -40,6 +48,8 @@ impl CertificateShift {
         }
     }
 
+    /// Replace the currently active certificate by the new one
+    /// (assuming the latter has been properly validated).
     pub async fn promote_new_certificate(&self) -> std::io::Result<()> {
         tokio::fs::rename(&self.new_cert_path, &self.active_cert_path).await
     }

@@ -28,10 +28,13 @@ pub struct RenewCertCmd {
     /// TLS Client configuration
     pub identity: Option<Identity>,
 
-    /// The path where the device certificate will be stored
+    /// The path of the certificate to be renewed
     pub cert_path: Utf8PathBuf,
 
-    /// The path where the device private key will be stored
+    /// The path where the new certificate will be stored
+    pub new_cert_path: Utf8PathBuf,
+
+    /// The path of the private key to re-use
     pub key_path: Utf8PathBuf,
 
     /// The path where the device CSR file will be stored
@@ -94,7 +97,7 @@ impl RenewCertCmd {
         match result {
             Ok(response) if response.status() == StatusCode::OK => match response.text().await {
                 Ok(cert) => {
-                    store_device_cert(&self.cert_path, cert).await?;
+                    store_device_cert(&self.new_cert_path, cert).await?;
                     Ok(())
                 }
                 Err(err) => Err(anyhow!(
