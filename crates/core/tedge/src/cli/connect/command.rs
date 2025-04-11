@@ -7,6 +7,8 @@ use crate::bridge::CommonMosquittoConfig;
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 use crate::cli::common::Cloud;
 use crate::cli::common::MaybeBorrowedCloud;
+use crate::cli::connect::aws::check_device_status_aws;
+use crate::cli::connect::azure::check_device_status_azure;
 use crate::cli::connect::c8y::*;
 use crate::cli::connect::*;
 use crate::cli::log::ConfigLogger;
@@ -21,16 +23,9 @@ use crate::ConfigError;
 use anyhow::anyhow;
 use anyhow::bail;
 use c8y_api::http_proxy::read_c8y_credentials;
-use c8y_api::smartrest::message::get_smartrest_template_id;
-use c8y_api::smartrest::message_ids::JWT_TOKEN;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use mqtt_channel::Topic;
-use rumqttc::Event;
-use rumqttc::Incoming;
-use rumqttc::Outgoing;
-use rumqttc::Packet;
-use rumqttc::QoS::AtLeastOnce;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -47,7 +42,6 @@ use tedge_config::models::Cryptoki;
 use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
 use tedge_config::tedge_toml::MultiError;
-use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::TEdgeConfigReaderMqtt;
 use tedge_config::TEdgeConfig;
@@ -647,7 +641,7 @@ pub fn bridge_config(
     }
 }
 
-fn bridge_health_topic(
+pub(crate) fn bridge_health_topic(
     prefix: &TopicPrefix,
     tedge_config: &TEdgeConfig,
 ) -> Result<Topic, TopicIdError> {
@@ -661,372 +655,9 @@ fn bridge_health_topic(
     ))
 }
 
-fn is_bridge_health_up_message(message: &rumqttc::Publish, health_topic: &str) -> bool {
+pub(crate) fn is_bridge_health_up_message(message: &rumqttc::Publish, health_topic: &str) -> bool {
     message.topic == health_topic
         && std::str::from_utf8(&message.payload).is_ok_and(|msg| msg.contains("\"up\""))
-}
-
-// Check the connection by using the jwt token retrieval over the mqtt.
-// If successful in getting the jwt token '71,xxxxx', the connection is established.
-async fn check_device_status_c8y(
-    tedge_config: &TEdgeConfig,
-    c8y_profile: Option<&ProfileName>,
-) -> Result<DeviceStatus, ConnectError> {
-    let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
-
-    // TODO: Use SmartREST1 to check connection
-    if c8y_config
-        .auth_method
-        .is_basic(&c8y_config.credentials_path)
-    {
-        return Ok(DeviceStatus::AlreadyExists);
-    }
-
-    let prefix = &c8y_config.bridge.topic_prefix;
-    let built_in_bridge_health = bridge_health_topic(prefix, tedge_config).unwrap().name;
-    let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
-    let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
-    const CLIENT_ID: &str = "check_connection_c8y";
-
-    let mut mqtt_options = tedge_config
-        .mqtt_config()?
-        .with_session_name(CLIENT_ID)
-        .with_clean_session(true)
-        .rumqttc_options()?;
-
-    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
-
-    let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
-    event_loop
-        .network_options
-        .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
-    let mut acknowledged = false;
-
-    let built_in_bridge = tedge_config.mqtt.bridge.built_in;
-    if built_in_bridge {
-        client
-            .subscribe(&built_in_bridge_health, AtLeastOnce)
-            .await?;
-    }
-    client
-        .subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)
-        .await?;
-
-    let mut err = None;
-    loop {
-        match event_loop.poll().await {
-            Ok(Event::Incoming(Packet::SubAck(_))) => {
-                // We are ready to get the response, hence send the request
-                client
-                    .publish(
-                        &c8y_topic_builtin_jwt_token_upstream,
-                        rumqttc::QoS::AtMostOnce,
-                        false,
-                        "",
-                    )
-                    .await?;
-            }
-            Ok(Event::Incoming(Packet::PubAck(_))) => {
-                // The request has been sent
-                acknowledged = true;
-            }
-            Ok(Event::Incoming(Packet::Publish(response))) => {
-                if response.topic == c8y_topic_builtin_jwt_token_downstream {
-                    // We got a response
-                    let response = std::str::from_utf8(&response.payload).unwrap();
-                    let message_id = get_smartrest_template_id(response);
-                    if message_id.parse() == Ok(JWT_TOKEN) {
-                        break;
-                    }
-                } else if is_bridge_health_up_message(&response, &built_in_bridge_health) {
-                    client
-                        .publish(
-                            &c8y_topic_builtin_jwt_token_upstream,
-                            rumqttc::QoS::AtMostOnce,
-                            false,
-                            "",
-                        )
-                        .await?;
-                }
-            }
-            Ok(Event::Outgoing(Outgoing::PingReq)) => {
-                // No messages have been received for a while
-                err = Some(if acknowledged {
-                    anyhow!("Didn't receive response from Cumulocity")
-                } else {
-                    anyhow!("Local MQTT publish has timed out")
-                });
-                break;
-            }
-            Ok(Event::Incoming(Incoming::Disconnect)) => {
-                err = Some(anyhow!(
-                    "Client was disconnected from mosquitto during connection check"
-                ));
-                break;
-            }
-            Err(e) => {
-                err = Some(
-                    anyhow::Error::from(e)
-                        .context("Failed to connect to mosquitto for connection check"),
-                );
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    // Cleanly disconnect client
-    client.disconnect().await?;
-    loop {
-        match event_loop.poll().await {
-            Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
-            _ => {}
-        }
-    }
-
-    match err {
-        None => Ok(DeviceStatus::AlreadyExists),
-        // The request has been sent but without a response
-        Some(_) if acknowledged => Ok(DeviceStatus::Unknown),
-        // The request has not even been sent
-        Some(err) => Err(err
-            .context("Failed to verify device is connected to Cumulocity")
-            .into()),
-    }
-}
-
-// Here We check the az device twin properties over mqtt to check if connection has been open.
-// First the mqtt client will subscribe to a topic az/$iothub/twin/res/#, listen to the
-// device twin property output.
-// Empty payload will be published to az/$iothub/twin/GET/?$rid=1, here 1 is request ID.
-// The result will be published by the iothub on the az/$iothub/twin/res/{status}/?$rid={request id}.
-// Here if the status is 200 then it's success.
-async fn check_device_status_azure(
-    tedge_config: &TEdgeConfig,
-    profile: Option<&ProfileName>,
-) -> Result<DeviceStatus, ConnectError> {
-    let az_config = tedge_config.az.try_get(profile)?;
-    let topic_prefix = &az_config.bridge.topic_prefix;
-    let built_in_bridge_health = bridge_health_topic(topic_prefix, tedge_config)
-        .unwrap()
-        .name;
-    let azure_topic_device_twin_downstream = format!(r##"{topic_prefix}/twin/res/#"##);
-    let azure_topic_device_twin_upstream = format!(r#"{topic_prefix}/twin/GET/?$rid=1"#);
-    const CLIENT_ID: &str = "check_connection_az";
-    const REGISTRATION_PAYLOAD: &[u8] = b"";
-    const REGISTRATION_OK: &str = "200";
-
-    let mut mqtt_options = tedge_config
-        .mqtt_config()?
-        .with_session_name(CLIENT_ID)
-        .rumqttc_options()?;
-
-    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
-
-    let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
-    let mut acknowledged = false;
-
-    if tedge_config.mqtt.bridge.built_in {
-        client
-            .subscribe(&built_in_bridge_health, AtLeastOnce)
-            .await?;
-    }
-    client
-        .subscribe(azure_topic_device_twin_downstream, AtLeastOnce)
-        .await?;
-
-    let mut err = None;
-    loop {
-        match event_loop.poll().await {
-            Ok(Event::Incoming(Packet::SubAck(_))) => {
-                // We are ready to get the response, hence send the request
-                client
-                    .publish(
-                        &azure_topic_device_twin_upstream,
-                        AtLeastOnce,
-                        false,
-                        REGISTRATION_PAYLOAD,
-                    )
-                    .await?;
-            }
-            Ok(Event::Incoming(Packet::PubAck(_))) => {
-                // The request has been sent
-                acknowledged = true;
-            }
-            Ok(Event::Incoming(Packet::Publish(response))) => {
-                if response.topic.contains(REGISTRATION_OK) {
-                    // We got a response
-                    break;
-                } else if response.topic == built_in_bridge_health {
-                    client
-                        .publish(
-                            &azure_topic_device_twin_upstream,
-                            AtLeastOnce,
-                            false,
-                            REGISTRATION_PAYLOAD,
-                        )
-                        .await?;
-                } else {
-                    break;
-                }
-            }
-            Ok(Event::Outgoing(Outgoing::PingReq)) => {
-                // No messages have been received for a while
-                err = Some(if acknowledged {
-                    anyhow!("Didn't receive response from Azure")
-                } else {
-                    anyhow!("Local MQTT publish has timed out")
-                });
-                break;
-            }
-            Ok(Event::Incoming(Incoming::Disconnect)) => {
-                err = Some(anyhow!(
-                    "Client was disconnected from mosquitto during connection check"
-                ));
-                break;
-            }
-            Err(e) => {
-                err = Some(
-                    anyhow::Error::from(e)
-                        .context("Failed to connect to mosquitto for connection check"),
-                );
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    // Cleanly disconnect client
-    client.disconnect().await?;
-    loop {
-        let event = event_loop.poll().await;
-        match event {
-            Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
-            _ => {}
-        }
-    }
-
-    match err {
-        None => Ok(DeviceStatus::AlreadyExists),
-        // The request has been sent but without a response
-        Some(_) if acknowledged => Ok(DeviceStatus::Unknown),
-        // The request has not even been sent
-        Some(err) => Err(err
-            .context("Failed to verify device is connected to Azure")
-            .into()),
-    }
-}
-
-async fn check_device_status_aws(
-    tedge_config: &TEdgeConfig,
-    profile: Option<&ProfileName>,
-) -> Result<DeviceStatus, ConnectError> {
-    let aws_config = tedge_config.aws.try_get(profile)?;
-    let topic_prefix = &aws_config.bridge.topic_prefix;
-    let aws_topic_pub_check_connection = format!("{topic_prefix}/test-connection");
-    let aws_topic_sub_check_connection = format!("{topic_prefix}/connection-success");
-    let built_in_bridge_health = bridge_health_topic(topic_prefix, tedge_config)
-        .unwrap()
-        .name;
-    const CLIENT_ID: &str = "check_connection_aws";
-    const REGISTRATION_PAYLOAD: &[u8] = b"";
-
-    let mut mqtt_options = tedge_config
-        .mqtt_config()?
-        .with_session_name(CLIENT_ID)
-        .rumqttc_options()?;
-    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
-
-    let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
-    let mut acknowledged = false;
-
-    if tedge_config.mqtt.bridge.built_in {
-        client
-            .subscribe(&built_in_bridge_health, AtLeastOnce)
-            .await?;
-    }
-    client
-        .subscribe(&aws_topic_sub_check_connection, AtLeastOnce)
-        .await?;
-
-    let mut err = None;
-    loop {
-        match event_loop.poll().await {
-            Ok(Event::Incoming(Packet::SubAck(_))) => {
-                // We are ready to get the response, hence send the request
-                client
-                    .publish(
-                        &aws_topic_pub_check_connection,
-                        AtLeastOnce,
-                        false,
-                        REGISTRATION_PAYLOAD,
-                    )
-                    .await?;
-            }
-            Ok(Event::Incoming(Packet::PubAck(_))) => {
-                // The request has been sent
-                acknowledged = true;
-            }
-            Ok(Event::Incoming(Packet::Publish(response))) => {
-                if response.topic == aws_topic_sub_check_connection {
-                    // We got a response
-                    break;
-                } else if is_bridge_health_up_message(&response, &built_in_bridge_health) {
-                    // Built in bridge is now up, republish the message in case it was never received by the bridge
-                    client
-                        .publish(
-                            &aws_topic_pub_check_connection,
-                            AtLeastOnce,
-                            false,
-                            REGISTRATION_PAYLOAD,
-                        )
-                        .await?;
-                }
-            }
-            Ok(Event::Outgoing(Outgoing::PingReq)) => {
-                // No messages have been received for a while
-                err = Some(if acknowledged {
-                    anyhow!("Didn't receive response from AWS")
-                } else {
-                    anyhow!("Local MQTT publish has timed out")
-                });
-                break;
-            }
-            Ok(Event::Incoming(Incoming::Disconnect)) => {
-                err = Some(anyhow!(
-                    "Client was disconnected from mosquitto during connection check"
-                ));
-                break;
-            }
-            Err(e) => {
-                err = Some(
-                    anyhow::Error::from(e)
-                        .context("Failed to connect to mosquitto for connection check"),
-                );
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    // Cleanly disconnect client
-    client.disconnect().await?;
-    loop {
-        match event_loop.poll().await {
-            Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
-            _ => {}
-        }
-    }
-
-    match err {
-        None => Ok(DeviceStatus::AlreadyExists),
-        // The request has been sent but without a response
-        Some(_) if acknowledged => Ok(DeviceStatus::Unknown),
-        // The request has not even been sent
-        Some(err) => Err(err
-            .context("Failed to verify device is connected to AWS")
-            .into()),
-    }
 }
 
 impl ConnectCommand {
@@ -1345,6 +976,7 @@ async fn tenant_matches_configured_url(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mqtt_channel::QoS::AtLeastOnce;
 
     mod is_bridge_health_up_message {
         use super::*;
