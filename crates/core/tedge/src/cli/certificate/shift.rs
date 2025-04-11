@@ -26,7 +26,7 @@ impl CertificateShift {
     pub fn new_certificate_path(cert_path: &Utf8Path) -> Utf8PathBuf {
         let mut new_cert_path = cert_path.to_owned();
         new_cert_path.set_file_name(match cert_path.file_name() {
-            None => ".new".to_string(),
+            None => "certificate.new".to_string(),
             Some(filename) => format!("{filename}.new"),
         });
         new_cert_path
