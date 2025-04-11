@@ -191,7 +191,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             bridge_attempt_unsubscribe: false,
             topics,
             bridge_location,
-            connection_check_attempts: 1,
+            connection_check_attempts: 3,
             auth_type,
             mosquitto_version,
             keepalive_interval,
