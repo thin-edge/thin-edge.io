@@ -85,8 +85,8 @@ impl Cryptoki {
             .transpose()?;
         dbg!(&uri_attributes);
 
-        let wanted_label = uri_attributes.as_ref().and_then(|u| u.token);
-        let wanted_serial = uri_attributes.as_ref().and_then(|u| u.serial);
+        let wanted_label = uri_attributes.as_ref().and_then(|u| u.token.as_ref());
+        let wanted_serial = uri_attributes.as_ref().and_then(|u| u.serial.as_ref());
 
         let slots_with_tokens = self.context.get_slots_with_token()?;
         let tokens: Result<Vec<_>, _> = slots_with_tokens
@@ -121,12 +121,8 @@ impl Cryptoki {
         debug!(?session_info, "Opened a readonly session");
 
         // get the signing key
-        let key = match uri_attributes {
-            Some(uri::Pkcs11Uri {
-                id: Some(_),
-                object: Some(_),
-                ..
-            }) => {
+        let key = match &uri_attributes {
+            Some(uri::Pkcs11Uri { id, object, .. }) if id.is_some() || object.is_some() => {
                 let key = Self::find_key_by_attributes(&uri_attributes.unwrap(), &session)?;
                 let key_type = session
                     .get_attributes(key, &[AttributeType::KeyType])?
@@ -173,11 +169,11 @@ impl Cryptoki {
             Attribute::Private(true),
             Attribute::Sign(true),
         ];
-        if let Some(object) = uri.object {
+        if let Some(object) = &uri.object {
             key_template.push(Attribute::Label(object.as_bytes().to_vec()));
         }
-        if let Some(id) = uri.id {
-            key_template.push(Attribute::Id(vec![id]));
+        if let Some(id) = &uri.id {
+            key_template.push(Attribute::Id(id.clone()));
         }
 
         trace!(?key_template, "Finding a key");
@@ -471,7 +467,7 @@ fn write_asn1_integer(writer: &mut dyn std::io::Write, b: &[u8]) {
 }
 
 pub mod uri {
-    use std::collections::HashMap;
+    use std::{borrow::Cow, collections::HashMap};
 
     /// Attributes decoded from a PKCS #11 URL.
     ///
@@ -480,11 +476,11 @@ pub mod uri {
     /// https://www.rfc-editor.org/rfc/rfc7512.html
     #[derive(Debug, Clone)]
     pub struct Pkcs11Uri<'a> {
-        pub token: Option<&'a str>,
-        pub serial: Option<&'a str>,
-        pub id: Option<u8>,
-        pub object: Option<&'a str>,
-        pub other: HashMap<&'a str, &'a str>,
+        pub token: Option<Cow<'a, str>>,
+        pub serial: Option<Cow<'a, str>>,
+        pub id: Option<Vec<u8>>,
+        pub object: Option<Cow<'a, str>>,
+        pub other: HashMap<&'a str, Cow<'a, str>>,
     }
 
     impl<'a> Pkcs11Uri<'a> {
@@ -492,23 +488,78 @@ pub mod uri {
             let path = uri
                 .strip_prefix("pkcs11:")
                 .ok_or(anyhow::anyhow!("missing PKCS #11 URI scheme"))?;
+            // split of the query component
+            let path = path.split_once('?').map(|(l, _)| l).unwrap_or(path);
 
             let pairs = path.split(';').filter_map(|pair| pair.split_once('='));
 
-            let mut pairs = HashMap::from_iter(pairs);
+            let mut pairs: HashMap<&str, &str> = HashMap::from_iter(pairs);
 
-            let token = pairs.remove("token");
-            let serial = pairs.remove("serial");
-            let id = pairs.remove("id").and_then(|id| id.parse().ok());
-            let object = pairs.remove("object");
+            let token = pairs
+                .remove("token")
+                .map(|v| percent_encoding::percent_decode_str(v).decode_utf8_lossy());
+            let serial = pairs
+                .remove("serial")
+                .map(|v| percent_encoding::percent_decode_str(v).decode_utf8_lossy());
+            let object = pairs
+                .remove("object")
+                .map(|v| percent_encoding::percent_decode_str(v).decode_utf8_lossy());
+
+            let id: Option<Vec<u8>> = pairs
+                .remove("id")
+                .map(|id| percent_encoding::percent_decode_str(id).collect());
+
+            let other = pairs
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k,
+                        percent_encoding::percent_decode_str(v).decode_utf8_lossy(),
+                    )
+                })
+                .collect();
 
             Ok(Self {
                 token,
                 serial,
                 id,
                 object,
-                other: pairs,
+                other,
             })
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn decodes_pkcs11_uri() {
+            // https://www.rfc-editor.org/rfc/rfc7512.html#section-3
+            let input = "pkcs11:token=The%20Software%20PKCS%2311%20Softtoken;\
+            manufacturer=Snake%20Oil,%20Inc.;\
+            model=1.0;\
+            object=my-certificate;\
+            type=cert;\
+            id=%69%95%3E%5C%F4%BD%EC%91;\
+            serial=\
+            ?pin-source=file:/etc/token_pin";
+
+            // let input = "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=5c1becd5222a84f6;token=token123;id=%01;object=object123;type=private";
+            let attributes = Pkcs11Uri::parse(input).unwrap();
+
+            assert_eq!(attributes.token.unwrap(), "The Software PKCS#11 Softtoken");
+            assert_eq!(
+                attributes.other.get("manufacturer").unwrap(),
+                "Snake Oil, Inc."
+            );
+            assert_eq!(attributes.other.get("model").unwrap(), "1.0");
+            assert_eq!(attributes.serial.unwrap(), "");
+            assert_eq!(attributes.object.unwrap(), "my-certificate");
+            assert_eq!(
+                attributes.id,
+                Some(vec![0x69, 0x95, 0x3e, 0x5c, 0xf4, 0xbd, 0xec, 0x91])
+            );
         }
     }
 }
