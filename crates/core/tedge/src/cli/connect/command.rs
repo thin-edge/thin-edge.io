@@ -100,6 +100,8 @@ impl Command for ConnectCommand {
             credentials_path,
         );
 
+        validate_config(config, &self.cloud)?;
+
         if self.is_test_connection {
             self.check_bridge(bridge_config).await.map_err(<_>::into)
         } else {
@@ -158,8 +160,6 @@ impl ConnectCommand {
     async fn connect_bridge(&self, bridge_config: BridgeConfig) -> Result<(), Fancy<ConnectError>> {
         let config = &self.config;
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
-
-        validate_config(config, &self.cloud)?;
 
         match self
             .new_bridge(&bridge_config, &updated_mosquitto_config)
