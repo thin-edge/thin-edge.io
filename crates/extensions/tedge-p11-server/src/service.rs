@@ -1,4 +1,4 @@
-use crate::pkcs11;
+use crate::pkcs11::Cryptoki;
 use crate::pkcs11::CryptokiConfigDirect;
 
 use crate::pkcs11::Pkcs11SigningKey;
@@ -9,19 +9,24 @@ use rustls::sign::SigningKey;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::instrument;
+use tracing::warn;
 
 #[derive(Debug)]
 pub struct P11SignerService {
-    signing_key: Pkcs11SigningKey,
+    cryptoki: Cryptoki,
 }
 
 impl P11SignerService {
     // TODO(marcel): would be nice to check if there are any keys upon starting the server and warn the user if there is not
     pub fn new(config: &CryptokiConfigDirect) -> anyhow::Result<Self> {
-        let signing_key = pkcs11::Pkcs11SigningKey::from_cryptoki_config(config)
-            .context("Failed to get handle of pkcs11 signing key")?;
+        let cryptoki = Cryptoki::new(config.clone()).context("Failed to load cryptoki library")?;
 
-        Ok(Self { signing_key })
+        // try to find a key on startup to see if requests succeed if nothing changes
+        if cryptoki.signing_key().is_err() {
+            warn!("No signing key found");
+        }
+
+        Ok(Self { cryptoki })
     }
 
     #[instrument(skip_all)]
@@ -31,8 +36,13 @@ impl P11SignerService {
     ) -> anyhow::Result<ChooseSchemeResponse> {
         let offered = request.offered.into_iter().map(|s| s.0).collect::<Vec<_>>();
 
-        let signer = self.signing_key.choose_scheme(&offered);
-        let algorithm = SignatureAlgorithm(self.signing_key.algorithm());
+        let signing_key = self
+            .cryptoki
+            .signing_key()
+            .context("Failed to find a signing key")?;
+
+        let signer = signing_key.choose_scheme(&offered);
+        let algorithm = SignatureAlgorithm(signing_key.algorithm());
 
         let Some(signer) = signer else {
             return Ok(ChooseSchemeResponse {
@@ -49,9 +59,14 @@ impl P11SignerService {
 
     #[instrument(skip_all)]
     pub fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse> {
-        let session = match &self.signing_key {
-            Pkcs11SigningKey::Ecdsa(key) => &key.pkcs11,
-            Pkcs11SigningKey::Rsa(key) => &key.pkcs11,
+        let signing_key = self
+            .cryptoki
+            .signing_key()
+            .context("Failed to find a signing key")?;
+
+        let session = match signing_key {
+            Pkcs11SigningKey::Ecdsa(key) => key.pkcs11,
+            Pkcs11SigningKey::Rsa(key) => key.pkcs11,
         };
         let signer = PkcsSigner::from_session(session.clone());
         let signature = signer

@@ -205,6 +205,7 @@ impl TEdgeConfigReaderDeviceCryptoki {
                     .clone(),
                 pin: AuthPin::new(self.pin.to_string()),
                 serial: None,
+                uri: None,
             }))),
             Cryptoki::Socket => Ok(Some(CryptokiConfig::SocketService {
                 socket_path: self.socket_path.clone(),
