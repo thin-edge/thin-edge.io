@@ -38,7 +38,7 @@ pub struct BridgeConfig {
     pub notification_topic: String,
     pub bridge_attempt_unsubscribe: bool,
     pub topics: Vec<String>,
-    pub connection_check_attempts: i32,
+    pub connection_check_attempts: u32,
     pub auth_type: AuthType,
     pub mosquitto_version: Option<String>,
     pub keepalive_interval: Duration,

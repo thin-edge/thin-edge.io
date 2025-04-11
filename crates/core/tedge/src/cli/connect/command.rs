@@ -248,26 +248,21 @@ impl ConnectCommand {
             "Checking new certificate validity: {}",
             &certificate_shift.new_cert_path
         ));
-
-        let res = if bridge_config.cloud_name.eq("c8y") {
-            let use_basic_auth = false;
-            let device_type = &self.config.device.ty;
-            let profile_name = self.cloud.profile_name().map(|p| p.as_ref());
-            let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(profile_name)?;
-            if let Some(client_config) = mqtt_auth_config.client.as_mut() {
-                client_config.cert_file = certificate_shift.new_cert_path.to_owned()
+        let mut attempt = 0;
+        let max_attempts = bridge_config.connection_check_attempts;
+        let res = loop {
+            attempt += 1;
+            match self
+                .connect_with_new_certificate(bridge_config, &certificate_shift)
+                .await
+            {
+                Ok(()) => break Ok(()),
+                Err(err) if attempt >= max_attempts => break Err(err),
+                Err(_) => {
+                    println!("Connection test failed, attempt {attempt} of {max_attempts}");
+                    std::thread::sleep(Duration::from_secs(2));
+                }
             }
-
-            create_device_with_direct_connection(
-                use_basic_auth,
-                bridge_config,
-                device_type,
-                mqtt_auth_config,
-            )
-            .await
-        } else {
-            // TODO: check for az and aws
-            Ok(())
         };
 
         if let Err(err) = spinner.finish(res) {
@@ -293,6 +288,33 @@ impl ConnectCommand {
             certificate_shift.active_cert_path
         );
         Ok(true)
+    }
+
+    async fn connect_with_new_certificate(
+        &self,
+        bridge_config: &BridgeConfig,
+        certificate_shift: &CertificateShift,
+    ) -> anyhow::Result<()> {
+        if bridge_config.cloud_name.eq("c8y") {
+            let use_basic_auth = false;
+            let device_type = &self.config.device.ty;
+            let profile_name = self.cloud.profile_name().map(|p| p.as_ref());
+            let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(profile_name)?;
+            if let Some(client_config) = mqtt_auth_config.client.as_mut() {
+                client_config.cert_file = certificate_shift.new_cert_path.to_owned()
+            }
+
+            create_device_with_direct_connection(
+                use_basic_auth,
+                bridge_config,
+                device_type,
+                mqtt_auth_config,
+            )
+            .await
+        } else {
+            // TODO: check for az and aws
+            Ok(())
+        }
     }
 }
 
@@ -344,7 +366,7 @@ impl ConnectCommand {
 
     async fn check_connection_with_retries(
         &self,
-        max_attempts: i32,
+        max_attempts: u32,
     ) -> Result<DeviceStatus, Fancy<ConnectError>> {
         for i in 1..max_attempts {
             let result = self.check_connection().await;
