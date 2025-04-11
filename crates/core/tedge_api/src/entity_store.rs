@@ -398,6 +398,10 @@ impl EntityStore {
         self.entities.update_parent(topic_id, new_parent)
     }
 
+    pub fn ancestors(&self, topic_id: &EntityTopicId) -> Result<Vec<&EntityTopicId>, Error> {
+        self.entities.ancestors(topic_id)
+    }
+
     /// Performs auto-registration process for an entity under a given
     /// identifier.
     ///
@@ -831,7 +835,7 @@ impl EntityTree {
         self.try_get(topic_id)
     }
 
-    fn ancestors(&self, topic_id: &EntityTopicId) -> Result<Vec<&EntityTopicId>, Error> {
+    pub fn ancestors(&self, topic_id: &EntityTopicId) -> Result<Vec<&EntityTopicId>, Error> {
         let mut ancestors = vec![];
         let mut current = topic_id;
         while let Some(parent) = self.try_get(current)?.parent.as_ref() {
@@ -2185,6 +2189,56 @@ mod tests {
                 .to_string(),
             error_msg
         );
+    }
+
+    #[test_case(
+        "device/child000//",
+        vec!["device/child00//", "device/child0//", "device/main//"];
+        "leaf_node"
+    )]
+    #[test_case(
+        "device/child00//",
+        vec!["device/child0//", "device/main//"];
+        "nested_child"
+    )]
+    #[test_case(
+        "device/child0//",
+        vec!["device/main//"];
+        "immediate_child"
+    )]
+    #[test_case(
+        "device/main//",
+        vec![];
+        "main_device"
+    )]
+    fn ancestors(topic_id: &str, expected: Vec<&str>) {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        build_entity_tree(
+            &mut store,
+            vec![
+                (
+                    "device/main/service/tedge-agent",
+                    "service",
+                    Some("device/main//"),
+                ),
+                ("device/child0//", "child-device", None),
+                ("device/child00//", "child-device", Some("device/child0//")),
+                (
+                    "device/child000//",
+                    "child-device",
+                    Some("device/child00//"),
+                ),
+            ],
+        );
+        let ancestors: Vec<&str> = store
+            .ancestors(&EntityTopicId::from_str(topic_id).unwrap())
+            .unwrap()
+            .iter()
+            .map(|e| e.as_str())
+            .collect();
+
+        assert_eq!(ancestors, expected);
     }
 
     fn new_entity_store(temp_dir: &TempDir, clean_start: bool) -> EntityStore {

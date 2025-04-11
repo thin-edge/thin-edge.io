@@ -24,7 +24,10 @@ use tracing::error;
 pub enum EntityStoreRequest {
     Get(EntityTopicId),
     Create(EntityRegistrationMessage),
-    Update(EntityTopicId, EntityTopicId),
+    UpdateParent {
+        topic_id: EntityTopicId,
+        new_parent: EntityTopicId,
+    },
     Delete(EntityTopicId),
     List(ListFilters),
     MqttMessage(MqttMessage),
@@ -102,8 +105,11 @@ impl Server for EntityStoreServer {
                 let res = self.register_entity(entity).await;
                 EntityStoreResponse::Create(res)
             }
-            EntityStoreRequest::Update(topic_id, new_parent) => {
-                let res = self.update_entity(&topic_id, &new_parent).await;
+            EntityStoreRequest::UpdateParent {
+                topic_id,
+                new_parent,
+            } => {
+                let res = self.update_parent(&topic_id, &new_parent).await;
                 EntityStoreResponse::Update(res.cloned())
             }
             EntityStoreRequest::Delete(topic_id) => {
@@ -284,7 +290,7 @@ impl EntityStoreServer {
         Ok(registered)
     }
 
-    async fn update_entity(
+    async fn update_parent(
         &mut self,
         topic_id: &EntityTopicId,
         new_parent: &EntityTopicId,

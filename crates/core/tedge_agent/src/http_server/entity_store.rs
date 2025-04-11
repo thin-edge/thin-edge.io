@@ -372,7 +372,10 @@ async fn update_entity(
     let response = state
         .entity_store_handle
         .clone()
-        .await_response(EntityStoreRequest::Update(topic_id, payload.parent))
+        .await_response(EntityStoreRequest::UpdateParent {
+            topic_id,
+            new_parent: payload.parent,
+        })
         .await?;
     let EntityStoreResponse::Update(res) = response else {
         return Err(Error::InvalidEntityStoreResponse);
