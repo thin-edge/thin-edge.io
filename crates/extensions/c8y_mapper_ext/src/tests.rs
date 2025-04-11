@@ -112,7 +112,7 @@ async fn child_device_registration_mapping() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "101,test-device:device:child1,Child1,RaspberryPi",
+            "101,test-device:device:child1,Child1,RaspberryPi,false",
         )],
     )
     .await;
@@ -137,7 +137,7 @@ async fn child_device_registration_mapping() {
         &mut mqtt,
         [(
             "c8y/s/us/test-device:device:child1",
-            "101,test-device:device:child2,test-device:device:child2,thin-edge.io-child",
+            "101,test-device:device:child2,test-device:device:child2,thin-edge.io-child,false",
         )],
     )
     .await;
@@ -162,7 +162,7 @@ async fn child_device_registration_mapping() {
         &mut mqtt,
         [(
             "c8y/s/us/test-device:device:child2",
-            "101,child3,child3,thin-edge.io-child",
+            "101,child3,child3,thin-edge.io-child,false",
         )],
     )
     .await;
@@ -201,7 +201,10 @@ async fn custom_topic_scheme_registration_mapping() {
 
     assert_received_contains_str(
         &mut mqtt,
-        [("c8y/s/us", "101,test-device:custom,Child1,RaspberryPi")],
+        [(
+            "c8y/s/us",
+            "101,test-device:custom,Child1,RaspberryPi,false",
+        )],
     )
     .await;
 
@@ -216,7 +219,7 @@ async fn custom_topic_scheme_registration_mapping() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "101,test-device:custom:child1,Child1,RaspberryPi",
+            "101,test-device:custom:child1,Child1,RaspberryPi,false",
         )],
     )
     .await;
@@ -1440,8 +1443,11 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
     assert_received_contains_str(
         &mut mqtt,
         [
-            ("c8y/s/us", "101,child1,child1,thin-edge.io-child"),
-            ("c8y/s/us/child1", "101,child11,child11,thin-edge.io-child"),
+            ("c8y/s/us", "101,child1,child1,thin-edge.io-child,false"),
+            (
+                "c8y/s/us/child1",
+                "101,child11,child11,thin-edge.io-child,false",
+            ),
         ],
     )
     .await;
@@ -2570,11 +2576,11 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
         [
             (
                 "c8y/s/us",
-                "101,immediate_child,immediate_child,thin-edge.io-child",
+                "101,immediate_child,immediate_child,thin-edge.io-child,false",
             ),
             (
                 "c8y/s/us/immediate_child",
-                "101,nested_child,nested_child,thin-edge.io-child",
+                "101,nested_child,nested_child,thin-edge.io-child,false",
             ),
             (
                 "c8y/s/us/nested_child",
@@ -2633,11 +2639,11 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
         [
             (
                 "c8y/s/us",
-                "101,immediate_child,immediate_child,thin-edge.io-child",
+                "101,immediate_child,immediate_child,thin-edge.io-child,false",
             ),
             (
                 "c8y/s/us/immediate_child",
-                "101,nested_child,nested_child,thin-edge.io-child",
+                "101,nested_child,nested_child,thin-edge.io-child,false",
             ),
         ],
     )
@@ -3418,6 +3424,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         SoftwareManagementApiFlag::Advanced,
         true,
         AutoLogUpload::Never,
+        false,
         false,
         C8Y_MQTT_PAYLOAD_LIMIT,
     )

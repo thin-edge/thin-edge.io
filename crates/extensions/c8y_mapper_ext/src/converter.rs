@@ -370,6 +370,7 @@ impl CumulocityConverter {
                     parent_xid.map(|xid| xid.as_ref()),
                     &self.device_name,
                     &self.config.bridge_config.c8y_prefix,
+                    self.config.smartrest_child_device_create_with_device_marker,
                 )
                 .context("Could not create device creation message")?;
                 Some(child_creation_message)
@@ -1859,7 +1860,41 @@ pub(crate) mod tests {
             &messages,
             [(
                 "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child".into(),
+                "101,test-device:device:child1,child1,thin-edge.io-child,false".into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
+    async fn convert_child_device_registration_control_is_device_fragment() {
+        let tmp_dir = TempTedgeDir::new();
+        let mut config = c8y_converter_config(&tmp_dir);
+        config.smartrest_child_device_create_with_device_marker = true;
+        let (mut converter, _) = create_c8y_converter_from_config(config);
+
+        let in_message = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1//"),
+            json!({
+                "@type":"child-device",
+                "name":"child1"
+            })
+            .to_string(),
+        );
+        let entities = converter
+            .try_register_source_entities(&in_message)
+            .await
+            .unwrap();
+
+        assert_eq!(entities.len(), 1);
+
+        let messages =
+            converter.convert_entity_registration_message(&entities.get(0).unwrap().reg_message);
+
+        assert_messages_matching(
+            &messages,
+            [(
+                "c8y/s/us",
+                "101,test-device:device:child1,child1,thin-edge.io-child,true".into(),
             )],
         );
     }
@@ -2108,7 +2143,7 @@ pub(crate) mod tests {
             .collect();
         let expected_smart_rest_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,test-device:device:child1,child1,thin-edge.io-child",
+            "101,test-device:device:child1,child1,thin-edge.io-child,false",
         );
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -3393,6 +3428,7 @@ pub(crate) mod tests {
             SoftwareManagementApiFlag::Advanced,
             true,
             AutoLogUpload::Never,
+            false,
             false,
             16184,
         )
