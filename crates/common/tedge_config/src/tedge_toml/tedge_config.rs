@@ -246,6 +246,12 @@ define_tedge_config! {
             /// Switch using 501-503 (without operation ID) or 504-506 (with operation ID) SmartREST messages for operation status update
             #[tedge_config(example = "true", default(value = true))]
             use_operation_id: bool,
+
+            child: {
+                /// Attach the c8y_IsDevice fragment to child devices
+                #[tedge_config(example = "false", default(value = false))]
+                append_device_fragment: bool,
+            }
         },
 
         smartrest1: {
