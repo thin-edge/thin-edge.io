@@ -1072,7 +1072,7 @@ class ThinEdgeIO(DeviceLibrary):
         return json_output
 
     @keyword("List Entities")
-    def list_entities(
+    def _assert_list_entities(
             self,
             root: str = None,
             parent: str = None,
@@ -1110,7 +1110,7 @@ class ThinEdgeIO(DeviceLibrary):
                 f"Unable to query the entity store as the device: '{device_name}' has not been setup"
             )
 
-        url = "http://localhost:8000/tedge/v1/entities"
+        url = "/tedge/v1/entities"
         params = {}
         if root:
             params["root"] = root
@@ -1123,8 +1123,12 @@ class ThinEdgeIO(DeviceLibrary):
             query_string = "&".join(f"{key}={value}" for key, value in params.items())
             url += f"?{query_string}"
 
-        output = device.execute_command(f"curl -f '{url}'")
-        entities = json.loads(output.stdout)
+        output = device.execute_command(f"tedge http get '{url}'")
+        assert output.stdout, "tedge entity response is empty, this is unexpected"
+        try:
+            entities = json.loads(output.stdout)
+        except Exception as ex:
+            assert not ex, f"failed to parse json. {ex}"
         return entities
 
 
@@ -1162,7 +1166,7 @@ class ThinEdgeIO(DeviceLibrary):
             )
 
         if not entities:
-            entities = self.list_entities()
+            entities = self._assert_list_entities()
 
         if isinstance(item, str):
             item = json.loads(item)
@@ -1209,11 +1213,66 @@ class ThinEdgeIO(DeviceLibrary):
             )
 
         if not entities:
-            entities = self.list_entities()
+            entities = self._assert_list_entities()
         
         assert all(entity["@topic-id"] != topic_id for entity in entities)
         
         return entities
+
+    @keyword("Should Contain Twin Properties")
+    def _assert_contains_twin_entity(
+            self,
+            topic_id: str,
+            item: Union[str, Dict[str, Any]],
+            entities: List[Dict[str, Any]] = None,
+            device_name: str = None,
+            **kwargs
+    ) -> List[Dict[str, Any]]:
+        """Assert if an entity has matches given twin properties
+
+        It will only assert the given twin properties which allows you to match a subset
+        of properties and values.
+
+        Args:
+            topic_id (str): Topic id to look for
+            item (Union[str, Dict[str, Any]]): Expected twin properties (key and value)
+            entities (List[Dict[str, Any]], optional): List of entities to search in. Defaults to None.
+            device_name (str, optional): Device name to fetch the entity list from
+
+        Returns:
+            Dict[str, Any]: Twin properties of the matching topic id (all properties are returned)
+
+        *Example:*
+        | ${entities}= | Should Contain Twin Properties | topic_id=device/main// | item={"name":"example"} |
+        | ${entities}= | Should Contain Twin Properties | topic_id=device/main// | item={"name":"example","type":"thin-edge.io"} | device_name=${PARENT_SN} |
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to query the entity store as the device: '{device_name}' has not been setup"
+            )
+
+        if not entities:
+            entities = self._assert_list_entities()
+
+        if isinstance(item, str):
+            item = json.loads(item)
+
+        output = device.execute_command(f"tedge http get /tedge/v1/entities/{topic_id}/twin")
+        assert output.stdout
+        try:
+            props = json.loads(output.stdout)
+        except Exception as ex:
+            assert not ex
+
+        # only match against the keys that the caller has provided
+        prop_subset = {key: props[key] for key in item if key in props}
+        assert prop_subset == item
+        return props
 
 
 def to_date(value: relativetime_) -> datetime:
