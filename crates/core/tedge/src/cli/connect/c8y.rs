@@ -1,11 +1,16 @@
 use super::ConnectError;
 use crate::bridge::BridgeConfig;
+use crate::cli::bridge_health_topic;
 use crate::cli::connect::CONNECTION_TIMEOUT;
 use crate::cli::connect::RESPONSE_TIMEOUT;
+use crate::cli::is_bridge_health_up_message;
+use crate::DeviceStatus;
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Context as _;
 use base64::prelude::*;
+use c8y_api::smartrest::message::get_smartrest_template_id;
+use c8y_api::smartrest::message_ids::JWT_TOKEN;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
 use rumqttc::tokio_rustls::rustls::CertificateError;
@@ -22,6 +27,7 @@ use rumqttc::QoS::AtLeastOnce;
 use rumqttc::TlsError;
 use rumqttc::Transport;
 use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
+use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 
 const CONNECTION_ERROR_CONTEXT: &str = "Connection error while creating device in Cumulocity";
@@ -145,6 +151,135 @@ pub async fn create_device_with_direct_connection(
     }
 
     bail!("Timed-out attempting to create device in Cumulocity")
+}
+
+// Check the connection by using the jwt token retrieval over the mqtt.
+// If successful in getting the jwt token '71,xxxxx', the connection is established.
+pub(crate) async fn check_device_status_c8y(
+    tedge_config: &TEdgeConfig,
+    c8y_profile: Option<&ProfileName>,
+) -> Result<DeviceStatus, ConnectError> {
+    let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+
+    // TODO: Use SmartREST1 to check connection
+    if c8y_config
+        .auth_method
+        .is_basic(&c8y_config.credentials_path)
+    {
+        return Ok(DeviceStatus::AlreadyExists);
+    }
+
+    let prefix = &c8y_config.bridge.topic_prefix;
+    let built_in_bridge_health = bridge_health_topic(prefix, tedge_config).unwrap().name;
+    let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
+    let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
+    const CLIENT_ID: &str = "check_connection_c8y";
+
+    let mut mqtt_options = tedge_config
+        .mqtt_config()?
+        .with_session_name(CLIENT_ID)
+        .with_clean_session(true)
+        .rumqttc_options()?;
+
+    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
+
+    let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
+    event_loop
+        .network_options
+        .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
+    let mut acknowledged = false;
+
+    let built_in_bridge = tedge_config.mqtt.bridge.built_in;
+    if built_in_bridge {
+        client
+            .subscribe(&built_in_bridge_health, AtLeastOnce)
+            .await?;
+    }
+    client
+        .subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)
+        .await?;
+
+    let mut err = None;
+    loop {
+        match event_loop.poll().await {
+            Ok(Event::Incoming(Packet::SubAck(_))) => {
+                // We are ready to get the response, hence send the request
+                client
+                    .publish(
+                        &c8y_topic_builtin_jwt_token_upstream,
+                        rumqttc::QoS::AtMostOnce,
+                        false,
+                        "",
+                    )
+                    .await?;
+            }
+            Ok(Event::Incoming(Packet::PubAck(_))) => {
+                // The request has been sent
+                acknowledged = true;
+            }
+            Ok(Event::Incoming(Packet::Publish(response))) => {
+                if response.topic == c8y_topic_builtin_jwt_token_downstream {
+                    // We got a response
+                    let response = std::str::from_utf8(&response.payload).unwrap();
+                    let message_id = get_smartrest_template_id(response);
+                    if message_id.parse() == Ok(JWT_TOKEN) {
+                        break;
+                    }
+                } else if is_bridge_health_up_message(&response, &built_in_bridge_health) {
+                    client
+                        .publish(
+                            &c8y_topic_builtin_jwt_token_upstream,
+                            rumqttc::QoS::AtMostOnce,
+                            false,
+                            "",
+                        )
+                        .await?;
+                }
+            }
+            Ok(Event::Outgoing(Outgoing::PingReq)) => {
+                // No messages have been received for a while
+                err = Some(if acknowledged {
+                    anyhow!("Didn't receive response from Cumulocity")
+                } else {
+                    anyhow!("Local MQTT publish has timed out")
+                });
+                break;
+            }
+            Ok(Event::Incoming(Incoming::Disconnect)) => {
+                err = Some(anyhow!(
+                    "Client was disconnected from mosquitto during connection check"
+                ));
+                break;
+            }
+            Err(e) => {
+                err = Some(
+                    anyhow::Error::from(e)
+                        .context("Failed to connect to mosquitto for connection check"),
+                );
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    // Cleanly disconnect client
+    client.disconnect().await?;
+    loop {
+        match event_loop.poll().await {
+            Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    match err {
+        None => Ok(DeviceStatus::AlreadyExists),
+        // The request has been sent but without a response
+        Some(_) if acknowledged => Ok(DeviceStatus::Unknown),
+        // The request has not even been sent
+        Some(err) => Err(err
+            .context("Failed to verify device is connected to Cumulocity")
+            .into()),
+    }
 }
 
 async fn publish_device_create_message(
