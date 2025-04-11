@@ -104,9 +104,9 @@ impl UploadCertCmd {
         username: &str,
         password: &str,
     ) -> Result<(), CertError> {
-        let cert_path = match CertificateShift::exists_new_certificate(&self.path).await {
-            Some(certificate_shift) => certificate_shift.new_cert_path,
-            None => self.path.to_path_buf(),
+        let (is_new, cert_path) = match CertificateShift::exists_new_certificate(&self.path).await {
+            Some(certificate_shift) => (true, certificate_shift.new_cert_path),
+            None => (false, self.path.to_path_buf()),
         };
         let post_url = build_upload_certificate_url(&self.host.to_string(), tenant_id)?;
 
@@ -125,14 +125,19 @@ impl UploadCertCmd {
             .await
             .map_err(get_webpki_error_from_reqwest)?;
 
+        let cert_name = if is_new {
+            "New device certificate"
+        } else {
+            "Device certificate"
+        };
         match res.status() {
             StatusCode::OK | StatusCode::CREATED => {
-                println!("Certificate uploaded successfully.");
+                println!("{cert_name} uploaded successfully.");
                 Ok(())
             }
 
             StatusCode::CONFLICT => {
-                println!("Certificate already exists in the cloud.");
+                println!("{cert_name} already exists in the cloud.");
                 Ok(())
             }
 
