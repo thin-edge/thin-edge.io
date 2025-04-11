@@ -107,13 +107,24 @@ impl Command for ConnectCommand {
         } else {
             fail_if_already_connected(&self.config_location, &bridge_config)
                 .map_err(anyhow::Error::new)?;
-            if let Some(certificate_shift) = bridge_config.certificate_awaits_validation().await {
-                let _ = self
-                    .validate_new_certificate(&bridge_config, certificate_shift)
-                    .await
-                    .unwrap();
+
+            let shift_failed = match bridge_config.certificate_awaits_validation().await {
+                None => false,
+                Some(certificate_shift) => {
+                    let shift_done = self
+                        .validate_new_certificate(&bridge_config, certificate_shift)
+                        .await
+                        .unwrap_or(false);
+                    !shift_done
+                }
+            };
+
+            let connected = self.connect_bridge(bridge_config).await;
+            if connected.is_ok() && shift_failed {
+                println!("Successfully connected, however not using the new certificate");
+                std::process::exit(3);
             }
-            self.connect_bridge(bridge_config).await.map_err(<_>::into)
+            connected.map_err(<_>::into)
         }
     }
 }
