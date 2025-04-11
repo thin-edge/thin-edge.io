@@ -33,6 +33,7 @@ pub fn child_device_creation_message(
     parent: Option<&str>,
     main_device_id: &str,
     prefix: &TopicPrefix,
+    append_device_fragment: bool,
 ) -> Result<MqttMessage, InvalidValueError> {
     if child_id.is_empty() {
         return Err(InvalidValueError {
@@ -58,6 +59,7 @@ pub fn child_device_creation_message(
         child_id,
         device_name.unwrap_or(child_id),
         device_type.unwrap_or("thin-edge.io-child"),
+        append_device_fragment,
     ))
     .expect("child_id, device_name, device_type should not increase payload size over the limit");
 

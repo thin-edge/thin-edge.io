@@ -49,7 +49,7 @@ c8y/s/us
 ```
 
 ```text title="Payload"
-101,<main-device-id>:device:child01,child01,SmartHomeHub
+101,<main-device-id>:device:child01,child01,SmartHomeHub,false
 ```
 
 </div>
@@ -87,7 +87,7 @@ c8y/s/us
 ```
 
 ```text title="Payload"
-101,child01,child01,SmartHomeHub
+101,child01,child01,SmartHomeHub,false
 ```
 
 </div>
@@ -125,7 +125,7 @@ c8y/s/us/<main-device-id>:device:child01
 ```
 
 ```text title="Payload"
-101,<main-device-id>:device:nested_child01,nested_child01,BatterySensor
+101,<main-device-id>:device:nested_child01,nested_child01,BatterySensor,false
 ```
 
 </div>

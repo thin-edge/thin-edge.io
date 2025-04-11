@@ -62,6 +62,7 @@ pub struct C8yMapperConfig {
     pub bridge_service_name: String,
     pub bridge_health_topic: Topic,
     pub smartrest_use_operation_id: bool,
+    pub smartrest_child_append_device_fragment: bool,
 
     pub data_dir: DataDir,
     pub config_dir: Arc<Utf8Path>,
@@ -102,6 +103,7 @@ impl C8yMapperConfig {
         software_management_with_types: bool,
         auto_log_upload: AutoLogUpload,
         smartrest_use_operation_id: bool,
+        smartrest_child_append_device_fragment: bool,
         max_mqtt_payload_size: u32,
     ) -> Self {
         let ops_dir = config_dir
@@ -143,6 +145,7 @@ impl C8yMapperConfig {
             bridge_service_name,
             bridge_health_topic,
             smartrest_use_operation_id,
+            smartrest_child_append_device_fragment,
 
             config_dir,
             logs_path,
@@ -206,6 +209,8 @@ impl C8yMapperConfig {
 
         let auto_log_upload = c8y_config.operations.auto_log_upload;
         let smartrest_use_operation_id = c8y_config.smartrest.use_operation_id;
+        let smartrest_child_append_device_fragment =
+            c8y_config.smartrest.child.append_device_fragment;
         let max_mqtt_payload_size = c8y_config.mapper.mqtt.max_payload_size.0;
 
         // Add command topics
@@ -255,6 +260,7 @@ impl C8yMapperConfig {
             software_management_with_types,
             auto_log_upload,
             smartrest_use_operation_id,
+            smartrest_child_append_device_fragment,
             max_mqtt_payload_size,
         ))
     }
