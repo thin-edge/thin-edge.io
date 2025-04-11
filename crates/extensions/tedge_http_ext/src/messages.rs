@@ -111,6 +111,18 @@ impl HttpRequestBuilder {
         }
     }
 
+    /// Start to build a DELETE request
+    pub fn delete<T>(uri: T) -> Self
+    where
+        hyper::Uri: TryFrom<T>,
+        <hyper::Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        HttpRequestBuilder {
+            inner: hyper::Request::delete(uri),
+            body: Ok(Empty::new().map_err(infallible).boxed()),
+        }
+    }
+
     /// Add an HTTP header to this request
     pub fn header<K, V>(self, key: K, value: V) -> Self
     where

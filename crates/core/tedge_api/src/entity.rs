@@ -73,6 +73,22 @@ pub struct EntityMetadata {
 }
 
 impl EntityMetadata {
+    #[cfg(test)]
+    pub(crate) fn new(
+        topic_id: EntityTopicId,
+        r#type: EntityType,
+        parent: Option<EntityTopicId>,
+        external_id: Option<EntityExternalId>,
+    ) -> Self {
+        Self {
+            topic_id,
+            external_id,
+            r#type,
+            parent,
+            twin_data: Map::new(),
+        }
+    }
+
     /// Creates a entity metadata for the main device.
     pub fn main_device() -> Self {
         Self {

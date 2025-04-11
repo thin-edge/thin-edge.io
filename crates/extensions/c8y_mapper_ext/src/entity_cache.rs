@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::EntityType;
-use tedge_api::entity::InsertOutcome;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -35,6 +34,18 @@ pub enum Error {
     #[error(transparent)]
     InvalidExternalId(#[from] InvalidExternalIdError),
 
+    #[error("Updating the external id of {0} is not supported")]
+    InvalidExternalIdUpdate(EntityTopicId),
+
+    #[error("Updating the entity type of {0} is not supported")]
+    InvalidEntityTypeUpdate(EntityTopicId),
+
+    #[error("Updating the twin data of {0} with a registration message is not supported")]
+    InvalidEntityTwinUpdate(EntityTopicId),
+
+    #[error("Updating the metadata of the main device is not supported")]
+    InvalidMainDeviceUpdate,
+
     #[error("Auto registration of the entity with topic id {0} failed as it does not match the default topic scheme: 'device/<device-id>/service/<service-id>'. Try explicit registration instead.")]
     NonDefaultTopicScheme(EntityTopicId),
 }
@@ -52,6 +63,14 @@ impl CloudEntityMetadata {
             metadata,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UpdateOutcome {
+    Unchanged,
+    Inserted,
+    Updated(EntityMetadata, EntityMetadata),
+    Deleted,
 }
 
 /// An in-memory cache of entity metadata with their external ids, indexed by their entity topic ids.
@@ -108,15 +127,18 @@ impl EntityCache {
         }
     }
 
-    pub(crate) fn register_entity(
+    pub(crate) fn upsert_entity(
         &mut self,
         entity: EntityRegistrationMessage,
-    ) -> Result<Vec<RegisteredEntityData>, Error> {
+    ) -> Result<(UpdateOutcome, Vec<RegisteredEntityData>), Error> {
+        if entity.topic_id == self.main_device_tid {
+            return Err(Error::InvalidMainDeviceUpdate);
+        }
         let parent = entity.parent.as_ref().unwrap_or(&self.main_device_tid);
         if self.entities.contains_key(parent) {
             let outcome = self.register_single_entity(entity.clone())?;
-            if outcome == InsertOutcome::Unchanged {
-                return Ok(vec![]);
+            if outcome == UpdateOutcome::Unchanged {
+                return Ok((outcome, vec![]));
             }
 
             let topic_id = entity.topic_id.clone();
@@ -133,18 +155,18 @@ impl EntityCache {
                 self.register_single_entity(child_reg_message)?;
                 pending_entities.push(pending_child);
             }
-            Ok(pending_entities)
+            Ok((outcome, pending_entities))
         } else {
             self.pending_entities
                 .cache_early_registration_message(entity);
-            Ok(vec![])
+            Ok((UpdateOutcome::Unchanged, vec![]))
         }
     }
 
     pub fn register_single_entity(
         &mut self,
         entity: EntityRegistrationMessage,
-    ) -> Result<InsertOutcome, InvalidExternalIdError> {
+    ) -> Result<UpdateOutcome, Error> {
         let external_id = if let Some(id) = entity.external_id {
             (self.external_id_validator_fn)(id.as_ref())?
         } else {
@@ -172,9 +194,7 @@ impl EntityCache {
             twin_data: entity.twin_data,
         };
 
-        let outcome = self.insert(entity.topic_id.clone(), external_id, entity_metadata);
-
-        Ok(outcome)
+        self.insert(entity_metadata)
     }
 
     /// Insert a new entity
@@ -182,17 +202,21 @@ impl EntityCache {
     /// Return Inserted if the entity is new
     /// Return Updated if the entity was previously registered and has been updated by this call
     /// Return Unchanged if the entity not affected by this call
-    fn insert(
-        &mut self,
-        topic_id: EntityTopicId,
-        external_id: EntityExternalId,
-        entity_metadata: EntityMetadata,
-    ) -> InsertOutcome {
+    fn insert(&mut self, entity_metadata: EntityMetadata) -> Result<UpdateOutcome, Error> {
+        let topic_id = entity_metadata.topic_id.clone();
+        let external_id = entity_metadata
+            .external_id
+            .clone()
+            .expect("External id must be set");
         let previous = self.entities.entry(topic_id.clone());
         let outcome = match previous {
             Entry::Occupied(mut occupied) => {
                 // if there is no change, no entities were affected
-                let existing_entity = &occupied.get().metadata;
+                let existing_entity = occupied.get().metadata.clone();
+
+                if entity_metadata.external_id != existing_entity.external_id {
+                    return Err(Error::InvalidExternalIdUpdate(topic_id.clone()));
+                }
 
                 let mut merged_other = existing_entity.twin_data.clone();
                 merged_other.extend(entity_metadata.twin_data.clone());
@@ -200,12 +224,18 @@ impl EntityCache {
                     twin_data: merged_other,
                     ..entity_metadata
                 };
+                if merged_entity.twin_data != existing_entity.twin_data {
+                    return Err(Error::InvalidEntityTwinUpdate(topic_id.clone()));
+                }
 
-                if existing_entity == &merged_entity {
-                    InsertOutcome::Unchanged
+                if existing_entity == merged_entity {
+                    UpdateOutcome::Unchanged
                 } else {
-                    occupied.insert(CloudEntityMetadata::new(external_id.clone(), merged_entity));
-                    InsertOutcome::Updated
+                    occupied.insert(CloudEntityMetadata::new(
+                        external_id.clone(),
+                        merged_entity.clone(),
+                    ));
+                    UpdateOutcome::Updated(merged_entity, existing_entity)
                 }
             }
             Entry::Vacant(vacant) => {
@@ -213,13 +243,13 @@ impl EntityCache {
                     external_id.clone(),
                     entity_metadata,
                 ));
-                InsertOutcome::Inserted
+                UpdateOutcome::Inserted
             }
         };
         self.external_id_map.insert(external_id, topic_id);
 
         debug!("Updated entity map: {:?}", self.entities);
-        outcome
+        Ok(outcome)
     }
 
     pub(crate) fn delete(&mut self, topic_id: &EntityTopicId) -> Option<CloudEntityMetadata> {
@@ -348,7 +378,7 @@ mod tests {
         let mut cache = new_entity_cache();
 
         let entity_topic_id = EntityTopicId::default_child_device("child1").unwrap();
-        let res = cache.register_entity(EntityRegistrationMessage {
+        let res = cache.upsert_entity(EntityRegistrationMessage {
             topic_id: entity_topic_id.clone(),
             r#type: EntityType::ChildDevice,
             external_id: Some("bad+id".into()),
