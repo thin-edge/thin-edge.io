@@ -9,6 +9,7 @@ use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
 use crate::command::Command;
+use crate::CertificateShift;
 use crate::ConfigError;
 use anyhow::anyhow;
 use c8y_api::http_proxy::C8yEndPoint;
@@ -48,6 +49,13 @@ pub enum TEdgeCertCli {
     },
 
     /// Renew the device certificate
+    ///
+    /// The current certificate is left unchanged and a new certificate file is created,
+    /// of which path is derived from the current certificate path by adding a `.new` suffix.
+    ///
+    /// The device certificate will be replaced by the new certificate, after proper validation,
+    /// by the `tedge connect` command.
+    ///
     Renew {
         /// Path to a Certificate Signing Request (CSR) ready to be used
         ///
@@ -98,6 +106,10 @@ pub enum TEdgeCertCli {
         #[clap(long = "cert-path", value_hint = ValueHint::FilePath)]
         cert_path: Option<Utf8PathBuf>,
 
+        /// Show the new certificate, if any, instead of the current one
+        #[clap(long = "new", default_value_t = false)]
+        show_new: bool,
+
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
     },
@@ -108,7 +120,10 @@ pub enum TEdgeCertCli {
         cloud: Option<CloudArg>,
     },
 
-    /// Upload root certificate
+    /// Upload the device certificate to the cloud
+    ///
+    /// If the device certificate has been renewed,
+    /// then the new certificate is uploaded.
     #[clap(subcommand)]
     Upload(UploadCertCli),
 
@@ -180,14 +195,24 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Show { cloud, cert_path } => {
+            TEdgeCertCli::Show {
+                cloud,
+                cert_path,
+                show_new,
+            } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let device_cert_path = config.device_cert_path(cloud.as_ref())?.to_owned();
+                let cert_path = cert_path.unwrap_or(device_cert_path);
                 let cmd = ShowCertCmd {
-                    cert_path: cert_path.unwrap_or(device_cert_path),
+                    cert_path: if show_new {
+                        CertificateShift::new_certificate_path(&cert_path)
+                    } else {
+                        cert_path
+                    },
                     minimum: config.certificate.validity.minimum_duration.duration(),
                     validity_check_only: false,
                 };
+
                 cmd.into_boxed()
             }
 
@@ -267,6 +292,7 @@ impl BuildCommand for TEdgeCertCli {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cert_path = config.device_cert_path(cloud.as_ref())?.to_owned();
                 let key_path = config.device_key_path(cloud.as_ref())?.to_owned();
+                let new_cert_path = CertificateShift::new_certificate_path(&cert_path);
 
                 // The CA to renew a certificate is determined from the certificate
                 //
@@ -286,8 +312,9 @@ impl BuildCommand for TEdgeCertCli {
 
                 if is_self_signed && self_signed_only {
                     let cmd = RenewCertCmd {
-                        cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
-                        key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
+                        cert_path,
+                        new_cert_path,
+                        key_path,
                         csr_template,
                     };
                     cmd.into_boxed()
@@ -317,6 +344,7 @@ impl BuildCommand for TEdgeCertCli {
                         root_certs: config.cloud_root_certs(),
                         identity: config.http.client.auth.identity()?,
                         cert_path,
+                        new_cert_path,
                         key_path,
                         csr_path,
                         generate_csr,

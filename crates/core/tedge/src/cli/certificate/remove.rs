@@ -1,11 +1,11 @@
 use std::io::ErrorKind::NotFound;
 use tokio::fs;
 
+use super::error::CertError;
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use crate::CertificateShift;
 use camino::Utf8PathBuf;
-
-use super::error::CertError;
 
 /// Remove the device certificate
 pub struct RemoveCertCmd {
@@ -33,6 +33,8 @@ impl Command for RemoveCertCmd {
 
 impl RemoveCertCmd {
     pub(crate) async fn remove_certificate(&self) -> Result<RemoveCertResult, CertError> {
+        let _new_cert_silently_removed =
+            fs::remove_file(&CertificateShift::new_certificate_path(&self.cert_path)).await;
         let cert_removed = fs::remove_file(&self.cert_path).await;
         let key_removed = fs::remove_file(&self.key_path).await;
         match cert_removed.and(key_removed) {

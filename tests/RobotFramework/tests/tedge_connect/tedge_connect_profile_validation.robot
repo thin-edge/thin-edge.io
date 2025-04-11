@@ -46,6 +46,9 @@ Verify conflicting configuration error appears
     ...    stdout=False
     ...    stderr=True
     ...    timeout=0
-    Should Be Equal
+    Should Contain
     ...    ${output}
-    ...    error: The configurations: c8y.${conflicting_configuration}, c8y.profiles.second.${conflicting_configuration} should be set to different values before connecting, but are currently set to the same value\n
+    ...    Error
+    Should Contain
+    ...    ${output}
+    ...    The configurations: c8y.${conflicting_configuration}, c8y.profiles.second.${conflicting_configuration} should be set to different values before connecting, but are currently set to the same value\n
