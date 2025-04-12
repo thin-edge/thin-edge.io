@@ -105,6 +105,11 @@ Generate CSR using the CSR path from tedge config
     ...    openssl req -in /etc/tedge/device-certs/example_dev_test0001-test1.csr -pubkey -noout | openssl md5
     Should Be Equal    ${output_private_key_md5}    ${output_csr_md5}
 
+Generate CSR using a relative output path
+    [Setup]    Setup With Self-Signed Certificate
+    Execute Command
+    ...    sudo tedge cert create-csr c8y --device-id test-user --output-path ./local.csr && [ -f ./local.csr ]
+
 
 *** Keywords ***
 Setup With Self-Signed Certificate

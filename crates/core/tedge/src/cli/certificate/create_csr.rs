@@ -44,7 +44,7 @@ impl Command for CreateCsrCmd {
 impl CreateCsrCmd {
     pub async fn create_certificate_signing_request(&self) -> Result<(), CertError> {
         let id = &self.id;
-        let csr_path = &self.csr_path;
+        let csr_path = tedge_api::path::resolve_to_absolute_utf8_path(&self.csr_path)?;
         let key_path = &self.key_path;
 
         let previous_key = reuse_private_key(key_path)
@@ -64,7 +64,7 @@ impl CreateCsrCmd {
             .await
             .map_err(|err| err.key_context(key_path.clone()))?;
         }
-        override_public_key(csr_path, cert.certificate_signing_request_string()?)
+        override_public_key(&csr_path, cert.certificate_signing_request_string()?)
             .await
             .map_err(|err| err.cert_context(csr_path.clone()))?;
         Ok(())
