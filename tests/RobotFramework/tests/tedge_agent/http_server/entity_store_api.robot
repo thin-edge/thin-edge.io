@@ -323,6 +323,33 @@ Entity twin api errors
     ...    ${resp}
     ...    Failed to buffer the request body: length limit exceeded|413
 
+Delete entity clears entity registration and twin messages
+    Register Entity    device/child0//    child-device    device/main//
+    Register Entity    device/child1//    child-device    device/main//
+    Register Entity    device/child2//    child-device    device/main//
+    Register Entity    device/child0/service/service0    service    device/child0//
+    Register Entity    device/child00//    child-device    device/child0//
+    Register Entity    device/child000//    child-device    device/child00//
+
+    Execute Command    tedge http put /tedge/v1/entities/device/child0///twin '{"x": 1, "y": 2, "z": 3}'
+    Execute Command    tedge mqtt pub --retain 'te/device/child0///twin/foo' '"bar"'
+    Execute Command    tedge mqtt pub --retain 'te/device/child0/service/service0/twin/foo' '"bar"'
+    Execute Command    tedge mqtt pub --retain 'te/device/child00///twin/foo' '"bar"'
+    Execute Command    tedge mqtt pub --retain 'te/device/child000///twin/foo' '"bar"'
+
+    Should Have Retained MQTT Messages    te/device/child0///twin/foo    message_contains="bar"
+    Should Have Retained MQTT Messages    te/device/child0///twin/x    message_contains=1
+    Should Have Retained MQTT Messages    te/device/child0///twin/y    message_contains=2
+    Should Have Retained MQTT Messages    te/device/child0///twin/z    message_contains=3
+    Should Have Retained MQTT Messages    te/device/child00///twin/foo    message_contains="bar"
+    Should Have Retained MQTT Messages    te/device/child000///twin/foo    message_contains="bar"
+
+    ${deleted}=    Deregister Entity    device/child0//
+
+    Should Not Have Retained MQTT Messages    te/device/child0//#
+    Should Not Have Retained MQTT Messages    te/device/child00//#
+    Should Not Have Retained MQTT Messages    te/device/child000//#
+
 
 *** Keywords ***
 Custom Setup

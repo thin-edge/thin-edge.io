@@ -697,6 +697,82 @@ class ThinEdgeIO(DeviceLibrary):
         )
         return result
 
+    @keyword("Should Have Retained MQTT Messages")
+    def should_have_retained_mqtt_messages(
+            self,
+            topic: str,
+            message_pattern: str = None,
+            message_contains: str = None,
+            device_name: str = None 
+    ) -> List[str]:
+        """
+        Check for a retained message on the given topic
+
+        Args:
+            topic (str): Filter by topic. Supports MQTT wildcard patterns
+
+        *Example:*
+        | ${messages}= | `Should Have Retained MQTT Messages` | te/device/child01/# |
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to execute the command as the device: '{device_name}' has not been setup"
+            )
+        
+        command = f"tedge mqtt sub {topic} --retained-only --no-topic --duration 1s"
+        output = device.execute_command(command).stdout
+        lines = output.splitlines()
+
+        if message_contains:
+            message_pattern = r".*" + re.escape(message_contains) + r".*"
+
+        message_pattern_re = None
+        if message_pattern:
+            message_pattern_re = re.compile(message_pattern, re.IGNORECASE)
+
+        messages = []
+        for line in lines:
+            if message_pattern_re is None or message_pattern_re.match(line):
+                messages.append(line)
+
+        assert messages, f"Expected at least one retained message, but received none"
+        return messages
+
+    @keyword("Should Not Have Retained MQTT Messages")
+    def should_not_have_retained_mqtt_messages(
+            self,
+            topic: str,
+            device_name: str = None 
+    ) -> str:
+        """
+        Assert that there are no retained messages on the given topic
+
+        Args:
+            topic (str): Filter by topic. Supports MQTT wildcard patterns
+
+        *Example:*
+        | ${messages}= | `Should Not Have Retained MQTT Messages` | te/device/child01/# |
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to execute the command as the device: '{device_name}' has not been setup"
+            )
+        
+        command = f"tedge mqtt sub {topic} --retained-only --no-topic --duration 1s"
+        output = device.execute_command(command).stdout
+        assert output == "", f"Expected no messages, but received: {output}"
+        return output
+
     @keyword("Register Child Device")
     def register_child(
             self,
