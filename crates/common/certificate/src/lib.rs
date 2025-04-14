@@ -215,11 +215,15 @@ impl KeyCertPair {
         let mut params = CertificateParams::default();
         params.distinguished_name = distinguished_name;
 
-        // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
-        params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
-
         if let KeyKind::Reuse { keypair_pem } = key_kind {
-            params.key_pair = Some(KeyPair::from_pem(keypair_pem)?);
+            // Use the same signing algorithm as the existing key
+            // Failing to do so leads to an error telling the algorithm is not compatible
+            let key_pair = KeyPair::from_pem(keypair_pem)?;
+            params.alg = key_pair.algorithm();
+            params.key_pair = Some(key_pair);
+        } else {
+            // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
+            params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
         }
 
         Ok(params)
