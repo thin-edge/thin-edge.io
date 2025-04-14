@@ -141,6 +141,11 @@ Generate CSR reusing EC private key
     ...    openssl req -noout -subject -in /etc/tedge/device-certs/device-csr.pem | tr -d ' '
     Should Contain    ${output_csr_subject}    subject=CN=EC-device
 
+Generate CSR using a relative output path
+    [Setup]    Setup With Self-Signed Certificate
+    Execute Command
+    ...    sudo tedge cert create-csr c8y --device-id test-user --output-path ./local.csr && [ -f ./local.csr ]
+
 
 *** Keywords ***
 Setup With Self-Signed Certificate

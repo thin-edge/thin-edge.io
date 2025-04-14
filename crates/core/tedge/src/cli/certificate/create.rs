@@ -10,7 +10,6 @@ use certificate::PemCertificate;
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use tedge_utils::paths::validate_parent_dir_exists;
 use tokio::fs::File;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
@@ -83,9 +82,6 @@ pub async fn persist_new_public_key(
     user: &str,
     group: &str,
 ) -> Result<(), CertError> {
-    validate_parent_dir_exists(cert_path)
-        .await
-        .map_err(CertError::CertPathError)?;
     let key_file = create_new_file(cert_path, user, group).await?;
     persist_public_key(key_file, pem_string).await?;
     Ok(())
@@ -97,9 +93,6 @@ pub async fn persist_new_private_key(
     user: &str,
     group: &str,
 ) -> Result<(), CertError> {
-    validate_parent_dir_exists(key_path)
-        .await
-        .map_err(CertError::KeyPathError)?;
     let key_file = create_new_file(key_path, user, group).await?;
     persist_private_key(key_file, key).await?;
     Ok(())
@@ -109,9 +102,6 @@ pub async fn override_public_key(
     cert_path: &Utf8PathBuf,
     pem_string: String,
 ) -> Result<(), CertError> {
-    validate_parent_dir_exists(cert_path)
-        .await
-        .map_err(CertError::CertPathError)?;
     let key_file = override_file(cert_path).await?;
     persist_public_key(key_file, pem_string).await?;
     Ok(())
@@ -300,7 +290,7 @@ mod tests {
             .create_test_certificate(&CsrTemplate::default())
             .await
             .unwrap_err();
-        assert_matches!(cert_error, CertError::CertPathError { .. });
+        assert_matches!(cert_error, CertError::CertificateNotFound { .. });
     }
 
     #[tokio::test]
@@ -322,6 +312,6 @@ mod tests {
             .create_test_certificate(&CsrTemplate::default())
             .await
             .unwrap_err();
-        assert_matches!(cert_error, CertError::KeyPathError { .. });
+        assert_matches!(cert_error, CertError::KeyNotFound { .. });
     }
 }

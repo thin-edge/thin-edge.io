@@ -64,15 +64,6 @@ pub enum CertError {
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
 
-    #[error("Invalid device.cert_path path: {0}")]
-    CertPathError(PathsError),
-
-    #[error("Invalid device.key_path path: {0}")]
-    KeyPathError(PathsError),
-
-    #[error("Invalid device.csr_path path: {0}")]
-    CsrPathError(PathsError),
-
     #[error(transparent)]
     CertificateError(#[from] certificate::CertificateError),
 
