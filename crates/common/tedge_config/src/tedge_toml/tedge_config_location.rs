@@ -403,13 +403,13 @@ fn keys_in_inner(prefix: &str, table: &toml::map::Map<String, toml::Value>) -> V
 
 #[cfg(test)]
 mod tests {
+    use crate::models::AbsolutePath;
+    use crate::tedge_toml::Cloud;
+    use crate::TEdgeConfigReader;
     use once_cell::sync::Lazy;
     use tedge_test_utils::fs::TempTedgeDir;
     use tokio::sync::Mutex;
     use tokio::sync::MutexGuard;
-
-    use crate::tedge_toml::Cloud;
-    use crate::TEdgeConfigReader;
 
     use super::*;
 
@@ -550,7 +550,7 @@ type = "a-service-type""#;
         let config = t.load().await.unwrap();
         assert_eq!(
             config.c8y.try_get::<&str>(None).unwrap().root_cert_path,
-            "/env/path"
+            AbsolutePath::try_new("/env/path").unwrap()
         );
     }
 
@@ -562,7 +562,7 @@ type = "a-service-type""#;
         let config = t.load().await.unwrap();
         assert_eq!(
             config.c8y.try_get::<&str>(None).unwrap().root_cert_path,
-            "/env/path"
+            AbsolutePath::try_new("/env/path").unwrap()
         );
     }
 
@@ -608,7 +608,7 @@ type = "a-service-type""#;
         let config = t.load().await.unwrap();
         assert_eq!(
             config.c8y.try_get::<&str>(None).unwrap().root_cert_path,
-            "/etc/ssl/certs"
+            AbsolutePath::try_new("/etc/ssl/certs").unwrap()
         );
     }
 
@@ -621,7 +621,7 @@ type = "a-service-type""#;
         let config = t.load().await.unwrap();
         assert_eq!(
             config.c8y.try_get(Some("test")).unwrap().root_cert_path,
-            "/env/path"
+            AbsolutePath::try_new("/env/path").unwrap()
         );
     }
 

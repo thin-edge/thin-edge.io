@@ -20,6 +20,7 @@ use super::models::TopicPrefix;
 use super::models::HTTPS_PORT;
 use super::models::MQTT_TLS_PORT;
 use super::tedge_config_location::TEdgeConfigLocation;
+use crate::models::AbsolutePath;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
@@ -119,18 +120,15 @@ define_tedge_config! {
 
         /// Path where the device's private key is stored
         #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(function = "default_device_key"), reader(private))]
-        #[doku(as = "PathBuf")]
-        key_path: Utf8PathBuf,
+        key_path: AbsolutePath,
 
         /// Path where the device's certificate is stored
         #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(function = "default_device_cert"), reader(private))]
-        #[doku(as = "PathBuf")]
-        cert_path: Utf8PathBuf,
+        cert_path: AbsolutePath,
 
         /// Path where the device's certificate signing request is stored
         #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(function = "default_device_csr"), reader(private))]
-        #[doku(as = "PathBuf")]
-        csr_path: Utf8PathBuf,
+        csr_path: AbsolutePath,
 
         cryptoki: {
             /// Whether to use a Hardware Security Module for authenticating the MQTT connection with the cloud.
@@ -146,7 +144,7 @@ define_tedge_config! {
             /// Needs to be set when `device.cryptoki.mode` is set to `module`
             #[tedge_config(example = "/usr/lib/x86_64-linux-gnu/opensc-pkcs11.so")]
             #[doku(as = "PathBuf")]
-            module_path: Utf8PathBuf,
+            module_path: AbsolutePath,
 
             /// Pin value for logging into the HSM.
             #[tedge_config(example = "123456", default(value = "123456"))]
@@ -198,9 +196,8 @@ define_tedge_config! {
 
         /// The path where Cumulocity root certificate(s) are stored
         #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
-        #[tedge_config(example = "/etc/tedge/c8y-trusted-root-certificates.pem", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
-        #[doku(as = "PathBuf")]
-        root_cert_path: Utf8PathBuf,
+        #[tedge_config(example = "/etc/tedge/c8y-trusted-root-certificates.pem", default(function = "default_root_cert_path"))]
+        root_cert_path: AbsolutePath,
 
         /// The authentication method used to connect Cumulocity
         #[tedge_config(note = "In the auto mode, basic auth is used if c8y.credentials_path is set")]
@@ -210,8 +207,7 @@ define_tedge_config! {
         /// The path where Cumulocity username/password are stored
         #[tedge_config(note = "The value must be the path of the credentials file.")]
         #[tedge_config(example = "/etc/tedge/credentials.toml", default(function = "default_credentials_path"))]
-        #[doku(as = "PathBuf")]
-        credentials_path: Utf8PathBuf,
+        credentials_path: AbsolutePath,
 
         device: {
             /// Identifier of the device within the fleet. It must be globally
@@ -224,18 +220,15 @@ define_tedge_config! {
 
             /// Path where the device's private key is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(from_key = "device.key_path"))]
-            #[doku(as = "PathBuf")]
-            key_path: Utf8PathBuf,
+            key_path: AbsolutePath,
 
             /// Path where the device's certificate is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(from_key = "device.cert_path"))]
-            #[doku(as = "PathBuf")]
-            cert_path: Utf8PathBuf,
+            cert_path: AbsolutePath,
 
             /// Path where the device's certificate signing request is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
-            #[doku(as = "PathBuf")]
-            csr_path: Utf8PathBuf,
+            csr_path: AbsolutePath,
         },
 
         smartrest: {
@@ -332,19 +325,16 @@ define_tedge_config! {
 
             /// The file that will be used as the server certificate for the Cumulocity proxy
             #[tedge_config(example = "/etc/tedge/device-certs/c8y_proxy_certificate.pem")]
-            #[doku(as = "PathBuf")]
-            cert_path: Utf8PathBuf,
+            cert_path: AbsolutePath,
 
             /// The file that will be used as the server private key for the Cumulocity proxy
             #[tedge_config(example = "/etc/tedge/device-certs/c8y_proxy_key.pem")]
-            #[doku(as = "PathBuf")]
-            key_path: Utf8PathBuf,
+            key_path: AbsolutePath,
 
             /// Path to a file containing the PEM encoded CA certificates that are
             /// trusted when checking incoming client certificates for the Cumulocity Proxy
             #[tedge_config(example = "/etc/ssl/certs")]
-            #[doku(as = "PathBuf")]
-            ca_path: Utf8PathBuf,
+            ca_path: AbsolutePath,
         },
 
         bridge: {
@@ -415,9 +405,8 @@ define_tedge_config! {
 
         /// The path where Azure IoT root certificate(s) are stored
         #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
-        #[tedge_config(example = "/etc/tedge/az-trusted-root-certificates.pem", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
-        #[doku(as = "PathBuf")]
-        root_cert_path: Utf8PathBuf,
+        #[tedge_config(example = "/etc/tedge/az-trusted-root-certificates.pem", default(function = "default_root_cert_path"))]
+        root_cert_path: AbsolutePath,
 
         device: {
             /// Identifier of the device within the fleet. It must be globally
@@ -430,18 +419,15 @@ define_tedge_config! {
 
             /// Path where the device's private key is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(from_key = "device.key_path"))]
-            #[doku(as = "PathBuf")]
-            key_path: Utf8PathBuf,
+            key_path: AbsolutePath,
 
             /// Path where the device's certificate is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(from_key = "device.cert_path"))]
-            #[doku(as = "PathBuf")]
-            cert_path: Utf8PathBuf,
+            cert_path: AbsolutePath,
 
             /// Path where the device's certificate signing request is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
-            #[doku(as = "PathBuf")]
-            csr_path: Utf8PathBuf,
+            csr_path: AbsolutePath,
         },
 
         mapper: {
@@ -489,9 +475,8 @@ define_tedge_config! {
 
         /// The path where AWS IoT root certificate(s) are stored
         #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
-        #[tedge_config(example = "/etc/tedge/aws-trusted-root-certificates.pem", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
-        #[doku(as = "PathBuf")]
-        root_cert_path: Utf8PathBuf,
+        #[tedge_config(example = "/etc/tedge/aws-trusted-root-certificates.pem", default(function = "default_root_cert_path"))]
+        root_cert_path: AbsolutePath,
 
         device: {
             /// Identifier of the device within the fleet. It must be globally
@@ -504,18 +489,15 @@ define_tedge_config! {
 
             /// Path where the device's private key is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(from_key = "device.key_path"))]
-            #[doku(as = "PathBuf")]
-            key_path: Utf8PathBuf,
+            key_path: AbsolutePath,
 
             /// Path where the device's certificate is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(from_key = "device.cert_path"))]
-            #[doku(as = "PathBuf")]
-            cert_path: Utf8PathBuf,
+            cert_path: AbsolutePath,
 
             /// Path where the device's certificate signing request is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
-            #[doku(as = "PathBuf")]
-            csr_path: Utf8PathBuf,
+            csr_path: AbsolutePath,
         },
 
         mapper: {
@@ -596,28 +578,24 @@ define_tedge_config! {
             auth: {
                 /// Path to the CA certificate used by MQTT clients to use when authenticating the MQTT broker
                 #[tedge_config(example = "/etc/mosquitto/ca_certificates/ca.crt")]
-                #[doku(as = "PathBuf")]
                 #[tedge_config(deprecated_name = "cafile")]
-                ca_file: Utf8PathBuf,
+                ca_file: AbsolutePath,
 
                 /// Path to the directory containing the CA certificates used by MQTT
                 /// clients when authenticating the MQTT broker
                 #[tedge_config(example = "/etc/mosquitto/ca_certificates")]
-                #[doku(as = "PathBuf")]
                 #[tedge_config(deprecated_name = "cadir")]
-                ca_dir: Utf8PathBuf,
+                ca_dir: AbsolutePath,
 
                 /// Path to the client certificate
-                #[doku(as = "PathBuf")]
                 #[tedge_config(example = "/etc/mosquitto/auth_certificates/cert.pem")]
                 #[tedge_config(deprecated_name = "certfile")]
-                cert_file: Utf8PathBuf,
+                cert_file: AbsolutePath,
 
                 /// Path to the client private key
-                #[doku(as = "PathBuf")]
                 #[tedge_config(example = "/etc/mosquitto/auth_certificates/key.pem")]
                 #[tedge_config(deprecated_name = "keyfile")]
-                key_file: Utf8PathBuf,
+                key_file: AbsolutePath,
             }
         },
 
@@ -639,23 +617,20 @@ define_tedge_config! {
             /// Path to a file containing the PEM encoded CA certificates that are
             /// trusted when checking incoming client certificates
             #[tedge_config(example = "/etc/ssl/certs")]
-            #[doku(as = "PathBuf")]
             #[tedge_config(deprecated_key = "mqtt.external.capath")]
-            ca_path: Utf8PathBuf,
+            ca_path: AbsolutePath,
 
             /// Path to the certificate file which is used by the external MQTT listener
             #[tedge_config(note = "This setting shall be used together with `mqtt.external.key_file` for external connections.")]
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem")]
-            #[doku(as = "PathBuf")]
             #[tedge_config(deprecated_key = "mqtt.external.certfile")]
-            cert_file: Utf8PathBuf,
+            cert_file: AbsolutePath,
 
             /// Path to the key file which is used by the external MQTT listener
             #[tedge_config(note = "This setting shall be used together with `mqtt.external.cert_file` for external connections.")]
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem")]
-            #[doku(as = "PathBuf")]
             #[tedge_config(deprecated_key = "mqtt.external.keyfile")]
-            key_file: Utf8PathBuf,
+            key_file: AbsolutePath,
         },
 
         bridge: {
@@ -705,42 +680,36 @@ define_tedge_config! {
 
             auth: {
                 /// Path to the certificate which is used by the agent when connecting to external services
-                #[doku(as = "PathBuf")]
                 #[tedge_config(reader(private))]
-                cert_file: Utf8PathBuf,
+                cert_file: AbsolutePath,
 
                 /// Path to the private key which is used by the agent when connecting to external services
-                #[doku(as = "PathBuf")]
                 #[tedge_config(reader(private))]
-                key_file: Utf8PathBuf,
+                key_file: AbsolutePath,
             },
         },
 
         /// The file that will be used as the server certificate for the File Transfer Service
         #[tedge_config(example = "/etc/tedge/device-certs/file_transfer_certificate.pem")]
-        #[doku(as = "PathBuf")]
-        cert_path: Utf8PathBuf,
+        cert_path: AbsolutePath,
 
         /// The file that will be used as the server private key for the File Transfer Service
         #[tedge_config(example = "/etc/tedge/device-certs/file_transfer_key.pem")]
-        #[doku(as = "PathBuf")]
-        key_path: Utf8PathBuf,
+        key_path: AbsolutePath,
 
         /// Path to a directory containing the PEM encoded CA certificates that are
         /// trusted when checking incoming client certificates for the File Transfer Service
         #[tedge_config(example = "/etc/ssl/certs")]
-        #[doku(as = "PathBuf")]
-        ca_path: Utf8PathBuf,
+        ca_path: AbsolutePath,
     },
 
     agent: {
         state: {
             /// The directory where the tedge-agent persists its state across restarts
             #[tedge_config(note = "If the given directory doesn't exists, `/etc/tedge/.agent` is used as a fallback irrespective of the current setting.")]
-            #[tedge_config(default(value = "/data/tedge/agent"))]
+            #[tedge_config(default(from_str = "/data/tedge/agent"))]
             #[tedge_config(example = "/data/tedge/agent")]
-            #[doku(as = "PathBuf")]
-            path: Utf8PathBuf,
+            path: AbsolutePath,
         },
 
         enable: {
@@ -792,9 +761,8 @@ define_tedge_config! {
 
     run: {
         /// The directory used to store runtime information, such as file locks
-        #[doku(as = "PathBuf")]
-        #[tedge_config(example = "/run", default(value = "/run"))]
-        path: Utf8PathBuf,
+        #[tedge_config(example = "/run", default(from_str = "/run"))]
+        path: AbsolutePath,
 
         /// Whether to create a lock file or not
         #[tedge_config(example = "true", default(value = true))]
@@ -807,23 +775,20 @@ define_tedge_config! {
 
     logs: {
         /// The directory used to store logs
-        #[tedge_config(example = "/var/log/tedge", default(value = "/var/log/tedge"))]
-        #[doku(as = "PathBuf")]
-        path: Utf8PathBuf,
+        #[tedge_config(example = "/var/log/tedge", default(from_str = "/var/log/tedge"))]
+        path: AbsolutePath,
     },
 
     tmp: {
         /// The temporary directory used to download files to the device
-        #[tedge_config(example = "/tmp", default(value = "/tmp"))]
-        #[doku(as = "PathBuf")]
-        path: Utf8PathBuf,
+        #[tedge_config(example = "/tmp", default(from_str = "/tmp"))]
+        path: AbsolutePath,
     },
 
     data: {
         /// The directory used to store data like cached files, runtime metadata, etc.
-        #[tedge_config(example = "/var/tedge", default(value = "/var/tedge"))]
-        #[doku(as = "PathBuf")]
-        path: Utf8PathBuf,
+        #[tedge_config(example = "/var/tedge", default(from_str = "/var/tedge"))]
+        path: AbsolutePath,
     },
 
     firmware: {
@@ -1142,29 +1107,43 @@ fn cert_error_into_config_error(key: Cow<'static, str>, err: CertificateError) -
     }
 }
 
-fn default_device_key(location: &TEdgeConfigLocation) -> Utf8PathBuf {
+fn default_root_cert_path(_location: &TEdgeConfigLocation) -> AbsolutePath {
+    AbsolutePath::try_new(DEFAULT_ROOT_CERT_PATH).unwrap()
+}
+
+fn default_device_key(location: &TEdgeConfigLocation) -> AbsolutePath {
     location
         .tedge_config_root_path()
         .join("device-certs")
         .join("tedge-private-key.pem")
+        .try_into()
+        .unwrap()
 }
 
-fn default_device_cert(location: &TEdgeConfigLocation) -> Utf8PathBuf {
+fn default_device_cert(location: &TEdgeConfigLocation) -> AbsolutePath {
     location
         .tedge_config_root_path()
         .join("device-certs")
         .join("tedge-certificate.pem")
+        .try_into()
+        .unwrap()
 }
 
-fn default_device_csr(location: &TEdgeConfigLocation) -> Utf8PathBuf {
+fn default_device_csr(location: &TEdgeConfigLocation) -> AbsolutePath {
     location
         .tedge_config_root_path()
         .join("device-certs")
         .join("tedge.csr")
+        .try_into()
+        .unwrap()
 }
 
-fn default_credentials_path(location: &TEdgeConfigLocation) -> Utf8PathBuf {
-    location.tedge_config_root_path().join("credentials.toml")
+fn default_credentials_path(location: &TEdgeConfigLocation) -> AbsolutePath {
+    location
+        .tedge_config_root_path()
+        .join("credentials.toml")
+        .try_into()
+        .unwrap()
 }
 
 fn default_mqtt_port() -> NonZeroU16 {

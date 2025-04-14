@@ -252,7 +252,7 @@ impl BuildCommand for TEdgeCertCli {
                 let c8y = config.c8y.try_get(profile.as_deref())?;
                 let cmd = c8y::UploadCertCmd {
                     device_id: c8y.device.id()?.clone(),
-                    path: c8y.device.cert_path.clone(),
+                    path: c8y.device.cert_path.clone().into(),
                     host: c8y.http.or_err()?.to_owned(),
                     cloud_root_certs: config.cloud_root_certs(),
                     username,
@@ -272,7 +272,7 @@ impl BuildCommand for TEdgeCertCli {
                 let c8y_config = config.c8y.try_get(profile.as_deref())?;
 
                 let (csr_path, generate_csr) = match csr_path {
-                    None => (c8y_config.device.csr_path.clone(), true),
+                    None => (c8y_config.device.csr_path.clone().into(), true),
                     Some(csr_path) => (csr_path, false),
                 };
 
@@ -281,8 +281,8 @@ impl BuildCommand for TEdgeCertCli {
                     one_time_password: token,
                     c8y_url: c8y_config.http.or_err()?.to_owned(),
                     root_certs: config.cloud_root_certs(),
-                    cert_path: c8y_config.device.cert_path.to_owned(),
-                    key_path: c8y_config.device.key_path.to_owned(),
+                    cert_path: c8y_config.device.cert_path.to_owned().into(),
+                    key_path: c8y_config.device.key_path.to_owned().into(),
                     csr_path,
                     generate_csr,
                     retry_every,

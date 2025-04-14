@@ -1,3 +1,6 @@
+use crate::server::AppData;
+use crate::server::Server;
+use crate::tokens::C8yTokenManager;
 use async_trait::async_trait;
 use c8y_api::http_proxy::C8yAuthRetriever;
 use camino::Utf8PathBuf;
@@ -14,10 +17,6 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_config::TEdgeConfig;
 use tedge_config_macros::OptionalConfig;
 use tracing::info;
-
-use crate::server::AppData;
-use crate::server::Server;
-use crate::tokens::C8yTokenManager;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -48,9 +47,9 @@ impl C8yAuthProxyBuilder {
         };
         let bind = &c8y.proxy.bind;
         let (signal_sender, signal_receiver) = mpsc::channel(10);
-        let cert_path = c8y.proxy.cert_path.clone();
-        let key_path = c8y.proxy.key_path.clone();
-        let ca_path = c8y.proxy.ca_path.clone();
+        let cert_path = c8y.proxy.cert_path.clone().map(Utf8PathBuf::from);
+        let key_path = c8y.proxy.key_path.clone().map(Utf8PathBuf::from);
+        let ca_path = c8y.proxy.ca_path.clone().map(Utf8PathBuf::from);
 
         Ok(Self {
             app_data,

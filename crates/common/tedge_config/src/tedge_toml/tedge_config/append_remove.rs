@@ -35,6 +35,7 @@ macro_rules! impl_append_remove_for_single_value {
 
 impl_append_remove_for_single_value!(
     Utf8PathBuf,
+    AbsolutePath,
     String,
     ConnectUrl,
     HostPort<HTTPS_PORT>,

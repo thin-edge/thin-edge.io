@@ -201,9 +201,27 @@ impl CommonMosquittoConfig {
                     .cloned()
                     .map(|a| a.to_string()),
                 config.mqtt.external.bind.interface.or_none().cloned(),
-                config.mqtt.external.ca_path.or_none().cloned(),
-                config.mqtt.external.cert_file.or_none().cloned(),
-                config.mqtt.external.key_file.or_none().cloned(),
+                config
+                    .mqtt
+                    .external
+                    .ca_path
+                    .or_none()
+                    .cloned()
+                    .map(Utf8PathBuf::from),
+                config
+                    .mqtt
+                    .external
+                    .cert_file
+                    .or_none()
+                    .cloned()
+                    .map(Utf8PathBuf::from),
+                config
+                    .mqtt
+                    .external
+                    .key_file
+                    .or_none()
+                    .cloned()
+                    .map(Utf8PathBuf::from),
             )
     }
 

@@ -77,6 +77,13 @@ Run tedge cert create with cloud profile
     ...    openssl x509 -noout -subject -in /etc/tedge/device-certs/tedge-certificate@third.pem
     Should Match Regexp    ${subject}    pattern=^subject=CN = ${THIRD_DEVICE_SN},.+$
 
+Tedge config paths to certificates and keys must be absolute
+    ${error}=    Execute Command
+    ...    tedge config set device.cert_path device-certificate.pem
+    ...    exp_exit_code=1
+    ...    stderr=True
+    Should Contain    ${error}[1]    Not an absolute path: device-certificate.pem
+
 
 *** Keywords ***
 Custom Setup

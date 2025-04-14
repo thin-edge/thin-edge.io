@@ -27,7 +27,7 @@ impl OperationConfig {
             device_topic_id: device_topic_id.clone(),
             log_dir: tedge_config.logs.path.join("agent"),
             config_dir: config_dir.clone(),
-            state_dir: tedge_config.agent.state.path.clone(),
+            state_dir: tedge_config.agent.state.path.clone().into(),
             operations_dir: config_dir.join("operations"),
         })
     }

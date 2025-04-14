@@ -108,7 +108,7 @@ impl AgentConfig {
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
         let tmp_dir = Arc::from(tedge_config.tmp.path.as_path());
-        let state_dir = tedge_config.agent.state.path.clone();
+        let state_dir = tedge_config.agent.state.path.clone().into();
 
         let mqtt_topic_root = cliopts
             .mqtt_topic_root
@@ -132,15 +132,15 @@ impl AgentConfig {
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
 
         // HTTP config
-        let data_dir: DataDir = tedge_config.data.path.clone().into();
+        let data_dir: DataDir = tedge_config.data.path.as_path().to_owned().into();
         let http_bind_address = tedge_config.http.bind.address;
         let http_port = tedge_config.http.bind.port;
 
         let http_config = HttpServerConfig {
             file_transfer_dir: data_dir.file_transfer_dir(),
-            cert_path: tedge_config.http.cert_path.clone(),
-            key_path: tedge_config.http.key_path.clone(),
-            ca_path: tedge_config.http.ca_path.clone(),
+            cert_path: tedge_config.http.cert_path.clone().map(Utf8PathBuf::from),
+            key_path: tedge_config.http.key_path.clone().map(Utf8PathBuf::from),
+            ca_path: tedge_config.http.ca_path.clone().map(Utf8PathBuf::from),
             bind_addr: SocketAddr::from((http_bind_address, http_port)),
         };
 
@@ -162,11 +162,11 @@ impl AgentConfig {
         .await?;
 
         // For flockfile
-        let run_dir = tedge_config.run.path.clone();
+        let run_dir = tedge_config.run.path.clone().into();
         let use_lock = tedge_config.run.lock_files;
 
         // For agent specific
-        let log_dir = tedge_config.logs.path.clone();
+        let log_dir: Utf8PathBuf = tedge_config.logs.path.clone().into();
         let agent_log_dir = log_dir.join("agent");
         let operations_dir = config_dir.join("operations");
 
