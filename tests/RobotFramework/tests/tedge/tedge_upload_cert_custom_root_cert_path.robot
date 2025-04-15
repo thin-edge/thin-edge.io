@@ -15,7 +15,7 @@ tedge cert upload c8y respects root cert path
     [Setup]    Setup With Self-Signed Certificate
     Execute Command    sudo tedge disconnect c8y
     ${output}=    Execute Command
-    ...    sudo tedge cert renew --self-signed
+    ...    sudo tedge cert renew --ca self-signed
     ...    stderr=${True}
     ...    stdout=${False}
     ...    ignore_exit_code=${True}
