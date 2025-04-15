@@ -230,7 +230,7 @@ impl BuildCommand for TEdgeCertCli {
 
             TEdgeCertCli::Download(DownloadCertCli::C8y {
                 id,
-                token,
+                one_time_password: token,
                 profile,
                 csr_path,
                 retry_every,
@@ -245,7 +245,7 @@ impl BuildCommand for TEdgeCertCli {
 
                 let cmd = c8y::DownloadCertCmd {
                     device_id: id,
-                    security_token: token,
+                    one_time_password: token,
                     c8y_url: c8y_config.http.or_err()?.to_owned(),
                     root_certs: config.cloud_root_certs(),
                     cert_path: c8y_config.device.cert_path.to_owned(),
@@ -405,17 +405,17 @@ pub enum DownloadCertCli {
         )]
         id: String,
 
-        #[clap(long)]
+        #[clap(short = 'p', long = "one-time-password")]
         #[arg(
-            env = "DEVICE_TOKEN",
+            env = "DEVICE_ONE_TIME_PASSWORD",
             hide_env_values = true,
             hide_default_value = true,
             default_value = ""
         )]
-        /// The security token assigned to this device when registered to Cumulocity
+        /// The one-time password assigned to this device when registered to Cumulocity
         ///
         /// You will be prompted for input if the value is not provided or is empty
-        token: String,
+        one_time_password: String,
 
         #[clap(long)]
         /// The Cumulocity cloud profile (when the device is connected to several tenants)
