@@ -301,11 +301,11 @@ impl ConnectCommand {
         bridge_config: &BridgeConfig,
         certificate_shift: &CertificateShift,
     ) -> anyhow::Result<()> {
-        if bridge_config.cloud_name.eq("c8y") {
+        if let Cloud::C8y(profile_name) = &self.cloud {
             let use_basic_auth = false;
             let device_type = &self.config.device.ty;
-            let profile_name = self.cloud.profile_name().map(|p| p.as_ref());
-            let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(profile_name)?;
+            let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
+            let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
             if let Some(client_config) = mqtt_auth_config.client.as_mut() {
                 client_config.cert_file = certificate_shift.new_cert_path.to_owned()
             }
@@ -390,6 +390,15 @@ impl ConnectCommand {
 
     async fn check_connection(&self) -> Result<DeviceStatus, Fancy<ConnectError>> {
         let config = &self.config;
+        // IDEA: Report if any errors were returned by the mapper
+        //
+        // Here we setup the mapper for a given cloud and run a connection test that goes through
+        // the mapper. Often when this connection fails, it's due to the mapper encountering some
+        // error. Currently one has to manually run `journalctl -u tedge-mapper-[CLOUD]` to check if
+        // there are any, but we could perhaps display it here automatically if the test failed.
+        //
+        // The most simplest approach would be to just read journalctl and see if there are any
+        // errors since the time we started the connection process.
         let spinner = Spinner::start("Verifying device is connected to cloud");
         let res = match &self.cloud {
             Cloud::Azure(profile) => check_device_status_azure(config, profile.as_deref()).await,
@@ -696,8 +705,8 @@ impl ConnectCommand {
             if self.offline_mode {
                 println!("Offline mode. Skipping device creation in Cumulocity cloud.")
             } else {
-                let profile_name = profile_name.as_deref().map(|p| p.as_ref());
-                let mqtt_auth_config = tedge_config.mqtt_auth_config_cloud_broker(profile_name)?;
+                let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
+                let mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
                 let spinner = Spinner::start("Creating device in Cumulocity cloud");
                 let res = create_device_with_direct_connection(
                     use_basic_auth,
