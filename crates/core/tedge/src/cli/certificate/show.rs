@@ -62,6 +62,15 @@ impl Command for ShowCertCmd {
 }
 
 impl ShowCertCmd {
+    pub async fn show(cert_path: &Utf8PathBuf) -> Result<(), anyhow::Error> {
+        let cmd = ShowCertCmd {
+            cert_path: cert_path.clone(),
+            minimum: humantime::parse_duration("30d")?,
+            validity_check_only: false,
+        };
+        cmd.show_certificate().await
+    }
+
     async fn read_certificate(&self) -> Result<PemCertificate, anyhow::Error> {
         let cert_path = &self.cert_path;
         let cert = tokio::fs::read_to_string(cert_path)

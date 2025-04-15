@@ -1,5 +1,6 @@
 use super::create::certificate_cn;
 use super::error::CertError;
+use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::override_public_key;
@@ -31,7 +32,11 @@ impl Command for RenewCertCmd {
 
     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         self.renew_test_certificate(&self.csr_template).await?;
-        eprintln!("Certificate was successfully renewed, for un-interrupted service, the certificate has to be uploaded to the cloud");
+        eprintln!("Certificate renewed successfully");
+        eprintln!("    For an un-interrupted service:");
+        eprintln!("    => the new certificate has to be uploaded to the cloud");
+        eprintln!("    => then the device reconnected\n");
+        ShowCertCmd::show(&self.new_cert_path).await?;
         Ok(())
     }
 }

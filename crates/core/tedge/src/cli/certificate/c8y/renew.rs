@@ -2,6 +2,7 @@ use crate::certificate_cn;
 use crate::cli::certificate::c8y::create_device_csr;
 use crate::cli::certificate::c8y::read_csr_from_file;
 use crate::cli::certificate::c8y::store_device_cert;
+use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::get_webpki_error_from_reqwest;
 use crate::log::MaybeFancy;
@@ -57,7 +58,12 @@ impl Command for RenewCertCmd {
     }
 
     async fn execute(&self) -> Result<(), MaybeFancy<Error>> {
-        Ok(self.renew_device_certificate().await?)
+        self.renew_device_certificate().await?;
+        eprintln!("Certificate renewed successfully");
+        eprintln!("    For an un-interrupted service:");
+        eprintln!("    => the device has to be reconnected to the cloud\n");
+        ShowCertCmd::show(&self.new_cert_path).await?;
+        Ok(())
     }
 }
 
