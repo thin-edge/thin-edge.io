@@ -17,7 +17,7 @@ use tedge_config::models::TopicPrefix;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::TEdgeConfigReaderAz;
 use tedge_config::TEdgeConfig;
-use tedge_mqtt_bridge::use_key_and_cert;
+use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
@@ -60,7 +60,15 @@ impl TEdgeComponent for AzureMapper {
                 "",
             );
             cloud_config.set_keep_alive(az_config.bridge.keepalive_interval.duration());
-            use_key_and_cert(&mut cloud_config, az_config)?;
+
+            // set tls config
+            let cloud_broker_auth_config = tedge_config
+                .mqtt_auth_config_cloud_broker(az_config)
+                .expect("error getting cloud broker auth config");
+            let client_config = cloud_broker_auth_config
+                .to_rustls_client_config()
+                .expect("error getting cloud broker auth config");
+            cloud_config.set_transport(Transport::tls_with_config(client_config.into()));
 
             let built_in_bridge_name = format!("tedge-mapper-bridge-{prefix}");
             let health_topic =

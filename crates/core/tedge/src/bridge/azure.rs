@@ -108,7 +108,6 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval,
-            use_cryptoki: false,
         }
     }
 }
@@ -170,7 +169,6 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         auth_type: AuthType::Certificate,
         mosquitto_version: None,
         keepalive_interval: Duration::from_secs(60),
-        use_cryptoki: false,
     };
 
     assert_eq!(bridge, expected);
@@ -236,7 +234,6 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
         auth_type: AuthType::Certificate,
         mosquitto_version: None,
         keepalive_interval: Duration::from_secs(60),
-        use_cryptoki: false,
     };
 
     assert_eq!(bridge, expected);

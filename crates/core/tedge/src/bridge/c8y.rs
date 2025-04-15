@@ -34,7 +34,6 @@ pub struct BridgeConfigC8yParams {
     pub profile_name: Option<ProfileName>,
     pub mqtt_schema: MqttSchema,
     pub keepalive_interval: Duration,
-    pub use_cryptoki: bool,
 }
 
 impl From<BridgeConfigC8yParams> for BridgeConfig {
@@ -56,7 +55,6 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             profile_name,
             mqtt_schema,
             keepalive_interval,
-            use_cryptoki,
         } = params;
 
         let mut topics: Vec<String> = vec![
@@ -195,7 +193,8 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             auth_type,
             mosquitto_version,
             keepalive_interval,
-            use_cryptoki,
+            // this is orthogonal to
+            // use_cryptoki: false,
         }
     }
 }
@@ -256,7 +255,6 @@ mod tests {
             profile_name: None,
             mqtt_schema: MqttSchema::with_root("te".into()),
             keepalive_interval: Duration::from_secs(60),
-            use_cryptoki: false,
         };
 
         let bridge = BridgeConfig::from(params);
@@ -328,7 +326,6 @@ mod tests {
             auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
-            use_cryptoki: false,
         };
 
         assert_eq!(bridge, expected);
@@ -355,7 +352,6 @@ mod tests {
             profile_name: Some("profile".parse().unwrap()),
             mqtt_schema: MqttSchema::with_root("te".into()),
             keepalive_interval: Duration::from_secs(60),
-            use_cryptoki: false,
         };
 
         let bridge = BridgeConfig::from(params);
@@ -434,7 +430,6 @@ mod tests {
             auth_type: AuthType::Basic,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
-            use_cryptoki: false,
         };
 
         assert_eq!(bridge, expected);

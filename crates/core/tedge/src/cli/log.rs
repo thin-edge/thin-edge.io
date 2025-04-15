@@ -266,6 +266,7 @@ impl<'a> ConfigLogger<'a> {
         service_manager: &'a dyn SystemServiceManager,
         cloud: &'a MaybeBorrowedCloud<'a>,
         credentials_path: Option<&'a Utf8Path>,
+        use_cryptoki: bool,
     ) {
         println!(
             "{}",
@@ -280,7 +281,7 @@ impl<'a> ConfigLogger<'a> {
                 service_manager,
                 mosquitto_version: config.mosquitto_version.as_deref(),
                 cloud,
-                cryptoki: config.use_cryptoki
+                cryptoki: use_cryptoki
             }
         )
     }
