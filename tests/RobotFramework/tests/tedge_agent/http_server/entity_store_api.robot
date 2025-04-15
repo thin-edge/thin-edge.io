@@ -121,7 +121,7 @@ Update entity errors
     ...    curl ${url} -X PATCH --silent --write-out "|%\{http_code\}" -H 'Content-Type: application/json' -d '${payload}'
     Should Be Equal
     ...    ${resp}
-    ...    {"error":"Main device entity metadata can not be updated"}|400
+    ...    {"error":"The parent of main device can not be updated"}|400
 
     # New parent is a descendent of target
     ${url}=    Set Variable    http://localhost:8000/tedge/v1/entities/device/child_x//
@@ -139,7 +139,7 @@ Update entity errors
     ...    curl ${url} -X PATCH --silent --write-out "|%\{http_code\}" -H 'Content-Type: application/json' -d '${payload}'
     Should Be Equal
     ...    ${resp}
-    ...    {"error":"unknown field `@type`, expected `@parent` at line 1 column 8"}|400
+    ...    {"error":"unknown field `@type`, expected `@parent` or `@health` at line 1 column 8"}|400
 
 MQTT HTTP interoperability
     Execute Command    tedge mqtt pub --retain 'te/device/child_abc//' '{"@type":"child-device"}'

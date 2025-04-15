@@ -43,8 +43,8 @@ pub enum Error {
     #[error("Updating the twin data of {0} with a registration message is not supported")]
     InvalidEntityTwinUpdate(EntityTopicId),
 
-    #[error("Updating the metadata of the main device is not supported")]
-    InvalidMainDeviceUpdate,
+    #[error("Updating the parent of the main device is not supported")]
+    InvalidMainDeviceParentUpdate,
 
     #[error("Auto registration of the entity with topic id {0} failed as it does not match the default topic scheme: 'device/<device-id>/service/<service-id>'. Try explicit registration instead.")]
     NonDefaultTopicScheme(EntityTopicId),
@@ -113,8 +113,10 @@ impl EntityCache {
         SF: Fn(&str) -> Result<EntityExternalId, InvalidExternalIdError>,
         SF: 'static + Send + Sync,
     {
-        let main_device_metadata =
-            CloudEntityMetadata::new(main_device_xid.clone(), EntityMetadata::main_device());
+        let main_device_metadata = CloudEntityMetadata::new(
+            main_device_xid.clone(),
+            EntityMetadata::main_device(Some(main_device_xid.clone())),
+        );
 
         Self {
             main_device_xid: main_device_xid.clone(),
@@ -131,9 +133,6 @@ impl EntityCache {
         &mut self,
         entity: EntityRegistrationMessage,
     ) -> Result<(UpdateOutcome, Vec<RegisteredEntityData>), Error> {
-        if entity.topic_id == self.main_device_tid {
-            return Err(Error::InvalidMainDeviceUpdate);
-        }
         let parent = entity.parent.as_ref().unwrap_or(&self.main_device_tid);
         if self.entities.contains_key(parent) {
             let outcome = self.register_single_entity(entity.clone())?;
@@ -169,6 +168,8 @@ impl EntityCache {
     ) -> Result<UpdateOutcome, Error> {
         let external_id = if let Some(id) = entity.external_id {
             (self.external_id_validator_fn)(id.as_ref())?
+        } else if entity.r#type == EntityType::MainDevice {
+            self.main_device_xid.clone()
         } else {
             (self.external_id_mapper_fn)(&entity.topic_id, self.main_device_external_id())
         };
@@ -191,18 +192,19 @@ impl EntityCache {
             external_id: Some(external_id.clone()),
             r#type: entity.r#type,
             parent,
+            health_endpoint: entity.health_endpoint,
             twin_data: entity.twin_data,
         };
 
-        self.insert(entity_metadata)
+        self.upsert(entity_metadata)
     }
 
-    /// Insert a new entity
+    /// Insert a new entity or update an existing entity
     ///
     /// Return Inserted if the entity is new
     /// Return Updated if the entity was previously registered and has been updated by this call
     /// Return Unchanged if the entity not affected by this call
-    fn insert(&mut self, entity_metadata: EntityMetadata) -> Result<UpdateOutcome, Error> {
+    fn upsert(&mut self, entity_metadata: EntityMetadata) -> Result<UpdateOutcome, Error> {
         let topic_id = entity_metadata.topic_id.clone();
         let external_id = entity_metadata
             .external_id
@@ -214,8 +216,18 @@ impl EntityCache {
                 // if there is no change, no entities were affected
                 let existing_entity = occupied.get().metadata.clone();
 
+                if entity_metadata.r#type != existing_entity.r#type {
+                    return Err(Error::InvalidEntityTypeUpdate(topic_id.clone()));
+                }
+
                 if entity_metadata.external_id != existing_entity.external_id {
                     return Err(Error::InvalidExternalIdUpdate(topic_id.clone()));
+                }
+
+                if entity_metadata.r#type == EntityType::MainDevice
+                    && entity_metadata.parent != existing_entity.parent
+                {
+                    return Err(Error::InvalidMainDeviceParentUpdate);
                 }
 
                 let mut merged_other = existing_entity.twin_data.clone();
@@ -366,6 +378,7 @@ mod tests {
     use super::EntityCache;
     use super::Error;
     use crate::converter::CumulocityConverter;
+    use crate::entity_cache::UpdateOutcome;
     use assert_matches::assert_matches;
     use serde_json::Map;
     use tedge_api::entity::EntityType;
@@ -383,11 +396,35 @@ mod tests {
             r#type: EntityType::ChildDevice,
             external_id: Some("bad+id".into()),
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         });
 
         // Assert service registered under main device with custom topic scheme
         assert_matches!(res, Err(Error::InvalidExternalId(_)));
+    }
+
+    #[test]
+    fn main_device_health_endpoint_update() {
+        let mut cache = new_entity_cache();
+
+        let res = cache.upsert_entity(EntityRegistrationMessage {
+            topic_id: EntityTopicId::default_main_device(),
+            r#type: EntityType::MainDevice,
+            external_id: None,
+            parent: None,
+            health_endpoint: Some(EntityTopicId::default_main_service("foo").unwrap()),
+            twin_data: Map::new(),
+        });
+        assert_matches!(res, Ok((UpdateOutcome::Updated(_, _), _)));
+        if let UpdateOutcome::Updated(new, old) = res.unwrap().0 {
+            assert_eq!(
+                new.health_endpoint,
+                Some(EntityTopicId::default_main_service("foo").unwrap())
+            );
+            assert_eq!(new.external_id, Some("test-device".into())); //Kept from the original registration
+            assert_eq!(old.health_endpoint, None);
+        }
     }
 
     fn new_entity_cache() -> EntityCache {

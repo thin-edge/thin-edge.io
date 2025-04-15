@@ -107,6 +107,7 @@ impl EntityStore {
             external_id: None,
             r#type: main_device.r#type,
             parent: None,
+            health_endpoint: None,
             twin_data: main_device.twin_data,
         };
 
@@ -364,6 +365,7 @@ impl EntityStore {
             r#type: message.r#type,
             external_id: message.external_id,
             parent,
+            health_endpoint: message.health_endpoint,
             twin_data: message.twin_data,
         };
 
@@ -390,12 +392,12 @@ impl EntityStore {
         Ok(affected_entities)
     }
 
-    pub fn update_parent(
+    pub fn update_entity(
         &mut self,
         topic_id: &EntityTopicId,
-        new_parent: &EntityTopicId,
+        update_message: EntityUpdateMessage,
     ) -> Result<&EntityMetadata, Error> {
-        self.entities.update_parent(topic_id, new_parent)
+        self.entities.update_entity(topic_id, update_message)
     }
 
     pub fn ancestors(&self, topic_id: &EntityTopicId) -> Result<Vec<&EntityTopicId>, Error> {
@@ -789,47 +791,55 @@ impl EntityTree {
         Ok(parent)
     }
 
-    pub fn update_parent(
+    pub fn update_entity(
         &mut self,
         topic_id: &EntityTopicId,
-        new_parent: &EntityTopicId,
+        update_message: EntityUpdateMessage,
     ) -> Result<&EntityMetadata, Error> {
-        if topic_id == new_parent {
-            return Err(Error::InvalidSelfParent(new_parent.clone()));
-        }
+        if let Some(new_parent) = update_message.parent {
+            if new_parent == topic_id {
+                return Err(Error::InvalidSelfParent(new_parent.clone()));
+            }
 
-        if topic_id == &self.main_device {
-            return Err(Error::ImmutableMainDevice);
-        }
+            if topic_id == &self.main_device {
+                // The main device can not have a parent
+                return Err(Error::InvalidMainDeviceParent);
+            }
 
-        let entity = self.try_get(new_parent)?;
-        if entity.r#type == EntityType::Service {
-            return Err(Error::InvalidServiceParent(
-                new_parent.clone(),
-                topic_id.clone(),
-            ));
-        }
+            let entity = self.try_get(&new_parent)?;
+            if entity.r#type == EntityType::Service {
+                return Err(Error::InvalidServiceParent(
+                    new_parent.clone(),
+                    topic_id.clone(),
+                ));
+            }
 
-        if self.ancestors(new_parent)?.contains(&topic_id) {
-            return Err(Error::InvalidDescendentParent(
-                new_parent.clone(),
-                topic_id.clone(),
-            ));
-        }
+            if self.ancestors(&new_parent)?.contains(&topic_id) {
+                return Err(Error::InvalidDescendentParent(
+                    new_parent.clone(),
+                    topic_id.clone(),
+                ));
+            }
 
-        let current_parent = self.get_parent(topic_id)?.clone();
-        if current_parent != new_parent {
-            let current_node = self.try_get_entity_node_mut(topic_id)?;
-            current_node.metadata.parent = Some(new_parent.clone());
+            let current_parent = self.get_parent(topic_id)?.clone();
+            if current_parent != new_parent {
+                let current_node = self.try_get_entity_node_mut(topic_id)?;
+                current_node.metadata.parent = Some(new_parent.clone());
 
-            let new_parent_node = self.try_get_entity_node_mut(new_parent)?;
-            new_parent_node.children.insert(topic_id.clone());
+                let new_parent_node = self.try_get_entity_node_mut(&new_parent)?;
+                new_parent_node.children.insert(topic_id.clone());
 
-            self.entities
-                .get_mut(&current_parent)
-                .expect("Parent entity should exist")
-                .children
-                .remove(topic_id);
+                self.entities
+                    .get_mut(&current_parent)
+                    .expect("Parent entity should exist")
+                    .children
+                    .remove(topic_id);
+            }
+
+            if let Some(health_endpoint) = update_message.health_endpoint {
+                let entity = self.try_get_entity_node_mut(topic_id)?;
+                entity.metadata.health_endpoint = Some(health_endpoint);
+            }
         }
 
         self.try_get(topic_id)
@@ -890,8 +900,11 @@ pub enum Error {
     #[error("Entity: '{0}' can not be a parent of '{1}' because '{0}' is a descendent of '{1}'")]
     InvalidDescendentParent(EntityTopicId, EntityTopicId),
 
-    #[error("Main device entity metadata can not be updated")]
-    ImmutableMainDevice,
+    #[error("The parent of main device can not be updated")]
+    InvalidMainDeviceParent,
+
+    #[error("Updating the entity type of {0} is not supported")]
+    InvalidEntityTypeUpdate(EntityTopicId),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -921,6 +934,8 @@ pub struct EntityRegistrationMessage {
     pub r#type: EntityType,
     #[serde(rename = "@parent")]
     pub parent: Option<EntityTopicId>,
+    #[serde(rename = "@health")]
+    pub health_endpoint: Option<EntityTopicId>,
 
     #[serde(flatten)]
     pub twin_data: Map<String, JsonValue>,
@@ -979,6 +994,18 @@ impl EntityRegistrationMessage {
             None
         };
 
+        let health_service = if let Some(value) = properties.remove("@health") {
+            let JsonValue::String(value_str) = value else {
+                return None;
+            };
+            let Ok(health_service) = value_str.parse() else {
+                return None;
+            };
+            Some(health_service)
+        } else {
+            None
+        };
+
         let entity_id = properties.remove("@id");
         let entity_id = if let Some(entity_id) = entity_id {
             let JsonValue::String(entity_id) = entity_id else {
@@ -1000,6 +1027,7 @@ impl EntityRegistrationMessage {
             external_id: entity_id,
             r#type,
             parent,
+            health_endpoint: health_service,
             twin_data: other,
         })
     }
@@ -1010,6 +1038,7 @@ impl EntityRegistrationMessage {
             r#type,
             external_id: None,
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         }
     }
@@ -1036,6 +1065,7 @@ impl EntityRegistrationMessage {
             external_id: main_device_id.map(|v| v.into()),
             r#type: EntityType::MainDevice,
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         }
     }
@@ -1052,6 +1082,10 @@ impl EntityRegistrationMessage {
 
         if let Some(parent) = self.parent {
             props.insert("@parent".to_string(), parent.to_string().into());
+        }
+
+        if let Some(health_endpoint) = self.health_endpoint {
+            props.insert("@health".to_string(), health_endpoint.to_string().into());
         }
 
         props.append(&mut self.twin_data);
@@ -1078,6 +1112,7 @@ impl From<&EntityMetadata> for EntityRegistrationMessage {
             r#type: value.r#type.clone(),
             external_id: value.external_id.clone(),
             parent: value.parent.clone(),
+            health_endpoint: value.health_endpoint.clone(),
             twin_data: Map::new(),
         }
     }
@@ -1094,6 +1129,28 @@ fn parse_entity_register_payload(payload: &[u8]) -> Option<JsonValue> {
         Some(payload)
     } else {
         None
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EntityUpdateMessage {
+    #[serde(rename = "@parent")]
+    pub parent: Option<EntityTopicId>,
+
+    #[serde(rename = "@health")]
+    pub health_endpoint: Option<EntityTopicId>,
+}
+
+impl EntityUpdateMessage {
+    pub fn with_parent(mut self, parent: EntityTopicId) -> Self {
+        self.parent = Some(parent);
+        self
+    }
+
+    pub fn with_health_endpoint(mut self, health_endpoint: EntityTopicId) -> Self {
+        self.health_endpoint = Some(health_endpoint);
+        self
     }
 }
 
@@ -1494,6 +1551,7 @@ mod tests {
                     r#type,
                     external_id: None,
                     parent,
+                    health_endpoint: None,
                     twin_data: Map::new(),
                 })
                 .unwrap();
@@ -1512,6 +1570,7 @@ mod tests {
                 external_id: None,
                 topic_id: EntityTopicId::default_main_service("service1").unwrap(),
                 parent: None,
+                health_endpoint: None,
                 twin_data: Map::new(),
             })
             .unwrap();
@@ -1531,6 +1590,7 @@ mod tests {
                 external_id: None,
                 topic_id: EntityTopicId::default_main_service("service2").unwrap(),
                 parent: None,
+                health_endpoint: None,
                 twin_data: Map::new(),
             })
             .unwrap();
@@ -1563,6 +1623,7 @@ mod tests {
                     r#type: EntityType::ChildDevice,
                     external_id: None,
                     parent: Some(EntityTopicId::from_str("device/main//").unwrap()),
+                    health_endpoint: None,
                     twin_data: json!({ "name": "child1" }).as_object().unwrap().to_owned(),
                 },
                 EntityRegistrationMessage {
@@ -1570,6 +1631,7 @@ mod tests {
                     r#type: EntityType::Service,
                     external_id: None,
                     parent: Some(EntityTopicId::from_str("device/child1//").unwrap()),
+                    health_endpoint: None,
                     twin_data: json!({ "name": "service1" })
                         .as_object()
                         .unwrap()
@@ -1594,6 +1656,7 @@ mod tests {
                 r#type: EntityType::ChildDevice,
                 external_id: None,
                 parent: Some(EntityTopicId::from_str("device/main//").unwrap()),
+                health_endpoint: None,
                 twin_data: json!({ "name": "child2" }).as_object().unwrap().to_owned(),
             },]
         );
@@ -1622,6 +1685,7 @@ mod tests {
                 r#type: EntityType::MainDevice,
                 external_id: None,
                 parent: None,
+                health_endpoint: None,
                 twin_data: json!({}).as_object().unwrap().to_owned(),
             })
             .unwrap();
@@ -1631,6 +1695,7 @@ mod tests {
             parent: None,
             r#type: EntityType::MainDevice,
             external_id: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
         // Assert main device registered with custom topic scheme
@@ -1647,7 +1712,8 @@ mod tests {
                 r#type: EntityType::Service,
                 external_id: None,
                 parent: Some(main_topic_id.clone()),
-                twin_data: json!({}).as_object().unwrap().to_owned(),
+                health_endpoint: None,
+                twin_data: Map::new(),
             })
             .unwrap();
 
@@ -1656,6 +1722,7 @@ mod tests {
             parent: Some(main_topic_id),
             r#type: EntityType::Service,
             external_id: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
         // Assert service registered under main device with custom topic scheme
@@ -1766,6 +1833,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
+                health_endpoint: None,
                 twin_data: json!({ "name" : "test-name", "type": "test-type" })
                     .as_object()
                     .unwrap()
@@ -1792,6 +1860,7 @@ mod tests {
             external_id: Some("test-device".into()),
             r#type: EntityType::MainDevice,
             parent: None,
+            health_endpoint: None,
             twin_data: json!({ "name" : "new-test-device" })
                 .as_object()
                 .unwrap()
@@ -1828,6 +1897,7 @@ mod tests {
             r#type: EntityType::ChildDevice,
             external_id: Some("child1".into()),
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
 
@@ -1856,6 +1926,7 @@ mod tests {
             r#type: EntityType::ChildDevice,
             external_id: Some("child1".into()),
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
 
@@ -2098,9 +2169,9 @@ mod tests {
         );
 
         let entity = store
-            .update_parent(
+            .update_entity(
                 &"device/child00//".parse().unwrap(),
-                &"device/child1//".parse().unwrap(),
+                EntityUpdateMessage::default().with_parent("device/child1//".parse().unwrap()),
             )
             .unwrap();
 
@@ -2144,7 +2215,7 @@ mod tests {
     #[test_case(
         "device/main//",
         "device/child0//",
-        "Main device entity metadata can not be updated";
+        "The parent of main device can not be updated";
         "immutable_main_device"
     )]
     #[test_case(
@@ -2181,10 +2252,12 @@ mod tests {
         );
 
         let entity_topic_id = EntityTopicId::from_str(topic_id).unwrap();
-        let parent_topic_id = EntityTopicId::from_str(new_parent).unwrap();
+        let update_message = EntityUpdateMessage::default()
+            .with_parent(EntityTopicId::from_str(new_parent).unwrap());
+
         assert_eq!(
             store
-                .update_parent(&entity_topic_id, &parent_topic_id)
+                .update_entity(&entity_topic_id, update_message)
                 .unwrap_err()
                 .to_string(),
             error_msg
@@ -2229,6 +2302,11 @@ mod tests {
                     "child-device",
                     Some("device/child00//"),
                 ),
+                (
+                    "device/child000/service/service0",
+                    "service",
+                    Some("device/child000//"),
+                ),
             ],
         );
         let ancestors: Vec<&str> = store
@@ -2249,6 +2327,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
+                health_endpoint: None,
                 twin_data: Map::new(),
             },
             0,
