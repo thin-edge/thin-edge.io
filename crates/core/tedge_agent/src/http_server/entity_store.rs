@@ -23,7 +23,6 @@ use axum::Json;
 use axum::Router;
 use hyper::StatusCode;
 use serde::Deserialize;
-use serde::Serialize;
 use serde_json::json;
 use serde_json::Map;
 use serde_json::Value;
@@ -33,6 +32,7 @@ use tedge_api::entity::InvalidEntityType;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
+use tedge_api::entity_store::EntityUpdateMessage;
 use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -140,6 +140,8 @@ impl IntoResponse for Error {
             Error::EntityStoreError(err) => match err {
                 entity_store::Error::EntityAlreadyRegistered(_) => StatusCode::CONFLICT,
                 entity_store::Error::UnknownEntity(_) => StatusCode::NOT_FOUND,
+                entity_store::Error::NoParent(_) => StatusCode::BAD_REQUEST,
+                entity_store::Error::UnknownHealthEndpoint(_) => StatusCode::BAD_REQUEST,
                 entity_store::Error::InvalidTwinData(_) => StatusCode::BAD_REQUEST,
                 _ => StatusCode::BAD_REQUEST,
             },
@@ -357,13 +359,6 @@ async fn get_entity(
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct EntityUpdateMessage {
-    #[serde(rename = "@parent")]
-    pub parent: EntityTopicId,
-}
-
 async fn update_entity(
     state: AgentState,
     topic_id: EntityTopicId,
@@ -372,10 +367,7 @@ async fn update_entity(
     let response = state
         .entity_store_handle
         .clone()
-        .await_response(EntityStoreRequest::UpdateParent {
-            topic_id,
-            new_parent: payload.parent,
-        })
+        .await_response(EntityStoreRequest::Update(topic_id, payload))
         .await?;
     let EntityStoreResponse::Update(res) = response else {
         return Err(Error::InvalidEntityStoreResponse);
@@ -678,6 +670,7 @@ mod tests {
             external_id: Some("test-child".into()),
             r#type: EntityType::ChildDevice,
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
         let payload = serde_json::to_string(&entity).unwrap();
@@ -726,6 +719,7 @@ mod tests {
             external_id: Some("test-child".into()),
             r#type: EntityType::ChildDevice,
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
         let payload = serde_json::to_string(&entity).unwrap();
@@ -779,6 +773,7 @@ mod tests {
             external_id: Some("test-child".into()),
             r#type: EntityType::ChildDevice,
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
         let payload = serde_json::to_string(&entity).unwrap();
@@ -887,7 +882,7 @@ mod tests {
                 if let EntityStoreRequest::List(_) = req.request {
                     req.reply_to
                         .send(EntityStoreResponse::List(vec![
-                            EntityMetadata::main_device(),
+                            EntityMetadata::main_device(None),
                             EntityMetadata::child_device("child0".to_string()).unwrap(),
                             EntityMetadata::child_device("child1".to_string()).unwrap(),
                         ]))

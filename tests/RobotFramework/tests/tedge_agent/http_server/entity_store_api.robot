@@ -52,7 +52,7 @@ Update entity parent
     Register Entity    device/child_b//    child-device    device/main//
     Register Entity    device/child_ba//    child-device    device/child_b//
 
-    # Child00 and hence its children registered wrongly under the root device/main// instead of device/child0//
+    # child_aa and hence its children registered wrongly under the root device/child_b// instead of device/child_a//
     Register Entity    device/child_aa//    child-device    device/child_b//
     Register Entity    device/child_aaa//    child-device    device/child_aa//
 
@@ -91,6 +91,24 @@ Update entity parent
     Set Device    ${child_a}
     Device Should Have A Child Devices    ${child_aa}    ${child_ab}
 
+Update entity health endpoint
+    Register Entity    device/child_x//    child-device    device/main//
+    Register Entity    device/child_x/service/health_service    service    device/child_x//
+
+    # Update entity parent
+    ${patch}=    Execute Command
+    ...    curl -X PATCH http://localhost:8000/te/v1/entities/device/child_x// -H 'Content-Type: application/json' -d '{"@health": "device/child_x/service/health_service"}'
+    Should Be Equal
+    ...    ${patch}
+    ...    {"@topic-id":"device/child_x//","@parent":"device/main//","@type":"child-device","@health":"device/child_x/service/health_service"}
+    Should Have MQTT Messages
+    ...    te/device/child_x//
+    ...    message_contains={"@health":"device/child_x/service/health_service","@parent":"device/main//","@type":"child-device"}
+
+    ${get}=    Get Entity    device/child_x//
+    ${parent}=    Get From Dictionary    ${get}    @health
+    Should Be Equal    ${parent}    device/child_x/service/health_service
+
 Update entity errors
     Register Entity    device/child_x//    child-device    device/main//
     Register Entity    device/child_x/service/service0    service    device/child_x//
@@ -124,7 +142,7 @@ Update entity errors
     ...    curl ${url} -X PATCH --silent --write-out "|%\{http_code\}" -H 'Content-Type: application/json' -d '${payload}'
     Should Be Equal
     ...    ${resp}
-    ...    {"error":"Main device entity metadata can not be updated"}|400
+    ...    {"error":"The parent of main device can not be updated"}|400
 
     # New parent is a descendent of target
     ${url}=    Set Variable    http://localhost:8000/te/v1/entities/device/child_x//
@@ -142,7 +160,25 @@ Update entity errors
     ...    curl ${url} -X PATCH --silent --write-out "|%\{http_code\}" -H 'Content-Type: application/json' -d '${payload}'
     Should Be Equal
     ...    ${resp}
-    ...    {"error":"unknown field `@type`, expected `@parent` at line 1 column 8"}|400
+    ...    {"error":"unknown field `@type`, expected `@parent` or `@health` at line 1 column 8"}|400
+
+    # New parent is non-existent
+    ${url}=    Set Variable    http://localhost:8000/te/v1/entities/device/child_y//
+    ${payload}=    Set Variable    {"@parent": "device/unknown//"}
+    ${resp}=    Execute Command
+    ...    curl ${url} -X PATCH --silent --write-out "|%\{http_code\}" -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"The specified parent \\"device/unknown//\\" does not exist in the entity store"}|400
+
+    # New health endpoint is non-existent
+    ${url}=    Set Variable    http://localhost:8000/te/v1/entities/device/child_y//
+    ${payload}=    Set Variable    {"@health": "device/unknown//"}
+    ${resp}=    Execute Command
+    ...    curl ${url} -X PATCH --silent --write-out "|%\{http_code\}" -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal
+    ...    ${resp}
+    ...    {"error":"The specified health endpoint: device/unknown// does not exist in the entity store"}|400
 
 MQTT HTTP interoperability
     Execute Command    tedge mqtt pub --retain 'te/device/child_abc//' '{"@type":"child-device"}'

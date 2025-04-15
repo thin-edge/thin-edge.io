@@ -9,6 +9,7 @@ use tedge_api::entity::EntityMetadata;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
+use tedge_api::entity_store::EntityUpdateMessage;
 use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -24,10 +25,7 @@ use tracing::error;
 pub enum EntityStoreRequest {
     Get(EntityTopicId),
     Create(EntityRegistrationMessage),
-    UpdateParent {
-        topic_id: EntityTopicId,
-        new_parent: EntityTopicId,
-    },
+    Update(EntityTopicId, EntityUpdateMessage),
     Delete(EntityTopicId),
     List(ListFilters),
     MqttMessage(MqttMessage),
@@ -105,11 +103,8 @@ impl Server for EntityStoreServer {
                 let res = self.register_entity(entity).await;
                 EntityStoreResponse::Create(res)
             }
-            EntityStoreRequest::UpdateParent {
-                topic_id,
-                new_parent,
-            } => {
-                let res = self.update_parent(&topic_id, &new_parent).await;
+            EntityStoreRequest::Update(topic_id, update_message) => {
+                let res = self.update_entity(&topic_id, update_message).await;
                 EntityStoreResponse::Update(res.cloned())
             }
             EntityStoreRequest::Delete(topic_id) => {
@@ -292,12 +287,12 @@ impl EntityStoreServer {
         Ok(registered)
     }
 
-    async fn update_parent(
+    async fn update_entity(
         &mut self,
         topic_id: &EntityTopicId,
-        new_parent: &EntityTopicId,
+        update_message: EntityUpdateMessage,
     ) -> Result<&EntityMetadata, entity_store::Error> {
-        let entity = self.entity_store.update_parent(topic_id, new_parent)?;
+        let entity = self.entity_store.update_entity(topic_id, update_message)?;
         let entity_reg_msg: EntityRegistrationMessage = entity.into();
         let entity_msg = entity_reg_msg.to_mqtt_message(&self.mqtt_schema);
 

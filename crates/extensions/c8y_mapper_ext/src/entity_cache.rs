@@ -43,8 +43,8 @@ pub enum Error {
     #[error("Updating the twin data of {0} with a registration message is not supported")]
     InvalidEntityTwinUpdate(EntityTopicId),
 
-    #[error("Updating the metadata of the main device is not supported")]
-    InvalidMainDeviceUpdate,
+    #[error("Updating the parent of the main device is not supported")]
+    InvalidMainDeviceParentUpdate,
 
     #[error("Auto registration of the entity with topic id {0} failed as it does not match the default topic scheme: 'device/<device-id>/service/<service-id>'. Try explicit registration instead.")]
     NonDefaultTopicScheme(EntityTopicId),
@@ -68,7 +68,7 @@ impl CloudEntityMetadata {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdateOutcome {
     Unchanged,
-    Inserted,
+    Inserted(Vec<RegisteredEntityData>),
     Updated(EntityMetadata, EntityMetadata),
     Deleted,
 }
@@ -113,8 +113,10 @@ impl EntityCache {
         SF: Fn(&str) -> Result<EntityExternalId, InvalidExternalIdError>,
         SF: 'static + Send + Sync,
     {
-        let main_device_metadata =
-            CloudEntityMetadata::new(main_device_xid.clone(), EntityMetadata::main_device());
+        let main_device_metadata = CloudEntityMetadata::new(
+            main_device_xid.clone(),
+            EntityMetadata::main_device(Some(main_device_xid.clone())),
+        );
 
         Self {
             main_device_xid: main_device_xid.clone(),
@@ -127,52 +129,45 @@ impl EntityCache {
         }
     }
 
-    pub(crate) fn upsert_entity(
-        &mut self,
-        entity: EntityRegistrationMessage,
-    ) -> Result<(UpdateOutcome, Vec<RegisteredEntityData>), Error> {
-        if entity.topic_id == self.main_device_tid {
-            return Err(Error::InvalidMainDeviceUpdate);
-        }
-        let parent = entity.parent.as_ref().unwrap_or(&self.main_device_tid);
-        if self.entities.contains_key(parent) {
-            let outcome = self.register_single_entity(entity.clone())?;
-            if outcome == UpdateOutcome::Unchanged {
-                return Ok((outcome, vec![]));
+    /// Insert a new entity or update an existing entity
+    ///
+    /// Return Inserted if the entity is new. Any pending child entities of the given entity are also registered and returned.
+    /// Return Updated if the entity was previously registered and has been updated by this call
+    /// Return Unchanged if the entity not affected by this call
+    pub fn upsert(&mut self, entity: EntityRegistrationMessage) -> Result<UpdateOutcome, Error> {
+        let topic_id = entity.topic_id.clone();
+        let previous = self.entities.entry(entity.topic_id.clone());
+        let outcome = match previous {
+            Entry::Occupied(current) => {
+                let existing_entity = current.get().metadata.clone();
+                self.update(entity, existing_entity)?
             }
+            Entry::Vacant(_) => {
+                if !self.insert(entity.clone())? {
+                    return Ok(UpdateOutcome::Unchanged);
+                }
 
-            let topic_id = entity.topic_id.clone();
-            let current_entity_data = self
-                .pending_entities
-                .take_cached_entity_data(entity.clone());
-            let mut pending_entities = vec![current_entity_data];
+                let current_entity_data = self.pending_entities.take_cached_entity_data(entity);
+                let mut registered_entities = vec![current_entity_data];
 
-            let pending_children = self
-                .pending_entities
-                .take_cached_child_entities_data(&topic_id);
-            for pending_child in pending_children {
-                let child_reg_message = pending_child.reg_message.clone();
-                self.register_single_entity(child_reg_message)?;
-                pending_entities.push(pending_child);
+                let pending_children = self
+                    .pending_entities
+                    .take_cached_child_entities_data(&topic_id);
+                for pending_child in pending_children {
+                    let child_reg_message = pending_child.reg_message.clone();
+                    self.insert(child_reg_message)?;
+                    registered_entities.push(pending_child);
+                }
+
+                UpdateOutcome::Inserted(registered_entities)
             }
-            Ok((outcome, pending_entities))
-        } else {
-            self.pending_entities
-                .cache_early_registration_message(entity);
-            Ok((UpdateOutcome::Unchanged, vec![]))
-        }
-    }
-
-    pub fn register_single_entity(
-        &mut self,
-        entity: EntityRegistrationMessage,
-    ) -> Result<UpdateOutcome, Error> {
-        let external_id = if let Some(id) = entity.external_id {
-            (self.external_id_validator_fn)(id.as_ref())?
-        } else {
-            (self.external_id_mapper_fn)(&entity.topic_id, self.main_device_external_id())
         };
 
+        debug!("Updated entity map: {:?}", self.entities);
+        Ok(outcome)
+    }
+
+    fn insert(&mut self, entity: EntityRegistrationMessage) -> Result<bool, Error> {
         let parent = match entity.r#type {
             EntityType::MainDevice => None,
             EntityType::ChildDevice => entity
@@ -186,70 +181,99 @@ impl EntityCache {
                 .or_else(|| Some(self.main_device_tid.clone())),
         };
 
+        if entity.r#type != EntityType::MainDevice
+            && !self.entities.contains_key(
+                parent
+                    .as_ref()
+                    .expect("At least a default parent exists for child entities"),
+            )
+        {
+            self.pending_entities
+                .cache_early_registration_message(entity);
+            return Ok(false);
+        }
+
+        let topic_id = entity.topic_id.clone();
+        let external_id = if let Some(id) = entity.external_id {
+            (self.external_id_validator_fn)(id.as_ref())?
+        } else if entity.r#type == EntityType::MainDevice {
+            self.main_device_xid.clone()
+        } else {
+            (self.external_id_mapper_fn)(&entity.topic_id, self.main_device_external_id())
+        };
+
         let entity_metadata = EntityMetadata {
-            topic_id: entity.topic_id.clone(),
+            topic_id: topic_id.clone(),
             external_id: Some(external_id.clone()),
             r#type: entity.r#type,
             parent,
+            health_endpoint: entity.health_endpoint,
             twin_data: entity.twin_data,
         };
 
-        self.insert(entity_metadata)
-    }
-
-    /// Insert a new entity
-    ///
-    /// Return Inserted if the entity is new
-    /// Return Updated if the entity was previously registered and has been updated by this call
-    /// Return Unchanged if the entity not affected by this call
-    fn insert(&mut self, entity_metadata: EntityMetadata) -> Result<UpdateOutcome, Error> {
-        let topic_id = entity_metadata.topic_id.clone();
-        let external_id = entity_metadata
-            .external_id
-            .clone()
-            .expect("External id must be set");
-        let previous = self.entities.entry(topic_id.clone());
-        let outcome = match previous {
-            Entry::Occupied(mut occupied) => {
-                // if there is no change, no entities were affected
-                let existing_entity = occupied.get().metadata.clone();
-
-                if entity_metadata.external_id != existing_entity.external_id {
-                    return Err(Error::InvalidExternalIdUpdate(topic_id.clone()));
-                }
-
-                let mut merged_other = existing_entity.twin_data.clone();
-                merged_other.extend(entity_metadata.twin_data.clone());
-                let merged_entity = EntityMetadata {
-                    twin_data: merged_other,
-                    ..entity_metadata
-                };
-                if merged_entity.twin_data != existing_entity.twin_data {
-                    return Err(Error::InvalidEntityTwinUpdate(topic_id.clone()));
-                }
-
-                if existing_entity == merged_entity {
-                    UpdateOutcome::Unchanged
-                } else {
-                    occupied.insert(CloudEntityMetadata::new(
-                        external_id.clone(),
-                        merged_entity.clone(),
-                    ));
-                    UpdateOutcome::Updated(merged_entity, existing_entity)
-                }
-            }
-            Entry::Vacant(vacant) => {
-                vacant.insert(CloudEntityMetadata::new(
-                    external_id.clone(),
-                    entity_metadata,
-                ));
-                UpdateOutcome::Inserted
-            }
-        };
+        self.entities.insert(
+            topic_id.clone(),
+            CloudEntityMetadata::new(external_id.clone(), entity_metadata),
+        );
         self.external_id_map.insert(external_id, topic_id);
 
-        debug!("Updated entity map: {:?}", self.entities);
-        Ok(outcome)
+        Ok(true)
+    }
+
+    fn update(
+        &mut self,
+        entity: EntityRegistrationMessage,
+        existing_entity: EntityMetadata,
+    ) -> Result<UpdateOutcome, Error> {
+        let topic_id = entity.topic_id.clone();
+
+        if entity.r#type != existing_entity.r#type {
+            return Err(Error::InvalidEntityTypeUpdate(topic_id.clone()));
+        }
+
+        if entity.external_id.is_some() && entity.external_id != existing_entity.external_id {
+            return Err(Error::InvalidExternalIdUpdate(topic_id.clone()));
+        }
+
+        if entity.r#type == EntityType::MainDevice && entity.parent != existing_entity.parent {
+            return Err(Error::InvalidMainDeviceParentUpdate);
+        }
+
+        let mut merged_twin_data = existing_entity.twin_data.clone();
+        merged_twin_data.extend(entity.twin_data);
+        if merged_twin_data != existing_entity.twin_data {
+            return Err(Error::InvalidEntityTwinUpdate(topic_id.clone()));
+        }
+
+        let updated_entity = EntityMetadata {
+            topic_id: topic_id.clone(),
+            external_id: existing_entity.external_id.clone(),
+            r#type: existing_entity.r#type.clone(),
+            parent: entity
+                .parent
+                .clone()
+                .or_else(|| existing_entity.parent.clone()),
+            health_endpoint: entity
+                .health_endpoint
+                .clone()
+                .or_else(|| existing_entity.health_endpoint.clone()),
+            twin_data: existing_entity.twin_data.clone(),
+        };
+
+        if existing_entity == updated_entity {
+            return Ok(UpdateOutcome::Unchanged);
+        }
+        self.entities.insert(
+            topic_id.clone(),
+            CloudEntityMetadata::new(
+                updated_entity
+                    .external_id
+                    .clone()
+                    .expect("External id must be present"),
+                updated_entity.clone(),
+            ),
+        );
+        Ok(UpdateOutcome::Updated(updated_entity, existing_entity))
     }
 
     pub(crate) fn delete(&mut self, topic_id: &EntityTopicId) -> Option<CloudEntityMetadata> {
@@ -366,6 +390,7 @@ mod tests {
     use super::EntityCache;
     use super::Error;
     use crate::converter::CumulocityConverter;
+    use crate::entity_cache::UpdateOutcome;
     use assert_matches::assert_matches;
     use serde_json::Map;
     use tedge_api::entity::EntityType;
@@ -378,16 +403,100 @@ mod tests {
         let mut cache = new_entity_cache();
 
         let entity_topic_id = EntityTopicId::default_child_device("child1").unwrap();
-        let res = cache.upsert_entity(EntityRegistrationMessage {
+        let res = cache.upsert(EntityRegistrationMessage {
             topic_id: entity_topic_id.clone(),
             r#type: EntityType::ChildDevice,
             external_id: Some("bad+id".into()),
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         });
 
         // Assert service registered under main device with custom topic scheme
         assert_matches!(res, Err(Error::InvalidExternalId(_)));
+    }
+
+    #[test]
+    fn main_device_health_endpoint_update() {
+        let mut cache = new_entity_cache();
+
+        let res = cache.upsert(
+            EntityRegistrationMessage::new_custom(
+                EntityTopicId::default_main_device(),
+                EntityType::MainDevice,
+            )
+            .with_health_endpoint(EntityTopicId::default_main_service("foo").unwrap()),
+        );
+        assert_matches!(res, Ok(UpdateOutcome::Updated(_, _)));
+        if let UpdateOutcome::Updated(new, old) = res.unwrap() {
+            assert_eq!(
+                new.health_endpoint,
+                Some(EntityTopicId::default_main_service("foo").unwrap())
+            );
+            assert_eq!(new.external_id, Some("test-device".into())); //Kept from the original registration
+            assert_eq!(old.health_endpoint, None);
+        }
+    }
+
+    #[test]
+    fn main_device_twin_update_with_reg_message_not_supported() {
+        let mut cache = new_entity_cache();
+
+        let res = cache.upsert(
+            EntityRegistrationMessage::new_custom(
+                EntityTopicId::default_main_device(),
+                EntityType::MainDevice,
+            )
+            .with_twin_fragment("new".to_string(), "fragment".into()),
+        );
+
+        assert_matches!(res, Err(Error::InvalidEntityTwinUpdate(_)));
+    }
+
+    #[test]
+    fn subset_reg_message_does_not_update() {
+        let mut cache = new_entity_cache();
+
+        let topic_id = EntityTopicId::default_child_device("child0").unwrap();
+        let reg_message =
+            EntityRegistrationMessage::new_custom(topic_id.clone(), EntityType::ChildDevice)
+                .with_external_id("child0".into())
+                .with_parent(EntityTopicId::default_main_device())
+                .with_twin_fragment("key1".to_string(), "val1".into())
+                .with_twin_fragment("key2".to_string(), "val2".into())
+                .with_twin_fragment("key3".to_string(), "val3".into());
+        let res = cache.upsert(reg_message.clone());
+        assert_matches!(res, Ok(UpdateOutcome::Inserted(_)));
+
+        // Same reg message
+        let res = cache.upsert(reg_message);
+        assert_matches!(res, Ok(UpdateOutcome::Unchanged));
+
+        // Reg message without the original twin data
+        let res = cache.upsert(EntityRegistrationMessage::new_custom(
+            topic_id.clone(),
+            EntityType::ChildDevice,
+        ));
+        assert_matches!(res, Ok(UpdateOutcome::Unchanged));
+
+        // Reg message with a subset of original twin data
+        let res = cache.upsert(
+            EntityRegistrationMessage::new_custom(topic_id.clone(), EntityType::ChildDevice)
+                .with_twin_fragment("key2".to_string(), "val2".into()),
+        );
+        assert_matches!(res, Ok(UpdateOutcome::Unchanged));
+
+        let metadata = cache.get(&topic_id).unwrap();
+        assert_eq!(metadata.external_id, "child0".into());
+        assert_eq!(metadata.metadata.external_id, Some("child0".into()));
+        assert_eq!(
+            metadata.metadata.parent,
+            Some(EntityTopicId::default_main_device())
+        );
+        assert_eq!(metadata.metadata.twin_data.len(), 3);
+        assert_eq!(metadata.metadata.twin_data["key1"], "val1");
+        assert_eq!(metadata.metadata.twin_data["key2"], "val2");
+        assert_eq!(metadata.metadata.twin_data["key3"], "val3");
     }
 
     fn new_entity_cache() -> EntityCache {

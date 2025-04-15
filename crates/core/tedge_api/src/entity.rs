@@ -67,6 +67,8 @@ pub struct EntityMetadata {
     pub r#type: EntityType,
     #[serde(rename = "@id", skip_serializing_if = "Option::is_none")]
     pub external_id: Option<EntityExternalId>,
+    #[serde(rename = "@health", skip_serializing_if = "Option::is_none")]
+    pub health_endpoint: Option<EntityTopicId>,
 
     #[serde(skip)]
     pub twin_data: Map<String, JsonValue>,
@@ -74,28 +76,43 @@ pub struct EntityMetadata {
 
 impl EntityMetadata {
     #[cfg(test)]
-    pub(crate) fn new(
-        topic_id: EntityTopicId,
-        r#type: EntityType,
-        parent: Option<EntityTopicId>,
-        external_id: Option<EntityExternalId>,
-    ) -> Self {
+    pub(crate) fn new(topic_id: EntityTopicId, r#type: EntityType) -> Self {
         Self {
             topic_id,
-            external_id,
             r#type,
-            parent,
+            external_id: None,
+            parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn with_external_id(mut self, external_id: EntityExternalId) -> Self {
+        self.external_id = Some(external_id);
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_parent(mut self, topic_id: EntityTopicId) -> Self {
+        self.parent = Some(topic_id);
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_health_endpoint(mut self, topic_id: EntityTopicId) -> Self {
+        self.health_endpoint = Some(topic_id);
+        self
+    }
+
     /// Creates a entity metadata for the main device.
-    pub fn main_device() -> Self {
+    pub fn main_device(device_id: Option<EntityExternalId>) -> Self {
         Self {
             topic_id: EntityTopicId::default_main_device(),
-            external_id: None,
+            external_id: device_id,
             r#type: EntityType::MainDevice,
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         }
     }
@@ -107,6 +124,7 @@ impl EntityMetadata {
             external_id: Some(child_device_id.clone().into()),
             r#type: EntityType::ChildDevice,
             parent: Some(EntityTopicId::default_main_device()),
+            health_endpoint: None,
             twin_data: Map::new(),
         })
     }
