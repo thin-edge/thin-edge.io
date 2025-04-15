@@ -383,7 +383,7 @@ impl ConnectCommand {
                 "Connection test failed, attempt {} of {}\n",
                 i, max_attempts,
             );
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
         self.check_connection().await
     }
