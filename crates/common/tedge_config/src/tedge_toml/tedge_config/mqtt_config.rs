@@ -13,18 +13,16 @@ use certificate::parse_root_certificate::AuthPin;
 use certificate::CertificateError;
 use tedge_config_macros::all_or_nothing;
 
+use super::CloudConfig;
 use super::TEdgeConfigReaderDeviceCryptoki;
 
 use certificate::parse_root_certificate::CryptokiConfig;
 use certificate::parse_root_certificate::CryptokiConfigDirect;
 
 /// An MQTT authentication configuration for connecting to the remote cloud broker.
-///
-/// Either ca_dir or ca_file must be set.
 #[derive(Debug, Clone, Default)]
 pub struct MqttAuthConfigCloudBroker {
-    pub ca_dir: Option<Utf8PathBuf>,
-    pub ca_file: Option<Utf8PathBuf>,
+    pub ca_path: Utf8PathBuf,
     pub client: Option<MqttAuthClientConfigCloudBroker>,
 }
 
@@ -43,10 +41,6 @@ pub enum PrivateKeyType {
 
 impl MqttAuthConfigCloudBroker {
     pub fn to_rustls_client_config(self) -> anyhow::Result<rustls::ClientConfig> {
-        let Some(ca) = self.ca_dir.or(self.ca_file) else {
-            anyhow::bail!("No CA file or directory provided");
-        };
-
         let Some(MqttAuthClientConfigCloudBroker {
             cert_file,
             private_key,
@@ -57,11 +51,15 @@ impl MqttAuthConfigCloudBroker {
 
         let client_config = match private_key {
             PrivateKeyType::File(key_file) => {
-                certificate::parse_root_certificate::create_tls_config(ca, key_file, cert_file)
+                certificate::parse_root_certificate::create_tls_config(
+                    self.ca_path,
+                    key_file,
+                    cert_file,
+                )
             }
             PrivateKeyType::Cryptoki(cryptoki_config) => {
                 certificate::parse_root_certificate::create_tls_config_cryptoki(
-                    ca,
+                    self.ca_path,
                     cert_file,
                     cryptoki_config,
                 )
@@ -142,34 +140,30 @@ impl TEdgeConfig {
         Ok(mqtt_config)
     }
 
-    /// Returns an authentication configuration for an MQTT client that will connect to the Cumulocity MQTT broker.
+    /// Returns an authentication configuration for an MQTT client that will connect to the MQTT
+    /// broker of a cloud given in the parameter.
     pub fn mqtt_auth_config_cloud_broker(
         &self,
-        c8y_profile: Option<&str>,
+        cloud: &dyn CloudConfig,
     ) -> anyhow::Result<MqttAuthConfigCloudBroker> {
-        let c8y = self.c8y.try_get(c8y_profile)?;
-
-        let mut mqtt_auth = MqttAuthConfigCloudBroker {
-            ca_dir: Some(c8y.root_cert_path.clone().into()),
-            ca_file: None,
-            client: None,
-        };
+        let ca_path = cloud.root_cert_path().to_path_buf();
 
         // if client cert is set, then either cryptoki or key file must be set
-        if let Some(cryptoki_config) = self.device.cryptoki.config()? {
-            mqtt_auth.client = Some(MqttAuthClientConfigCloudBroker {
-                cert_file: c8y.device.cert_path.clone().into(),
+        let client_auth = match self.device.cryptoki.config()? {
+            Some(cryptoki_config) => MqttAuthClientConfigCloudBroker {
+                cert_file: cloud.device_cert_path().to_path_buf(),
                 private_key: PrivateKeyType::Cryptoki(cryptoki_config),
-            });
-            return Ok(mqtt_auth);
-        }
+            },
+            None => MqttAuthClientConfigCloudBroker {
+                cert_file: cloud.device_cert_path().to_path_buf(),
+                private_key: PrivateKeyType::File(cloud.device_key_path().to_path_buf()),
+            },
+        };
 
-        mqtt_auth.client = Some(MqttAuthClientConfigCloudBroker {
-            cert_file: c8y.device.cert_path.clone().into(),
-            private_key: PrivateKeyType::File(c8y.device.key_path.clone().into()),
-        });
-
-        Ok(mqtt_auth)
+        Ok(MqttAuthConfigCloudBroker {
+            ca_path,
+            client: Some(client_auth),
+        })
     }
 
     /// Returns an authentication configuration for an MQTT client that will connect to the local MQTT broker.

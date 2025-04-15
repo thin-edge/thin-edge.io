@@ -301,11 +301,11 @@ impl ConnectCommand {
         bridge_config: &BridgeConfig,
         certificate_shift: &CertificateShift,
     ) -> anyhow::Result<()> {
-        if bridge_config.cloud_name.eq("c8y") {
+        if let Cloud::C8y(profile_name) = &self.cloud {
             let use_basic_auth = false;
             let device_type = &self.config.device.ty;
-            let profile_name = self.cloud.profile_name().map(|p| p.as_ref());
-            let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(profile_name)?;
+            let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
+            let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
             if let Some(client_config) = mqtt_auth_config.client.as_mut() {
                 client_config.cert_file = certificate_shift.new_cert_path.to_owned()
             }
@@ -696,8 +696,8 @@ impl ConnectCommand {
             if self.offline_mode {
                 println!("Offline mode. Skipping device creation in Cumulocity cloud.")
             } else {
-                let profile_name = profile_name.as_deref().map(|p| p.as_ref());
-                let mqtt_auth_config = tedge_config.mqtt_auth_config_cloud_broker(profile_name)?;
+                let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
+                let mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
                 let spinner = Spinner::start("Creating device in Cumulocity cloud");
                 let res = create_device_with_direct_connection(
                     use_basic_auth,

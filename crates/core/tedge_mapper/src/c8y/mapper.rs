@@ -154,7 +154,7 @@ impl TEdgeComponent for CumulocityMapper {
 
             if use_certificate {
                 let cloud_broker_auth_config = tedge_config
-                    .mqtt_auth_config_cloud_broker(c8y_profile)
+                    .mqtt_auth_config_cloud_broker(c8y_config)
                     .expect("error getting cloud broker auth config");
                 let client_config = cloud_broker_auth_config
                     .to_rustls_client_config()
