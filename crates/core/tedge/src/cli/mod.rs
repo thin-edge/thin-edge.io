@@ -107,6 +107,10 @@ pub enum TEdgeOpt {
     Config(config::ConfigCmd),
 
     /// Connect to cloud provider
+    ///
+    /// If there is a renewed version of the device certificate,
+    /// this new certificate is used to connect the cloud
+    /// and on a successful connection the new certificate is promoted as active.
     Connect(connect::TEdgeConnectOpt),
 
     /// Remove bridge connection for a provider

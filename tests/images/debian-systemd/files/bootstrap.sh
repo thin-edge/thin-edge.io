@@ -129,6 +129,7 @@ PREFIX=${PREFIX:-tedge_}
 REPO_CHANNEL=${REPO_CHANNEL:-main}
 C8Y_BASEURL=${C8Y_BASEURL:-}
 CERT_METHOD=${CERT_METHOD:-}
+KEY_ALG="${KEY_ALG:-ec}"
 
 
 get_debian_arch() {
@@ -264,6 +265,10 @@ do
             ;;
         --cert-method)
             CERT_METHOD="$2"
+            shift
+            ;;
+        --key-alg)
+            KEY_ALG="$2"
             shift
             ;;
         --prefix)
@@ -800,7 +805,21 @@ sign_local_ca() {
     # name as some tests use the older agent version
     DEVICE_KEY_PATH=$(tedge config get device.key_path 2>/dev/null || tedge config get device.key.path)
 
-    sudo openssl genrsa -out "$DEVICE_KEY_PATH" 2048
+    KEY_ALG=$(echo "$KEY_ALG" | tr '[:upper:]' '[:lower:]')
+    case "$KEY_ALG" in
+        rsa)
+            sudo openssl genrsa -out "$DEVICE_KEY_PATH" 2048
+            ;;
+        ec)
+            sudo openssl ecparam -genkey -out "$DEVICE_KEY_PATH.tmp" -name secp256r1
+            sudo openssl pkcs8 -topk8 -nocrypt -in "$DEVICE_KEY_PATH.tmp" -out "$DEVICE_KEY_PATH"
+            sudo rm -f "$DEVICE_KEY_PATH.tmp"
+            ;;
+        *)
+            echo "Invalid key algorithm type ($KEY_ALG). Expected either 'rsa' or 'ec'"
+            exit 1
+            ;;
+    esac
 
     DEVICE_CSR=$(sudo openssl req \
         -key "$DEVICE_KEY_PATH" \

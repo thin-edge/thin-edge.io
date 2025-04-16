@@ -15,13 +15,16 @@ tedge cert upload c8y respects root cert path
     [Setup]    Setup With Self-Signed Certificate
     Execute Command    sudo tedge disconnect c8y
     ${output}=    Execute Command
-    ...    sudo tedge cert renew --self-signed
+    ...    sudo tedge cert renew --ca self-signed
     ...    stderr=${True}
     ...    stdout=${False}
     ...    ignore_exit_code=${True}
     Should Contain
     ...    ${output}
-    ...    Certificate was successfully renewed, for un-interrupted service, the certificate has to be uploaded to the cloud
+    ...    Certificate renewed successfully
+    Should Contain
+    ...    ${output}
+    ...    the new certificate has to be uploaded to the cloud
     Execute Command    mv /etc/ssl/certs /etc/ssl/certs_test
     Execute Command    tedge config set c8y.root_cert_path /etc/ssl/certs_test
     Execute Command

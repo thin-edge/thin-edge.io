@@ -9,6 +9,7 @@ use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
 use crate::command::Command;
+use crate::CertificateShift;
 use crate::ConfigError;
 use anyhow::anyhow;
 use c8y_api::http_proxy::C8yEndPoint;
@@ -48,6 +49,13 @@ pub enum TEdgeCertCli {
     },
 
     /// Renew the device certificate
+    ///
+    /// The current certificate is left unchanged and a new certificate file is created,
+    /// of which path is derived from the current certificate path by adding a `.new` suffix.
+    ///
+    /// The device certificate will be replaced by the new certificate, after proper validation,
+    /// by the `tedge connect` command.
+    ///
     Renew {
         /// Path to a Certificate Signing Request (CSR) ready to be used
         ///
@@ -59,18 +67,17 @@ pub enum TEdgeCertCli {
         #[clap(long = "csr-path", global = true, value_hint = ValueHint::FilePath)]
         csr_path: Option<Utf8PathBuf>,
 
-        /// Force the renewal of self-signed certificates as self-signed
+        /// Certificate Authority (CA) used to renew the certificate
         ///
-        /// This can be used to bypass the default behavior
-        /// which is to forward the renewal request to the cloud CA
-        /// even if the current certificate has not been signed by this CA.
+        /// Cumulocity CA is currently the only supported one and this is the default,
+        /// even if the current certificate has not been signed by Cumulocity.
         /// In most cases, the default behavior is what you want:
         /// substitute a proper CA-signed certificate for a self-signed certificate.
         ///
         /// However, if this is not the case, or if the cloud endpoint doesn't provide a CA:
-        /// use `--self-signed` to get a renewed self-signed certificate.
-        #[clap(long = "self-signed", default_value_t = false)]
-        self_signed_only: bool,
+        /// use `--ca self-signed` to get a renewed self-signed certificate.
+        #[clap(long = "ca", default_value_t = CA::C8y, global = true)]
+        ca: CA,
 
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
@@ -98,6 +105,10 @@ pub enum TEdgeCertCli {
         #[clap(long = "cert-path", value_hint = ValueHint::FilePath)]
         cert_path: Option<Utf8PathBuf>,
 
+        /// Show the new certificate, if any, instead of the current one
+        #[clap(long = "new", default_value_t = false, global = true)]
+        show_new: bool,
+
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
     },
@@ -108,13 +119,25 @@ pub enum TEdgeCertCli {
         cloud: Option<CloudArg>,
     },
 
-    /// Upload root certificate
+    /// Upload the device certificate to the cloud
+    ///
+    /// If the device certificate has been renewed,
+    /// then the new certificate is uploaded.
     #[clap(subcommand)]
     Upload(UploadCertCli),
 
     /// Request and download the device certificate
     #[clap(subcommand)]
     Download(DownloadCertCli),
+}
+
+#[derive(clap::ValueEnum, Clone, Debug, Eq, PartialEq, strum_macros::Display)]
+pub enum CA {
+    #[strum(serialize = "self-signed")]
+    SelfSigned,
+
+    #[strum(serialize = "c8y")]
+    C8y,
 }
 
 impl BuildCommand for TEdgeCertCli {
@@ -180,14 +203,24 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::Show { cloud, cert_path } => {
+            TEdgeCertCli::Show {
+                cloud,
+                cert_path,
+                show_new,
+            } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let device_cert_path = config.device_cert_path(cloud.as_ref())?.to_owned();
+                let cert_path = cert_path.unwrap_or(device_cert_path);
                 let cmd = ShowCertCmd {
-                    cert_path: cert_path.unwrap_or(device_cert_path),
+                    cert_path: if show_new {
+                        CertificateShift::new_certificate_path(&cert_path)
+                    } else {
+                        cert_path
+                    },
                     minimum: config.certificate.validity.minimum_duration.duration(),
                     validity_check_only: false,
                 };
+
                 cmd.into_boxed()
             }
 
@@ -262,11 +295,12 @@ impl BuildCommand for TEdgeCertCli {
             TEdgeCertCli::Renew {
                 csr_path,
                 cloud,
-                self_signed_only,
+                ca,
             } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cert_path = config.device_cert_path(cloud.as_ref())?.to_owned();
                 let key_path = config.device_key_path(cloud.as_ref())?.to_owned();
+                let new_cert_path = CertificateShift::new_certificate_path(&cert_path);
 
                 // The CA to renew a certificate is determined from the certificate
                 //
@@ -284,14 +318,15 @@ impl BuildCommand for TEdgeCertCli {
                     }
                 };
 
-                if is_self_signed && self_signed_only {
+                if is_self_signed && ca == CA::SelfSigned {
                     let cmd = RenewCertCmd {
-                        cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
-                        key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
+                        cert_path,
+                        new_cert_path,
+                        key_path,
                         csr_template,
                     };
                     cmd.into_boxed()
-                } else if self_signed_only {
+                } else if ca == CA::SelfSigned {
                     return Err(
                         anyhow!("Cannot renew certificate with `--self-signed`: {cert_path} is not self-signed").into()
                     );
@@ -317,6 +352,7 @@ impl BuildCommand for TEdgeCertCli {
                         root_certs: config.cloud_root_certs(),
                         identity: config.http.client.auth.identity()?,
                         cert_path,
+                        new_cert_path,
                         key_path,
                         csr_path,
                         generate_csr,

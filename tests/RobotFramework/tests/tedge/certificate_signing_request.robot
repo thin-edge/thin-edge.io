@@ -105,6 +105,42 @@ Generate CSR using the CSR path from tedge config
     ...    openssl req -in /etc/tedge/device-certs/example_dev_test0001-test1.csr -pubkey -noout | openssl md5
     Should Be Equal    ${output_private_key_md5}    ${output_csr_md5}
 
+Generate CSR reusing RSA private key
+    [Setup]    Setup Without Certificate
+    File Should Not Exist    /etc/tedge/device-certs/device-csr.pem
+    File Should Not Exist    /etc/tedge/device-certs/device-key.pem
+    Execute Command
+    ...    tedge config set device.csr_path /etc/tedge/device-certs/device-csr.pem
+    Execute Command
+    ...    tedge config set device.key_path /etc/tedge/device-certs/device-key.pem
+    Execute Command
+    ...    openssl genrsa -out /etc/tedge/device-certs/device-key.pem
+    Execute Command
+    ...    tedge cert create-csr --device-id RSA-device
+    File Should Exist    /etc/tedge/device-certs/device-csr.pem
+    ${output_csr_subject}=    Execute Command
+    ...    openssl req -noout -subject -in /etc/tedge/device-certs/device-csr.pem | tr -d ' '
+    Should Contain    ${output_csr_subject}    subject=CN=RSA-device
+
+Generate CSR reusing EC private key
+    [Setup]    Setup Without Certificate
+    File Should Not Exist    /etc/tedge/device-certs/device-csr.pem
+    File Should Not Exist    /etc/tedge/device-certs/device-key.pem
+    Execute Command
+    ...    tedge config set device.csr_path /etc/tedge/device-certs/device-csr.pem
+    Execute Command
+    ...    tedge config set device.key_path /etc/tedge/device-certs/device-key.pem
+    Execute Command
+    ...    sudo openssl ecparam -genkey -out "/etc/tedge/device-certs/device-key.tmp" -name secp256r1
+    Execute Command
+    ...    sudo openssl pkcs8 -topk8 -nocrypt -in "/etc/tedge/device-certs/device-key.tmp" -out "/etc/tedge/device-certs/device-key.pem"
+    Execute Command
+    ...    tedge cert create-csr --device-id EC-device
+    File Should Exist    /etc/tedge/device-certs/device-csr.pem
+    ${output_csr_subject}=    Execute Command
+    ...    openssl req -noout -subject -in /etc/tedge/device-certs/device-csr.pem | tr -d ' '
+    Should Contain    ${output_csr_subject}    subject=CN=EC-device
+
 
 *** Keywords ***
 Setup With Self-Signed Certificate

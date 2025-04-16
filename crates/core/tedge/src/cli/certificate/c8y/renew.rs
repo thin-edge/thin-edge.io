@@ -2,6 +2,7 @@ use crate::certificate_cn;
 use crate::cli::certificate::c8y::create_device_csr;
 use crate::cli::certificate::c8y::read_csr_from_file;
 use crate::cli::certificate::c8y::store_device_cert;
+use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::get_webpki_error_from_reqwest;
 use crate::log::MaybeFancy;
@@ -28,10 +29,13 @@ pub struct RenewCertCmd {
     /// TLS Client configuration
     pub identity: Option<Identity>,
 
-    /// The path where the device certificate will be stored
+    /// The path of the certificate to be renewed
     pub cert_path: Utf8PathBuf,
 
-    /// The path where the device private key will be stored
+    /// The path where the new certificate will be stored
+    pub new_cert_path: Utf8PathBuf,
+
+    /// The path of the private key to re-use
     pub key_path: Utf8PathBuf,
 
     /// The path where the device CSR file will be stored
@@ -54,7 +58,12 @@ impl Command for RenewCertCmd {
     }
 
     async fn execute(&self) -> Result<(), MaybeFancy<Error>> {
-        Ok(self.renew_device_certificate().await?)
+        self.renew_device_certificate().await?;
+        eprintln!("Certificate renewed successfully");
+        eprintln!("    For an un-interrupted service:");
+        eprintln!("    => the device has to be reconnected to the cloud\n");
+        ShowCertCmd::show(&self.new_cert_path).await?;
+        Ok(())
     }
 }
 
@@ -94,7 +103,7 @@ impl RenewCertCmd {
         match result {
             Ok(response) if response.status() == StatusCode::OK => match response.text().await {
                 Ok(cert) => {
-                    store_device_cert(&self.cert_path, cert).await?;
+                    store_device_cert(&self.new_cert_path, cert).await?;
                     Ok(())
                 }
                 Err(err) => Err(anyhow!(

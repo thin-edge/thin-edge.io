@@ -72,6 +72,47 @@ Check absence of OpenSSL Error messages #3024
     ...    systemctl is-active mosquitto && journalctl -u mosquitto -n 5000 --since "@${SuiteStartSeconds}" || true
     Should Not Contain    ${output}    OpenSSL Error
 
+tedge reconnect validates and uses the new certificate if any
+    Renew certificate
+    ${output}=    Execute Command    sudo tedge reconnect c8y
+    Should Contain    ${output}    Validating new certificate
+    Should Contain    ${output}    The new certificate is now the active certificate
+    ${output}=    Execute Command    tedge cert show c8y --new    exp_exit_code=1    stderr=True
+    Should Contain    ${output}[1]    No such file
+
+tedge connect validates and uses the new certificate if any
+    Renew certificate
+    Execute Command    sudo tedge disconnect c8y
+    ${output}=    Execute Command    sudo tedge connect c8y
+    Should Contain    ${output}    Validating new certificate
+    Should Contain    ${output}    The new certificate is now the active certificate
+    ${output}=    Execute Command    tedge cert show c8y --new    exp_exit_code=1    stderr=True
+    Should Contain    ${output}[1]    No such file
+
+tedge connect skips new certificate validation if connected
+    Renew certificate
+    # The connection is rejected because already connected
+    ${output}=    Execute Command    sudo tedge connect c8y    exp_exit_code=1    stderr=True
+    Should Contain    ${output}[1]    Connection is already established
+    # The invalid certificate is left unchanged
+    ${new-cert}=    Execute Command    tedge cert show c8y --new
+    Should Contain    ${new-cert}    O=thin-edge, OU=Test Device
+
+tedge reconnect rejects any new invalid certificate
+    Renew certificate
+    Execute Command    echo garbage | sudo tee "$(tedge config get c8y.device.cert_path).new"
+    # The connection should be successful, despite the new certificate being invalid
+    ${output}=    Execute Command    sudo tedge reconnect c8y    exp_exit_code=3
+    Should Contain    ${output}    Validating new certificate
+    Should Contain    ${output}    Connection error while creating device
+    Should Contain    ${output}    attempt 2 of 3
+    Should Contain    ${output}    attempt 3 of 3
+    ${output}=    Execute Command    sudo tedge connect c8y --test
+    Should Contain    ${output}    Connection check to c8y cloud is successful
+    # The invalid certificate is left unchanged
+    ${new-cert}=    Execute Command    cat "$(tedge config get c8y.device.cert_path).new"
+    Should Contain    ${new-cert}    garbage
+
 
 *** Keywords ***
 Suite Setup
@@ -86,3 +127,10 @@ Should Have File Permissions
     ...    ${FILE_MODE_OWNERSHIP}
     ...    ${expected_permissions}
     ...    msg=Unexpected file permissions/ownership of ${file}
+
+Renew certificate
+    # Simulate certificate renewal
+    Execute Command
+    ...    sudo cp "$(tedge config get c8y.device.cert_path)" "$(tedge config get c8y.device.cert_path).new"
+    ${output}=    Execute Command    tedge cert show c8y --new
+    Should Contain    ${output}    O=thin-edge, OU=Test Device

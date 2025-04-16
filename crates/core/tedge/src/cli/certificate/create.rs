@@ -42,13 +42,10 @@ impl Command for CreateCertCmd {
 
     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         self.create_test_certificate(&self.csr_template).await?;
-        eprintln!("Certificate was successfully created\n");
-        let show_cert_cmd = ShowCertCmd {
-            cert_path: self.cert_path.clone(),
-            minimum: humantime::parse_duration("30d").unwrap(),
-            validity_check_only: false,
-        };
-        show_cert_cmd.show_certificate().await?;
+        eprintln!("Certificate created successfully");
+        eprintln!("    => the certificate has to be uploaded to the cloud");
+        eprintln!("    => before the device can be connected\n");
+        ShowCertCmd::show(&self.cert_path).await?;
         Ok(())
     }
 }
