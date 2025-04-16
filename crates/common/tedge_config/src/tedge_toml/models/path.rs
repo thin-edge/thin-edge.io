@@ -20,16 +20,23 @@ impl AbsolutePath {
     }
 
     pub fn from_path(path: Utf8PathBuf) -> Result<Self, InvalidAbsolutePath> {
-        if path.is_relative() {
-            Err(InvalidAbsolutePath(path))
+        let absolute_path = if path.is_absolute() {
+            path
         } else {
-            Ok(AbsolutePath(path))
-        }
+            let Ok(Ok(pwd)) = std::env::current_dir().map(Utf8PathBuf::try_from) else {
+                return Err(InvalidAbsolutePath(path));
+            };
+            pwd.join(path)
+        };
+
+        // unwrap is safe because clean returns an utf8 path when given an utf8 path
+        let clean_path = Utf8PathBuf::try_from(path_clean::clean(absolute_path)).unwrap();
+        Ok(AbsolutePath(clean_path))
     }
 }
 
 #[derive(thiserror::Error, Debug)]
-#[error("Not an absolute path: {0}")]
+#[error("Cannot be converted to an absolute path: {0}")]
 pub struct InvalidAbsolutePath(Utf8PathBuf);
 
 impl Document for AbsolutePath {
