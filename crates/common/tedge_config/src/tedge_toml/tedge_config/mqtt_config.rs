@@ -111,6 +111,19 @@ impl MqttAuthConfig {
 }
 
 impl TEdgeConfig {
+    /// Returns a [`rustls::ClientConfig`] for an MQTT client that will connect to the MQTT broker
+    /// of a cloud given in the parameter.
+    pub fn mqtt_client_config_rustls(
+        &self,
+        cloud: &dyn CloudConfig,
+    ) -> anyhow::Result<rustls::ClientConfig> {
+        let client_config = self
+            .mqtt_auth_config_cloud_broker(cloud)?
+            .to_rustls_client_config()?;
+
+        Ok(client_config)
+    }
+
     pub fn mqtt_config(&self) -> Result<mqtt_channel::Config, CertificateError> {
         let host = self.mqtt.client.host.as_str();
         let port = u16::from(self.mqtt.client.port);
@@ -146,8 +159,6 @@ impl TEdgeConfig {
         &self,
         cloud: &dyn CloudConfig,
     ) -> anyhow::Result<MqttAuthConfigCloudBroker> {
-        let ca_path = cloud.root_cert_path().to_path_buf();
-
         // if client cert is set, then either cryptoki or key file must be set
         let client_auth = match self.device.cryptoki.config()? {
             Some(cryptoki_config) => MqttAuthClientConfigCloudBroker {
@@ -161,7 +172,7 @@ impl TEdgeConfig {
         };
 
         Ok(MqttAuthConfigCloudBroker {
-            ca_path,
+            ca_path: cloud.root_cert_path().to_path_buf(),
             client: Some(client_auth),
         })
     }

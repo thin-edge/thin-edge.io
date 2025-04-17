@@ -1,5 +1,6 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
+use anyhow::Context;
 use async_trait::async_trait;
 use az_mapper_ext::converter::AzureConverter;
 use clock::WallClock;
@@ -61,14 +62,10 @@ impl TEdgeComponent for AzureMapper {
             );
             cloud_config.set_keep_alive(az_config.bridge.keepalive_interval.duration());
 
-            // set tls config
-            let cloud_broker_auth_config = tedge_config
-                .mqtt_auth_config_cloud_broker(az_config)
-                .expect("error getting cloud broker auth config");
-            let client_config = cloud_broker_auth_config
-                .to_rustls_client_config()
-                .expect("error getting cloud broker auth config");
-            cloud_config.set_transport(Transport::tls_with_config(client_config.into()));
+            let tls_config = tedge_config
+                .mqtt_client_config_rustls(az_config)
+                .context("Failed to create MQTT TLS config")?;
+            cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
 
             let built_in_bridge_name = format!("tedge-mapper-bridge-{prefix}");
             let health_topic =

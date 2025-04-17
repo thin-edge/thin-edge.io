@@ -153,13 +153,10 @@ impl TEdgeComponent for CumulocityMapper {
             cloud_config.set_clean_session(true);
 
             if use_certificate {
-                let cloud_broker_auth_config = tedge_config
-                    .mqtt_auth_config_cloud_broker(c8y_config)
-                    .expect("error getting cloud broker auth config");
-                let client_config = cloud_broker_auth_config
-                    .to_rustls_client_config()
-                    .expect("error getting cloud broker auth config");
-                cloud_config.set_transport(Transport::tls_with_config(client_config.into()));
+                let tls_config = tedge_config
+                    .mqtt_client_config_rustls(c8y_config)
+                    .context("Failed to create MQTT TLS config")?;
+                cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
             } else {
                 // TODO(marcel): integrate credentials auth into MqttAuthConfig?
                 let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
