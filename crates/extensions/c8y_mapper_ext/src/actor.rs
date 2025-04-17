@@ -150,9 +150,10 @@ impl C8yMapperActor {
         // If incoming message follows MQTT topic scheme v1
         if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
             match self.converter.try_register_source_entities(&message).await {
-                Ok((outcome, pending_entities)) => match outcome {
-                    UpdateOutcome::Inserted => {
-                        self.process_registered_entities(pending_entities).await?
+                Ok(outcome) => match outcome {
+                    UpdateOutcome::Inserted(registered_entities) => {
+                        self.process_registered_entities(registered_entities)
+                            .await?
                     }
                     UpdateOutcome::Updated(updated_entity, old_entity) => {
                         self.process_entity_update(updated_entity, old_entity)

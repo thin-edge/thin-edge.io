@@ -52,7 +52,7 @@ Update entity parent
     Register Entity    device/child_b//    child-device    device/main//
     Register Entity    device/child_ba//    child-device    device/child_b//
 
-    # Child00 and hence its children registered wrongly under the root device/main// instead of device/child0//
+    # child_aa and hence its children registered wrongly under the root device/child_b// instead of device/child_a//
     Register Entity    device/child_aa//    child-device    device/child_b//
     Register Entity    device/child_aaa//    child-device    device/child_aa//
 

@@ -1128,7 +1128,7 @@ class ThinEdgeIO(DeviceLibrary):
 
         *Example:*
         | ${entities}= | Get Entity | device/child0// |
-        | ${entities}= | Register Entity | device/child0/service/service0 | device_name=${PARENT_SN} |
+        | ${entities}= | Get Entity | device/child0/service/service0 | device_name=${PARENT_SN} |
         """
         device = self.current
         if device_name:

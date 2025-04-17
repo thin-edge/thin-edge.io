@@ -1058,6 +1058,11 @@ impl EntityRegistrationMessage {
         self
     }
 
+    pub fn with_health_endpoint(mut self, health_endpoint: EntityTopicId) -> Self {
+        let _ = self.health_endpoint.insert(health_endpoint);
+        self
+    }
+
     /// Creates a entity registration message for a main device.
     pub fn main_device(main_device_id: Option<String>) -> Self {
         Self {

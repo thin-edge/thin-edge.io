@@ -77,7 +77,6 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_api::script::ShellScript;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandLog;
@@ -299,26 +298,24 @@ impl CumulocityConverter {
     pub async fn try_register_source_entities(
         &mut self,
         message: &MqttMessage,
-    ) -> Result<(UpdateOutcome, Vec<RegisteredEntityData>), ConversionError> {
+    ) -> Result<UpdateOutcome, ConversionError> {
         if let Ok((source, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) {
             match channel {
                 Channel::EntityMetadata => {
                     if message.payload().is_empty() {
                         // Clear cached entity
                         self.entity_cache.delete(&source);
-                        return Ok((UpdateOutcome::Deleted, vec![]));
+                        return Ok(UpdateOutcome::Deleted);
                     }
 
-                    if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
-                        return Ok(self
-                            .try_register_entity_with_pending_children(register_message)
-                            .await);
-                    }
-                    Err(anyhow!(
-                        "Invalid entity registration message received on topic: {}",
-                        message.topic.name
-                    )
-                    .into())
+                    let register_message =
+                        EntityRegistrationMessage::try_from(message).map_err(|_| {
+                            anyhow!(
+                                "Invalid entity registration message received on topic: {}",
+                                message.topic.name
+                            )
+                        })?;
+                    Ok(self.entity_cache.upsert(register_message.clone())?)
                 }
                 _ => {
                     if self.entity_cache.get(&source).is_none() {
@@ -327,11 +324,11 @@ impl CumulocityConverter {
                         // cache it in the unregistered entity store to be processed after the entity is registered
                         self.entity_cache.cache_early_data_message(message.clone());
                     }
-                    Ok((UpdateOutcome::Unchanged, vec![]))
+                    Ok(UpdateOutcome::Unchanged)
                 }
             }
         } else {
-            Ok((UpdateOutcome::Unchanged, vec![]))
+            Ok(UpdateOutcome::Unchanged)
         }
     }
 
@@ -1267,19 +1264,6 @@ impl CumulocityConverter {
         }
     }
 
-    pub(crate) async fn try_register_entity_with_pending_children(
-        &mut self,
-        register_message: EntityRegistrationMessage,
-    ) -> (UpdateOutcome, Vec<RegisteredEntityData>) {
-        match self.entity_cache.upsert_entity(register_message.clone()) {
-            Err(e) => {
-                error!("Entity registration failed: {e}");
-                (UpdateOutcome::Unchanged, vec![])
-            }
-            Ok(res) => res,
-        }
-    }
-
     pub(crate) fn append_id_if_not_given(
         &mut self,
         register_message: &mut EntityRegistrationMessage,
@@ -1847,11 +1831,13 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let entities = converter
+        let UpdateOutcome::Inserted(entities) = converter
             .try_register_source_entities(&in_message)
             .await
             .unwrap()
-            .1;
+        else {
+            panic!("Expected insert outcome");
+        };
 
         assert_eq!(entities.len(), 1);
 
@@ -2941,13 +2927,11 @@ pub(crate) mod tests {
             MqttMessage::new(&Topic::new_unchecked(in_topic), r#"{"@type": "service"}"#);
 
         // when converting a registration message the same as the previous one, no additional registration messages should be produced
-        let entities = converter
+        let outcome = converter
             .try_register_source_entities(&reg_message)
             .await
-            .unwrap()
-            .1;
-
-        assert!(entities.is_empty(), "Duplicate entry not registered");
+            .unwrap();
+        assert_eq!(outcome, UpdateOutcome::Unchanged);
     }
 
     #[tokio::test]
@@ -3120,11 +3104,13 @@ pub(crate) mod tests {
             json!({"@type": "child-device", "@id": "child1", "name": "child1"}).to_string(),
         );
 
-        let entities = converter
+        let UpdateOutcome::Inserted(entities) = converter
             .try_register_source_entities(&reg_message)
             .await
             .unwrap()
-            .1;
+        else {
+            panic!("Expected insert outcome");
+        };
 
         let messages = registered_entities_into_mqtt_messages(entities);
 
@@ -3178,15 +3164,11 @@ pub(crate) mod tests {
             .to_string(),
         );
 
-        let entities = converter
+        let outcome = converter
             .try_register_source_entities(&reg_message)
             .await
-            .unwrap()
-            .1;
-        assert!(
-            entities.is_empty(),
-            "Expected child device registration messages to be cached and not mapped"
-        );
+            .unwrap();
+        assert_eq!(outcome, UpdateOutcome::Unchanged);
 
         // Publish grand-child registration before child
         let reg_message = MqttMessage::new(
@@ -3200,15 +3182,11 @@ pub(crate) mod tests {
             .to_string(),
         );
 
-        let entities = converter
+        let outcome = converter
             .try_register_source_entities(&reg_message)
             .await
-            .unwrap()
-            .1;
-        assert!(
-            entities.is_empty(),
-            "Expected child device registration messages to be cached and not mapped"
-        );
+            .unwrap();
+        assert_eq!(outcome, UpdateOutcome::Unchanged);
 
         // Register the immediate child device which will trigger the conversion of cached messages as well
         let reg_message = MqttMessage::new(
@@ -3221,11 +3199,13 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let entities = converter
+        let UpdateOutcome::Inserted(entities) = converter
             .try_register_source_entities(&reg_message)
             .await
             .unwrap()
-            .1;
+        else {
+            panic!("Expected insert outcome");
+        };
         let messages = registered_entities_into_mqtt_messages(entities);
         assert_messages_matching(
             &messages,
