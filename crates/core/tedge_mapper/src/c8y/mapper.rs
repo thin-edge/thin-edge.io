@@ -12,14 +12,22 @@ use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
 use std::borrow::Cow;
+use std::sync::Arc;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_config::all_or_nothing;
+use tedge_config::models::http_or_s::HttpOrS;
+use tedge_config::models::mqtt_protocol::MqttProtocol;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_bridge::rumqttc::LastWill;
+use tedge_mqtt_bridge::rumqttc::Proxy;
+use tedge_mqtt_bridge::rumqttc::ProxyAuth;
+use tedge_mqtt_bridge::rumqttc::ProxyType;
+use tedge_mqtt_bridge::rumqttc::TlsConfiguration;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::use_credentials;
 use tedge_mqtt_bridge::BridgeConfig;
@@ -143,9 +151,15 @@ impl TEdgeComponent for CumulocityMapper {
             }
 
             let c8y = c8y_config.mqtt.or_config_not_set()?;
+            let mqtt_host = match c8y_config.bridge.protocol {
+                MqttProtocol::Websocket => format!("wss://{}/mqtt", c8y.host()),
+                MqttProtocol::Tcp => c8y.host().to_string(),
+            };
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 c8y_config.device.id()?,
-                c8y.host().to_string(),
+                mqtt_host,
+                // The port is ignored in websocket mode, so this only applies
+                // to MQTT/TCP connections
                 c8y.port().into(),
             );
             // Cumulocity tells us not to not set clean session to false, so don't
@@ -153,6 +167,10 @@ impl TEdgeComponent for CumulocityMapper {
             cloud_config.set_clean_session(true);
 
             if use_certificate {
+                ensure!(
+                    c8y_config.bridge.mqtt_protocol == MqttProtocol::Tcp,
+                    "To use MQTT over websockets, please enable basic authentication"
+                );
                 let cloud_broker_auth_config = tedge_config
                     .mqtt_auth_config_cloud_broker(c8y_profile)
                     .expect("error getting cloud broker auth config");
@@ -165,6 +183,7 @@ impl TEdgeComponent for CumulocityMapper {
                 let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
                 use_credentials(
                     &mut cloud_config,
+                    c8y_config.bridge.protocol,
                     &c8y_config.root_cert_path,
                     username,
                     password,
@@ -223,6 +242,28 @@ impl TEdgeComponent for CumulocityMapper {
                 retain: false,
             });
             cloud_config.set_keep_alive(c8y_config.bridge.keepalive_interval.duration());
+
+            let rustls_config = tedge_config.cloud_client_tls_config();
+            let proxy_config = &c8y_config.bridge.proxy;
+            if let Some(address) = proxy_config.address.or_none() {
+                let credentials =
+                    all_or_nothing((proxy_config.username.clone(), proxy_config.password.clone()))
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                cloud_config.set_proxy(Proxy {
+                    addr: address.host().to_string(),
+                    port: address.port().0,
+                    auth: match credentials {
+                        Some((username, password)) => ProxyAuth::Basic { username, password },
+                        None => ProxyAuth::None,
+                    },
+                    ty: match c8y_config.bridge.proxy.ty {
+                        HttpOrS::Http => ProxyType::Http,
+                        HttpOrS::Https => {
+                            ProxyType::Https(TlsConfiguration::Rustls(Arc::new(rustls_config)))
+                        }
+                    },
+                });
+            }
 
             runtime
                 .spawn(
