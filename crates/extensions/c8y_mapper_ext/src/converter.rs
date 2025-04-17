@@ -1868,10 +1868,13 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let entities = converter
+        let UpdateOutcome::Inserted(entities) = converter
             .try_register_source_entities(&in_message)
             .await
-            .unwrap();
+            .unwrap()
+        else {
+            panic!("Expected insert outcome");
+        };
 
         assert_eq!(entities.len(), 1);
 

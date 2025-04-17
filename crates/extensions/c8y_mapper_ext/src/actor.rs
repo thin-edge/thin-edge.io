@@ -263,7 +263,6 @@ impl C8yMapperActor {
         let entity_reg_msg: EntityRegistrationMessage =
             EntityRegistrationMessage::from(&updated_entity);
         let message = entity_reg_msg.to_mqtt_message(&self.converter.mqtt_schema);
-        dbg!(&message);
         // Send the registration message to all subscribed handlers
         self.publish_message_to_subscribed_handles(&Channel::EntityMetadata, message)
             .await?;
