@@ -8,6 +8,7 @@ use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::InternalIdResponse;
+use serde_json::json;
 use tedge_actors::ClientMessageBox;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
@@ -78,6 +79,41 @@ impl C8YHttpProxyActor {
 
         let http_result = self.http.await_response(request).await?;
         let _ = http_result.error_for_status()?;
+        Ok(())
+    }
+
+    pub(crate) async fn update_managed_object_parent(
+        &mut self,
+        device_xid: &str,
+        old_parent_xid: &str,
+        new_parent_xid: &str,
+    ) -> Result<(), C8YRestError> {
+        let device_id = self.try_get_internal_id(device_xid).await?;
+        let old_parent_id = self.try_get_internal_id(old_parent_xid).await?;
+        let new_parent_id = self.try_get_internal_id(new_parent_xid).await?;
+
+        let url = self
+            .end_point
+            .proxy_url_for_child_device_addition(&new_parent_id);
+        let payload = json!({
+            "managedObject": {
+                "id": device_id
+            }
+        });
+        let request = HttpRequestBuilder::post(url)
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .build()?;
+        let http_result = self.http.await_response(request).await?;
+        let _ = http_result.error_for_status()?;
+
+        let url = self
+            .end_point
+            .proxy_url_for_child_device_deletion(&old_parent_id, &device_id);
+        let request = HttpRequestBuilder::delete(url).build()?;
+        let http_result = self.http.await_response(request).await?;
+        let _ = http_result.error_for_status()?;
+
         Ok(())
     }
 }

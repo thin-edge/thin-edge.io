@@ -288,7 +288,7 @@ pub enum EntityTopicError {
 ///
 /// # Reference
 /// https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-identifier
-#[derive(Debug, Clone, Hash, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(transparent)]
 pub struct EntityTopicId(String);
 
@@ -458,6 +458,7 @@ pub mod default_topic_schema {
                 external_id: None,
                 r#type: EntityType::MainDevice,
                 parent: None,
+                health_endpoint: None,
                 twin_data: Default::default(),
             }],
             ["device", child, "", ""] if !child.is_empty() => vec![EntityRegistrationMessage {
@@ -465,6 +466,7 @@ pub mod default_topic_schema {
                 external_id: None,
                 r#type: EntityType::ChildDevice,
                 parent: Some(EntityTopicId::default_main_device()),
+                health_endpoint: None,
                 twin_data: json!({ "name": child }).as_object().unwrap().to_owned(),
             }],
             ["device", device, "service", service] if !device.is_empty() && !service.is_empty() => {
@@ -478,6 +480,7 @@ pub mod default_topic_schema {
                     external_id: None,
                     r#type: EntityType::Service,
                     parent: Some(device_topic_id),
+                    health_endpoint: None,
                     twin_data: json!({ "name": service }).as_object().unwrap().to_owned(),
                 });
                 registrations
