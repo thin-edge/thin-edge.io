@@ -3,6 +3,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::bail;
+use anyhow::Context;
 use tracing::debug;
 use tracing::trace;
 
@@ -21,7 +22,12 @@ impl TedgeP11Client {
         offered: &[rustls::SignatureScheme],
     ) -> anyhow::Result<Option<rustls::SignatureScheme>> {
         trace!("Connecting to socket...");
-        let stream = UnixStream::connect(&self.socket_path)?;
+        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
+            format!(
+                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
+                self.socket_path.display()
+            )
+        })?;
         let mut connection = crate::connection::Connection::new(stream);
 
         debug!("Connected to socket");
@@ -54,7 +60,12 @@ impl TedgeP11Client {
     // realistically it won't ever be called in our case
     pub fn algorithm(&self) -> anyhow::Result<rustls::SignatureAlgorithm> {
         trace!("Connecting to socket...");
-        let stream = UnixStream::connect(&self.socket_path)?;
+        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
+            format!(
+                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
+                self.socket_path.display()
+            )
+        })?;
         let mut connection = crate::connection::Connection::new(stream);
 
         debug!("Connected to socket");
@@ -75,7 +86,12 @@ impl TedgeP11Client {
     }
 
     pub fn sign(&self, message: &[u8]) -> anyhow::Result<Vec<u8>> {
-        let stream = UnixStream::connect(&self.socket_path)?;
+        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
+            format!(
+                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
+                self.socket_path.display()
+            )
+        })?;
         let mut connection = crate::connection::Connection::new(stream);
         debug!("Connected to socket");
 
