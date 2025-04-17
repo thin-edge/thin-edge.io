@@ -67,8 +67,8 @@ impl FirmwareManagerConfig {
         let tedge_device_id = c8y_config.device.id()?.to_string();
         let local_http_address = tedge_config.http.client.host.clone();
         let local_http_port = tedge_config.http.client.port;
-        let tmp_dir = tedge_config.tmp.path.clone();
-        let data_dir = tedge_config.data.path.clone().into();
+        let tmp_dir = tedge_config.tmp.path.clone().into();
+        let data_dir = tedge_config.data.path.as_path().to_owned().into();
         let timeout_sec = tedge_config.firmware.child.update.timeout.duration();
 
         let c8y_prefix = c8y_config.bridge.topic_prefix.clone();

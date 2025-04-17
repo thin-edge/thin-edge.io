@@ -285,7 +285,7 @@ impl C8yAuthRetriever {
 
         match c8y_config.auth_method.to_type(&c8y_config.credentials_path) {
             AuthType::Basic => Ok(Self::Basic {
-                credentials_path: c8y_config.credentials_path.clone(),
+                credentials_path: c8y_config.credentials_path.clone().into(),
             }),
             AuthType::Certificate => {
                 let mqtt_config = tedge_config.mqtt_config()?;

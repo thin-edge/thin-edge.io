@@ -150,7 +150,7 @@ impl TEdgeConfig {
         let c8y = self.c8y.try_get(c8y_profile)?;
 
         let mut mqtt_auth = MqttAuthConfigCloudBroker {
-            ca_dir: Some(c8y.root_cert_path.clone()),
+            ca_dir: Some(c8y.root_cert_path.clone().into()),
             ca_file: None,
             client: None,
         };
@@ -158,15 +158,15 @@ impl TEdgeConfig {
         // if client cert is set, then either cryptoki or key file must be set
         if let Some(cryptoki_config) = self.device.cryptoki.config()? {
             mqtt_auth.client = Some(MqttAuthClientConfigCloudBroker {
-                cert_file: c8y.device.cert_path.clone(),
+                cert_file: c8y.device.cert_path.clone().into(),
                 private_key: PrivateKeyType::Cryptoki(cryptoki_config),
             });
             return Ok(mqtt_auth);
         }
 
         mqtt_auth.client = Some(MqttAuthClientConfigCloudBroker {
-            cert_file: c8y.device.cert_path.clone(),
-            private_key: PrivateKeyType::File(c8y.device.key_path.clone()),
+            cert_file: c8y.device.cert_path.clone().into(),
+            private_key: PrivateKeyType::File(c8y.device.key_path.clone().into()),
         });
 
         Ok(mqtt_auth)
@@ -175,8 +175,22 @@ impl TEdgeConfig {
     /// Returns an authentication configuration for an MQTT client that will connect to the local MQTT broker.
     pub fn mqtt_client_auth_config(&self) -> MqttAuthConfig {
         let mut client_auth = MqttAuthConfig {
-            ca_dir: self.mqtt.client.auth.ca_dir.or_none().cloned(),
-            ca_file: self.mqtt.client.auth.ca_file.or_none().cloned(),
+            ca_dir: self
+                .mqtt
+                .client
+                .auth
+                .ca_dir
+                .or_none()
+                .cloned()
+                .map(Utf8PathBuf::from),
+            ca_file: self
+                .mqtt
+                .client
+                .auth
+                .ca_file
+                .or_none()
+                .cloned()
+                .map(Utf8PathBuf::from),
             client: None,
         };
         // Both these options have to either be set or not set
@@ -185,8 +199,8 @@ impl TEdgeConfig {
             self.mqtt.client.auth.key_file.as_ref(),
         )) {
             client_auth.client = Some(MqttAuthClientConfig {
-                cert_file: client_cert.clone(),
-                key_file: client_key.clone(),
+                cert_file: client_cert.clone().into(),
+                key_file: client_key.clone().into(),
             })
         }
         client_auth
@@ -202,7 +216,8 @@ impl TEdgeConfigReaderDeviceCryptoki {
                     .module_path
                     .or_config_not_set()
                     .context("required because `device.cryptoki.mode` is set to `module`")?
-                    .clone(),
+                    .clone()
+                    .into(),
                 pin: AuthPin::new(self.pin.to_string()),
                 serial: None,
             }))),

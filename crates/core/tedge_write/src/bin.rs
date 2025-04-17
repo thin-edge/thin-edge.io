@@ -59,7 +59,10 @@ pub fn run(args: Args) -> anyhow::Result<()> {
         bail!("Destination path has to be absolute");
     }
 
-    let target_filepath: Utf8PathBuf = path_clean::clean(args.destination_path.as_str()).into();
+    // unwrap is safe because clean returns an utf8 path when given an utf8 path
+    let target_filepath: Utf8PathBuf = path_clean::clean(args.destination_path.as_std_path())
+        .try_into()
+        .unwrap();
 
     if target_filepath != *args.destination_path {
         bail!(

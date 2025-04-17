@@ -21,9 +21,9 @@ impl RestartManagerConfig {
 
         Ok(RestartManagerConfig {
             device_topic_id: device_topic_id.clone(),
-            tmp_dir: tedge_config.tmp.path.clone(),
+            tmp_dir: tedge_config.tmp.path.clone().into(),
             config_dir: tedge_config_location.tedge_config_root_path.clone(),
-            state_dir: tedge_config.agent.state.path.clone(),
+            state_dir: tedge_config.agent.state.path.clone().into(),
             sudo: SudoCommandBuilder::new(&tedge_config),
         })
     }

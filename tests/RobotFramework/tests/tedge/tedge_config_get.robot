@@ -53,6 +53,11 @@ Set unknown configuration via environment variables
     ...    ${stderr}
     ...    Unknown configuration field "c8y_unknown_configuration" from environment variable TEDGE_C8Y_UNKNOWN_CONFIGURATION
 
+Normalize paths configured with tedge config
+    Execute Command    tedge config set c8y.device.csr_path c8y-device.csr
+    ${path}=    Execute Command    tedge config get c8y.device.csr_path
+    Should Be Equal    ${path}    /setup/c8y-device.csr\n
+
 
 *** Keywords ***
 Custom Setup

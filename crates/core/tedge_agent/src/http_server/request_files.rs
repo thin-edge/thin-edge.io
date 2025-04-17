@@ -88,5 +88,6 @@ fn local_path_for_file(
 }
 
 fn clean_utf8_path(path: &Utf8Path) -> Utf8PathBuf {
-    Utf8PathBuf::from(path_clean::clean(path.as_str()))
+    // unwrap is safe because clean returns an utf8 path when given an utf8 path
+    Utf8PathBuf::try_from(path_clean::clean(path.as_std_path())).unwrap()
 }

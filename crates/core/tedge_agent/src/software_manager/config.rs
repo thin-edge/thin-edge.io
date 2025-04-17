@@ -39,9 +39,9 @@ impl SoftwareManagerConfig {
 
         Ok(SoftwareManagerConfig {
             device,
-            tmp_dir: tedge_config.tmp.path.clone(),
+            tmp_dir: tedge_config.tmp.path.clone().into(),
             config_dir: config_dir.clone(),
-            state_dir: tedge_config.agent.state.path.clone(),
+            state_dir: tedge_config.agent.state.path.clone().into(),
             sm_plugins_dir: config_dir.join("sm-plugins"),
             log_dir: tedge_config.logs.path.join("agent"),
             default_plugin_type,

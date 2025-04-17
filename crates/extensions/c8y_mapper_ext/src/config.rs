@@ -165,7 +165,7 @@ impl C8yMapperConfig {
         let config_dir: Arc<Utf8Path> = config_dir.as_ref().into();
 
         let logs_path = tedge_config.logs.path.as_path().into();
-        let data_dir: DataDir = tedge_config.data.path.clone().into();
+        let data_dir: DataDir = tedge_config.data.path.as_path().to_owned().into();
         let tmp_dir = tedge_config.tmp.path.as_path().into();
 
         let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
