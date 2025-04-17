@@ -245,7 +245,7 @@ yzaWmqSb64bH/x0TjQ==
         "#
         .to_string();
 
-        // Computed using `$ tedge cert renew --self-signed`
+        // Computed using `$ tedge cert renew --ca self-signed`
         let tedge_csr = r#"
 -----BEGIN CERTIFICATE REQUEST-----
 MIIBKTCB0AIBADA8MRIwEAYDVQQKEwlUaGluIEVkZ2UxFDASBgNVBAsTC1Rlc3Qg
