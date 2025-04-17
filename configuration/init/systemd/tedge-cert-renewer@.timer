@@ -1,0 +1,19 @@
+[Unit]
+Description=Timer for thin-edge.io certificate renewal of %I
+Documentation=https://thin-edge.io
+PartOf=tedge-cert-renewer.target
+
+[Timer]
+Persistent=true
+
+; Timer interval
+OnCalendar=hourly
+
+; Always run the timer on time
+AccuracySec=1us
+
+; Add jitter to prevent a "thundering herd" of simultaneous certificate renewals
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target

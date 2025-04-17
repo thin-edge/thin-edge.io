@@ -1,0 +1,26 @@
+[Unit]
+Description=thin-edge.io certificate renewer for %I
+After=network-online.target
+StartLimitIntervalSec=0
+PartOf=tedge-cert-renewer.target
+
+[Service]
+Type=oneshot
+User=root
+
+Environment=RENEW_WITH_CA=c8y
+
+; Only run service is if the certificate needs renewal
+ExecCondition=/usr/bin/tedge cert needs-renewal %i
+
+; Run renewal
+ExecStartPre=/usr/bin/tedge cert renew %i --ca ${RENEW_WITH_CA}
+
+; Reconnect
+ExecStart=/usr/bin/tedge reconnect %i
+
+; Cleanup
+ExecStopPost=sh -c 'rm -f "$(tedge config get %i.device.cert_path).new"'
+
+[Install]
+WantedBy=multi-user.target
