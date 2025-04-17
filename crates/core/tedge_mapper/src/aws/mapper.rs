@@ -1,5 +1,6 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
+use anyhow::Context;
 use async_trait::async_trait;
 use aws_mapper_ext::converter::AwsConverter;
 use clock::WallClock;
@@ -53,14 +54,10 @@ impl TEdgeComponent for AwsMapper {
             cloud_config.set_clean_session(false);
             cloud_config.set_keep_alive(aws_config.bridge.keepalive_interval.duration());
 
-            // set tls config
-            let cloud_broker_auth_config = tedge_config
-                .mqtt_auth_config_cloud_broker(aws_config)
-                .expect("error getting cloud broker auth config");
-            let client_config = cloud_broker_auth_config
-                .to_rustls_client_config()
-                .expect("error getting cloud broker auth config");
-            cloud_config.set_transport(Transport::tls_with_config(client_config.into()));
+            let tls_config = tedge_config
+                .mqtt_client_config_rustls(aws_config)
+                .context("Failed to create MQTT TLS config")?;
+            cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
 
             let bridge_name = format!("tedge-mapper-bridge-{prefix}");
             let health_topic = service_health_topic(&mqtt_schema, &device_topic_id, &bridge_name);

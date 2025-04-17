@@ -13,7 +13,7 @@ use std::path::Path;
 use std::sync::Arc;
 use zeroize::Zeroizing;
 
-pub const MAX_PACKET_SIZE: usize = 268435455;
+pub const MAX_PACKET_SIZE: usize = 268435456;
 
 /// Configuration of an MQTT connection
 #[derive(Debug, Clone)]
