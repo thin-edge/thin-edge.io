@@ -35,7 +35,7 @@ pub struct CryptokiConfigDirect {
     pub module_path: Utf8PathBuf,
     pub pin: AuthPin,
     pub serial: Option<Arc<str>>,
-    pub uri: Option<Arc<str>>,
+    pub uri: Option<String>,
 }
 
 impl Debug for CryptokiConfigDirect {

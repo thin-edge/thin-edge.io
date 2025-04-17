@@ -4483,6 +4483,7 @@ dependencies = [
  "serde",
  "tempfile",
  "tokio",
+ "toml 0.8.8",
  "tracing",
  "tracing-subscriber",
 ]

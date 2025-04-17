@@ -12,6 +12,7 @@ repository.workspace = true
 [dependencies]
 anyhow.workspace = true
 asn1-rs.workspace = true
+camino.features = ["serde1"]
 camino.workspace = true
 clap.workspace = true
 cryptoki.workspace = true
@@ -27,7 +28,9 @@ tokio = { workspace = true, features = [
     "net",
     "signal",
     "time",
+    "fs",
 ] }
+toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
