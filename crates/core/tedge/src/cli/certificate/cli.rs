@@ -328,7 +328,7 @@ impl BuildCommand for TEdgeCertCli {
                     cmd.into_boxed()
                 } else if ca == CA::SelfSigned {
                     return Err(
-                        anyhow!("Cannot renew certificate with `--self-signed`: {cert_path} is not self-signed").into()
+                        anyhow!("Cannot renew certificate with self-signed ca: {cert_path} is not self-signed").into()
                     );
                 } else {
                     let (csr_path, generate_csr) = match csr_path {
