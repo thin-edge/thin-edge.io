@@ -21,18 +21,21 @@ Listing entities from a child device
 Updating entities from a child device
     Execute Command
     ...    tedge http post /tedge/v1/entities '{"@topic-id": "device/${CHILD_SN}/service/watchdog", "@type": "service", "@parent": "device/${CHILD_SN}//"}'
-    ${entity}=    Execute Command    tedge http get /tedge/v1/entities/device/${CHILD_SN}/service/watchdog
-    Should Contain    ${entity}    "@topic-id":"device/${CHILD_SN}/service/watchdog"
-    Should Contain    ${entity}    "@parent":"device/${CHILD_SN}//"
-    Should Contain    ${entity}    "@type":"service"
+    ${entity}=    Should Contain Entity
+    ...    {"@topic-id":"device/${CHILD_SN}/service/watchdog","@parent":"device/${CHILD_SN}//","@type":"service"}
+
+    Should Be Equal    ${entity[0]["@topic-id"]}    device/${CHILD_SN}/service/watchdog
+    Should Be Equal    ${entity[0]["@parent"]}    device/${CHILD_SN}//
+    Should Be Equal    ${entity[0]["@type"]}    service
 
     Execute Command
     ...    tedge http put /tedge/v1/entities/device/${CHILD_SN}///twin '{"name": "Child 01", "type": "Raspberry Pi 4"}'
+    Should Contain Twin Properties
+    ...    topic_id=device/${CHILD_SN}//
+    ...    item={"name": "Child 01", "type": "Raspberry Pi 4"}
 
-    ${entity_twin}=    Execute Command    tedge http get /tedge/v1/entities/device/${CHILD_SN}///twin
-    Should Contain    ${entity_twin}    "name":"Child 01"
-    Should Contain    ${entity_twin}    "type":"Raspberry Pi 4"
-
+    ${child_entity}=    Should Contain Entity
+    ...    {"@topic-id":"device/${CHILD_SN}//","@parent":"device/main//","@type":"child-device"}
     ${entity}=    Execute Command    tedge http get /tedge/v1/entities/device/${CHILD_SN}/
     Should Contain    ${entity}    "@topic-id":"device/${CHILD_SN}//"
     Should Contain    ${entity}    "@parent":"device/main//"
@@ -41,6 +44,7 @@ Updating entities from a child device
     Should Not Contain    ${entity}    "type":"Raspberry Pi 4"
 
     Execute Command    tedge http delete /tedge/v1/entities/device/${CHILD_SN}/service/watchdog
+    Should Not Contain Entity    "device/${CHILD_SN}/service/watchdog"
     Execute Command
     ...    tedge http get /tedge/v1/entities/device/${CHILD_SN}/service/watchdog
     ...    exp_exit_code=1
@@ -56,6 +60,7 @@ Accessing file-transfer from a child device
     ${content}=    Execute Command    tedge http get /tedge/v1/files/target
     Should Be Equal    ${content}    source file content
     Execute Command    tedge http delete /tedge/v1/files/target
+    Sleep    1s    Wait before accessing the data
     Execute Command    tedge http get /tedge/v1/files/target    exp_exit_code=1
 
 Displaying server errors
