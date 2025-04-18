@@ -20,6 +20,7 @@ use clap::Parser;
 use cryptoki::types::AuthPin;
 use tedge_p11_server::service::TedgeP11Service;
 use tokio::signal::unix::SignalKind;
+use serde::Deserialize;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -34,16 +35,16 @@ use tedge_p11_server::TedgeP11Server;
 #[command(version)]
 pub struct Args {
     /// A path where the UNIX socket listener will be created.
-    #[arg(long, default_value = "./tedge-p11-server.sock")]
-    socket_path: Utf8PathBuf,
+    #[arg(long)]
+    socket_path: Option<Utf8PathBuf>,
 
     /// The path to the PKCS#11 module.
     #[arg(long)]
-    module_path: Utf8PathBuf,
+    module_path: Option<Utf8PathBuf>,
 
     /// The PIN for the PKCS#11 token.
-    #[arg(long, default_value = "123456")]
-    pin: String,
+    #[arg(long)]
+    pin: Option<String>,
 
     /// Configures the logging level.
     ///
@@ -51,6 +52,69 @@ pub struct Args {
     /// will be printed, i.e. warn prints ERROR and WARN logs and trace prints logs of all levels.
     #[arg(long)]
     log_level: Option<Level>,
+
+    /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+    #[arg(
+        long,
+        default_value = "/etc/tedge/",
+        hide_env_values = true,
+        hide_default_value = true,
+        global = true
+    )]
+    config_dir: Utf8PathBuf,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+struct PartialTedgeToml {
+    device: PartialDeviceConfig,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+struct PartialDeviceConfig {
+    cryptoki: TomlCryptokiConfig,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+struct TomlCryptokiConfig {
+    pin: Option<String>,
+    module_path: Option<Utf8PathBuf>,
+    socket_path: Option<Utf8PathBuf>,
+}
+
+struct ValidConfig {
+    pin: String,
+    module_path: Utf8PathBuf,
+    socket_path: Utf8PathBuf,
+}
+
+fn try_read_config(mut args: Args) -> anyhow::Result<ValidConfig> {
+    let toml_path = &mut args.config_dir;
+    toml_path.push("tedge.toml");
+    let toml =
+        std::fs::read_to_string(&toml_path).with_context(|| format!("Reading {toml_path}"))?;
+    let config: PartialTedgeToml = toml::from_str(&toml).context("Reading tedge.toml")?;
+    let config = config.device.cryptoki;
+
+    let mut missing_configs = Vec::new();
+    let (Ok(pin), Ok(module_path), Ok(socket_path)) = (
+        args.pin
+            .or(config.pin)
+            .ok_or_else(|| missing_configs.push("device.cryptoki.pin")),
+        args.module_path
+            .or(config.module_path)
+            .ok_or_else(|| missing_configs.push("device.cryptoki.module_path")),
+        args.socket_path
+            .or(config.socket_path)
+            .ok_or_else(|| missing_configs.push("device.cryptoki.socket_path")),
+    ) else {
+        anyhow::bail!("Missing configuration values for {missing_configs:?}. Please set them in `tedge.toml` or pass them as command-line arguments.")
+    };
+
+    Ok(ValidConfig {
+        pin,
+        module_path,
+        socket_path,
+    })
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -68,12 +132,14 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let socket_path = args.socket_path;
+    let args = Args::parse();
+    let config = try_read_config(args)?;
     let cryptoki_config = CryptokiConfigDirect {
-        module_path: args.module_path,
-        pin: AuthPin::new(args.pin),
+        module_path: config.module_path,
+        pin: AuthPin::new(config.pin),
         serial: None,
     };
+    let socket_path = config.socket_path;
 
     info!(?cryptoki_config, "Using cryptoki configuration");
 
@@ -95,7 +161,7 @@ async fn main() -> anyhow::Result<()> {
                 .with_context(|| format!("Failed to bind to socket at '{socket_path}'"))?;
             (
                 listener,
-                Some(OwnedSocketFileDropGuard(socket_path.clone())),
+                Some(OwnedSocketFileDropGuard(socket_path)),
             )
         }
     };
@@ -125,5 +191,34 @@ struct OwnedSocketFileDropGuard(Utf8PathBuf);
 impl Drop for OwnedSocketFileDropGuard {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserialize_example_config() {
+        let tedge_toml = r#"[device.cryptoki]
+mode = "socket"
+pin = "123456"
+socket_path = "/var/run/tedge-p11-server/tedge-p11-server.sock"
+module_path = """#;
+
+        let config: PartialTedgeToml = toml::from_str(tedge_toml).unwrap();
+
+        assert_eq!(
+            config,
+            PartialTedgeToml {
+                device: PartialDeviceConfig {
+                    cryptoki: TomlCryptokiConfig {
+                        module_path: Some("".into()),
+                        pin: Some("123456".to_owned()),
+                        socket_path: Some("/var/run/tedge-p11-server/tedge-p11-server.sock".into()),
+                    }
+                }
+            }
+        )
     }
 }

@@ -13,6 +13,7 @@ repository.workspace = true
 anyhow.workspace = true
 asn1-rs.workspace = true
 camino.workspace = true
+camino.features = ["serde1"]
 clap.workspace = true
 cryptoki.workspace = true
 postcard.workspace = true
@@ -26,6 +27,7 @@ tokio = { workspace = true, features = [
     "signal",
     "time",
 ] }
+toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
