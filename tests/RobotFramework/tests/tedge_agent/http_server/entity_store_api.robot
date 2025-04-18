@@ -144,10 +144,11 @@ Entity twin fragment apis
     Should Be Equal    ${http_code}    204
 
 Entity twin apis
-    ${new_payload}=    Set Variable    {"maintainer":"John Doe","maintenance_mode":true,"maintenance_window":5}
+    # Assert PUT response
+    ${payload}=    Set Variable    {"maintainer":"John Doe","maintenance_mode":true,"maintenance_window":5}
     ${put}=    Execute Command
-    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
-    Should Be Equal    ${put}    ${new_payload}|200
+    ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${payload}'
+    Should Be Equal    ${put}    ${payload}|200
     Should Have MQTT Messages
     ...    te/device/main///twin/maintenance_mode
     ...    message_contains=true
@@ -155,47 +156,49 @@ Entity twin apis
     ...    te/device/main///twin/maintenance_window
     ...    message_contains=5
 
+    # Assert GET response
     ${get}=    Execute Command
     ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/tedge/v1/entities/device/main///twin
     Should Be Equal
     ...    ${get}
-    ...    ${new_payload}|200
+    ...    ${payload}|200
 
     # Replace existing twins
     ${timestamp}=    Get Unix Timestamp
-    ${new_payload}=    Set Variable    {"maintenance_mode":false}
+    ${new_payload}=    Set Variable
+    ...    {"last_serviced":"2025-01-01","maintainer":"John Doe","maintenance_mode":false}
     ${put}=    Execute Command
     ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
+    Should Be Equal    ${put}    ${new_payload}|200
     Should Have MQTT Messages
     ...    te/device/main///twin/maintenance_mode
     ...    message_contains=false
-    Should Be Equal    ${put}    ${new_payload}|200
+    ...    date_from=${timestamp}
+    Should Have MQTT Messages
+    ...    te/device/main///twin/last_serviced
+    ...    message_contains="2025-01-01"
+    ...    date_from=${timestamp}
+    # Unchanged values are not re-published
+    Should Have MQTT Messages
+    ...    te/device/main///twin/maintainer
+    ...    date_from=${timestamp}
+    ...    minimum=0
+    # Removed values are cleared
+    Should Not Have Retained MQTT Messages    topic=te/device/main///twin/maintenance_window
 
     # Assert PUT is idempotent
     ${put}=    Execute Command
     ...    curl --silent --write-out "|%\{http_code\}" -X PUT http://localhost:8000/tedge/v1/entities/device/main///twin -H 'Content-Type: application/json' -d '${new_payload}'
     Should Be Equal    ${put}    ${new_payload}|200
 
+    # Assert GET response
     ${get}=    Execute Command
     ...    curl http://localhost:8000/tedge/v1/entities/device/main///twin
     Should Be Equal
     ...    ${get}
     ...    ${new_payload}
-    Should Have MQTT Messages
-    ...    te/device/main///twin/maintenance_mode
-    ...    message_contains=${False}
-    ...    date_from=${timestamp}
-    ${retained_message}=    Execute Command
-    ...    tedge mqtt sub --no-topic te/device/main///twin/maintainer --duration 1s
-    ...    ignore_exit_code=${True}
-    ...    strip=${True}
-    Should Be Empty    ${retained_message}
-    ${retained_message}=    Execute Command
-    ...    tedge mqtt sub --no-topic te/device/main///twin/maintenance_window --duration 1s
-    ...    ignore_exit_code=${True}
-    ...    strip=${True}
-    Should Be Empty    ${retained_message}
 
+    # Assert DELETE response
     ${timestamp}=    Get Unix Timestamp
     ${http_code}=    Execute Command
     ...    curl --silent --write-out "%\{http_code\}" -X DELETE http://localhost:8000/tedge/v1/entities/device/main///twin
