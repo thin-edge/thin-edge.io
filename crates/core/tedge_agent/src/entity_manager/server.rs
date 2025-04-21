@@ -123,7 +123,7 @@ impl Server for EntityStoreServer {
                 EntityStoreResponse::GetTwinFragments(res.cloned())
             }
             EntityStoreRequest::SetTwinFragments(topic_id, fragments) => {
-                let res = self.set_entity_twin_data(&topic_id, fragments).await;
+                let res = self.set_entity_twin_fragments(&topic_id, fragments).await;
                 EntityStoreResponse::SetTwinFragments(res)
             }
             EntityStoreRequest::MqttMessage(mqtt_message) => {
@@ -305,17 +305,23 @@ impl EntityStoreServer {
         deleted
     }
 
-    async fn set_entity_twin_data(
+    async fn set_entity_twin_fragments(
         &mut self,
         topic_id: &EntityTopicId,
         fragments: Map<String, Value>,
     ) -> Result<(), entity_store::Error> {
-        let old_fragments = self
+        let mut old_fragments = self
             .entity_store
             .set_twin_fragments(topic_id, fragments.clone())?;
 
+        let fragments_to_clear = old_fragments
+            .keys()
+            .filter(|key| !fragments.contains_key(*key))
+            .cloned()
+            .collect::<Vec<_>>();
+
         // Clear all old twin messages
-        for (fragment_key, _) in old_fragments.into_iter() {
+        for fragment_key in fragments_to_clear.into_iter() {
             let twin_message = EntityTwinMessage::new(topic_id.clone(), fragment_key, Value::Null);
             let message = twin_message.to_mqtt_message(&self.mqtt_schema);
             self.publish_message(message).await;
@@ -323,6 +329,10 @@ impl EntityStoreServer {
 
         // Publish new twin messages
         for (fragment_key, fragment_value) in fragments.into_iter() {
+            let old_value = old_fragments.remove(&fragment_key);
+            if old_value == Some(fragment_value.clone()) {
+                continue;
+            }
             let twin_message =
                 EntityTwinMessage::new(topic_id.clone(), fragment_key, fragment_value);
 
