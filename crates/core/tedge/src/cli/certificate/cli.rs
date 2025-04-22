@@ -341,6 +341,7 @@ impl BuildCommand for TEdgeCertCli {
                             &config,
                             profile.as_deref().map(|p| p.as_ref()),
                         )?,
+                        #[cfg(any(feature = "aws", feature = "azure"))]
                         Some(cloud) => {
                             return Err(
                                 anyhow!("Certificate renewal is not supported for {cloud}").into()

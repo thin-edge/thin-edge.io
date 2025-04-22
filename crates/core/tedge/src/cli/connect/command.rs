@@ -1,5 +1,6 @@
 #[cfg(feature = "aws")]
 use crate::bridge::aws::BridgeConfigAwsParams;
+#[cfg(feature = "azure")]
 use crate::bridge::azure::BridgeConfigAzureParams;
 use crate::bridge::c8y::BridgeConfigC8yParams;
 use crate::bridge::BridgeConfig;
@@ -10,6 +11,7 @@ use crate::cli::common::Cloud;
 use crate::cli::common::MaybeBorrowedCloud;
 #[cfg(feature = "aws")]
 use crate::cli::connect::aws::check_device_status_aws;
+#[cfg(feature = "azure")]
 use crate::cli::connect::azure::check_device_status_azure;
 use crate::cli::connect::c8y::*;
 use crate::cli::connect::*;
@@ -40,12 +42,14 @@ use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::service_health_topic;
 use tedge_config;
 use tedge_config::models::auth_method::AuthType;
+#[cfg(any(feature = "aws", feature = "azure"))]
 use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
 use tedge_config::tedge_toml::MultiError;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::TEdgeConfigReaderMqtt;
 use tedge_config::TEdgeConfig;
+#[cfg(any(feature = "aws", feature = "azure"))]
 use tedge_config::TEdgeConfigError;
 use tedge_config::TEdgeConfigLocation;
 use tedge_utils::file::path_exists;
@@ -58,6 +62,7 @@ use yansi::Paint as _;
 pub(crate) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 20;
+#[cfg(any(feature = "aws", feature = "azure"))]
 const MQTT_TLS_PORT: u16 = 8883;
 
 pub struct ConnectCommand {
@@ -225,6 +230,7 @@ impl ConnectCommand {
             }
             #[cfg(feature = "aws")]
             Cloud::Aws(_) => (),
+            #[cfg(feature = "azure")]
             Cloud::Azure(_) => (),
         }
 
@@ -329,6 +335,7 @@ impl ConnectCommand {
             }
             #[cfg(feature = "aws")]
             Cloud::Aws(_) => Ok(()),
+            #[cfg(feature = "azure")]
             Cloud::Azure(_) => Ok(()),
         }
     }
@@ -345,6 +352,7 @@ fn credentials_path_for<'a>(
         }
         #[cfg(feature = "aws")]
         Cloud::Aws(_) => Ok(None),
+        #[cfg(feature = "azure")]
         Cloud::Azure(_) => Ok(None),
     }
 }
@@ -382,6 +390,7 @@ impl ConnectCommand {
             }
             #[cfg(feature = "aws")]
             Cloud::Aws(_) => Ok(None),
+            #[cfg(feature = "azure")]
             Cloud::Azure(_) => Ok(None),
         }
     }
@@ -408,6 +417,7 @@ impl ConnectCommand {
         let config = &self.config;
         let spinner = Spinner::start("Verifying device is connected to cloud");
         let res = match &self.cloud {
+            #[cfg(feature = "azure")]
             Cloud::Azure(profile) => check_device_status_azure(config, profile.as_deref()).await,
             #[cfg(feature = "aws")]
             Cloud::Aws(profile) => check_device_status_aws(config, profile.as_deref()).await,
@@ -456,6 +466,7 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
             )?;
             disallow_matching_configurations(config, ReadableKey::AwsBridgeTopicPrefix, &profiles)?;
         }
+        #[cfg(feature = "azure")]
         MaybeBorrowedCloud::Azure(_) => {
             let profiles = config
                 .az
@@ -588,6 +599,7 @@ pub fn bridge_config(
     };
     let mqtt_schema = MqttSchema::with_root(config.mqtt.topic_root.clone());
     match cloud {
+        #[cfg(feature = "azure")]
         MaybeBorrowedCloud::Azure(profile) => {
             let az_config = config.az.try_get(profile.as_deref())?;
 
@@ -729,6 +741,7 @@ impl ConnectCommand {
             }
             #[cfg(feature = "aws")]
             Cloud::Aws(_) => (),
+            #[cfg(feature = "azure")]
             Cloud::Azure(_) => (),
         }
 

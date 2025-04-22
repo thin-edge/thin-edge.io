@@ -5,6 +5,7 @@ mod config;
 
 #[cfg(feature = "aws")]
 pub mod aws;
+#[cfg(feature = "azure")]
 pub mod azure;
 pub mod c8y;
 

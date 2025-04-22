@@ -108,6 +108,7 @@ async fn established_bridges<'a>(
 fn possible_clouds(config: &TEdgeConfig) -> impl Iterator<Item = CloudBorrow<'_>> {
     let iter = ::std::iter::empty();
     let iter = iter.chain(config.c8y.keys().map(CloudBorrow::c8y_borrowed));
+    #[cfg(feature = "azure")]
     let iter = iter.chain(config.az.keys().map(CloudBorrow::az_borrowed));
     #[cfg(feature = "aws")]
     let iter = iter.chain(config.aws.keys().map(CloudBorrow::aws_borrowed));
