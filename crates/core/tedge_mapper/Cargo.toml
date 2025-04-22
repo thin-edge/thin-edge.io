@@ -13,7 +13,7 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 aws_mapper_ext = { workspace = true, optional = true }
-az_mapper_ext = { workspace = true }
+az_mapper_ext = { workspace = true, optional = true }
 batcher = { workspace = true }
 c8y_api = { workspace = true }
 c8y_auth_proxy = { workspace = true }
@@ -38,8 +38,9 @@ tedge_uploader_ext = { workspace = true }
 tracing = { workspace = true }
 
 [features]
-default = ["aws"]
+default = ["aws", "azure"]
 aws = ["dep:aws_mapper_ext"]
+azure = ["dep:az_mapper_ext"]
 integration-test = []
 
 [lints]

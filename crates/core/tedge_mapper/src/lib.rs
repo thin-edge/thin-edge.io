@@ -2,6 +2,7 @@ use std::fmt;
 
 #[cfg(feature = "aws")]
 use crate::aws::mapper::AwsMapper;
+#[cfg(feature = "azure")]
 use crate::az::mapper::AzureMapper;
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
@@ -16,6 +17,7 @@ use tracing::log::warn;
 
 #[cfg(feature = "aws")]
 mod aws;
+#[cfg(feature = "azure")]
 mod az;
 mod c8y;
 mod collectd;
@@ -42,6 +44,7 @@ macro_rules! read_and_set_var {
 
 fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
+        #[cfg(feature = "azure")]
         MapperName::Az { profile } => Box::new(AzureMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
@@ -83,6 +86,7 @@ pub struct MapperOpt {
 #[derive(Debug, clap::Subcommand, Clone)]
 #[clap(rename_all = "snake_case")]
 pub enum MapperName {
+    #[cfg(feature = "azure")]
     Az {
         /// The cloud profile to use
         #[clap(long)]
@@ -105,7 +109,9 @@ pub enum MapperName {
 impl fmt::Display for MapperName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            #[cfg(feature = "azure")]
             MapperName::Az { profile: None } => write!(f, "tedge-mapper-az"),
+            #[cfg(feature = "azure")]
             MapperName::Az {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-az@{profile}"),
