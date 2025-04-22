@@ -1,3 +1,4 @@
+#[cfg(feature = "aws")]
 use crate::bridge::aws::BridgeConfigAwsParams;
 use crate::bridge::azure::BridgeConfigAzureParams;
 use crate::bridge::c8y::BridgeConfigC8yParams;
@@ -7,6 +8,7 @@ use crate::bridge::CommonMosquittoConfig;
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 use crate::cli::common::Cloud;
 use crate::cli::common::MaybeBorrowedCloud;
+#[cfg(feature = "aws")]
 use crate::cli::connect::aws::check_device_status_aws;
 use crate::cli::connect::azure::check_device_status_azure;
 use crate::cli::connect::c8y::*;
@@ -221,6 +223,7 @@ impl ConnectCommand {
                 }
                 enable_software_management(&bridge_config, &*self.service_manager).await;
             }
+            #[cfg(feature = "aws")]
             Cloud::Aws(_) => (),
             Cloud::Azure(_) => (),
         }
@@ -324,6 +327,7 @@ impl ConnectCommand {
                 )
                 .await
             }
+            #[cfg(feature = "aws")]
             Cloud::Aws(_) => Ok(()),
             Cloud::Azure(_) => Ok(()),
         }
@@ -339,6 +343,7 @@ fn credentials_path_for<'a>(
             let c8y_config = config.c8y.try_get(profile.as_deref())?;
             Ok(Some(&c8y_config.credentials_path))
         }
+        #[cfg(feature = "aws")]
         Cloud::Aws(_) => Ok(None),
         Cloud::Azure(_) => Ok(None),
     }
@@ -375,6 +380,7 @@ impl ConnectCommand {
                     Ok(None)
                 }
             }
+            #[cfg(feature = "aws")]
             Cloud::Aws(_) => Ok(None),
             Cloud::Azure(_) => Ok(None),
         }
@@ -403,6 +409,7 @@ impl ConnectCommand {
         let spinner = Spinner::start("Verifying device is connected to cloud");
         let res = match &self.cloud {
             Cloud::Azure(profile) => check_device_status_azure(config, profile.as_deref()).await,
+            #[cfg(feature = "aws")]
             Cloud::Aws(profile) => check_device_status_aws(config, profile.as_deref()).await,
             Cloud::C8y(profile) => check_device_status_c8y(config, profile.as_deref()).await,
         };
@@ -433,6 +440,7 @@ impl ConnectCommand {
 
 fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyhow::Result<()> {
     match cloud {
+        #[cfg(feature = "aws")]
         MaybeBorrowedCloud::Aws(_) => {
             let profiles = config
                 .aws
@@ -602,6 +610,7 @@ pub fn bridge_config(
 
             Ok(BridgeConfig::from(params))
         }
+        #[cfg(feature = "aws")]
         MaybeBorrowedCloud::Aws(profile) => {
             let aws_config = config.aws.try_get(profile.as_deref())?;
 
@@ -718,6 +727,7 @@ impl ConnectCommand {
                     spinner.finish(res)?;
                 }
             }
+            #[cfg(feature = "aws")]
             Cloud::Aws(_) => (),
             Cloud::Azure(_) => (),
         }

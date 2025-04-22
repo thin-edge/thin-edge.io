@@ -27,6 +27,7 @@ pub enum CloudArg {
         #[arg(add(ArgValueCandidates::new(profile_completions)))]
         profile: Option<ProfileName>,
     },
+    #[cfg(feature = "aws")]
     Aws {
         /// The cloud profile you wish to use
         ///
@@ -61,6 +62,7 @@ impl CloudArg {
             }
         };
         Ok(match self {
+            #[cfg(feature = "aws")]
             Self::Aws {
                 profile: Some(profile),
             } => Cloud::aws(Some(profile)),
@@ -70,6 +72,7 @@ impl CloudArg {
             Self::C8y {
                 profile: Some(profile),
             } => Cloud::c8y(Some(profile)),
+            #[cfg(feature = "aws")]
             Self::Aws { profile: None } => Cloud::aws(read_env()?),
             Self::Az { profile: None } => Cloud::az(read_env()?),
             Self::C8y { profile: None } => Cloud::c8y(read_env()?),
@@ -86,6 +89,7 @@ pub enum MaybeBorrowedCloud<'a> {
     #[strum(serialize = "Cumulocity")]
     C8y(Option<Cow<'a, ProfileName>>),
     Azure(Option<Cow<'a, ProfileName>>),
+    #[cfg(feature = "aws")]
     Aws(Option<Cow<'a, ProfileName>>),
 }
 
@@ -97,6 +101,7 @@ impl fmt::Display for MaybeBorrowedCloud<'_> {
             match self {
                 Self::C8y(_) => "Cumulocity",
                 Self::Azure(_) => "Azure",
+                #[cfg(feature = "aws")]
                 Self::Aws(_) => "Aws",
             }
         )
@@ -108,6 +113,7 @@ impl<'a> From<&'a MaybeBorrowedCloud<'a>> for tedge_config::tedge_toml::Cloud<'a
         match value {
             MaybeBorrowedCloud::C8y(p) => tedge_config::tedge_toml::Cloud::C8y(p.as_deref()),
             MaybeBorrowedCloud::Azure(p) => tedge_config::tedge_toml::Cloud::Az(p.as_deref()),
+            #[cfg(feature = "aws")]
             MaybeBorrowedCloud::Aws(p) => tedge_config::tedge_toml::Cloud::Aws(p.as_deref()),
         }
     }
@@ -122,6 +128,7 @@ impl Cloud {
         Self::Azure(profile.map(Cow::Owned))
     }
 
+    #[cfg(feature = "aws")]
     pub fn aws(profile: Option<ProfileName>) -> Self {
         Self::Aws(profile.map(Cow::Owned))
     }
@@ -134,6 +141,7 @@ impl<'a> CloudBorrow<'a> {
     pub fn az_borrowed(profile: Option<&'a ProfileName>) -> Self {
         Self::Azure(profile.map(Cow::Borrowed))
     }
+    #[cfg(feature = "aws")]
     pub fn aws_borrowed(profile: Option<&'a ProfileName>) -> Self {
         Self::Aws(profile.map(Cow::Borrowed))
     }
@@ -142,6 +150,7 @@ impl<'a> CloudBorrow<'a> {
 impl MaybeBorrowedCloud<'_> {
     pub fn mapper_service(&self) -> SystemService<'_> {
         match self {
+            #[cfg(feature = "aws")]
             Self::Aws(profile) => SystemService::TEdgeMapperAws(profile.as_deref()),
             Self::Azure(profile) => SystemService::TEdgeMapperAz(profile.as_deref()),
             Self::C8y(profile) => SystemService::TEdgeMapperC8y(profile.as_deref()),
@@ -152,7 +161,9 @@ impl MaybeBorrowedCloud<'_> {
         match self {
             Self::C8y(None) => "c8y-bridge.conf".into(),
             Self::C8y(Some(profile)) => format!("c8y@{profile}-bridge.conf").into(),
+            #[cfg(feature = "aws")]
             Self::Aws(None) => "aws-bridge.conf".into(),
+            #[cfg(feature = "aws")]
             Self::Aws(Some(profile)) => format!("aws@{profile}-bridge.conf").into(),
             Self::Azure(None) => "az-bridge.conf".into(),
             Self::Azure(Some(profile)) => format!("az@{profile}-bridge.conf").into(),
@@ -162,6 +173,7 @@ impl MaybeBorrowedCloud<'_> {
     pub fn profile_name(&self) -> Option<&ProfileName> {
         match self {
             Self::C8y(profile) => profile.as_deref(),
+            #[cfg(feature = "aws")]
             Self::Aws(profile) => profile.as_deref(),
             Self::Azure(profile) => profile.as_deref(),
         }
