@@ -161,7 +161,9 @@ impl MaybeBorrowedCloud<'_> {
 
     pub fn profile_name(&self) -> Option<&ProfileName> {
         match self {
-            Self::Aws(profile) | Self::Azure(profile) | Self::C8y(profile) => profile.as_deref(),
+            Self::C8y(profile) => profile.as_deref(),
+            Self::Aws(profile) => profile.as_deref(),
+            Self::Azure(profile) => profile.as_deref(),
         }
     }
 }
