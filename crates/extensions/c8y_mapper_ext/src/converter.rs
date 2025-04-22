@@ -1298,13 +1298,9 @@ impl CumulocityConverter {
         channel: Channel,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if self.entity_cache.get(&source).is_none()
-            && !(self.config.enable_auto_register && source.matches_default_topic_scheme())
-        {
+        if self.entity_cache.get(&source).is_none() {
             // Since the entity is still not present in the entity store,
-            // despite an attempt to register the source entity in try_register_source_entities,
-            // either auto-registration is disabled or a non-default topic scheme is used.
-            // In either case, the message would have been cached in the entity store as pending entity data.
+            // the message would have been cached in the entity store as pending entity data.
             // Hence just skip the conversion as it will be converted eventually
             // once its source entity is registered.
             return Ok(vec![]);
