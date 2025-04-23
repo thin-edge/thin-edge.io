@@ -62,6 +62,7 @@ pub struct Args {
     /// [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
     #[arg(
         long,
+        env = "TEDGE_CONFIG_DIR",
         default_value = "/etc/tedge/",
         hide_env_values = true,
         hide_default_value = true,
