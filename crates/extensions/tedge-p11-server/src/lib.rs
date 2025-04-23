@@ -17,7 +17,7 @@ pub use signer::CryptokiConfig;
 pub mod client;
 
 /// Interfaces with the PKCS#11 dynamic module using cryptoki crate.
-mod pkcs11;
+pub mod pkcs11;
 pub use pkcs11::AuthPin;
 pub use pkcs11::CryptokiConfigDirect;
 

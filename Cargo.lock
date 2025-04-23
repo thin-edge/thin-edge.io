@@ -4476,6 +4476,7 @@ dependencies = [
  "camino",
  "clap",
  "cryptoki",
+ "percent-encoding",
  "postcard",
  "rustls 0.23.22",
  "sd-listen-fds",
