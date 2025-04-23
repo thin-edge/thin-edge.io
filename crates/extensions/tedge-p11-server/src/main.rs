@@ -35,21 +35,29 @@ use tedge_p11_server::TedgeP11Server;
 #[command(version)]
 pub struct Args {
     /// A path where the UNIX socket listener will be created.
-    #[arg(long, env = "TEDGE_DEVICE_CRYPTOKI_SOCKET_PATH")]
+    #[arg(
+        long,
+        env = "TEDGE_DEVICE_CRYPTOKI_SOCKET_PATH",
+        hide_env_values = true
+    )]
     socket_path: Option<Utf8PathBuf>,
 
     /// The path to the PKCS#11 module.
-    #[arg(long, env = "TEDGE_DEVICE_CRYPTOKI_MODULE_PATH")]
+    #[arg(
+        long,
+        env = "TEDGE_DEVICE_CRYPTOKI_MODULE_PATH",
+        hide_env_values = true
+    )]
     module_path: Option<Utf8PathBuf>,
 
     /// The PIN for the PKCS#11 token.
-    #[arg(long, env = "TEDGE_DEVICE_CRYPTOKI_PIN")]
+    #[arg(long, env = "TEDGE_DEVICE_CRYPTOKI_PIN", hide_env_values = true)]
     pin: Option<String>,
 
     /// A URI of the token/object to use.
     ///
     /// See RFC #7512.
-    #[arg(long, env = "TEDGE_DEVICE_CRYPTOKI_URI")]
+    #[arg(long, env = "TEDGE_DEVICE_CRYPTOKI_URI", hide_env_values = true)]
     uri: Option<String>,
 
     /// Configures the logging level.
