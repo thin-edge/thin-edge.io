@@ -193,8 +193,6 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             auth_type,
             mosquitto_version,
             keepalive_interval,
-            // this is orthogonal to
-            // use_cryptoki: false,
         }
     }
 }
