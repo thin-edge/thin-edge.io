@@ -74,6 +74,7 @@ pub struct Args {
         default_value = "/etc/tedge/",
         hide_env_values = true,
         hide_default_value = true,
+        hide_env = true,
         global = true
     )]
     config_dir: Utf8PathBuf,
