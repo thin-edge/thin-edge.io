@@ -12,6 +12,7 @@
 //! provide its own bundled p11-kit-like service.
 
 use std::os::unix::net::UnixListener;
+use std::sync::Arc;
 
 use anyhow::Context;
 use camino::Utf8PathBuf;
@@ -164,8 +165,10 @@ async fn main() -> anyhow::Result<()> {
     let cryptoki_config = CryptokiConfigDirect {
         module_path: config.module_path,
         pin: AuthPin::new(config.pin),
-        serial: None,
-        uri: config.uri.filter(|s| !s.is_empty()),
+        uri: config.uri.filter(|s| !s.is_empty()).map(|s| {
+            let v = s.into_boxed_str();
+            Arc::<str>::from(v)
+        }),
     };
     let socket_path = config.socket_path;
 

@@ -34,8 +34,7 @@ use std::sync::Mutex;
 pub struct CryptokiConfigDirect {
     pub module_path: Utf8PathBuf,
     pub pin: AuthPin,
-    pub serial: Option<Arc<str>>,
-    pub uri: Option<String>,
+    pub uri: Option<Arc<str>>,
 }
 
 impl Debug for CryptokiConfigDirect {
@@ -43,7 +42,7 @@ impl Debug for CryptokiConfigDirect {
         f.debug_struct("CryptokiConfigDirect")
             .field("module_path", &self.module_path)
             .field("pin", &"[REDACTED]")
-            .field("serial", &self.serial)
+            .field("uri", &self.uri)
             .finish()
     }
 }
