@@ -3,6 +3,7 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::entity_cache::UpdateOutcome;
 use crate::service_monitor::is_c8y_bridge_established;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use std::collections::HashMap;
@@ -26,6 +27,7 @@ use tedge_actors::Service;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::entity::EntityMetadata;
+use tedge_api::entity::EntityType;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
@@ -213,11 +215,12 @@ impl C8yMapperActor {
         old_entity: EntityMetadata,
     ) -> Result<(), RuntimeError> {
         if updated_entity.parent != old_entity.parent {
-            let device_xid = self
+            let entity = self
                 .converter
                 .entity_cache
-                .try_get_external_id(&updated_entity.topic_id)
-                .expect("Device external id should be present");
+                .get(&updated_entity.topic_id)
+                .expect("Entity should be present in the cache");
+            let child_xid = &entity.external_id;
             let old_parent_xid = self
                 .converter
                 .entity_cache
@@ -229,16 +232,33 @@ impl C8yMapperActor {
                 .try_get_external_id(&updated_entity.parent.clone().unwrap())
                 .expect("Device external id should be present");
 
-            if let Err(err) = self
-                .converter
-                .http_proxy
-                .update_managed_object_parent(
-                    device_xid.as_ref(),
-                    old_parent_xid.as_ref(),
-                    new_parent_xid.as_ref(),
-                )
-                .await
-            {
+            let res = match entity.metadata.r#type {
+                EntityType::MainDevice => {
+                    Err(anyhow!("Main device parent update is not supported").into())
+                }
+                EntityType::ChildDevice => {
+                    self.converter
+                        .http_proxy
+                        .update_child_device_parent(
+                            child_xid.as_ref(),
+                            old_parent_xid.as_ref(),
+                            new_parent_xid.as_ref(),
+                        )
+                        .await
+                }
+                EntityType::Service => {
+                    self.converter
+                        .http_proxy
+                        .update_child_addition_parent(
+                            child_xid.as_ref(),
+                            old_parent_xid.as_ref(),
+                            new_parent_xid.as_ref(),
+                        )
+                        .await
+                }
+            };
+
+            if let Err(err) = res {
                 self.mqtt_publisher
                     .send(self.converter.new_error_message(err))
                     .await?;

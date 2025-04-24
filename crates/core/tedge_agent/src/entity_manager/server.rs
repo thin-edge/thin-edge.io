@@ -147,9 +147,11 @@ impl EntityStoreServer {
             if let Channel::EntityMetadata = channel {
                 self.process_entity_registration(topic_id, message).await;
             } else {
-                let res = self.process_entity_data(topic_id, channel, message).await;
+                let res = self
+                    .process_entity_data(topic_id, channel, message.clone())
+                    .await;
                 if let Err(err) = res {
-                    error!("Failed to process entity data message: {err}");
+                    error!("Failed to process entity data message: {message} due to : {err}");
                 }
             }
         } else {

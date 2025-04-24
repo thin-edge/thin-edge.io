@@ -75,8 +75,7 @@ pub struct EntityMetadata {
 }
 
 impl EntityMetadata {
-    #[cfg(test)]
-    pub(crate) fn new(topic_id: EntityTopicId, r#type: EntityType) -> Self {
+    pub fn new(topic_id: EntityTopicId, r#type: EntityType) -> Self {
         Self {
             topic_id,
             r#type,
@@ -87,20 +86,17 @@ impl EntityMetadata {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn with_external_id(mut self, external_id: EntityExternalId) -> Self {
+    pub fn with_external_id(mut self, external_id: EntityExternalId) -> Self {
         self.external_id = Some(external_id);
         self
     }
 
-    #[cfg(test)]
-    pub(crate) fn with_parent(mut self, topic_id: EntityTopicId) -> Self {
+    pub fn with_parent(mut self, topic_id: EntityTopicId) -> Self {
         self.parent = Some(topic_id);
         self
     }
 
-    #[cfg(test)]
-    pub(crate) fn with_health_endpoint(mut self, topic_id: EntityTopicId) -> Self {
+    pub fn with_health_endpoint(mut self, topic_id: EntityTopicId) -> Self {
         self.health_endpoint = Some(topic_id);
         self
     }

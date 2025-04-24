@@ -2290,21 +2290,28 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut store = new_entity_store(&temp_dir, true);
         store
+            .update(
+                EntityRegistrationMessage::main_device(None)
+                    .with_health_endpoint("device/main/service/tedge-agent".parse().unwrap()),
+            )
+            .unwrap();
+        store
             .update(EntityRegistrationMessage::new_custom(
-                EntityTopicId::default_main_service("custom-service").unwrap(),
+                "health-service".parse().unwrap(),
                 EntityType::Service,
             ))
             .unwrap();
 
-        let health_endpoint = EntityTopicId::default_main_service("custom-service").unwrap();
         let entity = store
             .update_entity(
                 &EntityTopicId::default_main_device(),
-                EntityUpdateMessage::default().with_health_endpoint(health_endpoint.clone()),
+                EntityUpdateMessage::default()
+                    .with_health_endpoint("health-service/".parse().unwrap()),
             )
             .unwrap();
 
-        let expected = EntityMetadata::main_device(None).with_health_endpoint(health_endpoint);
+        let expected = EntityMetadata::main_device(None)
+            .with_health_endpoint("health-service///".parse().unwrap());
         assert_eq!(entity, &expected);
     }
 

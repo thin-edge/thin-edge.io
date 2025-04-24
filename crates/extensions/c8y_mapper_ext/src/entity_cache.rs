@@ -390,13 +390,36 @@ mod tests {
     use super::EntityCache;
     use super::Error;
     use crate::converter::CumulocityConverter;
+    use crate::entity_cache::CloudEntityMetadata;
     use crate::entity_cache::UpdateOutcome;
     use assert_matches::assert_matches;
     use serde_json::Map;
+    use tedge_api::entity::EntityExternalId;
+    use tedge_api::entity::EntityMetadata;
     use tedge_api::entity::EntityType;
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
+
+    #[test]
+    fn external_id_generation() {
+        let mut cache = new_entity_cache();
+
+        let topic_id: EntityTopicId = "device/child1//".parse().unwrap();
+        let res = cache.upsert(EntityRegistrationMessage::new_custom(
+            topic_id.clone(),
+            EntityType::ChildDevice,
+        ));
+        assert_matches!(res, Ok(UpdateOutcome::Inserted(_)));
+        let external_id: EntityExternalId = "test-device:device:child1".into();
+        let expected = CloudEntityMetadata::new(
+            external_id.clone(),
+            EntityMetadata::new(topic_id.clone(), EntityType::ChildDevice)
+                .with_external_id(external_id)
+                .with_parent(EntityTopicId::default_main_device()),
+        );
+        assert_eq!(cache.get(&topic_id), Some(&expected));
+    }
 
     #[test]
     fn external_id_validation() {

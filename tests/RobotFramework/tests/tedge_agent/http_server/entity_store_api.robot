@@ -56,7 +56,22 @@ Update entity parent
     Register Entity    device/child_aa//    child-device    device/child_b//
     Register Entity    device/child_aaa//    child-device    device/child_aa//
 
-    # Update entity parent
+    # service_a is also wrongly registered under device/child_b// instead of device/child_a//
+    Register Entity    device/child_a/service/service_a    service    device/child_b//
+
+    ${child_a}=    Set Variable    ${DEVICE_SN}:device:child_a
+    ${child_b}=    Set Variable    ${DEVICE_SN}:device:child_b
+    ${child_aa}=    Set Variable    ${DEVICE_SN}:device:child_aa
+    ${child_ab}=    Set Variable    ${DEVICE_SN}:device:child_ab
+    ${child_ba}=    Set Variable    ${DEVICE_SN}:device:child_ba
+
+    Set Device    ${child_a}
+    Device Should Have A Child Devices    ${child_ab}
+    Set Device    ${child_b}
+    Device Should Have A Child Devices    ${child_ba}    ${child_aa}
+    Should Have Services    name=service_a
+
+    # Update child device parent
     ${patch}=    Execute Command
     ...    curl -X PATCH http://localhost:8000/te/v1/entities/device/child_aa// -H 'Content-Type: application/json' -d '{"@parent": "device/child_a//"}'
     Should Be Equal
@@ -66,11 +81,24 @@ Update entity parent
     ...    te/device/child_aa//
     ...    message_contains={"@parent":"device/child_a//","@type":"child-device"}
 
+    # Update service parent
+    ${patch}=    Execute Command
+    ...    curl -X PATCH http://localhost:8000/te/v1/entities/device/child_a/service/service_a -H 'Content-Type: application/json' -d '{"@parent": "device/child_a//"}'
+    Should Be Equal
+    ...    ${patch}
+    ...    {"@topic-id":"device/child_a/service/service_a","@parent":"device/child_a//","@type":"service"}
+    Should Have MQTT Messages
+    ...    te/device/child_a/service/service_a
+    ...    message_contains={"@parent":"device/child_a//","@type":"service"}
+
     ${get}=    Get Entity    device/child_aa//
     ${parent}=    Get From Dictionary    ${get}    @parent
     Should Be Equal    ${parent}    device/child_a//
 
     ${entities}=    List Entities    root=device/child_a//
+    Should Contain Entity
+    ...    {"@topic-id":"device/child_a/service/service_a","@parent":"device/child_a//","@type":"service"}
+    ...    ${entities}
     Should Contain Entity
     ...    {"@topic-id":"device/child_aa//","@parent":"device/child_a//","@type":"child-device"}
     ...    ${entities}
@@ -81,15 +109,11 @@ Update entity parent
     ...    {"@topic-id":"device/child_ab//","@parent":"device/child_a//","@type":"child-device"}
     ...    ${entities}
 
-    ${child_a}=    Set Variable    ${DEVICE_SN}:device:child_a
-    ${child_b}=    Set Variable    ${DEVICE_SN}:device:child_b
-    ${child_aa}=    Set Variable    ${DEVICE_SN}:device:child_aa
-    ${child_ab}=    Set Variable    ${DEVICE_SN}:device:child_ab
-    ${child_ba}=    Set Variable    ${DEVICE_SN}:device:child_ba
     Set Device    ${child_b}
     Device Should Have A Child Devices    ${child_ba}
     Set Device    ${child_a}
     Device Should Have A Child Devices    ${child_aa}    ${child_ab}
+    Should Have Services    name=service_a
 
 Update entity health endpoint
     Register Entity    device/child_x//    child-device    device/main//

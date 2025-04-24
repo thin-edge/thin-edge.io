@@ -56,14 +56,25 @@ impl C8YHttpProxy {
         self.c8y.create_event(c8y_event).await
     }
 
-    pub async fn update_managed_object_parent(
+    pub async fn update_child_device_parent(
         &mut self,
         device_xid: &str,
         old_parent_xid: &str,
         new_parent_xid: &str,
     ) -> Result<(), C8YRestError> {
         self.c8y
-            .update_managed_object_parent(device_xid, old_parent_xid, new_parent_xid)
+            .update_child_device_parent(device_xid, old_parent_xid, new_parent_xid)
+            .await
+    }
+
+    pub async fn update_child_addition_parent(
+        &mut self,
+        service_xid: &str,
+        old_parent_xid: &str,
+        new_parent_xid: &str,
+    ) -> Result<(), C8YRestError> {
+        self.c8y
+            .update_child_addition_parent(service_xid, old_parent_xid, new_parent_xid)
             .await
     }
 

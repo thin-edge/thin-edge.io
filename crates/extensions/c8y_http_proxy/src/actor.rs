@@ -82,7 +82,7 @@ impl C8YHttpProxyActor {
         Ok(())
     }
 
-    pub(crate) async fn update_managed_object_parent(
+    pub(crate) async fn update_child_device_parent(
         &mut self,
         device_xid: &str,
         old_parent_xid: &str,
@@ -94,7 +94,7 @@ impl C8YHttpProxyActor {
 
         let url = self
             .end_point
-            .proxy_url_for_child_device_addition(&new_parent_id);
+            .proxy_url_for_assign_child_device_to_parent(&new_parent_id);
         let payload = json!({
             "managedObject": {
                 "id": device_id
@@ -109,7 +109,42 @@ impl C8YHttpProxyActor {
 
         let url = self
             .end_point
-            .proxy_url_for_child_device_deletion(&old_parent_id, &device_id);
+            .proxy_url_for_remove_child_device_from_parent(&old_parent_id, &device_id);
+        let request = HttpRequestBuilder::delete(url).build()?;
+        let http_result = self.http.await_response(request).await?;
+        let _ = http_result.error_for_status()?;
+
+        Ok(())
+    }
+
+    pub(crate) async fn update_child_addition_parent(
+        &mut self,
+        service_xid: &str,
+        old_parent_xid: &str,
+        new_parent_xid: &str,
+    ) -> Result<(), C8YRestError> {
+        let child_id = self.try_get_internal_id(service_xid).await?;
+        let old_parent_id = self.try_get_internal_id(old_parent_xid).await?;
+        let new_parent_id = self.try_get_internal_id(new_parent_xid).await?;
+
+        let url = self
+            .end_point
+            .proxy_url_for_assign_child_addition_to_parent(&new_parent_id);
+        let payload = json!({
+            "managedObject": {
+                "id": child_id
+            }
+        });
+        let request = HttpRequestBuilder::post(url)
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .build()?;
+        let http_result = self.http.await_response(request).await?;
+        let _ = http_result.error_for_status()?;
+
+        let url = self
+            .end_point
+            .proxy_url_for_remove_child_addition_from_parent(&old_parent_id, &child_id);
         let request = HttpRequestBuilder::delete(url).build()?;
         let http_result = self.http.await_response(request).await?;
         let _ = http_result.error_for_status()?;

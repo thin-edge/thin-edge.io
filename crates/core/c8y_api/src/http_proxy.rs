@@ -127,16 +127,36 @@ impl C8yEndPoint {
         Url::parse(&url).unwrap()
     }
 
-    pub fn proxy_url_for_child_device_addition(&self, device_id: &str) -> String {
-        Self::url_for_child_device_addition(&self.proxy.base_url(), device_id)
+    pub fn proxy_url_for_assign_child_device_to_parent(&self, device_id: &str) -> String {
+        Self::url_for_assign_child_device_to_parent(&self.proxy.base_url(), device_id)
     }
 
-    pub fn proxy_url_for_child_device_deletion(
+    pub fn proxy_url_for_remove_child_device_from_parent(
         &self,
         device_id: &str,
         child_device_id: &str,
     ) -> String {
-        Self::url_for_child_device_deletion(&self.proxy.base_url(), device_id, child_device_id)
+        Self::url_for_remove_child_device_from_parent(
+            &self.proxy.base_url(),
+            device_id,
+            child_device_id,
+        )
+    }
+
+    pub fn proxy_url_for_assign_child_addition_to_parent(&self, device_id: &str) -> String {
+        Self::url_for_assign_child_addition_to_parent(&self.proxy.base_url(), device_id)
+    }
+
+    pub fn proxy_url_for_remove_child_addition_from_parent(
+        &self,
+        device_id: &str,
+        child_device_id: &str,
+    ) -> String {
+        Self::url_for_remove_child_addition_from_parent(
+            &self.proxy.base_url(),
+            device_id,
+            child_device_id,
+        )
     }
 
     fn url_for_sw_list(host: &str, internal_id: &str) -> String {
@@ -155,12 +175,28 @@ impl C8yEndPoint {
         format!("{host}/event/events/{event_id}/binaries")
     }
 
-    fn url_for_child_device_addition(host: &str, device_id: &str) -> String {
+    fn url_for_assign_child_device_to_parent(host: &str, device_id: &str) -> String {
         format!("{host}/inventory/managedObjects/{device_id}/childDevices")
     }
 
-    fn url_for_child_device_deletion(host: &str, device_id: &str, child_device_id: &str) -> String {
+    fn url_for_remove_child_device_from_parent(
+        host: &str,
+        device_id: &str,
+        child_device_id: &str,
+    ) -> String {
         format!("{host}/inventory/managedObjects/{device_id}/childDevices/{child_device_id}")
+    }
+
+    fn url_for_assign_child_addition_to_parent(host: &str, device_id: &str) -> String {
+        format!("{host}/inventory/managedObjects/{device_id}/childAdditions")
+    }
+
+    fn url_for_remove_child_addition_from_parent(
+        host: &str,
+        device_id: &str,
+        child_device_id: &str,
+    ) -> String {
+        format!("{host}/inventory/managedObjects/{device_id}/childAdditions/{child_device_id}")
     }
 
     pub fn c8y_url_for_internal_id(&self, device_id: &str) -> String {
