@@ -10,6 +10,12 @@ pub enum Cryptoki {
     Module,
 }
 
+impl Cryptoki {
+    pub fn enabled(&self) -> bool {
+        *self != Self::Off
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 #[error("Failed to parse flag: {input}. Supported values are: off, module, socket")]
 pub struct InvalidCryptoki {

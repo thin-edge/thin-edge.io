@@ -1,5 +1,6 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
+use anyhow::Context;
 use async_trait::async_trait;
 use aws_mapper_ext::converter::AwsConverter;
 use clock::WallClock;
@@ -16,7 +17,7 @@ use tedge_config::models::TopicPrefix;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::TEdgeConfigReaderAws;
 use tedge_config::TEdgeConfig;
-use tedge_mqtt_bridge::use_key_and_cert;
+use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
@@ -52,7 +53,11 @@ impl TEdgeComponent for AwsMapper {
             );
             cloud_config.set_clean_session(false);
             cloud_config.set_keep_alive(aws_config.bridge.keepalive_interval.duration());
-            use_key_and_cert(&mut cloud_config, aws_config)?;
+
+            let tls_config = tedge_config
+                .mqtt_client_config_rustls(aws_config)
+                .context("Failed to create MQTT TLS config")?;
+            cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
 
             let bridge_name = format!("tedge-mapper-bridge-{prefix}");
             let health_topic = service_health_topic(&mqtt_schema, &device_topic_id, &bridge_name);

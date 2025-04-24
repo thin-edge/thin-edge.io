@@ -38,7 +38,6 @@ use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::service_health_topic;
 use tedge_config;
 use tedge_config::models::auth_method::AuthType;
-use tedge_config::models::Cryptoki;
 use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
 use tedge_config::tedge_toml::MultiError;
@@ -91,6 +90,7 @@ impl Command for ConnectCommand {
         let bridge_config = bridge_config(config, &self.cloud).map_err(anyhow::Error::new)?;
         let credentials_path =
             credentials_path_for(config, &self.cloud).map_err(anyhow::Error::new)?;
+        let use_cryptoki = config.device.cryptoki.mode.enabled();
 
         ConfigLogger::log(
             self.description(),
@@ -98,6 +98,7 @@ impl Command for ConnectCommand {
             &*self.service_manager,
             &self.cloud,
             credentials_path,
+            use_cryptoki,
         );
 
         validate_config(config, &self.cloud)?;
@@ -301,11 +302,11 @@ impl ConnectCommand {
         bridge_config: &BridgeConfig,
         certificate_shift: &CertificateShift,
     ) -> anyhow::Result<()> {
-        if bridge_config.cloud_name.eq("c8y") {
+        if let Cloud::C8y(profile_name) = &self.cloud {
             let use_basic_auth = false;
             let device_type = &self.config.device.ty;
-            let profile_name = self.cloud.profile_name().map(|p| p.as_ref());
-            let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(profile_name)?;
+            let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
+            let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
             if let Some(client_config) = mqtt_auth_config.client.as_mut() {
                 client_config.cert_file = certificate_shift.new_cert_path.to_owned()
             }
@@ -383,7 +384,7 @@ impl ConnectCommand {
                 "Connection test failed, attempt {} of {}\n",
                 i, max_attempts,
             );
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
         self.check_connection().await
     }
@@ -644,7 +645,6 @@ pub fn bridge_config(
                 profile_name: profile.clone().map(Cow::into_owned),
                 mqtt_schema,
                 keepalive_interval: c8y_config.bridge.keepalive_interval.duration(),
-                use_cryptoki: config.device.cryptoki.mode != Cryptoki::Off,
             };
 
             Ok(BridgeConfig::from(params))
@@ -696,8 +696,8 @@ impl ConnectCommand {
             if self.offline_mode {
                 println!("Offline mode. Skipping device creation in Cumulocity cloud.")
             } else {
-                let profile_name = profile_name.as_deref().map(|p| p.as_ref());
-                let mqtt_auth_config = tedge_config.mqtt_auth_config_cloud_broker(profile_name)?;
+                let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
+                let mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
                 let spinner = Spinner::start("Creating device in Cumulocity cloud");
                 let res = create_device_with_direct_connection(
                     use_basic_auth,
@@ -773,12 +773,11 @@ pub async fn chown_certificate_and_key(bridge_config: &BridgeConfig) {
         warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
     }
 
-    // if using cryptoki, no private key to chown
-    if bridge_config.use_cryptoki {
+    let path = &bridge_config.bridge_keyfile;
+    // if not using a private key (e.g. because we're signing with an HSM) don't chown it
+    if !path.exists() {
         return;
     }
-
-    let path = &bridge_config.bridge_keyfile;
     if let Err(err) =
         tedge_utils::file::change_user_and_group(path.into(), user.to_owned(), group.to_owned())
             .await
