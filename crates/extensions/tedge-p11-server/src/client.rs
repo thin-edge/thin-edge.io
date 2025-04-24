@@ -20,6 +20,7 @@ impl TedgeP11Client {
     pub fn choose_scheme(
         &self,
         offered: &[rustls::SignatureScheme],
+        uri: Option<String>,
     ) -> anyhow::Result<Option<rustls::SignatureScheme>> {
         trace!("Connecting to socket...");
         let stream = UnixStream::connect(&self.socket_path).with_context(|| {
@@ -38,7 +39,9 @@ impl TedgeP11Client {
                 .copied()
                 .map(super::service::SignatureScheme)
                 .collect::<Vec<_>>(),
+            uri,
         });
+        trace!(?request);
         connection.write_frame(&request)?;
 
         let response = connection.read_frame()?;
@@ -71,7 +74,10 @@ impl TedgeP11Client {
         debug!("Connected to socket");
 
         // if passed empty set of schemes, service doesn't return a scheme but returns an algorithm
-        let request = Frame1::ChooseSchemeRequest(ChooseSchemeRequest { offered: vec![] });
+        let request = Frame1::ChooseSchemeRequest(ChooseSchemeRequest {
+            offered: vec![],
+            uri: None,
+        });
         connection.write_frame(&request)?;
 
         let response = connection.read_frame()?;
@@ -85,7 +91,7 @@ impl TedgeP11Client {
         Ok(response.algorithm.0)
     }
 
-    pub fn sign(&self, message: &[u8]) -> anyhow::Result<Vec<u8>> {
+    pub fn sign(&self, message: &[u8], uri: Option<String>) -> anyhow::Result<Vec<u8>> {
         let stream = UnixStream::connect(&self.socket_path).with_context(|| {
             format!(
                 "Failed to connect to tedge-p11-server UNIX socket at '{}'",
@@ -97,7 +103,9 @@ impl TedgeP11Client {
 
         let request = Frame1::SignRequest(SignRequest {
             to_sign: message.to_vec(),
+            uri,
         });
+        trace!(?request);
         connection.write_frame(&request)?;
 
         let response = connection.read_frame()?;

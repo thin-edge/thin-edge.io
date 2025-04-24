@@ -76,11 +76,10 @@ impl Cryptoki {
         })
     }
 
-    pub fn signing_key(&self) -> anyhow::Result<Pkcs11SigningKey> {
-        let CryptokiConfigDirect { pin, uri, .. } = &self.config;
+    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11SigningKey> {
+        let uri = uri.or(self.config.uri.as_deref());
 
         let uri_attributes = uri
-            .as_deref()
             .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
             .transpose()?;
 
@@ -115,7 +114,7 @@ impl Cryptoki {
         debug!(?slot_info, ?token_info, "Selected slot");
 
         let session = self.context.open_ro_session(slot)?;
-        session.login(UserType::User, Some(pin))?;
+        session.login(UserType::User, Some(&self.config.pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
 

@@ -228,6 +228,7 @@ impl TEdgeConfigReaderDeviceCryptoki {
             }))),
             Cryptoki::Socket => Ok(Some(CryptokiConfig::SocketService {
                 socket_path: self.socket_path.clone(),
+                uri: None,
             })),
         }
     }

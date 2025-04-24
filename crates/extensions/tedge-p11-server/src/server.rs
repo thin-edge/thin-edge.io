@@ -140,8 +140,8 @@ mod tests {
         };
 
         tokio::task::spawn_blocking(move || {
-            assert_eq!(client.choose_scheme(&[]).unwrap().unwrap(), SCHEME);
-            assert_eq!(&client.sign(&[]).unwrap(), &SIGNATURE[..]);
+            assert_eq!(client.choose_scheme(&[], None).unwrap().unwrap(), SCHEME);
+            assert_eq!(&client.sign(&[], None).unwrap(), &SIGNATURE[..]);
         })
         .await
         .unwrap();
