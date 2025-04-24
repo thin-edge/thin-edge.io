@@ -5,7 +5,7 @@ use crate::warning;
 use crate::CertError;
 use crate::CertificateShift;
 use camino::Utf8PathBuf;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use reqwest::StatusCode;
 use reqwest::Url;
 use tedge_config::models::HostPort;
@@ -30,7 +30,7 @@ pub struct UploadCertCmd {
     pub path: Utf8PathBuf,
     pub host: HostPort<HTTPS_PORT>,
     pub username: String,
-    pub cloud_root_certs: CloudRootCerts,
+    pub cloud_root_certs: CloudHttpConfig,
     pub password: String,
 }
 

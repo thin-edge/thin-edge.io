@@ -95,7 +95,7 @@ impl BuildCommand for UploadCmd {
                 });
                 c8y::C8yUpload {
                     identity,
-                    cloud_root_certs,
+                    cloud_http_config: cloud_root_certs,
                     device_id,
                     c8y,
                     event_type,

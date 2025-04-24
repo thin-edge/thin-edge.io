@@ -31,7 +31,7 @@ use certificate::parse_root_certificate::create_tls_config;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use certificate::read_trust_store;
 use certificate::CertificateError;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use certificate::PemCertificate;
 use doku::Document;
 use once_cell::sync::Lazy;
@@ -848,7 +848,6 @@ define_tedge_config! {
         enable: bool,
     },
 
-
     proxy: {
         /// The address (host:port) of an HTTP CONNECT proxy to use when connecting to Cumulocity
         address: HostPort<8000>,
@@ -868,7 +867,8 @@ define_tedge_config! {
 static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();
 
 impl TEdgeConfigReader {
-    pub fn cloud_root_certs(&self) -> CloudRootCerts {
+    #![deny(clippy::unwrap_used)]
+    pub fn cloud_root_certs(&self) -> CloudHttpConfig {
         let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
             let c8y_roots = self.c8y.entries().flat_map(|(key, c8y)| {
                 read_trust_store(&c8y.root_cert_path).unwrap_or_else(move |e| {
@@ -900,7 +900,25 @@ impl TEdgeConfigReader {
             c8y_roots.chain(az_roots).chain(aws_roots).collect()
         });
 
-        CloudRootCerts::from(roots.clone())
+        let mut proxy = None;
+
+        if let Some(address) = self.proxy.address.or_none() {
+            // Unwrap should be safe here since address is valid from config, and ty can only be http or https
+            let mut url: url::Url = format!("{}://{}", self.proxy.ty, address)
+                .parse()
+                .expect("Scheme is valid, address is valid");
+            // TODO deal with other unwraps
+            if let Some((username, password)) =
+                all_or_nothing((self.proxy.username.as_ref(), self.proxy.password.as_ref()))
+                    .unwrap()
+            {
+                url.set_username(username);
+                url.set_password(Some(password));
+            }
+            proxy = Some(reqwest::Proxy::all(url).unwrap());
+        }
+
+        CloudHttpConfig::new(roots.clone(), proxy)
     }
 
     pub fn cloud_client_tls_config(&self) -> rustls::ClientConfig {

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use certificate::CloudRootCerts;
+    use certificate::CloudHttpConfig;
     use plugin_sm::plugin::deserialize_module_info;
     use plugin_sm::plugin::sm_path;
     use plugin_sm::plugin::ExternalPluginCommand;
@@ -87,7 +87,7 @@ mod tests {
             None,
             None,
             None,
-            CloudRootCerts::from([]),
+            CloudHttpConfig::from([]),
         );
 
         let module = SoftwareModule {
@@ -119,7 +119,7 @@ mod tests {
             None,
             None,
             None,
-            CloudRootCerts::from([]),
+            CloudHttpConfig::from([]),
         );
 
         // Create test module with name `test2`.
@@ -157,7 +157,7 @@ mod tests {
             None,
             None,
             None,
-            CloudRootCerts::from([]),
+            CloudHttpConfig::from([]),
         );
 
         // Create software module without an explicit type.

@@ -351,7 +351,7 @@ impl BuildCommand for TEdgeCertCli {
                     };
                     let cmd = c8y::RenewCertCmd {
                         c8y,
-                        root_certs: config.cloud_root_certs(),
+                        http_config: config.cloud_root_certs(),
                         identity: config.http.client.auth.identity()?,
                         cert_path,
                         new_cert_path,

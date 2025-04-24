@@ -10,7 +10,7 @@ use anyhow::anyhow;
 use anyhow::Error;
 use c8y_api::http_proxy::C8yEndPoint;
 use camino::Utf8PathBuf;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use certificate::CsrTemplate;
 use hyper::header::CONTENT_TYPE;
 use hyper::StatusCode;
@@ -24,7 +24,7 @@ pub struct RenewCertCmd {
     pub c8y: C8yEndPoint,
 
     /// Root certificates used to authenticate the Cumulocity instance
-    pub root_certs: CloudRootCerts,
+    pub http_config: CloudHttpConfig,
 
     /// TLS Client configuration
     pub identity: Option<Identity>,
@@ -86,7 +86,7 @@ impl RenewCertCmd {
         }
         let csr = read_csr_from_file(&self.csr_path).await?;
 
-        let http_builder = self.root_certs.client_builder();
+        let http_builder = self.http_config.client_builder();
         let http_builder = if let Some(identity) = &self.identity {
             http_builder.identity(identity.clone())
         } else {

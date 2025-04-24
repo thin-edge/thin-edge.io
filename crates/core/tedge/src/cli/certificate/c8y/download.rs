@@ -11,7 +11,7 @@ use anyhow::Context;
 use anyhow::Error;
 use c8y_api::json_c8y_deserializer::C8yAPIError;
 use camino::Utf8PathBuf;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use certificate::CsrTemplate;
 use hyper::StatusCode;
 use reqwest::header::CONTENT_TYPE;
@@ -34,7 +34,7 @@ pub struct DownloadCertCmd {
     pub c8y_url: HostPort<HTTPS_PORT>,
 
     /// Root certificates used to authenticate the Cumulocity instance
-    pub root_certs: CloudRootCerts,
+    pub root_certs: CloudHttpConfig,
 
     /// The path where the device certificate will be stored
     pub cert_path: Utf8PathBuf,

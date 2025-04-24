@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use download::DownloadError;
 use download::DownloadInfo;
 use download::Downloader;
@@ -64,7 +64,7 @@ pub struct DownloaderActor<T> {
     config: ServerConfig,
     key: std::marker::PhantomData<T>,
     identity: Option<Identity>,
-    cloud_root_certs: CloudRootCerts,
+    cloud_root_certs: CloudHttpConfig,
 }
 
 impl<T> Clone for DownloaderActor<T> {
@@ -79,7 +79,7 @@ impl<T> Clone for DownloaderActor<T> {
 }
 
 impl<T: Message + Default> DownloaderActor<T> {
-    pub fn new(identity: Option<Identity>, cloud_root_certs: CloudRootCerts) -> Self {
+    pub fn new(identity: Option<Identity>, cloud_root_certs: CloudHttpConfig) -> Self {
         DownloaderActor {
             config: <_>::default(),
             key: PhantomData,

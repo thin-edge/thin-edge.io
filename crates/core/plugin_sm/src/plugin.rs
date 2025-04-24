@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use csv::ReaderBuilder;
 use download::Downloader;
 use regex::Regex;
@@ -88,7 +88,7 @@ pub trait Plugin {
     }
 
     fn identity(&self) -> Option<&Identity>;
-    fn cloud_root_certs(&self) -> &CloudRootCerts;
+    fn cloud_root_certs(&self) -> &CloudHttpConfig;
 
     async fn apply_all(
         &self,
@@ -174,7 +174,7 @@ pub trait Plugin {
         mut command_log: Option<&mut CommandLog>,
         download_path: &Path,
         identity: Option<&Identity>,
-        cloud_root_certs: CloudRootCerts,
+        cloud_root_certs: CloudHttpConfig,
     ) -> Result<(), SoftwareError> {
         let downloader = Self::download_from_url(
             module,
@@ -197,7 +197,7 @@ pub trait Plugin {
         mut command_log: Option<&mut CommandLog>,
         download_path: &Path,
         identity: Option<&Identity>,
-        cloud_root_certs: CloudRootCerts,
+        cloud_root_certs: CloudHttpConfig,
     ) -> Result<Downloader, SoftwareError> {
         let sm_path = sm_path(&module.name, &module.version, download_path);
         let downloader =
@@ -276,7 +276,7 @@ pub struct ExternalPluginCommand {
     exclude: Option<String>,
     include: Option<String>,
     identity: Option<Identity>,
-    cloud_root_certs: CloudRootCerts,
+    cloud_root_certs: CloudHttpConfig,
 }
 
 impl ExternalPluginCommand {
@@ -289,7 +289,7 @@ impl ExternalPluginCommand {
         exclude: Option<String>,
         include: Option<String>,
         identity: Option<Identity>,
-        cloud_root_certs: CloudRootCerts,
+        cloud_root_certs: CloudHttpConfig,
     ) -> ExternalPluginCommand {
         ExternalPluginCommand {
             name: name.into(),
@@ -586,7 +586,7 @@ impl Plugin for ExternalPluginCommand {
         self.identity.as_ref()
     }
 
-    fn cloud_root_certs(&self) -> &CloudRootCerts {
+    fn cloud_root_certs(&self) -> &CloudHttpConfig {
         &self.cloud_root_certs
     }
 }

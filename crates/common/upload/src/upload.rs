@@ -3,7 +3,7 @@ use backoff::future::retry_notify;
 use backoff::ExponentialBackoff;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use log::info;
 use log::warn;
 use mime::Mime;
@@ -135,20 +135,20 @@ pub struct Uploader {
     source_filename: Utf8PathBuf,
     backoff: ExponentialBackoff,
     identity: Option<Identity>,
-    cloud_root_certs: CloudRootCerts,
+    cloud_http_config: CloudHttpConfig,
 }
 
 impl Uploader {
     pub fn new(
         target_path: Utf8PathBuf,
         identity: Option<Identity>,
-        cloud_root_certs: CloudRootCerts,
+        cloud_root_certs: CloudHttpConfig,
     ) -> Self {
         Self {
             source_filename: target_path,
             backoff: default_backoff(),
             identity,
-            cloud_root_certs,
+            cloud_http_config: cloud_root_certs,
         }
     }
 
@@ -183,7 +183,7 @@ impl Uploader {
 
             let file_body = Body::wrap_stream(FramedRead::new(file, BytesCodec::new()));
 
-            let mut client = self.cloud_root_certs.client_builder();
+            let mut client = self.cloud_http_config.client_builder();
             if let Some(identity) = self.identity.clone() {
                 client = client.identity(identity);
             }
@@ -321,7 +321,7 @@ mod tests {
         let mut uploader = Uploader::new(
             ttd.utf8_path().join("file_upload.txt"),
             None,
-            CloudRootCerts::from([]),
+            CloudHttpConfig::from([]),
         );
         uploader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
@@ -353,7 +353,7 @@ mod tests {
         let mut uploader = Uploader::new(
             ttd.utf8_path().join("file_upload.txt"),
             None,
-            CloudRootCerts::from([]),
+            CloudHttpConfig::from([]),
         );
         uploader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
@@ -387,7 +387,7 @@ mod tests {
         let mut uploader = Uploader::new(
             ttd.utf8_path().join("file_upload.txt"),
             None,
-            CloudRootCerts::from([]),
+            CloudHttpConfig::from([]),
         );
 
         uploader.set_backoff(ExponentialBackoff {
@@ -414,13 +414,13 @@ mod tests {
         // Not existing filename
         let source_path = Utf8Path::new("not_exist.txt").to_path_buf();
 
-        let uploader = Uploader::new(source_path, None, CloudRootCerts::from([]));
+        let uploader = Uploader::new(source_path, None, CloudHttpConfig::from([]));
         assert!(uploader.upload(&url).await.is_err());
     }
 
     #[test]
     fn default_uploader_uses_customised_backoff_parameters() {
-        let uploader = Uploader::new(Utf8PathBuf::default(), None, CloudRootCerts::from([]));
+        let uploader = Uploader::new(Utf8PathBuf::default(), None, CloudHttpConfig::from([]));
 
         assert_eq!(uploader.backoff.initial_interval, Duration::from_secs(15));
         assert_eq!(
@@ -497,7 +497,7 @@ mod tests {
 
         write_to_file_with_size(&mut source_file, 1024 * 1024).await;
 
-        let mut uploader = Uploader::new(source_path.to_owned(), None, CloudRootCerts::from([]));
+        let mut uploader = Uploader::new(source_path.to_owned(), None, CloudHttpConfig::from([]));
         // Adjust the backoff to be super fast for testing purposes
         uploader.set_backoff(
             ExponentialBackoffBuilder::new()
