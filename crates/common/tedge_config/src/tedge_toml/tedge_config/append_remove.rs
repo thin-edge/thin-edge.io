@@ -1,5 +1,3 @@
-use crate::models::http_or_s::HttpOrS;
-
 use super::*;
 
 #[diagnostic::on_unimplemented(
@@ -60,7 +58,7 @@ impl_append_remove_for_single_value!(
     AuthMethod,
     Cryptoki,
     HostPort<8000>,
-    HttpOrS,
+    ProxyScheme,
 );
 
 impl AppendRemoveItem for TemplatesSet {

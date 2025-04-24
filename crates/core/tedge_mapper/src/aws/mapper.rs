@@ -6,6 +6,7 @@ use aws_mapper_ext::converter::AwsConverter;
 use clock::WallClock;
 use mqtt_channel::TopicFilter;
 use std::str::FromStr;
+use std::sync::Arc;
 use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
@@ -13,10 +14,16 @@ use tedge_actors::NoConfig;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
+use tedge_config::all_or_nothing;
+use tedge_config::models::proxy_scheme::ProxyScheme;
 use tedge_config::models::TopicPrefix;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::TEdgeConfigReaderAws;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::rumqttc::Proxy;
+use tedge_mqtt_bridge::rumqttc::ProxyAuth;
+use tedge_mqtt_bridge::rumqttc::ProxyType;
+use tedge_mqtt_bridge::rumqttc::TlsConfiguration;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
@@ -58,6 +65,28 @@ impl TEdgeComponent for AwsMapper {
                 .mqtt_client_config_rustls(aws_config)
                 .context("Failed to create MQTT TLS config")?;
             cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
+
+            let rustls_config = tedge_config.cloud_client_tls_config();
+            let proxy_config = &tedge_config.proxy;
+            if let Some(address) = proxy_config.address.or_none() {
+                let credentials =
+                    all_or_nothing((proxy_config.username.clone(), proxy_config.password.clone()))
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                cloud_config.set_proxy(Proxy {
+                    addr: address.host().to_string(),
+                    port: address.port().0,
+                    auth: match credentials {
+                        Some((username, password)) => ProxyAuth::Basic { username, password },
+                        None => ProxyAuth::None,
+                    },
+                    ty: match proxy_config.ty {
+                        ProxyScheme::Http => ProxyType::Http,
+                        ProxyScheme::Https => {
+                            ProxyType::Https(TlsConfiguration::Rustls(Arc::new(rustls_config)))
+                        }
+                    },
+                });
+            }
 
             let bridge_name = format!("tedge-mapper-bridge-{prefix}");
             let health_topic = service_health_topic(&mqtt_schema, &device_topic_id, &bridge_name);

@@ -5,7 +5,7 @@ mod append_remove;
 pub use append_remove::AppendRemoveItem;
 
 use super::models::auth_method::AuthMethod;
-use super::models::http_or_s::HttpOrS;
+use super::models::proxy_scheme::ProxyScheme;
 use super::models::timestamp::TimeFormat;
 use super::models::AptConfig;
 use super::models::AutoFlag;
@@ -362,20 +362,6 @@ define_tedge_config! {
             #[tedge_config(example = "60s", default(from_str = "60s"))]
             keepalive_interval: SecondsOrHumanTime,
 
-            proxy: {
-                /// The address (host:port) of an HTTP CONNECT proxy to use when connecting to Cumulocity
-                address: HostPort<8000>,
-
-                /// The username for the proxy connection to Cumulocity's MQTT broker
-                username: String,
-
-                /// The password for the proxy connection to Cumulocity's MQTT broker
-                password: String,
-
-                #[tedge_config(rename = "type", default(variable = "HttpOrS::Https"), example = "HTTPS")]
-                /// The type of the proxy connection to use, either `HTTP` or `HTTPS`
-                ty: HttpOrS,
-            }
         },
 
         entity_store: {
@@ -860,6 +846,22 @@ define_tedge_config! {
         /// not owned by `tedge`.
         #[tedge_config(default(value = true), example = "true", example = "false")]
         enable: bool,
+    },
+
+
+    proxy: {
+        /// The address (host:port) of an HTTP CONNECT proxy to use when connecting to Cumulocity
+        address: HostPort<8000>,
+
+        /// The username for the proxy connection to Cumulocity's MQTT broker
+        username: String,
+
+        /// The password for the proxy connection to Cumulocity's MQTT broker
+        password: String,
+
+        #[tedge_config(rename = "type", default(variable = "ProxyScheme::Https"), example = "HTTPS")]
+        /// The type of the proxy connection to use, either `HTTP` or `HTTPS`
+        ty: ProxyScheme,
     },
 }
 

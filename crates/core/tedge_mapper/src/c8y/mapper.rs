@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::all_or_nothing;
-use tedge_config::models::http_or_s::HttpOrS;
+use tedge_config::models::proxy_scheme::ProxyScheme;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
@@ -229,7 +229,7 @@ impl TEdgeComponent for CumulocityMapper {
             cloud_config.set_keep_alive(c8y_config.bridge.keepalive_interval.duration());
 
             let rustls_config = tedge_config.cloud_client_tls_config();
-            let proxy_config = &c8y_config.bridge.proxy;
+            let proxy_config = &tedge_config.proxy;
             if let Some(address) = proxy_config.address.or_none() {
                 let credentials =
                     all_or_nothing((proxy_config.username.clone(), proxy_config.password.clone()))
@@ -241,9 +241,9 @@ impl TEdgeComponent for CumulocityMapper {
                         Some((username, password)) => ProxyAuth::Basic { username, password },
                         None => ProxyAuth::None,
                     },
-                    ty: match c8y_config.bridge.proxy.ty {
-                        HttpOrS::Http => ProxyType::Http,
-                        HttpOrS::Https => {
+                    ty: match proxy_config.ty {
+                        ProxyScheme::Http => ProxyType::Http,
+                        ProxyScheme::Https => {
                             ProxyType::Https(TlsConfiguration::Rustls(Arc::new(rustls_config)))
                         }
                     },
