@@ -4,7 +4,9 @@ use std::str::FromStr;
 
 /// A flag that can be set to auto,
 /// meaning the system will have to detect the appropriate true/false setting
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq, doku::Document)]
+#[derive(
+    Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Eq, PartialEq, doku::Document,
+)]
 pub enum AutoFlag {
     True,
     False,
