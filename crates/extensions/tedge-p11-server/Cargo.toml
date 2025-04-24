@@ -21,6 +21,7 @@ rustls.workspace = true
 sd-listen-fds.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = [
+    "fs",
     "rt",
     "macros",
     "net",

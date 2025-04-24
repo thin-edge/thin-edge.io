@@ -99,6 +99,16 @@ async fn main() -> anyhow::Result<()> {
             (listener, None)
         } else {
             debug!("No sockets from systemd, creating a standalone socket");
+            let socket_dir = socket_path.parent();
+            if let Some(socket_dir) = socket_dir {
+                if !socket_dir.exists() {
+                    tokio::fs::create_dir_all(socket_dir)
+                        .await
+                        .context(format!(
+                            "error creating parent directories for {socket_dir:?}"
+                        ))?;
+                }
+            }
             let listener = UnixListener::bind(&socket_path)
                 .with_context(|| format!("Failed to bind to socket at '{socket_path}'"))?;
             (
