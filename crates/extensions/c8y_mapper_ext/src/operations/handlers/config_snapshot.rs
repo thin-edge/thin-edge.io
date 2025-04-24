@@ -65,10 +65,10 @@ impl OperationContext {
                     Some(ref tedge_file_url) => Cow::Borrowed(tedge_file_url),
                     None => {
                         let tedge_file_url = format!(
-                        "http://{}/tedge/v1/files/{external_id}/config_snapshot/{config_filename}",
-                        &self.tedge_http_host,
-                        external_id = target.external_id.as_ref()
-                    );
+                            "http://{}/te/v1/files/{external_id}/config_snapshot/{config_filename}",
+                            &self.tedge_http_host,
+                            external_id = target.external_id.as_ref()
+                        );
                         Cow::Owned(tedge_file_url)
                     }
                 };
@@ -190,7 +190,7 @@ mod tests {
                 "te/device/main///cmd/config_snapshot/c8y-mapper-123456",
                 json!({
                     "status": "init",
-                    "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_snapshot/path:config:A-c8y-mapper-123456",
+                    "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/config_snapshot/path:config:A-c8y-mapper-123456",
                     "type": "path/config/A",
                 }),
             )],
@@ -241,7 +241,7 @@ mod tests {
                 "te/device/child1///cmd/config_snapshot/c8y-mapper-123456",
                 json!({
                     "status": "init",
-                    "tedgeUrl": "http://localhost:8888/tedge/v1/files/child1/config_snapshot/configA-c8y-mapper-123456",
+                    "tedgeUrl": "http://localhost:8888/te/v1/files/child1/config_snapshot/configA-c8y-mapper-123456",
                     "type": "configA",
                 }),
             )],
@@ -263,7 +263,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_snapshot/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/config_snapshot/typeA-c8y-mapper-1234",
             "type": "typeA",
         })
                 .to_string(),
@@ -279,7 +279,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_snapshot/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/config_snapshot/typeA-c8y-mapper-1234",
             "type": "typeA",
             "reason": "Something went wrong"
         })
@@ -320,7 +320,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": "http://localhost:8888/tedge/v1/files/child1/config_snapshot/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/te/v1/files/child1/config_snapshot/typeA-c8y-mapper-1234",
             "type": "typeA",
         })
                 .to_string(),
@@ -337,7 +337,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/tedge/v1/files/child1/config_snapshot/typeA-c8y-mapper-1234"),
+            "tedgeUrl": format!("http://localhost:8888/te/v1/files/child1/config_snapshot/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "reason": "Something went wrong"
         })
@@ -375,7 +375,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_snapshot/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/config_snapshot/typeA-c8y-mapper-1234",
             "type": "typeA",
         })
                 .to_string(),
@@ -391,7 +391,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_snapshot/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/config_snapshot/typeA-c8y-mapper-1234",
             "type": "typeA",
             "reason": "Something went wrong"
         })
@@ -424,7 +424,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_snapshot/path:type:A-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/config_snapshot/path:type:A-c8y-mapper-1234",
             "type": "path/type/A",
         })
                 .to_string(),
@@ -503,7 +503,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/v1/files/child1/config_snapshot/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/te/v1/files/child1/config_snapshot/typeA-c8y-mapper-1234",
             "type": "typeA",
         })
                 .to_string(),
@@ -579,7 +579,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_snapshot/path:type:A-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/config_snapshot/path:type:A-c8y-mapper-1234",
             "type": "path/type/A",
         })
                 .to_string(),
@@ -654,7 +654,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_snapshot/path:type:A-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/config_snapshot/path:type:A-c8y-mapper-1234",
             "type": "path/type/A",
             "logPath": test_log.path()
         })
@@ -737,7 +737,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
                 "status": "failed",
-                "tedgeUrl": "http://localhost:8888/tedge/v1/files/test-device/config_snapshot/typeA-c8y-mapper-1234",
+                "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/config_snapshot/typeA-c8y-mapper-1234",
                 "type": "typeA",
                 "reason": "Something went wrong",
                 "logPath": test_log.path(),

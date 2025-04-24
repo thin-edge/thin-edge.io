@@ -25,29 +25,29 @@ ${CHILD_SN}     ${EMPTY}
 File Transfer Service has HTTPS enabled
     ThinEdgeIO.Set Device Context    ${PARENT_SN}
     ${code}=    Execute Command
-    ...    curl --output /dev/null --write-out \%\{http_code\} https://${FTS_IP}:8000/tedge/v1/files/non-existent-file
+    ...    curl --output /dev/null --write-out \%\{http_code\} https://${FTS_IP}:8000/te/v1/files/non-existent-file
     ...    timeout=0
     Should Be Equal    ${code}    404
 
 File Transfer Service redirects HTTP to HTTPS
     ThinEdgeIO.Set Device Context    ${PARENT_SN}
     ${code}=    Execute Command
-    ...    curl --output /dev/null --write-out \%\{http_code\} http://${FTS_IP}:8000/tedge/v1/files/non-existent-file
+    ...    curl --output /dev/null --write-out \%\{http_code\} http://${FTS_IP}:8000/te/v1/files/non-existent-file
     ...    timeout=0
     Should Be Equal    ${code}    307
     ${GET_url_effective}=    Execute Command
-    ...    curl --output /dev/null --write-out \%\{url_effective\} -L http://${FTS_IP}:8000/tedge/v1/files/non-existent-file
+    ...    curl --output /dev/null --write-out \%\{url_effective\} -L http://${FTS_IP}:8000/te/v1/files/non-existent-file
     ...    timeout=0
-    Should Be Equal    ${GET_url_effective}    https://${FTS_IP}:8000/tedge/v1/files/non-existent-file
+    Should Be Equal    ${GET_url_effective}    https://${FTS_IP}:8000/te/v1/files/non-existent-file
     ${HEAD_url_effective}=    Execute Command
-    ...    curl --head --output /dev/null --write-out \%\{url_effective\} -L http://${FTS_IP}:8000/tedge/v1/files/non-existent-file
+    ...    curl --head --output /dev/null --write-out \%\{url_effective\} -L http://${FTS_IP}:8000/te/v1/files/non-existent-file
     ...    timeout=0
-    Should Be Equal    ${HEAD_url_effective}    https://${FTS_IP}:8000/tedge/v1/files/non-existent-file
+    Should Be Equal    ${HEAD_url_effective}    https://${FTS_IP}:8000/te/v1/files/non-existent-file
 
 File Transfer Service is accessible over HTTPS from child device
     ThinEdgeIO.Set Device Context    ${CHILD_SN}
     ${code}=    Execute Command
-    ...    curl --output /dev/null --write-out \%\{http_code\} https://${FTS_IP}:8000/tedge/v1/files/non-existent-file
+    ...    curl --output /dev/null --write-out \%\{http_code\} https://${FTS_IP}:8000/te/v1/files/non-existent-file
     ...    timeout=0
     Should Be Equal    ${code}    404
 
@@ -62,7 +62,7 @@ Configuration operation fails when configuration-plugin does not supply client c
     Enable Certificate Authentication for File Transfer Service
     Disable HTTP Client Certificate for FTS client
     Get Configuration Should Fail
-    ...    failure_reason=config-manager failed uploading configuration snapshot:.+https://${FTS_IP}:8000/tedge/v1/files/
+    ...    failure_reason=config-manager failed uploading configuration snapshot:.+https://${FTS_IP}:8000/te/v1/files/
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
     Update Configuration Should Fail
     ...    failure_reason=config-manager failed downloading a file:.+https://${parent_ip}:8001/c8y/inventory/binaries/
@@ -73,7 +73,7 @@ Configuration snapshot fails when mapper does not supply client certificate
     Disable HTTP Client Certificate for Mapper
     Enable HTTP Client Certificate for FTS client
     Get Configuration Should Fail
-    ...    failure_reason=tedge-mapper-c8y failed to download configuration snapshot from file-transfer service:.+https://${FTS_IP}:8000/tedge/v1/files/
+    ...    failure_reason=tedge-mapper-c8y failed to download configuration snapshot from file-transfer service:.+https://${FTS_IP}:8000/te/v1/files/
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
     [Teardown]    Re-enable HTTP Client Certificate for Mapper
 

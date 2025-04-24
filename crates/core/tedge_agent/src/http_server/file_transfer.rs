@@ -1,9 +1,9 @@
 //! This module defines the axum routes and handlers for the file transfer service REST APIs.
 //! The following endpoints are currently supported:
 //!
-//! - `PUT /tedge/v1/files/*path`: Upload a new file
-//! - `GET /tedge/v1/files/*path`: Retrieves an existing file
-//! - `DELETE /tedge/v1/files/*path`: Deletes a file
+//! - `PUT /te/v1/files/*path`: Upload a new file
+//! - `GET /te/v1/files/*path`: Retrieves an existing file
+//! - `DELETE /te/v1/files/*path`: Deletes a file
 use super::error::HttpRequestError as Error;
 use super::request_files::FileTransferDir;
 use super::request_files::FileTransferPath;
@@ -36,7 +36,16 @@ use tower_http::set_header::SetResponseHeaderLayer;
 pub(crate) fn file_transfer_router(file_transfer_dir: Utf8PathBuf) -> Router {
     Router::new()
         .route(
-            "/file-transfer/{*path}",
+            "/v1/files/{*path}",
+            get(download_file).put(upload_file).delete(delete_file),
+        )
+        .with_state(FileTransferDir::new(file_transfer_dir))
+}
+
+pub(crate) fn file_transfer_legacy_router(file_transfer_dir: Utf8PathBuf) -> Router {
+    Router::new()
+        .route(
+            "/tedge/file-transfer/{*path}",
             get(download_file).put(upload_file).delete(delete_file),
         )
         .layer(SetResponseHeaderLayer::if_not_present(
@@ -49,12 +58,8 @@ pub(crate) fn file_transfer_router(file_transfer_dir: Utf8PathBuf) -> Router {
         ))
         .layer(SetResponseHeaderLayer::if_not_present(
             HeaderName::from_static("link"),
-            HeaderValue::from_static("</tedge/v1/files>; rel=\"deprecation\""),
+            HeaderValue::from_static("</te/v1/files>; rel=\"deprecation\""),
         ))
-        .route(
-            "/v1/files/{*path}",
-            get(download_file).put(upload_file).delete(delete_file),
-        )
         .with_state(FileTransferDir::new(file_transfer_dir))
 }
 

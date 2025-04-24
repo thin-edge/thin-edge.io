@@ -252,7 +252,7 @@ impl FirmwareManagerWorker {
         let symlink_path =
             self.create_file_transfer_symlink(child_id, &file_cache_key, &cache_file_path)?;
         let file_transfer_url = format!(
-            "http://{}/tedge/v1/files/{child_id}/firmware_update/{file_cache_key}",
+            "http://{}/te/v1/files/{child_id}/firmware_update/{file_cache_key}",
             &self.config.local_http_host
         );
         let file_sha256 = try_digest(symlink_path.as_path())?;

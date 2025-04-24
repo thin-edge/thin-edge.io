@@ -27,7 +27,7 @@ Get Put Delete legacy
     ...    stderr=True
     Should Contain    ${put}[1]    deprecation: true
     Should Contain    ${put}[1]    sunset: Thu, 31 Dec 2025 23:59:59 GMT
-    Should Contain    ${put}[1]    link: </tedge/v1/files>; rel="deprecation"
+    Should Contain    ${put}[1]    link: </te/v1/files>; rel="deprecation"
 
     ${get}=    Execute Command
     ...    curl --silent -v http://${DEVICE_IP}:${PORT}/tedge/file-transfer/file_a
@@ -35,36 +35,36 @@ Get Put Delete legacy
     Should Contain    ${get}[0]    test of put
     Should Contain    ${get}[1]    deprecation: true
     Should Contain    ${get}[1]    sunset: Thu, 31 Dec 2025 23:59:59 GMT
-    Should Contain    ${get}[1]    link: </tedge/v1/files>; rel="deprecation"
+    Should Contain    ${get}[1]    link: </te/v1/files>; rel="deprecation"
 
     ${delete}=    Execute Command
     ...    curl -v -X DELETE http://${DEVICE_IP}:${PORT}/tedge/file-transfer/file_a
     ...    stderr=True
     Should Contain    ${delete}[1]    deprecation: true
     Should Contain    ${delete}[1]    sunset: Thu, 31 Dec 2025 23:59:59 GMT
-    Should Contain    ${delete}[1]    link: </tedge/v1/files>; rel="deprecation"
+    Should Contain    ${delete}[1]    link: </te/v1/files>; rel="deprecation"
 
 Get Put Delete
     Setup    skip_bootstrap=True    # Setup child device
 
     ${put}=    Execute Command
-    ...    curl -X PUT -d "test of put" http://${DEVICE_IP}:${PORT}/tedge/v1/files/file_a
+    ...    curl -X PUT -d "test of put" http://${DEVICE_IP}:${PORT}/te/v1/files/file_a
     ...    stderr=True
     Should Not Contain    ${put}[1]    deprecation: true
-    ${get}=    Execute Command    curl --silent http://${DEVICE_IP}:${PORT}/tedge/v1/files/file_a    stderr=True
+    ${get}=    Execute Command    curl --silent http://${DEVICE_IP}:${PORT}/te/v1/files/file_a    stderr=True
     Should Be Equal    ${get}[0]    test of put
     Should Not Contain    ${get}[1]    deprecation: true
-    ${delete}=    Execute Command    curl -X DELETE http://${DEVICE_IP}:${PORT}/tedge/v1/files/file_a    stderr=True
+    ${delete}=    Execute Command    curl -X DELETE http://${DEVICE_IP}:${PORT}/te/v1/files/file_a    stderr=True
     Should Not Contain    ${delete}[1]    deprecation: true
 
 File transfer using tedge cli
     Setup    skip_bootstrap=False
 
-    Execute Command    tedge http put /tedge/v1/files/file_b "content to be transferred"
-    ${content}=    Execute Command    tedge http get /tedge/v1/files/file_b
+    Execute Command    tedge http put /te/v1/files/file_b "content to be transferred"
+    ${content}=    Execute Command    tedge http get /te/v1/files/file_b
     Should Be Equal    ${content}    content to be transferred
-    Execute Command    tedge http delete /tedge/v1/files/file_b
-    Execute Command    tedge http get /tedge/v1/files/file_b    exp_exit_code=1
+    Execute Command    tedge http delete /te/v1/files/file_b
+    Execute Command    tedge http get /te/v1/files/file_b    exp_exit_code=1
 
 
 *** Keywords ***

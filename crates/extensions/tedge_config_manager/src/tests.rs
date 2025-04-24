@@ -217,7 +217,7 @@ async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
     let snapshot_request = r#"
         {
             "status": "init",
-            "tedgeUrl": "http://127.0.0.1:3000/tedge/v1/files/main/config-snapshot/type_two-1234",
+            "tedgeUrl": "http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_two-1234",
             "type": "type_two"
         }"#;
 
@@ -230,7 +230,7 @@ async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
             executing_message,
             Some(MqttMessage::new(
                 &config_topic,
-                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/config-snapshot/type_two-1234","type":"type_two"}"#
+                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_two-1234","type":"type_two"}"#
             ).with_retain())
         );
 
@@ -244,7 +244,7 @@ async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
 
     assert_eq!(
         upload_request.url,
-        "http://127.0.0.1:3000/tedge/v1/files/main/config-snapshot/type_two-1234"
+        "http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_two-1234"
     );
     assert_eq!(upload_request.file_path, tempdir.path().join("file_b"));
 
@@ -259,7 +259,7 @@ async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
             mqtt.recv().await,
             Some(MqttMessage::new(
                 &config_topic,
-                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/config-snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
+                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
             ).with_retain())
         );
 
@@ -292,7 +292,7 @@ async fn config_manager_creates_tedge_url_for_snapshot_request() -> Result<(), a
     assert_eq!(
         executing_message,
         Some(
-            MqttMessage::new(&config_topic, r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/config_snapshot/type_two-1234","type":"type_two"}"#)
+            MqttMessage::new(&config_topic, r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234","type":"type_two"}"#)
                 .with_retain()
         )
     );
@@ -307,7 +307,7 @@ async fn config_manager_creates_tedge_url_for_snapshot_request() -> Result<(), a
 
     assert_eq!(
         upload_request.url,
-        "http://127.0.0.1:3000/tedge/v1/files/main/config_snapshot/type_two-1234"
+        "http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234"
     );
     assert_eq!(upload_request.file_path, tempdir.path().join("file_b"));
 
@@ -322,7 +322,7 @@ async fn config_manager_creates_tedge_url_for_snapshot_request() -> Result<(), a
             mqtt.recv().await,
             Some(MqttMessage::new(
                 &config_topic,
-                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/config_snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
+                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
             ).with_retain())
         );
 
@@ -344,7 +344,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
     let snapshot_request = r#"
         {
             "status": "init",
-            "tedgeUrl": "http://127.0.0.1:3000/tedge/v1/files/main/config_update/type_two-1234",
+            "tedgeUrl": "http://127.0.0.1:3000/te/v1/files/main/config_update/type_two-1234",
             "remoteUrl": "http://www.remote.url",
             "serverUrl": "http://www.remote.url",
             "type": "type_two"
@@ -359,7 +359,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
         executing_message,
             Some(MqttMessage::new(
                 &config_topic,
-                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/config_update/type_two-1234","remoteUrl":"http://www.remote.url","serverUrl":"http://www.remote.url","type":"type_two"}"#
+                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config_update/type_two-1234","remoteUrl":"http://www.remote.url","serverUrl":"http://www.remote.url","type":"type_two"}"#
             ).with_retain())
         );
 
@@ -373,7 +373,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
 
     assert_eq!(
         download_request.url,
-        "http://127.0.0.1:3000/tedge/v1/files/main/config_update/type_two-1234"
+        "http://127.0.0.1:3000/te/v1/files/main/config_update/type_two-1234"
     );
     assert_eq!(
         download_request.file_path,
@@ -393,7 +393,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
             mqtt.recv().await,
             Some(MqttMessage::new(
                 &config_topic,
-                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/config_update/type_two-1234","remoteUrl":"http://www.remote.url","serverUrl":"http://www.remote.url","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
+                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config_update/type_two-1234","remoteUrl":"http://www.remote.url","serverUrl":"http://www.remote.url","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
             ).with_retain())
         );
 
@@ -414,7 +414,7 @@ async fn request_config_snapshot_that_does_not_exist() -> Result<(), anyhow::Err
     let snapshot_request = r#"
         {
             "status": "init",
-            "tedgeUrl": "http://127.0.0.1:3000/tedge/v1/files/main/config-snapshot/type_five-1234",
+            "tedgeUrl": "http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_five-1234",
             "type": "type_five"
         }"#;
 
@@ -427,7 +427,7 @@ async fn request_config_snapshot_that_does_not_exist() -> Result<(), anyhow::Err
         executing_message,
         Some(MqttMessage::new(
             &config_topic,
-            r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/config-snapshot/type_five-1234","type":"type_five"}"#
+            r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_five-1234","type":"type_five"}"#
         ).with_retain())
     );
 
@@ -439,7 +439,7 @@ async fn request_config_snapshot_that_does_not_exist() -> Result<(), anyhow::Err
         mqtt.recv().await,
         Some(MqttMessage::new(
             &config_topic,
-            r#"{"status":"failed","reason":"The requested config_type \"type_five\" is not defined in the plugin configuration file.","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/config-snapshot/type_five-1234","type":"type_five"}"#
+            r#"{"status":"failed","reason":"The requested config_type \"type_five\" is not defined in the plugin configuration file.","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_five-1234","type":"type_five"}"#
         ).with_retain())
     );
 
@@ -461,7 +461,7 @@ async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
     let snapshot_request = r#"
         {
             "status": "init",
-            "tedgeUrl": "http://127.0.0.1:3000/tedge/v1/files/child01/config-snapshot/type_two-1234",
+            "tedgeUrl": "http://127.0.0.1:3000/te/v1/files/child01/config-snapshot/type_two-1234",
             "type": "type_two"
         }"#;
 
@@ -488,7 +488,7 @@ async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
     let snapshot_request = r#"
         {
             "status": "init",
-            "tedgeurl": "http://127.0.0.1:3000/tedge/v1/files/main/config-snapshot/type_two-1234",
+            "tedgeurl": "http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_two-1234",
             "kind": "type_two"
         }"#;
 
@@ -529,7 +529,7 @@ async fn receive_executing_snapshot_request_without_tedge_url() -> Result<(), an
 
     assert_eq!(
         upload_request.url,
-        "http://127.0.0.1:3000/tedge/v1/files/main/config_snapshot/type_two-1234"
+        "http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234"
     );
     assert_eq!(upload_request.file_path, tempdir.path().join("file_b"));
 
@@ -544,7 +544,7 @@ async fn receive_executing_snapshot_request_without_tedge_url() -> Result<(), an
             mqtt.recv().await,
             Some(MqttMessage::new(
                 &config_topic,
-                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/tedge/v1/files/main/config_snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
+                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
             ).with_retain())
         );
 
@@ -569,7 +569,7 @@ async fn config_manager_processes_concurrently() -> Result<(), anyhow::Error> {
     let snapshot_request = r#"
         {
             "status": "executing",
-            "tedgeUrl": "http://127.0.0.1:3000/tedge/v1/files/main/config-snapshot/type_two-1234",
+            "tedgeUrl": "http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_two-1234",
             "type": "type_two"
         }"#;
 
@@ -578,7 +578,7 @@ async fn config_manager_processes_concurrently() -> Result<(), anyhow::Error> {
     let update_request = r#"
         {
             "status": "executing",
-            "tedgeUrl": "http://127.0.0.1:3000/tedge/v1/files/main/config_update/type_two-1234",
+            "tedgeUrl": "http://127.0.0.1:3000/te/v1/files/main/config_update/type_two-1234",
             "remoteUrl": "http://www.remote.url",
             "serverUrl": "http://www.remote.url",
             "type": "type_two"

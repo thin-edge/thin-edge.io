@@ -257,7 +257,7 @@ mod tests {
         }
 
         fn url_for(&self, path: &str) -> String {
-            format!("http://localhost:{}/tedge/v1/files/{path}", self.port)
+            format!("http://localhost:{}/te/v1/files/{path}", self.port)
         }
 
         #[allow(clippy::disallowed_methods)]
@@ -299,7 +299,7 @@ mod tests {
         }
 
         fn url_for(&self, path: &str) -> String {
-            format!("https://localhost:{}/tedge/v1/files/{path}", self.port)
+            format!("https://localhost:{}/te/v1/files/{path}", self.port)
         }
 
         /// An client with a client certificate that trusts the associated server certificate
