@@ -34,7 +34,8 @@ Custom Setup
     Remove Existing Certificates
 
     # initialize the soft hsm and create a self-signed certificate
-    Configure tedge-p11-server    module_path=/usr/lib/softhsm/libsofthsm2.so    pin=123456
+    Execute Command    tedge config set device.cryptoki.pin 123456
+    Execute Command    tedge config set device.cryptoki.module_path /usr/lib/softhsm/libsofthsm2.so
     Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --self-signed --device-id "${DEVICE_SN}" --pin 123456
 
     # configure tedge
@@ -46,11 +47,6 @@ Custom Setup
     # Upload the self-signed certificate
     ${cert_contents}=    Execute Command    cat $(tedge config get device.cert_path)
     ${aws}=    AWS.Create Thing With Self-Signed Certificate    name=${DEVICE_SN}    certificate_pem=${cert_contents}
-
-Configure tedge-p11-server
-    [Arguments]    ${module_path}    ${pin}
-    Execute Command
-    ...    cmd=printf 'TEDGE_DEVICE_CRYPTOKI_MODULE_PATH=%s\nTEDGE_DEVICE_CRYPTOKI_PIN=%s\n' "${module_path}" "${pin}" | sudo tee /etc/tedge/plugins/tedge-p11-server.conf
 
 Remove Existing Certificates
     Execute Command    cmd=rm -f "$(tedge config get device.key_path)" "$(tedge config get device.cert_path)"

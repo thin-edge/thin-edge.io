@@ -28,28 +28,28 @@ Select Private key using PKCS#11 URI
 
     Tedge Reconnect Should Succeed
 
-    # expect failure if we try to use a token that doesnt exist
-    Set tedge-p11-server Configuration    pkcs11_url=pkcs11:token=asdf
+    # expect failure if we try to use a token that doesn't exist
+    Set tedge-p11-server Uri    value=pkcs11:token=asdf
     Tedge Reconnect Should Fail With    Failed to find a signing key: Didn't find a slot to use
 
     # create tokens with no keys on them, so key selection fails if wrong token is selected
     Execute Command    softhsm2-util --init-token --free --label token1 --pin "123456" --so-pin "123456"
 
-    Set tedge-p11-server Configuration    pkcs11_url=pkcs11:token=token1
+    Set tedge-p11-server Uri    value=pkcs11:token=token1
     Tedge Reconnect Should Fail With    Failed to find a signing key
 
-    Set tedge-p11-server Configuration    pkcs11_url=pkcs11:token=tedge
+    Set tedge-p11-server Uri    value=pkcs11:token=tedge
     Tedge Reconnect Should Succeed
 
     # import another private key to the primary token (one that has valid tedge key) so we can select a key
     Execute Command
     ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ECDSA --curve=secp256r1 --label "key2" "pkcs11:token=tedge"
 
-    Set tedge-p11-server Configuration    pkcs11_url=pkcs11:token=tedge;object=key2
+    Set tedge-p11-server Uri    value=pkcs11:token=tedge;object=key2
     Tedge Reconnect Should Fail With    HandshakeFailure
 
     # but when URI has correct label, we expect valid key to be used again
-    Set tedge-p11-server Configuration    pkcs11_url=pkcs11:token=tedge;object=tedge
+    Set tedge-p11-server Uri    value=pkcs11:token=tedge;object=tedge
     Tedge Reconnect Should Succeed
 
 
@@ -64,7 +64,8 @@ Custom Setup
     Remove Existing Certificates
 
     # initialize the soft hsm and create a self-signed certificate
-    Configure tedge-p11-server    module_path=/usr/lib/softhsm/libsofthsm2.so    pin=123456
+    Execute Command    tedge config set device.cryptoki.pin 123456
+    Execute Command    tedge config set device.cryptoki.module_path /usr/lib/softhsm/libsofthsm2.so
     Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --self-signed --device-id "${DEVICE_SN}" --pin 123456
 
     # configure tedge
@@ -79,15 +80,9 @@ Custom Setup
 Remove Existing Certificates
     Execute Command    cmd=rm -f "$(tedge config get device.key_path)" "$(tedge config get device.cert_path)"
 
-Configure tedge-p11-server
-    [Arguments]    ${module_path}    ${pin}
-    Execute Command
-    ...    cmd=printf 'TEDGE_DEVICE_CRYPTOKI_MODULE_PATH=%s\nTEDGE_DEVICE_CRYPTOKI_PIN=%s\n' "${module_path}" "${pin}" | sudo tee /etc/tedge/plugins/tedge-p11-server.conf
-
-Set tedge-p11-server Configuration
-    [Arguments]    ${pkcs11_url}
-    Execute Command
-    ...    cmd=printf 'TEDGE_DEVICE_CRYPTOKI_MODULE_PATH=%s\nTEDGE_DEVICE_CRYPTOKI_PIN=%s\nTEDGE_DEVICE_CRYPTOKI_URI=%s\n' "/usr/lib/softhsm/libsofthsm2.so" "123456" "${pkcs11_url}" | sudo tee /etc/tedge/plugins/tedge-p11-server.conf
+Set tedge-p11-server Uri
+    [Arguments]    ${value}
+    Execute Command    tedge config set device.cryptoki.uri '${value}'
     Restart Service    tedge-p11-server
 
 Tedge Reconnect Should Succeed

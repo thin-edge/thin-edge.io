@@ -150,6 +150,12 @@ define_tedge_config! {
             #[tedge_config(example = "123456", default(value = "123456"))]
             pin: Arc<str>,
 
+            /// A URI of the token/object to use.
+            ///
+            /// See RFC #7512.
+            #[tedge_config(example = "pkcs11:model=PKCS%2315%20emulated")]
+            uri: Arc<str>,
+
             /// A path to the tedge-p11-server socket.
             ///
             /// Needs to be set when `device.cryptoki.mode` is set to `module`
