@@ -1103,7 +1103,7 @@ class ThinEdgeIO(DeviceLibrary):
         
         command = f"tedge http post /te/v1/entities --data '{json_payload}'"
         output = device.execute_command(command)
-        json_output = json.loads(output.stdout)
+        json_output = json.loads(output.stdout) if output.stdout else ""
         return json_output
 
     @keyword("Deregister Entity")
@@ -1140,7 +1140,7 @@ class ThinEdgeIO(DeviceLibrary):
             f"tedge http delete /te/v1/entities/{topic_id}"
         )
         output = device.execute_command(command)
-        json_output = json.loads(output.stdout)
+        json_output = json.loads(output.stdout) if output.stdout else ""
         return json_output
 
     @keyword("List Entities")
@@ -1196,7 +1196,7 @@ class ThinEdgeIO(DeviceLibrary):
             url += f"?{query_string}"
 
         output = device.execute_command(f"tedge http get '{url}'")
-        entities = json.loads(output.stdout)
+        entities = json.loads(output.stdout) if output.stdout else ""
         return entities
 
 
