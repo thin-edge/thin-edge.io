@@ -97,6 +97,7 @@ impl HttpCommand {
             while let Some(bytes) = body.next().await {
                 stdout.write_all(&bytes?).await?;
             }
+            stdout.flush().await?;
             Ok(())
         } else {
             let kind = if status.is_client_error() {
