@@ -84,6 +84,7 @@ impl HealthMonitorBuilder {
             external_id: None,
             r#type: EntityType::Service,
             parent: Some(service.device_topic_id.entity().clone()),
+            health_endpoint: None,
             twin_data: serde_json::json!({ "type": service_type })
                 .as_object()
                 .unwrap()

@@ -1,7 +1,9 @@
 use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
+use crate::entity_cache::UpdateOutcome;
 use crate::service_monitor::is_c8y_bridge_established;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use std::collections::HashMap;
@@ -24,6 +26,9 @@ use tedge_actors::Sender;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::entity::EntityMetadata;
+use tedge_api::entity::EntityType;
+use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::pending_entity_store::RegisteredEntityData;
@@ -153,9 +158,17 @@ impl C8yMapperActor {
                     .process_entity_metadata_message(&message)
                     .await
                 {
-                    Ok(pending_entities) => {
-                        self.process_registered_entities(pending_entities).await?;
-                    }
+                    Ok(outcome) => match outcome {
+                        UpdateOutcome::Inserted(registered_entities) => {
+                            self.process_registered_entities(registered_entities)
+                                .await?
+                        }
+                        UpdateOutcome::Updated(updated_entity, old_entity) => {
+                            self.process_entity_update(updated_entity, old_entity)
+                                .await?
+                        }
+                        UpdateOutcome::Deleted | UpdateOutcome::Unchanged => (),
+                    },
                     Err(err) => {
                         self.mqtt_publisher
                             .send(self.converter.new_error_message(err))
@@ -192,6 +205,72 @@ impl C8yMapperActor {
                 self.process_message(pending_data_message).await?;
             }
         }
+
+        Ok(())
+    }
+
+    pub(crate) async fn process_entity_update(
+        &mut self,
+        updated_entity: EntityMetadata,
+        old_entity: EntityMetadata,
+    ) -> Result<(), RuntimeError> {
+        if updated_entity.parent != old_entity.parent {
+            let entity = self
+                .converter
+                .entity_cache
+                .get(&updated_entity.topic_id)
+                .expect("Entity should be present in the cache");
+            let child_xid = &entity.external_id;
+            let old_parent_xid = self
+                .converter
+                .entity_cache
+                .try_get_external_id(&old_entity.parent.unwrap())
+                .expect("Device external id should be present");
+            let new_parent_xid = self
+                .converter
+                .entity_cache
+                .try_get_external_id(&updated_entity.parent.clone().unwrap())
+                .expect("Device external id should be present");
+
+            let res = match entity.metadata.r#type {
+                EntityType::MainDevice => {
+                    Err(anyhow!("Main device parent update is not supported").into())
+                }
+                EntityType::ChildDevice => {
+                    self.converter
+                        .http_proxy
+                        .update_child_device_parent(
+                            child_xid.as_ref(),
+                            old_parent_xid.as_ref(),
+                            new_parent_xid.as_ref(),
+                        )
+                        .await
+                }
+                EntityType::Service => {
+                    self.converter
+                        .http_proxy
+                        .update_child_addition_parent(
+                            child_xid.as_ref(),
+                            old_parent_xid.as_ref(),
+                            new_parent_xid.as_ref(),
+                        )
+                        .await
+                }
+            };
+
+            if let Err(err) = res {
+                self.mqtt_publisher
+                    .send(self.converter.new_error_message(err))
+                    .await?;
+            }
+        }
+
+        let entity_reg_msg: EntityRegistrationMessage =
+            EntityRegistrationMessage::from(&updated_entity);
+        let message = entity_reg_msg.to_mqtt_message(&self.converter.mqtt_schema);
+        // Send the registration message to all subscribed handlers
+        self.publish_message_to_subscribed_handles(&Channel::EntityMetadata, message)
+            .await?;
 
         Ok(())
     }

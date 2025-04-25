@@ -1106,6 +1106,41 @@ class ThinEdgeIO(DeviceLibrary):
         json_output = json.loads(output.stdout) if output.stdout else ""
         return json_output
 
+    @keyword("Get Entity")
+    def get_entity(
+            self,
+            topic_id: str,
+            device_name: str = None 
+    ) -> Dict[str, Any]:
+        """
+        Get the entity from the entity store
+
+        Args:
+            topic_id (str, optional): Topic ID of the entity
+            device_name (str, optional): Device name to fetch the entity list from
+
+        Returns:
+            Dict[str, Any]: Entity metadata
+
+        *Example:*
+        | ${entities}= | Get Entity | device/child0// |
+        | ${entities}= | Get Entity | device/child0/service/service0 | device_name=${PARENT_SN} |
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to query the entity store as the device: '{device_name}' has not been setup"
+            )
+
+        command = f"curl http://localhost:8000/te/v1/entities/{topic_id}"
+        output = device.execute_command(command)
+        json_output = json.loads(output.stdout)
+        return json_output
+
     @keyword("Deregister Entity")
     def deregister_entity(
             self,

@@ -9,6 +9,7 @@ use tedge_api::entity::EntityMetadata;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
+use tedge_api::entity_store::EntityUpdateMessage;
 use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -24,6 +25,7 @@ use tracing::error;
 pub enum EntityStoreRequest {
     Get(EntityTopicId),
     Create(EntityRegistrationMessage),
+    Update(EntityTopicId, EntityUpdateMessage),
     Delete(EntityTopicId),
     List(ListFilters),
     MqttMessage(MqttMessage),
@@ -37,6 +39,7 @@ pub enum EntityStoreRequest {
 pub enum EntityStoreResponse {
     Get(Option<EntityMetadata>),
     Create(Result<Vec<RegisteredEntityData>, entity_store::Error>),
+    Update(Result<EntityMetadata, entity_store::Error>),
     Delete(Vec<EntityMetadata>),
     List(Vec<EntityMetadata>),
     Ok,
@@ -100,6 +103,10 @@ impl Server for EntityStoreServer {
                 let res = self.register_entity(entity).await;
                 EntityStoreResponse::Create(res)
             }
+            EntityStoreRequest::Update(topic_id, update_message) => {
+                let res = self.update_entity(&topic_id, update_message).await;
+                EntityStoreResponse::Update(res.cloned())
+            }
             EntityStoreRequest::Delete(topic_id) => {
                 let deleted_entities = self.deregister_entity(topic_id).await;
                 EntityStoreResponse::Delete(deleted_entities)
@@ -140,9 +147,11 @@ impl EntityStoreServer {
             if let Channel::EntityMetadata = channel {
                 self.process_entity_registration(topic_id, message).await;
             } else {
-                let res = self.process_entity_data(topic_id, channel, message).await;
+                let res = self
+                    .process_entity_data(topic_id, channel, message.clone())
+                    .await;
                 if let Err(err) = res {
-                    error!("Failed to process entity data message: {err}");
+                    error!("Failed to process entity data message: {message} due to : {err}");
                 }
             }
         } else {
@@ -278,6 +287,20 @@ impl EntityStoreServer {
             self.publish_message(message).await;
         }
         Ok(registered)
+    }
+
+    async fn update_entity(
+        &mut self,
+        topic_id: &EntityTopicId,
+        update_message: EntityUpdateMessage,
+    ) -> Result<&EntityMetadata, entity_store::Error> {
+        let entity = self.entity_store.update_entity(topic_id, update_message)?;
+        let entity_reg_msg: EntityRegistrationMessage = entity.into();
+        let entity_msg = entity_reg_msg.to_mqtt_message(&self.mqtt_schema);
+
+        self.publish_message(entity_msg).await;
+
+        self.entity_store.try_get(topic_id)
     }
 
     async fn deregister_entity(&mut self, topic_id: EntityTopicId) -> Vec<EntityMetadata> {

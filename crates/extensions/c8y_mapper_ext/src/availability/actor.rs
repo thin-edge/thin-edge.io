@@ -8,7 +8,6 @@ use async_trait::async_trait;
 use c8y_api::smartrest::topic::C8yTopic;
 use serde_json::json;
 use std::collections::HashMap;
-use std::str::FromStr;
 use tedge_actors::Actor;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
@@ -164,16 +163,12 @@ impl AvailabilityActor {
     ) -> RegistrationResult {
         let source = &registration_message.topic_id;
 
-        let result = match registration_message.twin_data.get("@health") {
+        let result = match registration_message.health_endpoint.clone() {
             None => registration_message
                 .topic_id
                 .default_service_for_device("tedge-agent")
                 .ok_or_else( || format!("The entity is not in the default topic scheme. Please specify '@health' to enable availability monitoring for the device '{source}'")),
-            Some(raw_value) => match raw_value.as_str() {
-                None => Err(format!("'@health' must hold a string value. Given: {raw_value:?}, source: {source}")),
-                Some(maybe_entity_topic_id) => EntityTopicId::from_str(maybe_entity_topic_id)
-                    .map_err(|_| format!("'@health' must be 4-segment identifier like `a/b/c/d`. Given: {maybe_entity_topic_id}, source: {source}"))
-            }
+            Some(topic_id) => Ok(topic_id),
         };
 
         match result {

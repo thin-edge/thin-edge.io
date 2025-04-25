@@ -31,8 +31,8 @@ use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::mem;
 use std::path::Path;
@@ -107,6 +107,7 @@ impl EntityStore {
             external_id: None,
             r#type: main_device.r#type,
             parent: None,
+            health_endpoint: None,
             twin_data: main_device.twin_data,
         };
 
@@ -364,6 +365,7 @@ impl EntityStore {
             r#type: message.r#type,
             external_id: message.external_id,
             parent,
+            health_endpoint: message.health_endpoint,
             twin_data: message.twin_data,
         };
 
@@ -388,6 +390,18 @@ impl EntityStore {
         }
 
         Ok(affected_entities)
+    }
+
+    pub fn update_entity(
+        &mut self,
+        topic_id: &EntityTopicId,
+        update_message: EntityUpdateMessage,
+    ) -> Result<&EntityMetadata, Error> {
+        self.entities.update_entity(topic_id, update_message)
+    }
+
+    pub fn ancestors(&self, topic_id: &EntityTopicId) -> Result<Vec<&EntityTopicId>, Error> {
+        self.entities.ancestors(topic_id)
     }
 
     /// Performs auto-registration process for an entity under a given
@@ -587,14 +601,14 @@ struct EntityTree {
 #[derive(Debug)]
 struct EntityNode {
     metadata: EntityMetadata,
-    children: HashSet<EntityTopicId>,
+    children: BTreeSet<EntityTopicId>,
 }
 
 impl EntityNode {
     pub fn new(metadata: EntityMetadata) -> Self {
         EntityNode {
             metadata,
-            children: HashSet::new(),
+            children: BTreeSet::new(),
         }
     }
 
@@ -634,6 +648,22 @@ impl EntityTree {
         self.entities
             .get_mut(entity_topic_id)
             .map(EntityNode::mut_metadata)
+    }
+
+    /// Tries to get information about an entity using its `EntityTopicId`,
+    /// returning an error if the entity is not registered.
+    fn try_get(&self, topic_id: &EntityTopicId) -> Result<&EntityMetadata, Error> {
+        self.get(topic_id)
+            .ok_or_else(|| Error::UnknownEntity(topic_id.to_string()))
+    }
+
+    fn try_get_entity_node_mut(
+        &mut self,
+        topic_id: &EntityTopicId,
+    ) -> Result<&mut EntityNode, Error> {
+        self.entities
+            .get_mut(topic_id)
+            .ok_or_else(|| Error::UnknownEntity(topic_id.to_string()))
     }
 
     /// All the entities with a given parent.
@@ -751,6 +781,90 @@ impl EntityTree {
             vec![]
         }
     }
+
+    fn get_parent(&self, topic_id: &EntityTopicId) -> Result<&EntityTopicId, Error> {
+        let parent = self
+            .try_get(topic_id)?
+            .parent
+            .as_ref()
+            .unwrap_or(&self.main_device);
+        Ok(parent)
+    }
+
+    pub fn update_entity(
+        &mut self,
+        topic_id: &EntityTopicId,
+        update_message: EntityUpdateMessage,
+    ) -> Result<&EntityMetadata, Error> {
+        if let Some(new_parent) = update_message.parent {
+            if new_parent == topic_id {
+                return Err(Error::InvalidSelfParent(new_parent.clone()));
+            }
+
+            if topic_id == &self.main_device {
+                // The main device can not have a parent
+                return Err(Error::InvalidMainDeviceParent);
+            }
+
+            let entity = self
+                .try_get(&new_parent)
+                .map_err(|_| Error::NoParent(new_parent.to_string().into_boxed_str()))?;
+            if entity.r#type == EntityType::Service {
+                return Err(Error::InvalidServiceParent(
+                    new_parent.clone(),
+                    topic_id.clone(),
+                ));
+            }
+
+            if self.ancestors(&new_parent)?.contains(&topic_id) {
+                return Err(Error::InvalidDescendentParent(
+                    new_parent.clone(),
+                    topic_id.clone(),
+                ));
+            }
+
+            let current_parent = self.get_parent(topic_id)?.clone();
+            if current_parent != new_parent {
+                let current_node = self.try_get_entity_node_mut(topic_id)?;
+                current_node.metadata.parent = Some(new_parent.clone());
+
+                let new_parent_node = self.try_get_entity_node_mut(&new_parent)?;
+                new_parent_node.children.insert(topic_id.clone());
+
+                self.entities
+                    .get_mut(&current_parent)
+                    .expect("Parent entity should exist")
+                    .children
+                    .remove(topic_id);
+            }
+        }
+
+        if let Some(health_endpoint) = update_message.health_endpoint {
+            let health_endpoint_entity = self
+                .try_get(&health_endpoint)
+                .map_err(|_| Error::UnknownHealthEndpoint(health_endpoint.clone()))?;
+            if health_endpoint_entity.r#type != EntityType::Service {
+                return Err(Error::InvalidHealthEndpoint(
+                    health_endpoint.clone(),
+                    topic_id.clone(),
+                ));
+            }
+            let entity = self.try_get_entity_node_mut(topic_id)?;
+            entity.metadata.health_endpoint = Some(health_endpoint);
+        }
+
+        self.try_get(topic_id)
+    }
+
+    pub fn ancestors(&self, topic_id: &EntityTopicId) -> Result<Vec<&EntityTopicId>, Error> {
+        let mut ancestors = vec![];
+        let mut current = topic_id;
+        while let Some(parent) = self.try_get(current)?.parent.as_ref() {
+            ancestors.push(parent);
+            current = parent;
+        }
+        Ok(ancestors)
+    }
 }
 
 /// Represents an error encountered while updating the store.
@@ -787,6 +901,27 @@ pub enum Error {
 
     #[error("Invalid twin key: '{0}'. Keys that are empty, containing '/' or starting with '@' are not allowed")]
     InvalidTwinData(String),
+
+    #[error("Entity: '{0}' can not be its own parent")]
+    InvalidSelfParent(EntityTopicId),
+
+    #[error("Entity: '{0}' can not be a parent of '{1}' because it is a service. Only devices can be parents")]
+    InvalidServiceParent(EntityTopicId, EntityTopicId),
+
+    #[error("Entity: '{0}' can not be a parent of '{1}' because '{0}' is a descendent of '{1}'")]
+    InvalidDescendentParent(EntityTopicId, EntityTopicId),
+
+    #[error("The parent of main device can not be updated")]
+    InvalidMainDeviceParent,
+
+    #[error("Updating the entity type of {0} is not supported")]
+    InvalidEntityTypeUpdate(EntityTopicId),
+
+    #[error("Entity: '{0}' can not be a health endpoint of '{1}' because it is not a service. Only services can be health endpoints")]
+    InvalidHealthEndpoint(EntityTopicId, EntityTopicId),
+
+    #[error("The specified health endpoint: {0} does not exist in the entity store")]
+    UnknownHealthEndpoint(EntityTopicId),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -816,6 +951,8 @@ pub struct EntityRegistrationMessage {
     pub r#type: EntityType,
     #[serde(rename = "@parent")]
     pub parent: Option<EntityTopicId>,
+    #[serde(rename = "@health")]
+    pub health_endpoint: Option<EntityTopicId>,
 
     #[serde(flatten)]
     pub twin_data: Map<String, JsonValue>,
@@ -874,6 +1011,18 @@ impl EntityRegistrationMessage {
             None
         };
 
+        let health_service = if let Some(value) = properties.remove("@health") {
+            let JsonValue::String(value_str) = value else {
+                return None;
+            };
+            let Ok(health_service) = value_str.parse() else {
+                return None;
+            };
+            Some(health_service)
+        } else {
+            None
+        };
+
         let entity_id = properties.remove("@id");
         let entity_id = if let Some(entity_id) = entity_id {
             let JsonValue::String(entity_id) = entity_id else {
@@ -895,6 +1044,7 @@ impl EntityRegistrationMessage {
             external_id: entity_id,
             r#type,
             parent,
+            health_endpoint: health_service,
             twin_data: other,
         })
     }
@@ -905,6 +1055,7 @@ impl EntityRegistrationMessage {
             r#type,
             external_id: None,
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         }
     }
@@ -924,6 +1075,11 @@ impl EntityRegistrationMessage {
         self
     }
 
+    pub fn with_health_endpoint(mut self, health_endpoint: EntityTopicId) -> Self {
+        let _ = self.health_endpoint.insert(health_endpoint);
+        self
+    }
+
     /// Creates a entity registration message for a main device.
     pub fn main_device(main_device_id: Option<String>) -> Self {
         Self {
@@ -931,6 +1087,7 @@ impl EntityRegistrationMessage {
             external_id: main_device_id.map(|v| v.into()),
             r#type: EntityType::MainDevice,
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         }
     }
@@ -947,6 +1104,10 @@ impl EntityRegistrationMessage {
 
         if let Some(parent) = self.parent {
             props.insert("@parent".to_string(), parent.to_string().into());
+        }
+
+        if let Some(health_endpoint) = self.health_endpoint {
+            props.insert("@health".to_string(), health_endpoint.to_string().into());
         }
 
         props.append(&mut self.twin_data);
@@ -968,6 +1129,19 @@ impl TryFrom<&MqttMessage> for EntityRegistrationMessage {
     }
 }
 
+impl From<&EntityMetadata> for EntityRegistrationMessage {
+    fn from(value: &EntityMetadata) -> Self {
+        EntityRegistrationMessage {
+            topic_id: value.topic_id.clone(),
+            r#type: value.r#type.clone(),
+            external_id: value.external_id.clone(),
+            parent: value.parent.clone(),
+            health_endpoint: value.health_endpoint.clone(),
+            twin_data: Map::new(),
+        }
+    }
+}
+
 /// Parse a MQTT message payload as an entity registration payload.
 ///
 /// Returns `Some(register_payload)` if a payload is valid JSON and is a
@@ -979,6 +1153,28 @@ fn parse_entity_register_payload(payload: &[u8]) -> Option<JsonValue> {
         Some(payload)
     } else {
         None
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EntityUpdateMessage {
+    #[serde(rename = "@parent")]
+    pub parent: Option<EntityTopicId>,
+
+    #[serde(rename = "@health")]
+    pub health_endpoint: Option<EntityTopicId>,
+}
+
+impl EntityUpdateMessage {
+    pub fn with_parent(mut self, parent: EntityTopicId) -> Self {
+        self.parent = Some(parent);
+        self
+    }
+
+    pub fn with_health_endpoint(mut self, health_endpoint: EntityTopicId) -> Self {
+        self.health_endpoint = Some(health_endpoint);
+        self
     }
 }
 
@@ -1275,18 +1471,20 @@ mod tests {
         build_test_entity_tree(&mut store);
 
         // List entity tree from root
-        let entities = list_entity_tree_topics(&mut store, filters);
+        let entities: BTreeSet<&str> = list_entity_tree_topics(&mut store, filters);
         assert_eq!(entities, expected);
     }
 
-    fn list_entity_tree_topics(store: &mut EntityStore, filters: ListFilters) -> BTreeSet<&str> {
+    fn list_entity_tree_topics<'a, C: FromIterator<&'a str>>(
+        store: &'a mut EntityStore,
+        filters: ListFilters,
+    ) -> C {
         store
             .list_entity_tree(filters)
             .iter()
             .map(|e| e.topic_id.as_str())
             .collect()
     }
-
     /// Build the test entity tree:
     ///
     /// main
@@ -1377,6 +1575,7 @@ mod tests {
                     r#type,
                     external_id: None,
                     parent,
+                    health_endpoint: None,
                     twin_data: Map::new(),
                 })
                 .unwrap();
@@ -1395,6 +1594,7 @@ mod tests {
                 external_id: None,
                 topic_id: EntityTopicId::default_main_service("service1").unwrap(),
                 parent: None,
+                health_endpoint: None,
                 twin_data: Map::new(),
             })
             .unwrap();
@@ -1414,6 +1614,7 @@ mod tests {
                 external_id: None,
                 topic_id: EntityTopicId::default_main_service("service2").unwrap(),
                 parent: None,
+                health_endpoint: None,
                 twin_data: Map::new(),
             })
             .unwrap();
@@ -1446,6 +1647,7 @@ mod tests {
                     r#type: EntityType::ChildDevice,
                     external_id: None,
                     parent: Some(EntityTopicId::from_str("device/main//").unwrap()),
+                    health_endpoint: None,
                     twin_data: json!({ "name": "child1" }).as_object().unwrap().to_owned(),
                 },
                 EntityRegistrationMessage {
@@ -1453,6 +1655,7 @@ mod tests {
                     r#type: EntityType::Service,
                     external_id: None,
                     parent: Some(EntityTopicId::from_str("device/child1//").unwrap()),
+                    health_endpoint: None,
                     twin_data: json!({ "name": "service1" })
                         .as_object()
                         .unwrap()
@@ -1477,6 +1680,7 @@ mod tests {
                 r#type: EntityType::ChildDevice,
                 external_id: None,
                 parent: Some(EntityTopicId::from_str("device/main//").unwrap()),
+                health_endpoint: None,
                 twin_data: json!({ "name": "child2" }).as_object().unwrap().to_owned(),
             },]
         );
@@ -1505,6 +1709,7 @@ mod tests {
                 r#type: EntityType::MainDevice,
                 external_id: None,
                 parent: None,
+                health_endpoint: None,
                 twin_data: json!({}).as_object().unwrap().to_owned(),
             })
             .unwrap();
@@ -1514,6 +1719,7 @@ mod tests {
             parent: None,
             r#type: EntityType::MainDevice,
             external_id: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
         // Assert main device registered with custom topic scheme
@@ -1530,7 +1736,8 @@ mod tests {
                 r#type: EntityType::Service,
                 external_id: None,
                 parent: Some(main_topic_id.clone()),
-                twin_data: json!({}).as_object().unwrap().to_owned(),
+                health_endpoint: None,
+                twin_data: Map::new(),
             })
             .unwrap();
 
@@ -1539,6 +1746,7 @@ mod tests {
             parent: Some(main_topic_id),
             r#type: EntityType::Service,
             external_id: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
         // Assert service registered under main device with custom topic scheme
@@ -1649,6 +1857,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
+                health_endpoint: None,
                 twin_data: json!({ "name" : "test-name", "type": "test-type" })
                     .as_object()
                     .unwrap()
@@ -1675,6 +1884,7 @@ mod tests {
             external_id: Some("test-device".into()),
             r#type: EntityType::MainDevice,
             parent: None,
+            health_endpoint: None,
             twin_data: json!({ "name" : "new-test-device" })
                 .as_object()
                 .unwrap()
@@ -1711,6 +1921,7 @@ mod tests {
             r#type: EntityType::ChildDevice,
             external_id: Some("child1".into()),
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
 
@@ -1739,6 +1950,7 @@ mod tests {
             r#type: EntityType::ChildDevice,
             external_id: Some("child1".into()),
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
 
@@ -1933,6 +2145,251 @@ mod tests {
         assert!(store.get(&entity("device/00E//")).is_some());
     }
 
+    #[test]
+    fn update_parent() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        build_entity_tree(
+            &mut store,
+            vec![
+                ("device/child0//", "child-device", None),
+                ("device/child00//", "child-device", Some("device/child0//")),
+                (
+                    "device/child000//",
+                    "child-device",
+                    Some("device/child00//"),
+                ),
+                (
+                    "device/child001//",
+                    "child-device",
+                    Some("device/child00//"),
+                ),
+                ("device/child01//", "child-device", Some("device/child0//")),
+                ("device/child1//", "child-device", None),
+                ("device/child10//", "child-device", Some("device/child1//")),
+            ],
+        );
+
+        // Assert sub-trees of `child0` and `child1` before the update
+        assert_eq!(
+            list_entity_tree_topics::<Vec<&str>>(
+                &mut store,
+                ListFilters::default().root("device/child0//".parse().unwrap()),
+            ),
+            [
+                "device/child0//",
+                "device/child00//",
+                "device/child01//",
+                "device/child000//",
+                "device/child001//",
+            ]
+        );
+        assert_eq!(
+            list_entity_tree_topics::<Vec<&str>>(
+                &mut store,
+                ListFilters::default().root("device/child1//".parse().unwrap()),
+            ),
+            ["device/child1//", "device/child10//"]
+        );
+
+        let entity = store
+            .update_entity(
+                &"device/child00//".parse().unwrap(),
+                EntityUpdateMessage::default().with_parent("device/child1//".parse().unwrap()),
+            )
+            .unwrap();
+
+        let expected =
+            EntityMetadata::new("device/child00//".parse().unwrap(), EntityType::ChildDevice)
+                .with_parent("device/child1//".parse().unwrap());
+        assert_eq!(entity, &expected);
+
+        // Assert sub-trees of `child0` and `child1` after the update
+        assert_eq!(
+            list_entity_tree_topics::<Vec<&str>>(
+                &mut store,
+                ListFilters::default().root("device/child0//".parse().unwrap()),
+            ),
+            ["device/child0//", "device/child01//"]
+        );
+        assert_eq!(
+            list_entity_tree_topics::<Vec<&str>>(
+                &mut store,
+                ListFilters::default().root("device/child1//".parse().unwrap()),
+            ),
+            [
+                "device/child1//",
+                "device/child00//",
+                "device/child10//",
+                "device/child000//",
+                "device/child001//",
+            ]
+        );
+    }
+
+    #[test_case(
+        "device/child0//",
+        "device/child0//",
+        "Entity: 'device/child0//' can not be its own parent";
+        "invalid_self_parent"
+    )]
+    #[test_case(
+        "device/main//",
+        "device/child0//",
+        "The parent of main device can not be updated";
+        "immutable_main_device"
+    )]
+    #[test_case(
+        "device/child0//",
+        "device/main/service/tedge-agent",
+        "Entity: 'device/main/service/tedge-agent' can not be a parent of 'device/child0//' because it is a service. Only devices can be parents";
+        "invalid_service_parent"
+    )]
+    #[test_case(
+        "device/child0//",
+        "device/child000//",
+        "Entity: 'device/child000//' can not be a parent of 'device/child0//' because 'device/child000//' is a descendent of 'device/child0//'";
+        "invalid_descendent_parent"
+    )]
+    fn invalid_update_parent(topic_id: &str, new_parent: &str, error_msg: &str) {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        build_entity_tree(
+            &mut store,
+            vec![
+                (
+                    "device/main/service/tedge-agent",
+                    "service",
+                    Some("device/main//"),
+                ),
+                ("device/child0//", "child-device", None),
+                ("device/child00//", "child-device", Some("device/child0//")),
+                (
+                    "device/child000//",
+                    "child-device",
+                    Some("device/child00//"),
+                ),
+            ],
+        );
+
+        let entity_topic_id = EntityTopicId::from_str(topic_id).unwrap();
+        let update_message = EntityUpdateMessage::default()
+            .with_parent(EntityTopicId::from_str(new_parent).unwrap());
+
+        assert_eq!(
+            store
+                .update_entity(&entity_topic_id, update_message)
+                .unwrap_err()
+                .to_string(),
+            error_msg
+        );
+    }
+
+    #[test]
+    fn update_health_endpoint() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        store
+            .update(
+                EntityRegistrationMessage::main_device(None)
+                    .with_health_endpoint("device/main/service/tedge-agent".parse().unwrap()),
+            )
+            .unwrap();
+        store
+            .update(EntityRegistrationMessage::new_custom(
+                "health-service".parse().unwrap(),
+                EntityType::Service,
+            ))
+            .unwrap();
+
+        let entity = store
+            .update_entity(
+                &EntityTopicId::default_main_device(),
+                EntityUpdateMessage::default()
+                    .with_health_endpoint("health-service/".parse().unwrap()),
+            )
+            .unwrap();
+
+        let expected = EntityMetadata::main_device(None)
+            .with_health_endpoint("health-service///".parse().unwrap());
+        assert_eq!(entity, &expected);
+    }
+
+    #[test]
+    fn invalid_update_health_endpoint() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        let child_device = EntityTopicId::default_child_device("child0").unwrap();
+        store
+            .update(EntityRegistrationMessage::new_custom(
+                child_device.clone(),
+                EntityType::ChildDevice,
+            ))
+            .unwrap();
+
+        let update_message = EntityUpdateMessage::default().with_health_endpoint(child_device);
+
+        assert_matches!(
+            store.update_entity(&EntityTopicId::default_main_device(), update_message),
+            Err(Error::InvalidHealthEndpoint(_, _))
+        );
+    }
+
+    #[test_case(
+        "device/child000//",
+        vec!["device/child00//", "device/child0//", "device/main//"];
+        "leaf_node"
+    )]
+    #[test_case(
+        "device/child00//",
+        vec!["device/child0//", "device/main//"];
+        "nested_child"
+    )]
+    #[test_case(
+        "device/child0//",
+        vec!["device/main//"];
+        "immediate_child"
+    )]
+    #[test_case(
+        "device/main//",
+        vec![];
+        "main_device"
+    )]
+    fn ancestors(topic_id: &str, expected: Vec<&str>) {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        build_entity_tree(
+            &mut store,
+            vec![
+                (
+                    "device/main/service/tedge-agent",
+                    "service",
+                    Some("device/main//"),
+                ),
+                ("device/child0//", "child-device", None),
+                ("device/child00//", "child-device", Some("device/child0//")),
+                (
+                    "device/child000//",
+                    "child-device",
+                    Some("device/child00//"),
+                ),
+                (
+                    "device/child000/service/service0",
+                    "service",
+                    Some("device/child000//"),
+                ),
+            ],
+        );
+        let ancestors: Vec<&str> = store
+            .ancestors(&EntityTopicId::from_str(topic_id).unwrap())
+            .unwrap()
+            .iter()
+            .map(|e| e.as_str())
+            .collect();
+
+        assert_eq!(ancestors, expected);
+    }
+
     fn new_entity_store(temp_dir: &TempDir, clean_start: bool) -> EntityStore {
         EntityStore::with_main_device(
             MqttSchema::default(),
@@ -1941,6 +2398,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
+                health_endpoint: None,
                 twin_data: Map::new(),
             },
             0,

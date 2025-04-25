@@ -32,6 +32,7 @@ use tedge_api::entity::InvalidEntityType;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
+use tedge_api::entity_store::EntityUpdateMessage;
 use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -139,6 +140,8 @@ impl IntoResponse for Error {
             Error::EntityStoreError(err) => match err {
                 entity_store::Error::EntityAlreadyRegistered(_) => StatusCode::CONFLICT,
                 entity_store::Error::UnknownEntity(_) => StatusCode::NOT_FOUND,
+                entity_store::Error::NoParent(_) => StatusCode::BAD_REQUEST,
+                entity_store::Error::UnknownHealthEndpoint(_) => StatusCode::BAD_REQUEST,
                 entity_store::Error::InvalidTwinData(_) => StatusCode::BAD_REQUEST,
                 _ => StatusCode::BAD_REQUEST,
             },
@@ -163,7 +166,10 @@ pub(crate) fn entity_store_router(state: AgentState) -> Router {
         .route("/v1/entities", post(register_entity).get(list_entities))
         .route(
             "/v1/entities/{*path}",
-            get(get_resource).put(put_resource).delete(delete_resource),
+            get(get_resource)
+                .put(put_resource)
+                .patch(patch_resource)
+                .delete(delete_resource),
         )
         .layer(DefaultBodyLimit::max(HTTP_MAX_PAYLOAD_SIZE))
         .with_state(state)
@@ -234,6 +240,23 @@ async fn put_resource(
                     .await
                     .into_response(),
             )
+        }
+        _ => Err(Error::MethodNotAllowed),
+    }
+}
+
+async fn patch_resource(
+    State(state): State<AgentState>,
+    Path(path): Path<String>,
+    payload: String,
+) -> impl IntoResponse {
+    let (topic_id, channel) = parse_path(&path)?;
+    match channel {
+        Channel::EntityMetadata => {
+            let entity_update: EntityUpdateMessage = serde_json::from_str(&payload)?;
+            Ok(update_entity(state, topic_id, entity_update)
+                .await
+                .into_response())
         }
         _ => Err(Error::MethodNotAllowed),
     }
@@ -334,6 +357,23 @@ async fn get_entity(
     } else {
         Err(Error::EntityNotFound(topic_id))
     }
+}
+
+async fn update_entity(
+    state: AgentState,
+    topic_id: EntityTopicId,
+    payload: EntityUpdateMessage,
+) -> impl IntoResponse {
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::Update(topic_id, payload))
+        .await?;
+    let EntityStoreResponse::Update(res) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+
+    Ok(Json(res?))
 }
 
 async fn deregister_entity(state: AgentState, topic_id: EntityTopicId) -> Result<Response, Error> {
@@ -630,6 +670,7 @@ mod tests {
             external_id: Some("test-child".into()),
             r#type: EntityType::ChildDevice,
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
         let payload = serde_json::to_string(&entity).unwrap();
@@ -678,6 +719,7 @@ mod tests {
             external_id: Some("test-child".into()),
             r#type: EntityType::ChildDevice,
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
         let payload = serde_json::to_string(&entity).unwrap();
@@ -731,6 +773,7 @@ mod tests {
             external_id: Some("test-child".into()),
             r#type: EntityType::ChildDevice,
             parent: None,
+            health_endpoint: None,
             twin_data: Map::new(),
         };
         let payload = serde_json::to_string(&entity).unwrap();
@@ -839,7 +882,7 @@ mod tests {
                 if let EntityStoreRequest::List(_) = req.request {
                     req.reply_to
                         .send(EntityStoreResponse::List(vec![
-                            EntityMetadata::main_device(),
+                            EntityMetadata::main_device(None),
                             EntityMetadata::child_device("child0".to_string()).unwrap(),
                             EntityMetadata::child_device("child1".to_string()).unwrap(),
                         ]))

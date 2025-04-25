@@ -22,7 +22,7 @@ async fn new_entity_store() {
 
     assert_eq!(
         entity::get(&mut entity_store, "device/main//").await,
-        Some(EntityMetadata::main_device())
+        Some(EntityMetadata::main_device(None))
     )
 }
 
@@ -614,6 +614,7 @@ mod model {
                 external_id: None,
                 r#type: action.target_type(),
                 parent: action.parent_topic_id(),
+                health_endpoint: None,
                 twin_data: action.properties(),
             }
         }
