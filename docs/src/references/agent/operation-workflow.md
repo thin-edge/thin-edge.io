@@ -365,7 +365,7 @@ on_exec = "<next-state-waiting-for-sub-operation>"
 Operation specific arguments can be provided to the sub-operation instance,
 and data extracted from the calling command status topic and message payload can be injected into these arguments.
 
-- For instance, `input.url = "http://127.0.0.1:8000/tedge/v1/files/foo.txt"`
+- For instance, `input.url = "http://127.0.0.1:8000/te/v1/files/foo.txt"`
   adds an `url` property to the init message of the sub-operation.
 - Similarly, `input.url = "${.payload.config_update.url}"`
   adds an `url` property to the init message of the sub-operation, extracting this url from the calling command state.
@@ -405,7 +405,7 @@ For example, a configuration update can be triggered with:
 ```toml
 [trigger_config_update]
 operation = "config_update"
-input.tedgeUrl = "http://127.0.0.1:8000/tedge/v1/files/example/config_update/mosquitto-1234"
+input.tedgeUrl = "http://127.0.0.1:8000/te/v1/files/example/config_update/mosquitto-1234"
 input.type = "mosquitto"
 on_exec = "waiting_for_config_update"
 

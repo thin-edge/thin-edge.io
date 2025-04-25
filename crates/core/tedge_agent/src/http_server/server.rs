@@ -1,4 +1,5 @@
 use super::entity_store::entity_store_router;
+use super::file_transfer::file_transfer_legacy_router;
 use super::file_transfer::file_transfer_router;
 use crate::entity_manager::server::EntityStoreRequest;
 use crate::entity_manager::server::EntityStoreResponse;
@@ -51,8 +52,11 @@ pub(crate) fn http_server(
 }
 
 fn router(state: AgentState) -> Router {
+    let file_transfer_legacy_router = file_transfer_legacy_router(state.file_transfer_dir.clone());
     let file_transfer_router = file_transfer_router(state.file_transfer_dir.clone());
     let entity_store_router = entity_store_router(state);
 
-    Router::new().nest("/tedge", entity_store_router.merge(file_transfer_router))
+    Router::new()
+        .nest("/te", entity_store_router.merge(file_transfer_router))
+        .merge(file_transfer_legacy_router)
 }

@@ -179,7 +179,7 @@ impl FileCacheActor {
         let url_symlink_path = symlink_path(&entity, &operation.config_type, &cmd_id);
 
         let tedge_url = format!(
-            "http://{}/tedge/v1/files/{}",
+            "http://{}/te/v1/files/{}",
             &self.tedge_http_host, url_symlink_path
         );
 

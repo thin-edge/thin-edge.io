@@ -68,7 +68,7 @@ files = [
 * `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI
 
 The child device agent needs to upload this file to %%te%% [File Transfer Service](../references/file-transfer-service.md) with an HTTP PUT request
-to the URL: `http://{fts-address}:8000/tedge/v1/files/{child-id}/c8y-configuration-plugin`
+to the URL: `http://{fts-address}:8000/te/v1/files/{child-id}/c8y-configuration-plugin`
 
 * `{fts-address}` is the address of the %%te%% device on which the [File Transfer Service](../references/file-transfer-service.md) is running
 * `{child-id}` is the child-device-id
@@ -98,7 +98,7 @@ These requests arrive in the following JSON format:
 {
   "type": "{config-type}",
   "path": "/child/local/fs/path",
-  "url": "http://{fts-address}:8000/tedge/v1/files/{child-d}/config_snapshot/{config-type}"
+  "url": "http://{fts-address}:8000/te/v1/files/{child-d}/config_snapshot/{config-type}"
 }
 ```
 
@@ -165,7 +165,7 @@ These requests arrive in the following JSON format:
 {
   "type": "{config-type}",
   "path": "/child/local/fs/path",
-  "url": "http://{fts-address}:8000/tedge/v1/files/{child-d}/config_update/{config-type}"
+  "url": "http://{fts-address}:8000/te/v1/files/{child-d}/config_update/{config-type}"
 }
 ```
 

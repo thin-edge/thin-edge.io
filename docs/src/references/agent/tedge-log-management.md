@@ -70,7 +70,7 @@ A new log file upload command with the ID "1234" is published for the device nam
 ```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
   "status": "init",
-  "tedgeUrl": "http://127.0.0.1:8000/tedge/v1/files/example/log_upload/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/te/v1/files/example/log_upload/mosquitto-1234",
   "type": "mosquitto",
   "dateFrom": "2013-06-22T17:03:14.000+02:00",
   "dateTo": "2013-06-23T18:03:14.000+02:00",
@@ -100,7 +100,7 @@ Thus, the operation status update message for the above example looks like below
 tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
   "status": "failed",
   "reason": "The target log file for 'mosquitto' does not exist.",
-  "tedgeUrl": "http://127.0.0.1:8000/tedge/v1/files/example/log_upload/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/te/v1/files/example/log_upload/mosquitto-1234",
   "type": "mosquitto",
   "dateFrom": "2013-06-22T17:03:14.000+02:00",
   "dateTo": "2013-06-22T18:03:14.000+02:00",

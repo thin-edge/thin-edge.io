@@ -25,8 +25,8 @@ Any local process can PUT and GET files there:
 
 ```sh
 echo "Hello thin-edge.io" >/tmp/foo.txt
-curl -X PUT -F 'file=@/tmp/foo.txt' http://localhost:8000/tedge/v1/files/foo.txt
-curl http://localhost:8000/tedge/v1/files/foo.txt 
+curl -X PUT -F 'file=@/tmp/foo.txt' http://localhost:8000/te/v1/files/foo.txt
+curl http://localhost:8000/te/v1/files/foo.txt 
 ```
 
 ### Cumulocity Proxy
@@ -85,8 +85,8 @@ Any process running on a child device can also use the File Transfer Service:
 
 ```sh title="child device"
 echo "Hello thin-edge.io" >/tmp/foo.txt
-curl -X PUT -F 'file=@/tmp/foo.txt' http://rpi4-dca632efb150:8000/tedge/v1/files/foo.txt
-curl http://rpi4-dca632efb150:8000/tedge/v1/files/foo.txt 
+curl -X PUT -F 'file=@/tmp/foo.txt' http://rpi4-dca632efb150:8000/te/v1/files/foo.txt
+curl http://rpi4-dca632efb150:8000/te/v1/files/foo.txt 
 ```
 
 :::note
@@ -260,8 +260,8 @@ And file transfer is now available over HTTPS:
 
 ```sh title="child device"
 echo "Hello thin-edge.io" >/tmp/foo.txt
-curl -X PUT -F 'file=@/tmp/foo.txt' https://rpi4-dca632efb150:8000/tedge/v1/files/foo.txt
-curl https://rpi4-dca632efb150:8000/tedge/v1/files/foo.txt 
+curl -X PUT -F 'file=@/tmp/foo.txt' https://rpi4-dca632efb150:8000/te/v1/files/foo.txt
+curl https://rpi4-dca632efb150:8000/te/v1/files/foo.txt 
 ```
 
 ### Cumulocity Proxy
@@ -285,8 +285,8 @@ And the Cumulocity proxy is now available over HTTPS:
 
 ```sh title="child device"
 echo "Hello thin-edge.io" >/tmp/foo.txt
-curl -X PUT -F 'file=@/tmp/foo.txt' https://rpi4-dca632efb150:8000/tedge/v1/files/foo.txt
-curl https://rpi4-dca632efb150:8000/tedge/v1/files/foo.txt 
+curl -X PUT -F 'file=@/tmp/foo.txt' https://rpi4-dca632efb150:8000/te/v1/files/foo.txt
+curl https://rpi4-dca632efb150:8000/te/v1/files/foo.txt 
 ```
 
 ```sh title="main and child device"
@@ -357,10 +357,10 @@ echo "Hello thin-edge.io" >/tmp/foo.txt
 curl --cert /etc/tedge/device-local-certs/tedge-client.crt \
      --key /etc/tedge/device-local-certs/tedge-client.key \
      -X PUT -F 'file=@/tmp/foo.txt' \
-     https://rpi4-dca632efb150:8000/tedge/v1/files/foo.txt
+     https://rpi4-dca632efb150:8000/te/v1/files/foo.txt
 curl --cert /etc/tedge/device-local-certs/tedge-client.crt \
      --key /etc/tedge/device-local-certs/tedge-client.key \
-     https://rpi4-dca632efb150:8000/tedge/v1/files/foo.txt 
+     https://rpi4-dca632efb150:8000/te/v1/files/foo.txt 
 ```
 
 Notably, **tedge-agent** must be updated on each child device,

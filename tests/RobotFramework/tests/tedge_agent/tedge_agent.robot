@@ -30,7 +30,7 @@ Converter and file transfer service are not running on a child device
     # check that file transfer service is disabled
     # 7 - Failed to connect to host
     Execute Command
-    ...    curl -X PUT -d '' http://127.0.0.1:8000/tedge/v1/files/test-file
+    ...    curl -X PUT -d '' http://127.0.0.1:8000/te/v1/files/test-file
     ...    exp_exit_code=7
 
     # check that tedge-to-te-converter is not working while on a child device
