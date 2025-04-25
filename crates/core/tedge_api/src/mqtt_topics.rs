@@ -288,7 +288,7 @@ pub enum EntityTopicError {
 ///
 /// # Reference
 /// https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-identifier
-#[derive(Debug, Clone, Hash, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Hash, Eq, Serialize)]
 #[serde(transparent)]
 pub struct EntityTopicId(String);
 
@@ -331,6 +331,16 @@ impl FromStr for EntityTopicId {
         }
 
         Ok(EntityTopicId(topic_id))
+    }
+}
+
+impl<'de> Deserialize<'de> for EntityTopicId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        EntityTopicId::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -1085,5 +1095,25 @@ mod tests {
         let id_generator = IdGenerator::new("abc");
         let maybe_id = id_generator.get_value(cmd_id);
         assert_eq!(maybe_id, expected);
+    }
+
+    #[test_case("abc"; "no_slashes")]
+    #[test_case("abc/"; "one_slash")]
+    #[test_case("abc//"; "two_slashes")]
+    #[test_case("abc///"; "three_slashes")]
+    fn topic_id_trailing_slashes_optional(input: &str) {
+        let topic_id = EntityTopicId::from_str(input).unwrap();
+        assert_eq!(EntityTopicId::from_str("abc///").unwrap(), topic_id);
+
+        let json = format!("\"{input}\"");
+        let deserialized: EntityTopicId = serde_json::from_str(json.as_str()).unwrap();
+        assert_eq!(EntityTopicId::from_str("abc///").unwrap(), deserialized);
+    }
+
+    #[test]
+    fn topic_id_rejects_more_than_four_segments() {
+        let err = EntityTopicId::from_str("a/b/c/d/e").unwrap_err();
+        assert_eq!(err, TopicIdError::TooLong);
+        assert!(serde_json::from_str::<EntityTopicId>("\"a/b/c/d/e\"").is_err());
     }
 }
