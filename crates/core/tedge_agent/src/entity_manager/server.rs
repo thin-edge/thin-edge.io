@@ -176,7 +176,9 @@ impl EntityStoreServer {
                     );
                 }
             },
-            Err(()) => error!("Failed to parse {message} as an entity registration message"),
+            Err(err) => {
+                error!("Failed to parse {message} as an entity registration message: {err}")
+            }
         }
     }
 

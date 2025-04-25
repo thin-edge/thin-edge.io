@@ -535,7 +535,7 @@ Any JSON value.
 * 404: Not Found
   ```json
   {
-      "error": "The specified entity: device/test-child// does not exist in the store"
+      "error": "The specified entity: device/test-child// does not exist in the entity store"
   }
   ```
 
@@ -602,7 +602,7 @@ curl http://localhost:8000/tedge/v1/entities/device/child01///twin \
 * 404: Not Found
   ```json
   {
-      "error": "The specified entity: device/test-child// does not exist in the store"
+      "error": "The specified entity: device/test-child// does not exist in the entity store"
   }
   ```
 
@@ -635,7 +635,7 @@ curl http://localhost:8000/tedge/v1/entities/device/child01///twin/hardware
 * 404: Not Found
   ```json
   {
-      "error": "The specified entity: device/test-child// does not exist in the store"
+      "error": "The specified entity: device/test-child// does not exist in the entity store"
   }
   ```
 
@@ -667,7 +667,7 @@ curl http://localhost:8000/tedge/v1/entities/device/child01///twin
 * 404: Not Found
   ```json
   {
-      "error": "The specified entity: device/test-child// does not exist in the store"
+      "error": "The specified entity: device/test-child// does not exist in the entity store"
   }
   ```
 

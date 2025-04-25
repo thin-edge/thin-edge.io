@@ -756,7 +756,7 @@ impl EntityTree {
 /// Represents an error encountered while updating the store.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Specified parent {0:?} does not exist in the store")]
+    #[error("The specified parent {0:?} does not exist in the entity store")]
     NoParent(Box<str>),
 
     #[error("Main device was not registered. Before registering child entities, register the main device")]
@@ -768,7 +768,7 @@ pub enum Error {
     #[error("An entity with topic id: {0} is already registered")]
     EntityAlreadyRegistered(EntityTopicId),
 
-    #[error("The specified entity: {0} does not exist in the store")]
+    #[error("The specified entity: {0} does not exist in the entity store")]
     UnknownEntity(String),
 
     #[error("Auto registration of the entity with topic id {0} failed as it does not match the default topic scheme: 'device/<device-id>/service/<service-id>'. Try explicit registration instead.")]
@@ -959,10 +959,12 @@ impl EntityRegistrationMessage {
 }
 
 impl TryFrom<&MqttMessage> for EntityRegistrationMessage {
-    type Error = ();
+    type Error = serde_json::Error;
 
     fn try_from(value: &MqttMessage) -> Result<Self, Self::Error> {
-        EntityRegistrationMessage::new(value).ok_or(())
+        EntityRegistrationMessage::new(value).ok_or(serde::de::Error::custom(
+            "Failed to parse entity registration message: {value}",
+        ))
     }
 }
 

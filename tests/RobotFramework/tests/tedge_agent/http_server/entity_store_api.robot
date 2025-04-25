@@ -227,7 +227,7 @@ Entity twin api errors
     ${resp}=    Execute Command    curl --silent --write-out "|%\{http_code\}" ${url}
     Should Be Equal
     ...    ${resp}
-    ...    {"error":"The specified entity: device/bad-child// does not exist in the store"}|404
+    ...    {"error":"The specified entity: device/bad-child// does not exist in the entity store"}|404
 
     # Set twin fragments with non JSON map payload
     ${url}=    Set Variable
