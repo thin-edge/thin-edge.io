@@ -156,7 +156,7 @@ define_tedge_config! {
             #[tedge_config(example = "123456", default(value = "123456"))]
             pin: Arc<str>,
 
-            /// A URI of the token/object to use by tedge-p11-server.
+            /// A URI of the token/object to be used by tedge-p11-server.
             ///
             /// See RFC #7512.
             // NOTE: this field isn't actually used by anything in tedge-config yet - it can appear in tedge.toml though
