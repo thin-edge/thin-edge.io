@@ -24,7 +24,6 @@ use tedge_actors::Sender;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
-use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::pending_entity_store::RegisteredEntityData;
@@ -147,19 +146,24 @@ impl C8yMapperActor {
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
         // If incoming message follows MQTT topic scheme v1
         if let Ok((_, channel)) = self.converter.mqtt_schema.entity_channel_of(&message.topic) {
-            match self.converter.try_register_source_entities(&message).await {
-                Ok(pending_entities) => {
-                    self.process_registered_entities(pending_entities).await?;
+            if channel.is_entity_metadata() {
+                // If the message is an entity registration message, process it
+                match self
+                    .converter
+                    .process_entity_metadata_message(&message)
+                    .await
+                {
+                    Ok(pending_entities) => {
+                        self.process_registered_entities(pending_entities).await?;
+                    }
+                    Err(err) => {
+                        self.mqtt_publisher
+                            .send(self.converter.new_error_message(err))
+                            .await?;
+                        return Ok(());
+                    }
                 }
-                Err(err) => {
-                    self.mqtt_publisher
-                        .send(self.converter.new_error_message(err))
-                        .await?;
-                    return Ok(());
-                }
-            }
-
-            if !channel.is_entity_metadata() {
+            } else {
                 self.process_message(message.clone()).await?;
             }
         } else {
@@ -178,36 +182,16 @@ impl C8yMapperActor {
         pending_entities: Vec<RegisteredEntityData>,
     ) -> Result<(), RuntimeError> {
         for pending_entity in pending_entities {
-            self.process_registration_message(pending_entity.reg_message)
-                .await?;
+            let mut reg_message = pending_entity.reg_message;
+            self.converter.append_id_if_not_given(&mut reg_message);
+            let reg_message = reg_message.to_mqtt_message(&self.converter.mqtt_schema);
+            self.process_message(reg_message).await?;
 
             // Convert and publish cached data messages
             for pending_data_message in pending_entity.data_messages {
                 self.process_message(pending_data_message).await?;
             }
         }
-
-        Ok(())
-    }
-
-    async fn process_registration_message(
-        &mut self,
-        mut message: EntityRegistrationMessage,
-    ) -> Result<(), RuntimeError> {
-        self.converter.append_id_if_not_given(&mut message);
-        // Convert and publish the registration message
-        let reg_messages = self.converter.convert_entity_registration_message(&message);
-        self.publish_messages(reg_messages).await?;
-
-        // Send the registration message to all subscribed handlers
-        self.publish_message_to_subscribed_handles(
-            &Channel::EntityMetadata,
-            message
-                .clone()
-                .to_mqtt_message(&self.converter.mqtt_schema)
-                .clone(),
-        )
-        .await?;
 
         Ok(())
     }

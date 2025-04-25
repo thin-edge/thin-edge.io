@@ -258,7 +258,7 @@ mod tests {
             r#"{"@type": "child-device", "@id": "child01", "name": "child01", "type": "Rpi"}"#,
         );
         let _ = converter
-            .try_register_source_entities(reg_message)
+            .process_entity_metadata_message(reg_message)
             .await
             .unwrap();
 
@@ -516,11 +516,6 @@ mod tests {
 
         register_source_entities(&twin_message.topic.name, &mut converter).await;
 
-        converter
-            .try_register_source_entities(&twin_message)
-            .await
-            .unwrap();
-
         let inventory_messages = converter.convert(&twin_message).await;
 
         assert_messages_matching(
@@ -542,7 +537,7 @@ mod tests {
             r#"{"@type": "service", "@id": "service01"}"#,
         );
         let _ = converter
-            .try_register_source_entities(reg_message)
+            .process_entity_metadata_message(reg_message)
             .await
             .unwrap();
 

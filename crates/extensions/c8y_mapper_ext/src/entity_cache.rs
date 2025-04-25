@@ -29,7 +29,7 @@ type ExternalIdValidatorFn =
 /// Represents an error encountered while updating the store.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("The specified entity {0} does not exist in the store")]
+    #[error("The specified entity {0} does not exist in the entity cache")]
     UnknownEntity(String),
 
     #[error(transparent)]

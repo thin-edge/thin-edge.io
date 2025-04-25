@@ -63,7 +63,7 @@ Displaying server errors
     ...    tedge http post /te/v1/entities '{"@topic-id": "device/a//", "@type": "child-device", "@parent": "device/unknown//"}' 2>&1
     ...    exp_exit_code=1
     Should Contain    ${error_msg}    400 Bad Request
-    Should Contain    ${error_msg}    Specified parent \\"device/unknown//\\" does not exist in the store
+    Should Contain    ${error_msg}    The specified parent \\"device/unknown//\\" does not exist in the entity store
 
 
 *** Keywords ***

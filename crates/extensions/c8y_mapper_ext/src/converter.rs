@@ -295,58 +295,30 @@ impl CumulocityConverter {
     /// For any other data messages, auto-registration of the target entities are attempted when enabled.
     ///
     /// In both cases, the successfully registered entities, along with their cached data, is returned.
-    pub async fn try_register_source_entities(
+    pub async fn process_entity_metadata_message(
         &mut self,
         message: &MqttMessage,
     ) -> Result<Vec<RegisteredEntityData>, ConversionError> {
-        if let Ok((source, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) {
-            match channel {
-                Channel::EntityMetadata => {
-                    if message.payload().is_empty() {
-                        // Clear cached entity
-                        self.entity_cache.delete(&source);
-                        return Ok(vec![]);
-                    }
-
-                    if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
-                        return self
-                            .try_register_entity_with_pending_children(register_message)
-                            .await;
-                    }
-                    Err(anyhow!(
-                        "Invalid entity registration message received on topic: {}",
-                        message.topic.name
-                    )
-                    .into())
-                }
-                _ => {
-                    if self.entity_cache.get(&source).is_none() {
-                        // On receipt of an unregistered entity data message,
-                        // since it is received before the entity itself is registered,
-                        // cache it in the unregistered entity store to be processed after the entity is registered
-                        self.entity_cache.cache_early_data_message(message.clone());
-                    }
-                    Ok(vec![])
-                }
-            }
-        } else {
-            Ok(vec![])
+        let (topic_id, channel) = self.mqtt_schema.entity_channel_of(&message.topic).unwrap();
+        assert!(channel == Channel::EntityMetadata);
+        if message.payload().is_empty() {
+            // Clear cached entity
+            self.entity_cache.delete(&topic_id);
+            return Ok(vec![]);
         }
-    }
 
-    pub(crate) fn convert_entity_registration_message(
-        &mut self,
-        message: &EntityRegistrationMessage,
-    ) -> Vec<MqttMessage> {
-        let c8y_reg_message = self.try_convert_entity_registration(message);
-        self.wrap_errors(c8y_reg_message)
+        let register_message = EntityRegistrationMessage::try_from(message)?;
+        Ok(self
+            .entity_cache
+            .register_entity(register_message.clone())?)
     }
 
     /// Convert an entity registration message into its C8y counterpart
     pub fn try_convert_entity_registration(
         &mut self,
-        input: &EntityRegistrationMessage,
+        message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        let input = EntityRegistrationMessage::try_from(message)?;
         let mut messages = vec![];
 
         // Parse the optional fields
@@ -1255,27 +1227,11 @@ impl CumulocityConverter {
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         match &channel {
-            Channel::EntityMetadata => {
-                // No conversion done here as entity data messages must be converted using pending_entities_from_incoming_message
-                Ok(vec![])
-            }
+            Channel::EntityMetadata => self.try_convert_entity_registration(message),
             _ => {
                 self.try_convert_data_message(source, channel, message)
                     .await
             }
-        }
-    }
-
-    pub(crate) async fn try_register_entity_with_pending_children(
-        &mut self,
-        register_message: EntityRegistrationMessage,
-    ) -> Result<Vec<RegisteredEntityData>, ConversionError> {
-        match self.entity_cache.register_entity(register_message.clone()) {
-            Err(e) => {
-                error!("Entity registration failed: {e}");
-                Ok(vec![])
-            }
-            Ok(pending_entities) => Ok(pending_entities),
         }
     }
 
@@ -1298,15 +1254,11 @@ impl CumulocityConverter {
         channel: Channel,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if self.entity_cache.get(&source).is_none()
-            && !(self.config.enable_auto_register && source.matches_default_topic_scheme())
-        {
-            // Since the entity is still not present in the entity store,
-            // despite an attempt to register the source entity in try_register_source_entities,
-            // either auto-registration is disabled or a non-default topic scheme is used.
-            // In either case, the message would have been cached in the entity store as pending entity data.
-            // Hence just skip the conversion as it will be converted eventually
-            // once its source entity is registered.
+        if self.entity_cache.get(&source).is_none() {
+            // On receipt of an unregistered entity data message,
+            // since it is received before the entity itself is registered,
+            // cache it in the unregistered entity store to be processed after the entity is registered
+            self.entity_cache.cache_early_data_message(message.clone());
             return Ok(vec![]);
         }
 
@@ -1847,14 +1799,13 @@ pub(crate) mod tests {
             .to_string(),
         );
         let entities = converter
-            .try_register_source_entities(&in_message)
+            .process_entity_metadata_message(&in_message)
             .await
             .unwrap();
 
         assert_eq!(entities.len(), 1);
 
-        let messages =
-            converter.convert_entity_registration_message(&entities.get(0).unwrap().reg_message);
+        let messages = converter.convert(&in_message).await;
 
         assert_messages_matching(
             &messages,
@@ -1881,14 +1832,13 @@ pub(crate) mod tests {
             .to_string(),
         );
         let entities = converter
-            .try_register_source_entities(&in_message)
+            .process_entity_metadata_message(&in_message)
             .await
             .unwrap();
 
         assert_eq!(entities.len(), 1);
 
-        let messages =
-            converter.convert_entity_registration_message(&entities.get(0).unwrap().reg_message);
+        let messages = converter.convert(&in_message).await;
 
         assert_messages_matching(
             &messages,
@@ -1953,7 +1903,7 @@ pub(crate) mod tests {
             .to_string(),
         );
         let _ = converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
 
@@ -1967,7 +1917,7 @@ pub(crate) mod tests {
             .to_string(),
         );
         let _ = converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
 
@@ -2005,7 +1955,7 @@ pub(crate) mod tests {
             .to_string(),
         );
         let _ = converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
 
@@ -2019,7 +1969,7 @@ pub(crate) mod tests {
             .to_string(),
         );
         let _ = converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
 
@@ -2033,7 +1983,7 @@ pub(crate) mod tests {
             .to_string(),
         );
         let _ = converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
 
@@ -2940,7 +2890,7 @@ pub(crate) mod tests {
 
         // when converting a registration message the same as the previous one, no additional registration messages should be produced
         let entities = converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
 
@@ -2996,7 +2946,7 @@ pub(crate) mod tests {
 
         // Register main device service
         let _ = converter
-            .try_register_source_entities(&MqttMessage::new(
+            .process_entity_metadata_message(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/dummy"),
                 json!({
                     "@type":"service",
@@ -3007,7 +2957,7 @@ pub(crate) mod tests {
             .unwrap();
         // Register immediate child device
         let _ = converter
-            .try_register_source_entities(&MqttMessage::new(
+            .process_entity_metadata_message(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/immediate_child//"),
                 json!({
                     "@type":"child-device",
@@ -3018,7 +2968,7 @@ pub(crate) mod tests {
             .unwrap();
         // Register immediate child device service
         let _ = converter
-            .try_register_source_entities(&MqttMessage::new(
+            .process_entity_metadata_message(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/immediate_child/service/dummy"),
                 json!({
                     "@type":"service",
@@ -3029,7 +2979,7 @@ pub(crate) mod tests {
             .unwrap();
         // Register nested child device
         let _ = converter
-            .try_register_source_entities(&MqttMessage::new(
+            .process_entity_metadata_message(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/nested_child//"),
                 json!({
                     "@type":"child-device",
@@ -3041,7 +2991,7 @@ pub(crate) mod tests {
             .unwrap();
         // Register nested child device service
         let _ = converter
-            .try_register_source_entities(&MqttMessage::new(
+            .process_entity_metadata_message(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/nested_child/service/dummy"),
                 json!({
                     "@type":"service",
@@ -3085,10 +3035,6 @@ pub(crate) mod tests {
                 &Topic::new_unchecked("te/custom/child1///m/environment"),
                 json!({ "temperature": i }).to_string(),
             );
-            converter
-                .try_register_source_entities(&measurement_message)
-                .await
-                .unwrap();
             let mapped_messages = converter.convert(&measurement_message).await;
             assert!(
                 mapped_messages.is_empty(),
@@ -3101,10 +3047,6 @@ pub(crate) mod tests {
             &Topic::new_unchecked("te/custom/child1///twin/foo"),
             r#"5.6789"#,
         );
-        converter
-            .try_register_source_entities(&twin_message)
-            .await
-            .unwrap();
         let mapped_messages = converter.convert(&twin_message).await;
         assert!(
             mapped_messages.is_empty(),
@@ -3118,7 +3060,7 @@ pub(crate) mod tests {
         );
 
         let entities = converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
 
@@ -3175,7 +3117,7 @@ pub(crate) mod tests {
         );
 
         let entities = converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
         assert!(
@@ -3196,7 +3138,7 @@ pub(crate) mod tests {
         );
 
         let entities = converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
         assert!(
@@ -3216,7 +3158,7 @@ pub(crate) mod tests {
             .to_string(),
         );
         let entities = converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
         let messages = registered_entities_into_mqtt_messages(entities);
@@ -3306,7 +3248,7 @@ pub(crate) mod tests {
         );
 
         converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
 
@@ -3335,7 +3277,7 @@ pub(crate) mod tests {
         );
 
         converter
-            .try_register_source_entities(&reg_message)
+            .process_entity_metadata_message(&reg_message)
             .await
             .unwrap();
 
@@ -3488,7 +3430,7 @@ pub(crate) mod tests {
         for entity in entities {
             let message = entity.to_mqtt_message(&converter.mqtt_schema);
             converter
-                .try_register_source_entities(&message)
+                .process_entity_metadata_message(&message)
                 .await
                 .unwrap();
         }

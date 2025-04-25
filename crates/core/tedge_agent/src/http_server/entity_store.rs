@@ -749,7 +749,7 @@ mod tests {
         let entity: Value = serde_json::from_slice(&body).unwrap();
         assert_json_eq!(
             entity,
-            json!( {"error":"Specified parent \"test-child\" does not exist in the store"})
+            json!( {"error":"The specified parent \"test-child\" does not exist in the entity store"})
         );
     }
 
@@ -1595,7 +1595,7 @@ mod tests {
         let entity: Value = serde_json::from_slice(&body).unwrap();
         assert_json_eq!(
             entity,
-            json!({"error":"The specified entity: device/test-child// does not exist in the store"})
+            json!({"error":"The specified entity: device/test-child// does not exist in the entity store"})
         );
     }
 
