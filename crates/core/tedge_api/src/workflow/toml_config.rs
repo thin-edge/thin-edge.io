@@ -561,7 +561,6 @@ on_exit.1 = "1"
         "#;
         let input: TomlExitHandlers = toml::from_str(file).unwrap();
         let handlers: ExitHandlers = input.try_into().unwrap();
-        assert_eq!(handlers.state_update_on_success().status, "0");
         assert_eq!(handlers.state_update_on_exit("foo.sh", 0).status, "0");
         assert_eq!(handlers.state_update_on_exit("foo.sh", 1).status, "1");
         assert_eq!(
@@ -657,7 +656,10 @@ on_stdout = ["other_successful_state_extracted_from_json"]
         let file = "";
         let input: TomlExitHandlers = toml::from_str(file).unwrap();
         let handlers = ExitHandlers::try_from(input).unwrap();
-        assert_eq!(handlers.state_update_on_success().status, "successful");
+        assert_eq!(
+            handlers.state_update_on_exit("foo.sh", 0).status,
+            "successful"
+        );
         assert_eq!(
             handlers.state_update_on_exit("foo.sh", 1).reason.unwrap(),
             "foo.sh returned exit code 1"

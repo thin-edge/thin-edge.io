@@ -88,45 +88,52 @@ impl ExitHandlers {
         outcome: std::io::Result<std::process::Output>,
     ) -> Value {
         match outcome {
-            Ok(output) => match output.status.code() {
-                None => self
-                    .state_update_on_kill(program, output.status.signal().unwrap_or(0) as u8)
-                    .into_json(),
-                Some(0) => {
-                    match (
-                        &self.on_success,
-                        json_stdout_excerpt(output.stdout)
-                            .context(format!("Program `{program}` stdout")),
-                    ) {
+            Ok(output) => {
+                let json_stdout = json_stdout_excerpt(output.stdout)
+                    .context(format!("Program `{program}` stdout"));
+                match output.status.code() {
+                    None => self
+                        .state_update_on_kill(program, output.status.signal().unwrap_or(0) as u8)
+                        .into_json(),
+                    Some(0) => match (&self.on_success, json_stdout) {
                         (None, Err(reason)) => GenericStateUpdate::failed(reason).into_json(),
                         (None, Ok(dynamic_update)) => dynamic_update,
                         (Some(successful_state), Ok(dynamic_update)) => {
                             successful_state.clone().inject_into_json(dynamic_update)
                         }
                         (Some(successful_state), Err(_)) => successful_state.clone().into_json(),
-                    }
-                }
-                Some(code) => match self.state_update_on_error(code as u8) {
-                    None => self
-                        .state_update_on_unknown_exit_code(program, code as u8)
-                        .into_json(),
-                    Some(error_state) => match json_stdout_excerpt(output.stdout).ok() {
-                        None => error_state.into_json(),
-                        Some(dynamic_update) => error_state.inject_into_json(dynamic_update),
                     },
-                },
-            },
+                    Some(code) => match self.state_update_on_error(code as u8) {
+                        None => self
+                            .state_update_on_unknown_exit_code(
+                                program,
+                                code as u8,
+                                json_stdout
+                                    .ok()
+                                    .and_then(GenericStateUpdate::extract_reason),
+                            )
+                            .into_json(),
+                        Some(error_state) => match json_stdout.ok() {
+                            None => error_state.into_json(),
+                            Some(dynamic_update) => error_state.inject_into_json(dynamic_update),
+                        },
+                    },
+                }
+            }
             Err(err) => self.state_update_on_launch_error(program, err).into_json(),
         }
     }
 
-    pub fn state_update_on_exit(&self, program: &str, code: u8) -> GenericStateUpdate {
+    #[cfg(test)]
+    pub(crate) fn state_update_on_exit(&self, program: &str, code: u8) -> GenericStateUpdate {
         if code == 0 {
-            return self.state_update_on_success();
+            self.on_success
+                .clone()
+                .unwrap_or_else(GenericStateUpdate::successful)
+        } else {
+            self.state_update_on_error(code)
+                .unwrap_or_else(|| self.state_update_on_unknown_exit_code(program, code, None))
         }
-
-        self.state_update_on_error(code)
-            .unwrap_or_else(|| self.state_update_on_unknown_exit_code(program, code))
     }
 
     fn state_update_on_error(&self, code: u8) -> Option<GenericStateUpdate> {
@@ -141,12 +148,6 @@ impl ExitHandlers {
         None
     }
 
-    pub fn state_update_on_success(&self) -> GenericStateUpdate {
-        self.on_success
-            .clone()
-            .unwrap_or_else(GenericStateUpdate::successful)
-    }
-
     fn state_update_on_launch_error(
         &self,
         program: &str,
@@ -157,12 +158,17 @@ impl ExitHandlers {
         })
     }
 
-    fn state_update_on_unknown_exit_code(&self, program: &str, code: u8) -> GenericStateUpdate {
+    fn state_update_on_unknown_exit_code(
+        &self,
+        program: &str,
+        code: u8,
+        reason: Option<String>,
+    ) -> GenericStateUpdate {
         let mut state = self
             .on_error
             .clone()
             .unwrap_or(GenericStateUpdate::unknown_error());
-        state.reason = Some(format!("{program} returned exit code {code}"));
+        state.reason = reason.or(Some(format!("{program} returned exit code {code}")));
         state
     }
 
@@ -489,6 +495,24 @@ on_error = "oops"
             json! ({
                 "status": "oops",
                 "reason": "sh returned exit code 1"
+            })
+        )
+    }
+
+    #[test]
+    fn on_error_preserve_failure_reason() {
+        let file = r#"
+script = "sh -c 'echo :::begin-tedge:::; echo \\{\\\"reason\\\": \\\"No such file or directory\\\"\\}; echo :::end-tedge:::; exit 1'"
+on_error = "oops"
+        "#;
+        let (script, handlers) = script_from_toml(file);
+        let output = script.output();
+        let state_update = handlers.state_update(&script.command, output);
+        assert_eq!(
+            state_update,
+            json! ({
+                "status": "oops",
+                "reason": "No such file or directory"
             })
         )
     }
