@@ -124,13 +124,16 @@ impl ExitHandlers {
         }
     }
 
-    pub fn state_update_on_exit(&self, program: &str, code: u8) -> GenericStateUpdate {
+    #[cfg(test)]
+    pub(crate) fn state_update_on_exit(&self, program: &str, code: u8) -> GenericStateUpdate {
         if code == 0 {
-            return self.state_update_on_success();
+            self.on_success
+                .clone()
+                .unwrap_or_else(GenericStateUpdate::successful)
+        } else {
+            self.state_update_on_error(code)
+                .unwrap_or_else(|| self.state_update_on_unknown_exit_code(program, code, None))
         }
-
-        self.state_update_on_error(code)
-            .unwrap_or_else(|| self.state_update_on_unknown_exit_code(program, code, None))
     }
 
     fn state_update_on_error(&self, code: u8) -> Option<GenericStateUpdate> {
@@ -143,12 +146,6 @@ impl ExitHandlers {
             }
         }
         None
-    }
-
-    pub fn state_update_on_success(&self) -> GenericStateUpdate {
-        self.on_success
-            .clone()
-            .unwrap_or_else(GenericStateUpdate::successful)
     }
 
     fn state_update_on_launch_error(
