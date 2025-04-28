@@ -21,15 +21,15 @@ use clap::Parser;
 use cryptoki::types::AuthPin;
 use serde::Deserialize;
 use tedge_p11_server::service::TedgeP11Service;
+use tedge_p11_server::CryptokiConfigDirect;
+use tedge_p11_server::TedgeP11Server;
 use tokio::signal::unix::SignalKind;
 use tracing::debug;
+use tracing::error;
 use tracing::info;
 use tracing::warn;
 use tracing::Level;
 use tracing_subscriber::EnvFilter;
-
-use tedge_p11_server::CryptokiConfigDirect;
-use tedge_p11_server::TedgeP11Server;
 
 /// thin-edge.io service for passing PKCS#11 cryptographic tokens.
 #[derive(Debug, Clone, PartialEq, Eq, Parser)]
@@ -83,21 +83,21 @@ pub struct Args {
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 struct PartialTedgeToml {
+    #[serde(default)]
     device: PartialDeviceConfig,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
 struct PartialDeviceConfig {
+    #[serde(default)]
     cryptoki: TomlCryptokiConfig,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
 struct TomlCryptokiConfig {
-    #[serde(default = "default_pin")]
-    pin: String,
+    pin: Option<String>,
     module_path: Option<Utf8PathBuf>,
-    #[serde(default = "default_socket_path")]
-    socket_path: Utf8PathBuf,
+    socket_path: Option<Utf8PathBuf>,
     uri: Option<String>,
 }
 
@@ -109,32 +109,107 @@ fn default_pin() -> String {
     "123456".into()
 }
 
+/// Cache the result of reading a Cryptoki configuration from tedge.toml
+///
+/// The point is to warn the user if this file could not be read (either missing or incomplete),
+/// but only when actually used, i.e. when the user didn't provide the required config
+/// neither using env variables nor cli flags.
+///
+/// This struct is used to defer error reporting,
+/// - making sure the user is warned but only when the file could have been used
+/// - and only once, even if several setting are missing.
+struct TomlConfig {
+    read_result: Result<TomlCryptokiConfig, Option<String>>,
+    user_warned: bool,
+}
+
+impl TomlConfig {
+    async fn read_tedge_toml(toml_path: &Utf8PathBuf) -> Self {
+        TomlConfig {
+            read_result: try_read_tedge_toml(toml_path).await,
+            user_warned: false,
+        }
+    }
+
+    fn config(&mut self) -> Option<&TomlCryptokiConfig> {
+        match self.read_result.as_ref() {
+            Ok(config) => Some(config),
+            Err(None) => None, // don't log anything if tedge.toml doesn't exist
+            Err(Some(err)) => {
+                if !self.user_warned {
+                    warn!("{err}");
+                    self.user_warned = true;
+                }
+                None
+            }
+        }
+    }
+
+    fn pin(&mut self) -> String {
+        self.config()
+            .and_then(|config| config.pin.to_owned())
+            .unwrap_or_else(|| {
+                warn!("missing pin => use default value");
+                default_pin()
+            })
+    }
+
+    fn module_path(&mut self) -> Option<Utf8PathBuf> {
+        self.config()
+            .and_then(|config| config.module_path.to_owned())
+            .or_else(|| {
+                error!("missing required module-path => abort");
+                None
+            })
+    }
+
+    fn socket_path(&mut self) -> Utf8PathBuf {
+        self.config()
+            .and_then(|config| config.socket_path.to_owned())
+            .unwrap_or_else(|| {
+                warn!("missing socket-path => use default value");
+                default_socket_path()
+            })
+    }
+
+    fn uri(&mut self) -> Option<String> {
+        self.config().and_then(|config| config.uri.to_owned())
+    }
+}
+
 struct ValidConfig {
     pin: String,
     module_path: Utf8PathBuf,
     socket_path: Utf8PathBuf,
     uri: Option<String>,
 }
+async fn try_read_tedge_toml(
+    toml_path: &Utf8PathBuf,
+) -> Result<TomlCryptokiConfig, Option<String>> {
+    let toml = tokio::fs::read_to_string(&toml_path).await.map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            None
+        } else {
+            Some(format!("Failed to read {toml_path}: {err}"))
+        }
+    })?;
+    let config: PartialTedgeToml = toml::from_str(&toml)
+        .map_err(|_| Some(format!("Failed to parse {toml_path}: invalid TOML")))?;
+    Ok(config.device.cryptoki)
+}
 
-async fn try_read_config(mut args: Args) -> anyhow::Result<ValidConfig> {
-    let toml_path = &mut args.config_dir;
-    toml_path.push("tedge.toml");
-    let toml = tokio::fs::read_to_string(&toml_path)
-        .await
-        .with_context(|| format!("Reading {toml_path}"))?;
-    let config: PartialTedgeToml = toml::from_str(&toml).context("Reading tedge.toml")?;
-    let config = config.device.cryptoki;
+async fn try_read_config(args: Args) -> anyhow::Result<ValidConfig> {
+    let toml_path = args.config_dir.join("tedge.toml");
+    let mut toml_config = TomlConfig::read_tedge_toml(&toml_path).await;
 
-    let mut missing_configs = Vec::new();
-    let (pin, Ok(module_path), socket_path, uri) = (
-        args.pin.unwrap_or(config.pin),
-        args.module_path
-            .or(config.module_path)
-            .ok_or_else(|| missing_configs.push("device.cryptoki.module_path")),
-        args.socket_path.unwrap_or(config.socket_path),
-        args.uri.or(config.uri),
+    let (pin, Some(module_path), socket_path, uri) = (
+        args.pin.unwrap_or_else(|| toml_config.pin()),
+        args.module_path.or_else(|| toml_config.module_path()),
+        args.socket_path
+            .unwrap_or_else(|| toml_config.socket_path()),
+        args.uri.or_else(|| toml_config.uri()),
     ) else {
-        anyhow::bail!("Missing configuration values for {missing_configs:?}. Please set them in `tedge.toml` or pass them as command-line arguments.")
+        anyhow::bail!("Missing configuration values. Please set them in `tedge.toml` or pass them as command-line arguments.")
     };
 
     Ok(ValidConfig {
@@ -148,10 +223,11 @@ async fn try_read_config(mut args: Args) -> anyhow::Result<ValidConfig> {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    let if_dev_logging = std::env::var("RUST_LOG").is_ok();
 
     tracing_subscriber::fmt()
-        .with_file(true)
-        .with_line_number(true)
+        .with_file(if_dev_logging)
+        .with_line_number(if_dev_logging)
         .with_env_filter(
             EnvFilter::builder()
                 .with_default_directive(args.log_level.unwrap_or(Level::INFO).into())
@@ -252,8 +328,8 @@ module_path = """#;
                 device: PartialDeviceConfig {
                     cryptoki: TomlCryptokiConfig {
                         module_path: Some("".into()),
-                        pin: "123456".to_owned(),
-                        socket_path: "/var/run/tedge-p11-server/tedge-p11-server.sock".into(),
+                        pin: Some("123456".to_owned()),
+                        socket_path: Some("/var/run/tedge-p11-server/tedge-p11-server.sock".into()),
                         uri: None,
                     }
                 }
