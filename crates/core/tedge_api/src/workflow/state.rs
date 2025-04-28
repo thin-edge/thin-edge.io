@@ -501,6 +501,12 @@ impl GenericStateUpdate {
             }
         }
     }
+
+    pub fn extract_reason(json: Value) -> Option<String> {
+        json.as_object()
+            .and_then(|object| object.get(REASON))
+            .and_then(|reason| reason.as_str().map(|s| s.to_owned()))
+    }
 }
 
 impl Default for GenericStateUpdate {
