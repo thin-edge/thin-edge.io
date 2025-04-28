@@ -4,6 +4,7 @@ use std::fmt;
 use crate::aws::mapper::AwsMapper;
 #[cfg(feature = "azure")]
 use crate::az::mapper::AzureMapper;
+#[cfg(feature = "c8y")]
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
@@ -19,6 +20,7 @@ use tracing::log::warn;
 mod aws;
 #[cfg(feature = "azure")]
 mod az;
+#[cfg(feature = "c8y")]
 mod c8y;
 mod collectd;
 mod core;
@@ -53,6 +55,7 @@ fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
         MapperName::Collectd => Box::new(CollectdMapper),
+        #[cfg(feature = "c8y")]
         MapperName::C8y { profile } => Box::new(CumulocityMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
@@ -98,6 +101,7 @@ pub enum MapperName {
         #[clap(long)]
         profile: Option<ProfileName>,
     },
+    #[cfg(feature = "c8y")]
     C8y {
         /// The cloud profile to use
         #[clap(long)]
@@ -121,7 +125,9 @@ impl fmt::Display for MapperName {
             MapperName::Aws {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-aws@{profile}"),
+            #[cfg(feature = "c8y")]
             MapperName::C8y { profile: None } => write!(f, "tedge-mapper-c8y"),
+            #[cfg(feature = "c8y")]
             MapperName::C8y {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-c8y@{profile}"),
