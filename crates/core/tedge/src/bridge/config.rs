@@ -11,7 +11,8 @@ use tedge_config::TEdgeConfigLocation;
 use tedge_utils::paths::DraftFile;
 use tokio::io::AsyncWriteExt;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct BridgeConfig {
     pub cloud_name: String,
     // XXX: having file name squished together with 20 fields which go into file content is a bit obscure
@@ -42,7 +43,19 @@ pub struct BridgeConfig {
     pub auth_type: AuthType,
     pub mosquitto_version: Option<String>,
     pub keepalive_interval: Duration,
+    pub proxy: Option<ProxyWrapper>,
 }
+
+#[derive(Debug)]
+pub struct ProxyWrapper(pub rumqttc::Proxy);
+
+impl PartialEq for ProxyWrapper {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.addr == other.0.addr && self.0.port == other.0.port
+    }
+}
+
+impl Eq for ProxyWrapper {}
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum BridgeLocation {

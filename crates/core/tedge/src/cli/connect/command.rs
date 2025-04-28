@@ -44,7 +44,9 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::service_health_topic;
 use tedge_config;
+use tedge_config::all_or_nothing;
 use tedge_config::models::auth_method::AuthType;
+use tedge_config::models::proxy_scheme::ProxyScheme;
 #[cfg(any(feature = "aws", feature = "azure"))]
 use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
@@ -611,6 +613,34 @@ pub fn bridge_config(
         false => BridgeLocation::Mosquitto,
     };
     let mqtt_schema = MqttSchema::with_root(config.mqtt.topic_root.clone());
+    let proxy = config
+        .proxy
+        .address
+        .or_none()
+        .map(|address| {
+            let rustls_config = config.cloud_client_tls_config();
+            Ok::<_, ConfigError>(rumqttc::Proxy {
+                ty: match config.proxy.ty {
+                    ProxyScheme::Http => rumqttc::ProxyType::Http,
+                    ProxyScheme::Https => rumqttc::ProxyType::Https(
+                        rumqttc::TlsConfiguration::Rustls(Arc::new(rustls_config)),
+                    ),
+                },
+                addr: address.host().to_string(),
+                port: address.port().into(),
+                auth: match all_or_nothing((
+                    config.proxy.username.clone(),
+                    config.proxy.password.clone(),
+                ))
+                .map_err(|e| anyhow::anyhow!(e))?
+                {
+                    Some((username, password)) => rumqttc::ProxyAuth::Basic { username, password },
+                    None => rumqttc::ProxyAuth::None,
+                },
+            })
+        })
+        .transpose()?;
+
     match cloud {
         #[cfg(feature = "azure")]
         MaybeBorrowedCloud::Azure(profile) => {
@@ -631,6 +661,7 @@ pub fn bridge_config(
                 profile_name: profile.clone().map(Cow::into_owned),
                 mqtt_schema,
                 keepalive_interval: az_config.bridge.keepalive_interval.duration(),
+                proxy,
             };
 
             Ok(BridgeConfig::from(params))
@@ -654,6 +685,7 @@ pub fn bridge_config(
                 profile_name: profile.clone().map(Cow::into_owned),
                 mqtt_schema,
                 keepalive_interval: aws_config.bridge.keepalive_interval.duration(),
+                proxy,
             };
 
             Ok(BridgeConfig::from(params))
@@ -689,6 +721,7 @@ pub fn bridge_config(
                 profile_name: profile.clone().map(Cow::into_owned),
                 mqtt_schema,
                 keepalive_interval: c8y_config.bridge.keepalive_interval.duration(),
+                proxy,
             };
 
             Ok(BridgeConfig::from(params))

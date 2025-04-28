@@ -68,6 +68,9 @@ pub async fn create_device_with_direct_connection(
         mqtt_auth_config.to_rustls_client_config()?
     };
     mqtt_options.set_transport(Transport::tls_with_config(tls_config.into()));
+    if let Some(proxy) = &bridge_config.proxy {
+        mqtt_options.set_proxy(proxy.0.clone());
+    }
 
     let (mut client, mut eventloop) = AsyncClient::new(mqtt_options, 10);
     eventloop
