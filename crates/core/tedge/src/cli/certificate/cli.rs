@@ -337,6 +337,7 @@ impl BuildCommand for TEdgeCertCli {
                     };
                     let c8y = match cloud {
                         None => C8yEndPoint::local_proxy(&config, None)?,
+                        #[cfg(feature = "c8y")]
                         Some(Cloud::C8y(profile)) => C8yEndPoint::local_proxy(
                             &config,
                             profile.as_deref().map(|p| p.as_ref()),

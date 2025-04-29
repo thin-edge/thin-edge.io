@@ -6,6 +6,7 @@ pub use self::error::*;
 mod aws;
 #[cfg(feature = "azure")]
 mod azure;
+#[cfg(feature = "c8y")]
 mod c8y;
 mod cli;
 mod command;

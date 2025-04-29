@@ -77,9 +77,10 @@ x509-parser = { workspace = true }
 
 
 [features]
-default = ["aws", "azure"]
+default = ["aws", "azure", "c8y"]
 aws = ["tedge-mapper/aws"]
 azure = ["tedge-mapper/azure"]
+c8y = ["tedge-mapper/c8y"]
 integration-test = []
 
 [lints]

@@ -2,6 +2,7 @@
 use crate::bridge::aws::BridgeConfigAwsParams;
 #[cfg(feature = "azure")]
 use crate::bridge::azure::BridgeConfigAzureParams;
+#[cfg(feature = "c8y")]
 use crate::bridge::c8y::BridgeConfigC8yParams;
 use crate::bridge::BridgeConfig;
 use crate::bridge::BridgeLocation;
@@ -13,6 +14,7 @@ use crate::cli::common::MaybeBorrowedCloud;
 use crate::cli::connect::aws::check_device_status_aws;
 #[cfg(feature = "azure")]
 use crate::cli::connect::azure::check_device_status_azure;
+#[cfg(feature = "c8y")]
 use crate::cli::connect::c8y::*;
 use crate::cli::connect::*;
 use crate::cli::log::ConfigLogger;
@@ -26,6 +28,7 @@ use crate::warning;
 use crate::ConfigError;
 use anyhow::anyhow;
 use anyhow::bail;
+#[cfg(feature = "c8y")]
 use c8y_api::http_proxy::read_c8y_credentials;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -60,6 +63,7 @@ use tracing::warn;
 use yansi::Paint as _;
 
 pub(crate) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(feature = "c8y")]
 pub(crate) const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 20;
 #[cfg(any(feature = "aws", feature = "azure"))]
@@ -193,7 +197,9 @@ impl ConnectCommand {
             self.start_mapper().await;
         }
 
+        #[cfg(feature = "c8y")]
         let mut connection_check_success = true;
+        #[cfg(feature = "c8y")]
         if !self.offline_mode {
             match self
                 .check_connection_with_retries(bridge_config.connection_check_attempts)
@@ -217,6 +223,7 @@ impl ConnectCommand {
         }
 
         match &self.cloud {
+            #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => {
                 let c8y_config = config.c8y.try_get(profile.as_deref())?;
 
@@ -312,22 +319,23 @@ impl ConnectCommand {
 
     async fn connect_with_new_certificate(
         &self,
-        bridge_config: &BridgeConfig,
-        certificate_shift: &CertificateShift,
+        _bridge_config: &BridgeConfig,
+        _certificate_shift: &CertificateShift,
     ) -> anyhow::Result<()> {
         match &self.cloud {
+            #[cfg(feature = "c8y")]
             Cloud::C8y(profile_name) => {
                 let use_basic_auth = false;
                 let device_type = &self.config.device.ty;
                 let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
                 let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
                 if let Some(client_config) = mqtt_auth_config.client.as_mut() {
-                    client_config.cert_file = certificate_shift.new_cert_path.to_owned()
+                    client_config.cert_file = _certificate_shift.new_cert_path.to_owned()
                 }
 
                 create_device_with_direct_connection(
                     use_basic_auth,
-                    bridge_config,
+                    _bridge_config,
                     device_type,
                     mqtt_auth_config,
                 )
@@ -342,12 +350,13 @@ impl ConnectCommand {
 }
 
 fn credentials_path_for<'a>(
-    config: &'a TEdgeConfig,
+    _config: &'a TEdgeConfig,
     cloud: &Cloud,
 ) -> Result<Option<&'a Utf8Path>, MultiError> {
     match cloud {
+        #[cfg(feature = "c8y")]
         Cloud::C8y(profile) => {
-            let c8y_config = config.c8y.try_get(profile.as_deref())?;
+            let c8y_config = _config.c8y.try_get(profile.as_deref())?;
             Ok(Some(&c8y_config.credentials_path))
         }
         #[cfg(feature = "aws")]
@@ -360,6 +369,7 @@ fn credentials_path_for<'a>(
 impl ConnectCommand {
     async fn tenant_matches_configured_url(&self) -> Result<Option<bool>, Fancy<ConnectError>> {
         match &self.cloud {
+            #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => {
                 let config = &self.config;
                 let c8y_config = config.c8y.try_get(profile.as_deref())?;
@@ -395,6 +405,7 @@ impl ConnectCommand {
         }
     }
 
+    #[cfg(feature = "c8y")]
     async fn check_connection_with_retries(
         &self,
         max_attempts: u32,
@@ -421,6 +432,7 @@ impl ConnectCommand {
             Cloud::Azure(profile) => check_device_status_azure(config, profile.as_deref()).await,
             #[cfg(feature = "aws")]
             Cloud::Aws(profile) => check_device_status_aws(config, profile.as_deref()).await,
+            #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => check_device_status_c8y(config, profile.as_deref()).await,
         };
         spinner.finish(res)
@@ -482,6 +494,7 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
             )?;
             disallow_matching_configurations(config, ReadableKey::AzBridgeTopicPrefix, &profiles)?;
         }
+        #[cfg(feature = "c8y")]
         MaybeBorrowedCloud::C8y(_) => {
             let profiles = config
                 .c8y
@@ -645,6 +658,7 @@ pub fn bridge_config(
 
             Ok(BridgeConfig::from(params))
         }
+        #[cfg(feature = "c8y")]
         MaybeBorrowedCloud::C8y(profile) => {
             let c8y_config = config.c8y.try_get(profile.as_deref())?;
 
@@ -696,6 +710,7 @@ pub(crate) fn bridge_health_topic(
     ))
 }
 
+#[cfg(any(feature = "aws", feature = "c8y"))]
 pub(crate) fn is_bridge_health_up_message(message: &rumqttc::Publish, health_topic: &str) -> bool {
     message.topic == health_topic
         && std::str::from_utf8(&message.payload).is_ok_and(|msg| msg.contains("\"up\""))
@@ -720,6 +735,7 @@ impl ConnectCommand {
         let config_location = &self.config_location;
 
         match &self.cloud {
+            #[cfg(feature = "c8y")]
             Cloud::C8y(profile_name) => {
                 if self.offline_mode {
                     println!("Offline mode. Skipping device creation in Cumulocity cloud.")
@@ -864,6 +880,7 @@ async fn wait_for_mosquitto_listening(mqtt: &TEdgeConfigReaderMqtt) -> Result<()
     }
 }
 
+#[cfg(feature = "c8y")]
 async fn enable_software_management(
     bridge_config: &BridgeConfig,
     service_manager: &dyn SystemServiceManager,
@@ -994,6 +1011,7 @@ fn get_common_mosquitto_config_file_path(
 }
 
 // To confirm the connected c8y tenant is the one that user configured.
+#[cfg(feature = "c8y")]
 async fn tenant_matches_configured_url(
     tedge_config: &TEdgeConfig,
     c8y_prefix: Option<&str>,
