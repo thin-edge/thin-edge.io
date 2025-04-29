@@ -34,8 +34,7 @@ Custom Setup
 
 Configure tedge to use HTTP Proxy
     Execute Command    tedge config set mqtt.bridge.built_in true
-    Execute Command    tedge config set proxy.type http
-    Execute Command    tedge config set proxy.address 127.0.0.1:8080
+    Execute Command    tedge config set proxy.address http://127.0.0.1:8080
 
 Add iptables Rules
     # Set default outbound policy to DROP
