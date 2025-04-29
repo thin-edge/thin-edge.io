@@ -171,7 +171,7 @@ impl AgentConfig {
         let operations_dir = config_dir.join("operations");
 
         let identity = tedge_config.http.client.auth.identity()?;
-        let cloud_root_certs = tedge_config.cloud_root_certs();
+        let cloud_root_certs = tedge_config.cloud_root_certs()?;
 
         let is_sudo_enabled = tedge_config.sudo.enable;
 

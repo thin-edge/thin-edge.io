@@ -497,7 +497,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let mut downloader = Downloader::new(target_path, None, CloudHttpConfig::from([]));
+        let mut downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
         downloader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
             ..Default::default()
@@ -528,7 +528,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path.clone(), None, CloudHttpConfig::from([]));
+        let downloader = Downloader::new(target_path.clone(), None, CloudHttpConfig::test_value());
         downloader.download(&url).await.unwrap();
 
         let file_content = std::fs::read(target_path).unwrap();
@@ -559,7 +559,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None, CloudHttpConfig::from([]));
+        let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(err, DownloadError::InsufficientSpace));
     }
@@ -583,7 +583,7 @@ mod tests {
         let url = DownloadInfo::new(&target_url);
 
         // empty filename
-        let downloader = Downloader::new("".into(), None, CloudHttpConfig::from([]));
+        let downloader = Downloader::new("".into(), None, CloudHttpConfig::test_value());
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -592,7 +592,7 @@ mod tests {
 
         // invalid unicode filename
         let path = unsafe { String::from_utf8_unchecked(b"\xff".to_vec()) };
-        let downloader = Downloader::new(path.into(), None, CloudHttpConfig::from([]));
+        let downloader = Downloader::new(path.into(), None, CloudHttpConfig::test_value());
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -600,7 +600,7 @@ mod tests {
         ));
 
         // relative path filename
-        let downloader = Downloader::new("myfile.txt".into(), None, CloudHttpConfig::from([]));
+        let downloader = Downloader::new("myfile.txt".into(), None, CloudHttpConfig::test_value());
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
@@ -628,7 +628,11 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_file_path.clone(), None, CloudHttpConfig::from([]));
+        let downloader = Downloader::new(
+            target_file_path.clone(),
+            None,
+            CloudHttpConfig::test_value(),
+        );
         downloader.download(&url).await.unwrap();
 
         let file_content = std::fs::read(target_file_path).unwrap();
@@ -656,7 +660,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None, CloudHttpConfig::from([]));
+        let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
 
         downloader.download(&url).await.unwrap();
 
@@ -684,7 +688,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None, CloudHttpConfig::from([]));
+        let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
         downloader.download(&url).await.unwrap();
 
         let log_content = std::fs::read(downloader.filename()).unwrap();
@@ -705,7 +709,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path, None, CloudHttpConfig::from([]));
+        let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
         downloader.download(&url).await.unwrap();
 
         assert_eq!("".as_bytes(), std::fs::read(downloader.filename()).unwrap());
@@ -723,7 +727,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let mut downloader = Downloader::new(target_path, None, CloudHttpConfig::from([]));
+        let mut downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
         downloader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
             max_interval: Duration::ZERO,
@@ -819,7 +823,7 @@ mod tests {
         let tmpdir = TempDir::new().unwrap();
         let target_path = tmpdir.path().join("partial_download");
 
-        let downloader = Downloader::new(target_path, None, CloudHttpConfig::from([]));
+        let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
         let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
 
         downloader.download(&url).await.unwrap();
@@ -931,7 +935,7 @@ mod tests {
         };
 
         let target_path = target_dir_path.path().join("test_download");
-        let mut downloader = Downloader::new(target_path, None, CloudHttpConfig::from([]));
+        let mut downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
         downloader.set_backoff(ExponentialBackoff {
             max_elapsed_time: Some(Duration::ZERO),
             ..Default::default()
@@ -983,7 +987,7 @@ mod tests {
         let downloader = Downloader::new(
             PathBuf::from("/tmp/should-never-exist"),
             None,
-            CloudHttpConfig::from(Arc::from(vec![req_cert])),
+            CloudHttpConfig::new(Arc::from(vec![req_cert]), None),
         );
         let err = downloader.download(&url).await.unwrap_err();
         let err = anyhow::Error::new(err);

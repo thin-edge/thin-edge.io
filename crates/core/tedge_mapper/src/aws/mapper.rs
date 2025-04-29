@@ -79,7 +79,7 @@ impl TEdgeComponent for AwsMapper {
                         Some((username, password)) => ProxyAuth::Basic { username, password },
                         None => ProxyAuth::None,
                     },
-                    ty: match proxy_config.ty {
+                    ty: match address.scheme() {
                         ProxyScheme::Http => ProxyType::Http,
                         ProxyScheme::Https => {
                             ProxyType::Https(TlsConfiguration::Rustls(Arc::new(rustls_config)))

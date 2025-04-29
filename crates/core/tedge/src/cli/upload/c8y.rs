@@ -186,7 +186,7 @@ mod tests {
 
         C8yUpload {
             identity: None,
-            cloud_http_config: CloudHttpConfig::from([]),
+            cloud_http_config: CloudHttpConfig::test_value(),
             device_id: device_id.to_string(),
             c8y: C8yEndPoint::new("test.c8y.com", "test.c8y.com", proxy),
             event_type: c8y_event.event_type,

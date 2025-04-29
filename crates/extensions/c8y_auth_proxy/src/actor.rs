@@ -36,7 +36,7 @@ impl C8yAuthProxyBuilder {
         config: &TEdgeConfig,
         c8y_profile: Option<&str>,
     ) -> anyhow::Result<Self> {
-        let reqwest_client = config.cloud_root_certs().client();
+        let reqwest_client = config.cloud_root_certs()?.client();
         let c8y = config.c8y.try_get(c8y_profile)?;
         let auth_retriever = C8yAuthRetriever::from_tedge_config(config, c8y_profile)?;
         let app_data = AppData {

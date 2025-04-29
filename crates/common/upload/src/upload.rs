@@ -321,7 +321,7 @@ mod tests {
         let mut uploader = Uploader::new(
             ttd.utf8_path().join("file_upload.txt"),
             None,
-            CloudHttpConfig::from([]),
+            CloudHttpConfig::test_value(),
         );
         uploader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
@@ -353,7 +353,7 @@ mod tests {
         let mut uploader = Uploader::new(
             ttd.utf8_path().join("file_upload.txt"),
             None,
-            CloudHttpConfig::from([]),
+            CloudHttpConfig::test_value(),
         );
         uploader.set_backoff(ExponentialBackoff {
             current_interval: Duration::ZERO,
@@ -387,7 +387,7 @@ mod tests {
         let mut uploader = Uploader::new(
             ttd.utf8_path().join("file_upload.txt"),
             None,
-            CloudHttpConfig::from([]),
+            CloudHttpConfig::test_value(),
         );
 
         uploader.set_backoff(ExponentialBackoff {
@@ -414,13 +414,13 @@ mod tests {
         // Not existing filename
         let source_path = Utf8Path::new("not_exist.txt").to_path_buf();
 
-        let uploader = Uploader::new(source_path, None, CloudHttpConfig::from([]));
+        let uploader = Uploader::new(source_path, None, CloudHttpConfig::test_value());
         assert!(uploader.upload(&url).await.is_err());
     }
 
     #[test]
     fn default_uploader_uses_customised_backoff_parameters() {
-        let uploader = Uploader::new(Utf8PathBuf::default(), None, CloudHttpConfig::from([]));
+        let uploader = Uploader::new(Utf8PathBuf::default(), None, CloudHttpConfig::test_value());
 
         assert_eq!(uploader.backoff.initial_interval, Duration::from_secs(15));
         assert_eq!(
@@ -497,7 +497,8 @@ mod tests {
 
         write_to_file_with_size(&mut source_file, 1024 * 1024).await;
 
-        let mut uploader = Uploader::new(source_path.to_owned(), None, CloudHttpConfig::from([]));
+        let mut uploader =
+            Uploader::new(source_path.to_owned(), None, CloudHttpConfig::test_value());
         // Adjust the backoff to be super fast for testing purposes
         uploader.set_backoff(
             ExponentialBackoffBuilder::new()

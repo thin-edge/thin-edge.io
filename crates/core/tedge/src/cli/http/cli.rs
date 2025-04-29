@@ -217,7 +217,7 @@ impl BuildCommand for TEdgeHttpCli {
 
         let url = format!("{protocol}://{host}:{port}{uri}");
         let identity = config.http.client.auth.identity()?;
-        let client = http_client(config.cloud_root_certs(), identity.as_ref())?;
+        let client = http_client(config.cloud_root_certs()?, identity.as_ref())?;
         let action = self.into();
 
         Ok(HttpCommand {

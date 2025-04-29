@@ -78,7 +78,7 @@ async fn download_with_auth() {
 async fn spawn_downloader_actor(
 ) -> ClientMessageBox<(String, DownloadRequest), (String, DownloadResult)> {
     let mut downloader_actor_builder =
-        DownloaderActor::new(None, CloudHttpConfig::from([])).builder();
+        DownloaderActor::new(None, CloudHttpConfig::test_value()).builder();
     let requester = ClientMessageBox::new(&mut downloader_actor_builder);
 
     tokio::spawn(downloader_actor_builder.run());
@@ -130,7 +130,7 @@ struct TestDownloadKey {
 async fn spawn_downloader_actor_with_struct(
 ) -> ClientMessageBox<(TestDownloadKey, DownloadRequest), (TestDownloadKey, DownloadResult)> {
     let mut downloader_actor_builder =
-        DownloaderActor::new(None, CloudHttpConfig::from([])).builder();
+        DownloaderActor::new(None, CloudHttpConfig::test_value()).builder();
     let requester = ClientMessageBox::new(&mut downloader_actor_builder);
 
     tokio::spawn(downloader_actor_builder.run());

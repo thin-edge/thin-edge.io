@@ -241,7 +241,7 @@ impl TEdgeComponent for CumulocityMapper {
                         Some((username, password)) => ProxyAuth::Basic { username, password },
                         None => ProxyAuth::None,
                     },
-                    ty: match proxy_config.ty {
+                    ty: match address.scheme() {
                         ProxyScheme::Http => ProxyType::Http,
                         ProxyScheme::Https => {
                             ProxyType::Https(TlsConfiguration::Rustls(Arc::new(rustls_config)))
@@ -272,7 +272,7 @@ impl TEdgeComponent for CumulocityMapper {
         let mut timer_actor = TimerActor::builder();
 
         let identity = tedge_config.http.client.auth.identity()?;
-        let cloud_root_certs = tedge_config.cloud_root_certs();
+        let cloud_root_certs = tedge_config.cloud_root_certs()?;
         let mut uploader_actor =
             UploaderActor::new(identity.clone(), cloud_root_certs.clone()).builder();
         let mut downloader_actor = DownloaderActor::new(identity, cloud_root_certs).builder();

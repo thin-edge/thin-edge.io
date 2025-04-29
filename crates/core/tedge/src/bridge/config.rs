@@ -218,6 +218,7 @@ mod test {
             auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            proxy: None,
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -290,6 +291,7 @@ keepalive_interval 60
             auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            proxy: None,
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config).await?;
@@ -364,6 +366,7 @@ keepalive_interval 60
             auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            proxy: None,
         };
 
         let mut buffer = Vec::new();
@@ -438,6 +441,7 @@ keepalive_interval 60
             auth_type: AuthType::Basic,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            proxy: None,
         };
 
         let mut buffer = Vec::new();

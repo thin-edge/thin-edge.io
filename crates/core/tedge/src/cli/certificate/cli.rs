@@ -254,7 +254,7 @@ impl BuildCommand for TEdgeCertCli {
                     device_id: c8y.device.id()?.clone(),
                     path: c8y.device.cert_path.clone().into(),
                     host: c8y.http.or_err()?.to_owned(),
-                    cloud_root_certs: config.cloud_root_certs(),
+                    cloud_root_certs: config.cloud_root_certs()?,
                     username,
                     password,
                 };
@@ -280,7 +280,7 @@ impl BuildCommand for TEdgeCertCli {
                     device_id: id,
                     one_time_password: token,
                     c8y_url: c8y_config.http.or_err()?.to_owned(),
-                    root_certs: config.cloud_root_certs(),
+                    root_certs: config.cloud_root_certs()?,
                     cert_path: c8y_config.device.cert_path.to_owned().into(),
                     key_path: c8y_config.device.key_path.to_owned().into(),
                     csr_path,
@@ -351,7 +351,7 @@ impl BuildCommand for TEdgeCertCli {
                     };
                     let cmd = c8y::RenewCertCmd {
                         c8y,
-                        http_config: config.cloud_root_certs(),
+                        http_config: config.cloud_root_certs()?,
                         identity: config.http.client.auth.identity()?,
                         cert_path,
                         new_cert_path,

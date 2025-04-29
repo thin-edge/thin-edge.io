@@ -80,7 +80,7 @@ impl BuildCommand for UploadCmd {
                 device_id,
             } => {
                 let identity = config.http.client.auth.identity()?;
-                let cloud_root_certs = config.cloud_root_certs();
+                let cloud_root_certs = config.cloud_root_certs()?;
                 let c8y = C8yEndPoint::local_proxy(&config, profile.as_deref())?;
                 let c8y_config = config.c8y.try_get(profile.as_deref())?;
                 let device_id = match device_id {

@@ -58,7 +58,7 @@ impl_append_remove_for_single_value!(
     AuthMethod,
     Cryptoki,
     HostPort<8000>,
-    ProxyScheme,
+    ProxyUrl,
 );
 
 impl AppendRemoveItem for TemplatesSet {

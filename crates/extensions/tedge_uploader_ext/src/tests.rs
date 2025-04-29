@@ -20,7 +20,7 @@ async fn spawn_uploader_actor() -> ClientMessageBox<(String, UploadRequest), (St
 {
     let identity = None;
     let mut uploader_actor_builder =
-        UploaderActor::new(identity, CloudHttpConfig::from([])).builder();
+        UploaderActor::new(identity, CloudHttpConfig::test_value()).builder();
     let requester = ClientMessageBox::new(&mut uploader_actor_builder);
 
     tokio::spawn(uploader_actor_builder.run());

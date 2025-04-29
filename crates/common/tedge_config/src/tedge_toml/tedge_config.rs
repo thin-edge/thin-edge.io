@@ -5,7 +5,7 @@ mod append_remove;
 pub use append_remove::AppendRemoveItem;
 
 use super::models::auth_method::AuthMethod;
-use super::models::proxy_scheme::ProxyScheme;
+use super::models::proxy_url::ProxyUrl;
 use super::models::timestamp::TimeFormat;
 use super::models::AptConfig;
 use super::models::AutoFlag;
@@ -849,26 +849,23 @@ define_tedge_config! {
     },
 
     proxy: {
-        /// The address (host:port) of an HTTP CONNECT proxy to use when connecting to Cumulocity
-        address: HostPort<8000>,
+        /// The address (scheme://address:port) of an HTTP CONNECT proxy to use
+        /// when connecting to external HTTP/MQTT services
+        #[doku(as = "String")]
+        address: ProxyUrl,
 
-        /// The username for the proxy connection to Cumulocity's MQTT broker
+        /// The username for the proxy connection to the cloud MQTT broker
         username: String,
 
-        /// The password for the proxy connection to Cumulocity's MQTT broker
+        /// The password for the proxy connection to the cloud MQTT broker
         password: String,
-
-        #[tedge_config(rename = "type", default(variable = "ProxyScheme::Https"), example = "HTTPS")]
-        /// The type of the proxy connection to use, either `HTTP` or `HTTPS`
-        ty: ProxyScheme,
     },
 }
 
 static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();
 
 impl TEdgeConfigReader {
-    #![deny(clippy::unwrap_used)]
-    pub fn cloud_root_certs(&self) -> CloudHttpConfig {
+    pub fn cloud_root_certs(&self) -> anyhow::Result<CloudHttpConfig> {
         let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
             let c8y_roots = self.c8y.entries().flat_map(|(key, c8y)| {
                 read_trust_store(&c8y.root_cert_path).unwrap_or_else(move |e| {
@@ -900,25 +897,23 @@ impl TEdgeConfigReader {
             c8y_roots.chain(az_roots).chain(aws_roots).collect()
         });
 
-        let mut proxy = None;
-
-        if let Some(address) = self.proxy.address.or_none() {
+        let proxy = if let Some(address) = self.proxy.address.or_none() {
             // Unwrap should be safe here since address is valid from config, and ty can only be http or https
-            let mut url: url::Url = format!("{}://{}", self.proxy.ty, address)
-                .parse()
-                .expect("Scheme is valid, address is valid");
-            // TODO deal with other unwraps
+            let url = address.url();
+            let mut proxy =
+                reqwest::Proxy::all(url).context("Failed to configure HTTP proxy connection")?;
             if let Some((username, password)) =
                 all_or_nothing((self.proxy.username.as_ref(), self.proxy.password.as_ref()))
-                    .unwrap()
+                    .map_err(|e| anyhow::anyhow!("{}", e))?
             {
-                url.set_username(username);
-                url.set_password(Some(password));
+                proxy = proxy.basic_auth(username, password)
             }
-            proxy = Some(reqwest::Proxy::all(url).unwrap());
-        }
+            Some(proxy)
+        } else {
+            None
+        };
 
-        CloudHttpConfig::new(roots.clone(), proxy)
+        Ok(CloudHttpConfig::new(roots.clone(), proxy))
     }
 
     pub fn cloud_client_tls_config(&self) -> rustls::ClientConfig {

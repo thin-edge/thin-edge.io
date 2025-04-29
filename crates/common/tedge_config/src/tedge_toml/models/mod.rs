@@ -10,6 +10,7 @@ pub mod ipaddress;
 pub mod path;
 pub mod port;
 pub mod proxy_scheme;
+pub mod proxy_url;
 pub mod seconds;
 pub mod templates_set;
 pub mod topic_prefix;

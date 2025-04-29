@@ -112,6 +112,8 @@ impl Command for ConnectCommand {
             &self.cloud,
             credentials_path,
             use_cryptoki,
+            config.proxy.address.or_none(),
+            config.proxy.username.or_none().map(|u| u.as_str()),
         );
 
         validate_config(config, &self.cloud)?;
@@ -620,7 +622,7 @@ pub fn bridge_config(
         .map(|address| {
             let rustls_config = config.cloud_client_tls_config();
             Ok::<_, ConfigError>(rumqttc::Proxy {
-                ty: match config.proxy.ty {
+                ty: match address.scheme() {
                     ProxyScheme::Http => rumqttc::ProxyType::Http,
                     ProxyScheme::Https => rumqttc::ProxyType::Https(
                         rumqttc::TlsConfiguration::Rustls(Arc::new(rustls_config)),
