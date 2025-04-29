@@ -52,9 +52,9 @@ impl TryFrom<String> for ProxyUrl {
     }
 }
 
-impl Into<String> for ProxyUrl {
-    fn into(self) -> String {
-        self.to_string()
+impl From<ProxyUrl> for String {
+    fn from(url: ProxyUrl) -> String {
+        url.to_string()
     }
 }
 
@@ -94,7 +94,7 @@ fn parse_host_port(s: &str) -> anyhow::Result<(url::Host, Port)> {
         "URL should not contain a username, please specify this in the dedicated configuration"
     );
     ensure!(
-        url.password() == None,
+        url.password().is_none(),
         "URL should not contain a password, please specify this in the dedicated configuration"
     );
     match (url.host(), url.port()) {
