@@ -7,7 +7,7 @@ Type=simple
 StandardError=journal
 ; Read environment variables from file as some PKCS11 modules require additional environment variables to function
 EnvironmentFile=-/etc/tedge/plugins/tedge-p11-server.conf
-ExecStart=/usr/bin/tedge-p11-server
+ExecStart=/usr/bin/tedge-p11-server --socket-path "%t/tedge-p11-server/tedge-p11-server.sock"
 Restart=on-failure
 
 [Install]
