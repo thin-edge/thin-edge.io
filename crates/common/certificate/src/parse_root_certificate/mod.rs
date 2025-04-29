@@ -249,6 +249,7 @@ mod tests {
         );
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
+        temp_file.flush().unwrap();
         let parsed_key = read_pvt_key(temp_file.path()).unwrap();
         let expected_pvt_key = PrivateKeyDer::Pkcs1(vec![48, 46, 2, 1].into());
         assert_eq!(parsed_key, expected_pvt_key);
@@ -263,6 +264,7 @@ mod tests {
         );
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
+        temp_file.flush().unwrap();
 
         read_pvt_key(temp_file.path()).unwrap_err();
     }

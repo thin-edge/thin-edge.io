@@ -263,6 +263,7 @@ pub struct ConfigLogger<'a> {
 
 impl<'a> ConfigLogger<'a> {
     /// Print a summary of the bridge config to stdout
+    #[allow(clippy::too_many_arguments)]
     pub fn log(
         title: impl Into<Cow<'static, str>>,
         config: &'a BridgeConfig,
