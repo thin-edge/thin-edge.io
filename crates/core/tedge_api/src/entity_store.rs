@@ -37,9 +37,6 @@ use std::collections::VecDeque;
 use std::mem;
 use std::path::Path;
 
-// In the future, root will be read from config
-const MQTT_ROOT: &str = "te";
-
 /// A store for topic-based entity metadata lookup.
 ///
 /// This object is a hashmap from MQTT identifiers to entities (devices or
@@ -61,11 +58,11 @@ const MQTT_ROOT: &str = "te";
 /// # use mqtt_channel::{MqttMessage, Topic};
 /// # use tedge_api::mqtt_topics::MqttSchema;
 /// # use tedge_api::entity_store::{EntityStore, EntityRegistrationMessage};
-/// let mqtt_message = MqttMessage::new(
-///     &Topic::new("te/device/main//").unwrap(),
-///     r#"{"@type": "device"}"#.to_string(),
-/// );
-/// let registration_message = EntityRegistrationMessage::try_from(&mqtt_message).unwrap();
+///
+/// let registration_message = EntityRegistrationMessage::try_from(
+///     "device/main//".parse().unwrap(),
+///     r#"{"@type": "device"}"#.as_bytes()
+/// ).unwrap();
 ///
 /// let mut entity_store = EntityStore::with_main_device(
 ///     MqttSchema::default(),
@@ -167,7 +164,10 @@ impl EntityStore {
                                 match channel {
                                     Channel::EntityMetadata => {
                                         if let Ok(register_message) =
-                                            EntityRegistrationMessage::try_from(&message)
+                                            EntityRegistrationMessage::try_from(
+                                                source.clone(),
+                                                message.payload_bytes(),
+                                            )
                                         {
                                             if let Err(err) = self.register_entity(register_message)
                                             {
@@ -939,113 +939,52 @@ pub enum InitError {
     Custom(String),
 }
 
-/// An object representing a valid entity registration message.
+/// An object representing the common entity registration message payload,
+/// excluding the topic-id which is derived from different sources for MQTT and HTTP:
+/// - the topic of the MQTT message
+/// - the payload of the HTTP message
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EntityRegistrationMessage {
-    // fields used by thin-edge locally
-    #[serde(rename = "@topic-id")]
-    pub topic_id: EntityTopicId,
+pub struct EntityRegistrationPayload {
     #[serde(rename = "@id", skip_serializing_if = "Option::is_none")]
     pub external_id: Option<EntityExternalId>,
     #[serde(rename = "@type")]
     pub r#type: EntityType,
-    #[serde(rename = "@parent")]
+    #[serde(rename = "@parent", skip_serializing_if = "Option::is_none")]
     pub parent: Option<EntityTopicId>,
-    #[serde(rename = "@health")]
+    #[serde(rename = "@health", skip_serializing_if = "Option::is_none")]
     pub health_endpoint: Option<EntityTopicId>,
 
     #[serde(flatten)]
     pub twin_data: Map<String, JsonValue>,
 }
 
+/// An object representing a valid entity registration message,
+/// including the topic-id which is derived from:
+/// - the topic of the MQTT message
+/// - the payload of the HTTP message
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntityRegistrationMessage {
+    // fields used by thin-edge locally
+    pub topic_id: EntityTopicId,
+    pub external_id: Option<EntityExternalId>,
+    pub r#type: EntityType,
+    pub parent: Option<EntityTopicId>,
+    pub health_endpoint: Option<EntityTopicId>,
+
+    pub twin_data: Map<String, JsonValue>,
+}
+
 impl EntityRegistrationMessage {
-    /// Parses a MQTT message as an entity registration message.
-    ///
-    /// MQTT message is an entity registration message if
-    /// - published on a prefix of `te/+/+/+/+`
-    /// - its payload contains a registration message.
-    // TODO: replace option with proper error handling
-    // TODO: this is basically manual Deserialize implementation, better impl
-    // Serialize/Deserialize.
-    #[must_use]
-    pub fn new(message: &MqttMessage) -> Option<Self> {
-        let topic_id = message
-            .topic
-            .name
-            .strip_prefix(MQTT_ROOT)
-            .and_then(|s| s.strip_prefix('/'))?;
+    pub fn try_from(topic_id: EntityTopicId, payload: &[u8]) -> Result<Self, serde_json::Error> {
+        let payload: EntityRegistrationPayload = serde_json::from_slice(payload)?;
 
-        let payload = parse_entity_register_payload(message.payload_bytes())?;
-
-        let JsonValue::Object(mut properties) = payload else {
-            return None;
-        };
-
-        let Some(JsonValue::String(r#type)) = properties.remove("@type") else {
-            return None;
-        };
-
-        let r#type = match r#type.as_str() {
-            "device" => EntityType::MainDevice,
-            "child-device" => EntityType::ChildDevice,
-            "service" => EntityType::Service,
-            _ => return None,
-        };
-
-        let parent = properties.remove("@parent");
-        let parent = if let Some(parent) = parent {
-            let JsonValue::String(parent) = parent else {
-                return None;
-            };
-            let Ok(parent) = parent.parse() else {
-                return None;
-            };
-            Some(parent)
-        } else {
-            None
-        };
-
-        let parent = if r#type == EntityType::ChildDevice || r#type == EntityType::Service {
-            parent
-        } else {
-            None
-        };
-
-        let health_service = if let Some(value) = properties.remove("@health") {
-            let JsonValue::String(value_str) = value else {
-                return None;
-            };
-            let Ok(health_service) = value_str.parse() else {
-                return None;
-            };
-            Some(health_service)
-        } else {
-            None
-        };
-
-        let entity_id = properties.remove("@id");
-        let entity_id = if let Some(entity_id) = entity_id {
-            let JsonValue::String(entity_id) = entity_id else {
-                return None;
-            };
-            Some(entity_id.into())
-        } else {
-            None
-        };
-
-        let other = properties;
-
-        assert_eq!(other.get("@id"), None);
-        assert_eq!(other.get("@type"), None);
-        assert_eq!(other.get("@parent"), None);
-
-        Some(Self {
-            topic_id: topic_id.parse().ok()?,
-            external_id: entity_id,
-            r#type,
-            parent,
-            health_endpoint: health_service,
-            twin_data: other,
+        Ok(Self {
+            topic_id,
+            external_id: payload.external_id,
+            r#type: payload.r#type,
+            parent: payload.parent,
+            health_endpoint: payload.health_endpoint,
+            twin_data: payload.twin_data,
         })
     }
 
@@ -1119,16 +1058,6 @@ impl EntityRegistrationMessage {
     }
 }
 
-impl TryFrom<&MqttMessage> for EntityRegistrationMessage {
-    type Error = serde_json::Error;
-
-    fn try_from(value: &MqttMessage) -> Result<Self, Self::Error> {
-        EntityRegistrationMessage::new(value).ok_or(serde::de::Error::custom(
-            "Failed to parse entity registration message: {value}",
-        ))
-    }
-}
-
 impl From<&EntityMetadata> for EntityRegistrationMessage {
     fn from(value: &EntityMetadata) -> Self {
         EntityRegistrationMessage {
@@ -1139,20 +1068,6 @@ impl From<&EntityMetadata> for EntityRegistrationMessage {
             health_endpoint: value.health_endpoint.clone(),
             twin_data: Map::new(),
         }
-    }
-}
-
-/// Parse a MQTT message payload as an entity registration payload.
-///
-/// Returns `Some(register_payload)` if a payload is valid JSON and is a
-/// registration payload, or `None` otherwise.
-fn parse_entity_register_payload(payload: &[u8]) -> Option<JsonValue> {
-    let payload = serde_json::from_slice::<JsonValue>(payload).ok()?;
-
-    if payload.get("@type").is_some() {
-        Some(payload)
-    } else {
-        None
     }
 }
 
@@ -1214,7 +1129,6 @@ impl EntityTwinMessage {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use mqtt_channel::Topic;
     use serde_json::json;
     use std::collections::BTreeSet;
     use std::str::FromStr;
@@ -1223,8 +1137,8 @@ mod tests {
 
     #[test]
     fn parse_entity_registration_message() {
-        let message = MqttMessage::new(
-            &Topic::new("te/device/child1//").unwrap(),
+        let parsed = EntityRegistrationMessage::try_from(
+            "device/child1//".parse().unwrap(),
             json!({
                 "@type" : "child-device",
                 "name": "child1",
@@ -1234,9 +1148,10 @@ mod tests {
                     "foo" : "bar"
                 }
             })
-            .to_string(),
-        );
-        let parsed = EntityRegistrationMessage::new(&message).unwrap();
+            .to_string()
+            .as_bytes(),
+        )
+        .unwrap();
         assert_eq!(parsed.r#type, EntityType::ChildDevice);
         assert_eq!(parsed.twin_data.get("name").unwrap(), "child1");
         assert_eq!(parsed.twin_data.get("type").unwrap(), "RPi");
@@ -1244,6 +1159,57 @@ mod tests {
         assert_eq!(
             parsed.twin_data.get("complex").unwrap().get("foo").unwrap(),
             "bar"
+        );
+    }
+
+    #[test_case(
+        json!({
+            "@type" : "main-device",
+        }),
+        "unknown variant";
+        "invalid_entity_type"
+    )]
+    #[test_case(
+        json!({
+            "@id" : "child01",
+        }),
+        "missing field `@type`";
+        "missing_entity_type"
+    )]
+    #[test_case(
+        json!({
+            "@type" : "child-device",
+            "@id": 55
+        }),
+        "invalid type: integer `55`, expected a string";
+        "invalid_external_id"
+    )]
+    #[test_case(
+        json!({
+            "@type" : "child-device",
+            "@parent": "a/b/c/d/e"
+        }),
+        "An entity topic identifier has at most 4 segments";
+        "invalid_parent"
+    )]
+    #[test_case(
+        json!({
+            "@type" : "child-device",
+            "@health": "a/b/c/d/e"
+        }),
+        "An entity topic identifier has at most 4 segments";
+        "invalid_health_endpoint"
+    )]
+    fn invalid_entity_registration_message(payload: JsonValue, expected: &str) {
+        let error = EntityRegistrationMessage::try_from(
+            "device/child1//".parse().unwrap(),
+            payload.to_string().as_bytes(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            error.contains(expected),
+            "Actual: \"{error}\" does not contain expected: \"{expected}\""
         );
     }
 
@@ -1261,8 +1227,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut store = new_entity_store(&temp_dir, true);
 
-        let entity = EntityRegistrationMessage::new(&MqttMessage::new(
-            &Topic::new("te/device/child1//").unwrap(),
+        let entity = EntityRegistrationMessage::try_from(
+            "device/child1//".parse().unwrap(),
             json!({
                 "@type" : "child-device",
                 "name": "child1",
@@ -1272,8 +1238,9 @@ mod tests {
                     "foo" : "bar"
                 }
             })
-            .to_string(),
-        ))
+            .to_string()
+            .as_bytes(),
+        )
         .unwrap();
         let updated_entities = store.update(entity.clone()).unwrap();
 
@@ -1291,10 +1258,10 @@ mod tests {
         // child of the main device.
         let updated_entities = store
             .update(
-                EntityRegistrationMessage::new(&MqttMessage::new(
-                    &Topic::new("te/device/child1//").unwrap(),
-                    json!({"@type": "child-device"}).to_string(),
-                ))
+                EntityRegistrationMessage::try_from(
+                    "device/child1//".parse().unwrap(),
+                    json!({"@type": "child-device"}).to_string().as_bytes(),
+                )
                 .unwrap(),
             )
             .unwrap();
@@ -1310,10 +1277,12 @@ mod tests {
 
         let updated_entities = store
             .update(
-                EntityRegistrationMessage::new(&MqttMessage::new(
-                    &Topic::new("te/device/child2//").unwrap(),
-                    json!({"@type": "child-device", "@parent": "device/main//"}).to_string(),
-                ))
+                EntityRegistrationMessage::try_from(
+                    "device/child2//".parse().unwrap(),
+                    json!({"@type": "child-device", "@parent": "device/main//"})
+                        .to_string()
+                        .as_bytes(),
+                )
                 .unwrap(),
             )
             .unwrap();
@@ -2409,10 +2378,10 @@ mod tests {
     }
 
     fn register(store: &mut EntityStore, topic_id: &str, payload: JsonValue) {
-        let registration = EntityRegistrationMessage::new(&MqttMessage::new(
-            &Topic::new(&format!("te/{topic_id}")).unwrap(),
-            payload.to_string(),
-        ));
+        let registration = EntityRegistrationMessage::try_from(
+            topic_id.parse().unwrap(),
+            payload.to_string().as_bytes(),
+        );
         store.update(registration.unwrap()).unwrap();
         assert!(store.get(&entity(topic_id)).is_some());
     }
