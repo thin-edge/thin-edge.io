@@ -209,16 +209,20 @@ impl ConnectCommand {
             self.start_mapper().await;
         }
 
-        if let Cloud::C8y(profile) = &self.cloud {
-            let c8y_config = config.c8y.try_get(profile.as_deref())?;
+        match &self.cloud {
+            Cloud::C8y(profile) => {
+                let c8y_config = config.c8y.try_get(profile.as_deref())?;
 
-            let use_basic_auth = c8y_config
-                .auth_method
-                .is_basic(&c8y_config.credentials_path);
-            if !use_basic_auth && !self.offline_mode && connection_check_success {
-                let _ = self.tenant_matches_configured_url().await;
+                let use_basic_auth = c8y_config
+                    .auth_method
+                    .is_basic(&c8y_config.credentials_path);
+                if !use_basic_auth && !self.offline_mode && connection_check_success {
+                    let _ = self.tenant_matches_configured_url().await;
+                }
+                enable_software_management(&bridge_config, &*self.service_manager).await;
             }
-            enable_software_management(&bridge_config, &*self.service_manager).await;
+            Cloud::Aws(_) => (),
+            Cloud::Azure(_) => (),
         }
 
         Ok(())
@@ -302,25 +306,26 @@ impl ConnectCommand {
         bridge_config: &BridgeConfig,
         certificate_shift: &CertificateShift,
     ) -> anyhow::Result<()> {
-        if let Cloud::C8y(profile_name) = &self.cloud {
-            let use_basic_auth = false;
-            let device_type = &self.config.device.ty;
-            let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
-            let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
-            if let Some(client_config) = mqtt_auth_config.client.as_mut() {
-                client_config.cert_file = certificate_shift.new_cert_path.to_owned()
-            }
+        match &self.cloud {
+            Cloud::C8y(profile_name) => {
+                let use_basic_auth = false;
+                let device_type = &self.config.device.ty;
+                let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
+                let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
+                if let Some(client_config) = mqtt_auth_config.client.as_mut() {
+                    client_config.cert_file = certificate_shift.new_cert_path.to_owned()
+                }
 
-            create_device_with_direct_connection(
-                use_basic_auth,
-                bridge_config,
-                device_type,
-                mqtt_auth_config,
-            )
-            .await
-        } else {
-            // TODO: check for az and aws
-            Ok(())
+                create_device_with_direct_connection(
+                    use_basic_auth,
+                    bridge_config,
+                    device_type,
+                    mqtt_auth_config,
+                )
+                .await
+            }
+            Cloud::Aws(_) => Ok(()),
+            Cloud::Azure(_) => Ok(()),
         }
     }
 }
@@ -329,45 +334,49 @@ fn credentials_path_for<'a>(
     config: &'a TEdgeConfig,
     cloud: &Cloud,
 ) -> Result<Option<&'a Utf8Path>, MultiError> {
-    if let Cloud::C8y(profile) = cloud {
-        let c8y_config = config.c8y.try_get(profile.as_deref())?;
-        Ok(Some(&c8y_config.credentials_path))
-    } else {
-        Ok(None)
+    match cloud {
+        Cloud::C8y(profile) => {
+            let c8y_config = config.c8y.try_get(profile.as_deref())?;
+            Ok(Some(&c8y_config.credentials_path))
+        }
+        Cloud::Aws(_) => Ok(None),
+        Cloud::Azure(_) => Ok(None),
     }
 }
 
 impl ConnectCommand {
     async fn tenant_matches_configured_url(&self) -> Result<Option<bool>, Fancy<ConnectError>> {
-        let config = &self.config;
-        if let Cloud::C8y(profile) = &self.cloud {
-            let c8y_config = config.c8y.try_get(profile.as_deref())?;
+        match &self.cloud {
+            Cloud::C8y(profile) => {
+                let config = &self.config;
+                let c8y_config = config.c8y.try_get(profile.as_deref())?;
 
-            let use_basic_auth = c8y_config
-                .auth_method
-                .is_basic(&c8y_config.credentials_path);
-            if !use_basic_auth && !self.offline_mode {
-                tenant_matches_configured_url(
-                    config,
-                    profile.as_ref().map(|g| &***g),
-                    &c8y_config
-                        .mqtt
-                        .or_none()
-                        .map(|u| u.host().to_string())
-                        .unwrap_or_default(),
-                    &c8y_config
-                        .http
-                        .or_none()
-                        .map(|u| u.host().to_string())
-                        .unwrap_or_default(),
-                )
-                .await
-                .map(Some)
-            } else {
-                Ok(None)
+                let use_basic_auth = c8y_config
+                    .auth_method
+                    .is_basic(&c8y_config.credentials_path);
+                if !use_basic_auth && !self.offline_mode {
+                    tenant_matches_configured_url(
+                        config,
+                        profile.as_ref().map(|g| &***g),
+                        &c8y_config
+                            .mqtt
+                            .or_none()
+                            .map(|u| u.host().to_string())
+                            .unwrap_or_default(),
+                        &c8y_config
+                            .http
+                            .or_none()
+                            .map(|u| u.host().to_string())
+                            .unwrap_or_default(),
+                    )
+                    .await
+                    .map(Some)
+                } else {
+                    Ok(None)
+                }
             }
-        } else {
-            Ok(None)
+            Cloud::Aws(_) => Ok(None),
+            Cloud::Azure(_) => Ok(None),
         }
     }
 
@@ -689,25 +698,28 @@ impl ConnectCommand {
         let tedge_config = &self.config;
         let config_location = &self.config_location;
 
-        let use_basic_auth =
-            bridge_config.remote_username.is_some() && bridge_config.remote_password.is_some();
-
-        if let Cloud::C8y(profile_name) = &self.cloud {
-            if self.offline_mode {
-                println!("Offline mode. Skipping device creation in Cumulocity cloud.")
-            } else {
-                let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
-                let mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
-                let spinner = Spinner::start("Creating device in Cumulocity cloud");
-                let res = create_device_with_direct_connection(
-                    use_basic_auth,
-                    bridge_config,
-                    &self.config.device.ty,
-                    mqtt_auth_config,
-                )
-                .await;
-                spinner.finish(res)?;
+        match &self.cloud {
+            Cloud::C8y(profile_name) => {
+                if self.offline_mode {
+                    println!("Offline mode. Skipping device creation in Cumulocity cloud.")
+                } else {
+                    let use_basic_auth = bridge_config.remote_username.is_some()
+                        && bridge_config.remote_password.is_some();
+                    let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
+                    let mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
+                    let spinner = Spinner::start("Creating device in Cumulocity cloud");
+                    let res = create_device_with_direct_connection(
+                        use_basic_auth,
+                        bridge_config,
+                        &self.config.device.ty,
+                        mqtt_auth_config,
+                    )
+                    .await;
+                    spinner.finish(res)?;
+                }
             }
+            Cloud::Aws(_) => (),
+            Cloud::Azure(_) => (),
         }
 
         if let Err(err) =
