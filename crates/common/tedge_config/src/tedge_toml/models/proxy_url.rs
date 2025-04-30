@@ -87,7 +87,6 @@ impl FromStr for ProxyUrl {
 }
 
 fn parse_host_port(s: &str) -> anyhow::Result<(url::Host, Port)> {
-    // TODO error handling
     let url = url::Url::parse(&format!("http://{s}"))?;
     ensure!(
         url.username() == "",
@@ -98,7 +97,6 @@ fn parse_host_port(s: &str) -> anyhow::Result<(url::Host, Port)> {
         "URL should not contain a password, please specify this in the dedicated configuration"
     );
     match (url.host(), url.port()) {
-        // TODO Port should actually be valid
         (Some(host), Some(port)) => Ok((host.to_owned(), Port(port))),
         (None, _) => {
             unreachable!("Host cannot be empty for http:// URLs, only for e.g. `data:` URLs")
