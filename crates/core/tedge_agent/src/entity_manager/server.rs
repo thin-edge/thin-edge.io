@@ -108,7 +108,7 @@ impl Server for EntityStoreServer {
                 EntityStoreResponse::Update(res.cloned())
             }
             EntityStoreRequest::Delete(topic_id) => {
-                let deleted_entities = self.deregister_entity(topic_id).await;
+                let deleted_entities = self.deregister_entity(&topic_id).await;
                 EntityStoreResponse::Delete(deleted_entities)
             }
             EntityStoreRequest::List(filters) => {
@@ -145,7 +145,8 @@ impl EntityStoreServer {
     async fn process_mqtt_message(&mut self, message: MqttMessage) {
         if let Ok((topic_id, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) {
             if let Channel::EntityMetadata = channel {
-                self.process_entity_registration(topic_id, message).await;
+                self.process_entity_registration(topic_id, message.payload_bytes())
+                    .await;
             } else {
                 let res = self
                     .process_entity_data(topic_id, channel, message.clone())
@@ -159,13 +160,13 @@ impl EntityStoreServer {
         }
     }
 
-    async fn process_entity_registration(&mut self, topic_id: EntityTopicId, message: MqttMessage) {
-        if message.payload().is_empty() {
-            let _ = self.deregister_entity(topic_id).await;
+    async fn process_entity_registration(&mut self, topic_id: EntityTopicId, payload: &[u8]) {
+        if payload.is_empty() {
+            let _ = self.deregister_entity(&topic_id).await;
             return;
         }
 
-        match EntityRegistrationMessage::try_from(&message) {
+        match EntityRegistrationMessage::try_from(topic_id.clone(), payload) {
             Ok(entity) => match self.entity_store.update(entity.clone()) {
                 Ok(registered) => {
                     for entity in registered {
@@ -186,7 +187,7 @@ impl EntityStoreServer {
                 }
             },
             Err(err) => {
-                error!("Failed to parse {message} as an entity registration message: {err}")
+                error!("Failed to parse message on {topic_id} as an entity registration message: {err}")
             }
         }
     }
@@ -303,8 +304,8 @@ impl EntityStoreServer {
         self.entity_store.try_get(topic_id)
     }
 
-    async fn deregister_entity(&mut self, topic_id: EntityTopicId) -> Vec<EntityMetadata> {
-        let deleted = self.entity_store.deregister_entity(&topic_id);
+    async fn deregister_entity(&mut self, topic_id: &EntityTopicId) -> Vec<EntityMetadata> {
+        let deleted = self.entity_store.deregister_entity(topic_id);
         for entity in deleted.iter().rev() {
             for twin_key in entity.twin_data.keys() {
                 let topic = self.mqtt_schema.topic_for(

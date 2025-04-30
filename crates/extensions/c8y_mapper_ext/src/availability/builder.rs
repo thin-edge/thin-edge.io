@@ -66,7 +66,7 @@ impl AvailabilityBuilder {
                 match channel {
                     Channel::EntityMetadata => {
                         if let Ok(registration_message) =
-                            EntityRegistrationMessage::try_from(&message)
+                            EntityRegistrationMessage::try_from(source, message.payload_bytes())
                         {
                             return Some(registration_message.into());
                         }

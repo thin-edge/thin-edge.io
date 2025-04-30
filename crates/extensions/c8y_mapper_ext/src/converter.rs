@@ -307,16 +307,18 @@ impl CumulocityConverter {
             return Ok(UpdateOutcome::Deleted);
         }
 
-        let register_message = EntityRegistrationMessage::try_from(message)?;
+        let register_message =
+            EntityRegistrationMessage::try_from(topic_id, message.payload_bytes())?;
         Ok(self.entity_cache.upsert(register_message.clone())?)
     }
 
     /// Convert an entity registration message into its C8y counterpart
     pub fn try_convert_entity_registration(
         &mut self,
+        source: EntityTopicId,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let input = EntityRegistrationMessage::try_from(message)?;
+        let input = EntityRegistrationMessage::try_from(source, message.payload_bytes())?;
         let mut messages = vec![];
 
         // Parse the optional fields
@@ -1225,7 +1227,7 @@ impl CumulocityConverter {
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         match &channel {
-            Channel::EntityMetadata => self.try_convert_entity_registration(message),
+            Channel::EntityMetadata => self.try_convert_entity_registration(source, message),
             _ => {
                 self.try_convert_data_message(source, channel, message)
                     .await

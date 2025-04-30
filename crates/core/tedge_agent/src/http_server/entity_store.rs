@@ -31,6 +31,7 @@ use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::InvalidEntityType;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::entity_store::EntityRegistrationPayload;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::entity_store::EntityUpdateMessage;
 use tedge_api::entity_store::ListFilters;
@@ -175,14 +176,37 @@ pub(crate) fn entity_store_router(state: AgentState) -> Router {
         .with_state(state)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct EntityRegistrationHttpPayload {
+    #[serde(rename = "@topic-id")]
+    pub topic_id: EntityTopicId,
+    #[serde(flatten)]
+    others: EntityRegistrationPayload,
+}
+
+impl From<EntityRegistrationHttpPayload> for EntityRegistrationMessage {
+    fn from(value: EntityRegistrationHttpPayload) -> Self {
+        EntityRegistrationMessage {
+            topic_id: value.topic_id,
+            external_id: value.others.external_id,
+            r#type: value.others.r#type,
+            parent: value.others.parent,
+            health_endpoint: value.others.health_endpoint,
+            twin_data: value.others.twin_data,
+        }
+    }
+}
+
 async fn register_entity(
     State(state): State<AgentState>,
-    Json(entity): Json<EntityRegistrationMessage>,
+    Json(payload): Json<EntityRegistrationHttpPayload>,
 ) -> impl IntoResponse {
+    let reg_message: EntityRegistrationMessage = payload.into();
+    let topic_id = reg_message.topic_id.clone();
     let response = state
         .entity_store_handle
         .clone()
-        .await_response(EntityStoreRequest::Create(entity.clone()))
+        .await_response(EntityStoreRequest::Create(reg_message))
         .await?;
     let EntityStoreResponse::Create(res) = response else {
         return Err(Error::InvalidEntityStoreResponse);
@@ -191,7 +215,7 @@ async fn register_entity(
     res?;
     Ok((
         StatusCode::CREATED,
-        Json(json!({"@topic-id": entity.topic_id.as_str()})),
+        Json(json!({"@topic-id": topic_id.as_str()})),
     ))
 }
 
@@ -547,7 +571,6 @@ mod tests {
     use hyper::Request;
     use hyper::StatusCode;
     use serde_json::json;
-    use serde_json::Map;
     use serde_json::Value;
     use std::collections::HashSet;
     use tedge_actors::Builder;
@@ -558,7 +581,6 @@ mod tests {
     use tedge_api::entity::EntityMetadata;
     use tedge_api::entity::EntityType;
     use tedge_api::entity_store;
-    use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
@@ -665,15 +687,12 @@ mod tests {
             }
         });
 
-        let entity = EntityRegistrationMessage {
-            topic_id: EntityTopicId::default_child_device("test-child").unwrap(),
-            external_id: Some("test-child".into()),
-            r#type: EntityType::ChildDevice,
-            parent: None,
-            health_endpoint: None,
-            twin_data: Map::new(),
-        };
-        let payload = serde_json::to_string(&entity).unwrap();
+        let payload = json!({
+            "@topic-id": "device/test-child//",
+            "@id": "test-child",
+            "@type": "child-device",
+        })
+        .to_string();
 
         let req = Request::builder()
             .method(Method::POST)
@@ -714,15 +733,12 @@ mod tests {
             }
         });
 
-        let entity = EntityRegistrationMessage {
-            topic_id: EntityTopicId::default_child_device("test-child").unwrap(),
-            external_id: Some("test-child".into()),
-            r#type: EntityType::ChildDevice,
-            parent: None,
-            health_endpoint: None,
-            twin_data: Map::new(),
-        };
-        let payload = serde_json::to_string(&entity).unwrap();
+        let payload = json!({
+            "@topic-id": "device/test-child//",
+            "@id": "test-child",
+            "@type": "child-device",
+        })
+        .to_string();
 
         let req = Request::builder()
             .method(Method::POST)
@@ -768,15 +784,12 @@ mod tests {
             }
         });
 
-        let entity = EntityRegistrationMessage {
-            topic_id: EntityTopicId::default_child_device("test-child").unwrap(),
-            external_id: Some("test-child".into()),
-            r#type: EntityType::ChildDevice,
-            parent: None,
-            health_endpoint: None,
-            twin_data: Map::new(),
-        };
-        let payload = serde_json::to_string(&entity).unwrap();
+        let payload = json!({
+            "@topic-id": "device/test-child//",
+            "@id": "test-child",
+            "@type": "child-device",
+        })
+        .to_string();
 
         let req = Request::builder()
             .method(Method::POST)
@@ -793,6 +806,43 @@ mod tests {
         assert_json_eq!(
             entity,
             json!( {"error":"The specified parent \"test-child\" does not exist in the entity store"})
+        );
+    }
+
+    #[tokio::test]
+    async fn entity_post_missing_topic_id() {
+        let TestHandle {
+            mut app,
+            entity_store_box: _,
+        } = setup();
+
+        let payload = json!({
+            "type": "child-device",
+        })
+        .to_string();
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/v1/entities")
+            .header("Content-Type", "application/json")
+            .body(Body::from(payload))
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let body = String::from_utf8(
+            response
+                .into_body()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes()
+                .to_vec(),
+        )
+        .unwrap();
+        assert!(
+            body.contains("missing field `@topic-id`"),
+            "Expected error message to contain 'missing field `@topic-id`', but got: {body}"
         );
     }
 
