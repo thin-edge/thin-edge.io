@@ -77,14 +77,24 @@ impl Cryptoki {
     }
 
     pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11SigningKey> {
-        let uri = uri.or(self.config.uri.as_deref());
+        let mut config_uri = self
+            .config
+            .uri
+            .as_deref()
+            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
+            .transpose()?
+            .unwrap_or_default();
 
-        let uri_attributes = uri
+        let request_uri = uri
             .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
-            .transpose()?;
+            .transpose()?
+            .unwrap_or_default();
 
-        let wanted_label = uri_attributes.as_ref().and_then(|u| u.token.as_ref());
-        let wanted_serial = uri_attributes.as_ref().and_then(|u| u.serial.as_ref());
+        config_uri.append_attributes(request_uri);
+        let uri_attributes = config_uri;
+
+        let wanted_label = uri_attributes.token.as_ref();
+        let wanted_serial = uri_attributes.serial.as_ref();
 
         let slots_with_tokens = self.context.get_slots_with_token()?;
         let tokens: Result<Vec<_>, _> = slots_with_tokens
@@ -120,8 +130,8 @@ impl Cryptoki {
 
         // get the signing key
         let key = match &uri_attributes {
-            Some(uri::Pkcs11Uri { id, object, .. }) if id.is_some() || object.is_some() => {
-                let key = Self::find_key_by_attributes(&uri_attributes.unwrap(), &session)?;
+            uri::Pkcs11Uri { id, object, .. } if id.is_some() || object.is_some() => {
+                let key = Self::find_key_by_attributes(&uri_attributes, &session)?;
                 let key_type = session
                     .get_attributes(key, &[AttributeType::KeyType])?
                     .into_iter()
@@ -480,7 +490,7 @@ pub mod uri {
     /// Attributes only relevant to us shall be put into fields and the rest is in `other` hashmap.
     ///
     /// https://www.rfc-editor.org/rfc/rfc7512.html
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Default)]
     pub struct Pkcs11Uri<'a> {
         pub token: Option<Cow<'a, str>>,
         pub serial: Option<Cow<'a, str>>,
@@ -540,6 +550,23 @@ pub mod uri {
                 other,
             })
         }
+
+        /// Add new attributes from `other` to `self`.
+        ///
+        /// If other contains new attributes not present in self, add them to self. If these
+        /// attributes are already present in self, preserve value currently in self.
+        pub fn append_attributes(&mut self, other: Self) {
+            self.token = self.token.take().or(other.token);
+            self.serial = self.serial.take().or(other.serial);
+            self.id = self.id.take().or(other.id);
+            self.object = self.object.take().or(other.object);
+
+            for (attribute, value) in other.other {
+                if !self.other.contains_key(attribute) {
+                    self.other.insert(attribute, value);
+                }
+            }
+        }
     }
 
     #[cfg(test)]
@@ -589,6 +616,61 @@ pub mod uri {
             let input = "not a pkcs#11 uri";
             let err = Pkcs11Uri::parse(input).unwrap_err();
             assert!(err.to_string().contains("missing PKCS #11 URI scheme"));
+        }
+
+        #[test]
+        fn appends_attributes_correctly() {
+            let mut uri1 = Pkcs11Uri::parse("pkcs11:token=token1").unwrap();
+            let uri2 = Pkcs11Uri::parse(
+                "pkcs11:token=token2;serial=serial2;id=%01%02;object=object2;key1=value1",
+            )
+            .unwrap();
+
+            uri1.append_attributes(uri2);
+
+            assert_eq!(uri1.token.unwrap(), "token1");
+            assert_eq!(uri1.serial.unwrap(), "serial2");
+            assert_eq!(uri1.id, Some(vec![0x01, 0x02]));
+            assert_eq!(uri1.object.unwrap(), "object2");
+            assert_eq!(uri1.other.get("key1").unwrap(), "value1");
+        }
+
+        #[test]
+        fn appends_attributes_with_no_conflicts() {
+            let mut uri1 = Pkcs11Uri::parse("pkcs11:").unwrap();
+            let uri2 = Pkcs11Uri::parse(
+                "pkcs11:token=token2;serial=serial2;id=%01%02;object=object2;key1=value1",
+            )
+            .unwrap();
+
+            uri1.append_attributes(uri2);
+
+            assert_eq!(uri1.token.unwrap(), "token2");
+            assert_eq!(uri1.serial.unwrap(), "serial2");
+            assert_eq!(uri1.id, Some(vec![0x01, 0x02]));
+            assert_eq!(uri1.object.unwrap(), "object2");
+            assert_eq!(uri1.other.get("key1").unwrap(), "value1");
+        }
+
+        #[test]
+        fn does_not_override_existing_attributes() {
+            let mut uri1 = Pkcs11Uri::parse(
+                "pkcs11:token=token1;serial=serial1;id=%01;object=object1;key1=value1",
+            )
+            .unwrap();
+            let uri2 = Pkcs11Uri::parse(
+                "pkcs11:token=token2;serial=serial2;id=%02;object=object2;key2=value2",
+            )
+            .unwrap();
+
+            uri1.append_attributes(uri2);
+
+            assert_eq!(uri1.token.unwrap(), "token1");
+            assert_eq!(uri1.serial.unwrap(), "serial1");
+            assert_eq!(uri1.id, Some(vec![0x01]));
+            assert_eq!(uri1.object.unwrap(), "object1");
+            assert_eq!(uri1.other.get("key1").unwrap(), "value1");
+            assert_eq!(uri1.other.get("key2").unwrap(), "value2");
         }
     }
 }
