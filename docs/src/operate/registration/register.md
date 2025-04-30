@@ -7,10 +7,8 @@ description: Register child devices and services with %%te%%
 
 # REST APIs for Entity Management
 
-In addition to the MQTT APIs, %%te%% now supports the following REST APIs as well to manage entities with it:
-* Creation
-* Retrieval
-* Deletion
+%%te%% provides REST APIs to manage all the entities (devices and services) attached to a main device.
+These APIs let you create, retrieve, update and delete entities.
 
 When compared to the MQTT APIs, the REST APIs provide an added advantage of immediate feedback to the user,
 if the respective call succeeded or not, which is lacking with the MQTT APIs.
@@ -432,6 +430,50 @@ curl 'http://localhost:8000/te/v1/entities?parent=device/child2//&type=service'
     }
 ]
 ```
+## Update entity
+
+An existing entity can be updated using the PATCH API.
+But the updates are limited to the `@parent` and `@health` endpoints only.
+Other properties like `@type` and `@id` can not be updated after the registration.
+
+The `@parent` must be another device, as services cannot have children.
+Similarly, the `@health` endpoint must be a service, as only services publish their health statuses.
+The entities specified in either fields must be registered up-front, before they can be used.
+
+**Endpoint**
+
+```
+PATCH /v1/entities/{topic-id}
+```
+
+**Payload**
+
+```json
+{
+    "@parent": "{new-parent-topic-id}",
+    "@health": "{some-service-topic-id}"
+}
+```
+
+**Example**
+
+```bash
+curl http://localhost:8000/te/v1/entities/device/child01 \
+  -X PATCH \
+  -H "Content-Type: application/json" \
+  -d '{"@parent": "device/child0//"}'
+```
+
+**Responses**
+
+* 200: OK, with the updated entity definition on a successful update
+  ```json
+  {
+      "@topic-id": "device/child01//",
+      "@parent": "device/child0//",
+      "@type": "child-device"
+  }
+  ```
 
 ## Delete entity
 

@@ -180,6 +180,19 @@ curl -fsSL https://thin-edge.io/install.sh | sh -s -- --package-manager tarball
 wget -O - https://thin-edge.io/install.sh | sh -s -- --package-manager tarball
 ```
 
+## Community plugins
+
+In addition to the core %%te%% packages,
+there are several community plugins developed and maintained by the %%te%% open source community.
+These plugins provide additional functionality and integrations for %%te%%,
+enabling users to extend the capabilities of their IoT solutions.
+Some of the popular community plugins are listed [here](../operate/plugins/index.md).
+
+:::note
+The community plugins maintained by the %%te%% team are hosted in a separate [community repository on Cloudsmith](https://cloudsmith.io/~thinedge/repos/community/packages).
+Instructions to setup this repo are documented [here](https://cloudsmith.io/~thinedge/repos/community/setup).
+:::
+
 ## Package repository hosting
 
 [_![Hosted By: Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&style=for-the-badge)_](https://cloudsmith.com)
