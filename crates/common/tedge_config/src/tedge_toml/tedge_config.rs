@@ -861,6 +861,9 @@ define_tedge_config! {
         /// The password for the proxy connection to the cloud MQTT broker
         password: String,
 
+        /// The "no-proxy" configuration, a comma-separated list of hosts to
+        /// bypass the configured proxy for
+        #[tedge_config(example = "127.0.0.1,example.com,192.168.1.0/24")]
         no_proxy: String,
     },
 }
