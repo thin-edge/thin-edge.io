@@ -12,7 +12,10 @@ use camino::Utf8PathBuf;
 use cryptoki::context::CInitializeArgs;
 use cryptoki::context::Pkcs11;
 use cryptoki::error::Error;
+use cryptoki::mechanism::rsa::PkcsMgfType;
+use cryptoki::mechanism::rsa::PkcsPssParams;
 use cryptoki::mechanism::Mechanism;
+use cryptoki::mechanism::MechanismType;
 use cryptoki::object::Attribute;
 use cryptoki::object::AttributeType;
 use cryptoki::object::KeyType;
@@ -241,24 +244,7 @@ impl PkcsSigner {
         }
     }
 
-    fn get_mechanism(&self) -> Result<Mechanism, rustls::Error> {
-        trace!("Getting mechanism from chosen scheme: {:?}", self.scheme);
-        match self.scheme {
-            SignatureScheme::ED25519 => Ok(Mechanism::Eddsa),
-            SignatureScheme::ECDSA_NISTP256_SHA256 => Ok(Mechanism::EcdsaSha256),
-            SignatureScheme::ECDSA_NISTP384_SHA384 => Ok(Mechanism::EcdsaSha384),
-            SignatureScheme::ECDSA_NISTP521_SHA512 => Ok(Mechanism::EcdsaSha512),
-            SignatureScheme::RSA_PKCS1_SHA1 => Ok(Mechanism::Sha1RsaPkcs),
-            SignatureScheme::RSA_PKCS1_SHA256 => Ok(Mechanism::Sha256RsaPkcs),
-            SignatureScheme::RSA_PKCS1_SHA384 => Ok(Mechanism::Sha384RsaPkcs),
-            SignatureScheme::RSA_PKCS1_SHA512 => Ok(Mechanism::Sha512RsaPkcs),
-            _ => Err(rustls::Error::General(
-                "Unsupported signature scheme".to_owned(),
-            )),
-        }
-    }
-
-    pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
+    pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
         let session = self.pkcs11.session.lock().unwrap();
 
         let key_template = vec![
@@ -269,13 +255,41 @@ impl PkcsSigner {
 
         let key = session
             .find_objects(&key_template)
-            .map_err(|_| rustls::Error::General("pkcs11: Failed to find objects".to_owned()))?
+            .context("pkcs11: Failed to find objects")?
             .into_iter()
             .next()
-            .ok_or_else(|| rustls::Error::General("pkcs11: No signing key found".to_owned()))?;
-        debug!(?key, "selected key to sign");
+            .context("pkcs11: No signing key found")?;
 
-        let mechanism = self.get_mechanism()?;
+        // we need to select a mechanism to use with a key, but we can't get a list of allowed mechanism from cryptoki
+        // and choose the best among them, we have to select one
+
+        // NOTE: cryptoki has AttributeType::AllowedMechanisms, but when i use it in get_attributes() with opensc-pkcs11
+        // module it gets ignored (not present or supported) and with softhsm2 module it panics(seems to be an issue
+        // with cryptoki, but regardless):
+
+        // thread 'main' panicked at library/core/src/panicking.rs:218:5:
+        // unsafe precondition(s) violated: slice::from_raw_parts requires the pointer to be aligned and non-null, and the total size of the slice not to exceed `isize::MAX`
+        // note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+        // thread caused non-unwinding panic. aborting.
+        // Aborted (core dumped)
+
+        let keytype = session.get_attributes(key, &[AttributeType::KeyType])?;
+        let [Attribute::KeyType(keytype)] = keytype[..] else {
+            anyhow::bail!("Failed to obtain keytype")
+        };
+
+        let mechanism = match keytype {
+            KeyType::RSA => Mechanism::Sha256RsaPkcsPss(PkcsPssParams {
+                hash_alg: MechanismType::SHA256,
+                mgf: PkcsMgfType::MGF1_SHA256,
+                // RFC8446 4.2.3: RSASSA-PSS PSS algorithms: [...] The length of
+                // the Salt MUST be equal to the length of the digest algorithm
+                // SHA256: 256 bits = 32 bytes
+                s_len: 32.into(),
+            }),
+            KeyType::EC => Mechanism::EcdsaSha256,
+            _ => anyhow::bail!("Unsupported keytype"),
+        };
 
         let (mechanism, digest_mechanism) = match mechanism {
             Mechanism::EcdsaSha256 => (Mechanism::Ecdsa, Some(Mechanism::Sha256)),
@@ -285,6 +299,9 @@ impl PkcsSigner {
             Mechanism::Sha256RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha256)),
             Mechanism::Sha384RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha384)),
             Mechanism::Sha512RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha512)),
+            Mechanism::Sha256RsaPkcsPss(p) => (Mechanism::Sha256RsaPkcsPss(p), None),
+            Mechanism::Sha384RsaPkcsPss(p) => (Mechanism::Sha384RsaPkcsPss(p), None),
+            Mechanism::Sha512RsaPkcsPss(p) => (Mechanism::Sha512RsaPkcsPss(p), None),
             _ => {
                 warn!(?mechanism, "Unsupported mechanism, trying it out anyway.");
                 (Mechanism::Ecdsa, Some(Mechanism::Sha256))
@@ -301,23 +318,28 @@ impl PkcsSigner {
         } else {
             digest = session
                 .digest(&digest_mechanism.unwrap(), message)
-                .map_err(|err| {
-                    rustls::Error::General(format!("pkcs11: Failed to digest message: {:?}", err))
-                })?;
+                .context("pkcs11: Failed to digest message")?;
             &digest
         };
 
-        let signature_raw = session.sign(&mechanism, key, to_sign).map_err(|err| {
-            rustls::Error::General(format!("pkcs11: Failed to sign message: {:?}", err))
-        })?;
+        trace!(?mechanism, "Session::sign");
+        let signature_raw = session
+            .sign(&mechanism, key, to_sign)
+            .context("pkcs11: Failed to sign message")?;
 
         // Split raw signature into r and s values (assuming 32 bytes each)
         trace!("Signature (raw) len={:?}", signature_raw.len());
-        let r_bytes = &signature_raw[0..32];
-        let s_bytes = &signature_raw[32..];
-        let signature_asn1 = format_asn1_ecdsa_signature(r_bytes, s_bytes).map_err(|err| {
-            rustls::Error::General(format!("pkcs11: Failed to format signature: {:?}", err))
-        })?;
+        let signature_asn1 = match mechanism {
+            Mechanism::Ecdsa => {
+                let r_bytes = &signature_raw[0..32];
+                let s_bytes = &signature_raw[32..];
+
+                format_asn1_ecdsa_signature(r_bytes, s_bytes)
+                    .context("pkcs11: Failed to format signature")?
+            }
+
+            _ => signature_raw,
+        };
         trace!(
             "Encoded ASN.1 Signature: len={:?} {:?}",
             signature_asn1.len(),
@@ -329,7 +351,7 @@ impl PkcsSigner {
 
 impl Signer for PkcsSigner {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
-        Self::sign(self, message)
+        Self::sign(self, message).map_err(|e| rustls::Error::General(e.to_string()))
     }
 
     fn scheme(&self) -> SignatureScheme {
@@ -382,9 +404,12 @@ pub struct RSASigningKey {
 impl RSASigningKey {
     fn supported_schemes(&self) -> &[SignatureScheme] {
         &[
-            SignatureScheme::RSA_PKCS1_SHA256,
-            SignatureScheme::RSA_PKCS1_SHA384,
+            SignatureScheme::RSA_PSS_SHA512,
+            SignatureScheme::RSA_PSS_SHA384,
+            SignatureScheme::RSA_PSS_SHA256,
             SignatureScheme::RSA_PKCS1_SHA512,
+            SignatureScheme::RSA_PKCS1_SHA384,
+            SignatureScheme::RSA_PKCS1_SHA256,
         ]
     }
 }

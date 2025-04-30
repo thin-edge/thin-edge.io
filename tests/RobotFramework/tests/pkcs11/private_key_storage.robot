@@ -52,6 +52,24 @@ Select Private key using PKCS#11 URI
     Set tedge-p11-server Uri    value=pkcs11:token=tedge;object=tedge
     Tedge Reconnect Should Succeed
 
+Connects to C8y using an RSA key
+    [Documentation]    Test that we can connect to C8y using an RSA private key. At the time of writing the test
+    ...    `tedge cert create` by default uses an ECDSA keypair, so we have to generate it manually and upload it.
+    # set up an RSA key for tedge and upload it
+    Execute Command    softhsm2-util --init-token --free --label c8y-token-rsa --pin "123456" --so-pin "123456"
+    Execute Command
+    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey RSA --bits 4096 --label "c8y-key-rsa" "pkcs11:token=c8y-token-rsa" --outfile pubkey.pem
+    Execute Command
+    ...    cmd=GNUTLS_PIN=123456 certtool --generate-self-signed --template /etc/tedge/hsm/cert.template --outfile /etc/tedge/device-certs/tedge-certificate.pem --load-privkey "pkcs11:token=c8y-token-rsa;object=c8y-key-rsa"
+
+    Execute Command
+    ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
+    ...    log_output=${False}
+
+    Set tedge-p11-server Uri    value=pkcs11:token=c8y-token-rsa;object=c8y-key-rsa
+
+    Execute Command    tedge reconnect c8y
+
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
     ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0
