@@ -6,7 +6,7 @@ use crate::ConfigError;
 use anyhow::anyhow;
 use anyhow::Error;
 use camino::Utf8PathBuf;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use clap::Args;
 use reqwest::Body;
 use reqwest::Client;
@@ -217,7 +217,7 @@ impl BuildCommand for TEdgeHttpCli {
 
         let url = format!("{protocol}://{host}:{port}{uri}");
         let identity = config.http.client.auth.identity()?;
-        let client = http_client(config.cloud_root_certs(), identity.as_ref())?;
+        let client = http_client(config.cloud_root_certs()?, identity.as_ref())?;
         let action = self.into();
 
         Ok(HttpCommand {
@@ -294,8 +294,8 @@ fn https_if_some<T>(cert_path: &OptionalConfig<T>) -> &'static str {
     cert_path.or_none().map_or("http", |_| "https")
 }
 
-fn http_client(root_certs: CloudRootCerts, identity: Option<&Identity>) -> Result<Client, Error> {
-    let builder = root_certs.client_builder();
+fn http_client(http_config: CloudHttpConfig, identity: Option<&Identity>) -> Result<Client, Error> {
+    let builder = http_config.client_builder();
     let builder = if let Some(identity) = identity {
         builder.identity(identity.clone())
     } else {

@@ -19,7 +19,7 @@ use crate::Capabilities;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use flockfile::FlockfileError;
@@ -90,7 +90,7 @@ pub(crate) struct AgentConfig {
     pub tedge_http_host: Arc<str>,
     pub service: TEdgeConfigReaderService,
     pub identity: Option<Identity>,
-    pub cloud_root_certs: CloudRootCerts,
+    pub cloud_root_certs: CloudHttpConfig,
     pub fts_url: Arc<str>,
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
@@ -171,7 +171,7 @@ impl AgentConfig {
         let operations_dir = config_dir.join("operations");
 
         let identity = tedge_config.http.client.auth.identity()?;
-        let cloud_root_certs = tedge_config.cloud_root_certs();
+        let cloud_root_certs = tedge_config.cloud_root_certs()?;
 
         let is_sudo_enabled = tedge_config.sudo.enable;
 

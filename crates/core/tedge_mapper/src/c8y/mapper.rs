@@ -1,5 +1,6 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
+use crate::core::mqtt::configure_proxy;
 use anyhow::Context;
 use async_trait::async_trait;
 use c8y_api::http_proxy::read_c8y_credentials;
@@ -28,6 +29,8 @@ use tedge_mqtt_bridge::QoS;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
+use tracing::warn;
+use yansi::Paint;
 
 pub struct CumulocityMapper {
     pub profile: Option<ProfileName>,
@@ -221,6 +224,8 @@ impl TEdgeComponent for CumulocityMapper {
             });
             cloud_config.set_keep_alive(c8y_config.bridge.keepalive_interval.duration());
 
+            configure_proxy(&tedge_config, &mut cloud_config)?;
+
             runtime
                 .spawn(
                     MqttBridgeActorBuilder::new(
@@ -233,6 +238,8 @@ impl TEdgeComponent for CumulocityMapper {
                     .await,
                 )
                 .await?;
+        } else if tedge_config.proxy.address.or_none().is_some() {
+            warn!("`proxy.address` is configured without the built-in bridge enabled. The bridge MQTT connection to the cloud will {} communicate via the configured proxy.", "not".bold())
         }
 
         let mut http_actor = HttpActor::new(tedge_config.http.client_tls_config()?).builder();
@@ -243,7 +250,7 @@ impl TEdgeComponent for CumulocityMapper {
         let mut timer_actor = TimerActor::builder();
 
         let identity = tedge_config.http.client.auth.identity()?;
-        let cloud_root_certs = tedge_config.cloud_root_certs();
+        let cloud_root_certs = tedge_config.cloud_root_certs()?;
         let mut uploader_actor =
             UploaderActor::new(identity.clone(), cloud_root_certs.clone()).builder();
         let mut downloader_actor = DownloaderActor::new(identity, cloud_root_certs).builder();

@@ -1,0 +1,11 @@
+[Unit]
+Description=gost http proxy service
+After=syslog.target network-online.target
+
+[Service]
+User=gost
+ExecStart=/usr/bin/gost -L http://127.0.0.1:8080
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

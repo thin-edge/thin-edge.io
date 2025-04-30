@@ -8,7 +8,7 @@ use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::OffsetDateTime;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use reqwest::multipart;
 use reqwest::Identity;
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ use tedge_utils::file::path_exists;
 pub struct C8yUpload {
     /// TLS Client configuration
     pub identity: Option<Identity>,
-    pub cloud_root_certs: CloudRootCerts,
+    pub cloud_http_config: CloudHttpConfig,
 
     /// Device identifier
     pub device_id: String,
@@ -64,7 +64,7 @@ impl Command for C8yUpload {
 
 impl C8yUpload {
     fn client(&self) -> Result<reqwest::Client, Error> {
-        let builder = self.cloud_root_certs.client_builder();
+        let builder = self.cloud_http_config.client_builder();
         let builder = if let Some(identity) = &self.identity {
             builder.identity(identity.clone())
         } else {
@@ -186,7 +186,7 @@ mod tests {
 
         C8yUpload {
             identity: None,
-            cloud_root_certs: CloudRootCerts::from([]),
+            cloud_http_config: CloudHttpConfig::test_value(),
             device_id: device_id.to_string(),
             c8y: C8yEndPoint::new("test.c8y.com", "test.c8y.com", proxy),
             event_type: c8y_event.event_type,

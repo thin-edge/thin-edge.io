@@ -1,3 +1,4 @@
+use super::config::ProxyWrapper;
 use super::BridgeConfig;
 use crate::bridge::config::BridgeLocation;
 use camino::Utf8PathBuf;
@@ -25,6 +26,7 @@ pub struct BridgeConfigAzureParams {
     pub profile_name: Option<ProfileName>,
     pub mqtt_schema: MqttSchema,
     pub keepalive_interval: Duration,
+    pub proxy: Option<rumqttc::Proxy>,
 }
 
 impl From<BridgeConfigAzureParams> for BridgeConfig {
@@ -41,6 +43,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             profile_name,
             mqtt_schema,
             keepalive_interval,
+            proxy,
         } = params;
 
         let address = mqtt_host.clone();
@@ -108,6 +111,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval,
+            proxy: proxy.map(ProxyWrapper),
         }
     }
 }
@@ -128,6 +132,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         profile_name: None,
         mqtt_schema: MqttSchema::with_root("te".into()),
         keepalive_interval: Duration::from_secs(60),
+        proxy: None,
     };
 
     let bridge = BridgeConfig::from(params);
@@ -169,6 +174,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         auth_type: AuthType::Certificate,
         mosquitto_version: None,
         keepalive_interval: Duration::from_secs(60),
+        proxy: None,
     };
 
     assert_eq!(bridge, expected);
@@ -192,6 +198,7 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
         profile_name: Some("profile".parse().unwrap()),
         mqtt_schema: MqttSchema::with_root("te".into()),
         keepalive_interval: Duration::from_secs(60),
+        proxy: None,
     };
 
     let bridge = BridgeConfig::from(params);
@@ -234,6 +241,7 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
         auth_type: AuthType::Certificate,
         mosquitto_version: None,
         keepalive_interval: Duration::from_secs(60),
+        proxy: None,
     };
 
     assert_eq!(bridge, expected);

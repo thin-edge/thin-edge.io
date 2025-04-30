@@ -6,19 +6,41 @@ use std::fs::File;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
-pub struct CloudRootCerts {
+pub struct CloudHttpConfig {
     certificates: Arc<[Certificate]>,
+    proxy: Option<reqwest::Proxy>,
 }
 
-impl CloudRootCerts {
+impl CloudHttpConfig {
+    pub fn new(certificates: impl Into<Arc<[Certificate]>>, proxy: Option<reqwest::Proxy>) -> Self {
+        Self {
+            certificates: certificates.into(),
+            proxy,
+        }
+    }
+
+    pub fn test_value() -> Self {
+        Self {
+            certificates: Arc::new([]),
+            proxy: None,
+        }
+    }
+
     #[allow(clippy::disallowed_types)]
     pub fn client_builder(&self) -> reqwest::ClientBuilder {
-        self.certificates
+        let builder = self
+            .certificates
             .iter()
             .cloned()
             .fold(reqwest::ClientBuilder::new(), |builder, cert| {
                 builder.add_root_certificate(cert)
-            })
+            });
+
+        if let Some(proxy) = self.proxy.clone() {
+            builder.proxy(proxy)
+        } else {
+            builder.no_proxy()
+        }
     }
 
     #[allow(clippy::disallowed_types)]
@@ -26,20 +48,6 @@ impl CloudRootCerts {
         self.client_builder()
             .build()
             .expect("Valid reqwest client builder configuration")
-    }
-}
-
-impl From<Arc<[Certificate]>> for CloudRootCerts {
-    fn from(certificates: Arc<[Certificate]>) -> Self {
-        Self { certificates }
-    }
-}
-
-impl From<[Certificate; 0]> for CloudRootCerts {
-    fn from(certificates: [Certificate; 0]) -> Self {
-        Self {
-            certificates: Arc::new(certificates),
-        }
     }
 }
 

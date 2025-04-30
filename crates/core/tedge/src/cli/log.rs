@@ -10,6 +10,7 @@ use crate::system_services::SystemServiceError;
 use crate::system_services::SystemServiceManager;
 use camino::Utf8Path;
 use tedge_config::models::auth_method::AuthType;
+use tedge_config::models::proxy_url::ProxyUrl;
 use tedge_config::tedge_toml::MultiError;
 use yansi::Paint as _;
 
@@ -256,10 +257,13 @@ pub struct ConfigLogger<'a> {
     cloud: &'a MaybeBorrowedCloud<'a>,
     credentials_path: Option<&'a Utf8Path>,
     cryptoki: bool,
+    proxy_url: Option<&'a ProxyUrl>,
+    proxy_username: Option<&'a str>,
 }
 
 impl<'a> ConfigLogger<'a> {
     /// Print a summary of the bridge config to stdout
+    #[allow(clippy::too_many_arguments)]
     pub fn log(
         title: impl Into<Cow<'static, str>>,
         config: &'a BridgeConfig,
@@ -267,6 +271,8 @@ impl<'a> ConfigLogger<'a> {
         cloud: &'a MaybeBorrowedCloud<'a>,
         credentials_path: Option<&'a Utf8Path>,
         use_cryptoki: bool,
+        proxy_url: Option<&'a ProxyUrl>,
+        proxy_username: Option<&'a str>,
     ) {
         println!(
             "{}",
@@ -281,7 +287,9 @@ impl<'a> ConfigLogger<'a> {
                 service_manager,
                 mosquitto_version: config.mosquitto_version.as_deref(),
                 cloud,
-                cryptoki: use_cryptoki
+                cryptoki: use_cryptoki,
+                proxy_url,
+                proxy_username,
             }
         )
     }
@@ -322,6 +330,19 @@ impl fmt::Display for ConfigLogger<'_> {
         self.log_single_entry(f, "service manager", &self.service_manager.name())?;
         if let Some(mosquitto_version) = self.mosquitto_version {
             self.log_single_entry(f, "mosquitto version", &mosquitto_version)?;
+        }
+        if let Some(proxy) = self.proxy_url {
+            if let Some(username) = self.proxy_username {
+                let mut url = proxy.url();
+                // It is an HTTP URL, we can supply credentials, there shouldn't be any errors
+                let _ = url.set_username(username);
+                let _ = url.set_password(Some("******"));
+                self.log_single_entry(f, "proxy_url", &url)?;
+            } else {
+                self.log_single_entry(f, "proxy_url", &proxy.url())?;
+            }
+        } else {
+            self.log_single_entry(f, "proxy", &"Not configured")?;
         }
 
         Ok(())

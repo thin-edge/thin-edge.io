@@ -36,6 +36,7 @@ tedge_signal_ext = { workspace = true }
 tedge_timer_ext = { workspace = true }
 tedge_uploader_ext = { workspace = true }
 tracing = { workspace = true }
+yansi = { workspace = true }
 
 [features]
 default = ["aws", "azure", "c8y"]

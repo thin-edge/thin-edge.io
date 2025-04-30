@@ -1,10 +1,12 @@
 mod version;
+use reqwest::NoProxy;
 use version::TEdgeTomlVersion;
 
 mod append_remove;
 pub use append_remove::AppendRemoveItem;
 
 use super::models::auth_method::AuthMethod;
+use super::models::proxy_url::ProxyUrl;
 use super::models::timestamp::TimeFormat;
 use super::models::AptConfig;
 use super::models::AutoFlag;
@@ -30,7 +32,7 @@ use certificate::parse_root_certificate::create_tls_config;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use certificate::read_trust_store;
 use certificate::CertificateError;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use certificate::PemCertificate;
 use doku::Document;
 use once_cell::sync::Lazy;
@@ -377,6 +379,7 @@ define_tedge_config! {
             /// The amount of time after which the bridge should send a ping if no other traffic has occurred
             #[tedge_config(example = "60s", default(from_str = "60s"))]
             keepalive_interval: SecondsOrHumanTime,
+
         },
 
         entity_store: {
@@ -874,12 +877,30 @@ define_tedge_config! {
         #[tedge_config(default(value = true), example = "true", example = "false")]
         enable: bool,
     },
+
+    proxy: {
+        /// The address (scheme://address:port) of an HTTP CONNECT proxy to use
+        /// when connecting to external HTTP/MQTT services
+        #[doku(as = "String")]
+        address: ProxyUrl,
+
+        /// The username for the proxy connection to the cloud MQTT broker
+        username: String,
+
+        /// The password for the proxy connection to the cloud MQTT broker
+        password: String,
+
+        /// The "no-proxy" configuration, a comma-separated list of hosts to
+        /// bypass the configured proxy for
+        #[tedge_config(example = "127.0.0.1,example.com,192.168.1.0/24")]
+        no_proxy: String,
+    },
 }
 
 static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();
 
 impl TEdgeConfigReader {
-    pub fn cloud_root_certs(&self) -> CloudRootCerts {
+    pub fn cloud_root_certs(&self) -> anyhow::Result<CloudHttpConfig> {
         let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
             let c8y_roots = self.c8y.entries().flat_map(|(key, c8y)| {
                 read_trust_store(&c8y.root_cert_path).unwrap_or_else(move |e| {
@@ -911,7 +932,29 @@ impl TEdgeConfigReader {
             c8y_roots.chain(az_roots).chain(aws_roots).collect()
         });
 
-        CloudRootCerts::from(roots.clone())
+        let proxy = if let Some(address) = self.proxy.address.or_none() {
+            let url = address.url();
+            let no_proxy = self
+                .proxy
+                .no_proxy
+                .or_none()
+                .and_then(|s| NoProxy::from_string(s))
+                .or_else(NoProxy::from_env);
+            let mut proxy = reqwest::Proxy::all(url)
+                .context("Failed to configure HTTP proxy connection")?
+                .no_proxy(no_proxy);
+            if let Some((username, password)) =
+                all_or_nothing((self.proxy.username.as_ref(), self.proxy.password.as_ref()))
+                    .map_err(|e| anyhow::anyhow!("{}", e))?
+            {
+                proxy = proxy.basic_auth(username, password)
+            }
+            Some(proxy)
+        } else {
+            None
+        };
+
+        Ok(CloudHttpConfig::new(roots.clone(), proxy))
     }
 
     pub fn cloud_client_tls_config(&self) -> rustls::ClientConfig {

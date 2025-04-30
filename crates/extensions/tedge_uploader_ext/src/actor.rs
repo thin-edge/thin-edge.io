@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use log::info;
 use reqwest::Identity;
 use tedge_actors::Sequential;
@@ -85,11 +85,11 @@ pub type UploadResult = Result<UploadResponse, UploadError>;
 pub struct UploaderActor {
     config: ServerConfig,
     identity: Option<Identity>,
-    cloud_root_certs: CloudRootCerts,
+    cloud_root_certs: CloudHttpConfig,
 }
 
 impl UploaderActor {
-    pub fn new(identity: Option<Identity>, cloud_root_certs: CloudRootCerts) -> Self {
+    pub fn new(identity: Option<Identity>, cloud_root_certs: CloudHttpConfig) -> Self {
         Self {
             config: ServerConfig::default(),
             identity,

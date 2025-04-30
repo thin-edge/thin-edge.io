@@ -3,7 +3,7 @@ use std::io::Write;
 use std::time::Duration;
 
 use camino::Utf8Path;
-use certificate::CloudRootCerts;
+use certificate::CloudHttpConfig;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynError;
 use tedge_test_utils::fs::TempTedgeDir;
@@ -20,7 +20,7 @@ async fn spawn_uploader_actor() -> ClientMessageBox<(String, UploadRequest), (St
 {
     let identity = None;
     let mut uploader_actor_builder =
-        UploaderActor::new(identity, CloudRootCerts::from([])).builder();
+        UploaderActor::new(identity, CloudHttpConfig::test_value()).builder();
     let requester = ClientMessageBox::new(&mut uploader_actor_builder);
 
     tokio::spawn(uploader_actor_builder.run());

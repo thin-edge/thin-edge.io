@@ -11,7 +11,8 @@ use tedge_config::TEdgeConfigLocation;
 use tedge_utils::paths::DraftFile;
 use tokio::io::AsyncWriteExt;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct BridgeConfig {
     pub cloud_name: String,
     // XXX: having file name squished together with 20 fields which go into file content is a bit obscure
@@ -42,7 +43,19 @@ pub struct BridgeConfig {
     pub auth_type: AuthType,
     pub mosquitto_version: Option<String>,
     pub keepalive_interval: Duration,
+    pub proxy: Option<ProxyWrapper>,
 }
+
+#[derive(Debug)]
+pub struct ProxyWrapper(pub rumqttc::Proxy);
+
+impl PartialEq for ProxyWrapper {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.addr == other.0.addr && self.0.port == other.0.port
+    }
+}
+
+impl Eq for ProxyWrapper {}
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum BridgeLocation {
@@ -205,6 +218,7 @@ mod test {
             auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            proxy: None,
         };
 
         let mut serialized_config = Vec::<u8>::new();
@@ -277,6 +291,7 @@ keepalive_interval 60
             auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            proxy: None,
         };
         let mut serialized_config = Vec::<u8>::new();
         bridge.serialize(&mut serialized_config).await?;
@@ -351,6 +366,7 @@ keepalive_interval 60
             auth_type: AuthType::Certificate,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            proxy: None,
         };
 
         let mut buffer = Vec::new();
@@ -425,6 +441,7 @@ keepalive_interval 60
             auth_type: AuthType::Basic,
             mosquitto_version: None,
             keepalive_interval: Duration::from_secs(60),
+            proxy: None,
         };
 
         let mut buffer = Vec::new();

@@ -18,6 +18,9 @@ RUN apt-get -y update \
     netcat-openbsd \
     iputils-ping \
     net-tools \
+    iptables \
+    iptables-persistent \
+    netfilter-persistent \
     # json tools (for tests)
     jq \
     jo \
@@ -46,6 +49,19 @@ RUN apt-get -y update \
 #    && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install -t bookworm-backports \
 #        mosquitto \
 #        mosquitto-clients
+
+# Install gost used for http proxy tests
+RUN case "$(uname -m)" in \
+         x86_64|amd64)  GOST_ARCH=amd64  ;; \
+         aarch64|arm64)  GOST_ARCH=arm64 ;; \
+         *) echo "Unsupported target platform: $(uname -m)"; exit 2 ;; \
+    esac \
+    && wget "https://github.com/go-gost/gost/releases/download/v3.0.0/gost_3.0.0_linux_${GOST_ARCH}.tar.gz" -O /tmp/gost.tar.gz \
+    && tar xvzf /tmp/gost.tar.gz -C /usr/bin/ gost \
+    # add user/group for gost to run as a service
+    && groupadd --system gost \
+    && useradd --system --no-create-home --shell /sbin/nologin --gid gost gost
+COPY files/gost-http-proxy.service /etc/systemd/system/
 
 # Remove unnecessary systemd services
 RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
