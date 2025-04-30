@@ -130,6 +130,12 @@ define_tedge_config! {
         #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(function = "default_device_csr"), reader(private))]
         csr_path: AbsolutePath,
 
+        /// A PKCS#11 URI of the private key.
+        ///
+        /// See RFC #7512.
+        #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
+        key_uri: Arc<str>,
+
         cryptoki: {
             /// Whether to use a Hardware Security Module for authenticating the MQTT connection with the cloud.
             ///
@@ -150,10 +156,15 @@ define_tedge_config! {
             #[tedge_config(example = "123456", default(value = "123456"))]
             pin: Arc<str>,
 
-            /// A URI of the token/object to use.
+            /// A URI of the token/object to be used by tedge-p11-server.
             ///
             /// See RFC #7512.
-            #[tedge_config(example = "pkcs11:model=PKCS%2315%20emulated")]
+            // NOTE: this field isn't actually used by anything in tedge-config yet - it can appear in tedge.toml though
+            // because it's read by tedge-p11-server crate, but the crate doesn't use tedge-config to read it (because
+            // adding tedge-config as dependency would introduce dependency cycle) but defines the schema itself. So
+            // while this field could be removed and nothing would break, it's kept to inform readers that such field
+            // can appear and to make tedge-p11-server actually use this field here once dependency cycles are resolved.
+            #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
             uri: Arc<str>,
 
             /// A path to the tedge-p11-server socket.
@@ -235,6 +246,12 @@ define_tedge_config! {
             /// Path where the device's certificate signing request is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
             csr_path: AbsolutePath,
+
+            /// A PKCS#11 URI of the private key.
+            ///
+            /// See RFC #7512.
+            #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
+            key_uri: Arc<str>,
         },
 
         smartrest: {
@@ -434,6 +451,12 @@ define_tedge_config! {
             /// Path where the device's certificate signing request is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
             csr_path: AbsolutePath,
+
+            /// A PKCS#11 URI of the private key.
+            ///
+            /// See RFC #7512.
+            #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
+            key_uri: Arc<str>,
         },
 
         mapper: {
@@ -504,6 +527,12 @@ define_tedge_config! {
             /// Path where the device's certificate signing request is stored
             #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
             csr_path: AbsolutePath,
+
+            /// A PKCS#11 URI of the private key.
+            ///
+            /// See RFC #7512.
+            #[tedge_config(example = "pkcs11:model=PKCS%2315%20emulated")]
+            key_uri: Arc<str>,
         },
 
         mapper: {
@@ -954,6 +983,7 @@ pub trait CloudConfig {
     fn device_key_path(&self) -> &Utf8Path;
     fn device_cert_path(&self) -> &Utf8Path;
     fn root_cert_path(&self) -> &Utf8Path;
+    fn key_uri(&self) -> Option<Arc<str>>;
 }
 
 impl CloudConfig for TEdgeConfigReaderC8y {
@@ -967,6 +997,10 @@ impl CloudConfig for TEdgeConfigReaderC8y {
 
     fn root_cert_path(&self) -> &Utf8Path {
         &self.root_cert_path
+    }
+
+    fn key_uri(&self) -> Option<Arc<str>> {
+        self.device.key_uri.or_none().cloned()
     }
 }
 
@@ -982,6 +1016,10 @@ impl CloudConfig for TEdgeConfigReaderAz {
     fn root_cert_path(&self) -> &Utf8Path {
         &self.root_cert_path
     }
+
+    fn key_uri(&self) -> Option<Arc<str>> {
+        self.device.key_uri.or_none().cloned()
+    }
 }
 
 impl CloudConfig for TEdgeConfigReaderAws {
@@ -995,6 +1033,10 @@ impl CloudConfig for TEdgeConfigReaderAws {
 
     fn root_cert_path(&self) -> &Utf8Path {
         &self.root_cert_path
+    }
+
+    fn key_uri(&self) -> Option<Arc<str>> {
+        self.device.key_uri.or_none().cloned()
     }
 }
 

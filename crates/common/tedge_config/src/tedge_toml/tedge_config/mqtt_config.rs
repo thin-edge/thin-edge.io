@@ -14,7 +14,7 @@ use certificate::CertificateError;
 use tedge_config_macros::all_or_nothing;
 
 use super::CloudConfig;
-use super::TEdgeConfigReaderDeviceCryptoki;
+use super::TEdgeConfigReaderDevice;
 
 use certificate::parse_root_certificate::CryptokiConfig;
 use certificate::parse_root_certificate::CryptokiConfigDirect;
@@ -160,7 +160,7 @@ impl TEdgeConfig {
         cloud: &dyn CloudConfig,
     ) -> anyhow::Result<MqttAuthConfigCloudBroker> {
         // if client cert is set, then either cryptoki or key file must be set
-        let client_auth = match self.device.cryptoki.config()? {
+        let client_auth = match self.device.cryptoki_config(cloud)? {
             Some(cryptoki_config) => MqttAuthClientConfigCloudBroker {
                 cert_file: cloud.device_cert_path().to_path_buf(),
                 private_key: PrivateKeyType::Cryptoki(cryptoki_config),
@@ -212,22 +212,28 @@ impl TEdgeConfig {
     }
 }
 
-impl TEdgeConfigReaderDeviceCryptoki {
-    pub fn config(&self) -> Result<Option<CryptokiConfig>, anyhow::Error> {
-        match self.mode {
+impl TEdgeConfigReaderDevice {
+    pub fn cryptoki_config(
+        &self,
+        cloud: &dyn CloudConfig,
+    ) -> Result<Option<CryptokiConfig>, anyhow::Error> {
+        let cryptoki = &self.cryptoki;
+        let uri = cloud.key_uri().or(self.key_uri.or_none().cloned());
+        match cryptoki.mode {
             Cryptoki::Off => Ok(None),
             Cryptoki::Module => Ok(Some(CryptokiConfig::Direct(CryptokiConfigDirect {
-                module_path: self
+                module_path: cryptoki
                     .module_path
                     .or_config_not_set()
                     .context("required because `device.cryptoki.mode` is set to `module`")?
                     .clone()
                     .into(),
-                pin: AuthPin::new(self.pin.to_string()),
-                uri: self.uri.clone().into(),
+                pin: AuthPin::new(cryptoki.pin.to_string()),
+                uri,
             }))),
             Cryptoki::Socket => Ok(Some(CryptokiConfig::SocketService {
-                socket_path: self.socket_path.clone(),
+                socket_path: cryptoki.socket_path.clone(),
+                uri,
             })),
         }
     }

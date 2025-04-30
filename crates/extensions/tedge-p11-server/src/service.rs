@@ -9,6 +9,7 @@ use rustls::sign::SigningKey;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::instrument;
+use tracing::trace;
 use tracing::warn;
 
 pub trait SigningService {
@@ -27,7 +28,7 @@ impl TedgeP11Service {
         let cryptoki = Cryptoki::new(config).context("Failed to load cryptoki library")?;
 
         // try to find a key on startup to see if requests succeed if nothing changes
-        if cryptoki.signing_key().is_err() {
+        if cryptoki.signing_key(None).is_err() {
             warn!("No signing key found");
         }
 
@@ -38,11 +39,13 @@ impl TedgeP11Service {
 impl SigningService for TedgeP11Service {
     #[instrument(skip_all)]
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse> {
+        trace!(?request);
         let offered = request.offered.into_iter().map(|s| s.0).collect::<Vec<_>>();
+        let uri = request.uri;
 
         let signing_key = self
             .cryptoki
-            .signing_key()
+            .signing_key(uri.as_deref())
             .context("Failed to find a signing key")?;
 
         let signer = signing_key.choose_scheme(&offered);
@@ -63,9 +66,11 @@ impl SigningService for TedgeP11Service {
 
     #[instrument(skip_all)]
     fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse> {
+        trace!(?request);
+        let uri = request.uri;
         let signing_key = self
             .cryptoki
-            .signing_key()
+            .signing_key(uri.as_deref())
             .context("Failed to find a signing key")?;
 
         let session = match signing_key {
@@ -83,6 +88,7 @@ impl SigningService for TedgeP11Service {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChooseSchemeRequest {
     pub offered: Vec<SignatureScheme>,
+    pub uri: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +100,7 @@ pub struct ChooseSchemeResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignRequest {
     pub to_sign: Vec<u8>,
+    pub uri: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

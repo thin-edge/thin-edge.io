@@ -15,7 +15,10 @@ use crate::pkcs11::CryptokiConfigDirect;
 #[derive(Debug, Clone)]
 pub enum CryptokiConfig {
     Direct(CryptokiConfigDirect),
-    SocketService { socket_path: Utf8PathBuf },
+    SocketService {
+        socket_path: Utf8PathBuf,
+        uri: Option<Arc<str>>,
+    },
 }
 
 /// Returns a rustls SigningKey that depending on the config, either connects to
@@ -23,16 +26,18 @@ pub enum CryptokiConfig {
 pub fn signing_key(config: CryptokiConfig) -> anyhow::Result<Arc<dyn SigningKey>> {
     let signing_key: Arc<dyn SigningKey> = match config {
         CryptokiConfig::Direct(config_direct) => {
+            let uri = config_direct.uri.clone();
             let cryptoki =
                 Cryptoki::new(config_direct).context("Failed to load cryptoki library")?;
             Arc::new(
                 cryptoki
-                    .signing_key()
+                    .signing_key(uri.as_deref())
                     .context("failed to create a TLS signer using PKCS#11 device")?,
             )
         }
-        CryptokiConfig::SocketService { socket_path } => Arc::new(TedgeP11ClientSigningKey {
+        CryptokiConfig::SocketService { socket_path, uri } => Arc::new(TedgeP11ClientSigningKey {
             socket_path: Arc::from(Path::new(&socket_path)),
+            uri,
         }),
     };
 
@@ -42,6 +47,7 @@ pub fn signing_key(config: CryptokiConfig) -> anyhow::Result<Arc<dyn SigningKey>
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TedgeP11ClientSigningKey {
     pub socket_path: Arc<Path>,
+    pub uri: Option<Arc<str>>,
 }
 
 impl SigningKey for TedgeP11ClientSigningKey {
@@ -53,7 +59,8 @@ impl SigningKey for TedgeP11ClientSigningKey {
         let client = TedgeP11Client {
             socket_path: self.socket_path.clone(),
         };
-        let response = match client.choose_scheme(offered) {
+        let uri = self.uri.as_ref().map(|s| s.to_string());
+        let response = match client.choose_scheme(offered, uri) {
             Ok(response) => response,
             Err(err) => {
                 error!(?err, "Failed to choose scheme using cryptoki signer");
@@ -65,6 +72,7 @@ impl SigningKey for TedgeP11ClientSigningKey {
         Some(Box::new(TedgeP11ClientSigner {
             socket_path: self.socket_path.clone(),
             scheme,
+            uri: self.uri.clone(),
         }))
     }
 
@@ -83,6 +91,7 @@ impl SigningKey for TedgeP11ClientSigningKey {
 pub struct TedgeP11ClientSigner {
     pub socket_path: Arc<Path>,
     scheme: rustls::SignatureScheme,
+    pub uri: Option<Arc<str>>,
 }
 
 impl Signer for TedgeP11ClientSigner {
@@ -90,7 +99,7 @@ impl Signer for TedgeP11ClientSigner {
         let client = TedgeP11Client {
             socket_path: self.socket_path.clone(),
         };
-        let response = match client.sign(message) {
+        let response = match client.sign(message, self.uri.as_ref().map(|s| s.to_string())) {
             Ok(response) => response,
             Err(err) => {
                 return Err(rustls::Error::Other(rustls::OtherError(Arc::from(
