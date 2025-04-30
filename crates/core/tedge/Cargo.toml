@@ -47,7 +47,7 @@ serde_json = { workspace = true }
 strum_macros = { workspace = true }
 tedge-agent = { workspace = true }
 tedge-apt-plugin = { workspace = true }
-tedge-mapper = { workspace = true }
+tedge-mapper = { workspace = true, default-features = false }
 tedge-watchdog = { workspace = true }
 tedge-write = { workspace = true }
 tedge_api = { workspace = true }
@@ -77,6 +77,10 @@ x509-parser = { workspace = true }
 
 
 [features]
+default = ["aws", "azure", "c8y"]
+aws = ["tedge-mapper/aws"]
+azure = ["tedge-mapper/azure"]
+c8y = ["tedge-mapper/c8y"]
 integration-test = []
 
 [lints]

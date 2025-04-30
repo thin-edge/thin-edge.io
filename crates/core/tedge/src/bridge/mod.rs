@@ -3,8 +3,11 @@
 mod common_mosquitto_config;
 mod config;
 
+#[cfg(feature = "aws")]
 pub mod aws;
+#[cfg(feature = "azure")]
 pub mod azure;
+#[cfg(feature = "c8y")]
 pub mod c8y;
 
 pub use common_mosquitto_config::*;

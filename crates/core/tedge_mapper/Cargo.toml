@@ -12,12 +12,12 @@ repository = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws_mapper_ext = { workspace = true }
-az_mapper_ext = { workspace = true }
+aws_mapper_ext = { workspace = true, optional = true }
+az_mapper_ext = { workspace = true, optional = true }
 batcher = { workspace = true }
-c8y_api = { workspace = true }
-c8y_auth_proxy = { workspace = true }
-c8y_mapper_ext = { workspace = true }
+c8y_api = { workspace = true, optional = true }
+c8y_auth_proxy = { workspace = true, optional = true }
+c8y_mapper_ext = { workspace = true, optional = true }
 clap = { workspace = true }
 clock = { workspace = true }
 collectd_ext = { workspace = true }
@@ -38,6 +38,10 @@ tedge_uploader_ext = { workspace = true }
 tracing = { workspace = true }
 
 [features]
+default = ["aws", "azure", "c8y"]
+aws = ["dep:aws_mapper_ext"]
+azure = ["dep:az_mapper_ext"]
+c8y = ["dep:c8y_mapper_ext", "dep:c8y_api", "dep:c8y_auth_proxy"]
 integration-test = []
 
 [lints]

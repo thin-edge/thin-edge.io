@@ -43,7 +43,7 @@ mqtt_tests = { path = "crates/tests/mqtt_tests" }
 plugin_sm = { path = "crates/core/plugin_sm" }
 tedge-agent = { path = "crates/core/tedge_agent" }
 tedge-apt-plugin = { path = "plugins/tedge_apt_plugin" }
-tedge-mapper = { path = "crates/core/tedge_mapper" }
+tedge-mapper = { path = "crates/core/tedge_mapper", default-features = false }
 tedge-p11-server = { path = "crates/extensions/tedge-p11-server" }
 tedge-watchdog = { path = "crates/core/tedge_watchdog" }
 tedge-write = { path = "crates/core/tedge_write" }

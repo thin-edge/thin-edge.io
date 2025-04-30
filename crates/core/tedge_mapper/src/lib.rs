@@ -1,7 +1,10 @@
 use std::fmt;
 
+#[cfg(feature = "aws")]
 use crate::aws::mapper::AwsMapper;
+#[cfg(feature = "azure")]
 use crate::az::mapper::AzureMapper;
+#[cfg(feature = "c8y")]
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
@@ -13,8 +16,11 @@ use tedge_config::log_init;
 use tedge_config::tedge_toml::ProfileName;
 use tracing::log::warn;
 
+#[cfg(feature = "aws")]
 mod aws;
+#[cfg(feature = "azure")]
 mod az;
+#[cfg(feature = "c8y")]
 mod c8y;
 mod collectd;
 mod core;
@@ -40,13 +46,16 @@ macro_rules! read_and_set_var {
 
 fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
+        #[cfg(feature = "azure")]
         MapperName::Az { profile } => Box::new(AzureMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
+        #[cfg(feature = "aws")]
         MapperName::Aws { profile } => Box::new(AwsMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
         MapperName::Collectd => Box::new(CollectdMapper),
+        #[cfg(feature = "c8y")]
         MapperName::C8y { profile } => Box::new(CumulocityMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
@@ -80,16 +89,19 @@ pub struct MapperOpt {
 #[derive(Debug, clap::Subcommand, Clone)]
 #[clap(rename_all = "snake_case")]
 pub enum MapperName {
+    #[cfg(feature = "azure")]
     Az {
         /// The cloud profile to use
         #[clap(long)]
         profile: Option<ProfileName>,
     },
+    #[cfg(feature = "aws")]
     Aws {
         /// The cloud profile to use
         #[clap(long)]
         profile: Option<ProfileName>,
     },
+    #[cfg(feature = "c8y")]
     C8y {
         /// The cloud profile to use
         #[clap(long)]
@@ -101,15 +113,21 @@ pub enum MapperName {
 impl fmt::Display for MapperName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            #[cfg(feature = "azure")]
             MapperName::Az { profile: None } => write!(f, "tedge-mapper-az"),
+            #[cfg(feature = "azure")]
             MapperName::Az {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-az@{profile}"),
+            #[cfg(feature = "aws")]
             MapperName::Aws { profile: None } => write!(f, "tedge-mapper-aws"),
+            #[cfg(feature = "aws")]
             MapperName::Aws {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-aws@{profile}"),
+            #[cfg(feature = "c8y")]
             MapperName::C8y { profile: None } => write!(f, "tedge-mapper-c8y"),
+            #[cfg(feature = "c8y")]
             MapperName::C8y {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-c8y@{profile}"),
