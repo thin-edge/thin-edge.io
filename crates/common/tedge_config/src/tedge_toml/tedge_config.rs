@@ -904,7 +904,6 @@ impl TEdgeConfigReader {
         });
 
         let proxy = if let Some(address) = self.proxy.address.or_none() {
-            // Unwrap should be safe here since address is valid from config, and ty can only be http or https
             let url = address.url();
             let no_proxy = self
                 .proxy
