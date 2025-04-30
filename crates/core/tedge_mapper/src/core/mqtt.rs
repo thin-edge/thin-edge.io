@@ -1,12 +1,12 @@
+use std::sync::Arc;
+use tedge_config::all_or_nothing;
+use tedge_config::models::proxy_scheme::ProxyScheme;
+use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::rumqttc::Proxy;
 use tedge_mqtt_bridge::rumqttc::ProxyAuth;
 use tedge_mqtt_bridge::rumqttc::ProxyType;
-use tedge_mqtt_bridge::rumqttc::Proxy;
-use tedge_config::TEdgeConfig;
-use tedge_mqtt_bridge::MqttOptions;
-use tedge_config::all_or_nothing;
-use std::sync::Arc;
-use tedge_config::models::proxy_scheme::ProxyScheme;
 use tedge_mqtt_bridge::rumqttc::TlsConfiguration;
+use tedge_mqtt_bridge::MqttOptions;
 
 pub fn configure_proxy(
     tedge_config: &TEdgeConfig,

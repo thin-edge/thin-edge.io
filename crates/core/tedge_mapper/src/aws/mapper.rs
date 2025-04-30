@@ -22,6 +22,7 @@ use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tracing::warn;
+use yansi::Paint;
 
 pub struct AwsMapper {
     pub profile: Option<ProfileName>,
@@ -74,6 +75,8 @@ impl TEdgeComponent for AwsMapper {
             )
             .await;
             runtime.spawn(bridge_actor).await?;
+        } else if tedge_config.proxy.address.or_none().is_some() {
+            warn!("`proxy.address` is configured without the built-in bridge enabled. The bridge MQTT connection to the cloud will {} communicate via the configured proxy.", "not".bold())
         }
         let clock = Box::new(WallClock);
         let aws_converter = AwsConverter::new(

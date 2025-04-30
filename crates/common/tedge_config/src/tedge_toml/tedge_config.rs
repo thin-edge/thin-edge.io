@@ -1,4 +1,5 @@
 mod version;
+use reqwest::NoProxy;
 use version::TEdgeTomlVersion;
 
 mod append_remove;
@@ -859,6 +860,8 @@ define_tedge_config! {
 
         /// The password for the proxy connection to the cloud MQTT broker
         password: String,
+
+        no_proxy: String,
     },
 }
 
@@ -900,8 +903,15 @@ impl TEdgeConfigReader {
         let proxy = if let Some(address) = self.proxy.address.or_none() {
             // Unwrap should be safe here since address is valid from config, and ty can only be http or https
             let url = address.url();
-            let mut proxy =
-                reqwest::Proxy::all(url).context("Failed to configure HTTP proxy connection")?;
+            let no_proxy = self
+                .proxy
+                .no_proxy
+                .or_none()
+                .and_then(|s| NoProxy::from_string(s))
+                .or_else(NoProxy::from_env);
+            let mut proxy = reqwest::Proxy::all(url)
+                .context("Failed to configure HTTP proxy connection")?
+                .no_proxy(no_proxy);
             if let Some((username, password)) =
                 all_or_nothing((self.proxy.username.as_ref(), self.proxy.password.as_ref()))
                     .map_err(|e| anyhow::anyhow!("{}", e))?

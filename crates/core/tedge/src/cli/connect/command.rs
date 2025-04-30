@@ -465,6 +465,9 @@ impl ConnectCommand {
 }
 
 fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyhow::Result<()> {
+    if !config.mqtt.bridge.built_in && config.proxy.address.or_none().is_some() {
+        warn!("`proxy.address` is configured without the built-in bridge enabled. The bridge MQTT connection to the cloud will {} communicate via the configured proxy.", "not".bold())
+    }
     match cloud {
         #[cfg(feature = "aws")]
         MaybeBorrowedCloud::Aws(_) => {

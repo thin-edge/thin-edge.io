@@ -4478,6 +4478,7 @@ dependencies = [
  "tedge_timer_ext",
  "tedge_uploader_ext",
  "tracing",
+ "yansi",
 ]
 
 [[package]]

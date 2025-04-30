@@ -1,5 +1,6 @@
 use super::ConnectError;
 use crate::bridge::BridgeConfig;
+use crate::bridge::BridgeLocation;
 use crate::cli::bridge_health_topic;
 use crate::cli::connect::CONNECTION_TIMEOUT;
 use crate::cli::connect::RESPONSE_TIMEOUT;
@@ -68,8 +69,13 @@ pub async fn create_device_with_direct_connection(
         mqtt_auth_config.to_rustls_client_config()?
     };
     mqtt_options.set_transport(Transport::tls_with_config(tls_config.into()));
-    if let Some(proxy) = &bridge_config.proxy {
-        mqtt_options.set_proxy(proxy.0.clone());
+
+    // Only connect via proxy if built-in bridge is enabled since the proxy is
+    // ignored when using mosquitto bridge
+    if bridge_config.bridge_location == BridgeLocation::BuiltIn {
+        if let Some(proxy) = &bridge_config.proxy {
+            mqtt_options.set_proxy(proxy.0.clone());
+        }
     }
 
     let (mut client, mut eventloop) = AsyncClient::new(mqtt_options, 10);

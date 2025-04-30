@@ -29,6 +29,8 @@ use tedge_mqtt_bridge::QoS;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
+use tracing::warn;
+use yansi::Paint;
 
 pub struct CumulocityMapper {
     pub profile: Option<ProfileName>,
@@ -236,6 +238,8 @@ impl TEdgeComponent for CumulocityMapper {
                     .await,
                 )
                 .await?;
+        } else if tedge_config.proxy.address.or_none().is_some() {
+            warn!("`proxy.address` is configured without the built-in bridge enabled. The bridge MQTT connection to the cloud will {} communicate via the configured proxy.", "not".bold())
         }
 
         let mut http_actor = HttpActor::new(tedge_config.http.client_tls_config()?).builder();
