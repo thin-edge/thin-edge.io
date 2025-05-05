@@ -64,7 +64,7 @@ async fn send_health_check_message_to_service_specific_topic() -> Result<(), any
 #[tokio::test]
 async fn health_check_set_init_and_last_will_message() -> Result<(), anyhow::Error> {
     let mut mqtt_config = MqttConfig::default();
-    let _ = spawn_a_health_check_actor("test", &mut mqtt_config).await;
+    let mut mqtt_box = spawn_a_health_check_actor("test", &mut mqtt_config).await;
 
     let expected_last_will = MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/test/status/health"),
@@ -72,6 +72,14 @@ async fn health_check_set_init_and_last_will_message() -> Result<(), anyhow::Err
     );
     let expected_last_will = expected_last_will.with_retain();
     assert_eq!(mqtt_config.last_will_message, Some(expected_last_will));
+
+    mqtt_box
+        .assert_received([MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/test"),
+            r#"{"@parent":"device/main//","@type":"service","name":"test","type":"service"}"#,
+        )
+        .with_retain()])
+        .await;
 
     Ok(())
 }
