@@ -4,14 +4,14 @@ tags: [Extend, Build]
 sidebar_position: 3
 ---
 
-This guide walks you through building a custom image using [Rugpi](https://github.com/silitics/rugpi). Rugpi is an open source tool to build images with support for robust Over-the-Air (OTA) updates. Currently it only supports Raspberry Pi devices, however in the future more device types may be considered.
+This guide walks you through building a custom image using [Rugix](https://github.com/silitics/rugix). Rugix is an open source tool to build images with support for robust Over-the-Air (OTA) updates. Currently it only supports Raspberry Pi devices, however in the future more device types may be considered.
 
-Rugpi is very beginner friendly compared to The Yocto Project, and has much shorter build times since it works by extending the official Raspberry Pi images with custom recipes which either install or configure components in the image, rather than rebuilding everything from scratch. Building an image with custom recipes only takes about 10 mins compared with the > 4 hours using The Yocto Project.
+Rugix is beginner friendly compared to The Yocto Project, and has much shorter build times since it works by extending the official Raspberry Pi images with custom recipes which either install or configure components in the image, rather than rebuilding everything from scratch. Building an image with custom recipes only takes about 10 mins compared with the > 4 hours using The Yocto Project.
 
 The instructions on this page can be used to build images for the following devices:
 
 * Raspberry Pi 1 (32 bit)
-* Raspberry Pi 2 (64 bit)
+* Raspberry Pi 2 (32 bit)
 * Raspberry Pi 3 (64 bit)
 * Raspberry Pi 4 / 400 (64 bit)
 * Raspberry Pi Compute Module 4 (64 bit)
@@ -19,25 +19,25 @@ The instructions on this page can be used to build images for the following devi
 * Raspberry Pi Zero W (32 bit)
 * Raspberry Pi Zero 2W (64 bit)
 
-Please check out the [official Rugpi documentation](https://oss.silitics.com/rugpi/) for more details on how to use and customize it.
+Please check out the [official Rugix documentation](https://oss.silitics.com/rugix/) for more details on how to use and customize it.
 
 ## Setting up your build system
 
-Building images using Rugpi is considerably faster and easier when compared to The Yocto Project, so it makes it a great tool for beginners.
+Building images using Rugix is considerably faster and easier when compared to The Yocto Project, so it makes it a great tool for beginners.
 
 The following tools are required to build an image:
 
 * Docker Engine
 
 :::tip
-Images can be built using Rugpi using a CI Workflow. An example for a Github Workflow is included in the template project.
+Images can be built using Rugix using a CI Workflow. An example for a Github Workflow is included in the template project.
 :::
 
 ## Building your image
 
-The [tedge-rugpi-images](https://github.com/thin-edge/tedge-rugpi-image) project includes out of the box configurations to perform robust Over-the-Air Operating System updates.
+The [tedge-rugix-images](https://github.com/thin-edge/tedge-rugix-image) project includes out of the box configurations to perform robust Over-the-Air Operating System updates.
 
-The [tedge-rugpi-core](https://github.com/thin-edge/tedge-rugpi-core) project contains the %%te%% specific recipes which are used to build the image.
+The [tedge-rugix-core](https://github.com/thin-edge/tedge-rugix-core) project contains the %%te%% specific recipes which are used to build the image.
 
 Feel free to clone the project if you want to make your own customizations, however please always refer back to the project if you run into any problems (as it may have changed in the meantime).
 
@@ -66,8 +66,8 @@ For other installation possibilities check out the [just documentation](https://
 1. Clone the project and change directory to the locally checked out folder
 
     ```sh
-    git clone https://github.com/thin-edge/tedge-rugpi-image.git
-    cd tedge-rugpi-image
+    git clone https://github.com/thin-edge/tedge-rugix-image.git
+    cd tedge-rugix-image
     ```
 
 2. Create a custom `.env` file which will be used to store secrets
@@ -120,33 +120,33 @@ Images can be built in MacOS or Linux environments (including WSL 2), however if
 1. Build an image for your device (machine)
 
     ```sh tab={"label":"Pi\tZero"}
-    just build-pizero
+    just SYSTEM=tedge-raspios-armhf build-image
     ```
 
     ```sh tab={"label":"Pi\t1"}
-    just build-pi1
+    just SYSTEM=tedge-raspios-armhf build-image
     ```    
 
     ```sh tab={"label":"Pi\t2"}
-    just build-pi2
+    just SYSTEM=tedge-raspios-armhf build-image
     ```
     ```sh tab={"label":"Pi\t3"}
-    just build-pi3
+    just SYSTEM=tedge-raspios-arm64 build-image
     ```
     ```sh tab={"label":"Pi\tZero2W"}
-    just build-pizero2w
+    just SYSTEM=tedge-raspios-arm64 build-image
     ```
 
     ```sh tab={"label":"Pi\t4\t(With\tFirmware)"}
-    just build-pi4-include-firmware
+    just SYSTEM=tedge-raspios-arm64-tryboot-pi4 build-image
     ```
 
     ```sh tab={"label":"Pi\t4\t(Without\tFirmware)"}
-    just build-pi4
+    just SYSTEM=tedge-raspios-arm64-tryboot build-image
     ```
 
     ```sh tab={"label":"Pi\t5"}
-    just build-pi5
+    just SYSTEM=tedge-raspios-arm64-tryboot build-image
     ```
 
     :::note
@@ -157,12 +157,44 @@ Images can be built in MacOS or Linux environments (including WSL 2), however if
 
 
 :::info
-The above tasks are actually just user-friendly helpers to make it easier to select the right image for your device, so some build-xxx tasks actually build the same output image (e.g. `build-pi4` and `build-pi5` produce the same image).
+If you want more control over the process you can use the command, and select one of the images as defined in the [rugix-bakery.toml](https://github.com/thin-edge/tedge-rugix-image/blob/main/rugix-bakery.toml)
 
-If you want more control over the process you can use the command, and select one of the images as defined in the [rugpi-bakery.toml](https://github.com/thin-edge/tedge-rugpi-image/blob/main/rugpi-bakery.toml)
-
-For more information about Rugpi repositories, layers and overall concepts please read the [official Rugpi documentation](https://oss.silitics.com/rugpi/docs/guide/system-customization/).
+For more information about Rugix repositories, layers and overall concepts please read the [official Rugix documentation](https://oss.silitics.com/rugix/docs/getting-started).
 :::
+
+For subsequent Over-the-Air (OTA) updates, you will have to build a bundle for the update (not the system image). Building an update bundle is very similar to building the system image, it just requires using the `build-bundle` task instead. B
+
+1. Build an update bundle for your device (machine) for usage with OTA updates
+
+    ```sh tab={"label":"Pi\tZero"}
+    just SYSTEM=tedge-raspios-armhf build-bundle
+    ```
+
+    ```sh tab={"label":"Pi\t1"}
+    just SYSTEM=tedge-raspios-armhf build-bundle
+    ```    
+
+    ```sh tab={"label":"Pi\t2"}
+    just SYSTEM=tedge-raspios-armhf build-bundle
+    ```
+    ```sh tab={"label":"Pi\t3"}
+    just SYSTEM=tedge-raspios-arm64 build-bundle
+    ```
+    ```sh tab={"label":"Pi\tZero2W"}
+    just SYSTEM=tedge-raspios-arm64 build-bundle
+    ```
+
+    ```sh tab={"label":"Pi\t4\t(With\tFirmware)"}
+    just SYSTEM=tedge-raspios-arm64-tryboot-pi4 build-bundle
+    ```
+
+    ```sh tab={"label":"Pi\t4\t(Without\tFirmware)"}
+    just SYSTEM=tedge-raspios-arm64-tryboot build-bundle
+    ```
+
+    ```sh tab={"label":"Pi\t5"}
+    just SYSTEM=tedge-raspios-arm64-tryboot build-bundle
+    ```
 
 
 ## Tips
@@ -212,19 +244,16 @@ INFO[0000] socket: unix:///Users/johnsmith/.colima/default/docker.sock
 
 ### Raspberry Pi 4 image selection
 
-Raspberry Pi 4 devices need to have their (EEPROM) firmware updated before the OTA updates can be issued. This is because the initial Raspberry Pi 4's were released without the [tryboot feature](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#fail-safe-os-updates-tryboot). The tryboot feature is used by Rugpi to provide the reliable partition switching between the A/B partitions. Raspberry Pi 5's have support for tryboot out of the box, so they do not require a EEPROM upgrade.
+Raspberry Pi 4 devices need to have their (EEPROM) firmware updated before the OTA updates can be issued. This is because the initial Raspberry Pi 4's were released without the [tryboot feature](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#fail-safe-os-updates-tryboot). The tryboot feature is used by Rugix to provide the reliable partition switching between the A/B partitions. Raspberry Pi 5's have support for tryboot out of the box, so they do not require a EEPROM upgrade.
 
 You can build an image which includes the required EEPROM firmware to enable the tryboot feature, however this image can only be used to deploy to Raspberry Pi 4 devices (not Raspberry Pi 5!)
 
 ```sh
-just build-pi4-include-firmware
+just SYSTEM=tedge-raspios-arm64-tryboot-pi4 build-image
 ```
 
 After the above image has been flashed to the device once, you can switch back to the image without the EEPROM firmware so that the same image can be used for both Raspberry Pi 4 and 5.
 
 ```sh
-just build-pi4
-
-# or
-just build-pi5
+just SYSTEM=tedge-raspios-arm64-tryboot build-image
 ```
