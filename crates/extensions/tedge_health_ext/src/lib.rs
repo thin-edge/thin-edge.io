@@ -4,6 +4,8 @@ mod actor;
 mod tests;
 
 use actor::HealthMonitorActor;
+use serde_json::json;
+use serde_json::Map;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
@@ -78,6 +80,12 @@ impl HealthMonitorBuilder {
         if service_type.is_empty() {
             service_type = "service"
         }
+        let mut twin_data = Map::new();
+        twin_data.insert("type".to_string(), json!(service_type));
+
+        if let Some(name) = service.service_topic_id.entity().default_service_name() {
+            twin_data.insert("name".to_string(), json!(name));
+        }
 
         let registration_message = EntityRegistrationMessage {
             topic_id: service_topic_id.entity().clone(),
@@ -85,10 +93,7 @@ impl HealthMonitorBuilder {
             r#type: EntityType::Service,
             parent: Some(service.device_topic_id.entity().clone()),
             health_endpoint: None,
-            twin_data: serde_json::json!({ "type": service_type })
-                .as_object()
-                .unwrap()
-                .to_owned(),
+            twin_data,
         };
         let registration_message = registration_message.to_mqtt_message(mqtt_schema);
 
