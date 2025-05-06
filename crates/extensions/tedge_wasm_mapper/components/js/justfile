@@ -1,0 +1,10 @@
+build-wasm *ARGS='deno run --allow-env --allow-read --allow-ffi --allow-write --allow-run componentize.mjs': build-container
+    mkdir -p build
+    docker run --rm -it \
+        --mount "type=bind,src=$PWD/src,target=/wasm/src" \
+        --mount "type=bind,src=$PWD/build,target=/wasm/build" \
+        wasm-js {{ARGS}}
+
+
+build-container *ARGS='':
+    docker build {{ARGS}} -t wasm-js .
