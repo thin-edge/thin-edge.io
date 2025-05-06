@@ -66,6 +66,18 @@ curl -fsSL https://thin-edge.io/install.sh | sh -s
 wget -O - https://thin-edge.io/install.sh | sh -s
 ```
 
+If the device is in a network behind a HTTP Proxy, then you will need to set the `https_proxy` environment variable before installing %%te%%.
+
+```sh
+export https_proxy="http://<username>:<password>@<ip>:<port>"
+
+# Without authentication
+export https_proxy="http://127.0.0.1:8080"
+
+# With authentication
+export https_proxy="http://user:password@127.0.0.1:8080"
+```
+
 After a successful installation, it is possible to use %%te%% via the CLI and use the tedge commands.
 
 :::info
