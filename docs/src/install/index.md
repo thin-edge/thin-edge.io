@@ -24,6 +24,18 @@ curl -fsSL https://thin-edge.io/install.sh | sh -s
 wget -O - https://thin-edge.io/install.sh | sh -s
 ```
 
+If the device is in a network behind a HTTP Proxy, then you will need to set the `https_proxy` environment variable before installing %%te%%.
+
+```sh
+export https_proxy="http://<username>:<password>@<ip>:<port>"
+
+# Without authentication
+export https_proxy="http://127.0.0.1:8080"
+
+# With authentication
+export https_proxy="http://user:password@127.0.0.1:8080"
+```
+
 ### Update using a package manager
 
 %%te%% and its components can be updated by running the install.sh script again, or using the Linux package manager on your distribution.
