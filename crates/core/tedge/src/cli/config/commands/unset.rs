@@ -19,6 +19,7 @@ impl Command for UnsetConfigCommand {
             .update_toml(&|dto, _reader| Ok(dto.try_unset_key(&self.key)?))
             .await
             .map_err(anyhow::Error::new)?;
+        tracing::info!(target: "Audit", "tedge config unset {}", &self.key);
         Ok(())
     }
 }
