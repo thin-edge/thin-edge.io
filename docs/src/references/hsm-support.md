@@ -30,54 +30,63 @@ This feature has the following related configuration options:
 <!-- maybe it would be better to use SoftHSM2 instead of a Yubikey so everyone can follow? -->
 <!-- also would be nice to write a test for this guide -->
 
-The following guide shows how to connect to Cumulocity using a PIV-capable Yubikey. The guide uses a
-Yubikey 5C NFC.
-
-Environment-related prerequisites:
-
-- a PKCS#11-capable device (e.g. Yubikey*)
-- a way to make the module accessible to tedge user and tedge processes
-- C runtime capable of loading dynamic modules (e.g. glibc or dynamically linked musl work, but
-  statically linked musl doesn't work)
+The following guide shows how to connect to Cumulocity using a PKCS #11 cryptographic token. Instead
+of using a dedicated hardware token, we'll create a software token using
+[SoftHSM2](https://github.com/softhsm/softHSMv2) and import currently used private key on it.
 
 ### Part 1: Setup the cryptographic token
 
-1. Make sure the Yubikey is connected.
-<!--is it possible to use a generic p11 client to setup the token instead of a yubikey-specific client?-->
-2. Install the [ykman CLI](https://docs.yubico.com/software/yubikey/tools/ykman/).
-3. Create a private key on the device. In the guide we'll import the private key, but you can also
-   create one directly on the Yubikey to ensure its contents are not exposed.
+1. Install SoftHSM2 and [configure][2] it if necessary.
 
     ```sh
-    ykman piv keys import 9a $(tedge config get device.key_path)
+    apt-get install -y softhsm2
     ```
 
-4. Create a X.509 certificate on the device. This certificate won't actually be used by %%te%% as
-   using a certificate from the device is currently unsupported and the certificate will still be
-   read from the filesystem. However, the Yubikey won't expose the key without the certificate, so
-   we still have to create it.
+[2]: https://github.com/softhsm/softHSMv2?tab=readme-ov-file#configure-1
+
+2. Create a new token.
+    ```sh
+    softhsm2-util --init-token --slot 0 --label my-token
+    ```
+
+3. Import the private key to the token. Make sure to use the correct PIN value for a regular user
+   from the previous step.
 
     ```sh
-    ykman piv certificates import 9a $(tedge config get device.cert_path)
+    PUB_PRIV_KEY=$(
+        cat "$(tedge config get device.key_path)" && cat "$(tedge config get device.cert_path)"
+    )
+    softhsm2-util \
+        --import <(echo "$PUB_PRIV_KEY") \
+        --token my-token \
+        --label my-key \
+        --id 01 \
+        --pin 123456 \
     ```
 
 ### Part 2: thin-edge setup
 
-Next, we need to make sure the Yubikey is accessible as a PKCS #11 token by %%te%%. This can be
-tricky because of different permissions or if %%te%% is inside of a container.
+Next, we need to make sure the token is accessible by %%te%%. This can be tricky because of different permissions or if
+%%te%% is inside of a container.
 
 So we're going to check if we can use the module directly and do it if so. If not, we're going to
 use [`tedge-p11-server`](./tedge-p11-server.md).
 
-5. Install `p11tool` and `opensc-pkcs11`
+5. Install `p11tool`
 
     ```sh
-    apt-get install -y gnutls-bin opensc-pkcs11
+    apt-get install -y gnutls-bin
     ```
 
-6. Check if Yubikey private key is visible using the module
+6. Check if SoftHSM2 key object is visible using the module
 
-    First, check if Yubikey token is visible:
+    <!-- if one needs root to interact with softhsm tokens, running tedge-p11-server as root would
+    make them available to tedge, but runing the server as root seems a bad idea and we probably
+    shouldn't recommend it-->
+    > NOTE: It may be necessary to have root permissions to view SoftHSM tokens. If so, `tedge` user also won't be able
+    > to access them.
+
+    First, check if the token itself is visible:
 
     ```sh
     p11tool --list-tokens
@@ -85,32 +94,30 @@ use [`tedge-p11-server`](./tedge-p11-server.md).
 
     ```sh title="p11tool --list-tokens"
     ...
-    Token 1:
-        URL: pkcs11:model=PKCS%2315%20emulated;manufacturer=piv_II;serial=f829510c18935023;token=marcel-hsm-device
-        Label: marcel-hsm-device
-        Type: Hardware token
+    Token 2:
+        URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token
+        Label: my-token
+        Type: Generic token
         Flags: RNG, Requires login
-        Manufacturer: piv_II
-        Model: PKCS#15 emulated
-        Serial: f829510c18935023
-        Module: opensc-pkcs11.so
+        Manufacturer: SoftHSM project
+        Model: SoftHSM v2
+        Serial: 83f9cf49039c051a
+        Module: /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
     ...
     ```
-
-    The token should have the same label as the Common Name of the certificate.
 
     Now check if the private key object is in the token. You may need to login, provide the regular
     user PIN and also provide token URL(URI) if multiple tokens are connected:
 
     ```sh
-    p11tool --login --set-pin=123456 --list-privkeys "pkcs11:model=PKCS%2315%20emulated;manufacturer=piv_II;serial=f829510c18935023;token=marcel-hsm-device"
+    p11tool --login --set-pin=123456 --list-privkeys "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token"
     ```
-    ```sh title="p11tool --login --set-pin=123456 --list-privkeys "pkcs11:model=PKCS%2315%20emulated;manufacturer=piv_II;serial=f829510c18935023;token=marcel-hsm-device""
+    ```sh title="p11tool --login --set-pin=123456 --list-privkeys "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token""
     Object 0:
-        URL: pkcs11:model=PKCS%2315%20emulated;manufacturer=piv_II;serial=f829510c18935023;token=marcel-hsm-device;id=%01;object=PIV%20AUTH%20key;type=private
-        Type: Private key (EC/ECDSA)
-        Label: PIV AUTH key
-        Flags: CKA_PRIVATE; CKA_NEVER_EXTRACTABLE; CKA_SENSITIVE; 
+        URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token;id=%01;object=my-key;type=private
+        Type: Private key (EC/ECDSA-SECP256R1)
+        Label: my-key
+        Flags: CKA_PRIVATE; CKA_SENSITIVE; 
         ID: 01
     ```
 
@@ -125,9 +132,9 @@ tokens or private keys we also need to provide the URI for the key to select a c
 
 ```sh
 tedge config set device.cryptoki.mode module
-tedge config set device.cryptoki.module_path /usr/lib/x86_64-linux-gnu/pkcs11/opensc-pkcs11.so
+tedge config set device.cryptoki.module_path /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
 # optional if there are many tokens/keys
-tedge config set device.key_uri "pkcs11:model=PKCS%2315%20emulated;manufacturer=piv_II;serial=f829510c18935023;token=marcel-hsm-device;id=%01;object=PIV%20AUTH%20key;type=private"
+tedge config set device.key_uri "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token;id=%01;object=my-key;type=private"
 ```
 
 ### Part 2b: Use `tedge-p11-server`
@@ -171,7 +178,7 @@ If we can't use the module mode, we can use `tedge-p11-server`.
 tedge config set device.cryptoki.enable socket
 tedge config set device.cryptoki.socket_path /path/to/socket.sock
 tedge config set device.cryptoki.pin 123456
-tedge config set device.cryptoki.uri "pkcs11:model=PKCS%2315%20emulated;manufacturer=piv_II;serial=f829510c18935023;token=marcel-hsm-device;id=%01;object=PIV%20AUTH%20key;type=private"
+tedge config set device.cryptoki.uri "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token;id=%01;object=my-key;type=private"
 ```
 
 ### Part 3: Reconnect
