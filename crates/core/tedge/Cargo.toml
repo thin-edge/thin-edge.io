@@ -25,6 +25,7 @@ certificate = { workspace = true }
 clap = { workspace = true }
 clap_complete = { version = "4.5.42", features = ["unstable-dynamic"] }
 doku = { workspace = true }
+flate2 = { workspace = true }
 humantime = { workspace = true }
 hyper = { workspace = true, default-features = false }
 mime_guess = { workspace = true }
@@ -45,6 +46,7 @@ rumqttc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum_macros = { workspace = true }
+tar = { workspace = true }
 tedge-agent = { workspace = true }
 tedge-apt-plugin = { workspace = true }
 tedge-mapper = { workspace = true, default-features = false }
@@ -54,6 +56,7 @@ tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
+time = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 toml = { workspace = true }
 tracing = { workspace = true }
