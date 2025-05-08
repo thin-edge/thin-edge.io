@@ -1,19 +1,31 @@
 ---
-title: 🚧 Hardware Security Module (HSM) support
+title: Hardware Security Module (HSM)
 tags: [Reference, Security]
 description: Current state of HSM support in %%te%%.
-draft: true
 ---
 
-%%te%% supports using [PKCS #11][1] (_aka_ cryptoki) cryptographic tokens for MQTT client
+%%te%% supports HSM using [PKCS #11][1] (_aka_ cryptoki) cryptographic tokens for MQTT client
 authentication between the device and the cloud.
 
-On the %%te%% side, we use the private key on the module to sign necessary messages to establish a
-TLS1.3 connection. The client certificate is still read from the file. It is up to the user to
-ensure the private key in the HSM corresponds to the used public certificate.
+With this feature, %%te%% uses an Hardware Security Module (HSM) to store the private key of the
+device, preventing this key to be stolen. Device authentication is then delegated by %%te%% to the
+module using the `PKCS#11` protocol when a TLS connection is established.  
 
-For now, the module is only used for the TLS MQTT connection between the device and C8y cloud.
-Additionally, the built-in bridge has to be used.
+When running `tedge connect` or `tedge reconnect` command, as part of a TLS handshake with the
+remote MQTT broker, a confirmation of an ownership of the certificate by the client is required.
+This is achieved by signing a TLS 1.3 CertificateVerify message by the PKCS #11 cryptographic token.
+This happens only once when establishing an MQTT connection over TLS and will only need to be
+repeated when a new connection is opened.
+
+Any HSM which has a `PKCS#11` interface are supported, some examples of such modules are:  
+
+* USB based devices like NitroKey HSM 2, Yubikey 5  
+* TPM 2.0 (Trusted Platform Module)  
+* ARM TrustZone (via OP-TEE)  
+
+For now, HSM is only used for the TLS MQTT connection between the device and C8y cloud.  
+Additionally, the built-in bridge has to be used and the user has to device certificate corresponds
+to private key stored in the HSM (a step that depends on the actual key).
 
 ## Configuration
 
@@ -27,30 +39,58 @@ This feature has the following related configuration options:
 
 ## Setup guide
 <!-- split the guide into a separate page under "Operate Devices" category? -->
-<!-- maybe it would be better to use SoftHSM2 instead of a Yubikey so everyone can follow? -->
 <!-- also would be nice to write a test for this guide -->
 
 The following guide shows how to connect to Cumulocity using a PKCS #11 cryptographic token. Instead
 of using a dedicated hardware token, we'll create a software token using
 [SoftHSM2](https://github.com/softhsm/softHSMv2) and import currently used private key on it.
 
+:::note
+
+While this guide uses SoftHSM2 to demonstrate the feature, be aware that in a real production
+setting you'll probably be using a different, hardware token. The process of setting up the token
+itself may be different for each token type, as well as require using a different PKCS #11 dynamic
+library, but in all cases, the goal is to:
+
+- store the private key on the HSM
+- store the corresponding certificate on the file system
+- set `device.cert_path` to the certificate path
+- set `device.cryptoki.module_path` to the correct PKCS #11 dynamic library
+- set `device.cryptoki.pin` and `device.cryptoki.uri` accordingly to the local HSM settings
+
+:::
+
 ### Part 1: Setup the cryptographic token
 
-1. Install SoftHSM2 and [configure][2] it if necessary.
+1. Install SoftHSM2 (to create the token and key) and `p11tool` (to view the [PKCS #11 URI][p11uri]
+   of the key).
 
     ```sh
-    apt-get install -y softhsm2
+    sudo apt-get install -y softhsm2 gnutls-bin
     ```
 
-[2]: https://github.com/softhsm/softHSMv2?tab=readme-ov-file#configure-1
+    [p11uri]: https://www.rfc-editor.org/rfc/rfc7512
 
-2. Create a new token.
+For SoftHSM configuration, see [SoftHSM README](https://github.com/softhsm/softHSMv2?tab=readme-ov-file#configure-1).
+
+2. Add tedge and current user to `softhsm` group. Only users belonging to `softhsm` group can view
+   and manage SoftHSM tokens. After adding your own user, remember to logout and login for changes
+   to take effect. Alternatively, you can just run `softhsm2-util` and `p11tool` with `sudo`.
+
+   ```sh
+    sudo usermod -a -G softhsm tedge
+    sudo usermod -a -G softhsm $()
+   ```
+
+3. Create a new SoftHSM token. You'll be prompted for a PIN for a regular user and security officer
+   (SO). The rest of the guide assumes PIN=123456, but you're free to use a different one.
+
     ```sh
     softhsm2-util --init-token --slot 0 --label my-token
     ```
 
-3. Import the private key to the token. Make sure to use the correct PIN value for a regular user
-   from the previous step.
+3. Import the private key to the created token. Make sure to use the correct PIN value for a regular
+   user from the previous step.
 
     ```sh
     PUB_PRIV_KEY=$(
@@ -64,29 +104,9 @@ of using a dedicated hardware token, we'll create a software token using
         --pin 123456 \
     ```
 
-### Part 2: thin-edge setup
+4. Get the URI of the key
 
-Next, we need to make sure the token is accessible by %%te%%. This can be tricky because of different permissions or if
-%%te%% is inside of a container.
-
-So we're going to check if we can use the module directly and do it if so. If not, we're going to
-use [`tedge-p11-server`](./tedge-p11-server.md).
-
-5. Install `p11tool`
-
-    ```sh
-    apt-get install -y gnutls-bin
-    ```
-
-6. Check if SoftHSM2 key object is visible using the module
-
-    <!-- if one needs root to interact with softhsm tokens, running tedge-p11-server as root would
-    make them available to tedge, but runing the server as root seems a bad idea and we probably
-    shouldn't recommend it-->
-    > NOTE: It may be necessary to have root permissions to view SoftHSM tokens. If so, `tedge` user also won't be able
-    > to access them.
-
-    First, check if the token itself is visible:
+    First, see what tokens are available
 
     ```sh
     p11tool --list-tokens
@@ -110,9 +130,9 @@ use [`tedge-p11-server`](./tedge-p11-server.md).
     user PIN and also provide token URL(URI) if multiple tokens are connected:
 
     ```sh
-    p11tool --login --set-pin=123456 --list-privkeys "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token"
+    sudo p11tool --login --set-pin=123456 --list-privkeys "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token"
     ```
-    ```sh title="p11tool --login --set-pin=123456 --list-privkeys "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token""
+    ```sh title="sudo p11tool --login --set-pin=123456 --list-privkeys "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token""
     Object 0:
         URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token;id=%01;object=my-key;type=private
         Type: Private key (EC/ECDSA-SECP256R1)
@@ -121,15 +141,19 @@ use [`tedge-p11-server`](./tedge-p11-server.md).
         ID: 01
     ```
 
-    If you can see the private key object, you can use the `module` mode and follow instructions in
-    [Part 2a](#part-2a-configure-thin-edge-in-module-mode). Otherwise, use the `socket` mode and
-    follow instructions in [Part 2b](#part-2b-use-tedge-p11-server).
+### Part 2: thin-edge setup
 
-### Part 2a: Configure thin-edge in module mode
+Next, we're going to configure `tedge` to use the token directly using module mode.
 
-Using the module mode, the cryptoki module will be loaded by the dynamic loader and used for signing. If there are many
-tokens or private keys we also need to provide the URI for the key to select a correct one.
+If that mode doesn't work for you, because of the token can't be accessed for some reason or you
+can't dynamically load the PKCS #11 library, see how to [use `tedge-p11-server`](./tedge-p11-server.md).
+<!-- TODO: put instructions for tp11s in its dedicated page -->
 
+Using the module mode, the cryptoki module will be loaded by the dynamic loader
+and used for signing. If there are many tokens or private keys we also need to
+provide the URI for the key to select a correct one.
+
+5. Enable the module mode and set the module and the key URI.
 ```sh
 tedge config set device.cryptoki.mode module
 tedge config set device.cryptoki.module_path /usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
@@ -137,67 +161,48 @@ tedge config set device.cryptoki.module_path /usr/lib/x86_64-linux-gnu/softhsm/l
 tedge config set device.key_uri "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token;id=%01;object=my-key;type=private"
 ```
 
-### Part 2b: Use `tedge-p11-server`
+:::note
 
-If we can't use the module mode, we can use `tedge-p11-server`.
+`[cloud].device.key_uri` config setting corresponds to the usual `[cloud].device.key_path` setting,
+but instead of pointing to the private key file, it contains the URI for a given cloud.
 
-1. Install `tedge-p11-server`
-    ```sh
-    apt install -y tedge-p11-server
-    ```
-
-2. Check that `tedge-p11-server` service will be activated by the socket
-    ```sh title="systemctl status tedge-p11-server"
-    ○ tedge-p11-server.service - tedge-p11-server
-        Loaded: loaded (/lib/systemd/system/tedge-p11-server.service; disabled; preset: enabled)
-        Active: inactive (dead)
-    TriggeredBy: ● tedge-p11-server.socket
-    ```
-    ```sh title="systemctl status tedge-p11-server.socket"
-    ● tedge-p11-server.socket - tedge-p11-server socket
-        Loaded: loaded (/lib/systemd/system/tedge-p11-server.socket; enabled; preset: enabled)
-        Active: active (listening) since Tue 2025-05-06 15:02:03 UTC; 8min ago
-    Triggers: ● tedge-p11-server.service
-        Listen: /run/tedge-p11-server/tedge-p11-server.sock (Stream)
-        Tasks: 0 (limit: 5478)
-        Memory: 0B
-            CPU: 322us
-        CGroup: /system.slice/tedge-p11-server.socket
-
-    May 06 15:02:03 32df1eef46c8 systemd[1]: Starting tedge-p11-server.socket - tedge-p11-server socket...
-    May 06 15:02:03 32df1eef46c8 systemd[1]: Listening on tedge-p11-server.socket - tedge-p11-server socket.
-    ```
-
-3. Ensure `tedge` will be able to connect to the socket
-    - make the socket available to `tedge` by mounting it
-    - Set up correct permissions; connecting clients need to have read/write permissions
-
-4. Set required config options
-
-```sh
-tedge config set device.cryptoki.enable socket
-tedge config set device.cryptoki.socket_path /path/to/socket.sock
-tedge config set device.cryptoki.pin 123456
-tedge config set device.cryptoki.uri "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token;id=%01;object=my-key;type=private"
-```
+:::
 
 ### Part 3: Reconnect
 
-1. Enable the builtin bridge. PKCS #11 doesn't work when using mosquitto as a bridge.
+6. Enable the builtin bridge. PKCS #11 doesn't work when using mosquitto as a bridge.
 ```sh
 tedge config set mqtt.bridge.built_in true
 ```
 
-2. Reconnect to c8y
+7. Reconnect to c8y
 
 ```sh
 tedge reconnect c8y
 ```
 
-## References
+```sh title="tedge reconnect c8y"
+Disconnecting from Cumulocity
+Removing bridge config file... ✓
+Disabling tedge-mapper-c8y... ✓
+reconnect to Cumulocity cloud.:
+        device id: marcel-hsm-device-rsa
+        cloud profile: <none>
+        cloud host: thin-edge-io.eu-latest.cumulocity.com:8883
+        auth type: Certificate
+        certificate file: /etc/tedge/device-certs/rsa/tedge-certificate.pem
+        cryptoki: true
+        bridge: built-in
+        service manager: systemd
+        mosquitto version: 2.0.20
+        proxy: Not configured
+Creating device in Cumulocity cloud... ✓
+Restarting mosquitto... ✓
+Waiting for mosquitto to be listening for connections... ✓
+Enabling tedge-mapper-c8y... ✓
+Verifying device is connected to cloud... ✓
+Checking Cumulocity is connected to intended tenant... ✓
+Enabling tedge-agent... ✓
+```
 
----
-
-\* Yubikey doesn't fully support all of PKCS#11, but the relevant subset works
-
-[1]: https://docs.oasis-open.org/pkcs11/pkcs11-base/v3.0/pkcs11-base-v3.0.html
+`cryptoki: true` in the connection summary confirms that we connected using our PKCS #11 token.

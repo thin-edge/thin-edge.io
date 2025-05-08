@@ -1,8 +1,7 @@
 ---
-title: 🚧 tedge-p11-server
+title: tedge-p11-server
 tags: [Reference, Security, "PKCS #11", CLI]
 description: "An optional component for accessing PKCS #11 cryptographic tokens"
-draft: true
 ---
 
 ## Description
@@ -10,20 +9,11 @@ draft: true
 **tedge-p11-server** is an optional component used by %%te%% for accessing PKCS #11 cryptographic
 tokens. It should be used when it's not possible to load the PKCS #11 dynamic module in `tedge`
 directly at runtime, e.g. when running a statically linked %%te%% on musl or when `tedge` doesn't
-have the permission to view/access cryptographic tokens.
-
-When running `tedge connect` or `tedge reconnect` command, as part of a TLS handshake with the
-remote MQTT broker, a confirmation of an ownership of the certificate by the client is required.
-This is achieved by signing a TLS 1.3 CertificateVerify message by the PKCS #11 cryptographic token.
-This happens only once when establishing an MQTT connection over TLS and will only need to be
-repeated when a new connection is opened.
+have the permission to view/access cryptographic tokens, e.g. because it runs in a container.
 
 If you can load dynamic objects at runtime and can access the token directly, you can instead use a
-`module` cryptoki mode, where the module is used directly in tedge.
-<!--TODO: link how to use module mode-->
+`module` cryptoki mode, where the module is used directly in tedge. [See guide](./hsm-support.md#part-2-thin-edge-setup).
 
-<!--TODO: link to an appropriate section of how to select a token using the URI in the HSM support document-->
-For information about how to select appropriate token/object, see [HSM reference page](./hsm-support.md).
 
 ## Connecting to the server from tedge
 
@@ -70,6 +60,17 @@ tedge-p11-server --module-path /path/to/pkcs11-module.so
 ```
 
 `tedge-p11-server` will create the socket and delete it when it exits.
+
+### Configuring tedge
+
+After ensuring `tedge` will be able to connect to the socket mounting it to an accessible path and setting up appropriate permissions (connecting clients need to have read/write permissions) set the following `tedge` options:
+
+```sh
+tedge config set device.cryptoki.enable socket
+tedge config set device.cryptoki.socket_path /path/to/socket.sock
+tedge config set device.cryptoki.pin 123456
+tedge config set device.cryptoki.uri "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token;id=%01;object=my-key;type=private"
+```
 
 ## Relevant configuration
 
