@@ -1,21 +1,32 @@
 use crate::auth::Auth;
 use async_compat::CompatExt;
-use async_tungstenite::tokio::ConnectStream;
+use async_http_proxy::http_connect_tokio;
+use async_http_proxy::http_connect_tokio_with_basic_auth;
+use async_tungstenite::tokio::ClientStream;
 use base64::prelude::*;
 use futures::future::join;
 use futures::future::select;
 use futures_util::io::AsyncReadExt;
 use futures_util::io::AsyncWriteExt;
 use http::HeaderValue;
+use miette::miette;
 use miette::Context;
 use miette::Diagnostic;
 use miette::IntoDiagnostic;
 use rand::RngCore;
 use rustls::ClientConfig;
+use std::pin::Pin;
 use std::sync::Arc;
+use tedge_config::all_or_nothing;
+use tedge_config::models::proxy_scheme::ProxyScheme;
+use tedge_config::tedge_toml::TEdgeConfigReaderProxy;
 use thiserror::Error;
+use tokio::io::AsyncRead;
+use tokio::io::AsyncWrite;
 use tokio::net::TcpStream;
 use tokio::net::ToSocketAddrs;
+use tokio_rustls::client::TlsStream;
+use tokio_rustls::TlsConnector;
 use url::Url;
 use ws_stream_tungstenite::WsStream;
 
@@ -39,9 +50,10 @@ impl WebsocketSocketProxy {
         socket: SA,
         auth: Auth,
         config: Option<ClientConfig>,
+        proxy: &TEdgeConfigReaderProxy,
     ) -> miette::Result<Self> {
         let socket_future = TcpStream::connect(socket);
-        let websocket_future = Websocket::new(url, auth.authorization_header(), config);
+        let websocket_future = Websocket::new(url, auth.authorization_header(), config, proxy);
 
         match join(socket_future, websocket_future).await {
             (Err(socket_error), _) => Err(SocketError(socket_error))?,
@@ -71,7 +83,7 @@ impl WebsocketSocketProxy {
 }
 
 struct Websocket {
-    socket: WsStream<ConnectStream>,
+    socket: WsStream<ClientStream<MaybeTlsStream>>,
 }
 
 fn generate_sec_websocket_key() -> String {
@@ -81,12 +93,112 @@ fn generate_sec_websocket_key() -> String {
     BASE64_STANDARD.encode(bytes)
 }
 
+enum MaybeTlsStream {
+    Plain(TcpStream),
+    Rustls(TlsStream<TcpStream>),
+}
+
+impl AsyncRead for MaybeTlsStream {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        match self.get_mut() {
+            Self::Plain(ref mut tcp) => Pin::new(tcp).poll_read(cx, buf),
+            Self::Rustls(ref mut tcp) => Pin::new(tcp).poll_read(cx, buf),
+        }
+    }
+}
+
+impl AsyncWrite for MaybeTlsStream {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+        match self.get_mut() {
+            Self::Plain(ref mut tcp) => Pin::new(tcp).poll_write(cx, buf),
+            Self::Rustls(ref mut tcp) => Pin::new(tcp).poll_write(cx, buf),
+        }
+    }
+
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        match self.get_mut() {
+            Self::Plain(ref mut tcp) => Pin::new(tcp).poll_flush(cx),
+            Self::Rustls(ref mut tcp) => Pin::new(tcp).poll_flush(cx),
+        }
+    }
+
+    fn poll_shutdown(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        match self.get_mut() {
+            Self::Plain(ref mut tcp) => Pin::new(tcp).poll_shutdown(cx),
+            Self::Rustls(ref mut tcp) => Pin::new(tcp).poll_shutdown(cx),
+        }
+    }
+}
+
 impl Websocket {
     async fn new(
         url: &Url,
         authorization: HeaderValue,
         config: Option<ClientConfig>,
+        proxy: &TEdgeConfigReaderProxy,
     ) -> miette::Result<Self> {
+        let config = config.map(Arc::new);
+        let target_host = url
+            .host_str()
+            .ok_or(miette!("{url} does not contain a host"))?;
+        let target_port = url
+            .port_or_known_default()
+            .ok_or(miette!("{url} does not contain a port"))?;
+        let stream = if let Some(address) = proxy.address.or_none() {
+            let host_port = format!("{}:{}", address.host(), address.port());
+            let stream = TcpStream::connect(&host_port).await.into_diagnostic()?;
+            let mut stream = match address.scheme() {
+                ProxyScheme::Https => {
+                    let connector: TlsConnector = config.clone().unwrap().into();
+                    MaybeTlsStream::Rustls(
+                        connector
+                            .connect(host_port.try_into().unwrap(), stream)
+                            .await
+                            .into_diagnostic()?,
+                    )
+                }
+                ProxyScheme::Http => MaybeTlsStream::Plain(stream),
+            };
+            if let Some((username, password)) =
+                all_or_nothing((proxy.username.as_ref(), proxy.password.as_ref()))
+                    .map_err(|e| miette!(e))?
+            {
+                http_connect_tokio_with_basic_auth(
+                    &mut stream,
+                    target_host,
+                    target_port,
+                    username,
+                    password,
+                )
+                .await
+                .into_diagnostic()?;
+            } else {
+                http_connect_tokio(&mut stream, target_host, target_port)
+                    .await
+                    .into_diagnostic()?;
+            }
+            stream
+        } else {
+            MaybeTlsStream::Plain(
+                TcpStream::connect(format!("{target_host}:{target_port}",))
+                    .await
+                    .into_diagnostic()?,
+            )
+        };
         let request = http::Request::builder()
             .header("Authorization", authorization)
             .header("Sec-WebSocket-Key", generate_sec_websocket_key())
@@ -100,9 +212,9 @@ impl Websocket {
             .into_diagnostic()
             .context("Instantiating Websocket connection")?;
 
-        let socket = async_tungstenite::tokio::connect_async_with_tls_connector(
-            request,
-            config.map(|c| Arc::new(c).into()),
+        let connector = config.map(|c| c.into());
+        let socket = async_tungstenite::tokio::client_async_tls_with_connector_and_config(
+            request, stream, connector, None,
         )
         .await
         .into_diagnostic()
@@ -129,6 +241,7 @@ mod tests {
     use http::HeaderName;
     use http::StatusCode;
     use sha1::Digest;
+    use tedge_config::TEdgeConfig;
     use tokio::io::AsyncReadExt;
     use tokio::io::AsyncWriteExt;
 
@@ -219,11 +332,13 @@ mod tests {
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
         let target = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let target_port = target.local_addr().unwrap().port();
+        let tedge_config = TEdgeConfig::load_toml_str("");
         let proxy = WebsocketSocketProxy::connect(
             &format!("ws://127.0.0.1:{axum_port}/ws").parse().unwrap(),
             format!("127.0.0.1:{target_port}"),
             Auth::test_value(HeaderValue::from_static("AUTHORIZATION HEADER")),
             None,
+            &tedge_config.proxy,
         )
         .await
         .unwrap();
@@ -269,6 +384,7 @@ mod tests {
             data.read_to_string(&mut incoming).await.unwrap();
             assert_eq!(incoming, "ws->tcp");
         });
+        let tedge_config = TEdgeConfig::load_toml_str("");
 
         tokio::time::timeout(Duration::from_secs(5), async move {
             let proxy = WebsocketSocketProxy::connect(
@@ -276,6 +392,7 @@ mod tests {
                 format!("127.0.0.1:{target_port}"),
                 Auth::test_value(HeaderValue::from_static("AUTHORIZATION HEADER")),
                 None,
+                &tedge_config.proxy,
             )
             .await
             .unwrap();

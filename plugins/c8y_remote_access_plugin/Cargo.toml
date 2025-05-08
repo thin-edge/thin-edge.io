@@ -11,6 +11,7 @@ repository = { workspace = true }
 
 [dependencies]
 async-compat = { workspace = true }
+async-http-proxy = { workspace = true }
 async-tungstenite = { workspace = true }
 base64 = { workspace = true }
 c8y_api = { workspace = true }
@@ -35,6 +36,7 @@ tokio = { workspace = true, features = [
     "time",
     "process",
 ] }
+tokio-rustls = { workspace = true }
 url = { workspace = true }
 ws_stream_tungstenite = { workspace = true }
 
