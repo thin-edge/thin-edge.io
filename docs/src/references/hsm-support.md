@@ -204,3 +204,24 @@ provide the URI for the key to select a correct one.
     ```
 
     `cryptoki: true` in the connection summary confirms that we connected using our PKCS #11 token.
+
+## Key selection
+
+<!-- at the moment this isn't tested very extensively -->
+
+`tedge` or `tedge-p11-server` will try to find a private key even if the URI is not provided. In
+cases where there are multiple tokens/keys to choose from, the first one returned by the system will
+be automatically selected, but appropriate warning will be emitted:
+
+```
+WARN tedge_p11_server::pkcs11: Multiple keys were found. If the wrong one was chosen, please use a URI that uniquely identifies a key.
+```
+
+In such cases, config setting `device.key_uri` can be used to select an appropriate key or token on
+which the key is located.
+
+It is also possible to use a URI that identifies a token in settings like `device.key_uri`. The URI
+will then be used to select a token, but the key will be selected automatically, though the selected
+key may be wrong if there are multiple to choose from. Also if the URI contain attributes that
+identify a key, but doesn't contain attributes that identify a token, still the first token will be
+selected, even if another token contains the intended key.

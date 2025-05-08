@@ -73,6 +73,15 @@ tedge config set device.cryptoki.pin 123456
 tedge config set device.cryptoki.uri "pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token;id=%01;object=my-key;type=private"
 ```
 
+## Key selection
+
+<!-- NOTE: this behaviour is currently not tested directly -->
+In addition to the key selection behaviour described on [main HSM reference page](./hsm-support.md#key-selection),
+the `tedge-p11-server`, using the `device.cryptoki.uri` option, can be used to set a filter that
+narrows down tokens/key objects `tedge` can access. For example, if `device.cryptoki.uri` contains a
+URI that identifies a token, then regardless of value of `device.key_uri`, only objects from this
+token will be considered for a key.
+
 ## Relevant configuration
 
 ```sh command="tedge config list --doc device.cryptoki" title="tedge config list --doc device.cryptoki"
