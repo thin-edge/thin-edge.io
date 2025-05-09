@@ -1,7 +1,5 @@
 use crate::pkcs11::Cryptoki;
 use crate::pkcs11::CryptokiConfigDirect;
-
-use crate::pkcs11::Pkcs11SigningKey;
 use crate::pkcs11::PkcsSigner;
 
 use anyhow::Context;
@@ -73,11 +71,7 @@ impl SigningService for TedgeP11Service {
             .signing_key(uri.as_deref())
             .context("Failed to find a signing key")?;
 
-        let session = match signing_key {
-            Pkcs11SigningKey::Ecdsa(key) => key.pkcs11,
-            Pkcs11SigningKey::Rsa(key) => key.pkcs11,
-        };
-        let signer = PkcsSigner::from_session(session.clone());
+        let signer = PkcsSigner::from_key(signing_key);
         let signature = signer
             .sign(&request.to_sign)
             .context("Failed to sign using PKCS #11")?;
