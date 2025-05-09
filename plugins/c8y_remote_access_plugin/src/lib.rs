@@ -322,9 +322,14 @@ async fn proxy(
         .await.context("Failed when requesting JWT from Cumulocity or invalid username/password credentials are given")?;
     let client_config = config.cloud_client_tls_config();
 
-    let proxy =
-        WebsocketSocketProxy::connect(&url, command.target_address(), auth, Some(client_config))
-            .await?;
+    let proxy = WebsocketSocketProxy::connect(
+        &url,
+        command.target_address(),
+        auth,
+        Some(client_config),
+        &config.proxy,
+    )
+    .await?;
 
     proxy.run().await;
     Ok(())

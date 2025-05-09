@@ -789,6 +789,7 @@ name = "c8y-remote-access-plugin"
 version = "1.5.0"
 dependencies = [
  "async-compat",
+ "async-http-proxy",
  "async-tungstenite 0.28.0",
  "axum 0.8.1",
  "base64 0.22.1",
@@ -811,6 +812,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-rustls 0.26.1",
  "url",
  "ws_stream_tungstenite 0.14.0",
 ]

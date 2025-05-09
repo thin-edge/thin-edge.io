@@ -21,6 +21,18 @@ tedge can connect to Cumulocity using HTTP Connect Tunnelling
     ${operation}=    Get Configuration    tedge-configuration-plugin
     Operation Should Be SUCCESSFUL    ${operation}
 
+Remote Access Uses the HTTP Proxy
+    [Tags]    theme:c8y    theme:http_proxy    theme:remoteaccess
+    [Setup]    Setup Device With thin-edge.io
+    Execute Command    tedge connect c8y
+    Device Should Exist    ${DEVICE_SN}
+    Execute SSH Command Using Remote Access
+
+C8Y HTTP proxy uses HTTP tunnelling
+    [Setup]    Setup Device With thin-edge.io
+    Execute Command    tedge connect c8y
+    Execute Command    tedge http get /c8y/inventory/managedObjects
+
 Install thin-edge.io behind a Proxy using wget
     [Setup]    Setup Device Without thin-edge.io
     Execute Command
@@ -68,3 +80,13 @@ Add iptables Rules
     Execute Command    sudo iptables -A OUTPUT -o lo -j ACCEPT
     # Allow traffic from the gost user
     Execute Command    sudo iptables -A OUTPUT -m owner --uid-owner "$(id -u gost)" -j ACCEPT
+
+Execute SSH Command Using Remote Access
+    ${KEY_FILE}=    ThinEdgeIO.Configure SSH
+    ThinEdgeIO.Add Remote Access Passthrough Configuration
+    ${stdout}=    ThinEdgeIO.Execute Remote Access Command
+    ...    command=tedge --version
+    ...    exp_exit_code=0
+    ...    user=root
+    ...    key_file=${KEY_FILE}
+    Should Match Regexp    ${stdout}    tedge .+
