@@ -227,7 +227,10 @@ impl Connection {
             // event loop, this needs to be done before we call
             // `event_loop.poll()`
             let remaining_events_empty =
-                event_loop.state.inflight() == 0 && pub_count.load(Ordering::SeqCst) == 0;
+                // Are there any queued publishes?
+                pub_count.load(Ordering::SeqCst) == 0&&
+                // And are any published messages awaiting acknowledgement?
+                event_loop.state.inflight() == 0;
             if disconnect_permit.is_some() && !triggered_disconnect && remaining_events_empty {
                 // `sender_loop` is not running and we have no remaining
                 // publishes to process
@@ -243,12 +246,7 @@ impl Connection {
                 // but will immediately be returned by `event_loop.poll()`
                 biased;
 
-                event = event_loop.poll() => {
-                    // If we receive more events, we want to reset the disconnect permit
-                    // so the event loop doesn't block disconnection
-                    disconnect_permit.take();
-                    event
-                },
+                event = event_loop.poll() => event,
                 permit = permits.clone().acquire_owned() => {
                     // The `sender_loop` has now concluded
                     disconnect_permit = Some(permit.unwrap());
@@ -317,7 +315,7 @@ impl Connection {
                     awaiting_ack.remove(&p.pkid);
                 }
 
-                Ok(Event::Incoming(Packet::PubRec(p))) => {
+                Ok(Event::Incoming(Packet::PubComp(p))) => {
                     awaiting_ack.remove(&p.pkid);
                 }
 
