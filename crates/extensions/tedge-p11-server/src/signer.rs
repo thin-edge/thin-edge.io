@@ -56,9 +56,7 @@ impl SigningKey for TedgeP11ClientSigningKey {
         &self,
         offered: &[rustls::SignatureScheme],
     ) -> Option<Box<dyn rustls::sign::Signer>> {
-        let client = TedgeP11Client {
-            socket_path: self.socket_path.clone(),
-        };
+        let client = TedgeP11Client::with_ready_check(self.socket_path.clone());
         let uri = self.uri.as_ref().map(|s| s.to_string());
         let response = match client.choose_scheme(offered, uri) {
             Ok(response) => response,
@@ -77,9 +75,7 @@ impl SigningKey for TedgeP11ClientSigningKey {
     }
 
     fn algorithm(&self) -> rustls::SignatureAlgorithm {
-        let client = TedgeP11Client {
-            socket_path: self.socket_path.clone(),
-        };
+        let client = TedgeP11Client::with_ready_check(self.socket_path.clone());
 
         // here we have no choice but to panic but this is only called by servers when verifying
         // client hello so it should never be called in our case
@@ -96,9 +92,7 @@ pub struct TedgeP11ClientSigner {
 
 impl Signer for TedgeP11ClientSigner {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
-        let client = TedgeP11Client {
-            socket_path: self.socket_path.clone(),
-        };
+        let client = TedgeP11Client::with_ready_check(self.socket_path.clone());
         let response = match client.sign(message, self.uri.as_ref().map(|s| s.to_string())) {
             Ok(response) => response,
             Err(err) => {

@@ -135,9 +135,7 @@ mod tests {
         // wait until the server calls accept()
         tokio::time::sleep(Duration::from_millis(2)).await;
 
-        let client = TedgeP11Client {
-            socket_path: socket_path.into(),
-        };
+        let client = TedgeP11Client::with_ready_check(socket_path.into());
 
         tokio::task::spawn_blocking(move || {
             assert_eq!(client.choose_scheme(&[], None).unwrap().unwrap(), SCHEME);
