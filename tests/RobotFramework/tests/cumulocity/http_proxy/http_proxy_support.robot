@@ -28,6 +28,11 @@ Remote Access Uses the HTTP Proxy
     Device Should Exist    ${DEVICE_SN}
     Execute SSH Command Using Remote Access
 
+C8Y HTTP proxy uses HTTP tunnelling
+    [Setup]    Setup Device With thin-edge.io
+    Execute Command    tedge connect c8y
+    Execute Command    tedge http get /c8y/inventory/managedObjects
+
 Install thin-edge.io behind a Proxy using wget
     [Setup]    Setup Device Without thin-edge.io
     Execute Command
