@@ -19,6 +19,7 @@ use cryptoki::mechanism::MechanismType;
 use cryptoki::object::Attribute;
 use cryptoki::object::AttributeType;
 use cryptoki::object::KeyType;
+use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
 use rustls::sign::Signer;
@@ -147,8 +148,14 @@ impl Cryptoki {
                     session: Arc::new(Mutex::new(session)),
                 };
                 match keytype {
-                    KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey { pkcs11 }),
-                    KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey { pkcs11 }),
+                    KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey {
+                        pkcs11,
+                        handle: key,
+                    }),
+                    KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey {
+                        pkcs11,
+                        handle: key,
+                    }),
                     _ => anyhow::bail!("unsupported key type"),
                 }
             }
@@ -156,11 +163,12 @@ impl Cryptoki {
                 let pkcs11 = PKCS11 {
                     session: Arc::new(Mutex::new(session)),
                 };
-                let key_type = get_key_type(pkcs11.clone()).context("Failed to read key")?;
+                let (key_type, handle) =
+                    get_key_type(pkcs11.clone()).context("Failed to read key")?;
                 trace!("Key Type: {:?}", key_type.to_string());
                 match key_type {
-                    KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey { pkcs11 }),
-                    KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey { pkcs11 }),
+                    KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey { pkcs11, handle }),
+                    KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey { pkcs11, handle }),
                     _ => {
                         anyhow::bail!("Unsupported key type. Only EC and RSA keys are supported");
                     }
@@ -174,7 +182,7 @@ impl Cryptoki {
     fn find_key_by_attributes(
         uri: &uri::Pkcs11Uri,
         session: &Session,
-    ) -> anyhow::Result<cryptoki::object::ObjectHandle> {
+    ) -> anyhow::Result<ObjectHandle> {
         let mut key_template = vec![
             Attribute::Token(true),
             Attribute::Private(true),
@@ -234,31 +242,26 @@ pub struct PKCS11 {
 pub struct PkcsSigner {
     pub pkcs11: PKCS11,
     pub scheme: SignatureScheme,
+    key: ObjectHandle,
 }
 
 impl PkcsSigner {
-    pub fn from_session(session: PKCS11) -> Self {
+    pub fn from_key(key: Pkcs11SigningKey) -> Self {
+        let (pkcs11, handle, scheme) = match key {
+            Pkcs11SigningKey::Ecdsa(e) => {
+                (e.pkcs11, e.handle, SignatureScheme::ECDSA_NISTP256_SHA256)
+            }
+            Pkcs11SigningKey::Rsa(e) => (e.pkcs11, e.handle, SignatureScheme::RSA_PSS_SHA256),
+        };
         Self {
-            pkcs11: session,
-            scheme: SignatureScheme::ECDSA_NISTP256_SHA256,
+            pkcs11,
+            key: handle,
+            scheme,
         }
     }
 
     pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
         let session = self.pkcs11.session.lock().unwrap();
-
-        let key_template = vec![
-            Attribute::Token(true),
-            Attribute::Private(true),
-            Attribute::Sign(true),
-        ];
-
-        let key = session
-            .find_objects(&key_template)
-            .context("pkcs11: Failed to find objects")?
-            .into_iter()
-            .next()
-            .context("pkcs11: No signing key found")?;
 
         // we need to select a mechanism to use with a key, but we can't get a list of allowed mechanism from cryptoki
         // and choose the best among them, we have to select one
@@ -273,7 +276,7 @@ impl PkcsSigner {
         // thread caused non-unwinding panic. aborting.
         // Aborted (core dumped)
 
-        let keytype = session.get_attributes(key, &[AttributeType::KeyType])?;
+        let keytype = session.get_attributes(self.key, &[AttributeType::KeyType])?;
         let [Attribute::KeyType(keytype)] = keytype[..] else {
             anyhow::bail!("Failed to obtain keytype")
         };
@@ -324,7 +327,7 @@ impl PkcsSigner {
 
         trace!(?mechanism, "Session::sign");
         let signature_raw = session
-            .sign(&mechanism, key, to_sign)
+            .sign(&mechanism, self.key, to_sign)
             .context("pkcs11: Failed to sign message")?;
 
         // Split raw signature into r and s values (assuming 32 bytes each)
@@ -362,7 +365,8 @@ impl Signer for PkcsSigner {
 
 #[derive(Debug)]
 pub struct ECSigningKey {
-    pub pkcs11: PKCS11,
+    pkcs11: PKCS11,
+    handle: ObjectHandle,
 }
 
 impl ECSigningKey {
@@ -385,6 +389,7 @@ impl SigningKey for ECSigningKey {
                 return Some(Box::new(PkcsSigner {
                     pkcs11: self.pkcs11.clone(),
                     scheme: *scheme,
+                    key: self.handle,
                 }));
             }
         }
@@ -398,7 +403,8 @@ impl SigningKey for ECSigningKey {
 
 #[derive(Debug)]
 pub struct RSASigningKey {
-    pub pkcs11: PKCS11,
+    pkcs11: PKCS11,
+    handle: ObjectHandle,
 }
 
 impl RSASigningKey {
@@ -424,6 +430,7 @@ impl SigningKey for RSASigningKey {
                 return Some(Box::new(PkcsSigner {
                     pkcs11: self.pkcs11.clone(),
                     scheme: *scheme,
+                    key: self.handle,
                 }));
             }
         }
@@ -435,7 +442,7 @@ impl SigningKey for RSASigningKey {
     }
 }
 
-fn get_key_type(pkcs11: PKCS11) -> anyhow::Result<KeyType> {
+fn get_key_type(pkcs11: PKCS11) -> anyhow::Result<(KeyType, ObjectHandle)> {
     let session = pkcs11.session.lock().unwrap();
 
     let key_template = vec![
@@ -473,11 +480,11 @@ fn get_key_type(pkcs11: PKCS11) -> anyhow::Result<KeyType> {
         .find(|a| a.attribute_type() == AttributeType::KeyType)
         .unwrap()
     else {
-        return Ok(key_type);
+        return Ok((key_type, key));
     };
     key_type = *returned_key_type;
 
-    Ok(key_type)
+    Ok((key_type, key))
 }
 
 fn format_asn1_ecdsa_signature(r_bytes: &[u8], s_bytes: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
