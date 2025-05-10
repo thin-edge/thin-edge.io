@@ -11,7 +11,7 @@ Test Tags       theme:c8y    test:on_demand
 Register Device Using Cumulocity CA
     [Setup]    Custom Setup
     ${credentials}=    Bulk Register Device With Cumulocity CA    ${DEVICE_SN}
-    ${DOMAIN}=    Get Cumulocity Domain
+    ${DOMAIN}=    Cumulocity.Get Domain
     Execute Command    tedge config set c8y.url "${DOMAIN}"
     Execute Command
     ...    tedge cert download c8y --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --retry-every 5s --max-timeout 30s
@@ -36,11 +36,6 @@ Certificate Renewal Service Using Cumulocity Certificate Authority
 
 
 *** Keywords ***
-Get Cumulocity Domain
-    ${DOMAIN}=    Replace String Using Regexp    ${C8Y_CONFIG.host}    ^.*://    ${EMPTY}
-    ${DOMAIN}=    Strip String    ${DOMAIN}    characters=/
-    RETURN    ${DOMAIN}
-
 Custom Setup
     ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
     Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-bootstrap --no-connect || true
