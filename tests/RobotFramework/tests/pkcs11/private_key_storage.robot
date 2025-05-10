@@ -6,6 +6,7 @@ Documentation       Test thin-edge.io MQTT client authentication using a Hardwar
 ...                 hardware device would be used.
 
 Resource            ../resources/common.resource
+Library             Cumulocity
 Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
@@ -152,7 +153,8 @@ Custom Setup
     Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --self-signed --device-id "${DEVICE_SN}" --pin 123456
 
     # configure tedge
-    Execute Command    tedge config set c8y.url "$(echo ${C8Y_CONFIG.host} | sed 's|https?://||g')"
+    ${domain}=    Cumulocity.Get Domain
+    Execute Command    tedge config set c8y.url "${domain}"
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge config set device.cryptoki.mode socket
 

@@ -1,5 +1,6 @@
 *** Settings ***
 Resource            ../../resources/common.resource
+Library             Cumulocity
 Library             ThinEdgeIO
 
 Suite Setup         Custom Suite Setup
@@ -79,7 +80,8 @@ Create Config Dir
 
     # Set some default config so components will startup
     Execute Command    tedge --config-dir ${CONFIG_DIR} cert create --device-id "${DEVICE_ID}"
-    Execute Command    tedge --config-dir ${CONFIG_DIR} config set c8y.url ${C8Y_CONFIG.host}
+    ${domain}=    Cumulocity.Get Domain
+    Execute Command    tedge --config-dir ${CONFIG_DIR} config set c8y.url "${domain}"
 
 Should Not Contain Default Path
     [Documentation]    Check a thin-edge.io executable by running it for a short time (~5s), and
