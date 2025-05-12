@@ -37,10 +37,13 @@ pub fn new_read_logs(
                 break;
             }
             Err(error) => {
+                temp_file.flush()?;
                 return Err(error);
             }
         };
     }
+
+    temp_file.flush()?;
 
     Ok(temp_path)
 }
@@ -329,6 +332,7 @@ mod tests {
         let data = "this is the first line.\nthis is the second line.\nthis is the third line.\nthis is the forth line.\nthis is the fifth line.";
 
         log_file.write_all(data.as_bytes()).unwrap();
+        log_file.flush().unwrap();
 
         let line_counter = 0;
         let max_lines = 4;
@@ -381,6 +385,7 @@ mod tests {
             let data = &format!("this is the first line of {file_name}.\nthis is the second line of {file_name}.\nthis is the third line of {file_name}.\nthis is the forth line of {file_name}.\nthis is the fifth line of {file_name}.");
 
             log_file.write_all(data.as_bytes()).unwrap();
+            log_file.flush().unwrap();
 
             let new_mtime = FileTime::from_unix_time(m_time, 0);
             set_file_mtime(file_path, new_mtime).unwrap();

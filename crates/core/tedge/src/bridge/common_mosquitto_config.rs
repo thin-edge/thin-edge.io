@@ -137,6 +137,7 @@ impl CommonMosquittoConfig {
 
         self.internal_listener.write(writer).await?;
         self.external_listener.write(writer).await?;
+        writer.flush().await?;
 
         Ok(())
     }

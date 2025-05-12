@@ -531,5 +531,6 @@ mod tests {
         }
 
         file.write_all(buffer.as_bytes()).await.unwrap();
+        file.flush().await.unwrap();
     }
 }

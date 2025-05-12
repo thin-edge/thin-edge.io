@@ -415,6 +415,7 @@ async fn save_chunks_to_file_at(
     while let Some(bytes) = response.chunk().await? {
         writer.write_all(&bytes)?;
     }
+    writer.flush()?;
     Ok(())
 }
 
@@ -800,6 +801,7 @@ mod tests {
                         let msg = format!("{header}\r\n{size}\r\n{body}\r\n");
                         debug!("sending message = {msg}");
                         writer.write_all(msg.as_bytes()).await.unwrap();
+                        writer.flush().await.unwrap();
                     } else {
                         let header = "\
                             HTTP/1.1 200 OK\r\n\
@@ -811,6 +813,7 @@ mod tests {
                         let body = "AAAA";
                         let msg = format!("{header}\r\n4\r\n{body}\r\n");
                         writer.write_all(msg.as_bytes()).await.unwrap();
+                        writer.flush().await.unwrap();
                     }
                 };
                 tokio::spawn(response_task);
@@ -1005,6 +1008,7 @@ mod tests {
         }
 
         file.write_all(buffer.as_bytes()).unwrap();
+        file.flush().unwrap();
 
         Ok(file)
     }

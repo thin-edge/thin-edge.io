@@ -4,8 +4,6 @@ use log::info;
 use log::warn;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::fs::File;
-use std::io::Write;
 use std::marker::PhantomData;
 use tedge_utils::fs::atomically_write_file_async;
 use tokio::fs;
@@ -29,9 +27,9 @@ pub fn agent_default_state_dir(tedge_root: Utf8PathBuf) -> Utf8PathBuf {
 pub fn agent_state_dir(state_dir: Utf8PathBuf, tedge_root: Utf8PathBuf) -> Utf8PathBuf {
     // Check that the given directory is actually writable, by creating an empty test file
     let test_file = state_dir.join(state_dir.join(".--test--"));
-    match File::create(test_file.clone()).and_then(|mut file| file.write_all(b"")) {
+    match std::fs::write(&test_file, "") {
         Ok(_) => {
-            let _ = std::fs::remove_file(test_file);
+            let _ = std::fs::remove_file(&test_file);
             state_dir
         }
         Err(err) => {

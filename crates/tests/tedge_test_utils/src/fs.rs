@@ -101,6 +101,7 @@ impl TempTedgeFile {
             .open(self.file_path.clone())
             .unwrap();
         file.write_all(content.as_bytes()).unwrap();
+        file.flush().unwrap();
         file.sync_all().unwrap();
         self
     }
@@ -113,6 +114,7 @@ impl TempTedgeFile {
             .unwrap();
         let file_content = content.to_string();
         file.write_all(file_content.as_bytes()).unwrap();
+        file.flush().unwrap();
         file.sync_all().unwrap();
     }
 
@@ -146,6 +148,7 @@ pub fn with_exec_permission(file_path: &Path, content: &str) {
         .unwrap();
 
     file.write_all(content.as_bytes()).unwrap();
+    file.flush().unwrap();
     file.sync_all().unwrap();
 }
 

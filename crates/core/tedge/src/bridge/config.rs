@@ -135,6 +135,8 @@ impl BridgeConfig {
             writeln_async!(writer, "topic {}", topic)?;
         }
 
+        writer.flush().await?;
+
         Ok(())
     }
 

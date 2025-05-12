@@ -87,7 +87,6 @@ pub fn set_log_level(log_level: tracing::Level) {
 mod tests {
     use super::*;
     use camino::Utf8PathBuf;
-    use std::io::Write;
     use tempfile::TempDir;
     use tracing::Level;
 
@@ -154,8 +153,7 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let config_root = temp_dir.path().to_path_buf();
         let config_file_path = config_root.join("system.toml");
-        let mut file = std::fs::File::create(config_file_path.as_path())?;
-        file.write_all(content.as_bytes())?;
+        std::fs::write(config_file_path.as_path(), content.as_bytes())?;
         Ok((temp_dir, config_root.try_into().unwrap()))
     }
 }

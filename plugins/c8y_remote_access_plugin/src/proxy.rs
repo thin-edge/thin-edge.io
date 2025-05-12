@@ -380,6 +380,7 @@ mod tests {
         let assert_bidirectional_comms = tokio::spawn(async move {
             let (mut data, _) = target.accept().await.unwrap();
             data.write_all("tcp->ws".as_bytes()).await.unwrap();
+            data.flush().await.unwrap();
             let mut incoming = String::new();
             data.read_to_string(&mut incoming).await.unwrap();
             assert_eq!(incoming, "ws->tcp");

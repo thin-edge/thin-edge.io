@@ -250,6 +250,12 @@ async fn write_request_and_shutdown(
         .context("sock: Could not write to socket")?;
     eprintln!("sock: Message sent");
 
+    unix_stream
+        .flush()
+        .await
+        .into_diagnostic()
+        .context("sock: Could not write to socket")?;
+
     eprintln!("sock: Shutting down writing on the stream, waiting for response...");
     unix_stream
         .shutdown()

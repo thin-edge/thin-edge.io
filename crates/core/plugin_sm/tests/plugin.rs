@@ -4,7 +4,6 @@ mod tests {
     use plugin_sm::plugin::deserialize_module_info;
     use plugin_sm::plugin::sm_path;
     use plugin_sm::plugin::ExternalPluginCommand;
-    use std::io::Write;
     use std::path::Path;
     use std::path::PathBuf;
     use tedge_api::SoftwareError;
@@ -206,8 +205,7 @@ mod tests {
         let toml_conf = &format!("[software]\nmax_packages = {max_packages}");
 
         let config_location = TEdgeConfigLocation::from_custom_root(dir.path());
-        let mut file = std::fs::File::create(config_location.tedge_config_file_path())?;
-        file.write_all(toml_conf.as_bytes())?;
+        std::fs::write(config_location.tedge_config_file_path(), toml_conf)?;
         Ok(dir)
     }
 }
