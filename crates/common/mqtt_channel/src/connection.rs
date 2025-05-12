@@ -14,9 +14,11 @@ use log::warn;
 use rumqttc::AsyncClient;
 use rumqttc::Event;
 use rumqttc::EventLoop;
-use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
+use std::collections::HashSet;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OwnedSemaphorePermit;
@@ -94,6 +96,7 @@ impl Connection {
             Connection::open(config, received_sender.clone(), error_sender.clone()).await?;
         let permits = Arc::new(Semaphore::new(1));
         let permit = permits.clone().acquire_owned().await.unwrap();
+        let pub_count = Arc::new(AtomicUsize::new(0));
         tokio::spawn(Connection::receiver_loop(
             mqtt_client.clone(),
             config.clone(),
@@ -102,6 +105,7 @@ impl Connection {
             error_sender.clone(),
             pub_done_sender,
             permits,
+            pub_count.clone(),
         ));
         tokio::spawn(Connection::sender_loop(
             mqtt_client,
@@ -109,6 +113,7 @@ impl Connection {
             error_sender,
             config.last_will_message.clone(),
             permit,
+            pub_count,
         ));
 
         Ok(Connection {
@@ -202,6 +207,7 @@ impl Connection {
         Ok((mqtt_client, event_loop))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn receiver_loop(
         mqtt_client: AsyncClient,
         config: Config,
@@ -210,15 +216,21 @@ impl Connection {
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         done: oneshot::Sender<()>,
         permits: Arc<Semaphore>,
+        pub_count: Arc<AtomicUsize>,
     ) -> Result<(), MqttError> {
         let mut triggered_disconnect = false;
         let mut disconnect_permit = None;
+        let mut awaiting_ack = HashSet::new();
 
         loop {
             // Check if we are ready to disconnect. Due to ownership of the
             // event loop, this needs to be done before we call
             // `event_loop.poll()`
-            let remaining_events_empty = event_loop.state.inflight() == 0;
+            let remaining_events_empty =
+                // Are there any queued publishes?
+                pub_count.load(Ordering::SeqCst) == 0&&
+                // And are any published messages awaiting acknowledgement?
+                event_loop.state.inflight() == 0;
             if disconnect_permit.is_some() && !triggered_disconnect && remaining_events_empty {
                 // `sender_loop` is not running and we have no remaining
                 // publishes to process
@@ -287,9 +299,24 @@ impl Connection {
                     }
                 }
 
-                Ok(Event::Incoming(Incoming::Disconnect))
+                Ok(Event::Incoming(Packet::Disconnect))
                 | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
                     break;
+                }
+
+                Ok(Event::Outgoing(Outgoing::Publish(p))) => {
+                    if !awaiting_ack.contains(&p) {
+                        pub_count.fetch_sub(1, Ordering::SeqCst);
+                    }
+                    awaiting_ack.insert(p);
+                }
+
+                Ok(Event::Incoming(Packet::PubAck(p))) => {
+                    awaiting_ack.remove(&p.pkid);
+                }
+
+                Ok(Event::Incoming(Packet::PubComp(p))) => {
+                    awaiting_ack.remove(&p.pkid);
                 }
 
                 Err(err) => {
@@ -326,6 +353,7 @@ impl Connection {
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         last_will: Option<MqttMessage>,
         _disconnect_permit: OwnedSemaphorePermit,
+        pub_count: Arc<AtomicUsize>,
     ) {
         while let Some(message) = messages_receiver.next().await {
             let payload = Vec::from(message.payload_bytes());
@@ -334,6 +362,8 @@ impl Connection {
                 .await
             {
                 let _ = error_sender.send(err.into()).await;
+            } else {
+                pub_count.fetch_add(1, Ordering::SeqCst);
             }
         }
 
