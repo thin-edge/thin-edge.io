@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -36,7 +35,7 @@ pub fn signing_key(config: CryptokiConfig) -> anyhow::Result<Arc<dyn SigningKey>
             )
         }
         CryptokiConfig::SocketService { socket_path, uri } => Arc::new(TedgeP11ClientSigningKey {
-            socket_path: Arc::from(Path::new(&socket_path)),
+            client: TedgeP11Client::with_ready_check(socket_path.into()),
             uri,
         }),
     };
@@ -46,7 +45,7 @@ pub fn signing_key(config: CryptokiConfig) -> anyhow::Result<Arc<dyn SigningKey>
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TedgeP11ClientSigningKey {
-    pub socket_path: Arc<Path>,
+    pub client: TedgeP11Client,
     pub uri: Option<Arc<str>>,
 }
 
@@ -56,11 +55,8 @@ impl SigningKey for TedgeP11ClientSigningKey {
         &self,
         offered: &[rustls::SignatureScheme],
     ) -> Option<Box<dyn rustls::sign::Signer>> {
-        let client = TedgeP11Client {
-            socket_path: self.socket_path.clone(),
-        };
         let uri = self.uri.as_ref().map(|s| s.to_string());
-        let response = match client.choose_scheme(offered, uri) {
+        let response = match self.client.choose_scheme(offered, uri) {
             Ok(response) => response,
             Err(err) => {
                 error!(?err, "Failed to choose scheme using cryptoki signer");
@@ -70,36 +66,32 @@ impl SigningKey for TedgeP11ClientSigningKey {
         let scheme = response?;
 
         Some(Box::new(TedgeP11ClientSigner {
-            socket_path: self.socket_path.clone(),
+            client: self.client.clone(),
             scheme,
             uri: self.uri.clone(),
         }))
     }
 
     fn algorithm(&self) -> rustls::SignatureAlgorithm {
-        let client = TedgeP11Client {
-            socket_path: self.socket_path.clone(),
-        };
-
         // here we have no choice but to panic but this is only called by servers when verifying
         // client hello so it should never be called in our case
-        client.algorithm().unwrap()
+        self.client.algorithm().unwrap()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TedgeP11ClientSigner {
-    pub socket_path: Arc<Path>,
+    pub client: TedgeP11Client,
     scheme: rustls::SignatureScheme,
     pub uri: Option<Arc<str>>,
 }
 
 impl Signer for TedgeP11ClientSigner {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
-        let client = TedgeP11Client {
-            socket_path: self.socket_path.clone(),
-        };
-        let response = match client.sign(message, self.uri.as_ref().map(|s| s.to_string())) {
+        let response = match self
+            .client
+            .sign(message, self.uri.as_ref().map(|s| s.to_string()))
+        {
             Ok(response) => response,
             Err(err) => {
                 return Err(rustls::Error::Other(rustls::OtherError(Arc::from(
