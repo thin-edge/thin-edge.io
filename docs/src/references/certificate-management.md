@@ -82,11 +82,11 @@ the device generating a one-time password that is communicated by the operator t
 whilst the device keeps trying to download its certificate.
 :::
 
-For a guide on how to register the device, please checkout the [Connecting to Cumulocity](../../../operate/c8y/connect) guide.
+For a guide on how to register the device, please checkout the [Connecting to Cumulocity](../../operate/c8y/connect) guide.
 
 ### Using Device Management UI
 
-For instructions on how to register a device using the Cumulocity Device Management UI, please see the [Connecting to Cumulocity](../../../operate/c8y/connect) guide.
+For instructions on how to register a device using the Cumulocity Device Management UI, please see the [Connecting to Cumulocity](../../operate/c8y/connect) guide.
 
 ### Using CLI Commands
 
