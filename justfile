@@ -198,3 +198,9 @@ build-wasm-go:
     go tool wit-bindgen-go generate --world tedge --out internal tedge:filter.wasm
     tinygo build -target=wasip2 -o collectd-to-te.wasm --wit-package tedge:filter.wasm --wit-world tedge main.go
 
+build-wasm-js:
+    #!/usr/bin/env bash
+    set -e
+    cd crates/extensions/tedge_wasm_mapper/components/js
+    just build-wasm
+
