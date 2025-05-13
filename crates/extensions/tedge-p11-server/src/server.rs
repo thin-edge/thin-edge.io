@@ -156,16 +156,15 @@ mod tests {
         // wait until the server calls accept()
         tokio::time::sleep(Duration::from_millis(2)).await;
 
-        let mut client_connection = Connection::new(UnixStream::connect(&socket_path).unwrap());
-        let mut client_connection = tokio::task::spawn_blocking(move || {
+        let response = tokio::task::spawn_blocking(move || {
+            let mut client_connection = Connection::new(UnixStream::connect(&socket_path).unwrap());
             client_connection
                 .write_frame(&Frame1::SignResponse(SignResponse(vec![])))
                 .unwrap();
-            client_connection
+            client_connection.read_frame().unwrap()
         })
         .await
         .unwrap();
-        let response = client_connection.read_frame().unwrap();
         assert!(matches!(response, Frame1::Error(_)));
     }
 
