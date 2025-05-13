@@ -189,3 +189,12 @@ build-wasm: wasm_deps
 
 wasm_deps:
     rustup target add wasm32-wasip2
+
+build-wasm-go:
+    #!/usr/bin/env bash
+    set -e
+    cd crates/extensions/tedge_wasm_mapper/components/go/collectd_to_te
+    wkg wit build
+    go tool wit-bindgen-go generate --world tedge --out internal tedge:filter.wasm
+    tinygo build -target=wasip2 -o collectd-to-te.wasm --wit-package tedge:filter.wasm --wit-world tedge main.go
+
