@@ -11,7 +11,7 @@ use tedge_config::TEdgeConfigLocation;
 use tedge_utils::paths::DraftFile;
 use tokio::io::AsyncWriteExt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct BridgeConfig {
     pub cloud_name: String,
@@ -19,6 +19,7 @@ pub struct BridgeConfig {
     pub config_file: Cow<'static, str>,
     pub connection: String,
     pub address: HostPort<MQTT_TLS_PORT>,
+    pub tenant_id: Option<String>,
     pub remote_username: Option<String>,
     pub remote_password: Option<String>,
     pub bridge_root_cert_path: Utf8PathBuf,
@@ -46,7 +47,7 @@ pub struct BridgeConfig {
     pub proxy: Option<ProxyWrapper>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProxyWrapper(pub rumqttc::Proxy);
 
 impl PartialEq for ProxyWrapper {
@@ -194,6 +195,7 @@ mod test {
             config_file: "test-bridge.conf".into(),
             connection: "edge_to_test".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
+            tenant_id: None,
             remote_username: None,
             remote_password: None,
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
@@ -267,6 +269,7 @@ keepalive_interval 60
             config_file: "test-bridge.conf".into(),
             connection: "edge_to_test".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
+            tenant_id: None,
             remote_username: None,
             remote_password: None,
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
@@ -339,6 +342,7 @@ keepalive_interval 60
             config_file: "az-bridge.conf".into(),
             connection: "edge_to_az".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
+            tenant_id: None,
             remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
             remote_password: None,
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),
@@ -414,6 +418,7 @@ keepalive_interval 60
             config_file: "c8y-bridge.conf".into(),
             connection: "edge_to_c8y".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:8883")?,
+            tenant_id: None,
             remote_username: Some("octocat".into()),
             remote_password: Some("pass1234".into()),
             bridge_root_cert_path: bridge_root_cert_path.to_owned(),

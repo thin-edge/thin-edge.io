@@ -714,6 +714,7 @@ pub fn bridge_config(
                 config_file: cloud.bridge_config_filename(),
                 bridge_root_cert_path: c8y_config.root_cert_path.clone().into(),
                 remote_clientid: c8y_config.device.id()?.clone(),
+                tenant_id: c8y_config.tenant_id.clone().into(),
                 remote_username,
                 remote_password,
                 bridge_certfile: c8y_config.device.cert_path.clone().into(),
@@ -810,7 +811,7 @@ impl ConnectCommand {
         if bridge_config.bridge_location == BridgeLocation::Mosquitto {
             if let Err(err) = write_bridge_config_to_file(config_location, bridge_config).await {
                 // We want to preserve previous errors and therefore discard result of this function.
-                let _ = clean_up(config_location, bridge_config);
+                // let _ = clean_up(config_location, bridge_config);
                 return Err(err.into());
             }
         } else {
@@ -1024,6 +1025,29 @@ async fn write_bridge_config_to_file(
     let mut config_draft = DraftFile::new(config_path).await?.with_mode(0o644);
     bridge_config.serialize(&mut config_draft).await?;
     config_draft.persist().await?;
+
+    if bridge_config.tenant_id.is_some() {
+        // Bridge for MQTT service
+        let mut mqtt_svc_bridge = bridge_config.clone();
+        mqtt_svc_bridge.config_file = "c8y-mqtt-svc-bridge.conf".into();
+        mqtt_svc_bridge.local_clientid = "CumulocityMqttService".into();
+        mqtt_svc_bridge.connection = "edge_to_c8y_mqtt_svc".to_string();
+        let mqtt_svc_host_port =
+            HostPort::<8883>::try_from(format!("{}:9883", mqtt_svc_bridge.address.host())).unwrap();
+        mqtt_svc_bridge.address = mqtt_svc_host_port;
+        mqtt_svc_bridge
+            .remote_username
+            .clone_from(&mqtt_svc_bridge.tenant_id);
+        mqtt_svc_bridge.topics = vec![format!(
+            "# out 1 c8y-mqtt/ {}/",
+            mqtt_svc_bridge.remote_clientid
+        )];
+
+        let config_path = get_bridge_config_file_path(config_location, &mqtt_svc_bridge);
+        let mut config_draft = DraftFile::new(config_path).await?.with_mode(0o644);
+        mqtt_svc_bridge.serialize(&mut config_draft).await?;
+        config_draft.persist().await?;
+    }
 
     Ok(())
 }

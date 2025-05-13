@@ -78,6 +78,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
                 "edge_to_aws".into()
             },
             address: mqtt_host,
+            tenant_id: None,
             remote_username: Some(user_name),
             remote_password: None,
             bridge_root_cert_path,
@@ -144,6 +145,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         config_file: "aws-bridge.conf".into(),
         connection: "edge_to_aws".into(),
         address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
+        tenant_id: None,
         remote_username: Some("alpha".into()),
         remote_password: None,
         bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
@@ -206,6 +208,7 @@ fn test_bridge_config_aws_custom_topic_prefix() -> anyhow::Result<()> {
         config_file: "aws-bridge.conf".into(),
         connection: "edge_to_aws@profile".into(),
         address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
+        tenant_id: None,
         remote_username: Some("alpha".into()),
         remote_password: None,
         bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),

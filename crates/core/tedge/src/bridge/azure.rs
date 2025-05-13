@@ -71,6 +71,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
                 "edge_to_az".into()
             },
             address,
+            tenant_id: None,
             remote_username: Some(user_name),
             remote_password: None,
             bridge_root_cert_path,
@@ -142,6 +143,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         config_file: "az-bridge.conf".into(),
         connection: "edge_to_az".into(),
         address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
+        tenant_id: None,
         remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
         remote_password: None,
         bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
@@ -208,6 +210,7 @@ fn test_azure_bridge_config_with_custom_prefix() -> anyhow::Result<()> {
         config_file: "az-bridge.conf".into(),
         connection: "edge_to_az@profile".into(),
         address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io")?,
+        tenant_id: None,
         remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
         remote_password: None,
         bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
