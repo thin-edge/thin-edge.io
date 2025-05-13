@@ -74,4 +74,46 @@ provided new values will be ignored.
 ## Command help
 
 ```sh command="tedge-write --help" title="tedge-write --help"
+tee-like helper for writing to files which `tedge` user does not have write permissions to.
+
+To be used in combination with sudo, passing the file content via standard input.
+
+Usage: tedge-write [OPTIONS] <DESTINATION_PATH>
+
+Arguments:
+  <DESTINATION_PATH>
+          A canonical path to a file to which standard input will be written.
+
+          If the file does not exist, it will be created with the specified owner/group/permissions. If the file does exist, it will be overwritten, but its owner/group/permissions will remain unchanged.
+
+Options:
+      --mode <MODE>
+          Permission mode for the file, in octal form
+
+      --user <USER>
+          User which will become the new owner of the file
+
+      --group <GROUP>
+          Group which will become the new owner of the file
+
+      --config-dir <CONFIG_DIR>
+          [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+
+      --debug
+          Turn-on the DEBUG log level.
+
+          If off only reports ERROR, WARN, and INFO, if on also reports DEBUG
+
+      --log-level <LOG_LEVEL>
+          Configures the logging level.
+
+          One of error/warn/info/debug/trace. Logs with verbosity lower or equal to the selected level will be printed, i.e. warn prints ERROR and WARN logs and trace prints logs of all levels.
+
+          Overrides `--debug`
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
 ```

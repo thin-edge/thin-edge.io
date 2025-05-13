@@ -85,6 +85,20 @@ token will be considered for a key.
 ## Relevant configuration
 
 ```sh command="tedge config list --doc device.cryptoki" title="tedge config list --doc device.cryptoki"
+       device.cryptoki.mode  Whether to use a Hardware Security Module for authenticating the MQTT connection with the cloud.  "off" to not use the HSM, "module" to use the provided cryptoki dynamic module, "socket" to access the HSM via tedge-p11-server signing service.
+                             Examples: off, module, socket
+
+device.cryptoki.module_path  A path to the PKCS#11 module used for interaction with the HSM.  Needs to be set when `device.cryptoki.mode` is set to `module`.
+                             Example: /usr/lib/x86_64-linux-gnu/opensc-pkcs11.so
+
+        device.cryptoki.pin  Pin value for logging into the HSM.
+                             Example: 123456
+
+        device.cryptoki.uri  A URI of the token/object to be used by tedge-p11-server.  See RFC #7512.
+                             Example: pkcs11:token=my-pkcs11-token;object=my-key
+
+device.cryptoki.socket_path  A path to the tedge-p11-server socket.  Needs to be set when `device.cryptoki.mode` is set to `socket`.
+                             Example: /run/tedge-p11-server/tedge-p11-server.sock
 ```
 
 ## Command help
