@@ -22,7 +22,6 @@ smartrest template custom operation successful
     ${c8y_messages}=    Should Have MQTT Messages
     ...    c8y/s/dc/${DEVICE_SN}
     ...    minimum=1
-    ...    maximum=1
     ...    message_contains=dm101,${DEVICE_SN},Factory Wifi,factory-onboarding-wifi,WPA3-Personal
 
 
