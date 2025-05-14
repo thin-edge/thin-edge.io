@@ -22,7 +22,6 @@ Firmware plugin supports restart via service manager #1932
     ...    topic=tedge/${CHILD_SN}/commands/req/firmware_update
     ...    date_from=${operation_start}
     ...    minimum=1
-    ...    maximum=1
 
     # Restart firmware plugin
     ${restart_pre}=    ThinEdgeIO.Get Unix Timestamp
