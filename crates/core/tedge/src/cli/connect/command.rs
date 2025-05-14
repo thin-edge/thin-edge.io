@@ -334,7 +334,9 @@ impl ConnectCommand {
                 let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
                 let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
                 if let Some(client_config) = mqtt_auth_config.client.as_mut() {
-                    client_config.cert_file = _certificate_shift.new_cert_path.to_owned()
+                    _certificate_shift
+                        .new_cert_path
+                        .clone_into(&mut client_config.cert_file)
                 }
 
                 create_device_with_direct_connection(

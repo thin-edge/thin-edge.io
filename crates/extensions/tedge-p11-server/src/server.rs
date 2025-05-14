@@ -157,7 +157,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(2)).await;
 
         let response = tokio::task::spawn_blocking(move || {
-            let mut client_connection = Connection::new(UnixStream::connect(&socket_path).unwrap());
+            let mut client_connection = Connection::new(UnixStream::connect(socket_path).unwrap());
             client_connection
                 .write_frame(&Frame1::SignResponse(SignResponse(vec![])))
                 .unwrap();
@@ -184,7 +184,7 @@ mod tests {
 
         // the reader should exit
         tokio::task::spawn_blocking(move || {
-            let mut stream = UnixStream::connect(&socket_path).unwrap();
+            let mut stream = UnixStream::connect(socket_path).unwrap();
             write!(stream, "garbage").unwrap();
             stream.shutdown(std::net::Shutdown::Write).unwrap();
             let mut response = Vec::new();
