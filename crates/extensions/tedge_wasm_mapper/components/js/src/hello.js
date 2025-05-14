@@ -7,8 +7,8 @@ class Message {
 
 
 export function process (timestamp, message) {
-  payload.time = timestamp.seconds + timestamp.nanoseconds / 10^9
-  payload = JSON.parse(message.payload);
+  let payload = JSON.parse(message.payload)
+  payload.time = Number(timestamp.seconds) + (timestamp.nanoseconds / 1e9)
   
-  return [Message.new(message.topic, payload.stringify())]; 
+  return [new Message(`${message.topic}/out`, JSON.stringify(payload))]
 }
