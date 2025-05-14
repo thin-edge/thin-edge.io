@@ -1,0 +1,6 @@
+input_topics = ["te/+/+/+/+/m/+"]
+
+stages = [
+    { filter = "add_timestamp.js" },
+    { filter = "te_to_c8y.js" }
+]

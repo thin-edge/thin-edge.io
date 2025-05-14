@@ -10,8 +10,10 @@ repository.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
-camino = { workspace = true }
+camino = { workspace = true, features = ["serde1"] }
+rquickjs = { workspace = true, features = ["futures","parallel"] }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 thiserror = { workspace = true }
