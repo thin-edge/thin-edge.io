@@ -4,7 +4,7 @@ Library         String
 Library         Cumulocity
 Library         ThinEdgeIO
 
-Test Tags       theme:c8y    test:on_demand
+Test Tags       theme:c8y
 
 
 *** Test Cases ***
