@@ -126,7 +126,7 @@ struct PrivateKey(rustls::pki_types::PrivateKeyDer<'static>);
 
 impl zeroize::Zeroize for PrivateKey {
     fn zeroize(&mut self) {
-        // FIXME(#3376) I can't be implemented with rustls 0.23 due to immutability
+        self.0.zeroize()
     }
 }
 
