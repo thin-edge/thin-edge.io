@@ -1,3 +1,4 @@
+use crate::js_filter::JsRuntime;
 use crate::pipeline::Pipeline;
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -15,6 +16,7 @@ use tracing::error;
 pub struct GenMapper {
     pub(super) mqtt: SimpleMessageBox<MqttMessage, MqttMessage>,
     pub(super) pipelines: HashMap<String, Pipeline>,
+    pub(super) js_runtime: JsRuntime,
 }
 
 #[async_trait]
@@ -47,7 +49,7 @@ impl GenMapper {
     async fn filter(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
         let timestamp = OffsetDateTime::now_utc();
         for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
-            match pipeline.process(timestamp, &message) {
+            match pipeline.process(&self.js_runtime, timestamp, &message) {
                 Ok(messages) => {
                     for message in messages {
                         self.mqtt.send(message).await?;
@@ -65,7 +67,7 @@ impl GenMapper {
     async fn tick(&mut self) -> Result<(), RuntimeError> {
         let timestamp = OffsetDateTime::now_utc();
         for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
-            match pipeline.tick(timestamp) {
+            match pipeline.tick(&self.js_runtime, timestamp) {
                 Ok(messages) => {
                     for message in messages {
                         self.mqtt.send(message).await?;
