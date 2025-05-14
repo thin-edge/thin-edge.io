@@ -1,0 +1,6 @@
+input_topics = ["collectd/+/+/+"]
+
+stages = [
+    { filter = "collectd-to-te.js" },
+    { filter = "group_by_timestamp.js" }
+]
