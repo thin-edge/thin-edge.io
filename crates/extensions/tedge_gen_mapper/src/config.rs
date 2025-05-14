@@ -1,8 +1,10 @@
+use crate::js_filter::JsRuntime;
 use crate::pipeline::Pipeline;
 use crate::pipeline::Stage;
-use crate::gen_filter::GenFilter;
+use crate::LoadError;
+use camino::Utf8PathBuf;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::Path;
 use tedge_mqtt_ext::TopicFilter;
 
 #[derive(Deserialize)]
@@ -22,40 +24,48 @@ pub struct StageConfig {
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum FilterSpec {
-    JavaScript(PathBuf),
+    JavaScript(Utf8PathBuf),
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
     #[error("Not a valid MQTT topic filter: {0}")]
     IncorrectTopicFilter(String),
+
+    #[error(transparent)]
+    LoadError(#[from] LoadError),
 }
 
-impl TryFrom<PipelineConfig> for Pipeline {
-    type Error = ConfigError;
-
-    fn try_from(config: PipelineConfig) -> Result<Self, Self::Error> {
-        let input = topic_filters(&config.input_topics)?;
-        let stages = config
+impl PipelineConfig {
+    pub fn compile(
+        self,
+        js_runtime: &JsRuntime,
+        config_dir: &Path,
+    ) -> Result<Pipeline, ConfigError> {
+        let input = topic_filters(&self.input_topics)?;
+        let stages = self
             .stages
             .into_iter()
-            .map(Stage::try_from)
+            .map(|stage| stage.compile(js_runtime, config_dir))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Pipeline { input_topics: input, stages })
+        Ok(Pipeline {
+            input_topics: input,
+            stages,
+        })
     }
 }
 
-impl TryFrom<StageConfig> for Stage {
-    type Error = ConfigError;
-
-    fn try_from(config: StageConfig) -> Result<Self, Self::Error> {
-        let filter = match config.filter {
-            FilterSpec::JavaScript(path) => GenFilter::new(path),
+impl StageConfig {
+    pub fn compile(self, js_runtime: &JsRuntime, config_dir: &Path) -> Result<Stage, ConfigError> {
+        let path = match self.filter {
+            FilterSpec::JavaScript(path) if path.is_absolute() => path.into(),
+            FilterSpec::JavaScript(path) => config_dir.join(path),
         };
-        let config = topic_filters(&config.config_topics)?;
+        let filter = js_runtime.loaded_module(path)?;
+        let config_topics = topic_filters(&self.config_topics)?;
         Ok(Stage {
-            filter: Box::new(filter),
-            config_topics: config,
+            filter,
+            config_topics,
         })
     }
 }
