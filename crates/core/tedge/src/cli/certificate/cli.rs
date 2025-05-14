@@ -385,7 +385,7 @@ pub enum UploadCertCli {
         /// You will be prompted for input if the value is not provided or is empty
         username: String,
 
-        #[clap(long = "password")]
+        #[clap(long = "password", allow_hyphen_values = true)]
         #[arg(env = "C8Y_PASSWORD", hide_env_values = true, hide_default_value = true, default_value_t = std::env::var("C8YPASS").unwrap_or_default().to_string())]
         // Note: Prefer C8Y_PASSWORD over the now deprecated C8YPASS env variable as the former is also supported by other tooling such as go-c8y-cli
         /// Cumulocity Password.
@@ -443,7 +443,7 @@ pub enum DownloadCertCli {
         )]
         id: String,
 
-        #[clap(short = 'p', long = "one-time-password")]
+        #[clap(short = 'p', long = "one-time-password", allow_hyphen_values = true)]
         #[arg(
             env = "DEVICE_ONE_TIME_PASSWORD",
             hide_env_values = true,
