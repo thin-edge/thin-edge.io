@@ -133,47 +133,30 @@ impl Cryptoki {
         debug!(?session_info, "Opened a readonly session");
 
         // get the signing key
-        let key = match &uri_attributes {
-            uri::Pkcs11Uri { id, object, .. } if id.is_some() || object.is_some() => {
-                let key = Self::find_key_by_attributes(&uri_attributes, &session)?;
-                let key_type = session
-                    .get_attributes(key, &[AttributeType::KeyType])?
-                    .into_iter()
-                    .next()
-                    .context("no keytype attribute")?;
-                let Attribute::KeyType(keytype) = key_type else {
-                    anyhow::bail!("can't get key type");
-                };
-                let pkcs11 = PKCS11 {
-                    session: Arc::new(Mutex::new(session)),
-                };
-                match keytype {
-                    KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey {
-                        pkcs11,
-                        handle: key,
-                    }),
-                    KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey {
-                        pkcs11,
-                        handle: key,
-                    }),
-                    _ => anyhow::bail!("unsupported key type"),
-                }
-            }
-            _ => {
-                let pkcs11 = PKCS11 {
-                    session: Arc::new(Mutex::new(session)),
-                };
-                let (key_type, handle) =
-                    get_key_type(pkcs11.clone()).context("Failed to read key")?;
-                trace!("Key Type: {:?}", key_type.to_string());
-                match key_type {
-                    KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey { pkcs11, handle }),
-                    KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey { pkcs11, handle }),
-                    _ => {
-                        anyhow::bail!("Unsupported key type. Only EC and RSA keys are supported");
-                    }
-                }
-            }
+        let key = Self::find_key_by_attributes(&uri_attributes, &session)?;
+        let key_type = session
+            .get_attributes(key, &[AttributeType::KeyType])?
+            .into_iter()
+            .next()
+            .context("no keytype attribute")?;
+
+        let Attribute::KeyType(keytype) = key_type else {
+            anyhow::bail!("can't get key type");
+        };
+
+        let pkcs11 = PKCS11 {
+            session: Arc::new(Mutex::new(session)),
+        };
+        let key = match keytype {
+            KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey {
+                pkcs11,
+                handle: key,
+            }),
+            KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey {
+                pkcs11,
+                handle: key,
+            }),
+            _ => anyhow::bail!("unsupported key type"),
         };
 
         Ok(key)
@@ -440,51 +423,6 @@ impl SigningKey for RSASigningKey {
     fn algorithm(&self) -> SignatureAlgorithm {
         SignatureAlgorithm::RSA
     }
-}
-
-fn get_key_type(pkcs11: PKCS11) -> anyhow::Result<(KeyType, ObjectHandle)> {
-    let session = pkcs11.session.lock().unwrap();
-
-    let key_template = vec![
-        Attribute::Token(true),
-        Attribute::Private(true),
-        Attribute::Sign(true),
-    ];
-
-    trace!(?key_template, "Finding a key");
-    let mut keys = session
-        .find_objects(&key_template)
-        .context("Failed to find private key objects")?
-        .into_iter();
-
-    let key = keys.next().context("Failed to find a private key")?;
-    if keys.len() > 0 {
-        warn!("Multiple keys were found. If the wrong one was chosen, please use a URI that uniquely identifies a key.")
-    }
-
-    let info = session
-        .get_attributes(
-            key,
-            &[
-                AttributeType::KeyType,
-                AttributeType::Token,
-                AttributeType::Private,
-                AttributeType::Sign,
-            ],
-        )
-        .context("failed to get key attributes")?;
-
-    let mut key_type = KeyType::EC;
-    let Attribute::KeyType(returned_key_type) = info
-        .iter()
-        .find(|a| a.attribute_type() == AttributeType::KeyType)
-        .unwrap()
-    else {
-        return Ok((key_type, key));
-    };
-    key_type = *returned_key_type;
-
-    Ok((key_type, key))
 }
 
 fn format_asn1_ecdsa_signature(r_bytes: &[u8], s_bytes: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
