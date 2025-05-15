@@ -103,8 +103,7 @@ impl AgentConfig {
         tedge_config_location: &tedge_config::TEdgeConfigLocation,
         cliopts: AgentOpt,
     ) -> Result<Self, anyhow::Error> {
-        let tedge_config =
-            tedge_config::TEdgeConfig::try_new(tedge_config_location.clone()).await?;
+        let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location).await?;
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
         let tmp_dir = Arc::from(tedge_config.tmp.path.as_path());
@@ -146,18 +145,16 @@ impl AgentConfig {
 
         // Restart config
         let restart_config =
-            RestartManagerConfig::from_tedge_config(&mqtt_device_topic_id, tedge_config_location)
-                .await?;
+            RestartManagerConfig::from_tedge_config(&mqtt_device_topic_id, &tedge_config).await?;
 
         // Software update config
-        let sw_update_config =
-            SoftwareManagerConfig::from_tedge_config(tedge_config_location).await?;
+        let sw_update_config = SoftwareManagerConfig::from_tedge_config(&tedge_config).await?;
 
         // Operation Workflow config
         let operation_config = OperationConfig::from_tedge_config(
             mqtt_topic_root.to_string(),
             &mqtt_device_topic_id,
-            tedge_config_location,
+            &tedge_config,
         )
         .await?;
 

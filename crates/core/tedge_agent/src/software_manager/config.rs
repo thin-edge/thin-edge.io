@@ -1,6 +1,7 @@
 use camino::Utf8PathBuf;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::SudoCommandBuilder;
+use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 #[derive(Debug, Clone)]
 pub struct SoftwareManagerConfig {
@@ -17,11 +18,9 @@ pub struct SoftwareManagerConfig {
 
 impl SoftwareManagerConfig {
     pub async fn from_tedge_config(
-        tedge_config_location: &TEdgeConfigLocation,
+        tedge_config: &TEdgeConfig,
     ) -> Result<SoftwareManagerConfig, tedge_config::TEdgeConfigError> {
-        let tedge_config =
-            tedge_config::TEdgeConfig::try_new(tedge_config_location.clone()).await?;
-        let config_dir = &tedge_config_location.tedge_config_root_path;
+        let config_dir = &tedge_config.location().tedge_config_root_path;
 
         let default_plugin_type = tedge_config
             .software
@@ -45,8 +44,8 @@ impl SoftwareManagerConfig {
             sm_plugins_dir: config_dir.join("sm-plugins"),
             log_dir: tedge_config.logs.path.join("agent"),
             default_plugin_type,
-            config_location: tedge_config_location.clone(),
-            sudo: SudoCommandBuilder::new(&tedge_config),
+            config_location: tedge_config.location().clone(),
+            sudo: SudoCommandBuilder::new(tedge_config),
         })
     }
 }

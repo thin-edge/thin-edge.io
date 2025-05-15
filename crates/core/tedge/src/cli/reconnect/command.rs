@@ -6,10 +6,8 @@ use crate::log::MaybeFancy;
 use crate::system_services::SystemServiceManager;
 use std::sync::Arc;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 
 pub struct ReconnectBridgeCommand {
-    pub config_location: TEdgeConfigLocation,
     pub config: TEdgeConfig,
     pub cloud: Cloud,
     pub use_mapper: bool,
@@ -37,7 +35,7 @@ impl Command for ReconnectBridgeCommand {
 impl From<&ReconnectBridgeCommand> for DisconnectBridgeCommand {
     fn from(reconnect_cmd: &ReconnectBridgeCommand) -> Self {
         DisconnectBridgeCommand {
-            config_location: reconnect_cmd.config_location.clone(),
+            config_location: reconnect_cmd.config.location().clone(),
             cloud: reconnect_cmd.cloud.clone(),
             use_mapper: reconnect_cmd.use_mapper,
             service_manager: reconnect_cmd.service_manager.clone(),
@@ -48,7 +46,6 @@ impl From<&ReconnectBridgeCommand> for DisconnectBridgeCommand {
 impl From<&ReconnectBridgeCommand> for ConnectCommand {
     fn from(reconnect_cmd: &ReconnectBridgeCommand) -> Self {
         ConnectCommand {
-            config_location: reconnect_cmd.config_location.clone(),
             config: reconnect_cmd.config.clone(),
             cloud: reconnect_cmd.cloud.clone(),
             is_test_connection: false,

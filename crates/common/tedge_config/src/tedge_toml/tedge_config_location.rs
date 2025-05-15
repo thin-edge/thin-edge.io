@@ -103,7 +103,7 @@ impl TEdgeConfigLocation {
             "Loading configuration from {:?}",
             self.tedge_config_file_path
         );
-        Ok(TEdgeConfig::from_dto(&dto, self))
+        Ok(TEdgeConfig::from_dto(&dto, self.clone()))
     }
 
     pub fn load_sync(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
@@ -112,7 +112,7 @@ impl TEdgeConfigLocation {
             "Loading configuration from {:?}",
             self.tedge_config_file_path
         );
-        Ok(TEdgeConfig::from_dto(&dto, self))
+        Ok(TEdgeConfig::from_dto(&dto, self.clone()))
     }
 
     pub async fn load_dto_from_toml_and_env(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
@@ -151,7 +151,7 @@ impl TEdgeConfigLocation {
         let (dto, warnings) =
             deserialize_toml(toml_value, Utf8Path::new("/not/read/from/file/system")).unwrap();
         warnings.emit();
-        TEdgeConfig::from_dto(&dto, &TEdgeConfigLocation::default())
+        TEdgeConfig::from_dto(&dto, TEdgeConfigLocation::default())
     }
 
     async fn load_dto_with_warnings<Sources: ConfigSources>(

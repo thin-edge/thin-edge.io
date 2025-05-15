@@ -5,14 +5,13 @@ use std::io::stdout;
 use std::io::IsTerminal;
 use tedge_config::tedge_toml::READABLE_KEYS;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use yansi::Paint;
 
 pub struct ListConfigCommand {
     pub is_all: bool,
     pub is_doc: bool,
     pub filter: Option<String>,
-    pub config_location: TEdgeConfigLocation,
+    pub config: TEdgeConfig,
 }
 
 #[async_trait::async_trait]
@@ -25,12 +24,7 @@ impl Command for ListConfigCommand {
         if self.is_doc {
             print_config_doc(self.filter.as_deref());
         } else {
-            let config = self
-                .config_location
-                .load()
-                .await
-                .map_err(anyhow::Error::new)?;
-            print_config_list(&config, self.is_all, self.filter.as_deref())?;
+            print_config_list(&self.config, self.is_all, self.filter.as_deref())?;
         }
 
         Ok(())

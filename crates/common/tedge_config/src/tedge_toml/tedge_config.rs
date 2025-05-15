@@ -73,19 +73,29 @@ impl<T> OptionalConfigError<T> for OptionalConfig<T> {
 }
 
 #[derive(Clone)]
-pub struct TEdgeConfig(TEdgeConfigReader);
+pub struct TEdgeConfig {
+    reader: TEdgeConfigReader,
+    location: TEdgeConfigLocation,
+}
 
 impl std::ops::Deref for TEdgeConfig {
     type Target = TEdgeConfigReader;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.reader
     }
 }
 
 impl TEdgeConfig {
-    pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
-        Self(TEdgeConfigReader::from_dto(dto, location))
+    pub fn from_dto(dto: &TEdgeConfigDto, location: TEdgeConfigLocation) -> Self {
+        Self {
+            reader: TEdgeConfigReader::from_dto(dto, &location),
+            location,
+        }
+    }
+
+    pub fn location(&self) -> &TEdgeConfigLocation {
+        &self.location
     }
 }
 

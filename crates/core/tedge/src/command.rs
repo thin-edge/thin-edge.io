@@ -1,6 +1,5 @@
 use crate::log::MaybeFancy;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 
 /// A trait to be implemented by all tedge sub-commands.
 ///
@@ -88,7 +87,7 @@ pub trait Command {
     ///
     /// ```
     /// use tedge_config::tedge_toml::ReadableKey;
-    /// use tedge_config::TEdgeConfigLocation;
+    /// use tedge_config::TEdgeConfig;
     /// use tedge::cli::config::GetConfigCommand;
     /// use tedge::ConfigError;
     /// use tedge::command::Command;
@@ -96,8 +95,8 @@ pub trait Command {
     /// struct SomeStruct;
     ///
     /// impl SomeStruct {
-    ///     fn build_command(self, config_location: TEdgeConfigLocation) -> Result<Box<dyn Command>, ConfigError> {
-    ///         let cmd = GetConfigCommand { config_location, key: ReadableKey::MqttBindPort };
+    ///     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    ///         let cmd = GetConfigCommand { config, key: ReadableKey::MqttBindPort };
     ///         Ok(cmd.into_boxed())
     ///     }
     /// }
@@ -134,15 +133,15 @@ pub trait Command {
 /// }
 ///
 /// impl BuildCommand for ConfigCmd {
-///     fn build_command(self, _config: TEdgeConfig, config_location: TEdgeConfigLocation) -> Result<Box<dyn Command>, ConfigError> {
+///     fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
 ///         let cmd = match self {
 ///             ConfigCmd::Set { key, value } => SetConfigCommand {
-///                 config_location,
+///                 config,
 ///                 key,
 ///                 value,
 ///             }.into_boxed(),
 ///             ConfigCmd::Get { key } => GetConfigCommand {
-///                 config_location,
+///                 config,
 ///                 key,
 ///             }.into_boxed(),
 ///         };
@@ -155,9 +154,5 @@ pub trait BuildCommand {
     ///
     /// As some commands have to update the config (notably `tedge config set`),
     /// the command are given not only the config but also the location of that config.
-    fn build_command(
-        self,
-        config: TEdgeConfig,
-        config_location: TEdgeConfigLocation,
-    ) -> Result<Box<dyn Command>, crate::ConfigError>;
+    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError>;
 }
