@@ -5,7 +5,7 @@ use crate::log::MaybeFancy;
 
 pub struct GetConfigCommand {
     pub key: ReadableKey,
-    pub config_location: tedge_config::TEdgeConfigLocation,
+    pub config: tedge_config::TEdgeConfig,
 }
 
 #[async_trait::async_trait]
@@ -15,12 +15,7 @@ impl Command for GetConfigCommand {
     }
 
     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let config = self
-            .config_location
-            .load()
-            .await
-            .map_err(anyhow::Error::new)?;
-        match config.read_string(&self.key) {
+        match self.config.read_string(&self.key) {
             Ok(value) => {
                 println!("{}", value);
             }

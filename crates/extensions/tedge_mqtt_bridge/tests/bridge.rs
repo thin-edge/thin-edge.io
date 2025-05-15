@@ -669,7 +669,7 @@ async fn tedge_mqtt_config(mqtt_port: u16) -> TEdgeConfig {
         })
         .await
         .unwrap();
-    TEdgeConfig::try_new(config_loc).await.unwrap()
+    TEdgeConfig::try_new(&config_loc).await.unwrap()
 }
 
 fn get_rumqttd_config(port: u16) -> Config {

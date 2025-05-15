@@ -1,6 +1,7 @@
 use camino::Utf8PathBuf;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_config::TEdgeConfig;
 
 #[derive(Debug, Clone)]
 pub struct OperationConfig {
@@ -16,11 +17,9 @@ impl OperationConfig {
     pub async fn from_tedge_config(
         topic_root: String,
         device_topic_id: &EntityTopicId,
-        tedge_config_location: &tedge_config::TEdgeConfigLocation,
+        tedge_config: &TEdgeConfig,
     ) -> Result<OperationConfig, tedge_config::TEdgeConfigError> {
-        let config_dir = &tedge_config_location.tedge_config_root_path;
-        let tedge_config =
-            tedge_config::TEdgeConfig::try_new(tedge_config_location.clone()).await?;
+        let config_dir = &tedge_config.location().tedge_config_root_path;
 
         Ok(OperationConfig {
             mqtt_schema: MqttSchema::with_root(topic_root),

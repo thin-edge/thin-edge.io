@@ -15,17 +15,18 @@ pub use tedge_toml::tedge_config_location::*;
 pub use camino::Utf8Path as Path;
 pub use camino::Utf8PathBuf as PathBuf;
 pub use certificate::CertificateError;
+use std::path::Path as StdPath;
 pub use tedge_config_macros::all_or_nothing;
 pub use tedge_config_macros::OptionalConfig;
 
 impl TEdgeConfig {
-    pub async fn try_new(config_location: TEdgeConfigLocation) -> Result<Self, TEdgeConfigError> {
+    pub async fn try_new(config_location: &TEdgeConfigLocation) -> Result<Self, TEdgeConfigError> {
         config_location.load().await
     }
 
-    pub async fn load(config_dir: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let config_location = TEdgeConfigLocation::from_custom_root(config_dir);
-        TEdgeConfig::try_new(config_location).await
+    pub async fn load(config_dir: impl AsRef<StdPath>) -> Result<TEdgeConfig, TEdgeConfigError> {
+        let config_location = TEdgeConfigLocation::from_custom_root(config_dir.as_ref());
+        TEdgeConfig::try_new(&config_location).await
     }
 
     #[cfg(feature = "test")]

@@ -14,7 +14,6 @@ use reqwest::Identity;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::OptionalConfig;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use tokio::fs::File;
 
 #[derive(clap::Subcommand, Debug)]
@@ -195,11 +194,7 @@ impl Content {
 }
 
 impl BuildCommand for TEdgeHttpCli {
-    fn build_command(
-        self,
-        config: TEdgeConfig,
-        _: TEdgeConfigLocation,
-    ) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let uri = self.uri();
 
         let (protocol, host, port) = if uri.starts_with("/c8y") {

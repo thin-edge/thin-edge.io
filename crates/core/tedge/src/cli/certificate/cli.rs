@@ -20,7 +20,6 @@ use std::time::Duration;
 use tedge_config::tedge_toml::OptionalConfigError;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeCertCli {
@@ -141,11 +140,7 @@ pub enum CA {
 }
 
 impl BuildCommand for TEdgeCertCli {
-    fn build_command(
-        self,
-        config: TEdgeConfig,
-        _: TEdgeConfigLocation,
-    ) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let (user, group) = if config.mqtt.bridge.built_in {
             ("tedge", "tedge")
         } else {

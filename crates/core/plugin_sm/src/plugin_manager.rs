@@ -137,7 +137,7 @@ impl ExternalPlugins {
     pub async fn load(&mut self) -> anyhow::Result<()> {
         self.plugin_map.clear();
 
-        let config = tedge_config::TEdgeConfig::try_new(self.config_location.clone())
+        let config = tedge_config::TEdgeConfig::try_new(&self.config_location)
             .await
             .map_err(|err| io::Error::other(format!("Failed to load tedge config: {}", err)))?;
 

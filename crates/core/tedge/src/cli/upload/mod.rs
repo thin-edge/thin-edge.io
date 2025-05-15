@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 
 mod c8y;
 
@@ -64,11 +63,7 @@ fn parse_mime_type(input: &str) -> Result<String, anyhow::Error> {
 }
 
 impl BuildCommand for UploadCmd {
-    fn build_command(
-        self,
-        config: TEdgeConfig,
-        _: TEdgeConfigLocation,
-    ) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let cmd = match self {
             UploadCmd::C8y {
                 event_type,

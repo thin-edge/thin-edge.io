@@ -10,11 +10,11 @@ use mqtt_channel::Topic;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
-use std::path::Path;
 use std::process;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 use tedge_api::health::ServiceHealthTopic;
@@ -22,7 +22,7 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_config::TEdgeConfigLocation;
+use tedge_config::TEdgeConfig;
 use tedge_utils::timestamp::IsoOrUnix;
 use time::OffsetDateTime;
 use tracing::debug;
@@ -51,7 +51,7 @@ struct HealthStatusExt {
     pub time: Option<JsonValue>,
 }
 
-pub async fn start_watchdog(tedge_config_dir: &Path) -> Result<(), anyhow::Error> {
+pub async fn start_watchdog(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     // Send ready notification to systemd.
     notify_systemd(process::id(), "--ready")?;
 
@@ -59,7 +59,7 @@ pub async fn start_watchdog(tedge_config_dir: &Path) -> Result<(), anyhow::Error
     start_watchdog_for_self().await?;
 
     // Monitor health of tedge services
-    start_watchdog_for_tedge_services(tedge_config_dir).await;
+    start_watchdog_for_tedge_services(tedge_config).await;
     Ok(())
 }
 
@@ -91,13 +91,7 @@ async fn start_watchdog_for_self() -> Result<(), WatchdogError> {
     }
 }
 
-async fn start_watchdog_for_tedge_services(tedge_config_dir: &Path) {
-    let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(tedge_config_dir);
-    let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone())
-        .await
-        .expect("Could not load config");
-
+async fn start_watchdog_for_tedge_services(tedge_config: TEdgeConfig) {
     let mqtt_topic_root = tedge_config.mqtt.topic_root.clone();
     let mqtt_schema = MqttSchema::with_root(mqtt_topic_root);
 
@@ -126,6 +120,7 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: &Path) {
     .collect::<Vec<_>>();
 
     let watchdog_tasks = FuturesUnordered::new();
+    let tedge_config = Arc::new(tedge_config);
 
     for service in tedge_services {
         let service_name = service.default_service_name().unwrap();
@@ -139,12 +134,12 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: &Path) {
                     },
                 );
                 let res_topic = mqtt_schema.topic_for(&service, &Channel::Health);
+                let tedge_config = tedge_config.clone();
 
-                let tedge_config_location = tedge_config_location.clone();
                 watchdog_tasks.push(tokio::spawn(async move {
                     let interval = Duration::from_secs((interval / NOTIFY_SEND_FREQ_RATIO).max(1));
                     monitor_tedge_service(
-                        tedge_config_location,
+                        &tedge_config,
                         service.as_str(),
                         req_topic,
                         res_topic,
@@ -164,14 +159,12 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: &Path) {
 }
 
 async fn monitor_tedge_service(
-    tedge_config_location: TEdgeConfigLocation,
+    tedge_config: &TEdgeConfig,
     name: &str,
     req_topic: Topic,
     res_topic: Topic,
     interval: Duration,
 ) -> Result<(), WatchdogError> {
-    let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location).await?;
-
     let mqtt_device_topic_id: EntityTopicId = tedge_config
         .mqtt
         .device_topic_id

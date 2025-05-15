@@ -72,7 +72,6 @@ const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 20;
 const MQTT_TLS_PORT: u16 = 8883;
 
 pub struct ConnectCommand {
-    pub config_location: TEdgeConfigLocation,
     pub config: TEdgeConfig,
     pub cloud: Cloud,
     pub is_test_connection: bool,
@@ -121,7 +120,7 @@ impl Command for ConnectCommand {
         if self.is_test_connection {
             self.check_bridge(bridge_config).await.map_err(<_>::into)
         } else {
-            fail_if_already_connected(&self.config_location, &bridge_config)
+            fail_if_already_connected(self.config.location(), &bridge_config)
                 .map_err(anyhow::Error::new)?;
 
             let shift_failed = match bridge_config.certificate_awaits_validation().await {
@@ -446,7 +445,8 @@ impl ConnectCommand {
 
     async fn check_if_bridge_exists(&self, br_config: &BridgeConfig) -> bool {
         let bridge_conf_path = self
-            .config_location
+            .config
+            .location()
             .tedge_config_root_path
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
             .join(&*br_config.config_file);
@@ -772,7 +772,7 @@ impl ConnectCommand {
         }
 
         let tedge_config = &self.config;
-        let config_location = &self.config_location;
+        let config_location = self.config.location();
 
         match &self.cloud {
             #[cfg(feature = "c8y")]

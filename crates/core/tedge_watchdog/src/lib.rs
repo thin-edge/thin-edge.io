@@ -27,14 +27,13 @@ pub struct WatchdogOpt {
 }
 
 pub async fn run(watchdog_opt: WatchdogOpt) -> Result<(), anyhow::Error> {
-    let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(watchdog_opt.common.config_dir.clone());
+    let tedge_config = tedge_config::TEdgeConfig::load(&watchdog_opt.common.config_dir).await?;
 
     log_init(
         "tedge-watchdog",
         &watchdog_opt.common.log_args,
-        &tedge_config_location.tedge_config_root_path,
+        &tedge_config.location().tedge_config_root_path,
     )?;
 
-    watchdog::start_watchdog(watchdog_opt.common.config_dir.as_std_path()).await
+    watchdog::start_watchdog(tedge_config).await
 }
