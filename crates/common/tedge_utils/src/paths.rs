@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use async_tempfile::TempFile;
 use tokio::io::AsyncWrite;
+use tokio::io::AsyncWriteExt;
+use tokio::io::BufWriter;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PathsError {
@@ -43,8 +45,13 @@ pub fn create_directories(dir_path: impl AsRef<Path>) -> Result<(), PathsError> 
         .map_err(|error| PathsError::DirCreationFailed(error, dir_path.into()))
 }
 
-pub async fn persist_tempfile(file: TempFile, path_to: impl AsRef<Path>) -> Result<(), PathsError> {
-    tokio::fs::rename(file.file_path(), &path_to)
+pub async fn persist_tempfile(
+    mut file: BufWriter<TempFile>,
+    path_to: impl AsRef<Path>,
+) -> Result<(), PathsError> {
+    file.flush().await?;
+    file.get_ref().sync_all().await?;
+    tokio::fs::rename(file.get_ref().file_path(), &path_to)
         .await
         .map_err(|error| PathsError::FileCreationFailed(error, path_to.as_ref().into()))?;
 
@@ -65,7 +72,7 @@ pub fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
 #[pin_project::pin_project]
 pub struct DraftFile {
     #[pin]
-    file: TempFile,
+    file: BufWriter<TempFile>,
     target: PathBuf,
     mode: Option<u32>,
 }
@@ -82,7 +89,7 @@ impl DraftFile {
             .ok_or_else(|| PathsError::ParentDirNotFound {
                 path: target.as_os_str().into(),
             })?;
-        let file = TempFile::new_in(dir).await?;
+        let file = BufWriter::new(TempFile::new_in(dir).await?);
 
         let target = target.to_path_buf();
 

@@ -466,7 +466,8 @@ impl Plugin for ExternalPluginCommand {
                 }
             };
 
-            child_stdin.write_all(action.as_bytes()).await?
+            child_stdin.write_all(action.as_bytes()).await?;
+            child_stdin.flush().await?;
         }
 
         let output = child.wait_with_output(command_log).await?;

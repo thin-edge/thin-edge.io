@@ -89,7 +89,6 @@ impl Default for SystemSpecificCommands {
 mod tests {
     use super::*;
     use camino::Utf8PathBuf;
-    use std::io::Write;
     use tempfile::TempDir;
 
     #[test]
@@ -196,8 +195,7 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let config_root = Utf8Path::from_path(temp_dir.path()).unwrap().to_owned();
         let config_file_path = config_root.join(SYSTEM_CONFIG_FILE);
-        let mut file = std::fs::File::create(config_file_path.as_path())?;
-        file.write_all(content.as_bytes())?;
+        std::fs::write(config_file_path.as_path(), content.as_bytes())?;
         Ok((temp_dir, config_root))
     }
 }

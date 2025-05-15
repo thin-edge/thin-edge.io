@@ -3,7 +3,6 @@ mod tests {
 
     // These test cases need mosquitto on localhost on GH hosted machine.
 
-    use std::io::Write;
     use std::time::Duration;
 
     use assert_cmd::assert::OutputAssertExt;
@@ -19,8 +18,10 @@ mod tests {
         let toml_conf = &format!("[mqtt]\nclient_port = {port}");
 
         let config_location = TEdgeConfigLocation::from_custom_root(dir.path());
-        let mut file = std::fs::File::create(config_location.tedge_config_file_path())?;
-        file.write_all(toml_conf.as_bytes())?;
+        std::fs::write(
+            config_location.tedge_config_file_path(),
+            toml_conf.as_bytes(),
+        )?;
         Ok(dir)
     }
 

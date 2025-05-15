@@ -314,10 +314,6 @@ impl PermissionEntry {
         match options.create_new(true).write(true).open(file).await {
             Ok(mut f) => {
                 self.clone().apply(file).await?;
-                f.sync_all().await.map_err(|from| FileError::FailedToSync {
-                    file: file.to_path_buf(),
-                    from,
-                })?;
                 if let Some(default_content) = default_content {
                     f.write_all(default_content.as_bytes())
                         .map_err(|e| FileError::WriteContentFailed {
@@ -325,7 +321,12 @@ impl PermissionEntry {
                             from: e,
                         })
                         .await?;
+                    f.flush().await?;
                 }
+                f.sync_all().await.map_err(|from| FileError::FailedToSync {
+                    file: file.to_path_buf(),
+                    from,
+                })?;
                 Ok(())
             }
 
@@ -347,16 +348,17 @@ pub async fn overwrite_file(file: &Path, content: &str) -> Result<(), FileError>
         .await
     {
         Ok(mut f) => {
-            f.sync_all()
-                .map_err(|from| FileError::FailedToSync {
-                    file: file.to_path_buf(),
-                    from,
-                })
-                .await?;
             f.write_all(content.as_bytes())
                 .map_err(|e| FileError::WriteContentFailed {
                     file: file.display().to_string(),
                     from: e,
+                })
+                .await?;
+            f.flush().await?;
+            f.sync_all()
+                .map_err(|from| FileError::FailedToSync {
+                    file: file.to_path_buf(),
+                    from,
                 })
                 .await?;
             Ok(())

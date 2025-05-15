@@ -1,5 +1,3 @@
-use std::fs::File;
-use std::io::Write;
 use std::time::Duration;
 
 use camino::Utf8Path;
@@ -42,8 +40,7 @@ async fn upload_without_auth() -> Result<(), DynError> {
         .unwrap()
         .join("file_to_upload.txt");
 
-    let mut tmp_file = File::create(&target_path).unwrap();
-    tmp_file.write_all(b"Hello, world!").unwrap();
+    std::fs::write(&target_path, "Hello, world!").unwrap();
 
     let server_url = server.url();
     let download_request = UploadRequest::new(&server_url, &target_path);
@@ -80,8 +77,7 @@ async fn upload_with_auth() -> Result<(), DynError> {
         .unwrap()
         .join("file_to_upload.txt");
 
-    let mut tmp_file = File::create(&target_path).unwrap();
-    tmp_file.write_all(b"Hello, world!").unwrap();
+    std::fs::write(&target_path, "Hello, world!").unwrap();
 
     let server_url = server.url();
     let download_request =

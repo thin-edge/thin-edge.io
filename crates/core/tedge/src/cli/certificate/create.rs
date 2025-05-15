@@ -169,6 +169,7 @@ async fn persist_private_key(
     // Make sure the key is secret, before write
     File::set_permissions(&key_file, Permissions::from_mode(0o600)).await?;
     key_file.write_all(cert_key.as_bytes()).await?;
+    key_file.flush().await?;
     key_file.sync_all().await?;
 
     // Prevent the key to be overwritten
@@ -178,6 +179,7 @@ async fn persist_private_key(
 
 async fn persist_public_key(mut key_file: File, cert_pem: String) -> Result<(), std::io::Error> {
     key_file.write_all(cert_pem.as_bytes()).await?;
+    key_file.flush().await?;
     key_file.sync_all().await?;
 
     // Make the file public
