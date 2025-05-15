@@ -73,7 +73,7 @@ use std::convert::Infallible;
 
 /// An actor that converts each input message into a sequence of output messages
 ///
-pub trait Converter: 'static + Send + Sync {
+pub trait Converter: 'static + Send {
     /// The input message type
     type Input: Message;
 

@@ -16,7 +16,7 @@ use async_trait::async_trait;
 ///   - sending responses for requests, possibly deferring some responses,
 ///   - acting as a source of messages ...
 #[async_trait]
-pub trait Actor: 'static + Send + Sync + ActorBoxed {
+pub trait Actor: 'static + Send + ActorBoxed {
     /// Return the actor instance name
     fn name(&self) -> &str;
 
