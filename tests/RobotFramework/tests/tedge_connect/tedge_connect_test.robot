@@ -14,7 +14,7 @@ Test Tags           theme:cli    theme:mqtt    theme:c8y
 
 *** Test Cases ***
 tedge_connect_test_positive
-    Execute Command    sudo tedge connect c8y || true    # Connect but don't fail if already connected
+    # Execute Command    sudo tedge connect c8y || true    # Connect but don't fail if already connected
     ${output}=    Execute Command    sudo tedge connect c8y --test
     Should Contain    ${output}    Connection check to c8y cloud is successful.
 
