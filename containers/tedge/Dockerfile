@@ -1,4 +1,4 @@
-FROM alpine:3.18 AS build
+FROM alpine:3.21 AS build
 # Use a build layer to avoid adding binaries from every target into a layer into the output image
 ARG TARGETPLATFORM
 
@@ -19,7 +19,7 @@ RUN case "${TARGETPLATFORM}" in \
 #
 # Output
 #
-FROM alpine:3.18
+FROM alpine:3.21
 
 ARG USERNAME=tedge
 ARG USER_UID=1000
