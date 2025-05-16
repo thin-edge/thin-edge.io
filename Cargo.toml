@@ -223,3 +223,4 @@ overflow-checks = true
 
 [workspace.lints.clippy]
 get_first = "allow"
+uninlined_format_args = "allow"

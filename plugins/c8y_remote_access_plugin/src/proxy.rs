@@ -95,7 +95,7 @@ fn generate_sec_websocket_key() -> String {
 
 enum MaybeTlsStream {
     Plain(TcpStream),
-    Rustls(TlsStream<TcpStream>),
+    Rustls(Box<TlsStream<TcpStream>>),
 }
 
 impl AsyncRead for MaybeTlsStream {
@@ -164,12 +164,12 @@ impl Websocket {
             let mut stream = match address.scheme() {
                 ProxyScheme::Https => {
                     let connector: TlsConnector = config.clone().unwrap().into();
-                    MaybeTlsStream::Rustls(
+                    MaybeTlsStream::Rustls(Box::new(
                         connector
                             .connect(host_port.try_into().unwrap(), stream)
                             .await
                             .into_diagnostic()?,
-                    )
+                    ))
                 }
                 ProxyScheme::Http => MaybeTlsStream::Plain(stream),
             };

@@ -243,7 +243,7 @@ async fn handle_request_child_device_with_failed_download() -> Result<(), DynErr
 
     // Simulate downloading a file is failed.
     let fake_download_error = DownloadError::FromIo {
-        source: io::Error::new(io::ErrorKind::Other, "fail"),
+        source: io::Error::other("fail"),
         context: "fail".to_string(),
     };
     downloader_message_box

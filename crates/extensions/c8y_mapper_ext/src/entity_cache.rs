@@ -69,7 +69,7 @@ impl CloudEntityMetadata {
 pub enum UpdateOutcome {
     Unchanged,
     Inserted(Vec<RegisteredEntityData>),
-    Updated(EntityMetadata, EntityMetadata),
+    Updated(Box<EntityMetadata>, Box<EntityMetadata>),
     Deleted,
 }
 
@@ -273,7 +273,10 @@ impl EntityCache {
                 updated_entity.clone(),
             ),
         );
-        Ok(UpdateOutcome::Updated(updated_entity, existing_entity))
+        Ok(UpdateOutcome::Updated(
+            Box::new(updated_entity),
+            Box::new(existing_entity),
+        ))
     }
 
     pub(crate) fn delete(&mut self, topic_id: &EntityTopicId) -> Option<CloudEntityMetadata> {
