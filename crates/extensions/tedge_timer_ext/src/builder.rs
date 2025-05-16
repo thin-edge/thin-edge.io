@@ -47,7 +47,9 @@ impl RuntimeRequestSink for TimerActorBuilder {
     }
 }
 
-impl<T: Message> MessageSink<RequestEnvelope<SetTimeout<T>, Timeout<T>>> for TimerActorBuilder {
+impl<T: Message + Sync> MessageSink<RequestEnvelope<SetTimeout<T>, Timeout<T>>>
+    for TimerActorBuilder
+{
     fn get_sender(&self) -> DynSender<RequestEnvelope<SetTimeout<T>, Timeout<T>>> {
         let request_sender = self.box_builder.get_sender();
         Box::new(SetTimeoutSender {
@@ -60,12 +62,12 @@ impl<T: Message> MessageSink<RequestEnvelope<SetTimeout<T>, Timeout<T>>> for Tim
 ///
 /// This sender receives `Timeout<AnyPayload>` from the `TimerActor`,
 /// and translates then forwards these messages to an actor expecting `Timeout<T>`
-struct TimeoutSender<T: Message> {
+struct TimeoutSender<T: Message + Sync> {
     inner: Box<dyn Sender<Timeout<T>>>,
 }
 
 #[async_trait]
-impl<T: Message> Sender<Timeout<AnyPayload>> for TimeoutSender<T> {
+impl<T: Message + Sync> Sender<Timeout<AnyPayload>> for TimeoutSender<T> {
     async fn send(&mut self, message: Timeout<AnyPayload>) -> Result<(), ChannelError> {
         if let Ok(event) = message.event.downcast() {
             self.inner.send(Timeout { event: *event }).await?;
@@ -92,7 +94,7 @@ impl Clone for SetTimeoutSender {
 }
 
 #[async_trait]
-impl<T: Message> Sender<RequestEnvelope<SetTimeout<T>, Timeout<T>>> for SetTimeoutSender {
+impl<T: Message + Sync> Sender<RequestEnvelope<SetTimeout<T>, Timeout<T>>> for SetTimeoutSender {
     async fn send(
         &mut self,
         RequestEnvelope { request, reply_to }: RequestEnvelope<SetTimeout<T>, Timeout<T>>,

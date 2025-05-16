@@ -106,7 +106,7 @@ use async_trait::async_trait;
 
 /// Define how a server process a request
 #[async_trait]
-pub trait Server: 'static + Sized + Send + Sync {
+pub trait Server: 'static + Sized + Send {
     /// The type of the requests send by clients
     type Request: Message;
 

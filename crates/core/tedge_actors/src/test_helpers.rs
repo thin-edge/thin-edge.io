@@ -243,7 +243,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
 #[async_trait]
 impl<T, M> MessageReceiverExt<M> for T
 where
-    T: MessageReceiver<M> + Send + Sync + 'static,
+    T: MessageReceiver<M> + Send + 'static,
     M: Message + Eq + PartialEq,
 {
     fn with_timeout(self, timeout: Duration) -> TimedMessageBox<Self> {
@@ -327,7 +327,7 @@ impl<T: Clone> Clone for TimedMessageBox<T> {
 impl<T, M> MessageReceiver<M> for TimedMessageBox<T>
 where
     M: Message,
-    T: MessageReceiver<M> + Send + Sync + 'static,
+    T: MessageReceiver<M> + Send + 'static,
 {
     async fn try_recv(&mut self) -> Result<Option<M>, RuntimeRequest> {
         tokio::time::timeout(self.timeout, self.inner.try_recv())
