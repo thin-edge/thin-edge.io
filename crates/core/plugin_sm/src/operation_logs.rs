@@ -152,7 +152,7 @@ mod tests {
         let unrelated_2 = create_file(log_dir.path(), "bar");
 
         // Open the log dir
-        let _operation_logs = OperationLogs::try_new(log_dir.into_path().try_into().unwrap())?;
+        let _operation_logs = OperationLogs::try_new(log_dir.keep().try_into().unwrap())?;
 
         // Outdated logs are removed
         assert!(!update_log_1.exists());
