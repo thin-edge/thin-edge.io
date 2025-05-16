@@ -55,6 +55,7 @@ tedge_config_macros-impl = { path = "crates/common/tedge_config_macros/impl" }
 tedge_config_manager = { path = "crates/extensions/tedge_config_manager" }
 tedge_downloader_ext = { path = "crates/extensions/tedge_downloader_ext" }
 tedge_file_system_ext = { path = "crates/extensions/tedge_file_system_ext" }
+tedge_gen_mapper = { path = "crates/extensions/tedge_gen_mapper" }
 tedge_health_ext = { path = "crates/extensions/tedge_health_ext" }
 tedge_http_ext = { path = "crates/extensions/tedge_http_ext" }
 tedge_log_manager = { path = "crates/extensions/tedge_log_manager" }
@@ -173,6 +174,7 @@ rustls = { version = "0.23", default-features = false, features = [
 rustls-native-certs = "0.8.1"
 rustls-pemfile = "2.2"
 rustls-pki-types = { version = "1.12", features = ["alloc"] }
+rustyscript = { version = "0.11", default-features = false, features = ["worker"] }
 sd-listen-fds = "0.2.0"
 serde = "1.0"
 serde_json = "1.0"
@@ -212,6 +214,8 @@ zeroize = "1.5"
 # TODO: remove once fix is upstreamed to libloading
 [patch.crates-io]
 libloading = { git = "https://github.com/Bravo555/rust_libloading.git", branch = "v0.7.4" }
+# https://github.com/rscarson/rustyscript/issues/332
+deno_media_type = { git = 'https://github.com/denoland/deno_media_type', tag = "0.2.6" }
 
 [profile.release]
 codegen-units = 1

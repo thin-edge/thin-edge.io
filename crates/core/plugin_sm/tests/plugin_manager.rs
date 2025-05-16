@@ -63,7 +63,7 @@ mod tests {
         let _ = File::create(plugin_file_path).unwrap();
 
         let result = ExternalPlugins::open(
-            plugin_dir.into_path(),
+            plugin_dir.keep(),
             Some("dummy".into()),
             SudoCommandBuilder::enabled(false),
             TEdgeConfigLocation::default(),
