@@ -9,16 +9,18 @@ use flate2::Compression;
 use std::collections::HashSet;
 use std::os::unix::fs::PermissionsExt;
 use std::process::ExitStatus;
-use tedge_config::models::SecondsOrHumanTime;
+use std::time::Duration;
+use tedge_api::CommandLog;
+use tedge_api::LoggedCommand;
 use tedge_utils::file;
-use tokio::io::AsyncWriteExt;
 use yansi::Paint;
 
 pub struct DiagCollectCommand {
     pub plugin_dir: Utf8PathBuf,
     pub diag_dir: Utf8PathBuf,
     pub config_dir: Utf8PathBuf,
-    pub timeout: SecondsOrHumanTime,
+    pub graceful_timeout: Duration,
+    pub forceful_timeout: Duration,
 }
 
 #[async_trait::async_trait]
@@ -86,33 +88,30 @@ impl DiagCollectCommand {
     ) -> Result<ExitStatus, anyhow::Error> {
         let plugin_name = plugin_path.file_stem().context("No filename")?;
         let plugin_output_dir = self.diag_dir.join(plugin_name);
+        let plugin_absolute_path = plugin_path.canonicalize()?;
+        let output_file = plugin_output_dir.join("output.log");
         file::create_directory_with_defaults(&plugin_output_dir)
             .await
             .with_context(|| format!("Failed to create output directory at {plugin_output_dir}"))?;
-        let mut out_file = tokio::fs::File::create(&plugin_output_dir.join("out.log"))
-            .await
-            .with_context(|| "Failed to create out.log")?;
-        let mut err_file = tokio::fs::File::create(&plugin_output_dir.join("err.log"))
-            .await
-            .with_context(|| "Failed to create err.log")?;
 
-        let result = tokio::process::Command::new(plugin_path)
+        let mut command = LoggedCommand::new(&plugin_absolute_path)?;
+        command
             .arg("collect")
             .arg("--output-dir")
             .arg(&plugin_output_dir)
             .arg("--config-dir")
-            .arg(&self.config_dir)
-            .output()
-            .await;
-
-        match result {
-            Ok(output) => {
-                out_file.write_all(&output.stdout).await?;
-                err_file.write_all(&output.stderr).await?;
-                Ok(output.status)
-            }
-            Err(err) => Err(err.into()),
-        }
+            .arg(&self.config_dir);
+        let child = command.spawn()?;
+        let mut command_log =
+            CommandLog::from_log_path(output_file, plugin_name.into(), "no cmd_id".into());
+        let output = child
+            .wait_for_output_with_timeout(
+                &mut command_log,
+                self.graceful_timeout,
+                self.forceful_timeout,
+            )
+            .await?;
+        Ok(output.status)
     }
 
     fn compress_into_a_tarball(&self) -> Result<Utf8PathBuf, anyhow::Error> {

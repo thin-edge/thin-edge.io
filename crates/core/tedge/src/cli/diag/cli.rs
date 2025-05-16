@@ -27,9 +27,13 @@ pub enum TEdgeDiagCli {
         #[clap(long)]
         tarball_name: Option<String>,
 
-        /// Timeout for each plugin's execution
-        #[clap(long, default_value = "10s")]
-        timeout: SecondsOrHumanTime,
+        /// Timeout for a graceful plugin shutdown
+        #[clap(long, default_value = "60s")]
+        graceful_timeout: SecondsOrHumanTime,
+
+        /// Timeout for forced termination, starting after a graceful timeout expires
+        #[clap(long, default_value = "60s")]
+        forceful_timeout: SecondsOrHumanTime,
     },
 }
 
@@ -44,7 +48,8 @@ impl BuildCommand for TEdgeDiagCli {
                 plugin_dir,
                 output_dir,
                 tarball_name,
-                timeout,
+                graceful_timeout,
+                forceful_timeout,
             } => {
                 let now = OffsetDateTime::now_utc()
                     .format(&format_description::well_known::Rfc3339)
@@ -55,7 +60,8 @@ impl BuildCommand for TEdgeDiagCli {
                     plugin_dir,
                     diag_dir: output_dir.join(&tarball_name),
                     config_dir: config_location.tedge_config_root_path,
-                    timeout,
+                    graceful_timeout: graceful_timeout.duration(),
+                    forceful_timeout: forceful_timeout.duration(),
                 }
                 .into_boxed();
                 Ok(cmd)
