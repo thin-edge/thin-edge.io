@@ -194,7 +194,9 @@ mod tests {
         //       - Do we need a more sophisticated actor that list the existing files on start?
         tokio::time::sleep(Duration::from_millis(100)).await;
         ttd.file("file_a");
-        ttd.dir("dir_b").file("file_b");
+        let dir = ttd.dir("dir_b");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        dir.file("file_b");
 
         #[cfg(target_os = "linux")]
         client_box

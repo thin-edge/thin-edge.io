@@ -9,7 +9,6 @@ use mqtt_channel::Topic;
 use rumqttc::QoS;
 use tedge_config::models::SecondsOrHumanTime;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 
 const PUB_CLIENT_PREFIX: &str = "tedge-pub";
 const SUB_CLIENT_PREFIX: &str = "tedge-sub";
@@ -60,11 +59,7 @@ pub enum TEdgeMqttCli {
 }
 
 impl BuildCommand for TEdgeMqttCli {
-    fn build_command(
-        self,
-        config: TEdgeConfig,
-        _: TEdgeConfigLocation,
-    ) -> Result<Box<dyn Command>, crate::ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
         let auth_config = config.mqtt_client_auth_config();
 
         let cmd = {

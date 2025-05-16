@@ -7,7 +7,6 @@ use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum ConfigCmd {
@@ -134,15 +133,10 @@ macro_rules! try_with_profile {
 }
 
 impl BuildCommand for ConfigCmd {
-    fn build_command(
-        self,
-        _: TEdgeConfig,
-        config_location: TEdgeConfigLocation,
-    ) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, _: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
             ConfigCmd::Get { key, profile } => Ok(GetConfigCommand {
                 key: try_with_profile!(key, profile),
-                config_location,
             }
             .into_boxed()),
             ConfigCmd::Set {
@@ -152,12 +146,10 @@ impl BuildCommand for ConfigCmd {
             } => Ok(SetConfigCommand {
                 key: try_with_profile!(key, profile),
                 value,
-                config_location,
             }
             .into_boxed()),
             ConfigCmd::Unset { key, profile } => Ok(UnsetConfigCommand {
                 key: try_with_profile!(key, profile),
-                config_location,
             }
             .into_boxed()),
             ConfigCmd::Add {
@@ -167,7 +159,6 @@ impl BuildCommand for ConfigCmd {
             } => Ok(AddConfigCommand {
                 key: try_with_profile!(key, profile),
                 value,
-                config_location,
             }
             .into_boxed()),
             ConfigCmd::Remove {
@@ -177,7 +168,6 @@ impl BuildCommand for ConfigCmd {
             } => Ok(RemoveConfigCommand {
                 key: try_with_profile!(key, profile),
                 value,
-                config_location,
             }
             .into_boxed()),
             ConfigCmd::List {
@@ -187,7 +177,6 @@ impl BuildCommand for ConfigCmd {
             } => Ok(ListConfigCommand {
                 is_all,
                 is_doc,
-                config_location,
                 filter,
             }
             .into_boxed()),

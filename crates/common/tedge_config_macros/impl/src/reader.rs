@@ -626,7 +626,7 @@ fn generate_conversions(
             #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
             #[automatically_derived]
             /// Converts the provided [TEdgeConfigDto] into a reader
-            pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation, #(#extra_args,)*) -> Self {
+            pub(crate) fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation, #(#extra_args,)*) -> Self {
                 Self {
                     #(#field_conversions),*
                 }
@@ -763,7 +763,7 @@ mod tests {
                 #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
                 #[automatically_derived]
                 /// Converts the provided [TEdgeConfigDto] into a reader
-                pub fn from_dto(
+                pub(crate) fn from_dto(
                     dto: &TEdgeConfigDto,
                     location: &TEdgeConfigLocation,
                     key0: Option<&str>,
@@ -930,7 +930,7 @@ mod tests {
                 #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
                 #[automatically_derived]
                 /// Converts the provided [TEdgeConfigDto] into a reader
-                pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
+                pub(crate) fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
                     Self {
                         c8y: TEdgeConfigReaderC8y::from_dto(dto, location),
                     }
@@ -940,7 +940,7 @@ mod tests {
                 #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
                 #[automatically_derived]
                 /// Converts the provided [TEdgeConfigDto] into a reader
-                pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
+                pub(crate) fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
                     Self {
                         http: match &dto.c8y.http {
                             Some(value) => {
@@ -1014,7 +1014,7 @@ mod tests {
                 #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
                 #[automatically_derived]
                 /// Converts the provided [TEdgeConfigDto] into a reader
-                pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
+                pub(crate) fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
                     Self {
                         id: LazyReaderC8yDeviceId(
                             <_>::default(),

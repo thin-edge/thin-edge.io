@@ -14,6 +14,7 @@ use flockfile::check_another_instance_is_not_running;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use tedge_config::tedge_toml::ProfileName;
+use tedge_config::TEdgeConfig;
 use tracing::log::warn;
 
 #[cfg(feature = "aws")]
@@ -136,18 +137,14 @@ impl fmt::Display for MapperName {
     }
 }
 
-pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
+pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<()> {
     let mapper_name = mapper_opt.name.to_string();
     let component = lookup_component(mapper_opt.name);
-
-    let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.common.config_dir);
-    let config = tedge_config::TEdgeConfig::try_new(tedge_config_location.clone()).await?;
 
     log_init(
         "tedge-mapper",
         &mapper_opt.common.log_args,
-        &tedge_config_location.tedge_config_root_path,
+        &mapper_opt.common.config_dir,
     )?;
 
     // Run only one instance of a mapper (if enabled)

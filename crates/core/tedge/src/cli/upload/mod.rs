@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 
 mod c8y;
 
@@ -64,11 +63,7 @@ fn parse_mime_type(input: &str) -> Result<String, anyhow::Error> {
 }
 
 impl BuildCommand for UploadCmd {
-    fn build_command(
-        self,
-        config: TEdgeConfig,
-        _: TEdgeConfigLocation,
-    ) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let cmd = match self {
             UploadCmd::C8y {
                 event_type,
@@ -81,7 +76,7 @@ impl BuildCommand for UploadCmd {
             } => {
                 let identity = config.http.client.auth.identity()?;
                 let cloud_root_certs = config.cloud_root_certs()?;
-                let c8y = C8yEndPoint::local_proxy(&config, profile.as_deref())?;
+                let c8y = C8yEndPoint::local_proxy(config, profile.as_deref())?;
                 let c8y_config = config.c8y.try_get(profile.as_deref())?;
                 let device_id = match device_id {
                     None => c8y_config.device.id()?.clone(),

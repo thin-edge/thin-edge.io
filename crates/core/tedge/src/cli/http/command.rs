@@ -8,6 +8,7 @@ use mqtt_channel::StreamExt;
 use reqwest::header::HeaderMap;
 use reqwest::Client;
 use reqwest::RequestBuilder;
+use tedge_config::TEdgeConfig;
 use tokio::io::AsyncWriteExt;
 
 pub struct HttpCommand {
@@ -56,7 +57,7 @@ impl Command for HttpCommand {
         format!("{verb} {}", self.url)
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
         let request = self.request().await?;
         HttpCommand::send(request).await?;
         Ok(())

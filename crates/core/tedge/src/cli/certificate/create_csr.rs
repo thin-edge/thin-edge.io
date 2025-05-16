@@ -8,6 +8,7 @@ use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
 use certificate::KeyCertPair;
 use certificate::KeyKind;
+use tedge_config::TEdgeConfig;
 
 /// Create a certificate signing request (CSR)
 pub struct CreateCsrCmd {
@@ -34,7 +35,7 @@ impl Command for CreateCsrCmd {
         "Generate a Certificate Signing Request.".into()
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         self.create_certificate_signing_request().await?;
         eprintln!("Certificate Signing Request was successfully created.");
         Ok(())

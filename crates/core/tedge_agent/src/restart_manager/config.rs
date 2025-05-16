@@ -14,17 +14,14 @@ pub struct RestartManagerConfig {
 impl RestartManagerConfig {
     pub async fn from_tedge_config(
         device_topic_id: &EntityTopicId,
-        tedge_config_location: &tedge_config::TEdgeConfigLocation,
+        tedge_config: &tedge_config::TEdgeConfig,
     ) -> Result<RestartManagerConfig, tedge_config::TEdgeConfigError> {
-        let tedge_config =
-            tedge_config::TEdgeConfig::try_new(tedge_config_location.clone()).await?;
-
         Ok(RestartManagerConfig {
             device_topic_id: device_topic_id.clone(),
             tmp_dir: tedge_config.tmp.path.clone().into(),
-            config_dir: tedge_config_location.tedge_config_root_path.clone(),
+            config_dir: tedge_config.root_dir().to_owned(),
             state_dir: tedge_config.agent.state.path.clone().into(),
-            sudo: SudoCommandBuilder::new(&tedge_config),
+            sudo: SudoCommandBuilder::new(tedge_config),
         })
     }
 }

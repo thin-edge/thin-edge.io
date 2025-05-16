@@ -14,7 +14,6 @@ use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use tedge_config::models::AptConfig;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use tracing::error;
 use tracing::warn;
 
@@ -335,9 +334,7 @@ fn get_name_and_version(line: &str) -> (&str, &str) {
 }
 
 pub async fn get_config(config_dir: &Path) -> Option<TEdgeConfig> {
-    let tedge_config_location = TEdgeConfigLocation::from_custom_root(config_dir);
-
-    match TEdgeConfig::try_new(tedge_config_location).await {
+    match TEdgeConfig::load(&config_dir).await {
         Ok(config) => Some(config),
         Err(err) => {
             warn!("Failed to load TEdgeConfig: {}", err);

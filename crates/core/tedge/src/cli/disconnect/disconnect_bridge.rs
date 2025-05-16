@@ -6,15 +6,16 @@ use crate::command::*;
 use crate::log::MaybeFancy;
 use crate::system_services::*;
 use anyhow::Context;
+use camino::Utf8PathBuf;
 use std::sync::Arc;
-use tedge_config::TEdgeConfigLocation;
+use tedge_config::TEdgeConfig;
 use which::which;
 
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 
 #[derive(Debug)]
 pub struct DisconnectBridgeCommand {
-    pub config_location: TEdgeConfigLocation,
+    pub config_dir: Utf8PathBuf,
     pub cloud: Cloud,
     pub use_mapper: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
@@ -26,7 +27,14 @@ impl Command for DisconnectBridgeCommand {
         format!("remove the bridge to disconnect {} cloud", self.cloud)
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        self.execute_direct().await
+    }
+}
+
+impl DisconnectBridgeCommand {
+    /// Execute this without needing to pass in a `TEdgeConfig` value
+    pub(crate) async fn execute_direct(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
         match self.stop_bridge().await {
             Ok(())
             | Err(Fancy {
@@ -36,9 +44,7 @@ impl Command for DisconnectBridgeCommand {
             Err(err) => Err(err.into()),
         }
     }
-}
 
-impl DisconnectBridgeCommand {
     async fn stop_bridge(&self) -> Result<(), Fancy<DisconnectBridgeError>> {
         // If this fails, do not continue with applying changes and stopping/disabling tedge-mapper.
         let is_fatal_error = |err: &DisconnectBridgeError| {
@@ -85,8 +91,7 @@ impl DisconnectBridgeCommand {
     async fn remove_bridge_config_file(&self) -> Result<(), DisconnectBridgeError> {
         let config_file = self.cloud.bridge_config_filename();
         let bridge_conf_path = self
-            .config_location
-            .tedge_config_root_path
+            .config_dir
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
             .join(config_file.as_ref());
 
