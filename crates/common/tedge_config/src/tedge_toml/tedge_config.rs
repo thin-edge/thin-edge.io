@@ -72,7 +72,6 @@ impl<T> OptionalConfigError<T> for OptionalConfig<T> {
     }
 }
 
-#[derive(Clone)]
 pub struct TEdgeConfig {
     reader: TEdgeConfigReader,
     location: TEdgeConfigLocation,
