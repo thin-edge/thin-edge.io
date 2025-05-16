@@ -1,6 +1,6 @@
 use std::path::Path;
 
-pub async fn start_watchdog(_: TEdgeConfig) -> Result<(), anyhow::Error> {
+pub async fn start_watchdog(_: tedge_config::TEdgeConfig) -> Result<(), anyhow::Error> {
     Err(anyhow::Error::from(WatchdogError::WatchdogNotAvailable))
 }
 
