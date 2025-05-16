@@ -137,7 +137,7 @@ impl fmt::Display for MapperName {
     }
 }
 
-pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
+pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<()> {
     let mapper_name = mapper_opt.name.to_string();
     let component = lookup_component(mapper_opt.name);
 
@@ -146,8 +146,6 @@ pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
         &mapper_opt.common.log_args,
         &mapper_opt.common.config_dir,
     )?;
-
-    let config = TEdgeConfig::load(&mapper_opt.common.config_dir).await?;
 
     // Run only one instance of a mapper (if enabled)
     let mut _flock = None;

@@ -38,12 +38,12 @@ async fn main() -> anyhow::Result<()> {
         TEdgeOptMulticall::Component(Component::TedgeMapper(opt)) => {
             let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;
             log_memory_usage(tedge_config.run.log_memory_interval.duration());
-            tedge_mapper::run(opt).await
+            tedge_mapper::run(opt, tedge_config).await
         }
         TEdgeOptMulticall::Component(Component::TedgeAgent(opt)) => {
             let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;
             log_memory_usage(tedge_config.run.log_memory_interval.duration());
-            tedge_agent::run(opt).await
+            tedge_agent::run(opt, tedge_config).await
         }
         TEdgeOptMulticall::Component(Component::C8yFirmwarePlugin(fp_opt)) => {
             c8y_firmware_plugin::run(fp_opt).await

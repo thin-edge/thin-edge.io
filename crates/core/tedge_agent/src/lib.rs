@@ -52,14 +52,15 @@ pub struct AgentOpt {
     pub mqtt_topic_root: Option<Arc<str>>,
 }
 
-pub async fn run(agent_opt: AgentOpt) -> Result<(), anyhow::Error> {
+pub async fn run(
+    agent_opt: AgentOpt,
+    tedge_config: tedge_config::TEdgeConfig,
+) -> Result<(), anyhow::Error> {
     log_init(
         "tedge-agent",
         &agent_opt.common.log_args,
         &agent_opt.common.config_dir,
     )?;
-
-    let tedge_config = tedge_config::TEdgeConfig::load(&agent_opt.common.config_dir).await?;
 
     let init = agent_opt.init;
 
