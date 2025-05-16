@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use camino::Utf8Path;
 use certificate::CloudHttpConfig;
 use csv::ReaderBuilder;
 use download::Downloader;
@@ -9,6 +10,7 @@ use std::error::Error;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
+use std::sync::Arc;
 use tedge_api::CommandLog;
 use tedge_api::DownloadInfo;
 use tedge_api::LoggedCommand;
@@ -277,6 +279,7 @@ pub struct ExternalPluginCommand {
     include: Option<String>,
     identity: Option<Identity>,
     cloud_root_certs: CloudHttpConfig,
+    pub tmp_dir: Arc<Utf8Path>,
 }
 
 impl ExternalPluginCommand {
@@ -290,6 +293,7 @@ impl ExternalPluginCommand {
         include: Option<String>,
         identity: Option<Identity>,
         cloud_root_certs: CloudHttpConfig,
+        tmp_dir: Arc<Utf8Path>,
     ) -> ExternalPluginCommand {
         ExternalPluginCommand {
             name: name.into(),
@@ -300,6 +304,7 @@ impl ExternalPluginCommand {
             include,
             identity,
             cloud_root_certs,
+            tmp_dir,
         }
     }
 
@@ -311,7 +316,7 @@ impl ExternalPluginCommand {
         let mut command = self.sudo.command(&self.path);
         command.arg(action);
 
-        let mut command = LoggedCommand::from(command);
+        let mut command = LoggedCommand::from_command(command, self.tmp_dir.as_ref());
 
         if let Some(module) = maybe_module {
             self.check_module_type(module)?;

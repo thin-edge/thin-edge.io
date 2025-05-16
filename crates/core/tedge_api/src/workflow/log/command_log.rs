@@ -229,7 +229,7 @@ mod tests {
         );
 
         // Prepare a command
-        let mut command = LoggedCommand::new("echo").unwrap();
+        let mut command = LoggedCommand::new("echo", "/tmp").unwrap();
         command.arg("Hello").arg("World!");
 
         // Execute the command with logging
@@ -264,7 +264,7 @@ EOF
         );
 
         // Prepare a command that triggers some content on stderr
-        let mut command = LoggedCommand::new("ls").unwrap();
+        let mut command = LoggedCommand::new("ls", "/tmp").unwrap();
         command.arg("dummy-file");
 
         // Execute the command with logging
@@ -314,7 +314,7 @@ stdout (EMPTY)
         );
 
         // Prepare a command that cannot be executed
-        let command = LoggedCommand::new("dummy-command").unwrap();
+        let command = LoggedCommand::new("dummy-command", "/tmp").unwrap();
 
         // Execute the command with logging
         let _ = command.execute(Some(&mut command_log)).await;

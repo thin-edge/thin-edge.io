@@ -1,11 +1,13 @@
 #[cfg(test)]
 mod tests {
+    use camino::Utf8PathBuf;
     use certificate::CloudHttpConfig;
     use plugin_sm::plugin::deserialize_module_info;
     use plugin_sm::plugin::sm_path;
     use plugin_sm::plugin::ExternalPluginCommand;
     use std::path::Path;
     use std::path::PathBuf;
+    use std::sync::Arc;
     use tedge_api::SoftwareError;
     use tedge_api::SoftwareModule;
     use tedge_config::SudoCommandBuilder;
@@ -67,6 +69,7 @@ mod tests {
             None,
             config.http.client.auth.identity()?,
             config.cloud_root_certs().unwrap(),
+            Arc::from(Utf8PathBuf::from("/tmp")),
         );
         assert_eq!(plugin.name, "test");
         assert_eq!(plugin.path, dummy_plugin_path);
@@ -87,6 +90,7 @@ mod tests {
             None,
             None,
             CloudHttpConfig::test_value(),
+            Arc::from(Utf8PathBuf::from("/tmp")),
         );
 
         let module = SoftwareModule {
@@ -119,6 +123,7 @@ mod tests {
             None,
             None,
             CloudHttpConfig::test_value(),
+            Arc::from(Utf8PathBuf::from("/tmp")),
         );
 
         // Create test module with name `test2`.
@@ -157,6 +162,7 @@ mod tests {
             None,
             None,
             CloudHttpConfig::test_value(),
+            Arc::from(Utf8PathBuf::from("/tmp")),
         );
 
         // Create software module without an explicit type.
