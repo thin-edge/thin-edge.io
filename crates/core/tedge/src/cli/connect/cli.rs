@@ -27,7 +27,7 @@ impl BuildCommand for TEdgeConnectOpt {
             cloud,
         } = self;
         Ok(Box::new(ConnectCommand {
-            service_manager: service_manager(&config.location().tedge_config_root_path)?,
+            service_manager: service_manager(config.root_dir())?,
             config,
             cloud: cloud.try_into()?,
             is_test_connection,

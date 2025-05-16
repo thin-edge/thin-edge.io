@@ -1,25 +1,23 @@
 #[cfg(test)]
 mod tests {
-
     use plugin_sm::plugin_manager::ExternalPlugins;
     use plugin_sm::plugin_manager::Plugins;
     use std::fs::File;
     use tedge_config::SudoCommandBuilder;
-    use tedge_config::TEdgeConfigLocation;
-    use tempfile::NamedTempFile;
+    use tedge_test_utils::fs::TempTedgeDir;
 
     #[tokio::test]
     async fn plugin_manager_load_plugins_empty() {
         // Create empty plugins directory.
-        let temp_dir = tempfile::tempdir().unwrap();
-        let plugin_dir = temp_dir.path().to_owned();
+        let config_dir = TempTedgeDir::new();
+        let plugin_dir = config_dir.dir("sm-plugins");
 
         // Call open and load to register all plugins from given directory.
         let mut plugins = ExternalPlugins::open(
-            plugin_dir,
+            plugin_dir.path(),
             None,
             SudoCommandBuilder::enabled(false),
-            TEdgeConfigLocation::default(),
+            config_dir.utf8_path_buf(),
         )
         .await
         .unwrap();
@@ -32,19 +30,19 @@ mod tests {
     #[tokio::test]
     async fn plugin_manager_load_plugins_some_by_plugins_none() {
         // Create empty plugins directory.
-        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = TempTedgeDir::new();
+        let plugin_dir = config_dir.dir("sm-plugins");
 
         // Add a plugin to the directory.
-        let _file = create_some_plugin_in(&temp_dir);
-        let _file = create_some_plugin_in(&temp_dir);
-        let plugin_dir = temp_dir.path().to_owned();
+        plugin_dir.file("a-plugin.0");
+        plugin_dir.file("another-plugin.0");
 
         // Call open and load to register all plugins from given directory.
         let mut plugins = ExternalPlugins::open(
-            plugin_dir,
+            plugin_dir.path(),
             None,
             SudoCommandBuilder::enabled(false),
-            TEdgeConfigLocation::default(),
+            config_dir.utf8_path_buf(),
         )
         .await
         .unwrap();
@@ -58,27 +56,21 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_default_plugin_pass_through() -> anyhow::Result<()> {
-        let plugin_dir = tempfile::tempdir().unwrap();
+        let config_dir = TempTedgeDir::new();
+        let plugin_dir = config_dir.dir("sm-plugins");
         let plugin_file_path = plugin_dir.path().join("apt");
         let _ = File::create(plugin_file_path).unwrap();
 
         let result = ExternalPlugins::open(
-            plugin_dir.into_path(),
+            plugin_dir.path(),
             Some("dummy".into()),
             SudoCommandBuilder::enabled(false),
-            TEdgeConfigLocation::default(),
+            config_dir.utf8_path_buf(),
         )
         .await?;
         assert!(result.empty());
         assert!(result.default().is_none());
 
         Ok(())
-    }
-
-    fn create_some_plugin_in(dir: &tempfile::TempDir) -> NamedTempFile {
-        tempfile::Builder::new()
-            .suffix(".0")
-            .tempfile_in(dir)
-            .unwrap()
     }
 }

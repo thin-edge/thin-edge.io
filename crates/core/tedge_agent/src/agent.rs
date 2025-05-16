@@ -100,12 +100,10 @@ pub(crate) struct AgentConfig {
 
 impl AgentConfig {
     pub async fn from_config_and_cliopts(
-        tedge_config_location: &tedge_config::TEdgeConfigLocation,
+        tedge_config: tedge_config::TEdgeConfig,
         cliopts: AgentOpt,
     ) -> Result<Self, anyhow::Error> {
-        let tedge_config = tedge_config::TEdgeConfig::try_new(tedge_config_location).await?;
-
-        let config_dir = tedge_config_location.tedge_config_root_path.clone();
+        let config_dir = tedge_config.root_dir().to_owned();
         let tmp_dir = Arc::from(tedge_config.tmp.path.as_path());
         let state_dir = tedge_config.agent.state.path.clone().into();
 

@@ -141,13 +141,13 @@ pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
     let mapper_name = mapper_opt.name.to_string();
     let component = lookup_component(mapper_opt.name);
 
-    let config = TEdgeConfig::load(&mapper_opt.common.config_dir).await?;
-
     log_init(
         "tedge-mapper",
         &mapper_opt.common.log_args,
-        &config.location().tedge_config_root_path,
+        &mapper_opt.common.config_dir,
     )?;
+
+    let config = TEdgeConfig::load(&mapper_opt.common.config_dir).await?;
 
     // Run only one instance of a mapper (if enabled)
     let mut _flock = None;

@@ -6,6 +6,7 @@ use crate::state_repository::error::StateError;
 use crate::state_repository::state::AgentStateRepository;
 use anyhow::anyhow;
 use async_trait::async_trait;
+use camino::Utf8Path;
 use plugin_sm::plugin_manager::ExternalPlugins;
 use plugin_sm::plugin_manager::Plugins;
 use serde::Deserialize;
@@ -104,7 +105,7 @@ impl Actor for SoftwareManagerActor {
             &self.config.sm_plugins_dir,
             self.config.default_plugin_type.clone(),
             self.config.sudo.clone(),
-            self.config.config_location.clone(),
+            self.config.config_dir.clone(),
         )
         .await
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
@@ -245,7 +246,7 @@ impl SoftwareManagerActor {
         }
 
         plugins.load().await?;
-        plugins.update_default(&get_default_plugin(&self.config.config_location).await?)?;
+        plugins.update_default(&get_default_plugin(&self.config.config_dir).await?)?;
 
         self.state_repository.store(&request.clone().into()).await?;
 
@@ -338,9 +339,9 @@ impl SoftwareManagerActor {
 }
 
 async fn get_default_plugin(
-    config_location: &tedge_config::TEdgeConfigLocation,
+    config_dir: &Utf8Path,
 ) -> Result<Option<SoftwareType>, TEdgeConfigError> {
-    let tedge_config = tedge_config::TEdgeConfig::try_new(config_location).await?;
+    let tedge_config = tedge_config::TEdgeConfig::load(config_dir).await?;
 
     Ok(tedge_config
         .software

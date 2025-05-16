@@ -27,13 +27,12 @@ pub struct WatchdogOpt {
 }
 
 pub async fn run(watchdog_opt: WatchdogOpt) -> Result<(), anyhow::Error> {
-    let tedge_config = tedge_config::TEdgeConfig::load(&watchdog_opt.common.config_dir).await?;
-
     log_init(
         "tedge-watchdog",
         &watchdog_opt.common.log_args,
-        &tedge_config.location().tedge_config_root_path,
+        &watchdog_opt.common.config_dir,
     )?;
 
+    let tedge_config = tedge_config::TEdgeConfig::load(&watchdog_opt.common.config_dir).await?;
     watchdog::start_watchdog(tedge_config).await
 }

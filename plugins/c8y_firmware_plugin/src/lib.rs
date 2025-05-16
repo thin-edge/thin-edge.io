@@ -48,17 +48,14 @@ pub struct FirmwarePluginOpt {
 }
 
 pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::Error> {
-    // Load tedge config from the provided location
-    let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(&firmware_plugin_opt.common.config_dir);
-
+    let config_dir = &firmware_plugin_opt.common.config_dir;
     log_init(
         "c8y-firmware-plugin",
         &firmware_plugin_opt.common.log_args,
-        &tedge_config_location.tedge_config_root_path,
+        config_dir,
     )?;
 
-    let tedge_config = tedge_config::TEdgeConfig::try_new(&tedge_config_location).await?;
+    let tedge_config = tedge_config::TEdgeConfig::load(config_dir).await?;
     let c8y_profile = firmware_plugin_opt.profile.as_deref();
 
     if firmware_plugin_opt.init {

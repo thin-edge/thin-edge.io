@@ -3146,6 +3146,7 @@ dependencies = [
  "serde",
  "tedge_api",
  "tedge_config",
+ "tedge_test_utils",
  "tempfile",
  "test-case",
  "thiserror 1.0.69",

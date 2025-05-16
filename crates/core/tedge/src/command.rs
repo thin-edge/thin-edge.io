@@ -121,7 +121,6 @@ pub trait Command {
 /// use tedge::ConfigError;
 /// use tedge_config::tedge_toml::tedge_config::*;
 /// use tedge_config::TEdgeConfig;
-/// use tedge_config::TEdgeConfigLocation;
 ///
 /// #[derive(clap::Parser, Debug)]
 /// enum ConfigCmd {

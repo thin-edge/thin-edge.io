@@ -35,7 +35,7 @@ impl Command for ReconnectBridgeCommand {
 impl From<&ReconnectBridgeCommand> for DisconnectBridgeCommand {
     fn from(reconnect_cmd: &ReconnectBridgeCommand) -> Self {
         DisconnectBridgeCommand {
-            config_location: reconnect_cmd.config.location().clone(),
+            tedge_config_dir: reconnect_cmd.config.root_dir().to_path_buf(),
             cloud: reconnect_cmd.cloud.clone(),
             use_mapper: reconnect_cmd.use_mapper,
             service_manager: reconnect_cmd.service_manager.clone(),

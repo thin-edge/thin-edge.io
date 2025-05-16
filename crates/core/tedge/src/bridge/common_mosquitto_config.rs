@@ -1,6 +1,5 @@
 use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use tedge_utils::paths::DraftFile;
 use tokio::io::AsyncWriteExt;
 
@@ -230,15 +229,13 @@ impl CommonMosquittoConfig {
     /// tedge config location.
     pub async fn save(
         &self,
-        tedge_config_location: &TEdgeConfigLocation,
+        tedge_config: &TEdgeConfig,
     ) -> Result<(), tedge_utils::paths::PathsError> {
-        let dir_path = tedge_config_location
-            .tedge_config_root_path
-            .join(TEDGE_BRIDGE_CONF_DIR_PATH);
+        let dir_path = tedge_config.root_dir().join(TEDGE_BRIDGE_CONF_DIR_PATH);
 
         tedge_utils::paths::create_directories(dir_path)?;
 
-        let config_path = self.file_path(tedge_config_location);
+        let config_path = self.file_path(tedge_config);
         let mut config_draft = DraftFile::new(config_path).await?.with_mode(0o644);
         self.serialize(&mut config_draft).await?;
         config_draft.persist().await?;
@@ -246,9 +243,9 @@ impl CommonMosquittoConfig {
         Ok(())
     }
 
-    fn file_path(&self, tedge_config_location: &TEdgeConfigLocation) -> Utf8PathBuf {
-        tedge_config_location
-            .tedge_config_root_path
+    fn file_path(&self, tedge_config: &TEdgeConfig) -> Utf8PathBuf {
+        tedge_config
+            .root_dir()
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
             .join(&self.config_file)
     }

@@ -9,7 +9,6 @@ use std::io::BufRead;
 use tedge_config::cli::CommonArgs;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::Path;
-use tedge_config::TEdgeConfigLocation;
 
 use crate::csv::deserialize_csv_record;
 use crate::UNIX_SOCKFILE;
@@ -64,12 +63,6 @@ pub struct C8yRemoteAccessPluginOpt {
 
     #[command(flatten)]
     pub common: CommonArgs,
-}
-
-impl C8yRemoteAccessPluginOpt {
-    pub fn get_config_location(&self) -> TEdgeConfigLocation {
-        TEdgeConfigLocation::from_custom_root(&self.common.config_dir)
-    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

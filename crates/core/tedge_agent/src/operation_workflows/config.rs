@@ -19,13 +19,13 @@ impl OperationConfig {
         device_topic_id: &EntityTopicId,
         tedge_config: &TEdgeConfig,
     ) -> Result<OperationConfig, tedge_config::TEdgeConfigError> {
-        let config_dir = &tedge_config.location().tedge_config_root_path;
+        let config_dir = tedge_config.root_dir();
 
         Ok(OperationConfig {
             mqtt_schema: MqttSchema::with_root(topic_root),
             device_topic_id: device_topic_id.clone(),
             log_dir: tedge_config.logs.path.join("agent"),
-            config_dir: config_dir.clone(),
+            config_dir: config_dir.to_owned(),
             state_dir: tedge_config.agent.state.path.clone().into(),
             operations_dir: config_dir.join("operations"),
         })

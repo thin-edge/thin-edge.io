@@ -53,20 +53,19 @@ pub struct AgentOpt {
 }
 
 pub async fn run(agent_opt: AgentOpt) -> Result<(), anyhow::Error> {
-    let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.common.config_dir.clone());
-
     log_init(
         "tedge-agent",
         &agent_opt.common.log_args,
-        &tedge_config_location.tedge_config_root_path,
+        &agent_opt.common.config_dir,
     )?;
+
+    let tedge_config = tedge_config::TEdgeConfig::load(&agent_opt.common.config_dir).await?;
 
     let init = agent_opt.init;
 
     let agent = agent::Agent::try_new(
         "tedge-agent",
-        AgentConfig::from_config_and_cliopts(&tedge_config_location, agent_opt).await?,
+        AgentConfig::from_config_and_cliopts(tedge_config, agent_opt).await?,
     )?;
 
     if init {
