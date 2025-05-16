@@ -30,6 +30,13 @@ impl TEdgeConfig {
         config_location.load_sync()
     }
 
+    pub async fn update_toml(
+        self,
+        update: &impl Fn(&mut TEdgeConfigDto, &TEdgeConfigReader) -> ConfigSettingResult<()>,
+    ) -> Result<(), TEdgeConfigError> {
+        self.location().update_toml(update).await
+    }
+
     #[cfg(feature = "test")]
     /// A test only method designed for injecting configuration into tests
     ///

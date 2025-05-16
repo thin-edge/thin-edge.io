@@ -76,14 +76,14 @@ async fn main() -> anyhow::Result<()> {
             let tedge_config = tedge_config::TEdgeConfig::load(&common.config_dir).await?;
 
             let cmd = cmd
-                .build_command(tedge_config)
+                .build_command(&tedge_config)
                 .with_context(|| "missing configuration parameter")?;
 
             if !std::io::stdout().is_terminal() {
                 yansi::disable();
             }
 
-            match cmd.execute().await {
+            match cmd.execute(tedge_config).await {
                 Ok(()) => Ok(()),
                 // If the command already prints its own nicely formatted errors
                 // don't also print the error by returning it

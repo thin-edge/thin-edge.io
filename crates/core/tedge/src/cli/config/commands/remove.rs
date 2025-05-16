@@ -6,7 +6,6 @@ use tedge_config::TEdgeConfig;
 pub struct RemoveConfigCommand {
     pub key: WritableKey,
     pub value: String,
-    pub config: TEdgeConfig,
 }
 
 #[async_trait::async_trait]
@@ -15,9 +14,8 @@ impl Command for RemoveConfigCommand {
         format!("Remove or unset the configuration value for '{}'", self.key)
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        self.config
-            .location()
+    async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        tedge_config
             .update_toml(&|dto, reader| {
                 dto.try_remove_str(reader, &self.key, &self.value)
                     .map_err(|e| e.into())

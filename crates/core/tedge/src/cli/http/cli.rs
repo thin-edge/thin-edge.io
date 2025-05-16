@@ -194,7 +194,7 @@ impl Content {
 }
 
 impl BuildCommand for TEdgeHttpCli {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let uri = self.uri();
 
         let (protocol, host, port) = if uri.starts_with("/c8y") {

@@ -15,7 +15,6 @@ use crate::system_services::SystemService;
 use crate::system_services::SystemServiceManager;
 
 pub struct RefreshBridgesCmd {
-    config: TEdgeConfig,
     service_manager: Arc<dyn SystemServiceManager>,
 }
 
@@ -25,47 +24,44 @@ impl Command for RefreshBridgesCmd {
         "Refresh all currently active mosquitto bridges (restarts mosquitto)".to_string()
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        self.execute_unfancy().await.map_err(<_>::into)
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        self.execute_unfancy(config).await.map_err(<_>::into)
     }
 }
 
 impl RefreshBridgesCmd {
-    pub fn new(config: TEdgeConfig) -> Result<Self, crate::ConfigError> {
+    pub fn new(config: &TEdgeConfig) -> Result<Self, crate::ConfigError> {
         let service_manager = service_manager(config.root_dir())?;
 
-        let cmd = Self {
-            config,
-            service_manager,
-        };
+        let cmd = Self { service_manager };
 
         Ok(cmd)
     }
 
-    async fn execute_unfancy(&self) -> anyhow::Result<()> {
-        let clouds = established_bridges(&self.config).await;
+    async fn execute_unfancy(&self, config: TEdgeConfig) -> anyhow::Result<()> {
+        let clouds = established_bridges(&config).await;
 
-        if clouds.is_empty() && !self.config.mqtt.bridge.built_in {
+        if clouds.is_empty() && !config.mqtt.bridge.built_in {
             println!("No bridges to refresh.");
             return Ok(());
         }
 
-        let common_mosquitto_config = CommonMosquittoConfig::from_tedge_config(&self.config);
-        common_mosquitto_config.save(&self.config).await?;
+        let common_mosquitto_config = CommonMosquittoConfig::from_tedge_config(&config);
+        common_mosquitto_config.save(&config).await?;
 
-        if !self.config.mqtt.bridge.built_in {
+        if !config.mqtt.bridge.built_in {
             for cloud in &clouds {
                 println!("Refreshing bridge {cloud}");
 
-                let bridge_config = super::connect::bridge_config(&self.config, cloud)?;
-                refresh_bridge(&bridge_config, &self.config).await?;
+                let bridge_config = super::connect::bridge_config(&config, cloud)?;
+                refresh_bridge(&bridge_config, &config).await?;
             }
         }
 
-        for cloud in possible_clouds(&self.config) {
+        for cloud in possible_clouds(&config) {
             // (attempt to) reassert ownership of the certificate and key
             // This is necessary when upgrading from the mosquitto bridge to the built-in bridge
-            if let Ok(bridge_config) = super::connect::bridge_config(&self.config, &cloud) {
+            if let Ok(bridge_config) = super::connect::bridge_config(&config, &cloud) {
                 super::connect::chown_certificate_and_key(&bridge_config).await;
 
                 if bridge_config.bridge_location == BridgeLocation::BuiltIn
@@ -74,7 +70,7 @@ impl RefreshBridgesCmd {
                     println!(
                     "Deleting mosquitto bridge configuration for {cloud} in favour of built-in bridge"
                 );
-                    super::connect::use_built_in_bridge(&self.config, &bridge_config).await?;
+                    super::connect::use_built_in_bridge(&config, &bridge_config).await?;
                 }
             }
         }

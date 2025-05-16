@@ -16,6 +16,7 @@ use hyper::header::CONTENT_TYPE;
 use hyper::StatusCode;
 use reqwest::Identity;
 use reqwest::Response;
+use tedge_config::TEdgeConfig;
 use url::Url;
 
 /// Command to renew a device certificate from Cumulocity
@@ -57,7 +58,7 @@ impl Command for RenewCertCmd {
         )
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
         self.renew_device_certificate().await?;
         eprintln!("Certificate renewed successfully");
         eprintln!("    For an un-interrupted service:");

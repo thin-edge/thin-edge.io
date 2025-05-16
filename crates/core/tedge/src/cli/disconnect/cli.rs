@@ -11,10 +11,10 @@ pub struct TEdgeDisconnectBridgeCli {
 }
 
 impl BuildCommand for TEdgeDisconnectBridgeCli {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
         let cmd = DisconnectBridgeCommand {
             service_manager: service_manager(config.root_dir())?,
-            tedge_config_dir: config.root_dir().to_path_buf(),
+            config_dir: config.root_dir().to_path_buf(),
             cloud: self.cloud.try_into()?,
             use_mapper: true,
         };

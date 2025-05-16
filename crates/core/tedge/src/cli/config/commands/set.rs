@@ -6,7 +6,6 @@ use tedge_config::TEdgeConfig;
 pub struct SetConfigCommand {
     pub key: WritableKey,
     pub value: String,
-    pub config: TEdgeConfig,
 }
 
 #[async_trait::async_trait]
@@ -19,9 +18,8 @@ impl Command for SetConfigCommand {
         )
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        self.config
-            .location()
+    async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        tedge_config
             .update_toml(&|dto, _reader| {
                 dto.try_update_str(&self.key, &self.value)
                     .map_err(|e| e.into())

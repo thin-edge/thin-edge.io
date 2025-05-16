@@ -5,6 +5,7 @@ use mqtt_channel::MqttMessage;
 use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
 use tedge_config::tedge_toml::MqttAuthClientConfig;
+use tedge_config::TEdgeConfig;
 use tracing::info;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
@@ -34,7 +35,7 @@ impl Command for MqttPublishCommand {
         )
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         Ok(publish(self).await?)
     }
 }

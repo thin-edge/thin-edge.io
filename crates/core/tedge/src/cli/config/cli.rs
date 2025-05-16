@@ -133,11 +133,10 @@ macro_rules! try_with_profile {
 }
 
 impl BuildCommand for ConfigCmd {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, _: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
             ConfigCmd::Get { key, profile } => Ok(GetConfigCommand {
                 key: try_with_profile!(key, profile),
-                config,
             }
             .into_boxed()),
             ConfigCmd::Set {
@@ -147,12 +146,10 @@ impl BuildCommand for ConfigCmd {
             } => Ok(SetConfigCommand {
                 key: try_with_profile!(key, profile),
                 value,
-                config,
             }
             .into_boxed()),
             ConfigCmd::Unset { key, profile } => Ok(UnsetConfigCommand {
                 key: try_with_profile!(key, profile),
-                config,
             }
             .into_boxed()),
             ConfigCmd::Add {
@@ -162,7 +159,6 @@ impl BuildCommand for ConfigCmd {
             } => Ok(AddConfigCommand {
                 key: try_with_profile!(key, profile),
                 value,
-                config,
             }
             .into_boxed()),
             ConfigCmd::Remove {
@@ -172,7 +168,6 @@ impl BuildCommand for ConfigCmd {
             } => Ok(RemoveConfigCommand {
                 key: try_with_profile!(key, profile),
                 value,
-                config,
             }
             .into_boxed()),
             ConfigCmd::List {
@@ -182,7 +177,6 @@ impl BuildCommand for ConfigCmd {
             } => Ok(ListConfigCommand {
                 is_all,
                 is_doc,
-                config,
                 filter,
             }
             .into_boxed()),

@@ -71,7 +71,6 @@ const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 20;
 const MQTT_TLS_PORT: u16 = 8883;
 
 pub struct ConnectCommand {
-    pub config: TEdgeConfig,
     pub cloud: Cloud,
     pub is_test_connection: bool,
     pub offline_mode: bool,
@@ -96,12 +95,12 @@ impl Command for ConnectCommand {
         }
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let config = &self.config;
-        let bridge_config = bridge_config(config, &self.cloud).map_err(anyhow::Error::new)?;
+    async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        let bridge_config =
+            bridge_config(&tedge_config, &self.cloud).map_err(anyhow::Error::new)?;
         let credentials_path =
-            credentials_path_for(config, &self.cloud).map_err(anyhow::Error::new)?;
-        let use_cryptoki = config.device.cryptoki.mode.enabled();
+            credentials_path_for(&tedge_config, &self.cloud).map_err(anyhow::Error::new)?;
+        let use_cryptoki = tedge_config.device.cryptoki.mode.enabled();
 
         ConfigLogger::log(
             self.description(),
@@ -110,29 +109,31 @@ impl Command for ConnectCommand {
             &self.cloud,
             credentials_path,
             use_cryptoki,
-            config.proxy.address.or_none(),
-            config.proxy.username.or_none().map(|u| u.as_str()),
+            tedge_config.proxy.address.or_none(),
+            tedge_config.proxy.username.or_none().map(|u| u.as_str()),
         );
 
-        validate_config(config, &self.cloud)?;
+        validate_config(&tedge_config, &self.cloud)?;
 
         if self.is_test_connection {
-            self.check_bridge(bridge_config).await.map_err(<_>::into)
+            self.check_bridge(&tedge_config, bridge_config)
+                .await
+                .map_err(<_>::into)
         } else {
-            fail_if_already_connected(&self.config, &bridge_config).map_err(anyhow::Error::new)?;
+            fail_if_already_connected(&tedge_config, &bridge_config).map_err(anyhow::Error::new)?;
 
             let shift_failed = match bridge_config.certificate_awaits_validation().await {
                 None => false,
                 Some(certificate_shift) => {
                     let shift_done = self
-                        .validate_new_certificate(&bridge_config, certificate_shift)
+                        .validate_new_certificate(&tedge_config, &bridge_config, certificate_shift)
                         .await
                         .unwrap_or(false);
                     !shift_done
                 }
             };
 
-            let connected = self.connect_bridge(bridge_config).await;
+            let connected = self.connect_bridge(&tedge_config, bridge_config).await;
             if connected.is_ok() && shift_failed {
                 println!("Successfully connected, however not using the new certificate");
                 std::process::exit(3);
@@ -143,14 +144,21 @@ impl Command for ConnectCommand {
 }
 
 impl ConnectCommand {
-    async fn check_bridge(&self, bridge_config: BridgeConfig) -> Result<(), Fancy<ConnectError>> {
+    async fn check_bridge(
+        &self,
+        tedge_config: &TEdgeConfig,
+        bridge_config: BridgeConfig,
+    ) -> Result<(), Fancy<ConnectError>> {
         // If the bridge is part of the mapper, the bridge config file won't exist
         // TODO tidy me up once mosquitto is no longer required for bridge
-        if self.check_if_bridge_exists(&bridge_config).await {
-            match self.check_connection().await {
+        if self
+            .check_if_bridge_exists(tedge_config, &bridge_config)
+            .await
+        {
+            match self.check_connection(tedge_config).await {
                 Ok(DeviceStatus::AlreadyExists) => {
                     let cloud = bridge_config.cloud_name;
-                    match self.tenant_matches_configured_url().await? {
+                    match self.tenant_matches_configured_url(tedge_config).await? {
                         // Check failed, warning has been printed already
                         // Don't tell them the connection test succeeded because that's not true
                         Some(false) => {}
@@ -173,12 +181,15 @@ impl ConnectCommand {
         }
     }
 
-    async fn connect_bridge(&self, bridge_config: BridgeConfig) -> Result<(), Fancy<ConnectError>> {
-        let config = &self.config;
-        let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(config);
+    async fn connect_bridge(
+        &self,
+        tedge_config: &TEdgeConfig,
+        bridge_config: BridgeConfig,
+    ) -> Result<(), Fancy<ConnectError>> {
+        let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(tedge_config);
 
         match self
-            .new_bridge(&bridge_config, &updated_mosquitto_config)
+            .new_bridge(tedge_config, &bridge_config, &updated_mosquitto_config)
             .await
         {
             Ok(()) => (),
@@ -203,7 +214,10 @@ impl ConnectCommand {
         #[cfg(feature = "c8y")]
         if !self.offline_mode {
             match self
-                .check_connection_with_retries(bridge_config.connection_check_attempts)
+                .check_connection_with_retries(
+                    tedge_config,
+                    bridge_config.connection_check_attempts,
+                )
                 .await
             {
                 Ok(DeviceStatus::AlreadyExists) => {}
@@ -226,13 +240,13 @@ impl ConnectCommand {
         match &self.cloud {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => {
-                let c8y_config = config.c8y.try_get(profile.as_deref())?;
+                let c8y_config = tedge_config.c8y.try_get(profile.as_deref())?;
 
                 let use_basic_auth = c8y_config
                     .auth_method
                     .is_basic(&c8y_config.credentials_path);
                 if !use_basic_auth && !self.offline_mode && connection_check_success {
-                    let _ = self.tenant_matches_configured_url().await;
+                    let _ = self.tenant_matches_configured_url(tedge_config).await;
                 }
                 enable_software_management(&bridge_config, &*self.service_manager).await;
             }
@@ -253,6 +267,7 @@ impl ConnectCommand {
     /// - Err(err) when the endpoint is not correctly configured
     async fn validate_new_certificate(
         &self,
+        tedge_config: &TEdgeConfig,
         bridge_config: &BridgeConfig,
         certificate_shift: CertificateShift,
     ) -> Result<bool, ConfigError> {
@@ -284,7 +299,7 @@ impl ConnectCommand {
 
             let spinner = Spinner::start(banner);
             let res = self
-                .connect_with_new_certificate(bridge_config, &certificate_shift)
+                .connect_with_new_certificate(tedge_config, bridge_config, &certificate_shift)
                 .await;
             match spinner.finish(res) {
                 Ok(()) => break Ok(()),
@@ -320,6 +335,7 @@ impl ConnectCommand {
 
     async fn connect_with_new_certificate(
         &self,
+        tedge_config: &TEdgeConfig,
         _bridge_config: &BridgeConfig,
         _certificate_shift: &CertificateShift,
     ) -> anyhow::Result<()> {
@@ -327,9 +343,10 @@ impl ConnectCommand {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile_name) => {
                 let use_basic_auth = false;
-                let device_type = &self.config.device.ty;
-                let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
-                let mut mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
+                let device_type = &tedge_config.device.ty;
+                let c8y_config = tedge_config.c8y.try_get(profile_name.as_deref())?;
+                let mut mqtt_auth_config =
+                    tedge_config.mqtt_auth_config_cloud_broker(c8y_config)?;
                 if let Some(client_config) = mqtt_auth_config.client.as_mut() {
                     _certificate_shift
                         .new_cert_path
@@ -370,19 +387,21 @@ fn credentials_path_for<'a>(
 }
 
 impl ConnectCommand {
-    async fn tenant_matches_configured_url(&self) -> Result<Option<bool>, Fancy<ConnectError>> {
+    async fn tenant_matches_configured_url(
+        &self,
+        tedge_config: &TEdgeConfig,
+    ) -> Result<Option<bool>, Fancy<ConnectError>> {
         match &self.cloud {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => {
-                let config = &self.config;
-                let c8y_config = config.c8y.try_get(profile.as_deref())?;
+                let c8y_config = tedge_config.c8y.try_get(profile.as_deref())?;
 
                 let use_basic_auth = c8y_config
                     .auth_method
                     .is_basic(&c8y_config.credentials_path);
                 if !use_basic_auth && !self.offline_mode {
                     tenant_matches_configured_url(
-                        config,
+                        tedge_config,
                         profile.as_ref().map(|g| &***g),
                         &c8y_config
                             .mqtt
@@ -411,10 +430,11 @@ impl ConnectCommand {
     #[cfg(feature = "c8y")]
     async fn check_connection_with_retries(
         &self,
+        tedge_config: &TEdgeConfig,
         max_attempts: u32,
     ) -> Result<DeviceStatus, Fancy<ConnectError>> {
         for i in 1..max_attempts {
-            let result = self.check_connection().await;
+            let result = self.check_connection(tedge_config).await;
             if let Ok(DeviceStatus::AlreadyExists) = result {
                 return result;
             }
@@ -424,26 +444,33 @@ impl ConnectCommand {
             );
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
-        self.check_connection().await
+        self.check_connection(tedge_config).await
     }
 
-    async fn check_connection(&self) -> Result<DeviceStatus, Fancy<ConnectError>> {
-        let config = &self.config;
+    async fn check_connection(
+        &self,
+        tedge_config: &TEdgeConfig,
+    ) -> Result<DeviceStatus, Fancy<ConnectError>> {
         let spinner = Spinner::start("Verifying device is connected to cloud");
         let res = match &self.cloud {
             #[cfg(feature = "azure")]
-            Cloud::Azure(profile) => check_device_status_azure(config, profile.as_deref()).await,
+            Cloud::Azure(profile) => {
+                check_device_status_azure(tedge_config, profile.as_deref()).await
+            }
             #[cfg(feature = "aws")]
-            Cloud::Aws(profile) => check_device_status_aws(config, profile.as_deref()).await,
+            Cloud::Aws(profile) => check_device_status_aws(tedge_config, profile.as_deref()).await,
             #[cfg(feature = "c8y")]
-            Cloud::C8y(profile) => check_device_status_c8y(config, profile.as_deref()).await,
+            Cloud::C8y(profile) => check_device_status_c8y(tedge_config, profile.as_deref()).await,
         };
         spinner.finish(res)
     }
 
-    async fn check_if_bridge_exists(&self, br_config: &BridgeConfig) -> bool {
-        let bridge_conf_path = self
-            .config
+    async fn check_if_bridge_exists(
+        &self,
+        tedge_config: &TEdgeConfig,
+        br_config: &BridgeConfig,
+    ) -> bool {
+        let bridge_conf_path = tedge_config
             .root_dir()
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
             .join(&*br_config.config_file);
@@ -756,6 +783,7 @@ pub(crate) fn is_bridge_health_up_message(message: &rumqttc::Publish, health_top
 impl ConnectCommand {
     async fn new_bridge(
         &self,
+        tedge_config: &TEdgeConfig,
         bridge_config: &BridgeConfig,
         common_mosquitto_config: &CommonMosquittoConfig,
     ) -> Result<(), Fancy<ConnectError>> {
@@ -768,8 +796,6 @@ impl ConnectCommand {
             warning!("'{name}' service manager is not available on the system.",);
         }
 
-        let tedge_config = &self.config;
-
         match &self.cloud {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile_name) => {
@@ -778,13 +804,14 @@ impl ConnectCommand {
                 } else {
                     let use_basic_auth = bridge_config.remote_username.is_some()
                         && bridge_config.remote_password.is_some();
-                    let c8y_config = self.config.c8y.try_get(profile_name.as_deref())?;
-                    let mqtt_auth_config = self.config.mqtt_auth_config_cloud_broker(c8y_config)?;
+                    let c8y_config = tedge_config.c8y.try_get(profile_name.as_deref())?;
+                    let mqtt_auth_config =
+                        tedge_config.mqtt_auth_config_cloud_broker(c8y_config)?;
                     let spinner = Spinner::start("Creating device in Cumulocity cloud");
                     let res = create_device_with_direct_connection(
                         use_basic_auth,
                         bridge_config,
-                        &self.config.device.ty,
+                        &tedge_config.device.ty,
                         mqtt_auth_config,
                     )
                     .await;
@@ -798,21 +825,21 @@ impl ConnectCommand {
         }
 
         if let Err(err) =
-            write_generic_mosquitto_config_to_file(&self.config, common_mosquitto_config).await
+            write_generic_mosquitto_config_to_file(tedge_config, common_mosquitto_config).await
         {
             // We want to preserve previous errors and therefore discard result of this function.
-            let _ = clean_up(&self.config, bridge_config);
+            let _ = clean_up(tedge_config, bridge_config);
             return Err(err.into());
         }
 
         if bridge_config.bridge_location == BridgeLocation::Mosquitto {
-            if let Err(err) = write_bridge_config_to_file(&self.config, bridge_config).await {
+            if let Err(err) = write_bridge_config_to_file(tedge_config, bridge_config).await {
                 // We want to preserve previous errors and therefore discard result of this function.
-                let _ = clean_up(&self.config, bridge_config);
+                let _ = clean_up(tedge_config, bridge_config);
                 return Err(err.into());
             }
         } else {
-            use_built_in_bridge(&self.config, bridge_config).await?;
+            use_built_in_bridge(tedge_config, bridge_config).await?;
         }
 
         if let Err(err) = service_manager_result {
@@ -822,7 +849,7 @@ impl ConnectCommand {
             return Err(err.into());
         }
 
-        restart_mosquitto(bridge_config, service_manager.as_ref(), &self.config).await?;
+        restart_mosquitto(bridge_config, service_manager.as_ref(), tedge_config).await?;
 
         let spinner = Spinner::start("Waiting for mosquitto to be listening for connections");
         spinner.finish(wait_for_mosquitto_listening(&tedge_config.mqtt).await)?;
@@ -831,7 +858,7 @@ impl ConnectCommand {
             .enable_service(SystemService::Mosquitto)
             .await
         {
-            clean_up(&self.config, bridge_config)?;
+            clean_up(tedge_config, bridge_config)?;
             return Err(err.into());
         }
 
@@ -988,15 +1015,16 @@ fn fail_if_already_connected(
 }
 
 async fn write_generic_mosquitto_config_to_file(
-    config: &TEdgeConfig,
+    tedge_config: &TEdgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
 ) -> Result<(), ConnectError> {
-    let dir_path = config.root_dir().join(TEDGE_BRIDGE_CONF_DIR_PATH);
+    let dir_path = tedge_config.root_dir().join(TEDGE_BRIDGE_CONF_DIR_PATH);
 
     // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
     create_directories(dir_path)?;
 
-    let common_config_path = get_common_mosquitto_config_file_path(config, common_mosquitto_config);
+    let common_config_path =
+        get_common_mosquitto_config_file_path(tedge_config, common_mosquitto_config);
     let mut common_draft = DraftFile::new(common_config_path).await?.with_mode(0o644);
     common_mosquitto_config.serialize(&mut common_draft).await?;
     common_draft.persist().await?;

@@ -36,7 +36,7 @@ impl From<Shell> for Box<dyn clap_complete::env::EnvCompleter> {
 }
 
 impl BuildCommand for Shell {
-    fn build_command(self, _: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, _: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         Ok(Box::new(CompletionsCmd { shell: self }))
     }
 }
@@ -52,7 +52,7 @@ impl Command for CompletionsCmd {
         format!("generate shell tab completion script for {}", self.shell)
     }
 
-    async fn execute(&self) -> Result<(), super::log::MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), super::log::MaybeFancy<anyhow::Error>> {
         let cmd = TEdgeCli::command();
         let completer = std::env::current_exe().unwrap();
         let completer = completer.to_str().unwrap();

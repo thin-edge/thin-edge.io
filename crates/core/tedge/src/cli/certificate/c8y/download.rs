@@ -20,6 +20,7 @@ use std::io::Write;
 use std::time::Duration;
 use tedge_config::models::HostPort;
 use tedge_config::models::HTTPS_PORT;
+use tedge_config::TEdgeConfig;
 use url::Url;
 
 /// Command to request and download a device certificate from Cumulocity
@@ -67,7 +68,7 @@ impl Command for DownloadCertCmd {
         )
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
         self.download_device_certificate().await?;
         eprintln!("Certificate downloaded successfully");
         eprintln!("    => the device can now be connected\n");

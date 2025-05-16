@@ -13,6 +13,7 @@ use reqwest::multipart;
 use reqwest::Identity;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tedge_config::TEdgeConfig;
 use tedge_utils::file::path_exists;
 
 /// Upload a file to Cumulocity
@@ -49,7 +50,7 @@ impl Command for C8yUpload {
         "upload a file to Cumulocity".to_string()
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
         if !path_exists(&self.file).await {
             return Err(anyhow!("Failed to open file: {:?}", self.file))?;
         }
@@ -169,7 +170,7 @@ mod tests {
         assert!(upload.upload_file("event-123").await.is_ok());
 
         // In one go
-        assert!(upload.execute().await.is_ok());
+        assert!(upload.execute(TEdgeConfig::load_toml_str("")).await.is_ok());
     }
 
     fn upload_cmd(
