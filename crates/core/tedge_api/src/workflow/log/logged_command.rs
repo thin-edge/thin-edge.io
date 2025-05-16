@@ -1,6 +1,7 @@
 use crate::CommandLog;
 use std::ffi::OsStr;
 use std::os::unix::process::ExitStatusExt;
+use std::path::Path;
 use std::process::Output;
 use std::process::Stdio;
 use std::time::Duration;
@@ -142,7 +143,10 @@ impl LoggedCommand {
     /// In contrast to [`std::process::Command`], `program` can contain space-separated arguments,
     /// which will be properly parsed, split, and passed into `.args()` call for the underlying
     /// command.
-    pub fn new(program: impl AsRef<OsStr>) -> Result<LoggedCommand, std::io::Error> {
+    pub fn new(
+        program: impl AsRef<OsStr>,
+        working_dir: impl AsRef<Path>,
+    ) -> Result<LoggedCommand, std::io::Error> {
         let mut args = shell_words::split(&program.as_ref().to_string_lossy())
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
 
@@ -162,13 +166,24 @@ impl LoggedCommand {
         };
 
         command
-            // TODO: should use tmp from config
-            .current_dir("/tmp")
+            .current_dir(working_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
         Ok(LoggedCommand { command })
+    }
+
+    pub fn from_command(mut command: std::process::Command, working_dir: impl AsRef<Path>) -> Self {
+        command
+            .current_dir(working_dir)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        Self {
+            command: tokio::process::Command::from(command),
+        }
     }
 
     pub fn arg(&mut self, arg: impl AsRef<OsStr>) -> &mut LoggedCommand {
@@ -263,33 +278,5 @@ impl LoggedCommand {
 
         logger.flush().await?;
         Ok(())
-    }
-}
-
-impl From<tokio::process::Command> for LoggedCommand {
-    fn from(mut command: Command) -> Self {
-        command
-            // TODO: should use tmp from config
-            .current_dir("/tmp")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
-        Self { command }
-    }
-}
-
-impl From<std::process::Command> for LoggedCommand {
-    fn from(mut command: std::process::Command) -> Self {
-        command
-            // TODO: should use tmp from config
-            .current_dir("/tmp")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
-        Self {
-            command: tokio::process::Command::from(command),
-        }
     }
 }

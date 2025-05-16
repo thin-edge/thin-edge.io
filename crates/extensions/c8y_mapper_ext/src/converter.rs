@@ -1038,10 +1038,12 @@ impl CumulocityConverter {
         let cmd_id = self.command_id.new_id();
 
         let mut logged =
-            LoggedCommand::new(command).map_err(|e| CumulocityMapperError::ExecuteFailed {
-                error_message: e.to_string(),
-                command: command.to_string(),
-                operation_name: operation_name.to_string(),
+            LoggedCommand::new(command, self.config.tmp_dir.as_ref()).map_err(|e| {
+                CumulocityMapperError::ExecuteFailed {
+                    error_message: e.to_string(),
+                    command: command.to_string(),
+                    operation_name: operation_name.to_string(),
+                }
             })?;
 
         logged.args(script.args);
