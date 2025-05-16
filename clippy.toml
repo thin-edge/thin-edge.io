@@ -10,3 +10,4 @@ disallowed-methods = [
     { path = "hyper::client::Client::new", reason = "Use Client::builder()" },
     { path = "hyper_rustls::HttpsConnectorBuilder::with_native_roots", reason = "Use .with_tls_config(tedge_config.cloud_client_tls_config()) instead to use configured root certificate paths for the connected cloud" },
 ]
+large-error-threshold = 256

@@ -164,7 +164,7 @@ impl C8yMapperActor {
                                 .await?
                         }
                         UpdateOutcome::Updated(updated_entity, old_entity) => {
-                            self.process_entity_update(updated_entity, old_entity)
+                            self.process_entity_update(*updated_entity, *old_entity)
                                 .await?
                         }
                         UpdateOutcome::Deleted | UpdateOutcome::Unchanged => (),
