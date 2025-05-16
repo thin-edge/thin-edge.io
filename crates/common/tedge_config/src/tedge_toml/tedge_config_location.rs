@@ -47,7 +47,7 @@ pub fn get_config_dir() -> PathBuf {
 /// - User-local locations under `$HOME/.tedge`
 ///
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct TEdgeConfigLocation {
+pub(crate) struct TEdgeConfigLocation {
     /// Root directory where `tedge.toml` and other tedge related configuration files are located.
     tedge_config_root_path: Utf8PathBuf,
 
@@ -63,7 +63,7 @@ impl Default for TEdgeConfigLocation {
 }
 
 impl TEdgeConfigLocation {
-    pub fn from_custom_root(tedge_config_root_path: impl AsRef<Path>) -> Self {
+    pub(crate) fn from_custom_root(tedge_config_root_path: impl AsRef<Path>) -> Self {
         Self {
             tedge_config_root_path: Utf8Path::from_path(tedge_config_root_path.as_ref())
                 .unwrap()

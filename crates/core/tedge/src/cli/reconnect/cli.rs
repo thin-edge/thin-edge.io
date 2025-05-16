@@ -11,10 +11,10 @@ pub struct TEdgeReconnectCli {
 }
 
 impl BuildCommand for TEdgeReconnectCli {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
         Ok(ReconnectBridgeCommand {
+            config_dir: config.root_dir().to_owned(),
             service_manager: service_manager(config.root_dir())?,
-            config,
             cloud: self.cloud.try_into()?,
             use_mapper: true,
         }

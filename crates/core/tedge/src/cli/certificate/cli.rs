@@ -140,7 +140,7 @@ pub enum CA {
 }
 
 impl BuildCommand for TEdgeCertCli {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let (user, group) = if config.mqtt.bridge.built_in {
             ("tedge", "tedge")
         } else {
@@ -165,7 +165,7 @@ impl BuildCommand for TEdgeCertCli {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
 
                 let cmd = CreateCertCmd {
-                    id: get_device_id(id, &config, &cloud)?,
+                    id: get_device_id(id, config, &cloud)?,
                     cert_path: config.device_cert_path(cloud.as_ref())?.to_owned(),
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
                     user: user.to_owned(),
@@ -183,7 +183,7 @@ impl BuildCommand for TEdgeCertCli {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
 
                 let cmd = CreateCsrCmd {
-                    id: get_device_id(id, &config, &cloud)?,
+                    id: get_device_id(id, config, &cloud)?,
                     key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
                     // Use output file instead of csr_path from tedge config if provided
                     csr_path: if let Some(output_path) = output_path {
@@ -331,10 +331,10 @@ impl BuildCommand for TEdgeCertCli {
                         Some(csr_path) => (csr_path, false),
                     };
                     let c8y = match cloud {
-                        None => C8yEndPoint::local_proxy(&config, None)?,
+                        None => C8yEndPoint::local_proxy(config, None)?,
                         #[cfg(feature = "c8y")]
                         Some(Cloud::C8y(profile)) => C8yEndPoint::local_proxy(
-                            &config,
+                            config,
                             profile.as_deref().map(|p| p.as_ref()),
                         )?,
                         #[cfg(any(feature = "aws", feature = "azure"))]

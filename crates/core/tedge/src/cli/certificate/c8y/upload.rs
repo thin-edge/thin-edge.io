@@ -10,6 +10,7 @@ use reqwest::StatusCode;
 use reqwest::Url;
 use tedge_config::models::HostPort;
 use tedge_config::models::HTTPS_PORT;
+use tedge_config::TEdgeConfig;
 
 #[derive(Debug, serde::Deserialize)]
 struct CumulocityResponse {
@@ -40,7 +41,7 @@ impl Command for UploadCertCmd {
         "upload root certificate".into()
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         Ok(self.upload_certificate().await?)
     }
 }

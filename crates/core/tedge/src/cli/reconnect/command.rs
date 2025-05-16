@@ -1,3 +1,6 @@
+use camino::Utf8PathBuf;
+use tedge_config::TEdgeConfig;
+
 use crate::cli::common::Cloud;
 use crate::cli::connect::ConnectCommand;
 use crate::cli::disconnect::disconnect_bridge::DisconnectBridgeCommand;
@@ -5,10 +8,9 @@ use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::system_services::SystemServiceManager;
 use std::sync::Arc;
-use tedge_config::TEdgeConfig;
 
 pub struct ReconnectBridgeCommand {
-    pub config: TEdgeConfig,
+    pub config_dir: Utf8PathBuf,
     pub cloud: Cloud,
     pub use_mapper: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
@@ -21,13 +23,13 @@ impl Command for ReconnectBridgeCommand {
     }
 
     /// calls the disconnect command, followed by the connect command
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         println!("Disconnecting from {}", self.cloud);
         let disconnect_cmd: DisconnectBridgeCommand = self.into();
-        disconnect_cmd.execute().await?;
+        disconnect_cmd.execute_direct().await?;
 
         let connect_cmd: ConnectCommand = self.into();
-        connect_cmd.execute().await?;
+        connect_cmd.execute(config).await?;
         Ok(())
     }
 }
@@ -35,7 +37,7 @@ impl Command for ReconnectBridgeCommand {
 impl From<&ReconnectBridgeCommand> for DisconnectBridgeCommand {
     fn from(reconnect_cmd: &ReconnectBridgeCommand) -> Self {
         DisconnectBridgeCommand {
-            tedge_config_dir: reconnect_cmd.config.root_dir().to_path_buf(),
+            config_dir: reconnect_cmd.config_dir.clone(),
             cloud: reconnect_cmd.cloud.clone(),
             use_mapper: reconnect_cmd.use_mapper,
             service_manager: reconnect_cmd.service_manager.clone(),
@@ -46,7 +48,6 @@ impl From<&ReconnectBridgeCommand> for DisconnectBridgeCommand {
 impl From<&ReconnectBridgeCommand> for ConnectCommand {
     fn from(reconnect_cmd: &ReconnectBridgeCommand) -> Self {
         ConnectCommand {
-            config: reconnect_cmd.config.clone(),
             cloud: reconnect_cmd.cloud.clone(),
             is_test_connection: false,
             offline_mode: false,

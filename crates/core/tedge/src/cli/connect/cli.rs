@@ -20,7 +20,7 @@ pub struct TEdgeConnectOpt {
 }
 
 impl BuildCommand for TEdgeConnectOpt {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
         let Self {
             is_test_connection,
             offline_mode,
@@ -28,7 +28,6 @@ impl BuildCommand for TEdgeConnectOpt {
         } = self;
         Ok(Box::new(ConnectCommand {
             service_manager: service_manager(config.root_dir())?,
-            config,
             cloud: cloud.try_into()?,
             is_test_connection,
             offline_mode,

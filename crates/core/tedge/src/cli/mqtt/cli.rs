@@ -59,7 +59,7 @@ pub enum TEdgeMqttCli {
 }
 
 impl BuildCommand for TEdgeMqttCli {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
         let auth_config = config.mqtt_client_auth_config();
 
         let cmd = {

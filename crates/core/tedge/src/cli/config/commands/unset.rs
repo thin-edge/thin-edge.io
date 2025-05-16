@@ -5,7 +5,6 @@ use tedge_config::TEdgeConfig;
 
 pub struct UnsetConfigCommand {
     pub key: WritableKey,
-    pub config: TEdgeConfig,
 }
 
 #[async_trait::async_trait]
@@ -14,9 +13,8 @@ impl Command for UnsetConfigCommand {
         format!("unset the configuration value for '{}'", self.key)
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        self.config
-            .location()
+    async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        tedge_config
             .update_toml(&|dto, _reader| Ok(dto.try_unset_key(&self.key)?))
             .await
             .map_err(anyhow::Error::new)?;

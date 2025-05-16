@@ -186,18 +186,13 @@ fn styles() -> clap::builder::Styles {
 }
 
 impl BuildCommand for TEdgeOpt {
-    fn build_command(self, config: TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
         match self {
             TEdgeOpt::Init {
                 user,
                 group,
                 relative_links,
-            } => Ok(Box::new(TEdgeInitCmd::new(
-                user,
-                group,
-                relative_links,
-                config,
-            ))),
+            } => Ok(Box::new(TEdgeInitCmd::new(user, group, relative_links))),
             TEdgeOpt::Upload(opt) => opt.build_command(config),
             TEdgeOpt::Cert(opt) => opt.build_command(config),
             TEdgeOpt::Config(opt) => opt.build_command(config),

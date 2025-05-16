@@ -10,6 +10,7 @@ use certificate::PemCertificate;
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use tedge_config::TEdgeConfig;
 use tokio::fs::File;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
@@ -39,7 +40,7 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         self.create_test_certificate(&self.csr_template).await?;
         eprintln!("Certificate created successfully");
         eprintln!("    => the certificate has to be uploaded to the cloud");

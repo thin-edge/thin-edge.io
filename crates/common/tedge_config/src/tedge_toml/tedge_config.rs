@@ -87,14 +87,14 @@ impl std::ops::Deref for TEdgeConfig {
 }
 
 impl TEdgeConfig {
-    pub fn from_dto(dto: &TEdgeConfigDto, location: TEdgeConfigLocation) -> Self {
+    pub(crate) fn from_dto(dto: &TEdgeConfigDto, location: TEdgeConfigLocation) -> Self {
         Self {
             reader: TEdgeConfigReader::from_dto(dto, &location),
             location,
         }
     }
 
-    pub fn location(&self) -> &TEdgeConfigLocation {
+    pub(crate) fn location(&self) -> &TEdgeConfigLocation {
         &self.location
     }
 
@@ -1291,7 +1291,7 @@ pub enum ReadError {
 ///
 /// Some configuration defaults are relative to the config location, and
 /// this trait allows us to pass that in, or the DTO, both, or neither!
-pub(crate) trait TEdgeConfigDefault<T, Args> {
+trait TEdgeConfigDefault<T, Args> {
     type Output;
     fn call(self, data: &T, location: &TEdgeConfigLocation) -> Self::Output;
 }

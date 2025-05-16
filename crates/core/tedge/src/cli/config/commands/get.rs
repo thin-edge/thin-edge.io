@@ -1,11 +1,11 @@
 use tedge_config::tedge_toml::ReadableKey;
+use tedge_config::TEdgeConfig;
 
 use crate::command::Command;
 use crate::log::MaybeFancy;
 
 pub struct GetConfigCommand {
     pub key: ReadableKey,
-    pub config: tedge_config::TEdgeConfig,
 }
 
 #[async_trait::async_trait]
@@ -14,8 +14,8 @@ impl Command for GetConfigCommand {
         format!("get the configuration value for key: '{}'", self.key)
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        match self.config.read_string(&self.key) {
+    async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        match tedge_config.read_string(&self.key) {
             Ok(value) => {
                 println!("{}", value);
             }

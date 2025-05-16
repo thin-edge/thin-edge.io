@@ -11,7 +11,6 @@ pub struct ListConfigCommand {
     pub is_all: bool,
     pub is_doc: bool,
     pub filter: Option<String>,
-    pub config: TEdgeConfig,
 }
 
 #[async_trait::async_trait]
@@ -20,11 +19,11 @@ impl Command for ListConfigCommand {
         "list the configuration keys and values".into()
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         if self.is_doc {
             print_config_doc(self.filter.as_deref());
         } else {
-            print_config_list(&self.config, self.is_all, self.filter.as_deref())?;
+            print_config_list(&tedge_config, self.is_all, self.filter.as_deref())?;
         }
 
         Ok(())
