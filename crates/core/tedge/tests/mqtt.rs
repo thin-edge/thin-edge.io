@@ -8,7 +8,6 @@ mod tests {
     use assert_cmd::assert::OutputAssertExt;
     use assert_cmd::Command;
     use predicates::prelude::predicate;
-    use tedge_config::TEdgeConfigLocation;
     use test_case::test_case;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
@@ -17,11 +16,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let toml_conf = &format!("[mqtt]\nclient_port = {port}");
 
-        let config_location = TEdgeConfigLocation::from_custom_root(dir.path());
-        std::fs::write(
-            config_location.tedge_config_file_path(),
-            toml_conf.as_bytes(),
-        )?;
+        std::fs::write(dir.path().join("tedge.toml"), toml_conf.as_bytes())?;
         Ok(dir)
     }
 

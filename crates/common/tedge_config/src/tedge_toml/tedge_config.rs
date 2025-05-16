@@ -97,6 +97,10 @@ impl TEdgeConfig {
     pub fn location(&self) -> &TEdgeConfigLocation {
         &self.location
     }
+
+    pub fn root_dir(&self) -> &Utf8Path {
+        self.location.tedge_config_root_path()
+    }
 }
 
 /// The keys that can be read from the configuration
@@ -1287,7 +1291,7 @@ pub enum ReadError {
 ///
 /// Some configuration defaults are relative to the config location, and
 /// this trait allows us to pass that in, or the DTO, both, or neither!
-pub trait TEdgeConfigDefault<T, Args> {
+pub(crate) trait TEdgeConfigDefault<T, Args> {
     type Output;
     fn call(self, data: &T, location: &TEdgeConfigLocation) -> Self::Output;
 }

@@ -20,13 +20,14 @@ pub use tedge_config_macros::all_or_nothing;
 pub use tedge_config_macros::OptionalConfig;
 
 impl TEdgeConfig {
-    pub async fn try_new(config_location: &TEdgeConfigLocation) -> Result<Self, TEdgeConfigError> {
+    pub async fn load(config_dir: impl AsRef<StdPath>) -> Result<Self, TEdgeConfigError> {
+        let config_location = TEdgeConfigLocation::from_custom_root(config_dir.as_ref());
         config_location.load().await
     }
 
-    pub async fn load(config_dir: impl AsRef<StdPath>) -> Result<TEdgeConfig, TEdgeConfigError> {
+    pub fn load_sync(config_dir: impl AsRef<StdPath>) -> Result<Self, TEdgeConfigError> {
         let config_location = TEdgeConfigLocation::from_custom_root(config_dir.as_ref());
-        TEdgeConfig::try_new(&config_location).await
+        config_location.load_sync()
     }
 
     #[cfg(feature = "test")]
@@ -41,6 +42,11 @@ impl TEdgeConfig {
     /// assert_eq!(config.sudo.enable, true);
     /// ```
     pub fn load_toml_str(toml: &str) -> TEdgeConfig {
-        TEdgeConfigLocation::load_toml_str(toml)
+        TEdgeConfigLocation::load_toml_str(toml, TEdgeConfigLocation::default())
+    }
+
+    #[cfg(feature = "test")]
+    pub fn load_toml_str_with_root_dir(config_dir: impl AsRef<StdPath>, toml: &str) -> TEdgeConfig {
+        TEdgeConfigLocation::load_toml_str(toml, TEdgeConfigLocation::from_custom_root(config_dir))
     }
 }

@@ -77,7 +77,7 @@ impl TEdgeInitCmd {
             create_symlinks_for(component, target, executable_dir, &RealEnv).await?;
         }
 
-        let config_dir = &self.config.location().tedge_config_root_path;
+        let config_dir = &self.config.root_dir();
         let permissions = {
             PermissionEntry::new(
                 Some(self.user.clone()),

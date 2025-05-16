@@ -11,7 +11,7 @@ mod tests {
     use tedge_api::SoftwareError;
     use tedge_api::SoftwareModule;
     use tedge_config::SudoCommandBuilder;
-    use tedge_config::TEdgeConfigLocation;
+    use tedge_config::TEdgeConfig;
     use test_case::test_case;
 
     #[test_case("abc", Some("1.0")  ; "with version")]
@@ -55,8 +55,7 @@ mod tests {
     async fn plugin_call_name_and_path() -> Result<(), anyhow::Error> {
         let dummy_plugin_path = get_dummy_plugin_path();
 
-        let tmpfile = make_config(100)?;
-        let config = tedge_config::TEdgeConfig::load(tmpfile.path()).await?;
+        let config = TEdgeConfig::load_toml_str("software.max_packages = 100");
 
         let plugin = ExternalPluginCommand::new(
             "test",
@@ -202,14 +201,5 @@ mod tests {
             .join("target/debug/tedge-dummy-plugin");
 
         dummy_plugin_path
-    }
-
-    fn make_config(max_packages: u32) -> Result<tempfile::TempDir, anyhow::Error> {
-        let dir = tempfile::TempDir::new().unwrap();
-        let toml_conf = &format!("[software]\nmax_packages = {max_packages}");
-
-        let config_location = TEdgeConfigLocation::from_custom_root(dir.path());
-        std::fs::write(config_location.tedge_config_file_path(), toml_conf)?;
-        Ok(dir)
     }
 }

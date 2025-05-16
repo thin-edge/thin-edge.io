@@ -16,10 +16,8 @@ use std::collections::HashMap;
 use std::str::from_utf8;
 use std::time::Duration;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
-use tedge_test_utils::fs::TempTedgeDir;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
@@ -659,17 +657,12 @@ async fn next_received_message(event_loop: &mut EventLoop) -> anyhow::Result<Pub
 }
 
 async fn tedge_mqtt_config(mqtt_port: u16) -> TEdgeConfig {
-    let ttd = TempTedgeDir::new();
-    let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-    config_loc
-        .update_toml(&|dto, _reader| {
-            dto.mqtt.client.port = Some(mqtt_port.try_into().unwrap());
-            dto.mqtt.bridge.reconnect_policy.initial_interval = Some("0s".parse().unwrap());
-            Ok(())
-        })
-        .await
-        .unwrap();
-    TEdgeConfig::try_new(&config_loc).await.unwrap()
+    TEdgeConfig::load_toml_str(&format!(
+        "
+    mqtt.client.port = {mqtt_port}
+    mqtt.bridge.reconnect_policy.initial_interval = \"0s\"
+    "
+    ))
 }
 
 fn get_rumqttd_config(port: u16) -> Config {

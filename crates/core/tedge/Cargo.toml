@@ -69,6 +69,7 @@ mockito = { workspace = true }
 mqtt_tests = { workspace = true }
 predicates = { workspace = true }
 rcgen = { workspace = true }
+tedge_config = { workspace = true, features = ["test"] }
 tedge_test_utils = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }

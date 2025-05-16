@@ -56,7 +56,6 @@ use tedge_config::tedge_toml::TEdgeConfigReaderMqtt;
 use tedge_config::TEdgeConfig;
 #[cfg(any(feature = "aws", feature = "azure"))]
 use tedge_config::TEdgeConfigError;
-use tedge_config::TEdgeConfigLocation;
 use tedge_utils::file::path_exists;
 use tedge_utils::paths::create_directories;
 use tedge_utils::paths::ok_if_not_found;
@@ -120,8 +119,7 @@ impl Command for ConnectCommand {
         if self.is_test_connection {
             self.check_bridge(bridge_config).await.map_err(<_>::into)
         } else {
-            fail_if_already_connected(self.config.location(), &bridge_config)
-                .map_err(anyhow::Error::new)?;
+            fail_if_already_connected(&self.config, &bridge_config).map_err(anyhow::Error::new)?;
 
             let shift_failed = match bridge_config.certificate_awaits_validation().await {
                 None => false,
@@ -446,8 +444,7 @@ impl ConnectCommand {
     async fn check_if_bridge_exists(&self, br_config: &BridgeConfig) -> bool {
         let bridge_conf_path = self
             .config
-            .location()
-            .tedge_config_root_path
+            .root_dir()
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
             .join(&*br_config.config_file);
 
@@ -772,7 +769,6 @@ impl ConnectCommand {
         }
 
         let tedge_config = &self.config;
-        let config_location = self.config.location();
 
         match &self.cloud {
             #[cfg(feature = "c8y")]
@@ -802,21 +798,21 @@ impl ConnectCommand {
         }
 
         if let Err(err) =
-            write_generic_mosquitto_config_to_file(config_location, common_mosquitto_config).await
+            write_generic_mosquitto_config_to_file(&self.config, common_mosquitto_config).await
         {
             // We want to preserve previous errors and therefore discard result of this function.
-            let _ = clean_up(config_location, bridge_config);
+            let _ = clean_up(&self.config, bridge_config);
             return Err(err.into());
         }
 
         if bridge_config.bridge_location == BridgeLocation::Mosquitto {
-            if let Err(err) = write_bridge_config_to_file(config_location, bridge_config).await {
+            if let Err(err) = write_bridge_config_to_file(&self.config, bridge_config).await {
                 // We want to preserve previous errors and therefore discard result of this function.
-                let _ = clean_up(config_location, bridge_config);
+                let _ = clean_up(&self.config, bridge_config);
                 return Err(err.into());
             }
         } else {
-            use_built_in_bridge(config_location, bridge_config).await?;
+            use_built_in_bridge(&self.config, bridge_config).await?;
         }
 
         if let Err(err) = service_manager_result {
@@ -826,7 +822,7 @@ impl ConnectCommand {
             return Err(err.into());
         }
 
-        restart_mosquitto(bridge_config, service_manager.as_ref(), config_location).await?;
+        restart_mosquitto(bridge_config, service_manager.as_ref(), &self.config).await?;
 
         let spinner = Spinner::start("Waiting for mosquitto to be listening for connections");
         spinner.finish(wait_for_mosquitto_listening(&tedge_config.mqtt).await)?;
@@ -835,7 +831,7 @@ impl ConnectCommand {
             .enable_service(SystemService::Mosquitto)
             .await
         {
-            clean_up(config_location, bridge_config)?;
+            clean_up(&self.config, bridge_config)?;
             return Err(err.into());
         }
 
@@ -880,14 +876,14 @@ pub async fn chown_certificate_and_key(bridge_config: &BridgeConfig) {
 async fn restart_mosquitto(
     bridge_config: &BridgeConfig,
     service_manager: &dyn SystemServiceManager,
-    config_location: &TEdgeConfigLocation,
+    config: &TEdgeConfig,
 ) -> Result<(), Fancy<ConnectError>> {
     let spinner = Spinner::start("Restarting mosquitto");
     spinner
         .finish(restart_mosquitto_inner(bridge_config, service_manager).await)
         .inspect_err(|_| {
             // We want to preserve existing errors and therefore discard result of this function.
-            let _ = clean_up(config_location, bridge_config);
+            let _ = clean_up(config, bridge_config);
         })
 }
 async fn restart_mosquitto_inner(
@@ -955,20 +951,20 @@ async fn start_and_enable_service(
 // To preserve error chain and not discard other errors we need to ignore error here
 // (don't use '?' with the call to this function to preserve original error).
 pub fn clean_up(
-    config_location: &TEdgeConfigLocation,
+    config: &TEdgeConfig,
     bridge_config: &BridgeConfig,
 ) -> Result<(), Fancy<ConnectError>> {
-    let path = get_bridge_config_file_path(config_location, bridge_config);
+    let path = get_bridge_config_file_path(config, bridge_config);
     Spinner::start(format!("Cleaning up {path} due to failure"))
         .finish(std::fs::remove_file(path).or_else(ok_if_not_found))?;
     Ok(())
 }
 
 pub async fn use_built_in_bridge(
-    config_location: &TEdgeConfigLocation,
+    config: &TEdgeConfig,
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
-    let path = get_bridge_config_file_path(config_location, bridge_config);
+    let path = get_bridge_config_file_path(config, bridge_config);
     tokio::fs::write(
         path,
         "# This file is left empty as the built-in bridge is enabled",
@@ -979,10 +975,10 @@ pub async fn use_built_in_bridge(
 }
 
 fn fail_if_already_connected(
-    config_location: &TEdgeConfigLocation,
+    config: &TEdgeConfig,
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
-    let path = get_bridge_config_file_path(config_location, bridge_config);
+    let path = get_bridge_config_file_path(config, bridge_config);
     if path.exists() {
         return Err(ConnectError::ConfigurationExists {
             cloud: bridge_config.cloud_name.to_string(),
@@ -992,18 +988,15 @@ fn fail_if_already_connected(
 }
 
 async fn write_generic_mosquitto_config_to_file(
-    config_location: &TEdgeConfigLocation,
+    config: &TEdgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
 ) -> Result<(), ConnectError> {
-    let dir_path = config_location
-        .tedge_config_root_path
-        .join(TEDGE_BRIDGE_CONF_DIR_PATH);
+    let dir_path = config.root_dir().join(TEDGE_BRIDGE_CONF_DIR_PATH);
 
     // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
     create_directories(dir_path)?;
 
-    let common_config_path =
-        get_common_mosquitto_config_file_path(config_location, common_mosquitto_config);
+    let common_config_path = get_common_mosquitto_config_file_path(config, common_mosquitto_config);
     let mut common_draft = DraftFile::new(common_config_path).await?.with_mode(0o644);
     common_mosquitto_config.serialize(&mut common_draft).await?;
     common_draft.persist().await?;
@@ -1012,17 +1005,15 @@ async fn write_generic_mosquitto_config_to_file(
 }
 
 async fn write_bridge_config_to_file(
-    config_location: &TEdgeConfigLocation,
+    config: &TEdgeConfig,
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
-    let dir_path = config_location
-        .tedge_config_root_path
-        .join(TEDGE_BRIDGE_CONF_DIR_PATH);
+    let dir_path = config.root_dir().join(TEDGE_BRIDGE_CONF_DIR_PATH);
 
     // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
     create_directories(dir_path)?;
 
-    let config_path = get_bridge_config_file_path(config_location, bridge_config);
+    let config_path = get_bridge_config_file_path(config, bridge_config);
     let mut config_draft = DraftFile::new(config_path).await?.with_mode(0o644);
     bridge_config.serialize(&mut config_draft).await?;
     config_draft.persist().await?;
@@ -1030,22 +1021,19 @@ async fn write_bridge_config_to_file(
     Ok(())
 }
 
-fn get_bridge_config_file_path(
-    config_location: &TEdgeConfigLocation,
-    bridge_config: &BridgeConfig,
-) -> Utf8PathBuf {
-    config_location
-        .tedge_config_root_path
+fn get_bridge_config_file_path(config: &TEdgeConfig, bridge_config: &BridgeConfig) -> Utf8PathBuf {
+    config
+        .root_dir()
         .join(TEDGE_BRIDGE_CONF_DIR_PATH)
         .join(&*bridge_config.config_file)
 }
 
 fn get_common_mosquitto_config_file_path(
-    config_location: &TEdgeConfigLocation,
+    config: &TEdgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
 ) -> Utf8PathBuf {
-    config_location
-        .tedge_config_root_path
+    config
+        .root_dir()
         .join(TEDGE_BRIDGE_CONF_DIR_PATH)
         .join(&common_mosquitto_config.config_file)
 }
@@ -1114,15 +1102,13 @@ mod tests {
     mod validate_config {
         use super::super::validate_config;
         use super::Cloud;
-        use tedge_config::TEdgeConfigLocation;
+        use tedge_config::TEdgeConfig;
         use tedge_test_utils::fs::TempTedgeDir;
 
         #[tokio::test]
         async fn allows_default_config() {
             let cloud = Cloud::C8y(None);
-            let ttd = TempTedgeDir::new();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            let config = loc.load().await.unwrap();
+            let config = TEdgeConfig::load_toml_str("");
 
             validate_config(&config, &cloud).unwrap();
         }
@@ -1130,16 +1116,7 @@ mod tests {
         #[tokio::test]
         async fn allows_single_named_c8y_profile_without_default_profile() {
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
-            let ttd = TempTedgeDir::new();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-            let config = loc.load().await.unwrap();
+            let config = TEdgeConfig::load_toml_str("c8y.profiles.new.url = \"example.com\"");
 
             validate_config(&config, &cloud).unwrap();
         }
@@ -1148,18 +1125,10 @@ mod tests {
         async fn disallows_matching_device_id_same_urls() {
             yansi::disable();
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
-            let ttd = TempTedgeDir::new();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"c8y.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-            let config = loc.load().await.unwrap();
+            let config = TEdgeConfig::load_toml_str(
+                "c8y.url = \"example.com\"
+            c8y.profiles.new.url = \"example.com\"",
+            );
 
             let err = validate_config(&config, &cloud).unwrap_err();
             assert_eq!(err.to_string(), "You have matching URLs and device IDs for different profiles.
@@ -1172,28 +1141,12 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
         #[tokio::test]
         async fn allows_different_urls() {
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
-            let ttd = TempTedgeDir::new();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"c8y.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.new.url".parse().unwrap(),
-                    "different.example.com",
-                )
-                .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.new.bridge.topic_prefix".parse().unwrap(),
-                    "c8y-new",
-                )
-                .unwrap();
-                dto.try_update_str(&"c8y.profiles.new.proxy.bind.port".parse().unwrap(), "8002")
-                    .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-            let config = loc.load().await.unwrap();
+            let config = TEdgeConfig::load_toml_str(
+                "c8y.url = \"example.com\"
+            c8y.profiles.new.url = \"different.example.com\"
+            c8y.profiles.new.bridge.topic_prefix = \"c8y-new\"
+            c8y.profiles.new.proxy.bind.port = 8002",
+            );
 
             validate_config(&config, &cloud).unwrap();
         }
@@ -1203,45 +1156,24 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
-            let mut cert_path = ttd.path().to_owned();
+            let mut cert_path = ttd.utf8_path().to_owned();
             cert_path.push("test.crt");
-            let mut key_path = ttd.path().to_owned();
+            let mut key_path = ttd.utf8_path().to_owned();
             key_path.push("test.key");
             std::fs::write(&cert_path, cert.serialize_pem().unwrap()).unwrap();
             std::fs::write(&key_path, cert.serialize_private_key_pem()).unwrap();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"c8y.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.new.device.id".parse().unwrap(),
-                    "test-device",
-                )
-                .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.new.device.cert_path".parse().unwrap(),
-                    &cert_path.display().to_string(),
-                )
-                .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.new.device.key_path".parse().unwrap(),
-                    &key_path.display().to_string(),
-                )
-                .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.new.bridge.topic_prefix".parse().unwrap(),
-                    "c8y-new",
-                )
-                .unwrap();
-                dto.try_update_str(&"c8y.profiles.new.proxy.bind.port".parse().unwrap(), "8002")
-                    .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-            let config = loc.load().await.unwrap();
+            let config = TEdgeConfig::load_toml_str_with_root_dir(
+                ttd.path(),
+                &format!(
+                    "c8y.url = \"example.com\"
+            c8y.profiles.new.url = \"example.com\"
+            c8y.profiles.new.device.id = \"test-device\"
+            c8y.profiles.new.device.cert_path = \"{cert_path}\"
+            c8y.profiles.new.device.key_path = \"{key_path}\"
+            c8y.profiles.new.bridge.topic_prefix = \"c8y-new\"
+            c8y.profiles.new.proxy.bind.port = 8002"
+                ),
+            );
 
             validate_config(&config, &cloud).unwrap();
         }
@@ -1250,64 +1182,26 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
         async fn allows_combination_of_urls_and_device_ids() {
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
-            let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
-            let mut cert_path = ttd.path().to_owned();
+            let mut cert_path = ttd.utf8_path().to_owned();
             cert_path.push("test.crt");
-            let mut key_path = ttd.path().to_owned();
+            let mut key_path = ttd.utf8_path().to_owned();
             key_path.push("test.key");
+            let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
             std::fs::write(&cert_path, cert.serialize_pem().unwrap()).unwrap();
             std::fs::write(&key_path, cert.serialize_private_key_pem()).unwrap();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"c8y.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                dto.try_update_str(&"c8y.profiles.diff_id.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.diff_id.device.id".parse().unwrap(),
-                    "test-device-second",
-                )
-                .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.diff_id.device.cert_path".parse().unwrap(),
-                    &cert_path.display().to_string(),
-                )
-                .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.diff_id.device.key_path".parse().unwrap(),
-                    &key_path.display().to_string(),
-                )
-                .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.diff_id.bridge.topic_prefix".parse().unwrap(),
-                    "c8y-diff-id",
-                )
-                .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.diff_id.proxy.bind.port".parse().unwrap(),
-                    "8002",
-                )
-                .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.diff_url.url".parse().unwrap(),
-                    "different.example.com",
-                )
-                .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.diff_url.bridge.topic_prefix".parse().unwrap(),
-                    "c8y-diff-url",
-                )
-                .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.diff_url.proxy.bind.port".parse().unwrap(),
-                    "8003",
-                )
-                .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-            let config = loc.load().await.unwrap();
+            let config = TEdgeConfig::load_toml_str_with_root_dir(
+                ttd.path(),
+                &format!(
+                    "c8y.url = \"example.com\"
+            c8y.profiles.diff_id.url = \"example.com\"
+            c8y.profiles.diff_id.device.id = \"test-device-second\"
+            c8y.profiles.diff_id.device.cert_path = \"{cert_path}\"
+            c8y.profiles.diff_id.device.key_path = \"{key_path}\"
+            c8y.profiles.diff_id.bridge.topic_prefix = \"c8y-diff-id\"
+            c8y.profiles.diff_id.proxy.bind.port = 8002
+            "
+                ),
+            );
 
             validate_config(&config, &cloud).unwrap();
         }
@@ -1315,16 +1209,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
         #[tokio::test]
         async fn allows_single_named_az_profile_without_default_profile() {
             let cloud = Cloud::az(Some("new".parse().unwrap()));
-            let ttd = TempTedgeDir::new();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"az.profiles.new.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-            let config = loc.load().await.unwrap();
+            let config = TEdgeConfig::load_toml_str("az.profiles.new.url = \"example.com\"");
 
             validate_config(&config, &cloud).unwrap();
         }
@@ -1332,16 +1217,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
         #[tokio::test]
         async fn allows_single_named_aws_profile_without_default_profile() {
             let cloud = Cloud::aws(Some("new".parse().unwrap()));
-            let ttd = TempTedgeDir::new();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"aws.profiles.new.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-            let config = loc.load().await.unwrap();
+            let config = TEdgeConfig::load_toml_str("aws.profiles.new.url = \"example.com\"");
 
             validate_config(&config, &cloud).unwrap();
         }
@@ -1349,20 +1225,11 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
         #[tokio::test]
         async fn rejects_conflicting_topic_prefixes() {
             let cloud = Cloud::C8y(None);
-            let ttd = TempTedgeDir::new();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"c8y.url".parse().unwrap(), "latest.example.com")
-                    .unwrap();
-                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                dto.try_update_str(&"c8y.profiles.new.proxy.bind.port".parse().unwrap(), "8002")
-                    .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-            let config = loc.load().await.unwrap();
+            let config = TEdgeConfig::load_toml_str(
+                "c8y.url = \"latest.example.com\"
+            c8y.profiles.new.url = \"example.com\"
+            c8y.profiles.new.proxy.bind.port = 8002",
+            );
 
             let err = validate_config(&config, &cloud).unwrap_err();
             eprintln!("err={err}");
@@ -1375,23 +1242,11 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
         #[tokio::test]
         async fn rejects_conflicting_bind_ports() {
             let cloud = Cloud::C8y(None);
-            let ttd = TempTedgeDir::new();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"c8y.url".parse().unwrap(), "latest.example.com")
-                    .unwrap();
-                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                dto.try_update_str(
-                    &"c8y.profiles.new.bridge.topic_prefix".parse().unwrap(),
-                    "c8y-new",
-                )
-                .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-            let config = loc.load().await.unwrap();
+            let config = TEdgeConfig::load_toml_str(
+                "c8y.url = \"latest.example.com\"
+            c8y.profiles.new.url = \"example.com\"
+            c8y.profiles.new.bridge.topic_prefix = \"c8y-new\"",
+            );
 
             let err = validate_config(&config, &cloud).unwrap_err();
             eprintln!("err={err}");
@@ -1402,18 +1257,10 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
         #[tokio::test]
         async fn ignores_conflicting_configs_for_other_clouds() {
             let cloud = Cloud::Azure(None);
-            let ttd = TempTedgeDir::new();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            loc.update_toml(&|dto, _| {
-                dto.try_update_str(&"c8y.url".parse().unwrap(), "latest.example.com")
-                    .unwrap();
-                dto.try_update_str(&"c8y.profiles.new.url".parse().unwrap(), "example.com")
-                    .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-            let config = loc.load().await.unwrap();
+            let config = TEdgeConfig::load_toml_str(
+                "c8y.url = \"latest.example.com\"
+                c8y.profiles.new.url = \"example.com\"",
+            );
 
             validate_config(&config, &cloud).unwrap();
         }
@@ -1421,19 +1268,8 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
         #[tokio::test]
         async fn allows_non_conflicting_topic_prefixes() {
             let cloud = Cloud::Azure(None);
-            let ttd = TempTedgeDir::new();
-            let loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-            loc.update_toml(&|dto, _| {
-                dto.try_update_str(
-                    &"az.profiles.new.bridge.topic_prefix".parse().unwrap(),
-                    "az-new",
-                )
-                .unwrap();
-                Ok(())
-            })
-            .await
-            .unwrap();
-            let config = loc.load().await.unwrap();
+            let config =
+                TEdgeConfig::load_toml_str("az.profiles.new.bridge.topic_prefix = \"az-new\"");
 
             validate_config(&config, &cloud).unwrap();
         }

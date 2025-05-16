@@ -1,6 +1,7 @@
 use crate::plugin::ExternalPluginCommand;
 use crate::plugin::Plugin;
 use crate::plugin::LIST;
+use camino::Utf8PathBuf;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fs;
@@ -17,7 +18,6 @@ use tedge_api::SoftwareError;
 use tedge_api::SoftwareType;
 use tedge_api::DEFAULT;
 use tedge_config::SudoCommandBuilder;
-use tedge_config::TEdgeConfigLocation;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -46,7 +46,7 @@ pub struct ExternalPlugins {
     plugin_map: BTreeMap<SoftwareType, ExternalPluginCommand>,
     default_plugin_type: Option<SoftwareType>,
     sudo: SudoCommandBuilder,
-    config_location: TEdgeConfigLocation,
+    config_dir: Utf8PathBuf,
 }
 
 impl Plugins for ExternalPlugins {
@@ -96,14 +96,14 @@ impl ExternalPlugins {
         plugin_dir: impl Into<PathBuf>,
         default_plugin_type: Option<String>,
         sudo: SudoCommandBuilder,
-        config_location: TEdgeConfigLocation,
+        config_dir: Utf8PathBuf,
     ) -> Result<ExternalPlugins, SoftwareError> {
         let mut plugins = ExternalPlugins {
             plugin_dir: plugin_dir.into(),
             plugin_map: BTreeMap::new(),
             default_plugin_type: default_plugin_type.clone(),
             sudo,
-            config_location,
+            config_dir,
         };
         if let Err(e) = plugins.load().await {
             warn!(
@@ -137,7 +137,7 @@ impl ExternalPlugins {
     pub async fn load(&mut self) -> anyhow::Result<()> {
         self.plugin_map.clear();
 
-        let config = tedge_config::TEdgeConfig::try_new(&self.config_location)
+        let config = tedge_config::TEdgeConfig::load(&self.config_dir)
             .await
             .map_err(|err| io::Error::other(format!("Failed to load tedge config: {}", err)))?;
 
@@ -298,16 +298,24 @@ impl ExternalPlugins {
     }
 }
 
-#[tokio::test]
-async fn test_no_sm_plugin_dir() {
-    let plugin_dir = tempfile::TempDir::new().unwrap();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tedge_test_utils::fs::TempTedgeDir;
 
-    let actual = ExternalPlugins::open(
-        plugin_dir.path(),
-        None,
-        SudoCommandBuilder::enabled(false),
-        TEdgeConfigLocation::default(),
-    )
-    .await;
-    assert!(actual.is_ok());
+    #[tokio::test]
+    async fn test_no_sm_plugin_dir() {
+        let config_dir = TempTedgeDir::new();
+        let mut plugin_dir_path = config_dir.utf8_path_buf();
+        plugin_dir_path.push("sm-plugins");
+
+        let actual = ExternalPlugins::open(
+            plugin_dir_path,
+            None,
+            SudoCommandBuilder::enabled(false),
+            config_dir.utf8_path_buf(),
+        )
+        .await;
+        assert!(actual.is_ok());
+    }
 }

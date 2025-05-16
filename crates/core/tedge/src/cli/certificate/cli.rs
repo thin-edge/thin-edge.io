@@ -479,7 +479,6 @@ pub enum DownloadCertCli {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tedge_config::TEdgeConfigLocation;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
 
@@ -617,10 +616,9 @@ mod tests {
         let cloud: Option<Cloud> = cloud_arg.map(<_>::try_into).transpose().unwrap();
         let ttd = TempTedgeDir::new();
         ttd.file("tedge.toml").with_toml_content(toml);
-        let location = TEdgeConfigLocation::from_custom_root(ttd.path());
-        let reader = location.load_sync().unwrap();
+        let config = TEdgeConfig::load_sync(ttd.path()).unwrap();
         let id = input_id.map(|s| s.to_string());
-        let result = get_device_id(id, &reader, &cloud);
+        let result = get_device_id(id, &config, &cloud);
         assert_eq!(result.unwrap().as_str(), expected);
     }
 
@@ -639,10 +637,9 @@ mod tests {
         let cloud: Option<Cloud> = cloud_arg.map(<_>::try_into).transpose().unwrap();
         let ttd = TempTedgeDir::new();
         ttd.file("tedge.toml").with_toml_content(toml);
-        let location = TEdgeConfigLocation::from_custom_root(ttd.path());
-        let reader = location.load_sync().unwrap();
+        let config = TEdgeConfig::load_sync(ttd.path()).unwrap();
         let id = input_id.map(|s| s.to_string());
-        let result = get_device_id(id, &reader, &cloud);
+        let result = get_device_id(id, &config, &cloud);
         assert!(result.is_err());
     }
 }

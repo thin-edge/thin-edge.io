@@ -13,7 +13,6 @@ use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
 use tedge_actors::Sender;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_http_ext::HttpRequest;
@@ -276,8 +275,7 @@ async fn request_internal_id_before_posting_new_event() {
     );
 
     let ttd = TempTedgeDir::new();
-    let config_loc = TEdgeConfigLocation::from_custom_root(ttd.path());
-    let tedge_config = config_loc.load().await.unwrap();
+    let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
     let tls_config = tedge_config.http.client_tls_config().unwrap();
     let mut http_actor = HttpActor::new(tls_config).builder();
 
