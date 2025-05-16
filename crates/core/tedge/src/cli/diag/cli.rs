@@ -3,6 +3,7 @@ use crate::command::BuildCommand;
 use crate::command::Command;
 use crate::ConfigError;
 use camino::Utf8PathBuf;
+use tedge_config::models::AbsolutePath;
 use tedge_config::models::SecondsOrHumanTime;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
@@ -17,10 +18,9 @@ pub enum TEdgeDiagCli {
         #[clap(long, default_value = "/etc/tedge/diag-plugins")]
         plugin_dir: Utf8PathBuf,
 
-        /// Directory where output tarball and temporary output files are stored
-        /// [env: TEDGE_TMP_PATH]
-        #[clap(long, default_value = "/tmp")]
-        output_dir: Utf8PathBuf,
+        /// Directory where output tarball and temporary output files are stored. The path from tmp.path will be used by default
+        #[clap(long)]
+        output_dir: Option<Utf8PathBuf>,
 
         /// Filename (without .tar.gz) for the output tarball
         /// [default: tedge-diag_<timestamp>]
@@ -40,7 +40,7 @@ pub enum TEdgeDiagCli {
 impl BuildCommand for TEdgeDiagCli {
     fn build_command(
         self,
-        _config: TEdgeConfig,
+        config: TEdgeConfig,
         config_location: TEdgeConfigLocation,
     ) -> Result<Box<dyn Command>, ConfigError> {
         match self {
@@ -51,15 +51,19 @@ impl BuildCommand for TEdgeDiagCli {
                 graceful_timeout,
                 forceful_timeout,
             } => {
+                let output_dir = output_dir.unwrap_or_else(|| config.tmp.path.to_path_buf());
                 let now = OffsetDateTime::now_utc()
-                    .format(&format_description::well_known::Rfc3339)
+                    .format(
+                        &format_description::parse("[year]-[month]-[day]_[hour]-[minute]-[second]")
+                            .unwrap(),
+                    )
                     .unwrap();
                 let tarball_name = tarball_name.unwrap_or(format!("tedge-diag-{now}"));
 
                 let cmd = DiagCollectCommand {
-                    plugin_dir,
-                    diag_dir: output_dir.join(&tarball_name),
-                    config_dir: config_location.tedge_config_root_path,
+                    plugin_dir: get_absolute_path(plugin_dir)?,
+                    diag_dir: get_absolute_path(output_dir.join(&tarball_name))?,
+                    config_dir: get_absolute_path(config_location.tedge_config_root_path)?,
                     graceful_timeout: graceful_timeout.duration(),
                     forceful_timeout: forceful_timeout.duration(),
                 }
@@ -68,4 +72,8 @@ impl BuildCommand for TEdgeDiagCli {
             }
         }
     }
+}
+
+fn get_absolute_path(path: Utf8PathBuf) -> Result<AbsolutePath, anyhow::Error> {
+    Ok(AbsolutePath::from_path(path)?)
 }

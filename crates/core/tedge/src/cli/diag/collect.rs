@@ -6,19 +6,20 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::os::unix::fs::PermissionsExt;
 use std::process::ExitStatus;
 use std::time::Duration;
 use tedge_api::CommandLog;
 use tedge_api::LoggedCommand;
+use tedge_config::models::AbsolutePath;
 use tedge_utils::file;
 use yansi::Paint;
 
 pub struct DiagCollectCommand {
-    pub plugin_dir: Utf8PathBuf,
-    pub diag_dir: Utf8PathBuf,
-    pub config_dir: Utf8PathBuf,
+    pub plugin_dir: AbsolutePath,
+    pub diag_dir: AbsolutePath,
+    pub config_dir: AbsolutePath,
     pub graceful_timeout: Duration,
     pub forceful_timeout: Duration,
 }
@@ -44,7 +45,7 @@ impl Command for DiagCollectCommand {
                 Ok(exit_status) if exit_status.success() => {}
                 Ok(exit_status) if exit_status.code() == Some(2) => {
                     skipped_count += 1;
-                    println!("{}", format!("INFO: {plugin} is marked skipped").yellow());
+                    println!("{}", format!("INFO: {plugin} is marked skipped").green());
                 }
                 Ok(exit_status) => {
                     error_count += 1;
@@ -66,10 +67,12 @@ impl Command for DiagCollectCommand {
         let success_count = plugin_count - skipped_count - error_count;
         println!("Total {plugin_count} executed: {success_count} completed, {error_count} failed, {skipped_count} skipped");
 
-        if success_count > 0 {
-            self.compress_into_a_tarball()
-                .with_context(|| "Failed to compress diagnostic information")?;
-        }
+        self.compress_into_a_tarball()
+            .with_context(|| "Failed to compress diagnostic information")?;
+
+        tokio::fs::remove_dir_all(&self.diag_dir)
+            .await
+            .with_context(|| format!("Failed to delete directory: {}", self.diag_dir))?;
 
         if error_count > 0 {
             std::process::exit(1)
@@ -88,13 +91,12 @@ impl DiagCollectCommand {
     ) -> Result<ExitStatus, anyhow::Error> {
         let plugin_name = plugin_path.file_stem().context("No filename")?;
         let plugin_output_dir = self.diag_dir.join(plugin_name);
-        let plugin_absolute_path = plugin_path.canonicalize()?;
         let output_file = plugin_output_dir.join("output.log");
         file::create_directory_with_defaults(&plugin_output_dir)
             .await
             .with_context(|| format!("Failed to create output directory at {plugin_output_dir}"))?;
 
-        let mut command = LoggedCommand::new(&plugin_absolute_path)?;
+        let mut command = LoggedCommand::new(plugin_path)?;
         command
             .arg("collect")
             .arg("--output-dir")
@@ -115,31 +117,34 @@ impl DiagCollectCommand {
     }
 
     fn compress_into_a_tarball(&self) -> Result<Utf8PathBuf, anyhow::Error> {
-        let mut tarball = self.diag_dir.clone();
+        let mut tarball = self.diag_dir.to_path_buf();
+        let dir_name = self.diag_dir.file_name().unwrap();
         tarball.set_extension("tar.gz");
-        let tar_gz = std::fs::File::create(&tarball)
-            .with_context(|| format!("Failed to create {tarball}"))?;
+
+        let tar_gz = std::fs::File::create(&tarball)?;
         let enc = GzEncoder::new(tar_gz, Compression::default());
         let mut tar = tar::Builder::new(enc);
-        tar.append_dir_all("", &self.diag_dir)?;
+
+        tar.append_dir_all(dir_name, &self.diag_dir)?;
         tar.finish()?;
-        eprintln!("Diagnostic information saved to {tarball}");
+
+        println!("Diagnostic information saved to {tarball}");
         Ok(tarball)
     }
 
-    async fn init(&self) -> Result<HashSet<Utf8PathBuf>, anyhow::Error> {
+    async fn init(&self) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
         file::create_directory_with_defaults(&self.diag_dir).await?;
-        let plugins = self.scan_diag_plugins().await.with_context(|| {
+        let plugins = self.read_diag_plugins().await.with_context(|| {
             format!(
-                "Failed to scan diag plugin directory {:?}",
+                "Failed to read diag plugin directory {:?}",
                 &self.plugin_dir
             )
         })?;
         Ok(plugins)
     }
 
-    async fn scan_diag_plugins(&self) -> Result<HashSet<Utf8PathBuf>, anyhow::Error> {
-        let mut plugins = HashSet::new();
+    async fn read_diag_plugins(&self) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
+        let mut plugins = BTreeSet::new();
         let mut entries = tokio::fs::read_dir(&self.plugin_dir).await?;
 
         while let Some(entry) = entries.next_entry().await? {
