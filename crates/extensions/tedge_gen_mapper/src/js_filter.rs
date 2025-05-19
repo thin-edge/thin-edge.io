@@ -4,6 +4,8 @@ use crate::pipeline::FilterError;
 use crate::pipeline::Message;
 use crate::LoadError;
 use rustyscript::deno_core::ModuleId;
+use rustyscript::serde_json::json;
+use rustyscript::serde_json::Value;
 use rustyscript::worker::DefaultWorker;
 use rustyscript::worker::DefaultWorkerOptions;
 use rustyscript::Module;
@@ -17,9 +19,26 @@ use tracing::debug;
 pub struct JsFilter {
     path: PathBuf,
     module_id: ModuleId,
+    config: Value,
 }
 
 impl JsFilter {
+    pub fn new(path: PathBuf, module_id: ModuleId) -> Self {
+        JsFilter {
+            path,
+            module_id,
+            config: json!({}),
+        }
+    }
+
+    pub fn with_config(self, config: Option<Value>) -> Self {
+        if let Some(config) = config {
+            Self { config, ..self }
+        } else {
+            self
+        }
+    }
+
     pub fn process(
         &self,
         js: &JsRuntime,
@@ -27,7 +46,7 @@ impl JsFilter {
         message: &Message,
     ) -> Result<Vec<Message>, FilterError> {
         debug!(target: "MAPPING", "{}: process({timestamp:?}, {message:?})", self.path.display());
-        let input = vec![timestamp.json(), message.json()];
+        let input = vec![timestamp.json(), message.json(), self.config.clone()];
         js.runtime
             .call_function(Some(self.module_id), "process".to_string(), input)
             .map_err(pipeline::error_from_js)
@@ -79,13 +98,13 @@ impl JsRuntime {
         let path = module.filename().to_owned();
         let module_id = self.runtime.load_module(module)?;
         self.modules.insert(path.clone(), module_id);
-        Ok(JsFilter { path, module_id })
+        Ok(JsFilter::new(path, module_id))
     }
 
     pub fn loaded_module(&self, path: PathBuf) -> Result<JsFilter, LoadError> {
         match self.modules.get(&path).cloned() {
             None => Err(LoadError::ScriptNotLoaded { path }),
-            Some(module_id) => Ok(JsFilter { path, module_id }),
+            Some(module_id) => Ok(JsFilter::new(path, module_id)),
         }
     }
 }

@@ -3,6 +3,7 @@ use crate::pipeline::Pipeline;
 use crate::pipeline::Stage;
 use crate::LoadError;
 use camino::Utf8PathBuf;
+use rustyscript::serde_json::Value;
 use serde::Deserialize;
 use std::path::Path;
 use tedge_mqtt_ext::TopicFilter;
@@ -16,6 +17,9 @@ pub struct PipelineConfig {
 #[derive(Deserialize)]
 pub struct StageConfig {
     filter: FilterSpec,
+
+    #[serde(default)]
+    config: Option<Value>,
 
     #[serde(default)]
     config_topics: Vec<String>,
@@ -61,7 +65,7 @@ impl StageConfig {
             FilterSpec::JavaScript(path) if path.is_absolute() => path.into(),
             FilterSpec::JavaScript(path) => config_dir.join(path),
         };
-        let filter = js_runtime.loaded_module(path)?;
+        let filter = js_runtime.loaded_module(path)?.with_config(self.config);
         let config_topics = topic_filters(&self.config_topics)?;
         Ok(Stage {
             filter,
