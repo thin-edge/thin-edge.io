@@ -1,4 +1,5 @@
 use std::io::ErrorKind::NotFound;
+use tedge_config::TEdgeConfig;
 use tokio::fs;
 
 use super::error::CertError;
@@ -22,7 +23,7 @@ impl Command for RemoveCertCmd {
         "remove the device certificate".into()
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         match self.remove_certificate().await? {
             RemoveCertResult::Removed => eprintln!("Certificate was successfully removed"),
             RemoveCertResult::NotFound => eprintln!("There is no certificate to remove"),

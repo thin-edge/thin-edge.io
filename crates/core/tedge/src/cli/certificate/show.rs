@@ -5,6 +5,7 @@ use camino::Utf8PathBuf;
 use certificate::PemCertificate;
 use certificate::ValidityStatus;
 use std::time::Duration;
+use tedge_config::TEdgeConfig;
 use tokio::io::AsyncWriteExt;
 use yansi::Paint;
 
@@ -39,7 +40,7 @@ impl Command for ShowCertCmd {
         }
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         if self.validity_check_only {
             let need_renewal = self.check_validity().await;
             match need_renewal {

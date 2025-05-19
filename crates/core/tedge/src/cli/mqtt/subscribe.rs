@@ -6,6 +6,7 @@ use mqtt_channel::StreamExt;
 use mqtt_channel::TopicFilter;
 use std::time::Duration;
 use tedge_config::tedge_toml::MqttAuthClientConfig;
+use tedge_config::TEdgeConfig;
 use tokio::io::AsyncWriteExt;
 use tracing::error;
 use tracing::info;
@@ -41,7 +42,7 @@ impl Command for MqttSubscribeCommand {
         )
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         Ok(subscribe(self).await?)
     }
 }

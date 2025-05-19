@@ -1,7 +1,6 @@
 use camino::Utf8PathBuf;
 use std::sync::Arc;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 
 use super::common::CloudBorrow;
 use super::connect::ConnectError;
@@ -16,8 +15,6 @@ use crate::system_services::SystemService;
 use crate::system_services::SystemServiceManager;
 
 pub struct RefreshBridgesCmd {
-    config: TEdgeConfig,
-    config_location: TEdgeConfigLocation,
     service_manager: Arc<dyn SystemServiceManager>,
 }
 
@@ -27,51 +24,44 @@ impl Command for RefreshBridgesCmd {
         "Refresh all currently active mosquitto bridges (restarts mosquitto)".to_string()
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        self.execute_unfancy().await.map_err(<_>::into)
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        self.execute_unfancy(config).await.map_err(<_>::into)
     }
 }
 
 impl RefreshBridgesCmd {
-    pub fn new(
-        config: TEdgeConfig,
-        config_location: TEdgeConfigLocation,
-    ) -> Result<Self, crate::ConfigError> {
-        let service_manager = service_manager(&config_location.tedge_config_root_path)?;
+    pub fn new(config: &TEdgeConfig) -> Result<Self, crate::ConfigError> {
+        let service_manager = service_manager(config.root_dir())?;
 
-        let cmd = Self {
-            config,
-            config_location,
-            service_manager,
-        };
+        let cmd = Self { service_manager };
 
         Ok(cmd)
     }
 
-    async fn execute_unfancy(&self) -> anyhow::Result<()> {
-        let clouds = established_bridges(&self.config_location, &self.config).await;
+    async fn execute_unfancy(&self, config: TEdgeConfig) -> anyhow::Result<()> {
+        let clouds = established_bridges(&config).await;
 
-        if clouds.is_empty() && !self.config.mqtt.bridge.built_in {
+        if clouds.is_empty() && !config.mqtt.bridge.built_in {
             println!("No bridges to refresh.");
             return Ok(());
         }
 
-        let common_mosquitto_config = CommonMosquittoConfig::from_tedge_config(&self.config);
-        common_mosquitto_config.save(&self.config_location).await?;
+        let common_mosquitto_config = CommonMosquittoConfig::from_tedge_config(&config);
+        common_mosquitto_config.save(&config).await?;
 
-        if !self.config.mqtt.bridge.built_in {
+        if !config.mqtt.bridge.built_in {
             for cloud in &clouds {
                 println!("Refreshing bridge {cloud}");
 
-                let bridge_config = super::connect::bridge_config(&self.config, cloud)?;
-                refresh_bridge(&bridge_config, &self.config_location).await?;
+                let bridge_config = super::connect::bridge_config(&config, cloud)?;
+                refresh_bridge(&bridge_config, &config).await?;
             }
         }
 
-        for cloud in possible_clouds(&self.config) {
+        for cloud in possible_clouds(&config) {
             // (attempt to) reassert ownership of the certificate and key
             // This is necessary when upgrading from the mosquitto bridge to the built-in bridge
-            if let Ok(bridge_config) = super::connect::bridge_config(&self.config, &cloud) {
+            if let Ok(bridge_config) = super::connect::bridge_config(&config, &cloud) {
                 super::connect::chown_certificate_and_key(&bridge_config).await;
 
                 if bridge_config.bridge_location == BridgeLocation::BuiltIn
@@ -80,8 +70,7 @@ impl RefreshBridgesCmd {
                     println!(
                     "Deleting mosquitto bridge configuration for {cloud} in favour of built-in bridge"
                 );
-                    super::connect::use_built_in_bridge(&self.config_location, &bridge_config)
-                        .await?;
+                    super::connect::use_built_in_bridge(&config, &bridge_config).await?;
                 }
             }
         }
@@ -95,13 +84,10 @@ impl RefreshBridgesCmd {
     }
 }
 
-async fn established_bridges<'a>(
-    config_location: &TEdgeConfigLocation,
-    config: &'a TEdgeConfig,
-) -> Vec<CloudBorrow<'a>> {
+async fn established_bridges(tedge_config: &TEdgeConfig) -> Vec<CloudBorrow<'_>> {
     // if the bridge configuration file doesn't exist, then the bridge doesn't exist and we shouldn't try to update it
-    possible_clouds(config)
-        .filter(|cloud| get_bridge_config_file_path_cloud(config_location, cloud).exists())
+    possible_clouds(tedge_config)
+        .filter(|cloud| get_bridge_config_file_path_cloud(tedge_config, cloud).exists())
         .collect()
 }
 
@@ -119,20 +105,20 @@ fn possible_clouds(config: &TEdgeConfig) -> impl Iterator<Item = CloudBorrow<'_>
 
 pub async fn refresh_bridge(
     bridge_config: &BridgeConfig,
-    config_location: &TEdgeConfigLocation,
+    tedge_config: &TEdgeConfig,
 ) -> Result<(), ConnectError> {
     // if error, no need to clean up because the file already exists
-    bridge_config.save(config_location).await?;
+    bridge_config.save(tedge_config).await?;
 
     Ok(())
 }
 
 pub fn get_bridge_config_file_path_cloud(
-    config_location: &TEdgeConfigLocation,
+    tedge_config: &TEdgeConfig,
     cloud: &CloudBorrow<'_>,
 ) -> Utf8PathBuf {
-    config_location
-        .tedge_config_root_path
+    tedge_config
+        .root_dir()
         .join(TEDGE_BRIDGE_CONF_DIR_PATH)
         .join(&*cloud.bridge_config_filename())
 }

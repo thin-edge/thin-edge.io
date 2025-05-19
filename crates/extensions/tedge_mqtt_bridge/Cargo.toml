@@ -35,6 +35,7 @@ mockall = { workspace = true }
 rcgen = { workspace = true }
 rumqttd = { workspace = true }
 serde_json = { workspace = true }
+tedge_config = { workspace = true, features = ["test"] }
 tedge_test_utils = { workspace = true }
 
 [lints]

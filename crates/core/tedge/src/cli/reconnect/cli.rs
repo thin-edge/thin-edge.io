@@ -3,7 +3,6 @@ use crate::cli::common::CloudArg;
 use crate::command::*;
 use crate::system_services::service_manager;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 
 #[derive(clap::Args, Debug)]
 pub struct TEdgeReconnectCli {
@@ -12,15 +11,10 @@ pub struct TEdgeReconnectCli {
 }
 
 impl BuildCommand for TEdgeReconnectCli {
-    fn build_command(
-        self,
-        config: TEdgeConfig,
-        config_location: TEdgeConfigLocation,
-    ) -> Result<Box<dyn Command>, crate::ConfigError> {
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
         Ok(ReconnectBridgeCommand {
-            config,
-            service_manager: service_manager(&config_location.tedge_config_root_path)?,
-            config_location,
+            config_dir: config.root_dir().to_owned(),
+            service_manager: service_manager(config.root_dir())?,
             cloud: self.cloud.try_into()?,
             use_mapper: true,
         }

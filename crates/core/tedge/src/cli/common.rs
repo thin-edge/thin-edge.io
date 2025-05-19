@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::fmt;
 use tedge_config::get_config_dir;
 use tedge_config::tedge_toml::ProfileName;
-use tedge_config::TEdgeConfigLocation;
+use tedge_config::TEdgeConfig;
 
 #[derive(clap::Subcommand, Debug, Clone, PartialEq, Eq)]
 #[clap(rename_all = "snake_case")]
@@ -214,8 +214,7 @@ impl MaybeBorrowedCloud<'_> {
 /// `TEDGE_CONFIGURATION_DIR` environment variable, or `/etc/tedge` if
 /// that is not set
 pub fn profile_completions() -> Vec<CompletionCandidate> {
-    let location = TEdgeConfigLocation::from_custom_root(get_config_dir());
-    let Ok(tc) = location.load_sync() else {
+    let Ok(tc) = TEdgeConfig::load_sync(get_config_dir()) else {
         return vec![];
     };
     tc.c8y

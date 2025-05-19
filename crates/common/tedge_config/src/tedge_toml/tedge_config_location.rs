@@ -47,12 +47,12 @@ pub fn get_config_dir() -> PathBuf {
 /// - User-local locations under `$HOME/.tedge`
 ///
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct TEdgeConfigLocation {
+pub(crate) struct TEdgeConfigLocation {
     /// Root directory where `tedge.toml` and other tedge related configuration files are located.
-    pub tedge_config_root_path: Utf8PathBuf,
+    tedge_config_root_path: Utf8PathBuf,
 
     /// Full path to the `tedge.toml` file.
-    pub tedge_config_file_path: Utf8PathBuf,
+    tedge_config_file_path: Utf8PathBuf,
 }
 
 impl Default for TEdgeConfigLocation {
@@ -63,7 +63,7 @@ impl Default for TEdgeConfigLocation {
 }
 
 impl TEdgeConfigLocation {
-    pub fn from_custom_root(tedge_config_root_path: impl AsRef<Path>) -> Self {
+    pub(crate) fn from_custom_root(tedge_config_root_path: impl AsRef<Path>) -> Self {
         Self {
             tedge_config_root_path: Utf8Path::from_path(tedge_config_root_path.as_ref())
                 .unwrap()
@@ -74,12 +74,8 @@ impl TEdgeConfigLocation {
         }
     }
 
-    pub fn tedge_config_root_path(&self) -> &Utf8Path {
+    pub(crate) fn tedge_config_root_path(&self) -> &Utf8Path {
         &self.tedge_config_root_path
-    }
-
-    pub fn tedge_config_file_path(&self) -> &Utf8Path {
-        &self.tedge_config_file_path
     }
 
     pub async fn update_toml(
@@ -94,19 +90,19 @@ impl TEdgeConfigLocation {
     }
 
     fn toml_path(&self) -> &Utf8Path {
-        self.tedge_config_file_path()
+        &self.tedge_config_file_path
     }
 
-    pub async fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
+    pub(crate) async fn load(self) -> Result<TEdgeConfig, TEdgeConfigError> {
         let dto = self.load_dto_from_toml_and_env().await?;
         debug!(
             "Loading configuration from {:?}",
             self.tedge_config_file_path
         );
-        Ok(TEdgeConfig::from_dto(&dto, self))
+        Ok(TEdgeConfig::from_dto(&dto, self.clone()))
     }
 
-    pub fn load_sync(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
+    pub(crate) fn load_sync(self) -> Result<TEdgeConfig, TEdgeConfigError> {
         let dto = self.load_dto_sync::<FileAndEnvironment>()?;
         debug!(
             "Loading configuration from {:?}",
@@ -115,7 +111,7 @@ impl TEdgeConfigLocation {
         Ok(TEdgeConfig::from_dto(&dto, self))
     }
 
-    pub async fn load_dto_from_toml_and_env(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
+    async fn load_dto_from_toml_and_env(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
         self.load_dto::<FileAndEnvironment>().await
     }
 
@@ -136,22 +132,12 @@ impl TEdgeConfigLocation {
     }
 
     #[cfg(feature = "test")]
-    /// A test only method designed for injecting configuration into tests
-    ///
-    /// ```
-    /// use tedge_config::TEdgeConfigLocation;
-    /// let config = TEdgeConfigLocation::load_toml_str("service.ty = \"service\"");
-    ///
-    /// assert_eq!(&config.service.ty, "service");
-    /// // Defaults are preserved
-    /// assert_eq!(config.sudo.enable, true);
-    /// ```
-    pub fn load_toml_str(toml: &str) -> TEdgeConfig {
+    pub(crate) fn load_toml_str(toml: &str, location: TEdgeConfigLocation) -> TEdgeConfig {
         let toml_value = toml::from_str(toml).unwrap();
         let (dto, warnings) =
             deserialize_toml(toml_value, Utf8Path::new("/not/read/from/file/system")).unwrap();
         warnings.emit();
-        TEdgeConfig::from_dto(&dto, &TEdgeConfigLocation::default())
+        TEdgeConfig::from_dto(&dto, location)
     }
 
     async fn load_dto_with_warnings<Sources: ConfigSources>(

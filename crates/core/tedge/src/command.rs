@@ -1,6 +1,5 @@
 use crate::log::MaybeFancy;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 
 /// A trait to be implemented by all tedge sub-commands.
 ///
@@ -10,6 +9,7 @@ use tedge_config::TEdgeConfigLocation;
 /// ```
 /// use tedge::command::Command;
 /// use tedge::log::MaybeFancy;
+/// use tedge_config::TEdgeConfig;
 ///
 /// struct SayHello {
 ///     name: String,
@@ -21,7 +21,7 @@ use tedge_config::TEdgeConfigLocation;
 ///        format!("say hello to '{}'", self.name)
 ///     }
 ///
-///     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+///     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
 ///        println!("Hello {}!", self.name);
 ///        Ok(())
 ///     }
@@ -49,7 +49,7 @@ use tedge_config::TEdgeConfigLocation;
 ///        format!("get the value of the configuration key '{}'", self.key)
 ///     }
 ///
-///     async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+///     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
 ///        match self.config.read_string(&self.key) {
 ///             Ok(value) => println!("{}", value),
 ///             Err(ReadError::ConfigNotSet(_)) => eprintln!("The configuration key `{}` is not set", self.key),
@@ -80,7 +80,7 @@ pub trait Command {
     ///     UnknownKey{key: String},
     /// }
     /// ```
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>>;
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>>;
 
     /// Helper method to be used in the `BuildCommand` trait.
     ///
@@ -88,7 +88,7 @@ pub trait Command {
     ///
     /// ```
     /// use tedge_config::tedge_toml::ReadableKey;
-    /// use tedge_config::TEdgeConfigLocation;
+    /// use tedge_config::TEdgeConfig;
     /// use tedge::cli::config::GetConfigCommand;
     /// use tedge::ConfigError;
     /// use tedge::command::Command;
@@ -96,8 +96,8 @@ pub trait Command {
     /// struct SomeStruct;
     ///
     /// impl SomeStruct {
-    ///     fn build_command(self, config_location: TEdgeConfigLocation) -> Result<Box<dyn Command>, ConfigError> {
-    ///         let cmd = GetConfigCommand { config_location, key: ReadableKey::MqttBindPort };
+    ///     fn build_command(self, _: TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    ///         let cmd = GetConfigCommand { key: ReadableKey::MqttBindPort };
     ///         Ok(cmd.into_boxed())
     ///     }
     /// }
@@ -122,7 +122,6 @@ pub trait Command {
 /// use tedge::ConfigError;
 /// use tedge_config::tedge_toml::tedge_config::*;
 /// use tedge_config::TEdgeConfig;
-/// use tedge_config::TEdgeConfigLocation;
 ///
 /// #[derive(clap::Parser, Debug)]
 /// enum ConfigCmd {
@@ -134,15 +133,13 @@ pub trait Command {
 /// }
 ///
 /// impl BuildCommand for ConfigCmd {
-///     fn build_command(self, _config: TEdgeConfig, config_location: TEdgeConfigLocation) -> Result<Box<dyn Command>, ConfigError> {
+///     fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
 ///         let cmd = match self {
 ///             ConfigCmd::Set { key, value } => SetConfigCommand {
-///                 config_location,
 ///                 key,
 ///                 value,
 ///             }.into_boxed(),
 ///             ConfigCmd::Get { key } => GetConfigCommand {
-///                 config_location,
 ///                 key,
 ///             }.into_boxed(),
 ///         };
@@ -155,9 +152,5 @@ pub trait BuildCommand {
     ///
     /// As some commands have to update the config (notably `tedge config set`),
     /// the command are given not only the config but also the location of that config.
-    fn build_command(
-        self,
-        config: TEdgeConfig,
-        config_location: TEdgeConfigLocation,
-    ) -> Result<Box<dyn Command>, crate::ConfigError>;
+    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError>;
 }

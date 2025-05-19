@@ -15,17 +15,26 @@ pub use tedge_toml::tedge_config_location::*;
 pub use camino::Utf8Path as Path;
 pub use camino::Utf8PathBuf as PathBuf;
 pub use certificate::CertificateError;
+use std::path::Path as StdPath;
 pub use tedge_config_macros::all_or_nothing;
 pub use tedge_config_macros::OptionalConfig;
 
 impl TEdgeConfig {
-    pub async fn try_new(config_location: TEdgeConfigLocation) -> Result<Self, TEdgeConfigError> {
+    pub async fn load(config_dir: impl AsRef<StdPath>) -> Result<Self, TEdgeConfigError> {
+        let config_location = TEdgeConfigLocation::from_custom_root(config_dir.as_ref());
         config_location.load().await
     }
 
-    pub async fn load(config_dir: &Path) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let config_location = TEdgeConfigLocation::from_custom_root(config_dir);
-        TEdgeConfig::try_new(config_location).await
+    pub fn load_sync(config_dir: impl AsRef<StdPath>) -> Result<Self, TEdgeConfigError> {
+        let config_location = TEdgeConfigLocation::from_custom_root(config_dir.as_ref());
+        config_location.load_sync()
+    }
+
+    pub async fn update_toml(
+        self,
+        update: &impl Fn(&mut TEdgeConfigDto, &TEdgeConfigReader) -> ConfigSettingResult<()>,
+    ) -> Result<(), TEdgeConfigError> {
+        self.location().update_toml(update).await
     }
 
     #[cfg(feature = "test")]
@@ -40,6 +49,11 @@ impl TEdgeConfig {
     /// assert_eq!(config.sudo.enable, true);
     /// ```
     pub fn load_toml_str(toml: &str) -> TEdgeConfig {
-        TEdgeConfigLocation::load_toml_str(toml)
+        TEdgeConfigLocation::load_toml_str(toml, TEdgeConfigLocation::default())
+    }
+
+    #[cfg(feature = "test")]
+    pub fn load_toml_str_with_root_dir(config_dir: impl AsRef<StdPath>, toml: &str) -> TEdgeConfig {
+        TEdgeConfigLocation::load_toml_str(toml, TEdgeConfigLocation::from_custom_root(config_dir))
     }
 }

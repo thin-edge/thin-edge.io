@@ -8,6 +8,7 @@ use crate::reuse_private_key;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
 use certificate::KeyCertPair;
+use tedge_config::TEdgeConfig;
 
 /// Renew the self-signed device certificate
 pub struct RenewCertCmd {
@@ -30,7 +31,7 @@ impl Command for RenewCertCmd {
         "Renew the self-signed certificate of the device.".into()
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         self.renew_test_certificate(&self.csr_template).await?;
         eprintln!("Certificate renewed successfully");
         eprintln!("    For an un-interrupted service:");

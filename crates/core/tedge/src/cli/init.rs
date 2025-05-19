@@ -9,7 +9,6 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use tedge_utils::file::change_user_and_group;
 use tedge_utils::file::create_directory;
 use tedge_utils::file::PermissionEntry;
@@ -19,30 +18,20 @@ pub struct TEdgeInitCmd {
     user: String,
     group: String,
     relative_links: bool,
-    config_location: TEdgeConfigLocation,
-    config: TEdgeConfig,
 }
 
 impl TEdgeInitCmd {
-    pub fn new(
-        user: String,
-        group: String,
-        relative_links: bool,
-        config: TEdgeConfig,
-        config_location: TEdgeConfigLocation,
-    ) -> Self {
+    pub fn new(user: String, group: String, relative_links: bool) -> Self {
         Self {
             user,
             group,
             relative_links,
-            config_location,
-            config,
         }
     }
 }
 
 impl TEdgeInitCmd {
-    async fn initialize_tedge(&self) -> anyhow::Result<()> {
+    async fn initialize_tedge(&self, config: TEdgeConfig) -> anyhow::Result<()> {
         let executable_name =
             std::env::current_exe().context("retrieving the current executable name")?;
         let stat = tokio::fs::metadata(&executable_name)
@@ -86,7 +75,7 @@ impl TEdgeInitCmd {
             create_symlinks_for(component, target, executable_dir, &RealEnv).await?;
         }
 
-        let config_dir = self.config_location.tedge_config_root_path.clone();
+        let config_dir = &config.root_dir();
         let permissions = {
             PermissionEntry::new(
                 Some(self.user.clone()),
@@ -102,8 +91,6 @@ impl TEdgeInitCmd {
         create_directory(config_dir.join("sm-plugins"), &permissions).await?;
         create_directory(config_dir.join("device-certs"), &permissions).await?;
         create_directory(config_dir.join(".tedge-mapper-c8y"), &permissions).await?;
-
-        let config = &self.config;
 
         create_directory(&config.logs.path, &permissions).await?;
         create_directory(&config.data.path, &permissions).await?;
@@ -129,8 +116,8 @@ impl Command for TEdgeInitCmd {
         "Initialize tedge".into()
     }
 
-    async fn execute(&self) -> Result<(), MaybeFancy<anyhow::Error>> {
-        self.initialize_tedge()
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        self.initialize_tedge(config)
             .await
             .with_context(|| "Failed to initialize tedge. You have to run tedge with sudo.")
             .map_err(<_>::into)

@@ -33,27 +33,26 @@ mod proxy;
 const UNIX_SOCKFILE: &str = "/run/c8y-remote-access-plugin.sock";
 
 pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
-    let config_dir = opt.get_config_location();
     let c8y_profile = opt.profile.clone();
     let c8y_profile = c8y_profile.as_deref();
-
-    let tedge_config = TEdgeConfig::try_new(config_dir.clone())
-        .await
-        .into_diagnostic()
-        .context("Reading tedge config")?;
 
     log_init(
         "c8y_remote_access_plugin",
         &opt.common.log_args,
-        &config_dir.tedge_config_root_path,
+        &opt.common.config_dir,
     )
     .into_diagnostic()?;
+
+    let tedge_config = TEdgeConfig::load(&opt.common.config_dir)
+        .await
+        .into_diagnostic()
+        .context("Reading tedge config")?;
 
     let command = parse_arguments(opt)?;
 
     match command {
         Command::Init(user, group) => declare_supported_operation(
-            config_dir.tedge_config_root_path(),
+            tedge_config.root_dir(),
             &user,
             &group,
         )
@@ -62,14 +61,14 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
             "Failed to initialize c8y-remote-access-plugin. You have to run the command with sudo."
         }),
         Command::Cleanup => {
-            remove_supported_operation(config_dir.tedge_config_root_path());
+            remove_supported_operation(tedge_config.root_dir());
             Ok(())
         }
         Command::Connect((command, p)) => {
             proxy(command, tedge_config, c8y_profile.or(p.as_deref())).await
         }
         Command::SpawnChild(command) => {
-            spawn_child(command, config_dir.tedge_config_root_path(), c8y_profile).await
+            spawn_child(command, tedge_config.root_dir(), c8y_profile).await
         }
         Command::TryConnectUnixSocket(command) => match UnixStream::connect(UNIX_SOCKFILE).await {
             Ok(mut unix_stream) => {
@@ -80,7 +79,7 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
             }
             Err(_e) => {
                 eprintln!("sock: Could not connect to Unix socket at {UNIX_SOCKFILE}. Falling back to spawning a child process");
-                spawn_child(command, config_dir.tedge_config_root_path(), c8y_profile).await
+                spawn_child(command, tedge_config.root_dir(), c8y_profile).await
             }
         },
     }
