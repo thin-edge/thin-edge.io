@@ -1,6 +1,8 @@
 export function process (timestamp, message) {
   let payload = JSON.parse(message.payload)
-  payload.time = Number(timestamp.seconds) + (timestamp.nanoseconds / 1e9)
+  if (!payload.time) {
+    payload.time = timestamp.seconds + (timestamp.nanoseconds / 1e9)
+  }
 
   return [{
     topic: message.topic,
