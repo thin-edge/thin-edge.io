@@ -1,5 +1,7 @@
 use crate::pipeline;
+use crate::pipeline::DateTime;
 use crate::pipeline::FilterError;
+use crate::pipeline::Message;
 use crate::LoadError;
 use rquickjs::Ctx;
 use rquickjs::FromJs;
@@ -9,21 +11,7 @@ use rquickjs::Value;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_mqtt_ext::MqttMessage;
-use time::OffsetDateTime;
 use tracing::debug;
-
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct DateTime {
-    seconds: u64,
-    nanoseconds: u32,
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct Message {
-    topic: String,
-    payload: String,
-}
 
 #[derive(Clone)]
 pub struct JsFilter {
@@ -34,31 +22,23 @@ impl JsFilter {
     pub async fn process(
         &self,
         js: &JsRuntime,
-        timestamp: OffsetDateTime,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, FilterError> {
-        debug!(target: "MAPPING", "{}: process({timestamp}, {message:?})", self.path.display());
-        let timestamp = DateTime::try_from(timestamp)?;
-        let message = Message::try_from(message)?;
-        let input = (timestamp, message);
-        let output: Vec<Message> = js
-            .call_function(&self, "process", input)
+        timestamp: &DateTime,
+        message: &Message,
+    ) -> Result<Vec<Message>, FilterError> {
+        debug!(target: "MAPPING", "{}: process({timestamp:?}, {message:?})", self.path.display());
+        let input = (timestamp.clone(), message.clone());
+        js.call_function(&self, "process", input)
             .await
-            .map_err(error_from_js)?;
-        output.into_iter().map(MqttMessage::try_from).collect()
+            .map_err(pipeline::error_from_js)
     }
 
-    pub fn update_config(&self, _js: &JsRuntime, config: &MqttMessage) -> Result<(), FilterError> {
+    pub fn update_config(&self, _js: &JsRuntime, config: &Message) -> Result<(), FilterError> {
         debug!(target: "MAPPING", "{}: update_config({config:?})", self.path.display());
         Ok(())
     }
 
-    pub fn tick(
-        &self,
-        _js: &JsRuntime,
-        timestamp: OffsetDateTime,
-    ) -> Result<Vec<MqttMessage>, FilterError> {
-        debug!(target: "MAPPING", "{}: tick({timestamp})", self.path.display());
+    pub fn tick(&self, _js: &JsRuntime, timestamp: &DateTime) -> Result<Vec<Message>, FilterError> {
+        debug!(target: "MAPPING", "{}: tick({timestamp:?})", self.path.display());
         Ok(vec![])
     }
 }
@@ -107,7 +87,7 @@ impl JsRuntime {
     ) -> Result<Ret, LoadError>
     where
         for<'a> Args: rquickjs::function::IntoArgs<'a> + Send + 'a,
-        for<'a> Ret: rquickjs::FromJs<'a> + Send + 'a,
+        for<'a> Ret: FromJs<'a> + Send + 'a,
     {
         let Some(source) = self.modules.get(&module.path) else {
             return Err(LoadError::ScriptNotLoaded {
@@ -128,47 +108,6 @@ impl JsRuntime {
             Ok(r)
         })
         .await
-    }
-}
-
-impl TryFrom<OffsetDateTime> for DateTime {
-    type Error = FilterError;
-
-    fn try_from(value: OffsetDateTime) -> Result<Self, Self::Error> {
-        let seconds = u64::try_from(value.unix_timestamp()).map_err(|err| {
-            FilterError::UnsupportedMessage(format!("failed to convert timestamp: {}", err))
-        })?;
-
-        Ok(DateTime {
-            seconds,
-            nanoseconds: value.nanosecond(),
-        })
-    }
-}
-
-impl TryFrom<&MqttMessage> for Message {
-    type Error = FilterError;
-
-    fn try_from(message: &MqttMessage) -> Result<Self, Self::Error> {
-        let topic = message.topic.to_string();
-        let payload = message
-            .payload_str()
-            .map_err(|_| {
-                pipeline::FilterError::UnsupportedMessage("Not an UTF8 payload".to_string())
-            })?
-            .to_string();
-        Ok(Message { topic, payload })
-    }
-}
-
-impl TryFrom<Message> for MqttMessage {
-    type Error = FilterError;
-
-    fn try_from(message: Message) -> Result<Self, Self::Error> {
-        let topic = message.topic.as_str().try_into().map_err(|_| {
-            FilterError::UnsupportedMessage(format!("invalid topic {}", message.topic))
-        })?;
-        Ok(MqttMessage::new(&topic, message.payload))
     }
 }
 
@@ -205,14 +144,9 @@ impl<'js> IntoJs<'js> for DateTime {
     }
 }
 
-fn error_from_js(err: LoadError) -> FilterError {
-    FilterError::IncorrectSetting(format!("{}", err))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tedge_mqtt_ext::Topic;
 
     #[tokio::test]
     async fn identity_filter() {
@@ -220,12 +154,11 @@ mod tests {
         let mut runtime = JsRuntime::try_new().await.unwrap();
         let filter = runtime.load_js("id.js", script).unwrap();
 
-        let topic = Topic::new_unchecked("te/main/device///m/");
-        let input = MqttMessage::new(&topic, "hello world");
+        let input = Message::new("te/main/device///m/", "hello world");
         let output = input.clone();
         assert_eq!(
             filter
-                .process(&runtime, OffsetDateTime::now_utc(), &input)
+                .process(&runtime, &DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![output]
@@ -238,10 +171,9 @@ mod tests {
         let mut runtime = JsRuntime::try_new().await.unwrap();
         let filter = runtime.load_js("err.js", script).unwrap();
 
-        let topic = Topic::new_unchecked("te/main/device///m/");
-        let input = MqttMessage::new(&topic, "hello world");
+        let input = Message::new("te/main/device///m/", "hello world");
         let error = filter
-            .process(&runtime, OffsetDateTime::now_utc(), &input)
+            .process(&runtime, &DateTime::now(), &input)
             .await
             .unwrap_err();
         eprintln!("{:?}", error);
