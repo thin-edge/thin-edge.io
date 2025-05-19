@@ -213,6 +213,9 @@ define_tedge_config! {
         #[tedge_config(reader(private))]
         url: ConnectUrl,
 
+        /// Cumulocity tenant ID
+        tenant_id: String,
+
         /// The path where Cumulocity root certificate(s) are stored
         #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
         #[tedge_config(example = "/etc/tedge/c8y-trusted-root-certificates.pem", default(function = "default_root_cert_path"))]
