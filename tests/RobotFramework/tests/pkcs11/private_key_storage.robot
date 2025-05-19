@@ -95,6 +95,15 @@ Connects to C8y using an RSA key
 
     Execute Command    tedge reconnect c8y
 
+Connects to C8y supporting all TLS13 ECDSA signature algorithms
+    [Documentation]    Check that we support all ECDSA sigschemes used in TLS1.3, i.e: ecdsa_secp256r1_sha256,
+    ...    ecdsa_secp384r1_sha384, ecdsa_secp521r1_sha512.
+    [Setup]    Set tedge-p11-server Uri    value=${EMPTY}
+    [Template]    Connect to C8y using ECDSA key
+    curve=secp256r1
+    curve=secp384r1
+    curve=secp521r1
+
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
     ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0
@@ -162,6 +171,31 @@ Warn the user if tedge.toml cannot be parsed
 
 
 *** Keywords ***
+Connect to C8y using ECDSA key
+    [Documentation]    Generates a new ECDSA key/cert pair, uploads it to c8y, and connects using it.
+    [Arguments]    ${curve}
+    Execute Command    mkdir -p /etc/tedge/device-certs/ecdsa
+
+    Execute Command
+    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ECDSA --curve=${curve} --label ${curve} "pkcs11:token=tedge"
+    # we should probably generate certs signed by CA instead of uploading them
+    Execute Command
+    ...    cmd=GNUTLS_PIN=123456 certtool --generate-self-signed --template /etc/tedge/hsm/cert.template --outfile /etc/tedge/device-certs/ecdsa/${curve}.pem --load-privkey "pkcs11:token=tedge;object=${curve}"
+
+    # set
+    Execute Command    tedge config set c8y.device.cert_path /etc/tedge/device-certs/ecdsa/${curve}.pem
+    Execute Command    cmd=tedge config set c8y.device.key_uri "pkcs11:token=tedge;object=${curve}"
+
+    # upload (THIS STAYS ON C8Y AND ISN'T DELETED)
+    Execute Command
+    ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
+    ...    log_output=${False}
+
+    Tedge Reconnect Should Succeed
+
+    Execute Command    tedge config unset c8y.device.cert_path
+    Execute Command    tedge config unset c8y.device.key_uri
+
 Custom Setup
     ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
     Set Suite Variable    $DEVICE_SN
