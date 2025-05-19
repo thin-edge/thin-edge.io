@@ -5,9 +5,6 @@ export function process (timestamp, message, config) {
     if (!msg_time) {
         return []
     }
-    if (!config) {
-        config = {}
-    }
 
     let msg_timestamp = msg_time
     if (typeof(msg_time) === "string") {
@@ -21,6 +18,6 @@ export function process (timestamp, message, config) {
     if (min <= msg_timestamp && msg_timestamp <= max) {
         return [message]
     } else {
-        return [{"topic":" te/error", "payload":`straggler rejected on ${message.topic} with time=${msg_timestamp}`}]
+        return [{"topic":" te/error", "payload":`straggler rejected on ${message.topic} with time=${msg_timestamp} at ${time}`}]
     }
 }

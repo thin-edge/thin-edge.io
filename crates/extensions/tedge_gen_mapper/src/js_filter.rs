@@ -16,9 +16,31 @@ use tracing::debug;
 #[derive(Clone)]
 pub struct JsFilter {
     path: PathBuf,
+    config: JsonValue,
 }
 
+#[derive(Clone, Default)]
+pub struct JsonValue(serde_json::Value);
+
 impl JsFilter {
+    pub fn new(path: PathBuf) -> Self {
+        JsFilter {
+            path,
+            config: JsonValue::default(),
+        }
+    }
+
+    pub fn with_config(self, config: Option<serde_json::Value>) -> Self {
+        if let Some(config) = config {
+            Self {
+                config: JsonValue(config),
+                ..self
+            }
+        } else {
+            self
+        }
+    }
+
     pub async fn process(
         &self,
         js: &JsRuntime,
@@ -26,7 +48,7 @@ impl JsFilter {
         message: &Message,
     ) -> Result<Vec<Message>, FilterError> {
         debug!(target: "MAPPING", "{}: process({timestamp:?}, {message:?})", self.path.display());
-        let input = (timestamp.clone(), message.clone());
+        let input = (timestamp.clone(), message.clone(), self.config.clone());
         js.call_function(&self, "process", input)
             .await
             .map_err(pipeline::error_from_js)
@@ -69,13 +91,13 @@ impl JsRuntime {
     ) -> Result<JsFilter, LoadError> {
         let path = path.as_ref().to_path_buf();
         self.modules.insert(path.clone(), source.into());
-        Ok(JsFilter { path })
+        Ok(JsFilter::new(path))
     }
 
     pub fn loaded_module(&self, path: PathBuf) -> Result<JsFilter, LoadError> {
         match self.modules.get(&path) {
             None => Err(LoadError::ScriptNotLoaded { path }),
-            Some(_) => Ok(JsFilter { path }),
+            Some(_) => Ok(JsFilter::new(path)),
         }
     }
 
@@ -141,6 +163,45 @@ impl<'js> IntoJs<'js> for DateTime {
         msg.set("topic", self.seconds)?;
         msg.set("payload", self.nanoseconds)?;
         Ok(Value::from_object(msg))
+    }
+}
+
+impl<'js> IntoJs<'js> for JsonValue {
+    fn into_js(self, ctx: &Ctx<'js>) -> rquickjs::Result<Value<'js>> {
+        match self.0 {
+            serde_json::Value::Null => Ok(Value::new_null(ctx.clone())),
+            serde_json::Value::Bool(value) => Ok(Value::new_bool(ctx.clone(), value)),
+            serde_json::Value::Number(value) => {
+                if let Some(n) = value.as_i64() {
+                    if let Ok(n) = i32::try_from(n) {
+                        return Ok(Value::new_int(ctx.clone(), n));
+                    }
+                }
+                if let Some(f) = value.as_f64() {
+                    return Ok(Value::new_float(ctx.clone(), f));
+                }
+                let nan = rquickjs::String::from_str(ctx.clone(), "NaN")?;
+                Ok(nan.into_value())
+            }
+            serde_json::Value::String(value) => {
+                let string = rquickjs::String::from_str(ctx.clone(), &value)?;
+                Ok(string.into_value())
+            }
+            serde_json::Value::Array(values) => {
+                let array = rquickjs::Array::new(ctx.clone())?;
+                for (i, value) in values.into_iter().enumerate() {
+                    array.set(i, JsonValue(value))?;
+                }
+                Ok(array.into_value())
+            }
+            serde_json::Value::Object(values) => {
+                let object = rquickjs::Object::new(ctx.clone())?;
+                for (key, value) in values.into_iter() {
+                    object.set(key, JsonValue(value))?;
+                }
+                Ok(object.into_value())
+            }
+        }
     }
 }
 
