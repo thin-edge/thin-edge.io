@@ -1,4 +1,6 @@
 use crate::js_filter::JsRuntime;
+use crate::pipeline::DateTime;
+use crate::pipeline::Message;
 use crate::pipeline::Pipeline;
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -8,7 +10,6 @@ use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_mqtt_ext::MqttMessage;
-use time::OffsetDateTime;
 use tokio::time::interval;
 use tokio::time::Duration;
 use tracing::error;
@@ -34,8 +35,11 @@ impl Actor for GenMapper {
                     self.tick().await?;
                 }
                 message = self.mqtt.recv() => {
-                    match message {
-                        Some(message) => self.filter(message).await?,
+                    match message.map(Message::try_from) {
+                        Some(Ok(message)) => self.filter(message).await?,
+                        Some(Err(err)) => {
+                            error!(target: "gen-mapper", "Cannot process message: {err}");
+                        },
                         None => break,
                     }
                 }
@@ -46,13 +50,18 @@ impl Actor for GenMapper {
 }
 
 impl GenMapper {
-    async fn filter(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
-        let timestamp = OffsetDateTime::now_utc();
-        for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
-            match pipeline.process(&self.js_runtime, timestamp, &message) {
+    async fn filter(&mut self, message: Message) -> Result<(), RuntimeError> {
+        let timestamp = DateTime::now();
+        for (pipeline_id, pipeline) in self.pipelines.iter() {
+            match pipeline.process(&self.js_runtime, &timestamp, &message) {
                 Ok(messages) => {
                     for message in messages {
-                        self.mqtt.send(message).await?;
+                        match MqttMessage::try_from(message) {
+                            Ok(message) => self.mqtt.send(message).await?,
+                            Err(err) => {
+                                error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
+                            }
+                        }
                     }
                 }
                 Err(err) => {
@@ -65,12 +74,17 @@ impl GenMapper {
     }
 
     async fn tick(&mut self) -> Result<(), RuntimeError> {
-        let timestamp = OffsetDateTime::now_utc();
-        for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
-            match pipeline.tick(&self.js_runtime, timestamp) {
+        let timestamp = DateTime::now();
+        for (pipeline_id, pipeline) in self.pipelines.iter() {
+            match pipeline.tick(&self.js_runtime, &timestamp) {
                 Ok(messages) => {
                     for message in messages {
-                        self.mqtt.send(message).await?;
+                        match MqttMessage::try_from(message) {
+                            Ok(message) => self.mqtt.send(message).await?,
+                            Err(err) => {
+                                error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
+                            }
+                        }
                     }
                 }
                 Err(err) => {
