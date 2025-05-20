@@ -41,6 +41,14 @@ impl JsFilter {
         }
     }
 
+    /// Process a message returning zero, one or more messages
+    ///
+    /// The "process" function of the JS module is passed 3 arguments
+    /// - the current timestamp
+    /// - the message to be transformed
+    /// - the filter config (as configured for the pipeline stage, possibly updated by update_config messages)
+    ///
+    /// The returned value is expected to be an array of messages.
     pub async fn process(
         &self,
         js: &JsRuntime,
@@ -54,8 +62,25 @@ impl JsFilter {
             .map_err(pipeline::error_from_js)
     }
 
-    pub fn update_config(&self, _js: &JsRuntime, config: &Message) -> Result<(), FilterError> {
-        debug!(target: "MAPPING", "{}: update_config({config:?})", self.path.display());
+    /// Update the filter config using a metadata message
+    ///
+    /// The "update_config" function of the JS module is passed 2 arguments
+    /// - the message
+    /// - the current filter config
+    ///
+    /// The value returned by this function is used as the updated filter config
+    pub async fn update_config(
+        &mut self,
+        js: &JsRuntime,
+        message: &Message,
+    ) -> Result<(), FilterError> {
+        debug!(target: "MAPPING", "{}: update_config({message:?})", self.path.display());
+        let input = (message.clone(), self.config.clone());
+        let config = js
+            .call_function(&self, "update_config", input)
+            .await
+            .map_err(pipeline::error_from_js)?;
+        self.config = config;
         Ok(())
     }
 
@@ -202,6 +227,42 @@ impl<'js> IntoJs<'js> for JsonValue {
                 Ok(object.into_value())
             }
         }
+    }
+}
+
+impl<'js> FromJs<'js> for JsonValue {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
+        if let Some(b) = value.as_bool() {
+            return Ok(JsonValue(serde_json::Value::Bool(b)));
+        }
+        if let Some(n) = value.as_int() {
+            return Ok(JsonValue(serde_json::Value::Number(n.into())));
+        }
+        if let Some(n) = value.as_float() {
+            let js_n = serde_json::Number::from_f64(n)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::Null);
+            return Ok(JsonValue(js_n));
+        }
+        if let Some(string) = value.as_string() {
+            return Ok(JsonValue(serde_json::Value::String(string.to_string()?)));
+        }
+        if let Some(array) = value.as_array() {
+            let array: rquickjs::Result<Vec<JsonValue>> = array.iter().collect();
+            let array = array?.into_iter().map(|v| v.0).collect();
+            return Ok(JsonValue(serde_json::Value::Array(array)));
+        }
+        if let Some(object) = value.as_object() {
+            let mut js_object = serde_json::Map::new();
+            for key in object.keys::<String>().flatten() {
+                if let Ok(JsonValue(v)) = object.get(&key) {
+                    js_object.insert(key, v.clone());
+                }
+            }
+            return Ok(JsonValue(serde_json::Value::Object(js_object)));
+        }
+
+        Ok(JsonValue(serde_json::Value::Null))
     }
 }
 
