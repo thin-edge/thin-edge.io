@@ -52,7 +52,7 @@ impl Actor for GenMapper {
 impl GenMapper {
     async fn filter(&mut self, message: Message) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
-        for (pipeline_id, pipeline) in self.pipelines.iter() {
+        for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
             match pipeline.process(&self.js_runtime, &timestamp, &message) {
                 Ok(messages) => {
                     for message in messages {

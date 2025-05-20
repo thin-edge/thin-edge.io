@@ -53,11 +53,11 @@ impl Pipeline {
     }
 
     pub fn update_config(
-        &self,
+        &mut self,
         js_runtime: &JsRuntime,
         message: &Message,
     ) -> Result<(), FilterError> {
-        for stage in self.stages.iter() {
+        for stage in self.stages.iter_mut() {
             if stage.config_topics.accept_topic_name(&message.topic) {
                 stage.filter.update_config(js_runtime, message)?
             }
@@ -66,7 +66,7 @@ impl Pipeline {
     }
 
     pub fn process(
-        &self,
+        &mut self,
         js_runtime: &JsRuntime,
         timestamp: &DateTime,
         message: &Message,

@@ -22,7 +22,7 @@ pub struct StageConfig {
     config: Option<Value>,
 
     #[serde(default)]
-    config_topics: Vec<String>,
+    meta_topics: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -66,7 +66,7 @@ impl StageConfig {
             FilterSpec::JavaScript(path) => config_dir.join(path),
         };
         let filter = js_runtime.loaded_module(path)?.with_config(self.config);
-        let config_topics = topic_filters(&self.config_topics)?;
+        let config_topics = topic_filters(&self.meta_topics)?;
         Ok(Stage {
             filter,
             config_topics,

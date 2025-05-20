@@ -39,6 +39,14 @@ impl JsFilter {
         }
     }
 
+    /// Process a message returning zero, one or more messages
+    ///
+    /// The "process" function of the JS module is passed 3 arguments
+    /// - the current timestamp
+    /// - the message to be transformed
+    /// - the filter config (as configured for the pipeline stage, possibly updated by update_config messages)
+    ///
+    /// The returned value is expected to be an array of messages.
     pub fn process(
         &self,
         js: &JsRuntime,
@@ -52,8 +60,21 @@ impl JsFilter {
             .map_err(pipeline::error_from_js)
     }
 
-    pub fn update_config(&self, _js: &JsRuntime, config: &Message) -> Result<(), FilterError> {
-        debug!(target: "MAPPING", "{}: update_config({config:?})", self.path.display());
+    /// Update the filter config using a metadata message
+    ///
+    /// The "update_config" function of the JS module is passed 2 arguments
+    /// - the message
+    /// - the current filter config
+    ///
+    /// The value returned by this function is used as the updated filter config
+    pub fn update_config(&mut self, js: &JsRuntime, message: &Message) -> Result<(), FilterError> {
+        debug!(target: "MAPPING", "{}: update_config({message:?})", self.path.display());
+        let input = vec![message.json(), self.config.clone()];
+        let config = js
+            .runtime
+            .call_function(Some(self.module_id), "update_config".to_string(), input)
+            .map_err(pipeline::error_from_js)?;
+        self.config = config;
         Ok(())
     }
 
@@ -97,6 +118,7 @@ impl JsRuntime {
     pub fn load(&mut self, module: Module) -> Result<JsFilter, LoadError> {
         let path = module.filename().to_owned();
         let module_id = self.runtime.load_module(module)?;
+
         self.modules.insert(path.clone(), module_id);
         Ok(JsFilter::new(path, module_id))
     }
