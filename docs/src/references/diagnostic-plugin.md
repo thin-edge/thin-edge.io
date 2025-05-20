@@ -1,64 +1,85 @@
 ---
-title: Diagnostic plugin
-tags: [Reference, API]
+title: Diagnostic API
+tags: [ Reference, API ]
 sidebar_position: 100
 description: Diagnostic Plugin API reference
 ---
 
-# Contract between runner and plugins
+# Diagnostic Runner and Plugin API
 
-## Runner's responsibility
-* Runner creates an output directory `<PLUGIN_DIR>/<TARBALL_NAME>` and subdirectories for each plugin `<PLUGIN_DIR>/<TARBALL_NAME>/<PLUGIN_NAME>`.
-* Runner doesn't know about each plugin script. Runner executes all the plugin scripts under `<PLUGIN_DIR>` blindly with arguments.
+The `tedge diag collect` command is used to gather diagnostics by executing a series of plugins.
+Each plugin outputs logs or relevant system data, and everything is bundled into a single `.tar.gz` archive.
+
+The design consists of two parts, the **runner** and the **plugins**.
+The runner is the `tedge diag collect` command, which calls plugins that must be executable files.
+
+## Runner
+
+* The runner creates a temporary output directory at `<OUTPUT_DIR>/<TARBALL_NAME>` (e.g. `/tmp/tedge-diag-now`) and
+  subdirectories for each plugin at
+  `<OUTPUT_DIR>/<TARBALL_NAME>/<PLUGIN_NAME>` (e.g. `/tmp/tedge-diag-now/01_tedge`) to collect output files.
+* The runner does not need to understand the content of each plugin script.
+  It blindly executes all plugin scripts located under `<PLUGIN_DIR>` (e.g. `/etc/tedge/diag-plugins`) using the
+  following arguments:
     * arg1: `collect`
-    * option1 `--output-dir` <PATH>: the path to the subdirectory, `<PLUGIN_DIR>/<TARBALL_NAME>/<PLUGIN_NAME>`
-    * option2 `--config-dir` <PATH>
-* Runner logs stdout and stderr from the each plugin's execution and store them as `out.log`(stdout) and `err.log`(stderr).
-* Runner makes a tarball for the output directory `<PLUGIN_DIR>/<TARBALL_NAME>` as `<TARBALL_NAME>.tar.gz`.
-* Runner takes care of the exit codes of plugins. Runner's exit code is `0` if either `0` or `2` returns from each plugin. Otherwise `1`.
-    * 0: plugin execution successful
-    * 1: some error occurs while executing the plugin
-    * 2: skipped / not applicable (e.g. mosquitto plugin is not applicable when built-in bridge is used)
+    * option1 `--output-dir <PATH>`: the path to the temporary output subdirectory for the plugin (e.g.
+      `/tmp/tedge-diag-now/01_tedge`)
+    * option2 `--config-dir <PATH>`: the directory where the `tedge.toml` file is stored (e.g. `/etc/tedge`)
+* The runner logs both stdout and stderr from the plugin's execution and stores them in `output.log`.
+* The runner makes a tarball archive of the output directory as `<OUTPUT_DIR>/<TARBALL_NAME>.tar.gz` (e.g.
+  `/tmp/tedge-diag-now.tar.gz`)
+* The runner determines its own exit codes based on the exit codes of the plugins:
+    * `0`: all plugins returned either `0` or `2`
+    * `1`: at least one plugin returned a code other than `0` or `2`
+* If a plugin runs too long, the runner sends a `SIGTERM` after a grace period. If the plugin does not terminate,
+  it is forcibly terminated with `SIGKILL`.
 
+### Directory Hierarchy Example
 
-### Usage
-```shell
-$ tedge diag collect [OPTIONS]
+#### Plugin Directory
+
 ```
-
-#### Options
-* `--plugin-dir <PLUGIN_DIR>`: Directory where plugins are stored (default: `/etc/tedge/diag-plugins`)
-* `--output-dir <OUTPUT_DIR>`: Directory where output tarball and temporary output files are stored  (default: `/tmp`)
-* `--tarball-name <TARBALL_NAME>`: Filename (without .tar.gz) for the output tarball (default: `tedge-diag_<timestamp>`)
-* `--timeout <TIME>`: Timeout for each plugin's execution (default: 10s) 
-
-#### Note
-`collect` is the only subcommand as of now. Can be more in the future.
-
-### Directory hierarchy example
-```
-/tmp/
-├─ tedge-diag_20250404235840.tar.gz
-├─ tedge-diag_20250404235840/
-│  ├─ 01_tedge/
-│  │  ├─ out.log
-│  │  ├─ err.log
-│  │  ├─ tedge-agent.log
-│  │  ├─ tedge-mapper-c8y.log
-│  │  ├─ ...
 /etc/tedge/diag-plugins/
-├─ 01_tedge
-├─ 02_mosquitto
+├─ 01_tedge.sh
+├─ 02_os.sh
+├─ 03_mqtt.sh
 ├─ ...
 ```
 
-## Diagnostic plugin's responsibility
-* Plugin must be an executable.
-* Plugin is called by the runner with arguments (see runner's spec).
-* Plugin should output to the directory provided by the argument. (with `--output-dir <DIR>`)
-* Plugin should exit before the timeout and return with respectful exit code.
+#### Temporary Output Directory
 
-For example, `00_tedge.sh` plugin is called by the runner as below.
+```
+/tmp/
+├─ tedge-diag-2025-05-20_15-08-42.tar.gz
+├─ tedge-diag-2025-05-20_15-08-42
+│  ├─ 01_tedge/
+│  │  ├─ output.log
+│  │  ├─ tedge-agent.log
+│  │  ├─ tedge-mapper-c8y.log
+│  ├─ 02_os/
+│  │  ├─ output.log
+│  ├─ 03_mqtt/
+│  │  ├─ output.log
+│  │  ├─ tedge-mqtt-sub-retained-only.log
+│  │  ├─ ...
+```
+
+## Plugin
+
+* A plugin must be an executable file.
+* It is called by the runner with the specified arguments (see the [Runner](#runner) section).
+* The plugin should write its output files to the designated temporary output directory provided via the command line.
+* The plugin must complete execution within the timeout period and return an appropriate exit code:
+    * `0`: successful execution
+    * `2`: plugin skipped (not applicable)
+    * any other non-zero value: error occurred
+
+### Example Plugin Execution
+
+The 00_tedge.sh plugin is invoked by the runner as follows:
+
 ```shell
-/etc/tedge/diag-plugins/00_tedge.sh collect --output-dir <OUTPUT_DIR> --config-dir <CONFIG_DIR>
+/etc/tedge/diag-plugins/00_tedge.sh collect \
+  --output-dir "/tmp/tedge-diag-now/00_tedge" \
+  --config-dir "/etc/tedge"
 ```
