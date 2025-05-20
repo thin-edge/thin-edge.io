@@ -52,14 +52,14 @@ impl Pipeline {
         topics
     }
 
-    pub fn update_config(
-        &self,
+    pub async fn update_config(
+        &mut self,
         js_runtime: &JsRuntime,
         message: &Message,
     ) -> Result<(), FilterError> {
-        for stage in self.stages.iter() {
+        for stage in self.stages.iter_mut() {
             if stage.config_topics.accept_topic_name(&message.topic) {
-                stage.filter.update_config(js_runtime, message)?
+                stage.filter.update_config(js_runtime, message).await?
             }
         }
         Ok(())
@@ -71,7 +71,7 @@ impl Pipeline {
         timestamp: &DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FilterError> {
-        self.update_config(js_runtime, message)?;
+        self.update_config(js_runtime, message).await?;
         if !self.input_topics.accept_topic_name(&message.topic) {
             return Ok(vec![]);
         }
