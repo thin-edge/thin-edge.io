@@ -1,16 +1,14 @@
-// Demonstrate that messages can be delayed
-export function process (timestamp, message, config) {
-    if ( typeof process.batch == 'undefined' ) {
-        process.batch = [];
-    }
+class State {
+    static batch = []
+}
 
-    let len = process.batch.push(message)
-    let batch_len = config.batch_len || 4
-    if (len < batch_len) {
-        return []
-    }
+export function process (timestamp, message) {
+    State.batch.push(message)
+    return []
+}
 
-    let batch = process.batch
-    process.batch = []
+export function tick() {
+    let batch = State.batch
+    State.batch = []
     return batch
 }

@@ -124,6 +124,10 @@ impl DateTime {
     pub fn json(&self) -> Value {
         json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
     }
+
+    pub fn tick_now(&self, tick_every_seconds: u64) -> bool {
+        tick_every_seconds != 0 && (self.seconds % tick_every_seconds == 0)
+    }
 }
 
 impl TryFrom<OffsetDateTime> for DateTime {

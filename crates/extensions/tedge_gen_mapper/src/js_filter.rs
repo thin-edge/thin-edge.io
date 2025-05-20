@@ -20,6 +20,7 @@ pub struct JsFilter {
     path: PathBuf,
     module_id: ModuleId,
     config: Value,
+    tick_every_seconds: u64,
 }
 
 impl JsFilter {
@@ -28,6 +29,7 @@ impl JsFilter {
             path,
             module_id,
             config: json!({}),
+            tick_every_seconds: 0,
         }
     }
 
@@ -36,6 +38,13 @@ impl JsFilter {
             Self { config, ..self }
         } else {
             self
+        }
+    }
+
+    pub fn with_tick_every_seconds(self, tick_every_seconds: u64) -> Self {
+        Self {
+            tick_every_seconds,
+            ..self
         }
     }
 
@@ -78,9 +87,22 @@ impl JsFilter {
         Ok(())
     }
 
-    pub fn tick(&self, _js: &JsRuntime, timestamp: &DateTime) -> Result<Vec<Message>, FilterError> {
+    /// Trigger the tick function of the JS module
+    ///
+    /// The "tick" function is passed 2 arguments
+    /// - the current timestamp
+    /// - the current filter config
+    ///
+    /// Return zero, one or more messages
+    pub fn tick(&self, js: &JsRuntime, timestamp: &DateTime) -> Result<Vec<Message>, FilterError> {
+        if !timestamp.tick_now(self.tick_every_seconds) {
+            return Ok(vec![]);
+        }
         debug!(target: "MAPPING", "{}: tick({timestamp:?})", self.path.display());
-        Ok(vec![])
+        let input = vec![timestamp.json(), self.config.clone()];
+        js.runtime
+            .call_function(Some(self.module_id), "tick".to_string(), input)
+            .map_err(pipeline::error_from_js)
     }
 }
 
