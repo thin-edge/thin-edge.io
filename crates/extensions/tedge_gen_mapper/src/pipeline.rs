@@ -103,7 +103,7 @@ impl Pipeline {
             }
 
             // Only then process the tick
-            transformed_messages.extend(stage.filter.tick(js_runtime, timestamp)?);
+            transformed_messages.extend(stage.filter.tick(js_runtime, timestamp).await?);
 
             // Iterate with all the messages collected at this stage
             messages = transformed_messages;
@@ -115,6 +115,10 @@ impl Pipeline {
 impl DateTime {
     pub fn now() -> Self {
         DateTime::try_from(OffsetDateTime::now_utc()).unwrap()
+    }
+
+    pub fn tick_now(&self, tick_every_seconds: u64) -> bool {
+        tick_every_seconds != 0 && (self.seconds % tick_every_seconds == 0)
     }
 }
 

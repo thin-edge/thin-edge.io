@@ -17,6 +17,7 @@ use tracing::debug;
 pub struct JsFilter {
     path: PathBuf,
     config: JsonValue,
+    tick_every_seconds: u64,
 }
 
 #[derive(Clone, Default)]
@@ -27,6 +28,7 @@ impl JsFilter {
         JsFilter {
             path,
             config: JsonValue::default(),
+            tick_every_seconds: 0,
         }
     }
 
@@ -38,6 +40,13 @@ impl JsFilter {
             }
         } else {
             self
+        }
+    }
+
+    pub fn with_tick_every_seconds(self, tick_every_seconds: u64) -> Self {
+        Self {
+            tick_every_seconds,
+            ..self
         }
     }
 
@@ -84,9 +93,26 @@ impl JsFilter {
         Ok(())
     }
 
-    pub fn tick(&self, _js: &JsRuntime, timestamp: &DateTime) -> Result<Vec<Message>, FilterError> {
+    /// Trigger the tick function of the JS module
+    ///
+    /// The "tick" function is passed 2 arguments
+    /// - the current timestamp
+    /// - the current filter config
+    ///
+    /// Return zero, one or more messages
+    pub async fn tick(
+        &self,
+        js: &JsRuntime,
+        timestamp: &DateTime,
+    ) -> Result<Vec<Message>, FilterError> {
+        if !timestamp.tick_now(self.tick_every_seconds) {
+            return Ok(vec![]);
+        }
         debug!(target: "MAPPING", "{}: tick({timestamp:?})", self.path.display());
-        Ok(vec![])
+        let input = (timestamp.clone(), self.config.clone());
+        js.call_function(&self, "tick", input)
+            .await
+            .map_err(pipeline::error_from_js)
     }
 }
 

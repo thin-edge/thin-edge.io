@@ -27,7 +27,7 @@ impl Actor for GenMapper {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        let mut interval = interval(Duration::from_secs(5));
+        let mut interval = interval(Duration::from_secs(1));
 
         loop {
             tokio::select! {
