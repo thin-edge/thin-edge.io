@@ -22,6 +22,9 @@ pub struct StageConfig {
     config: Option<Value>,
 
     #[serde(default)]
+    tick_every_seconds: u64,
+
+    #[serde(default)]
     meta_topics: Vec<String>,
 }
 
@@ -65,7 +68,10 @@ impl StageConfig {
             FilterSpec::JavaScript(path) if path.is_absolute() => path.into(),
             FilterSpec::JavaScript(path) => config_dir.join(path),
         };
-        let filter = js_runtime.loaded_module(path)?.with_config(self.config);
+        let filter = js_runtime
+            .loaded_module(path)?
+            .with_config(self.config)
+            .with_tick_every_seconds(self.tick_every_seconds);
         let config_topics = topic_filters(&self.meta_topics)?;
         Ok(Stage {
             filter,
