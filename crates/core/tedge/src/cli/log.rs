@@ -24,6 +24,13 @@ use super::CertError;
 use super::ConnectError;
 
 #[macro_export]
+macro_rules! info {
+    ($($arg:tt)+) => ({
+        use yansi::Paint as _; eprintln!("{} {}", "info:".green().bold(), format_args!($($arg)+))
+    });
+}
+
+#[macro_export]
 macro_rules! warning {
     ($($arg:tt)+) => ({
         use yansi::Paint as _; eprintln!("{} {}", "warning:".yellow().bold(), format_args!($($arg)+))
