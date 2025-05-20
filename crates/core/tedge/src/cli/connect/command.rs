@@ -32,6 +32,7 @@ use anyhow::bail;
 use c8y_api::http_proxy::read_c8y_credentials;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use certificate::parse_root_certificate::CryptokiConfig;
 use mqtt_channel::Topic;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -100,7 +101,24 @@ impl Command for ConnectCommand {
             bridge_config(&tedge_config, &self.cloud).map_err(anyhow::Error::new)?;
         let credentials_path =
             credentials_path_for(&tedge_config, &self.cloud).map_err(anyhow::Error::new)?;
-        let use_cryptoki = tedge_config.device.cryptoki.mode.enabled();
+
+        let cloud = tedge_config
+            .as_cloud_config((&self.cloud).into())
+            .map_err(anyhow::Error::new)?;
+
+        let cryptoki_key_uri = tedge_config
+            .device
+            .cryptoki_config(cloud)?
+            .map(|c| match c {
+                CryptokiConfig::Direct(d) => d.uri,
+                CryptokiConfig::SocketService { uri, .. } => uri,
+            });
+        let cryptoki_mode = tedge_config.device.cryptoki.mode.clone();
+        let cryptoki_status = match cryptoki_key_uri {
+            None => "off".to_string(),
+            Some(None) => format!("{cryptoki_mode}"),
+            Some(Some(key)) => format!("{cryptoki_mode} (key: {key})"),
+        };
 
         ConfigLogger::log(
             self.description(),
@@ -108,7 +126,7 @@ impl Command for ConnectCommand {
             &*self.service_manager,
             &self.cloud,
             credentials_path,
-            use_cryptoki,
+            &cryptoki_status,
             tedge_config.proxy.address.or_none(),
             tedge_config.proxy.username.or_none().map(|u| u.as_str()),
         );

@@ -982,6 +982,14 @@ impl TEdgeConfigReader {
         .unwrap()
     }
 
+    pub fn as_cloud_config(&self, cloud: Cloud<'_>) -> Result<&dyn CloudConfig, MultiError> {
+        Ok(match cloud {
+            Cloud::C8y(profile) => self.c8y.try_get(profile)?,
+            Cloud::Az(profile) => self.az.try_get(profile)?,
+            Cloud::Aws(profile) => self.aws.try_get(profile)?,
+        })
+    }
+
     pub fn device_key_path<'a>(
         &self,
         cloud: Option<impl Into<Cloud<'a>>>,

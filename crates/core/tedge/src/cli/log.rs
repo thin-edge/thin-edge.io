@@ -256,7 +256,7 @@ pub struct ConfigLogger<'a> {
     mosquitto_version: Option<&'a str>,
     cloud: &'a MaybeBorrowedCloud<'a>,
     credentials_path: Option<&'a Utf8Path>,
-    cryptoki: bool,
+    cryptoki: &'a str,
     proxy_url: Option<&'a ProxyUrl>,
     proxy_username: Option<&'a str>,
 }
@@ -270,7 +270,7 @@ impl<'a> ConfigLogger<'a> {
         service_manager: &'a dyn SystemServiceManager,
         cloud: &'a MaybeBorrowedCloud<'a>,
         credentials_path: Option<&'a Utf8Path>,
-        use_cryptoki: bool,
+        cryptoki: &'a str,
         proxy_url: Option<&'a ProxyUrl>,
         proxy_username: Option<&'a str>,
     ) {
@@ -287,7 +287,7 @@ impl<'a> ConfigLogger<'a> {
                 service_manager,
                 mosquitto_version: config.mosquitto_version.as_deref(),
                 cloud,
-                cryptoki: use_cryptoki,
+                cryptoki,
                 proxy_url,
                 proxy_username,
             }

@@ -5,6 +5,7 @@ Documentation       Test thin-edge.io MQTT client authentication using a Hardwar
 ...                 cryptographic tokens that will be read by thin-edge. In real production environments a dedicated
 ...                 hardware device would be used.
 
+# it would be good to explain here why we use the tedge-p11-server exclusively and not the module mode
 Resource            ../resources/common.resource
 Library             Cumulocity
 Library             ThinEdgeIO
@@ -19,14 +20,18 @@ Test Tags           adapter:docker    theme:cryptoki
 Use Private Key in SoftHSM2 using tedge-p11-server
     Tedge Reconnect Should Succeed
 
-Select Private key using PKCS#11 URI
+Select Private key using tedge-p11-server URI
     [Documentation]    Make sure that we can select different keys and tokens using a PKCS#11 URI.
     ...    The URI can either point to a specific key, or to a specific token where we will attempt to find a key.
     ...
     ...    To ensure that correct key is selected and reduce the need to generate and upload different keys and
     ...    certificates, we'll only be using one key and we'll only import it to the chosen token, keeping other tokens
     ...    empty.
+    ...
+    ...    We set the URI on tedge-p11-server, which means that all connecting clients will use the selected key until
+    ...    tedge-p11-server is restarted with a different URI.
 
+    Set tedge-p11-server Uri    value=
     Tedge Reconnect Should Succeed
 
     # expect failure if we try to use a token that doesn't exist
@@ -52,6 +57,25 @@ Select Private key using PKCS#11 URI
     # but when URI has correct label, we expect valid key to be used again
     Set tedge-p11-server Uri    value=pkcs11:token=tedge;object=tedge
     Tedge Reconnect Should Succeed
+
+    Set tedge-p11-server Uri    value=
+
+Select Private key using a request URI
+    [Documentation]    Like above, we select the key using a URI, but this time we include it in a request, which means
+    ...    we can select different keys without restarting tedge-p11-server.
+
+    Execute Command    cmd=tedge config set device.key_uri pkcs11:token=token123
+    ${stdout}=    Tedge Reconnect Should Fail With    Failed to find a signing key
+    Should Contain    ${stdout}    item=cryptoki: socket (key: pkcs11:token=token123)
+
+    Execute Command    cmd=tedge config unset device.key_uri
+    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:token=token123
+    ${stdout}=    Tedge Reconnect Should Fail With    Failed to find a signing key
+    Should Contain    ${stdout}    item=cryptoki: socket (key: pkcs11:token=token123)
+
+    Execute Command    cmd=tedge config set c8y.device.key_uri "pkcs11:token=tedge;object=tedge"
+    ${stdout}=    Tedge Reconnect Should Succeed
+    Should Contain    ${stdout}    item=cryptoki: socket (key: pkcs11:token=tedge;object=tedge)
 
 Connects to C8y using an RSA key
     [Documentation]    Test that we can connect to C8y using an RSA private key. At the time of writing the test
@@ -162,6 +186,8 @@ Custom Setup
     Execute Command
     ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
 
+    Set tedge-p11-server Uri    value=
+
 Remove Existing Certificates
     Execute Command    cmd=rm -f "$(tedge config get device.key_path)" "$(tedge config get device.cert_path)"
 
@@ -171,9 +197,11 @@ Set tedge-p11-server Uri
     Restart Service    tedge-p11-server
 
 Tedge Reconnect Should Succeed
-    Execute Command    tedge reconnect c8y
+    ${stdout}=    Execute Command    tedge reconnect c8y
+    RETURN    ${stdout}
 
 Tedge Reconnect Should Fail With
     [Arguments]    ${error}
-    ${stderr}=    Execute Command    tedge reconnect c8y    exp_exit_code=!0    stdout=false    stderr=true
+    ${stdout}    ${stderr}=    Execute Command    tedge reconnect c8y    exp_exit_code=!0    stdout=true    stderr=true
     Should Contain    ${stderr}    ${error}
+    RETURN    ${stdout}
