@@ -5936,6 +5936,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tedge_actors",
+ "tedge_file_system_ext",
  "tedge_mqtt_ext",
  "thiserror 1.0.69",
  "time",

@@ -11,10 +11,13 @@ repository.workspace = true
 [dependencies]
 async-trait = { workspace = true }
 camino = { workspace = true, features = ["serde1"] }
-rustyscript = { version = "0.11", default-features = false, features = ["worker"] }
+rustyscript = { version = "0.11", default-features = false, features = [
+    "worker",
+] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
+tedge_file_system_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }

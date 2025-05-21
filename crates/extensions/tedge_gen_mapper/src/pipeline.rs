@@ -1,5 +1,6 @@
 use crate::js_filter::JsFilter;
 use crate::js_filter::JsRuntime;
+use camino::Utf8PathBuf;
 use rustyscript::serde_json::json;
 use rustyscript::serde_json::Value;
 use rustyscript::Error;
@@ -14,6 +15,8 @@ pub struct Pipeline {
 
     /// Transformation stages to apply in order to the messages
     pub stages: Vec<Stage>,
+
+    pub source: Utf8PathBuf,
 }
 
 /// A message transformation stage

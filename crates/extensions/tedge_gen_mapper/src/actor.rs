@@ -1,23 +1,30 @@
+use crate::config::PipelineConfig;
 use crate::js_filter::JsRuntime;
 use crate::pipeline::DateTime;
 use crate::pipeline::Message;
 use crate::pipeline::Pipeline;
+use crate::InputMessage;
 use async_trait::async_trait;
+use camino::Utf8PathBuf;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use tedge_actors::Actor;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
+use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tokio::time::interval;
 use tokio::time::Duration;
 use tracing::error;
+use tracing::info;
 
 pub struct GenMapper {
-    pub(super) mqtt: SimpleMessageBox<MqttMessage, MqttMessage>,
+    pub(super) messages: SimpleMessageBox<InputMessage, MqttMessage>,
     pub(super) pipelines: HashMap<String, Pipeline>,
     pub(super) js_runtime: JsRuntime,
+    pub(super) config_dir: PathBuf,
 }
 
 #[async_trait]
@@ -34,11 +41,26 @@ impl Actor for GenMapper {
                 _ = interval.tick() => {
                     self.tick().await?;
                 }
-                message = self.mqtt.recv() => {
-                    match message.map(Message::try_from) {
-                        Some(Ok(message)) => self.filter(message).await?,
-                        Some(Err(err)) => {
-                            error!(target: "gen-mapper", "Cannot process message: {err}");
+                message = self.messages.recv() => {
+                    match message {
+                        Some(InputMessage::MqttMessage(message)) => match Message::try_from(message) {
+                            Ok(message) => self.filter(message).await?,
+                            Err(err) => {
+                                error!(target: "gen-mapper", "Cannot process message: {err}");
+                            }
+                        },
+                        Some(InputMessage::FsWatchEvent(FsWatchEvent::Modified(path))) => {
+                            let Ok(path) = Utf8PathBuf::try_from(path) else {
+                                continue;
+                            };
+                            if matches!(path.extension(), Some("js" | "ts")) {
+                                self.reload_filter(path).await;
+                            } else if path.extension() == Some("toml") {
+                                self.reload_toml(path).await;
+                            }
+                        },
+                        Some(InputMessage::FsWatchEvent(e)) => {
+                            tracing::warn!("TODO do something with {e:?}")
                         },
                         None => break,
                     }
@@ -50,6 +72,52 @@ impl Actor for GenMapper {
 }
 
 impl GenMapper {
+    async fn reload_filter(&mut self, path: Utf8PathBuf) {
+        for pipeline in self.pipelines.values_mut() {
+            for stage in &mut pipeline.stages {
+                if stage.filter.path() == path {
+                    match self.js_runtime.load_file(&path) {
+                        Ok(filter) => {
+                            info!("Reloaded filter {path}");
+                            stage.filter = filter
+                        }
+                        Err(e) => {
+                            error!("Failed to reload filter {path}: {e}");
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    async fn reload_toml(&mut self, path: Utf8PathBuf) {
+        for pipeline in self.pipelines.values_mut() {
+            if pipeline.source == path {
+                let Ok(source) = tokio::fs::read_to_string(&path).await else {
+                    error!("Failed to read updated filter {path}");
+                    break;
+                };
+                let config: PipelineConfig = match toml::from_str(&source) {
+                    Ok(config) => config,
+                    Err(e) => {
+                        error!("Failed to parse toml for updated filter {path}: {e}");
+                        break;
+                    }
+                };
+                match config.compile(&self.js_runtime, &self.config_dir, path.clone()) {
+                    Ok(p) => {
+                        *pipeline = p;
+                        info!("Reloaded pipeline {path}");
+                    }
+                    Err(e) => {
+                        error!("Failed to load updated pipeline {path}: {e}")
+                    }
+                };
+            }
+        }
+    }
+
     async fn filter(&mut self, message: Message) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
         for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
@@ -57,7 +125,7 @@ impl GenMapper {
                 Ok(messages) => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
-                            Ok(message) => self.mqtt.send(message).await?,
+                            Ok(message) => self.messages.send(message).await?,
                             Err(err) => {
                                 error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
                             }
@@ -80,7 +148,7 @@ impl GenMapper {
                 Ok(messages) => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
-                            Ok(message) => self.mqtt.send(message).await?,
+                            Ok(message) => self.messages.send(message).await?,
                             Err(err) => {
                                 error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
                             }
