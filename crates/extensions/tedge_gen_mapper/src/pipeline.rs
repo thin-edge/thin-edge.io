@@ -1,6 +1,7 @@
 use crate::js_filter::JsFilter;
 use crate::js_filter::JsRuntime;
 use crate::LoadError;
+use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
 use tedge_mqtt_ext::MqttMessage;
@@ -14,6 +15,8 @@ pub struct Pipeline {
 
     /// Transformation stages to apply in order to the messages
     pub stages: Vec<Stage>,
+
+    pub source: Utf8PathBuf,
 }
 
 /// A message transformation stage
