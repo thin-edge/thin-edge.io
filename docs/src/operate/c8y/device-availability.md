@@ -13,6 +13,14 @@ and also sending heartbeats to **Cumulocity** periodically when a device is deem
 monitored using its service health endpoint.
 The health endpoint can be changed from the `tedge-agent` to any other entity's health endpoint as well.
 
+<p align="center">
+    <img
+        src={require('../../images/c8y_availability_monitoring.png').default}
+        alt="Cumulocity availability monitoring"
+        width="40%"
+    />
+</p>
+
 ## Set the required availability interval
 
 As described in the [Cumulocity's user documentation](https://cumulocity.com/docs/device-integration/fragment-library/#device-availability),

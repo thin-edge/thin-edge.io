@@ -379,7 +379,9 @@ The 403 (Forbidden) error means that your user/password is correct however you d
 
 Your Cumulocity user **MUST** be assigned the **Tenant Manager** Global Role in order to add new trusted certificates to Cumulocity. Global roles can be assigned to users via the Cumulocity **Administration** application under Accounts &rarr; Users &rarr; `<your username>` &rarr; Global Roles section. Below shows a screenshot of the **Tenant Manager** role that your user needs to be assigned to.
 
-![User Global Roles](./c8y-user-globl-roles.png)
+<p align="center">
+    <img width="40%" src={require('./c8y-user-global-roles.png').default} alt="User Global Roles" />
+</p>
 
 Alternatively, you can explicitly add one of the following permissions to your Cumulocity user: `ROLE_TENANT_MANAGEMENT_ADMIN` OR `ROLE_TENANT_ADMIN`, however this method requires you to be familiar with the [Cumulocity OpenAPI](https://cumulocity.com/api/core/#operation/postTrustedCertificateCollectionResource).
 

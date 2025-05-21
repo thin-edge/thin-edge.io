@@ -75,9 +75,6 @@ An example `inventory.json` looks something like this:
 
 ```json title="file: /etc/tedge/device/inventory.json"
 {
-  "c8y_RequiredAvailability": {
-    "responseInterval": 5
-  },
   "c8y_Hardware": {
     "model": "BCM2708",
     "revision": "000e",

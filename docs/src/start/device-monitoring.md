@@ -5,6 +5,8 @@ sidebar_position: 8
 description: Monitoring your device with collectd
 ---
 
+import BrowserWindow from '@site/src/components/BrowserWindow';
+
 With %%te%% device monitoring, you can collect metrics from your device
 and forward these device metrics to IoT platforms in the cloud.
 
@@ -16,7 +18,11 @@ Additionally, the metrics can be used to help the customer troubleshoot when pro
 %%te%% translates the `collectd` metrics from their native format to the [%%te%% JSON](../understand/thin-edge-json.md) format
 and then into the [cloud-vendor specific format](../understand/tedge-mapper.md).
 
+<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/measurements">
+
 ![device monitoring with collectd](images/collectd-metrics.png)
+
+</BrowserWindow>
 
 ## Install
 

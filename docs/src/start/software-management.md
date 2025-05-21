@@ -68,27 +68,33 @@ Find more information about [managing the device software](https://cumulocity.co
 4. %%te%% ships a default plugin supporting `debian` packages from both `apt` repositories as well as remote locations.
     If you prefer to use packages from an `apt` repository, select the **Provide a file path** option and give an **empty space** (' ').
 
+    <p align="center">
     <img
        src={require('./images/add-new-software-to-repo.png').default}
        alt="Add new software"
        width="30%"
     />
+    </p>
 
     If you would like to use other sources (e.g. file uploaded to your cloud or an external source), provide the full url to the file.
 
+    <p align="center">
     <img
        src={require('./images/add-new-software-to-repo-binary.png').default}
        alt="Add new software from uploaded binary"
        width="40%"
     />
+    </p>
 
     If you would like to upload your binaries, select `Upload a binary` option and upload the file to Cumulocity software repository.
 
+    <p align="center">
     <img
        src={require('./images/add-new-software-to-repo-remote.png').default}
        alt="Add new software from remote"
        width="40%"
     />
+    </p>
 
     :::note
     Bear in mind that some external remotes may require additional authentication which is not supported at the moment.

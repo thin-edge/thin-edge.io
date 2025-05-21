@@ -4,6 +4,8 @@ tags: [Operate, Cumulocity]
 description: SmartREST 2.0 template registration and usage
 ---
 
+import BrowserWindow from '@site/src/components/BrowserWindow';
+
 [Custom SmartREST 2.0 Templates](https://cumulocity.com/docs/smartrest/smartrest-introduction/) can be used to extend the functionality of a device to support more operations than what the [static SmartREST templates](https://cumulocity.com/docs/smartrest/mqtt-static-templates/) offer.
 
 %%te%% supports subscription to custom templates as documented [here](https://cumulocity.com/docs/smartrest/smartrest-two/#template-collections).
@@ -160,15 +162,27 @@ The following procedure details the step-by-step instructions on how to implemen
 
 2. Navigate to *Device Types &rarr; SmartREST Templates*
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/smart-rest-templates">
+
     ![smartrest-template-list-empty](./images/smartrest-template-list-empty.png)
+
+    </BrowserWindow>
 
 3. Click *Add SmartREST template*
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/smart-rest-templates">
+
     ![smartrest-template-create-new](./images/smartrest-template-create-new.png)
+
+    </BrowserWindow>
 
 4. Add a new *Response* message, and enter the details as detailed in the screenshot.
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/smart-rest-templates/12345/responses">
+
     ![smartrest-template-add-operation](./images/smartrest-template-add-operation.png)
+
+    </BrowserWindow>
 
     The properties used in the example can be also described as follows:
 
@@ -184,7 +198,11 @@ The following procedure details the step-by-step instructions on how to implemen
 
 5. Click *Save*
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/smart-rest-templates">
+
     ![custom-smartrest-template-list](./images/custom-smartrest-template-list.png)
+
+    </BrowserWindow>
 
 #### Alternative: Import SmartREST template from file
 
@@ -220,23 +238,37 @@ Alternatively, you can import a SmartREST template from an existing file. This a
 
 3. Navigate to *Device Types &rarr; SmartREST templates*
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/smart-rest-templates">
+
     ![smartrest-template-list-empty](./images/smartrest-template-list-empty.png)
+
+    </BrowserWindow>
 
 4. Click *Import template*
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/smart-rest-templates">
+
     ![custom-smartrest-template-response](./images/smartrest-template-import.png)
+
+    </BrowserWindow>
 
 5. Select the *Load from file* and select the json file you saved in the first step and click *Open*
 
-    ![smartrest-template-import-file-dialog](./images/smartrest-template-import-file-dialog.png)
-
 6. Double check the information and select *Import*
+
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/smart-rest-templates">
 
     ![smartrest-template-import-after-selection](./images/smartrest-template-import-after-selection.png)
 
+    </BrowserWindow>
+
     If the import was successful, then you should see the SmartREST template, **custom_devmgmt**, in the list:
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/smart-rest-templates">
+
     ![custom-smartrest-template-list](./images/custom-smartrest-template-list.png)
+
+    </BrowserWindow>
     
 
 ### Step 2: Configure thin-edge.io
@@ -353,7 +385,11 @@ On your %%te%% device, run the following steps:
 
 2. In the Cumulocity *Device Management* application, check the *Control* page where you should see the "Configure Wifi" operation.
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/control">
+
     ![smartrest-custom-operation-control.png](./images/smartrest-custom-operation-control.png)
+
+    </BrowserWindow>
 
 3. On the %%te%% device, open a console, and check the log file which when processing the custom operation
 

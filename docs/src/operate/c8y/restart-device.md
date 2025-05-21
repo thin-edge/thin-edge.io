@@ -4,6 +4,8 @@ tags: [Operate, Operation, Cumulocity]
 description: Restarting a device from the cloud
 ---
 
+import BrowserWindow from '@site/src/components/BrowserWindow';
+
 If your device is running %%te%%, you can restart it from the cloud.
 
 ### Cumulocity
@@ -12,10 +14,9 @@ If your device is running %%te%%, you can restart it from the cloud.
 
 2. Find your device and open up its homepage
 
-3. Open the *Control* menu item
+3. In the *Device Status* tile, click the *Restart* button
 
-    ![Control button](../../images/control-button-red-highlight.png)
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/device-info">
+    ![Restart Progress](../../images/restart-button-red-highlight.png)
 
-4. In the top right corner, you will find the *More* button, click it and select, *Restart device*
-
-    ![Restart device button](../../images/restart-button-red-highlight.png)
+    </BrowserWindow>
