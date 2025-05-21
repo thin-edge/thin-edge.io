@@ -48,6 +48,7 @@ impl PipelineConfig {
         self,
         js_runtime: &JsRuntime,
         config_dir: &Path,
+        source: Utf8PathBuf,
     ) -> Result<Pipeline, ConfigError> {
         let input = topic_filters(&self.input_topics)?;
         let stages = self
@@ -58,6 +59,7 @@ impl PipelineConfig {
         Ok(Pipeline {
             input_topics: input,
             stages,
+            source,
         })
     }
 }
