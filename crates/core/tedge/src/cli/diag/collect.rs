@@ -36,8 +36,24 @@ impl Command for DiagCollectCommand {
     }
 
     async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let plugins = self.init().await?;
+        let plugins = self.read_diag_plugins().await?;
         let plugin_count = plugins.len();
+        if plugin_count == 0 {
+            eprintln!(
+                "{}",
+                format!(
+                    "ERROR: No diagnostic plugins were found in {}. Please check if the directory contains any executable files",
+                    self.plugin_dir
+                )
+                .red()
+            );
+            std::process::exit(2)
+        }
+
+        file::create_directory_with_defaults(&self.diag_dir)
+            .await
+            .with_context(|| format!("failed to create directory at {}", self.diag_dir))?;
+
         let mut skipped_count = 0;
         let mut error_count = 0;
 
@@ -83,8 +99,6 @@ impl Command for DiagCollectCommand {
 
         if error_count > 0 {
             std::process::exit(1)
-        } else if skipped_count > 0 {
-            std::process::exit(2)
         } else {
             Ok(())
         }
@@ -92,17 +106,6 @@ impl Command for DiagCollectCommand {
 }
 
 impl DiagCollectCommand {
-    async fn init(&self) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
-        file::create_directory_with_defaults(&self.diag_dir).await?;
-        let plugins = self.read_diag_plugins().await.with_context(|| {
-            format!(
-                "Failed to read diag plugin directory {:?}",
-                &self.plugin_dir
-            )
-        })?;
-        Ok(plugins)
-    }
-
     async fn read_diag_plugins(&self) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
         let mut plugins = BTreeSet::new();
         let mut entries = tokio::fs::read_dir(&self.plugin_dir).await?;

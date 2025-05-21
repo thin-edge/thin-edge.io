@@ -31,6 +31,7 @@ The runner is the `tedge diag collect` command, which calls plugins that must be
 * The runner determines its own exit codes based on the exit codes of the plugins:
     * `0`: all plugins returned either `0` or `2`
     * `1`: at least one plugin returned a code other than `0` or `2`
+    * `2`: no valid plugins were found in the specified plugin directory
 * If a plugin runs too long, the runner sends a `SIGTERM` after a grace period. If the plugin does not terminate,
   it is forcibly terminated with `SIGKILL`.
 
