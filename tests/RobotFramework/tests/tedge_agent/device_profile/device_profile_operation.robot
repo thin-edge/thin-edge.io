@@ -24,8 +24,9 @@ Send device profile operation from Cumulocity
     ...    file=${CURDIR}/tedge-configuration-plugin.toml
 
     ${PROFILE_NAME}=    Set Variable    Test Profile
-    # robocop: off=misaligned-continuation-row
-    # robotidy: off
+
+    # fmt: off
+    # robocop: fmt: off
     ${PROFILE_PAYLOAD}=    Catenate    SEPARATOR=\n
     ...    {
     ...      "firmware": {
@@ -75,8 +76,8 @@ Send device profile operation locally
 
     Execute Command    curl -X PUT --data-binary "bad toml" "${config_url}"
 
-    # robocop: off=misaligned-continuation-row
-    # robotidy: off
+    # fmt: off
+    # robocop: fmt: off
     ${payload}=    Catenate    SEPARATOR=\n
     ...    {
     ...      "status": "init",

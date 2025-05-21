@@ -1,7 +1,7 @@
 # See the robocop rules list for more information about the linting rules:
-# https://robocop.readthedocs.io/en/stable/rules_list.html
-[tool.robocop]
-exclude = [
+# https://robocop.readthedocs.io/en/stable/rules/rules_list.html
+[tool.robocop.lint]
+ignore = [
     # Docs
     "missing-doc-suite",
     "missing-doc-test-case",
@@ -28,9 +28,17 @@ exclude = [
     # Styling
     "not-capitalized-test-case-title",
     "wrong-case-in-keyword-name",
+
+    # robocop >6.0
+    "no-suite-variable",
+    "no-test-variable",
+    "undefined-argument-default",
+    "undefined-argument-value",
+    "todo-in-comment"
 ]
 
+[tool.robocop.format]
 configure = [
-    "line-too-long:line_length:220",
-    "todo-in-comment:severity:I"
+    "line-too-long.line_length=220",
+    "todo-in-comment.severity=I"
 ]

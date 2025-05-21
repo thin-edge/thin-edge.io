@@ -152,8 +152,7 @@ def lint_tests(c, threshold="W"):
         # Run linting and include Info level messages
     """
     print("Checking formatting of RobotFramework tests...", file=sys.stderr)
-    c.run(f"{sys.executable} -m robotidy tests --check")
-    c.run(f"{sys.executable} -m robocop --report rules_by_error_type --threshold {threshold}")
+    c.run(f"{sys.executable} -m robocop check --threshold {threshold}")
 
 @task(name="format")
 def formatcode(c):
@@ -165,7 +164,7 @@ def format_tests(c):
     """Format RobotFramework tests
     """
     print("Formatting of RobotFramework tests...", file=sys.stderr)
-    c.run(f"{sys.executable} -m robotidy tests")
+    c.run(f"{sys.executable} -m robocop format")
 
 @task(name="reports")
 def start_server(c, port=9000):
