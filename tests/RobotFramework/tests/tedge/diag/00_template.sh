@@ -17,6 +17,7 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         --config-dir)
+            # shellcheck disable=SC2034
             CONFIG_DIR="$2"
             shift 2
             ;;
