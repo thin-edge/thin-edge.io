@@ -1,6 +1,9 @@
 use crate::command::Command;
+use crate::error;
+use crate::info;
 use crate::log::MaybeFancy;
 use crate::log::Spinner;
+use crate::warning;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -15,7 +18,6 @@ use tedge_api::LoggedCommand;
 use tedge_config::models::AbsolutePath;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file;
-use yansi::Paint;
 
 #[derive(Debug)]
 pub struct DiagCollectCommand {
@@ -39,14 +41,7 @@ impl Command for DiagCollectCommand {
         let plugins = self.read_diag_plugins().await?;
         let plugin_count = plugins.len();
         if plugin_count == 0 {
-            eprintln!(
-                "{}",
-                format!(
-                    "ERROR: No diagnostic plugins were found in {}. Please check if the directory contains any executable files",
-                    self.plugin_dir
-                )
-                .red()
-            );
+            error!("No diagnostic plugins were found in {}. Please check if the directory contains any executable files", self.plugin_dir);
             std::process::exit(2)
         }
 
@@ -66,27 +61,21 @@ impl Command for DiagCollectCommand {
                 Ok(exit_status) if exit_status.success() => {}
                 Ok(exit_status) if exit_status.code() == Some(2) => {
                     skipped_count += 1;
-                    eprintln!("{}", format!("INFO: {plugin} is marked skipped").green());
+                    info!("{plugin} is marked skipped");
                 }
                 Ok(exit_status) => {
                     error_count += 1;
-                    eprintln!(
-                        "{}",
-                        format!("ERROR: {plugin} failed with exit status: {exit_status}").red()
-                    );
+                    error!("{plugin} failed with exit status: {exit_status}");
                 }
                 Err(err) => {
                     error_count += 1;
-                    eprintln!(
-                        "{}",
-                        format!("ERROR: {plugin} failed with error: {err}").red()
-                    );
+                    error!("{plugin} failed with error: {err}");
                 }
             }
         }
 
         let success_count = plugin_count - skipped_count - error_count;
-        eprintln!("Total {plugin_count} executed: {success_count} completed, {error_count} failed, {skipped_count} skipped");
+        eprintln!("\nTotal {plugin_count} executed: {success_count} completed, {error_count} failed, {skipped_count} skipped");
 
         self.compress_into_a_tarball()
             .with_context(|| "Failed to compress diagnostic information")?;
@@ -115,20 +104,10 @@ impl DiagCollectCommand {
                 if path.is_file() && is_executable(&path).await {
                     plugins.insert(path);
                 } else {
-                    eprintln!(
-                        "{}",
-                        format!(
-                            "WARN: Skipping plugin as it is not executable. file: {:?}",
-                            entry.path()
-                        )
-                        .yellow()
-                    );
+                    warning!("Skipping non-executable file: {:?}", entry.path());
                 }
             } else {
-                eprintln!(
-                    "{}",
-                    format!("WARN: Ignoring invalid path: {:?}", entry.path()).yellow()
-                );
+                warning!("Ignoring invalid path: {:?}", entry.path());
             }
         }
         Ok(plugins)
@@ -177,7 +156,7 @@ impl DiagCollectCommand {
         tar.append_dir_all(&self.tarball_name, &self.diag_dir)?;
         tar.finish()?;
 
-        println!("Diagnostic information saved to {tarball_path}");
+        eprintln!("Diagnostic information saved to {tarball_path}");
         Ok(tarball_path)
     }
 }
