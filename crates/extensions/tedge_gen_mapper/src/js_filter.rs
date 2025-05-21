@@ -50,6 +50,10 @@ impl JsFilter {
         }
     }
 
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
     /// Process a message returning zero, one or more messages
     ///
     /// The "process" function of the JS module is passed 3 arguments
