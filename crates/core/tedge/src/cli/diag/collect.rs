@@ -26,7 +26,7 @@ pub struct DiagCollectCommand {
     pub working_dir: AbsolutePath,
     pub diag_dir: AbsolutePath,
     pub tarball_name: String,
-    pub clean_tmp_output: bool,
+    pub keep_tmp_output: bool,
     pub graceful_timeout: Duration,
     pub forceful_timeout: Duration,
 }
@@ -80,7 +80,7 @@ impl Command for DiagCollectCommand {
         self.compress_into_a_tarball()
             .with_context(|| "Failed to compress diagnostic information")?;
 
-        if self.clean_tmp_output {
+        if !self.keep_tmp_output {
             tokio::fs::remove_dir_all(&self.diag_dir)
                 .await
                 .with_context(|| format!("Failed to delete directory: {}", self.diag_dir))?;
@@ -273,7 +273,7 @@ mod tests {
                 working_dir: AbsolutePath::from_path(working_dir.utf8_path_buf()).unwrap(),
                 diag_dir: AbsolutePath::from_path(diag_dir.utf8_path_buf()).unwrap(),
                 tarball_name: "tarball".to_string(),
-                clean_tmp_output: true,
+                keep_tmp_output: false,
                 graceful_timeout: Duration::from_secs(60),
                 forceful_timeout: Duration::from_secs(60),
             }
