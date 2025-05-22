@@ -169,7 +169,7 @@ impl TopicFilter {
     }
 
     /// The list of `SubscribeFilter` expected by `mqttc`
-    pub(crate) fn filters(&self) -> Vec<SubscribeFilter> {
+    pub fn filters(&self) -> Vec<SubscribeFilter> {
         let qos = self.qos;
         self.patterns
             .iter()
@@ -182,6 +182,14 @@ impl TopicFilter {
 
     pub fn patterns(&self) -> &Vec<String> {
         &self.patterns
+    }
+
+    pub fn remove(&mut self, topic: &str) -> Option<String> {
+        if let Some((index, _)) = self.patterns.iter().enumerate().find(|(_, p)| *p == topic) {
+            Some(self.patterns.swap_remove(index))
+        } else {
+            None
+        }
     }
 }
 
