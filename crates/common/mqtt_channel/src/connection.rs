@@ -4,6 +4,7 @@ use crate::MqttError;
 use crate::MqttMessage;
 use crate::PubChannel;
 use crate::SubChannel;
+use crate::TopicFilter;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::SinkExt;
@@ -20,6 +21,7 @@ use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -38,6 +40,10 @@ pub struct Connection {
 
     /// A channel to notify that all the published messages have been actually published.
     pub pub_done: oneshot::Receiver<()>,
+
+    pub client: AsyncClient,
+
+    pub subscriptions: Arc<Mutex<TopicFilter>>,
 }
 
 impl Connection {
@@ -108,7 +114,7 @@ impl Connection {
             pub_count.clone(),
         ));
         tokio::spawn(Connection::sender_loop(
-            mqtt_client,
+            mqtt_client.clone(),
             published_receiver,
             error_sender,
             config.last_will_message.clone(),
@@ -121,6 +127,8 @@ impl Connection {
             published: published_sender,
             errors: error_receiver,
             pub_done: pub_done_receiver,
+            client: mqtt_client,
+            subscriptions: config.subscriptions.clone(),
         })
     }
 
@@ -160,7 +168,7 @@ impl Connection {
                     };
                     info!(target: "MQTT", "Connection established");
 
-                    let subscriptions = config.subscriptions.filters();
+                    let subscriptions = config.subscriptions.lock().unwrap().filters();
 
                     // Need check here otherwise it will hang waiting for a SubAck, and none will come when there is no subscription.
                     if subscriptions.is_empty() {
@@ -289,7 +297,7 @@ impl Connection {
                             // If session_name is not provided or if the broker session persistence
                             // is not enabled or working, then re-subscribe
 
-                            let subscriptions = config.subscriptions.filters();
+                            let subscriptions = config.subscriptions.lock().unwrap().filters();
                             // Need check here otherwise it will hang waiting for a SubAck, and none will come when there is no subscription.
                             if subscriptions.is_empty() {
                                 break;
