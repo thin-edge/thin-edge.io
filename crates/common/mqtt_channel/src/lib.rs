@@ -54,3 +54,4 @@ pub use futures::Stream;
 pub use futures::StreamExt;
 
 pub use rumqttc::QoS;
+pub use rumqttc::AsyncClient;
