@@ -4,6 +4,7 @@ use crate::pipeline::DateTime;
 use crate::pipeline::Message;
 use crate::pipeline::Pipeline;
 use crate::InputMessage;
+use crate::OutputMessage;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
@@ -21,7 +22,7 @@ use tracing::error;
 use tracing::info;
 
 pub struct GenMapper {
-    pub(super) messages: SimpleMessageBox<InputMessage, MqttMessage>,
+    pub(super) messages: SimpleMessageBox<InputMessage, OutputMessage>,
     pub(super) pipelines: HashMap<String, Pipeline>,
     pub(super) js_runtime: JsRuntime,
     pub(super) config_dir: PathBuf,
@@ -56,7 +57,7 @@ impl Actor for GenMapper {
                             if matches!(path.extension(), Some("js" | "ts")) {
                                 self.reload_filter(path).await;
                             } else if path.extension() == Some("toml") {
-                                self.reload_toml(path).await;
+                                self.reload_pipeline(path).await;
                             }
                         },
                         Some(InputMessage::FsWatchEvent(e)) => {
@@ -91,7 +92,7 @@ impl GenMapper {
         }
     }
 
-    async fn reload_toml(&mut self, path: Utf8PathBuf) {
+    async fn reload_pipeline(&mut self, path: Utf8PathBuf) {
         for pipeline in self.pipelines.values_mut() {
             if pipeline.source == path {
                 let Ok(source) = tokio::fs::read_to_string(&path).await else {
@@ -108,6 +109,7 @@ impl GenMapper {
                 match config.compile(&self.js_runtime, &self.config_dir, path.clone()) {
                     Ok(p) => {
                         *pipeline = p;
+                        self.messages.send(OutputMessage::TopicFilter(pipeline.input_topics.clone())).await.unwrap();
                         info!("Reloaded pipeline {path}");
                     }
                     Err(e) => {
@@ -125,7 +127,7 @@ impl GenMapper {
                 Ok(messages) => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
-                            Ok(message) => self.messages.send(message).await?,
+                            Ok(message) => self.messages.send(OutputMessage::MqttMessage(message)).await?,
                             Err(err) => {
                                 error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
                             }
@@ -148,7 +150,7 @@ impl GenMapper {
                 Ok(messages) => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
-                            Ok(message) => self.messages.send(message).await?,
+                            Ok(message) => self.messages.send(OutputMessage::MqttMessage(message)).await?,
                             Err(err) => {
                                 error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
                             }

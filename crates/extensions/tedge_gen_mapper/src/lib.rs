@@ -9,6 +9,8 @@ use crate::js_filter::JsRuntime;
 use crate::pipeline::Pipeline;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use tedge_mqtt_ext::PublishOrSubscribe;
+use tedge_mqtt_ext::SubscriptionRequest;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::path::Path;
@@ -31,10 +33,11 @@ use tracing::error;
 use tracing::info;
 
 fan_in_message_type!(InputMessage[MqttMessage, FsWatchEvent]: Clone, Debug, Eq, PartialEq);
+fan_in_message_type!(OutputMessage[MqttMessage, TopicFilter]: Clone, Debug, Eq, PartialEq);
 
 pub struct GenMapperBuilder {
     config_dir: PathBuf,
-    message_box: SimpleMessageBoxBuilder<InputMessage, MqttMessage>,
+    message_box: SimpleMessageBoxBuilder<InputMessage, OutputMessage>,
     pipelines: HashMap<String, Pipeline>,
     pipeline_specs: HashMap<String, (Utf8PathBuf, PipelineConfig)>,
     js_runtime: JsRuntime,
@@ -124,12 +127,15 @@ impl GenMapperBuilder {
 
     pub fn connect(
         &mut self,
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<PublishOrSubscribe>),
     ) {
         mqtt.connect_mapped_sink(self.topics(), &self.message_box, |msg| {
             Some(InputMessage::MqttMessage(msg))
         });
-        self.message_box.connect_sink(NoConfig, mqtt);
+        self.message_box.connect_mapped_sink(NoConfig, mqtt, |msg| match msg {
+            OutputMessage::MqttMessage(mqtt) => Some(PublishOrSubscribe::Publish(mqtt)),
+            OutputMessage::TopicFilter(filter) => Some(PublishOrSubscribe::Subscribe(SubscriptionRequest(filter))),
+        });
     }
 
     pub fn connect_fs(&mut self, fs: &mut impl MessageSource<FsWatchEvent, PathBuf>) {
