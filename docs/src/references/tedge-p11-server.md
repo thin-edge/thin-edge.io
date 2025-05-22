@@ -13,7 +13,7 @@ have the permission to view/access cryptographic tokens, e.g. because it runs in
 
 If you can load dynamic objects at runtime and can access the token directly, `tedge-p11-server` can
 be used, but you can also use the `module` cryptoki mode, where the module is used directly in
-tedge. [See guide](./hsm-support.md#part-2-thin-edge-setup).
+tedge. [See guide](./hsm-support.md#step-2-tedge-setup).
 
 
 ## Connecting to the server from tedge

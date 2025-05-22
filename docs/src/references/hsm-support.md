@@ -85,7 +85,7 @@ library, but in all cases, the goal is to:
 
 :::
 
-### Step 1: Setup the cryptographic token
+### Step 1: Setup the cryptographic token {#step-1-hsm-setup}
 
 1. Install SoftHSM2 (to create the token and key) and `p11tool` (to view the [PKCS #11 URI][p11uri]
    of the key).
@@ -166,7 +166,7 @@ For SoftHSM configuration, see [SoftHSM README](https://github.com/softhsm/softH
         ID: 01
     ```
 
-### Step 2: thin-edge setup
+### Step 2: %%te%% setup {#step-2-tedge-setup}
 
 Next, we're going to configure `tedge` to use the token directly using module mode.
 
@@ -191,7 +191,7 @@ provide the URI for the key to select a correct one.
 
     :::
 
-### Step 3: Reconnect
+### Step 3: Reconnect {#step-3-reconnect}
 
 1. Enable the built-in bridge. PKCS #11 doesn't work when using mosquitto as a bridge.
     ```sh
@@ -230,7 +230,7 @@ provide the URI for the key to select a correct one.
 
     `cryptoki: true` in the connection summary confirms that we connected using our PKCS #11 token.
 
-## Key selection
+## Key selection {#key-selection}
 
 <!-- at the moment this isn't tested very extensively -->
 
