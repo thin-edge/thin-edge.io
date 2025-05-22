@@ -17,13 +17,13 @@ This is achieved by signing a TLS 1.3 CertificateVerify message by the PKCS #11 
 This happens only once when establishing an MQTT connection over TLS and will only need to be
 repeated when a new connection is opened.
 
-Any HSM which has a `PKCS#11` interface are supported, some examples of such modules are:  
+Any HSM which has a `PKCS#11` interface are supported, some examples of such modules are:
 
-* USB based devices like NitroKey HSM 2, Yubikey 5  
-* TPM 2.0 (Trusted Platform Module)  
-* ARM TrustZone (via OP-TEE)  
+* USB based devices like NitroKey HSM 2, Yubikey 5
+* TPM 2.0 (Trusted Platform Module)
+* ARM TrustZone (via OP-TEE)
 
-For now, HSM is only used for the TLS MQTT connection between the device and C8y cloud.  
+For now, HSM is only used for the TLS MQTT connection between the device and C8y cloud.
 Additionally, the built-in bridge has to be used and the user has to device certificate corresponds
 to private key stored in the HSM (a step that depends on the actual key).
 
@@ -162,7 +162,7 @@ For SoftHSM configuration, see [SoftHSM README](https://github.com/softhsm/softH
         URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=my-token;id=%01;object=my-key;type=private
         Type: Private key (EC/ECDSA-SECP256R1)
         Label: my-key
-        Flags: CKA_PRIVATE; CKA_SENSITIVE; 
+        Flags: CKA_PRIVATE; CKA_SENSITIVE;
         ID: 01
     ```
 
