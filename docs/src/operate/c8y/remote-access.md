@@ -4,6 +4,8 @@ tags: [Operate, Cumulocity, Remote Access]
 description: Accessing devices remote using tcp based protocols (e.g. ssh, vnc etc.)
 ---
 
+import BrowserWindow from '@site/src/components/BrowserWindow';
+
 # Remote Access
 
 To access a device remotely that runs %%te%%, a plugin of the operation plugin concept is used. The tedge-mapper is checking for cloud remote access operation and is triggering the particular plugin. You can use the remote access tab in device management to access the device via SSH or VNC.
@@ -27,30 +29,25 @@ Make sure %%te%% is connected to Cumulocity.
 
 You device within Cumulocity should look similar to this (the "Remote access" tab should be visible in the menu on the left):
 
-<p align="center">
-    <img
-        src={require('../../images/c8y-remote-access_dm.png').default}
-        alt="Cumulocity remote access device management"
-        width="60%"
-    />
-</p>
+<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/remote_access">
+
+![Cumulocity remote access endpoint list](../../images/c8y-remote-access_dm.png)
+
+</BrowserWindow>
 
 You can configure now within the Remote access tab to which e.g. VNC or SSH server you want to jump to. Please keep in mind that the Host is from the %%te%% point of view.
 
-<p align="center">
-    <img
-        src={require('../../images/c8y-remote-access_endpoint.png').default}
-        alt="Cumulocity remote access endpoint"
-        width="40%"
-    />
-</p>
 
-If you click on connect after the proper configuration an websocket window opens and %%te%% triggers the <code>c8y-remote-access-connect</code> plugin to reach that websocket.
+<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/remote_access">
 
-<p align="center">
-    <img
-        src={require('../../images/c8y-remote-access_websocket.png').default}
-        alt="Cumulocity remote access websocket"
-        width="40%"
-    />
-</p>
+![Cumulocity remote access endpoint](../../images/c8y-remote-access_endpoint.png)
+
+</BrowserWindow>
+
+If you click on connect after the proper configuration an websocket window opens and %%te%% triggers the **c8y-remote-access-connect-plugin** to reach that websocket.
+
+<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/ssh/1">
+
+![Cumulocity remote access websocket](../../images/c8y-remote-access_websocket.png)
+
+</BrowserWindow>

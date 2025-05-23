@@ -4,6 +4,8 @@ tags: [Operate, Cumulocity, Configuration]
 description: Managing configuration on devices
 ---
 
+import BrowserWindow from '@site/src/components/BrowserWindow';
+
 With %%te%%, you can manage config files on a device by using the [Cumulocity configuration management feature](https://cumulocity.com/docs/device-management-application/managing-device-data/#managing-configurations) as a part of Device Management.
 
 If you are new to the Cumulocity **Configuration Management** feature,
@@ -46,7 +48,11 @@ You can also configure the `tedge-configuration-plugin.toml` from the cloud late
 Navigate to your Cumulocity Device Management and the desired device. Open its **Configuration** tab.
 You can find `tedge-configuration-plugin` and more are listed as supported configuration types, as declared in the plugin configuration file in step 1.
 
+<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device-configuration">
+
 ![Cumulocity Configuration Management Upload](../../images/c8y-config-plugin-upload.png)
+
+</BrowserWindow>
 
 This is the configuration file of `tedge-configuration-plugin`, where you can add file entries that you want to manage with Cumulocity.
 
@@ -58,7 +64,11 @@ The `tedge-configuration-plugin.toml` file can also be updated from the cloud in
 
 Then, go back to the **Configuration** tab of your desired device in Cumulocity.
 
+<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device-configuration">
+
 ![Cumulocity Configuration Management Download](../../images/c8y-config-plugin-download.png)
+
+</BrowserWindow>
 
 Click on the config file entry from the **DEVICE SUPPORTED CONFIGURATIONS** files list.
 You can choose the file that you uploaded from the **AVAILABLE SUPPORTED CONFIGURATIONS** section, and then apply that file to your device by clicking on the **Send configuration to device** button.

@@ -6,6 +6,7 @@ sidebar_position: 1
 
 import UserContext from '@site/src/components/UserContext';
 import UserContextForm from '@site/src/components/UserContextForm';
+import BrowserWindow from '@site/src/components/BrowserWindow';
 
 :::tip
 #### User Context {#user-context}
@@ -186,13 +187,15 @@ sudo tedge connect c8y
 
 When the connection is established, the device will be created in Cumulocity. When you go to Device Management &rarr; Devices &rarr; All devices, the device is visible in the list.
 
-<p align="center">
-    <img
+<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device">
+
+<img
         src={require('./images/DevicesList.png').default}
         alt="All devices"
-        width="40%"
+        width="100%"
     />
-</p>
+
+</BrowserWindow>
 
 ## Step 3 Sending Device Data
 
@@ -238,7 +241,7 @@ A simple event can be represented in %%te%% JSON as follows:
 {
   "text": "A door was closed"
 }
-```
+``` 
 
 The endpoint that is supervised by the tedge-mapper for events is:
 
@@ -259,7 +262,11 @@ However an explicit time can be given as a Unix timestamp, as in `"time": 170679
 
 When you go to events (`Device management` &rarr; `your device` &rarr; `events`), you should see this:
 
+<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/events">
+
 ![Sending Events](./images/SendingEvents.png)
+
+</BrowserWindow>
 
 ## Step 4 Monitor the device
 
@@ -318,7 +325,12 @@ INFO: Connected
 ```
 
 The monitoring data will appear in Cumulocity on the device in the measurement section.
-![CollectdMeasurements](./images/CollectdMeasurements.png)
+
+<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/measurements">
+
+![CollectdMeasurements](./images/collectd-metrics.png)
+
+</BrowserWindow>
 
 
 ### Edit Collectd
@@ -362,7 +374,9 @@ sudo tedge reconnect c8y
 4. %%te%% contains a default plugin supporting `debian` packages from both `apt` repositories as well as remote locations.
     If you prefer to use packages from an `apt` repository, select the `Provide a file path` option and give an empty space (' ').
 
-    ![Add new software](./images/AddSoftware.png)
+    <p align="center">
+        <img width="40%" src={require('./images/AddSoftware.png').default} alt="Add new software" />
+    </p>
 
     If you would like to use other sources (eg. a file uploaded to your cloud or an external source), provide the full URL to the file.
     If you would like to upload your binaries, select `Upload a binary` option and upload the file to Cumulocity software repository.
@@ -423,8 +437,11 @@ If there is a need to change one or more configuration files, there is more than
 
 In this tutorial the last option is explained, there are some steps to be taken:
 
-![Configuration Management](./images/ConfigurationManagement.png)
+<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/configuration">
 
+    ![Configuration Management](./images/ConfigurationManagement.png)
+
+</BrowserWindow>
 
 1. Save the configuration file to the repository (`Device management` &rarr; `configuration`. In the list of configuration files  pick  a file to change and click on `Save to repository`).
 2. Go to `Management` &rarr; `configuration` snapshots repository.
@@ -436,9 +453,13 @@ In this tutorial the last option is explained, there are some steps to be taken:
 8. Then click on  `send configuration to device` the configuration file is uploaded to the device.
 9. If you then click on `get snapshot from device` (select the right configuration file in device-supported configurations), you will see the change of the configuration file.
 
+<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/device-info">
+
+    ![Change Configuration](./images/ChangeConfiguration.png)
+
+</BrowserWindow>
 
 
-![Change Configuration](./images/ChangeConfiguration.png)
 
 ### Change collectd configuration file via Cumulocity {#change-collectd-configuration}
 
@@ -498,7 +519,11 @@ To see the content of the log files in Cumulocity, take the following steps:
 6. Refresh the page.
 7. Click on the requested log file, you should see something similar to this:
 
-![Request Log file](./images/RequestLogfile.png)
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/logs">
+
+        ![Request Log file](./images/RequestLogfile.png)
+
+    </BrowserWindow>
 
 If `tedge-log-plugin.toml` is added to the `tedge-configuration-plugin.toml` it is possible to do the administration from there.
 

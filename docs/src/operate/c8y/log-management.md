@@ -30,5 +30,6 @@ any file inside "/var/log/tedge/agent/" that starts with "software-".
 The `type` key in the toml is the name of the log with you will see in the
 Cumulocity UI:
 
-![Log request dropdown](../../images/tedge-log-plugin_log-types.png)
-
+<p align="center">
+    <img width="40%" src={require('../../images/tedge-log-plugin_log-types.png').default} alt="Log request dropdown" />
+</p>

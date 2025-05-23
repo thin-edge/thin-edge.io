@@ -4,6 +4,8 @@ tags: [Operate, Installation, Software Management]
 description: Managing software on devices
 ---
 
+import BrowserWindow from '@site/src/components/BrowserWindow';
+
 ## Management
 
 %%te%% enables you to manage the software installed on your device. The following sections details how to install and remove software packages.
@@ -16,7 +18,11 @@ For more detailed information on the Cumulocity **Device Management** features, 
 
 1. Navigate to the *Management* &rarr; *Software repository* page
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/software">
+
     ![Select software](images/software-repo-1-list.png)
+
+    </BrowserWindow>
 
     The page will display all of the software packages which are are available for to be installed on a device.
 
@@ -36,11 +42,19 @@ For more detailed information on the Cumulocity **Device Management** features, 
 
 1. Select the software you want to install on the device
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/software">
+
     ![Select software](images/software-install-1-select.png)
+
+    </BrowserWindow>
 
 2. Review the software changes
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/software">
+
     ![Review software](images/software-install-2-review.png)
+
+    </BrowserWindow>
 
     :::info
     You can combine installing and removing software in the same operation
@@ -48,22 +62,30 @@ For more detailed information on the Cumulocity **Device Management** features, 
 
 3. Select *Apply Changes* and wait for the operation to complete
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/software">
+
     ![Apply software changes](images/software-install-3-apply.png)
 
-4. Use the installed package
-
-    ![Software changes finished](images/software-install-5-use-result.png)
+    </BrowserWindow>
 
 
 ### To delete software from a device {#delete}
 
 1. Select the software you want to remove from the device
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/software">
+
     ![Select software](images/software-remove-1-select.png)
+
+    </BrowserWindow>
 
 2. Review the software changes
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/software">
+
     ![Review software](images/software-remove-2-review.png)
+
+    </BrowserWindow>
 
     :::note
     You can combine installing and removing software in the same operation
@@ -71,9 +93,12 @@ For more detailed information on the Cumulocity **Device Management** features, 
 
 3. Select *Apply Changes* and wait for the operation to complete
 
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/software">
+
     ![Apply software changes](images/software-remove-3-apply.png)
 
-    ![Software changes finished](images/software-remove-4-done.png)
+    </BrowserWindow>
+
 
 ### Updating to the latest %%te%% version {#self-update}
 
@@ -98,11 +123,7 @@ Below shows instructions on how to update %%te%% to the latest version:
 
 2. Select the `tedge-full` software you want to install on the device
 
-    ![Select software](images/software-self-update-1-select.png)
-
 3. Review the software changes and select *Apply changes*
-
-    ![Select software](images/software-self-update-2-review.png)
 
 4. Wait for the operation to complete
 
@@ -190,7 +211,3 @@ When hosting the linux packages within Cumulocity then ensure that:
 
     If the package name and version does not match, then the package might fail to be installed due to a validation error.
 * the *Device type filter* property is set in the Cumulocity Software repository if the packages is only valid for a specific CPU architecture. The *Device type filter* is used to filter which packages are available for different devices types to ensure you can only install compatible packages on a given device.
-
-    <p align="center">
-        <img width="40%" src={require('./images/software-repo-hosted-binary.png').default} alt="Hosted binary" />
-    </p>

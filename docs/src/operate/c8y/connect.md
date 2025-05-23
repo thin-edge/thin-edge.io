@@ -7,6 +7,7 @@ sidebar_position: 0
 
 import UserContext from '@site/src/components/UserContext';
 import UserContextForm from '@site/src/components/UserContextForm';
+import BrowserWindow from '@site/src/components/BrowserWindow';
 
 :::tip
 #### User Context {#user-context}
@@ -79,17 +80,21 @@ The following steps detail how to register a device using the Cumulocity [Device
 
 1. Click *Register device* and select *General*
 
-    <p align="center">
-        <img width="60%" src={require('./images/register-c8y-ca-register-1-device.png').default} alt="Register device" />
-    </p>
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/deviceregistration">
+
+    ![Register device](./images/register-c8y-ca-register-1-device.png)
+
+    </BrowserWindow>
 
 1. In the *Register general devices* dialog box, select the "Create device certificates during device registration" option
 
 1. Fill in the following required fields and click *Next*
 
-    <p align="center">
-        <img width="60%" src={require('./images/register-c8y-ca-register-2-form-details.png').default} alt="Register device form" />
-    </p>
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/deviceregistration">
+
+    ![Register device form](./images/register-c8y-ca-register-2-form-details.png)
+
+    </BrowserWindow>
 
     |Field|Description|
     |----|-----------|
@@ -102,9 +107,11 @@ The following steps detail how to register a device using the Cumulocity [Device
 
 1. Close the form
 
-    <p align="center">
-        <img width="60%" src={require('./images/register-c8y-ca-register-3-form-complete.png').default} alt="Close registration form" />
-    </p>
+    <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/deviceregistration">
+
+    ![Close registration form](./images/register-c8y-ca-register-3-form-complete.png)
+
+    </BrowserWindow>
 
 1. On the device, run the following command to download the device's certificate (you will be prompted for the one-time password)
 
