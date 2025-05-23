@@ -178,3 +178,7 @@ publish-linux-target TARGET=DEFAULT_TARGET *ARGS='':
 # Generate changelog for a release
 generate-changelog *ARGS:
     ./ci/changelog/changelog.sh {{ARGS}}
+
+# Remove unused/unreferenced images
+clean-unused-images:
+    ./ci/admin/check_unused_images.sh
