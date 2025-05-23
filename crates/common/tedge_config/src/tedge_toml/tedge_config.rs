@@ -908,6 +908,12 @@ define_tedge_config! {
         #[tedge_config(example = "127.0.0.1,example.com,192.168.1.0/24")]
         no_proxy: String,
     },
+
+    diag: {
+        /// The directories where diagnostic plugins are stored
+        #[tedge_config(example = "/usr/share/diag-plugins,/etc/tedge/diag-plugins", default(value = "/usr/share/tedge/diag-plugins"))]
+        plugin_paths: TemplatesSet,
+    }
 }
 
 static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();

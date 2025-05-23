@@ -15,11 +15,15 @@ The runner is the `tedge diag collect` command, which calls plugins that must be
 
 ## Runner
 
+* The runner supports multiple plugin directory paths, which are resolved in the following order of precedence:
+    1. Command-line arguments (e.g. `--plugin-dir /pathA --plugin-dir /pathB` or `--plugin-dir "/pathA,/pathB"`)
+    2. Environmental variable (`TEDGE_DIAG_PLUGIN_PATHS`)
+    3. `tedge config` value (`diag.plugin_paths`)
 * The runner creates a temporary output directory at `<OUTPUT_DIR>/<TARBALL_NAME>` (e.g. `/tmp/tedge-diag-now`) and
   subdirectories for each plugin at
   `<OUTPUT_DIR>/<TARBALL_NAME>/<PLUGIN_NAME>` (e.g. `/tmp/tedge-diag-now/01_tedge`) to collect output files.
 * The runner does not need to understand the content of each plugin script.
-  It blindly executes all plugin scripts located under `<PLUGIN_DIR>` (e.g. `/etc/tedge/diag-plugins`) using the
+  It blindly executes all plugin scripts located under `<PLUGIN_DIR>` (e.g. `/usr/share/tedge/diag-plugins`) using the
   following arguments:
     * arg1: `collect`
     * option1 `--output-dir <PATH>`: the path to the temporary output subdirectory for the plugin (e.g.
@@ -40,7 +44,7 @@ The runner is the `tedge diag collect` command, which calls plugins that must be
 #### Plugin Directory
 
 ```
-/etc/tedge/diag-plugins/
+/usr/share/tedge/diag-plugins/
 ├─ 01_tedge.sh
 ├─ 02_os.sh
 ├─ 03_mqtt.sh
@@ -76,13 +80,14 @@ The runner is the `tedge diag collect` command, which calls plugins that must be
     * `0`: successful execution
     * `2`: plugin skipped (not applicable)
     * any other non-zero value: error occurred
+* Plugins with the `.ignore` extension will be ignored.
 
 ### Example Plugin Execution
 
-The 00_tedge.sh plugin is invoked by the runner as follows:
+The 01_tedge.sh plugin is invoked by the runner as follows:
 
 ```shell
-/etc/tedge/diag-plugins/00_tedge.sh collect \
-  --output-dir "/tmp/tedge-diag-now/00_tedge" \
+/usr/share/tedge/diag-plugins/01_tedge.sh collect \
+  --output-dir "/tmp/tedge-diag-now/01_tedge" \
   --config-dir "/etc/tedge"
 ```

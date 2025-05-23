@@ -22,7 +22,7 @@ use tracing::debug;
 
 #[derive(Debug)]
 pub struct DiagCollectCommand {
-    pub plugin_dir: AbsolutePath,
+    pub plugin_dir: BTreeSet<AbsolutePath>,
     pub config_dir: AbsolutePath,
     pub working_dir: AbsolutePath,
     pub diag_dir: AbsolutePath,
@@ -42,7 +42,7 @@ impl Command for DiagCollectCommand {
         let plugins = self.read_diag_plugins().await?;
         let plugin_count = plugins.len();
         if plugin_count == 0 {
-            error!("No diagnostic plugins were found in {}", self.plugin_dir);
+            error!("No diagnostic plugins were found");
             std::process::exit(2)
         }
 
@@ -98,9 +98,25 @@ impl Command for DiagCollectCommand {
 impl DiagCollectCommand {
     async fn read_diag_plugins(&self) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
         let mut plugins = BTreeSet::new();
-        let mut entries = tokio::fs::read_dir(&self.plugin_dir)
-            .await
-            .with_context(|| format!("Failed to read directory: {}", self.plugin_dir))?;
+        for dir_path in &self.plugin_dir {
+            match Self::read_diag_plugins_from_dir(dir_path.as_ref()).await {
+                Ok(plugin_files) => {
+                    plugins.extend(plugin_files);
+                }
+                Err(err) => {
+                    warning!("Failed to read plugins from {dir_path}: {err}");
+                    continue;
+                }
+            }
+        }
+        Ok(plugins)
+    }
+
+    async fn read_diag_plugins_from_dir(
+        dir_path: &Utf8Path,
+    ) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
+        let mut plugins = BTreeSet::new();
+        let mut entries = tokio::fs::read_dir(&dir_path).await?;
 
         while let Some(entry) = entries.next_entry().await? {
             if let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) {
@@ -186,12 +202,44 @@ mod tests {
     async fn test_read_diag_plugins() {
         let ttd = TempTedgeDir::new();
         let command = DiagCollectCommand::new(&ttd);
-        with_exec_permission(command.plugin_dir.join("plugin_a"), "pwd");
-        with_exec_permission(command.plugin_dir.join("plugin_b"), "pwd");
-        with_exec_permission(command.plugin_dir.join("plugin_c"), "pwd");
+        with_exec_permission(command.first_plugin_dir().join("plugin_a"), "pwd");
+        with_exec_permission(command.first_plugin_dir().join("plugin_b"), "pwd");
+        with_exec_permission(command.first_plugin_dir().join("plugin_c"), "pwd");
 
         let plugins = command.read_diag_plugins().await.unwrap();
         assert_eq!(plugins.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_read_diag_plugins_from_multiple_dirs() {
+        let ttd = TempTedgeDir::new();
+        let second_plugin_dir = ttd.dir("plugins_2");
+        let third_plugin_dir = ttd.dir("plugins_3");
+        let mut command = DiagCollectCommand::new(&ttd);
+        command.add_plugin_dir(second_plugin_dir.utf8_path());
+        command.add_plugin_dir(third_plugin_dir.utf8_path());
+        with_exec_permission(command.first_plugin_dir().join("plugin_1a"), "pwd");
+        with_exec_permission(command.first_plugin_dir().join("plugin_1b"), "pwd");
+        with_exec_permission(second_plugin_dir.utf8_path().join("plugin_2a"), "pwd");
+        with_exec_permission(second_plugin_dir.utf8_path().join("plugin_2b"), "pwd");
+        with_exec_permission(third_plugin_dir.utf8_path().join("plugin_3a"), "pwd");
+        with_exec_permission(third_plugin_dir.utf8_path().join("plugin_3b"), "pwd");
+
+        let plugins = command.read_diag_plugins().await.unwrap();
+        assert_eq!(plugins.len(), 6);
+    }
+
+    #[tokio::test]
+    async fn test_read_diag_plugins_ignores_not_existing_plugin_dirs() {
+        let ttd = TempTedgeDir::new();
+        let second_plugin_dir = ttd.utf8_path().join("plugins_2");
+        assert!(!second_plugin_dir.exists());
+
+        let mut command = DiagCollectCommand::new(&ttd);
+        command.add_plugin_dir(&second_plugin_dir);
+
+        let plugins = command.read_diag_plugins().await.unwrap();
+        assert_eq!(plugins.len(), 0);
     }
 
     #[tokio::test]
@@ -201,7 +249,13 @@ mod tests {
         ttd.dir("plugins").file("plugin_a");
         ttd.dir("plugins").file("plugin_b");
         ttd.dir("plugins").dir("directory");
-        with_exec_permission(command.plugin_dir.join("directory").join("plugin_c"), "pwd");
+        with_exec_permission(
+            command
+                .first_plugin_dir()
+                .join("directory")
+                .join("plugin_c"),
+            "pwd",
+        );
 
         let plugins = command.read_diag_plugins().await.unwrap();
         assert_eq!(plugins.len(), 0);
@@ -222,8 +276,11 @@ mod tests {
     async fn test_execute_diag_plugins() {
         let ttd = TempTedgeDir::new();
         let command = DiagCollectCommand::new(&ttd);
-        let plugin_a_path = command.plugin_dir.join("plugin_a.sh");
-        with_exec_permission(command.plugin_dir.join(&plugin_a_path), "#!/bin/sh\nls");
+        let plugin_a_path = command.first_plugin_dir().join("plugin_a.sh");
+        with_exec_permission(
+            command.first_plugin_dir().join(&plugin_a_path),
+            "#!/bin/sh\nls",
+        );
 
         let status = command.execute_diag_plugin(&plugin_a_path).await.unwrap();
         assert!(status.success());
@@ -287,7 +344,9 @@ mod tests {
             let working_dir = ttd.dir("tmp");
             let diag_dir = ttd.dir("tmp").dir("tarball");
             Self {
-                plugin_dir: AbsolutePath::from_path(plugin_dir.utf8_path_buf()).unwrap(),
+                plugin_dir: BTreeSet::from([
+                    AbsolutePath::from_path(plugin_dir.utf8_path_buf()).unwrap()
+                ]),
                 config_dir: AbsolutePath::from_path(config_dir.utf8_path_buf()).unwrap(),
                 working_dir: AbsolutePath::from_path(working_dir.utf8_path_buf()).unwrap(),
                 diag_dir: AbsolutePath::from_path(diag_dir.utf8_path_buf()).unwrap(),
@@ -296,6 +355,15 @@ mod tests {
                 graceful_timeout: Duration::from_secs(60),
                 forceful_timeout: Duration::from_secs(60),
             }
+        }
+
+        fn first_plugin_dir(&self) -> &Utf8Path {
+            self.plugin_dir.first().unwrap().as_path()
+        }
+
+        fn add_plugin_dir(&mut self, path: &Utf8Path) {
+            self.plugin_dir
+                .insert(AbsolutePath::from_path(path.to_path_buf()).unwrap());
         }
     }
 }
