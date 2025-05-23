@@ -4,6 +4,7 @@ use doku::Document;
 use doku::Type;
 use serde::Deserialize;
 use serde::Serialize;
+use std::ffi::OsStr;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
@@ -11,7 +12,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Ord, PartialOrd)]
 pub struct AbsolutePath(Utf8PathBuf);
 
 impl AbsolutePath {
@@ -89,5 +90,11 @@ impl AsRef<Path> for AbsolutePath {
 impl Display for AbsolutePath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+impl AsRef<OsStr> for AbsolutePath {
+    fn as_ref(&self) -> &OsStr {
+        self.0.as_os_str()
     }
 }

@@ -20,6 +20,7 @@ mod common;
 mod completions;
 pub mod config;
 mod connect;
+mod diag;
 mod disconnect;
 mod http;
 mod init;
@@ -115,6 +116,10 @@ pub enum TEdgeOpt {
     /// Remove bridge connection for a provider
     Disconnect(disconnect::TEdgeDisconnectBridgeCli),
 
+    /// Collect diagnostic information to help with debugging
+    #[clap(subcommand)]
+    Diag(diag::TEdgeDiagCli),
+
     /// Reconnect command, calls disconnect followed by connect
     Reconnect(reconnect::TEdgeReconnectCli),
 
@@ -197,6 +202,7 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Cert(opt) => opt.build_command(config),
             TEdgeOpt::Config(opt) => opt.build_command(config),
             TEdgeOpt::Connect(opt) => opt.build_command(config),
+            TEdgeOpt::Diag(opt) => opt.build_command(config),
             TEdgeOpt::Disconnect(opt) => opt.build_command(config),
             TEdgeOpt::RefreshBridges => RefreshBridgesCmd::new(config).map(Command::into_boxed),
             TEdgeOpt::Mqtt(opt) => opt.build_command(config),
