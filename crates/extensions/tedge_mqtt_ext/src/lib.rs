@@ -5,8 +5,14 @@ mod tests;
 
 use async_trait::async_trait;
 use mqtt_channel::Connection;
+pub use mqtt_channel::DebugPayload;
+pub use mqtt_channel::MqttError;
+pub use mqtt_channel::MqttMessage;
+pub use mqtt_channel::QoS;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
+pub use mqtt_channel::Topic;
+pub use mqtt_channel::TopicFilter;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -25,19 +31,13 @@ use tedge_actors::Sender;
 use tracing::info;
 
 pub type MqttConfig = mqtt_channel::Config;
-pub use mqtt_channel::DebugPayload;
-pub use mqtt_channel::MqttError;
-pub use mqtt_channel::MqttMessage;
-pub use mqtt_channel::QoS;
-pub use mqtt_channel::Topic;
-pub use mqtt_channel::TopicFilter;
 
 pub struct MqttActorBuilder {
     mqtt_config: mqtt_channel::Config,
     input_receiver: InputCombiner,
     pub_or_sub_sender: PubOrSubSender,
     publish_sender: mpsc::Sender<MqttMessage>,
-    pub subscriber_addresses: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+    subscriber_addresses: Vec<DynMqttSender>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
@@ -48,7 +48,7 @@ struct InputCombiner {
 }
 
 #[derive(Debug)]
-pub enum PublishOrSubscribe{
+pub enum PublishOrSubscribe {
     Publish(MqttMessage),
     Subscribe(SubscriptionRequest),
 }
@@ -119,8 +119,8 @@ impl MqttActorBuilder {
 
     pub(crate) fn build_actor(self) -> MqttActor {
         let mut combined_topic_filter = TopicFilter::empty();
-        for (topic_filter, _) in self.subscriber_addresses.iter() {
-            combined_topic_filter.add_all(topic_filter.to_owned());
+        for subscriber in self.subscriber_addresses.iter() {
+            combined_topic_filter.add_all(subscriber.topic_filter());
         }
 
         let removed = combined_topic_filter.remove_overlapping_patterns();
@@ -143,15 +143,71 @@ impl AsMut<MqttConfig> for MqttActorBuilder {
 }
 
 impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
-    fn connect_sink(&mut self, subscriptions: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
-        let sender = peer.get_sender();
-        self.subscriber_addresses.push((subscriptions, sender));
+    fn connect_sink(&mut self, topics: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
+        let sender = DynMqttSender {
+            topics: Subscription::Static(topics),
+            sender: peer.get_sender(),
+        };
+        self.subscriber_addresses.push(sender);
     }
 }
 
 impl MessageSink<MqttMessage> for MqttActorBuilder {
     fn get_sender(&self) -> DynSender<MqttMessage> {
         self.publish_sender.clone().into()
+    }
+}
+
+impl MessageSource<MqttMessage, Subscription> for MqttActorBuilder {
+    fn connect_sink(&mut self, topics: Subscription, peer: &impl MessageSink<MqttMessage>) {
+        let sender = DynMqttSender {
+            topics,
+            sender: peer.get_sender(),
+        };
+        self.subscriber_addresses.push(sender);
+    }
+}
+
+pub enum Subscription {
+    Static(TopicFilter),
+    Dynamic(Arc<Mutex<TopicFilter>>),
+}
+
+impl Subscription {
+    pub fn topic_filter(&self) -> TopicFilter {
+        match self {
+            Subscription::Static(topic_filter) => topic_filter.clone(),
+            Subscription::Dynamic(topic_filter) => topic_filter.lock().unwrap().clone(),
+        }
+    }
+
+    pub fn accept(&self, message: &MqttMessage) -> bool {
+        match self {
+            Subscription::Static(topic_filter) => topic_filter.accept(message),
+            Subscription::Dynamic(topic_filter) => topic_filter.lock().unwrap().accept(message),
+        }
+    }
+}
+
+struct DynMqttSender {
+    topics: Subscription,
+    sender: DynSender<MqttMessage>,
+}
+
+impl DynMqttSender {
+    pub fn topic_filter(&self) -> TopicFilter {
+        self.topics.topic_filter()
+    }
+}
+
+#[async_trait]
+impl Sender<MqttMessage> for DynMqttSender {
+    async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
+        if self.topics.accept(&message) {
+            self.sender.send(message).await
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -166,10 +222,14 @@ struct PubOrSubSender {
 
 #[async_trait]
 impl Sender<PublishOrSubscribe> for PubOrSubSender {
-    async fn send(&mut self, message:PublishOrSubscribe) ->  Result<(), ChannelError> {
+    async fn send(&mut self, message: PublishOrSubscribe) -> Result<(), ChannelError> {
         match message {
-            PublishOrSubscribe::Publish(msg) => Sender::<_>::send(&mut self.publish_sender, msg).await,
-            PublishOrSubscribe::Subscribe(sub) => Sender::<_>::send(&mut self.subscription_request_sender, sub).await,
+            PublishOrSubscribe::Publish(msg) => {
+                Sender::<_>::send(&mut self.publish_sender, msg).await
+            }
+            PublishOrSubscribe::Subscribe(sub) => {
+                Sender::<_>::send(&mut self.subscription_request_sender, sub).await
+            }
         }
     }
 }
@@ -203,7 +263,7 @@ pub struct FromPeers {
 }
 
 pub struct ToPeers {
-    peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+    peer_senders: Vec<DynMqttSender>,
 }
 
 impl FromPeers {
@@ -282,10 +342,8 @@ impl ToPeers {
     }
 
     async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
-        for (topic_filter, peer_sender) in self.peer_senders.iter_mut() {
-            if topic_filter.accept(&message) {
-                peer_sender.send(message.clone()).await?;
-            }
+        for peer_sender in self.peer_senders.iter_mut() {
+            peer_sender.send(message.clone()).await?;
         }
         Ok(())
     }
@@ -316,7 +374,7 @@ impl MqttActor {
     fn new(
         mqtt_config: mqtt_channel::Config,
         input_receiver: InputCombiner,
-        peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+        peer_senders: Vec<DynMqttSender>,
     ) -> Self {
         MqttActor {
             mqtt_config,
