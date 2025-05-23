@@ -1,7 +1,6 @@
 *** Settings ***
-Library             ThinEdgeIO
 Library             String
-Library             Collections
+Library             ThinEdgeIO
 
 Suite Setup         Custom Suite Setup
 Suite Teardown      Get Suite Logs

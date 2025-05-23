@@ -92,3 +92,39 @@ contents:
     file_info:
       mode: 0644
     packager: rpm
+
+  # preset diagnostic plugins
+  - src: ./configuration/contrib/diag-plugins/01_tedge.sh
+    dst: /usr/share/tedge/diag-plugins/
+    file_info:
+      mode: 0755
+
+  - src: ./configuration/contrib/diag-plugins/02_os.sh
+    dst: /usr/share/tedge/diag-plugins/
+    file_info:
+      mode: 0755
+
+  - src: ./configuration/contrib/diag-plugins/03_mqtt.sh
+    dst: /usr/share/tedge/diag-plugins/
+    file_info:
+      mode: 0755
+
+  - src: ./configuration/contrib/diag-plugins/04_workflow.sh
+    dst: /usr/share/tedge/diag-plugins/
+    file_info:
+      mode: 0755
+
+  - src: ./configuration/contrib/diag-plugins/05_entities.sh
+    dst: /usr/share/tedge/diag-plugins/
+    file_info:
+      mode: 0755
+
+  - src: ./configuration/contrib/diag-plugins/06_internal.sh
+    dst: /usr/share/tedge/diag-plugins/
+    file_info:
+      mode: 0755
+
+  - src: ./configuration/contrib/diag-plugins/07_mosquitto.sh
+    dst: /usr/share/tedge/diag-plugins/
+    file_info:
+      mode: 0755
