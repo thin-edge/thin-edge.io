@@ -147,15 +147,32 @@ impl Cryptoki {
         let pkcs11 = PKCS11 {
             session: Arc::new(Mutex::new(session)),
         };
+
+        // we need to select a signature scheme to use with a key - each type of key can only have one signature scheme
+        // ideally we'd simply get a cryptoki mechanism that corresponds to this sigscheme but it's not possible;
+        // instead we have to manually parse additional attributes to select a proper sigscheme; currently don't do it
+        // and just select the most common sigscheme for both types of keys
+
+        // NOTE: cryptoki has AttributeType::AllowedMechanisms, but when i use it in get_attributes() with opensc-pkcs11
+        // module it gets ignored (not present or supported) and with softhsm2 module it panics(seems to be an issue
+        // with cryptoki, but regardless):
+
+        // thread 'main' panicked at library/core/src/panicking.rs:218:5:
+        // unsafe precondition(s) violated: slice::from_raw_parts requires the pointer to be aligned and non-null, and the total size of the slice not to exceed `isize::MAX`
+        // note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+        // thread caused non-unwinding panic. aborting.
+        // Aborted (core dumped)
         let key = match keytype {
-            KeyType::EC => Pkcs11SigningKey::Ecdsa(ECSigningKey {
-                pkcs11,
+            KeyType::EC => Pkcs11SigningKey {
+                session: pkcs11,
                 handle: key,
-            }),
-            KeyType::RSA => Pkcs11SigningKey::Rsa(RSASigningKey {
-                pkcs11,
+                sigscheme: SigScheme::EcdsaNistp256Sha256,
+            },
+            KeyType::RSA => Pkcs11SigningKey {
+                session: pkcs11,
                 handle: key,
-            }),
+                sigscheme: SigScheme::RsaPssSha256,
+            },
             _ => anyhow::bail!("unsupported key type"),
         };
 
@@ -194,25 +211,31 @@ impl Cryptoki {
     }
 }
 
-#[derive(Debug)]
-pub enum Pkcs11SigningKey {
-    Rsa(RSASigningKey),
-    Ecdsa(ECSigningKey),
+#[derive(Debug, Clone)]
+pub struct Pkcs11SigningKey {
+    session: PKCS11,
+    handle: ObjectHandle,
+    sigscheme: SigScheme,
 }
 
 impl SigningKey for Pkcs11SigningKey {
     fn choose_scheme(&self, offered: &[SignatureScheme]) -> Option<Box<dyn Signer>> {
-        match self {
-            Self::Ecdsa(e) => e.choose_scheme(offered),
-            Self::Rsa(r) => r.choose_scheme(offered),
+        debug!("Offered signature schemes. offered={:?}", offered);
+        let key_scheme = self.sigscheme.into();
+        if offered.contains(&key_scheme) {
+            debug!("Matching scheme: {key_scheme:?}");
+            Some(Box::new(PkcsSigner {
+                pkcs11: self.session.clone(),
+                key: self.handle,
+                sigscheme: self.sigscheme,
+            }))
+        } else {
+            None
         }
     }
 
     fn algorithm(&self) -> SignatureAlgorithm {
-        match self {
-            Self::Ecdsa(e) => e.algorithm(),
-            Self::Rsa(r) => r.algorithm(),
-        }
+        self.sigscheme.into()
     }
 }
 
@@ -223,60 +246,24 @@ pub struct PKCS11 {
 
 #[derive(Debug)]
 pub struct PkcsSigner {
-    pub pkcs11: PKCS11,
-    pub scheme: SignatureScheme,
+    pkcs11: PKCS11,
     key: ObjectHandle,
+    sigscheme: SigScheme,
 }
 
 impl PkcsSigner {
     pub fn from_key(key: Pkcs11SigningKey) -> Self {
-        let (pkcs11, handle, scheme) = match key {
-            Pkcs11SigningKey::Ecdsa(e) => {
-                (e.pkcs11, e.handle, SignatureScheme::ECDSA_NISTP256_SHA256)
-            }
-            Pkcs11SigningKey::Rsa(e) => (e.pkcs11, e.handle, SignatureScheme::RSA_PSS_SHA256),
-        };
         Self {
-            pkcs11,
-            key: handle,
-            scheme,
+            pkcs11: key.session,
+            key: key.handle,
+            sigscheme: key.sigscheme,
         }
     }
 
     pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
         let session = self.pkcs11.session.lock().unwrap();
 
-        // we need to select a mechanism to use with a key, but we can't get a list of allowed mechanism from cryptoki
-        // and choose the best among them, we have to select one
-
-        // NOTE: cryptoki has AttributeType::AllowedMechanisms, but when i use it in get_attributes() with opensc-pkcs11
-        // module it gets ignored (not present or supported) and with softhsm2 module it panics(seems to be an issue
-        // with cryptoki, but regardless):
-
-        // thread 'main' panicked at library/core/src/panicking.rs:218:5:
-        // unsafe precondition(s) violated: slice::from_raw_parts requires the pointer to be aligned and non-null, and the total size of the slice not to exceed `isize::MAX`
-        // note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-        // thread caused non-unwinding panic. aborting.
-        // Aborted (core dumped)
-
-        let keytype = session.get_attributes(self.key, &[AttributeType::KeyType])?;
-        let [Attribute::KeyType(keytype)] = keytype[..] else {
-            anyhow::bail!("Failed to obtain keytype")
-        };
-
-        let mechanism = match keytype {
-            KeyType::RSA => Mechanism::Sha256RsaPkcsPss(PkcsPssParams {
-                hash_alg: MechanismType::SHA256,
-                mgf: PkcsMgfType::MGF1_SHA256,
-                // RFC8446 4.2.3: RSASSA-PSS PSS algorithms: [...] The length of
-                // the Salt MUST be equal to the length of the digest algorithm
-                // SHA256: 256 bits = 32 bytes
-                s_len: 32.into(),
-            }),
-            KeyType::EC => Mechanism::EcdsaSha256,
-            _ => anyhow::bail!("Unsupported keytype"),
-        };
-
+        let mechanism = self.sigscheme.into();
         let (mechanism, digest_mechanism) = match mechanism {
             Mechanism::EcdsaSha256 => (Mechanism::Ecdsa, Some(Mechanism::Sha256)),
             Mechanism::EcdsaSha384 => (Mechanism::Ecdsa, Some(Mechanism::Sha384)),
@@ -335,93 +322,54 @@ impl PkcsSigner {
     }
 }
 
+/// Currently supported signature schemes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SigScheme {
+    EcdsaNistp256Sha256,
+    RsaPssSha256,
+}
+
+impl From<SigScheme> for rustls::SignatureScheme {
+    fn from(value: SigScheme) -> Self {
+        match value {
+            SigScheme::EcdsaNistp256Sha256 => Self::ECDSA_NISTP256_SHA256,
+            SigScheme::RsaPssSha256 => Self::RSA_PSS_SHA256,
+        }
+    }
+}
+
+impl From<SigScheme> for rustls::SignatureAlgorithm {
+    fn from(value: SigScheme) -> Self {
+        match value {
+            SigScheme::EcdsaNistp256Sha256 => Self::ECDSA,
+            SigScheme::RsaPssSha256 => Self::RSA,
+        }
+    }
+}
+
+impl From<SigScheme> for Mechanism<'_> {
+    fn from(value: SigScheme) -> Self {
+        match value {
+            SigScheme::EcdsaNistp256Sha256 => Self::EcdsaSha256,
+            SigScheme::RsaPssSha256 => Mechanism::Sha256RsaPkcsPss(PkcsPssParams {
+                hash_alg: MechanismType::SHA256,
+                mgf: PkcsMgfType::MGF1_SHA256,
+                // RFC8446 4.2.3: RSASSA-PSS PSS algorithms: [...] The length of
+                // the Salt MUST be equal to the length of the digest algorithm
+                // SHA256: 256 bits = 32 bytes
+                s_len: 32.into(),
+            }),
+        }
+    }
+}
+
 impl Signer for PkcsSigner {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
         Self::sign(self, message).map_err(|e| rustls::Error::General(e.to_string()))
     }
 
     fn scheme(&self) -> SignatureScheme {
-        trace!("Using Signature scheme: {:?}", self.scheme.as_str());
-        self.scheme
-    }
-}
-
-#[derive(Debug)]
-pub struct ECSigningKey {
-    pkcs11: PKCS11,
-    handle: ObjectHandle,
-}
-
-impl ECSigningKey {
-    fn supported_schemes(&self) -> &[SignatureScheme] {
-        &[
-            SignatureScheme::ECDSA_NISTP256_SHA256,
-            SignatureScheme::ECDSA_NISTP384_SHA384,
-            SignatureScheme::ECDSA_NISTP521_SHA512,
-        ]
-    }
-}
-
-impl SigningKey for ECSigningKey {
-    fn choose_scheme(&self, offered: &[SignatureScheme]) -> Option<Box<dyn Signer>> {
-        trace!("Offered signature schemes. offered={:?}", offered);
-        let supported = self.supported_schemes();
-        for scheme in offered {
-            if supported.contains(scheme) {
-                trace!("Matching scheme: {:?}", scheme.as_str());
-                return Some(Box::new(PkcsSigner {
-                    pkcs11: self.pkcs11.clone(),
-                    scheme: *scheme,
-                    key: self.handle,
-                }));
-            }
-        }
-        None
-    }
-
-    fn algorithm(&self) -> SignatureAlgorithm {
-        SignatureAlgorithm::ECDSA
-    }
-}
-
-#[derive(Debug)]
-pub struct RSASigningKey {
-    pkcs11: PKCS11,
-    handle: ObjectHandle,
-}
-
-impl RSASigningKey {
-    fn supported_schemes(&self) -> &[SignatureScheme] {
-        &[
-            SignatureScheme::RSA_PSS_SHA512,
-            SignatureScheme::RSA_PSS_SHA384,
-            SignatureScheme::RSA_PSS_SHA256,
-            SignatureScheme::RSA_PKCS1_SHA512,
-            SignatureScheme::RSA_PKCS1_SHA384,
-            SignatureScheme::RSA_PKCS1_SHA256,
-        ]
-    }
-}
-
-impl SigningKey for RSASigningKey {
-    fn choose_scheme(&self, offered: &[SignatureScheme]) -> Option<Box<dyn Signer>> {
-        debug!("Offered signature schemes. offered={:?}", offered);
-        let supported = self.supported_schemes();
-        for scheme in offered {
-            if supported.contains(scheme) {
-                debug!("Matching scheme: {:?}", scheme.as_str());
-                return Some(Box::new(PkcsSigner {
-                    pkcs11: self.pkcs11.clone(),
-                    scheme: *scheme,
-                    key: self.handle,
-                }));
-            }
-        }
-        None
-    }
-
-    fn algorithm(&self) -> SignatureAlgorithm {
-        SignatureAlgorithm::RSA
+        self.sigscheme.into()
     }
 }
 
