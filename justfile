@@ -180,5 +180,5 @@ generate-changelog *ARGS:
     ./ci/changelog/changelog.sh {{ARGS}}
 
 # Remove unused/unreferenced images
-clean-unused-images:
-    ./ci/admin/check_unused_images.sh
+clean-unused-images *ARGS:
+    ./ci/admin/check_unused_images.sh --delete {{ARGS}}
