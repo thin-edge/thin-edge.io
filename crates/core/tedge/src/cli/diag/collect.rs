@@ -18,6 +18,7 @@ use tedge_api::LoggedCommand;
 use tedge_config::models::AbsolutePath;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file;
+use tracing::debug;
 
 #[derive(Debug)]
 pub struct DiagCollectCommand {
@@ -103,8 +104,11 @@ impl DiagCollectCommand {
 
         while let Some(entry) = entries.next_entry().await? {
             if let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) {
-                if path.is_file() && is_executable(&path).await {
+                if path.extension() == Some("ignore") {
+                    debug!("Skipping ignored file: {:?}", entry.path());
+                } else if path.is_file() && is_executable(&path).await {
                     plugins.insert(path);
+                    continue;
                 } else {
                     warning!("Skipping non-executable file: {:?}", entry.path());
                 }
@@ -198,6 +202,17 @@ mod tests {
         ttd.dir("plugins").file("plugin_b");
         ttd.dir("plugins").dir("directory");
         with_exec_permission(command.plugin_dir.join("directory").join("plugin_c"), "pwd");
+
+        let plugins = command.read_diag_plugins().await.unwrap();
+        assert_eq!(plugins.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn read_diag_plugins_skips_files_with_ignore_extension() {
+        let ttd = TempTedgeDir::new();
+        let command = DiagCollectCommand::new(&ttd);
+        ttd.dir("plugins").file("plugin_a.ignore");
+        ttd.dir("plugins").file("plugin_b.ignore");
 
         let plugins = command.read_diag_plugins().await.unwrap();
         assert_eq!(plugins.len(), 0);
