@@ -31,11 +31,11 @@ pub enum TEdgeDiagCli {
 
         /// Whether to keep intermediate output files after the tarball is created
         #[clap(long)]
-        keep_tmp_output: bool,
+        keep_dir: bool,
 
         /// Timeout for a graceful plugin shutdown
         #[clap(long, default_value = "60s")]
-        graceful_timeout: SecondsOrHumanTime,
+        timeout: SecondsOrHumanTime,
 
         /// Timeout for forced termination, starting after a graceful timeout expires
         #[clap(long, default_value = "60s")]
@@ -50,8 +50,8 @@ impl BuildCommand for TEdgeDiagCli {
                 plugin_dir,
                 output_dir,
                 tarball_name,
-                keep_tmp_output,
-                graceful_timeout,
+                keep_dir,
+                timeout,
                 forceful_timeout,
             } => {
                 let plugin_dir =
@@ -71,8 +71,8 @@ impl BuildCommand for TEdgeDiagCli {
                     working_dir: get_absolute_path(output_dir.clone())?,
                     diag_dir: get_absolute_path(output_dir.join(&tarball_name))?,
                     tarball_name,
-                    keep_tmp_output,
-                    graceful_timeout: graceful_timeout.duration(),
+                    keep_dir,
+                    graceful_timeout: timeout.duration(),
                     forceful_timeout: forceful_timeout.duration(),
                 }
                 .into_boxed();
