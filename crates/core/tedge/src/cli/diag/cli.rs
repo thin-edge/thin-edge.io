@@ -11,7 +11,7 @@ use time::OffsetDateTime;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeDiagCli {
-    /// Collect diagnostic logs
+    /// Collect diagnostic information by running device-specific scripts
     Collect {
         /// Directory where diagnostic plugins are stored
         ///

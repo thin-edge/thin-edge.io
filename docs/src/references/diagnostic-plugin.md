@@ -69,7 +69,9 @@ The runner is the `tedge diag collect` command, which calls plugins that must be
 
 * A plugin must be an executable file.
 * It is called by the runner with the specified arguments (see the [Runner](#runner) section).
-* The plugin should write its output files to the designated temporary output directory provided via the command line.
+* The plugin can print diagnostic information on its standard output and error stream, both will be collected by the
+  runner.
+* The plugin can also create files in the output directory provided as `--output-dir` by the runner.
 * The plugin must complete execution within the timeout period and return an appropriate exit code:
     * `0`: successful execution
     * `2`: plugin skipped (not applicable)

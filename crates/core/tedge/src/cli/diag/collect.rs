@@ -41,7 +41,7 @@ impl Command for DiagCollectCommand {
         let plugins = self.read_diag_plugins().await?;
         let plugin_count = plugins.len();
         if plugin_count == 0 {
-            error!("No diagnostic plugins were found in {}. Please check if the directory contains any executable files", self.plugin_dir);
+            error!("No diagnostic plugins were found in {}", self.plugin_dir);
             std::process::exit(2)
         }
 
@@ -97,7 +97,9 @@ impl Command for DiagCollectCommand {
 impl DiagCollectCommand {
     async fn read_diag_plugins(&self) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
         let mut plugins = BTreeSet::new();
-        let mut entries = tokio::fs::read_dir(&self.plugin_dir).await?;
+        let mut entries = tokio::fs::read_dir(&self.plugin_dir)
+            .await
+            .with_context(|| format!("Failed to read directory: {}", self.plugin_dir))?;
 
         while let Some(entry) = entries.next_entry().await? {
             if let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) {
@@ -117,7 +119,9 @@ impl DiagCollectCommand {
         &self,
         plugin_path: &Utf8Path,
     ) -> Result<ExitStatus, anyhow::Error> {
-        let plugin_name = plugin_path.file_stem().context("No filename")?;
+        let plugin_name = plugin_path
+            .file_stem()
+            .with_context(|| format!("No file name for {}", plugin_path))?;
         let plugin_output_dir = self.diag_dir.join(plugin_name);
         let output_file = plugin_output_dir.join("output.log");
         file::create_directory_with_defaults(&plugin_output_dir)

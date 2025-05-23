@@ -116,7 +116,7 @@ pub enum TEdgeOpt {
     /// Remove bridge connection for a provider
     Disconnect(disconnect::TEdgeDisconnectBridgeCli),
 
-    /// Help to diagnose problems
+    /// Collect diagnostic information to help with debugging
     #[clap(subcommand)]
     Diag(diag::TEdgeDiagCli),
 
