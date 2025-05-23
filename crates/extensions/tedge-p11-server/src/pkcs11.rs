@@ -4,6 +4,7 @@
 //! - thin-edge: docs/src/references/hsm-support.md
 //! - PKCS#11: https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html
 
+use asn1_rs::FromDer as _;
 pub use cryptoki::types::AuthPin;
 
 use anyhow::Context;
@@ -33,6 +34,12 @@ use tracing::warn;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::Mutex;
+
+// oIDs for curves defined here: https://datatracker.ietf.org/doc/html/rfc5480#section-2.1.1.1
+// other can be browsed here: https://oid-base.com/get/1.3.132.0.34
+const SECP256R1_OID: &str = "1.2.840.10045.3.1.7";
+const SECP384R1_OID: &str = "1.3.132.0.34";
+const SECP521R1_OID: &str = "1.3.132.0.35";
 
 #[derive(Clone)]
 pub struct CryptokiConfigDirect {
@@ -162,12 +169,18 @@ impl Cryptoki {
         // note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
         // thread caused non-unwinding panic. aborting.
         // Aborted (core dumped)
+
         let key = match keytype {
-            KeyType::EC => Pkcs11SigningKey {
-                session: pkcs11,
-                handle: key,
-                sigscheme: SigScheme::EcdsaNistp256Sha256,
-            },
+            KeyType::EC => {
+                let sigscheme = get_ec_mechanism(&pkcs11.session.lock().unwrap(), key)
+                    .unwrap_or(SigScheme::EcdsaNistp256Sha256);
+
+                Pkcs11SigningKey {
+                    session: pkcs11,
+                    handle: key,
+                    sigscheme,
+                }
+            }
             KeyType::RSA => Pkcs11SigningKey {
                 session: pkcs11,
                 handle: key,
@@ -304,8 +317,9 @@ impl PkcsSigner {
         trace!("Signature (raw) len={:?}", signature_raw.len());
         let signature_asn1 = match mechanism {
             Mechanism::Ecdsa => {
-                let r_bytes = &signature_raw[0..32];
-                let s_bytes = &signature_raw[32..];
+                let size = signature_raw.len() / 2;
+                let r_bytes = &signature_raw[0..size];
+                let s_bytes = &signature_raw[size..];
 
                 format_asn1_ecdsa_signature(r_bytes, s_bytes)
                     .context("pkcs11: Failed to format signature")?
@@ -326,6 +340,8 @@ impl PkcsSigner {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SigScheme {
     EcdsaNistp256Sha256,
+    EcdsaNistp384Sha384,
+    EcdsaNistp521Sha512,
     RsaPssSha256,
 }
 
@@ -333,6 +349,8 @@ impl From<SigScheme> for rustls::SignatureScheme {
     fn from(value: SigScheme) -> Self {
         match value {
             SigScheme::EcdsaNistp256Sha256 => Self::ECDSA_NISTP256_SHA256,
+            SigScheme::EcdsaNistp384Sha384 => Self::ECDSA_NISTP384_SHA384,
+            SigScheme::EcdsaNistp521Sha512 => Self::ECDSA_NISTP521_SHA512,
             SigScheme::RsaPssSha256 => Self::RSA_PSS_SHA256,
         }
     }
@@ -341,7 +359,9 @@ impl From<SigScheme> for rustls::SignatureScheme {
 impl From<SigScheme> for rustls::SignatureAlgorithm {
     fn from(value: SigScheme) -> Self {
         match value {
-            SigScheme::EcdsaNistp256Sha256 => Self::ECDSA,
+            SigScheme::EcdsaNistp256Sha256
+            | SigScheme::EcdsaNistp384Sha384
+            | SigScheme::EcdsaNistp521Sha512 => Self::ECDSA,
             SigScheme::RsaPssSha256 => Self::RSA,
         }
     }
@@ -351,6 +371,8 @@ impl From<SigScheme> for Mechanism<'_> {
     fn from(value: SigScheme) -> Self {
         match value {
             SigScheme::EcdsaNistp256Sha256 => Self::EcdsaSha256,
+            SigScheme::EcdsaNistp384Sha384 => Self::EcdsaSha384,
+            SigScheme::EcdsaNistp521Sha512 => Self::EcdsaSha512,
             SigScheme::RsaPssSha256 => Mechanism::Sha256RsaPkcsPss(PkcsPssParams {
                 hash_alg: MechanismType::SHA256,
                 mgf: PkcsMgfType::MGF1_SHA256,
@@ -397,6 +419,34 @@ fn write_asn1_integer(writer: &mut dyn std::io::Write, b: &[u8]) {
     let i = i.to_signed_bytes_be();
     let i = asn1_rs::Integer::new(&i);
     let _ = i.write_der(writer);
+}
+
+fn get_ec_mechanism(session: &Session, key: ObjectHandle) -> anyhow::Result<SigScheme> {
+    let key_params = &[AttributeType::EcParams];
+    let attrs = session
+        .get_attributes(key, key_params)
+        .context("Failed to get key params")?;
+    trace!(?attrs);
+
+    let attr = attrs
+        .into_iter()
+        .next()
+        .context("Failed to get EcParams attribute")?;
+    let Attribute::EcParams(ecparams) = attr else {
+        anyhow::bail!("Failed to get EcParams attribute");
+    };
+
+    // this can be oid, but also a bunch of other things
+    // https://docs.oasis-open.org/pkcs11/pkcs11-curr/v3.0/os/pkcs11-curr-v3.0-os.html#_Toc30061181
+    let (_, ecparams) = asn1_rs::Any::from_der(&ecparams).context("Failed to parse EC_PARAMS")?;
+    let oid = ecparams.as_oid().context("EC_PARAMS isn't an oID")?;
+    let oid = oid.to_id_string();
+    match oid.as_str() {
+        SECP256R1_OID => Ok(SigScheme::EcdsaNistp256Sha256),
+        SECP384R1_OID => Ok(SigScheme::EcdsaNistp384Sha384),
+        SECP521R1_OID => Ok(SigScheme::EcdsaNistp521Sha512),
+        _ => anyhow::bail!("Parsed oID({oid}) doesn't match any supported EC curve"),
+    }
 }
 
 pub mod uri {
