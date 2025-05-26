@@ -13,6 +13,8 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -41,6 +43,7 @@ pub struct GenMapperBuilder {
     message_box: SimpleMessageBoxBuilder<InputMessage, OutputMessage>,
     pipelines: HashMap<String, Pipeline>,
     pipeline_specs: HashMap<String, (Utf8PathBuf, PipelineConfig)>,
+    subscriptions: Arc<Mutex<TopicFilter>>,
     js_runtime: JsRuntime,
 }
 
@@ -53,6 +56,7 @@ impl GenMapperBuilder {
             message_box: SimpleMessageBoxBuilder::new("GenMapper", 16),
             pipelines: HashMap::default(),
             pipeline_specs: HashMap::default(),
+            subscriptions: Arc::new(Mutex::new(TopicFilter::empty())),
             js_runtime,
         })
     }
@@ -128,9 +132,9 @@ impl GenMapperBuilder {
 
     pub fn connect(
         &mut self,
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<PublishOrSubscribe>),
+        mqtt: &mut (impl MessageSource<MqttMessage, Subscription> + MessageSink<PublishOrSubscribe>),
     ) {
-        mqtt.connect_mapped_sink(self.topics(), &self.message_box, |msg| {
+        mqtt.connect_mapped_sink(self.init_subscriptions(), &self.message_box, |msg| {
             Some(InputMessage::MqttMessage(msg))
         });
         self.message_box
@@ -148,12 +152,14 @@ impl GenMapperBuilder {
         });
     }
 
-    fn topics(&self) -> TopicFilter {
-        let mut topics = TopicFilter::empty();
-        for pipeline in self.pipelines.values() {
-            topics.add_all(pipeline.topics())
+    fn init_subscriptions(&self) -> Subscription {
+        {
+            let mut topics = self.subscriptions.lock().unwrap();
+            for pipeline in self.pipelines.values() {
+                topics.add_all(pipeline.topics())
+            }
         }
-        topics
+        Subscription::Dynamic(self.subscriptions.clone())
     }
 }
 
@@ -174,6 +180,7 @@ impl Builder<GenMapper> for GenMapperBuilder {
         GenMapper {
             messages: self.message_box.build(),
             pipelines: self.pipelines,
+            subscriptions: self.subscriptions,
             js_runtime: self.js_runtime,
             config_dir: self.config_dir,
         }
