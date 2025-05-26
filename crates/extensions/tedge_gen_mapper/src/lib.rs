@@ -13,6 +13,8 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -23,8 +25,10 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::PublishOrSubscribe;
+use tedge_mqtt_ext::MqttRequest;
+use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
 use tokio::fs::read_dir;
 use tokio::fs::read_to_string;
@@ -32,13 +36,14 @@ use tracing::error;
 use tracing::info;
 
 fan_in_message_type!(InputMessage[MqttMessage, FsWatchEvent]: Clone, Debug, Eq, PartialEq);
-fan_in_message_type!(OutputMessage[MqttMessage]: Clone, Debug, Eq, PartialEq);
+fan_in_message_type!(OutputMessage[MqttMessage, SubscriptionDiff]: Clone, Debug, Eq, PartialEq);
 
 pub struct GenMapperBuilder {
     config_dir: PathBuf,
     message_box: SimpleMessageBoxBuilder<InputMessage, OutputMessage>,
     pipelines: HashMap<String, Pipeline>,
     pipeline_specs: HashMap<String, (Utf8PathBuf, PipelineConfig)>,
+    subscriptions: Arc<Mutex<TopicFilter>>,
     js_runtime: JsRuntime,
 }
 
@@ -51,6 +56,7 @@ impl GenMapperBuilder {
             message_box: SimpleMessageBoxBuilder::new("GenMapper", 16),
             pipelines: HashMap::default(),
             pipeline_specs: HashMap::default(),
+            subscriptions: Arc::new(Mutex::new(TopicFilter::empty())),
             js_runtime,
         })
     }
@@ -126,14 +132,20 @@ impl GenMapperBuilder {
 
     pub fn connect(
         &mut self,
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<PublishOrSubscribe>),
+        mqtt: &mut (impl for<'a> MessageSource<MqttMessage, &'a mut DynSubscriptions>
+                  + MessageSink<MqttRequest>),
     ) {
-        mqtt.connect_mapped_sink(self.topics(), &self.message_box, |msg| {
+        let mut dyn_subscriptions = DynSubscriptions::new(self.topics());
+        mqtt.connect_mapped_sink(&mut dyn_subscriptions, &self.message_box, |msg| {
             Some(InputMessage::MqttMessage(msg))
         });
+        let client_id = dyn_subscriptions.client_id();
         self.message_box
             .connect_mapped_sink(NoConfig, mqtt, move |msg| match msg {
-                OutputMessage::MqttMessage(mqtt) => Some(PublishOrSubscribe::Publish(mqtt)),
+                OutputMessage::MqttMessage(mqtt) => Some(MqttRequest::Publish(mqtt)),
+                OutputMessage::SubscriptionDiff(diff) => {
+                    Some(MqttRequest::subscribe(client_id, diff))
+                }
             });
     }
 
@@ -169,6 +181,7 @@ impl Builder<GenMapper> for GenMapperBuilder {
         GenMapper {
             messages: self.message_box.build(),
             pipelines: self.pipelines,
+            subscriptions: self.subscriptions,
             js_runtime: self.js_runtime,
             config_dir: self.config_dir,
         }
