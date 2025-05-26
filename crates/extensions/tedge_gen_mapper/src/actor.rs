@@ -109,7 +109,10 @@ impl GenMapper {
                 match config.compile(&self.js_runtime, &self.config_dir, path.clone()) {
                     Ok(p) => {
                         *pipeline = p;
-                        self.messages.send(OutputMessage::TopicFilter(pipeline.input_topics.clone())).await.unwrap();
+                        self.messages
+                            .send(OutputMessage::TopicFilter(pipeline.input_topics.clone()))
+                            .await
+                            .unwrap();
                         info!("Reloaded pipeline {path}");
                     }
                     Err(e) => {
@@ -127,7 +130,11 @@ impl GenMapper {
                 Ok(messages) => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
-                            Ok(message) => self.messages.send(OutputMessage::MqttMessage(message)).await?,
+                            Ok(message) => {
+                                self.messages
+                                    .send(OutputMessage::MqttMessage(message))
+                                    .await?
+                            }
                             Err(err) => {
                                 error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
                             }
@@ -150,7 +157,11 @@ impl GenMapper {
                 Ok(messages) => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
-                            Ok(message) => self.messages.send(OutputMessage::MqttMessage(message)).await?,
+                            Ok(message) => {
+                                self.messages
+                                    .send(OutputMessage::MqttMessage(message))
+                                    .await?
+                            }
                             Err(err) => {
                                 error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
                             }

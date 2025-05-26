@@ -9,8 +9,6 @@ use crate::js_filter::JsRuntime;
 use crate::pipeline::Pipeline;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use tedge_mqtt_ext::PublishOrSubscribe;
-use tedge_mqtt_ext::SubscriptionRequest;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::path::Path;
@@ -26,6 +24,9 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::PublishOrSubscribe;
+use tedge_mqtt_ext::Subscription;
+use tedge_mqtt_ext::SubscriptionRequest;
 use tedge_mqtt_ext::TopicFilter;
 use tokio::fs::read_dir;
 use tokio::fs::read_to_string;
@@ -132,10 +133,13 @@ impl GenMapperBuilder {
         mqtt.connect_mapped_sink(self.topics(), &self.message_box, |msg| {
             Some(InputMessage::MqttMessage(msg))
         });
-        self.message_box.connect_mapped_sink(NoConfig, mqtt, |msg| match msg {
-            OutputMessage::MqttMessage(mqtt) => Some(PublishOrSubscribe::Publish(mqtt)),
-            OutputMessage::TopicFilter(filter) => Some(PublishOrSubscribe::Subscribe(SubscriptionRequest(filter))),
-        });
+        self.message_box
+            .connect_mapped_sink(NoConfig, mqtt, |msg| match msg {
+                OutputMessage::MqttMessage(mqtt) => Some(PublishOrSubscribe::Publish(mqtt)),
+                OutputMessage::TopicFilter(filter) => {
+                    Some(PublishOrSubscribe::Subscribe(SubscriptionRequest(filter)))
+                }
+            });
     }
 
     pub fn connect_fs(&mut self, fs: &mut impl MessageSource<FsWatchEvent, PathBuf>) {
