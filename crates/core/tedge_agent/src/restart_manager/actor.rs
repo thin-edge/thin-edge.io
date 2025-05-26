@@ -191,8 +191,10 @@ impl RestartManagerActor {
         let mut not_interrupted = true;
         for mut command in commands {
             let cmd = command.as_std().get_program().to_string_lossy();
-            let args = command.as_std().get_args();
-            info!("Restarting: {cmd} {args:?}");
+            {
+                let args = command.as_std().get_args();
+                info!("Restarting: {cmd} {args:?}");
+            }
 
             match command.status().await {
                 Ok(status) => {
