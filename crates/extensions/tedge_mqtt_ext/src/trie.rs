@@ -156,6 +156,16 @@ impl SubscriptionDiff {
         }
     }
 
+    pub fn new(
+        subscribe: &mqtt_channel::TopicFilter,
+        unsubscribe: &mqtt_channel::TopicFilter,
+    ) -> Self {
+        Self {
+            subscribe: subscribe.patterns().iter().cloned().collect(),
+            unsubscribe: unsubscribe.patterns().iter().cloned().collect(),
+        }
+    }
+
     fn with_topic_prefix(self, prefix: &str) -> Self {
         Self {
             subscribe: self
