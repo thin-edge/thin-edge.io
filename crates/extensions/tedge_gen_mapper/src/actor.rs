@@ -9,6 +9,8 @@ use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tedge_actors::Actor;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
@@ -16,6 +18,8 @@ use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::SubscriptionDiff;
+use tedge_mqtt_ext::TopicFilter;
 use tokio::time::interval;
 use tokio::time::Duration;
 use tracing::error;
@@ -24,6 +28,7 @@ use tracing::info;
 pub struct GenMapper {
     pub(super) messages: SimpleMessageBox<InputMessage, OutputMessage>,
     pub(super) pipelines: HashMap<String, Pipeline>,
+    pub(super) subscriptions: Arc<Mutex<TopicFilter>>,
     pub(super) js_runtime: JsRuntime,
     pub(super) config_dir: PathBuf,
 }
@@ -58,6 +63,7 @@ impl Actor for GenMapper {
                                 self.reload_filter(path).await;
                             } else if path.extension() == Some("toml") {
                                 self.reload_pipeline(path).await;
+                                self.send_updated_subscriptions().await?;
                             }
                         },
                         Some(InputMessage::FsWatchEvent(e)) => {
@@ -117,6 +123,23 @@ impl GenMapper {
                 };
             }
         }
+    }
+
+    async fn send_updated_subscriptions(&mut self) -> Result<(), RuntimeError> {
+        let topics = self.update_subscriptions();
+        let diff = SubscriptionDiff::new(&topics, &TopicFilter::empty());
+        self.messages
+            .send(OutputMessage::SubscriptionDiff(diff))
+            .await?;
+        Ok(())
+    }
+
+    fn update_subscriptions(&self) -> TopicFilter {
+        let mut topics = self.subscriptions.lock().unwrap();
+        for pipeline in self.pipelines.values() {
+            topics.add_all(pipeline.topics())
+        }
+        topics.clone()
     }
 
     async fn filter(&mut self, message: Message) -> Result<(), RuntimeError> {
