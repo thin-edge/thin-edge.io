@@ -66,10 +66,20 @@ Custom Setup
 
 Check known tedge environment settings
     [Arguments]    ${ENV_NAME}    ${KEY_NAME}    ${VALUE}
-    ${output}=    Execute Command    cmd=env ${ENV_NAME}=${VALUE} tedge config get ${KEY_NAME}
-    Should Be Equal    ${output}    ${VALUE}\n
+    ${stdout}    ${stderr}=    Execute Command
+    ...    cmd=env ${ENV_NAME}=${VALUE} tedge config get ${KEY_NAME}
+    ...    stdout=${True}
+    ...    stderr=${True}
+    ...    retries=1
+    Should Be Equal    ${stdout}    ${VALUE}\n
+    Should Be Empty    ${stderr}
 
 Check known tedge environment settings for topics
     [Arguments]    ${ENV_NAME}    ${KEY_NAME}
-    ${output}=    Execute Command    cmd=env ${ENV_NAME}=topic/1,topic/2/+,topic/3/# tedge config get ${KEY_NAME}
-    Should Be Equal    ${output}    ["topic/1", "topic/2/+", "topic/3/#"]\n
+    ${stdout}    ${stderr}=    Execute Command
+    ...    cmd=env ${ENV_NAME}=topic/1,topic/2/+,topic/3/# tedge config get ${KEY_NAME}
+    ...    stdout=${True}
+    ...    stderr=${True}
+    ...    retries=1
+    Should Be Equal    ${stdout}    ["topic/1", "topic/2/+", "topic/3/#"]\n
+    Should Be Empty    ${stderr}
