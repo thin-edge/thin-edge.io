@@ -82,22 +82,13 @@ Select Private key using a request URI
     Should Contain    ${stdout}    item=cryptoki: socket (key: pkcs11:token=tedge;object=tedge)
 
 Connects to C8y using an RSA key
-    [Documentation]    Test that we can connect to C8y using an RSA private key. At the time of writing the test
-    ...    `tedge cert create` by default uses an ECDSA keypair, so we have to generate it manually and upload it.
-    # set up an RSA key for tedge and upload it
-    Execute Command    softhsm2-util --init-token --free --label c8y-token-rsa --pin "123456" --so-pin "123456"
-    Execute Command
-    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey RSA --bits 4096 --label "c8y-key-rsa" "pkcs11:token=c8y-token-rsa" --outfile pubkey.pem
-    Execute Command
-    ...    cmd=GNUTLS_PIN=123456 certtool --generate-self-signed --template ${CERT_TEMPLATE} --outfile /etc/tedge/device-certs/tedge-certificate.pem --load-privkey "pkcs11:token=c8y-token-rsa;object=c8y-key-rsa"
-
-    Execute Command
-    ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
-    ...    log_output=${False}
-
-    Set tedge-p11-server Uri    value=pkcs11:token=c8y-token-rsa;object=c8y-key-rsa
-
-    Execute Command    tedge reconnect c8y
+    [Documentation]    Test that we can connect to C8y using an RSA private keys of all sizes.
+    [Setup]    Set tedge-p11-server Uri    value=${EMPTY}
+    [Template]    Connect to C8y using new keypair
+    type=rsa    bits=4096
+    type=rsa    bits=3072
+    type=rsa    bits=2048
+    type=rsa    bits=1024
 
 Connects to C8y supporting all TLS13 ECDSA signature algorithms
     [Documentation]    Check that we support all ECDSA sigschemes used in TLS1.3, i.e: ecdsa_secp256r1_sha256,
