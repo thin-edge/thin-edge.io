@@ -16,6 +16,10 @@ Suite Teardown      Get Suite Logs
 Test Tags           adapter:docker    theme:cryptoki
 
 
+*** Variables ***
+${CERT_TEMPLATE}     /etc/tedge/hsm/cert.template    # created by init_softhsm script
+
+
 *** Test Cases ***
 Use Private Key in SoftHSM2 using tedge-p11-server
     Tedge Reconnect Should Succeed
@@ -85,7 +89,7 @@ Connects to C8y using an RSA key
     Execute Command
     ...    cmd=p11tool --set-pin=123456 --login --generate-privkey RSA --bits 4096 --label "c8y-key-rsa" "pkcs11:token=c8y-token-rsa" --outfile pubkey.pem
     Execute Command
-    ...    cmd=GNUTLS_PIN=123456 certtool --generate-self-signed --template /etc/tedge/hsm/cert.template --outfile /etc/tedge/device-certs/tedge-certificate.pem --load-privkey "pkcs11:token=c8y-token-rsa;object=c8y-key-rsa"
+    ...    cmd=GNUTLS_PIN=123456 certtool --generate-self-signed --template ${CERT_TEMPLATE} --outfile /etc/tedge/device-certs/tedge-certificate.pem --load-privkey "pkcs11:token=c8y-token-rsa;object=c8y-key-rsa"
 
     Execute Command
     ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
@@ -99,10 +103,10 @@ Connects to C8y supporting all TLS13 ECDSA signature algorithms
     [Documentation]    Check that we support all ECDSA sigschemes used in TLS1.3, i.e: ecdsa_secp256r1_sha256,
     ...    ecdsa_secp384r1_sha384, ecdsa_secp521r1_sha512.
     [Setup]    Set tedge-p11-server Uri    value=${EMPTY}
-    [Template]    Connect to C8y using ECDSA key
-    curve=secp256r1
-    curve=secp384r1
-    curve=secp521r1
+    [Template]    Connect to C8y using new keypair
+    type=ecdsa    curve=secp256r1
+    type=ecdsa    curve=secp384r1
+    type=ecdsa    curve=secp521r1
 
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
@@ -171,25 +175,34 @@ Warn the user if tedge.toml cannot be parsed
 
 
 *** Keywords ***
-Connect to C8y using ECDSA key
-    [Documentation]    Generates a new ECDSA key/cert pair, uploads it to c8y, and connects using it.
-    [Arguments]    ${curve}
-    Execute Command    mkdir -p /etc/tedge/device-certs/ecdsa
+Connect to C8y using new keypair
+    [Documentation]    Generates a new key/cert pair, uploads it to c8y, and connects using it.
+    [Arguments]    ${type}    # ecdsa or rsa
+    ...    ${curve}=secp256r1    # if type == ECDSA, curve of the key - one of {secp256r1, secp384r1, secp521r1}
+    ...    ${bits}=4096    # if type == RSA, length in bits of the RSA key - one of {1024, 2048, 3072, 4096}
+
+    IF    '${type}' == 'ecdsa'
+        VAR    ${object_name}=    ${type}-${curve}
+        VAR    ${p11tool_args}=    --curve=${curve}
+    ELSE IF    '${type}' == 'rsa'
+        VAR    ${object_name}=    ${type}-${bits}
+        VAR    ${p11tool_args}=    --bits=${bits}
+    ELSE
+        Fail    Wrong key type provided.
+    END
+    VAR    ${cert_path}=    /etc/tedge/device-certs/${object_name}.pem
 
     Execute Command
-    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ECDSA --curve=${curve} --label ${curve} "pkcs11:token=tedge"
+    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ${type} ${p11tool_args} --label ${object_name} "pkcs11:token=tedge"
     # we should probably generate certs signed by CA instead of uploading them
     Execute Command
-    ...    cmd=GNUTLS_PIN=123456 certtool --generate-self-signed --template /etc/tedge/hsm/cert.template --outfile /etc/tedge/device-certs/ecdsa/${curve}.pem --load-privkey "pkcs11:token=tedge;object=${curve}"
+    ...    cmd=GNUTLS_PIN=123456 certtool --generate-self-signed --template ${CERT_TEMPLATE} --outfile ${cert_path} --load-privkey "pkcs11:token=tedge;object=${object_name}"
 
-    # set
-    Execute Command    tedge config set c8y.device.cert_path /etc/tedge/device-certs/ecdsa/${curve}.pem
-    Execute Command    cmd=tedge config set c8y.device.key_uri "pkcs11:token=tedge;object=${curve}"
+    Execute Command    tedge config set c8y.device.cert_path ${cert_path}
+    Execute Command    cmd=tedge config set c8y.device.key_uri "pkcs11:token=tedge;object=${object_name}"
 
     # upload (THIS STAYS ON C8Y AND ISN'T DELETED)
-    Execute Command
-    ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
-    ...    log_output=${False}
+    Upload Currently Used Certificates To Cumulocity
 
     Tedge Reconnect Should Succeed
 
@@ -216,9 +229,7 @@ Custom Setup
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge config set device.cryptoki.mode socket
 
-    # Upload the self-signed certificate
-    Execute Command
-    ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
+    Upload Currently Used Certificates To Cumulocity
 
     Set tedge-p11-server Uri    value=
 
@@ -239,3 +250,7 @@ Tedge Reconnect Should Fail With
     ${stdout}    ${stderr}=    Execute Command    tedge reconnect c8y    exp_exit_code=!0    stdout=true    stderr=true
     Should Contain    ${stderr}    ${error}
     RETURN    ${stdout}
+
+Upload Currently Used Certificates To Cumulocity
+    Execute Command
+    ...    cmd=sudo env C8Y_USER="${C8Y_CONFIG.username}" C8Y_PASSWORD="${C8Y_CONFIG.password}" tedge cert upload c8y
