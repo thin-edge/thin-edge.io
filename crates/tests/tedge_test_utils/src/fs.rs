@@ -139,7 +139,7 @@ impl TempTedgeFile {
     }
 }
 
-pub fn with_exec_permission(file_path: &Path, content: &str) {
+pub fn with_exec_permission(file_path: impl AsRef<Path>, content: &str) {
     let mut file = OpenOptions::new()
         .mode(0o744)
         .create_new(true)
