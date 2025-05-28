@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thin-edge.io/alarm.schema.json",
+  "title": "Alarm",
+  "type": "object",
+  "properties": {
+    "time": {
+      "description": "Timestamp of the alarm in ISO 8601 or UNIX timestamp format.",
+      "oneOf": [
+        { "$ref": "#/$defs/unixTimestamp" },
+        { "$ref": "#/$defs/dateISO861" }
+      ]
+    },
+    "text": {
+      "description": "Alarm description",
+      "type": "string"
+    },
+    "severity": {
+      "description": "Severity of the alarm",
+      "type": "string",
+      "enum": ["critical", "major", "minor", "warning"],
+      "default": "minor"
+    }
+  },
+  "$defs": {
+    "unixTimestamp": {
+      "description": "Unix timestamp in second",
+      "type": "number"
+    },
+    "dateISO861": {
+      "description": "Date and time with time zone",
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
