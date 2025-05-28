@@ -50,6 +50,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Retrieve MSRV from workspace Cargo.toml
         id: rust_version
