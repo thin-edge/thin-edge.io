@@ -35,7 +35,7 @@ The payload format must be as follows:
 {
   "text": "<alarm text>",
   "severity": "major",
-  "time": "<Timestamp in ISO-8601 format>"
+  "time": "<Timestamp in ISO-8601 format or a unix timestamp (in seconds)>"
 }
 ```
 

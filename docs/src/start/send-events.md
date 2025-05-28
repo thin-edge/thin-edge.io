@@ -31,7 +31,7 @@ The payload format must be as follows:
 ```json title="Payload"
 {
   "text": "<event text>",
-  "time": "<Timestamp in ISO-8601 format>"
+  "time": "<Timestamp in ISO-8601 format or a unix timestamp (in seconds)>"
 }
 ```
 
@@ -118,7 +118,7 @@ The payload format must be as follows:
 ```json title="Payload"
 {
   "text": "<event text>",
-  "time": "<Timestamp in ISO-8601 format>"
+  "time": "<Timestamp in ISO-8601 format or a unix timestamp (in seconds)>"
 }
 ```
 

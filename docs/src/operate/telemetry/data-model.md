@@ -97,7 +97,7 @@ One MQTT message can contain a mixture of more than one single-value and multi-v
 | --------- | --------- |
 |`name`       |a string that identifies the measurement uniquely in context of the device|
 |`value`      |the value that was sampled; can be named (especially in context of a multi-value measurement) or unnamed; must be an integer or floating point number|
-|`timestamp`  |optional time that indicates when values were sampled; when not provided, %%te%% uses the current system time as the time of the sample; when provided must be conform to ISO 8601|
+|`timestamp`  |optional time that indicates when values were sampled; when not provided, %%te%% uses the current system time as the time of the sample; when provided must be conform to ISO 8601 or a unix timestamp (in seconds)|
 
 #### Behaviour of measurements
 - %%te%% does not store any historical sampled values for measurements
@@ -136,7 +136,7 @@ te/device/<child-id>///e/<event-type>
 | ------------------ | --------- |
 |`event-type`        |a string part of the MQTT topic, that identifies the event uniquely in context of the device|
 |`text`              |carries a human readable event-text; must be UTF-8 encoded|
-|`timestamp`         |optional time that indicates when the event has occurred; when not provided, %%te%% uses the current system time as the time of the event; when provided must be conform to ISO 8601|
+|`timestamp`         |optional time that indicates when the event has occurred; when not provided, %%te%% uses the current system time as the time of the event; when provided must be conform to ISO 8601 or a unix timestamp (in seconds)|
 |`custom fragments`  |additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud|
 
 #### Behaviour of events
@@ -178,7 +178,7 @@ te/device/<child-id>///a/<alarm-type>
 |`alarm-type`        |a string part of the MQTT topic, that identifies the alarm uniquely in context of the device|
 |`severity`          |a string part of the MQTT payload, that indicates the severity of the alarm; recommended to be `critical`, `major`, `minor` or `warning`|
 |`text`              |carries a human readable alarm-text; must be UTF-8 encoded|
-|`timestamp`         |optional time that indicates when the alarm has occurred; when not provided, %%te%% uses the current system time as the time of the alarm; when provided must be conform to ISO 8601|
+|`timestamp`         |optional time that indicates when the alarm has occurred; when not provided, %%te%% uses the current system time as the time of the alarm; when provided must be conform to ISO 8601 or a unix timestamp (in seconds)|
 |`custom fragments`  |additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud|
 
 #### Behaviour of alarms
