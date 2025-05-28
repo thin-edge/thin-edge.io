@@ -7,8 +7,13 @@ export function process (timestamp, message, config) {
 	let time = data[0]
 	let value = data[1]
 
+    var topic = "te/device/main///m/collectd"
+    if (config && config.topic) {
+        topic = config.topic
+    }
+
     return [ {
-        topic: config.topic || "te/device/main///m/collectd",
+        topic: topic,
         payload: `{"time": ${time}, "${group}": {"${measurement}": ${value}}}`
     }]
 }
