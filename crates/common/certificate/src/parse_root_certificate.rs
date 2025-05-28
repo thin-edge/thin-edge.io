@@ -284,14 +284,14 @@ mod tests {
         // Add a first chain with 1 certificate
         fs::write(
             temp_dir.path().join("cert_1"),
-            include_str!("../test_root_cert_1.txt"),
+            include_str!("./test_root_cert_1.txt"),
         )
         .unwrap();
 
         // Add a second chain with 2 certificates
         fs::write(
             temp_dir.path().join("cert_2"),
-            include_str!("../test_root_cert_2.txt"),
+            include_str!("./test_root_cert_2.txt"),
         )
         .unwrap();
 
@@ -306,7 +306,7 @@ mod tests {
         // Add a first chain with 1 certificate
         fs::write(
             temp_dir.path().join("cert_1"),
-            include_str!("../test_root_cert_1.txt"),
+            include_str!("./test_root_cert_1.txt"),
         )
         .unwrap();
 
@@ -314,7 +314,7 @@ mod tests {
         fs::create_dir(temp_dir.path().join("sub_certs")).unwrap();
         fs::write(
             temp_dir.path().join("sub_certs/cert_2"),
-            include_str!("../test_root_cert_2.txt"),
+            include_str!("./test_root_cert_2.txt"),
         )
         .unwrap();
 
