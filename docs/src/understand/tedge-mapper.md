@@ -181,7 +181,7 @@ Here is an example if you publish invalid %%te%% JSON messages on `te/+/+/+/+/m/
 
 ```sh
 tedge mqtt pub te/device/main///m/ '{"temperature": 23,"pressure": 220'
-tedge mqtt pub te/device/main///m/ '{"temperature": 23,"time": 220}'
+tedge mqtt pub te/device/main///m/ '{"temperature": 23,"time": "oops"}'
 ```
 
 Then, you'll receive error messages from the mapper on the topic `te/errors`:
@@ -191,6 +191,6 @@ tedge mqtt sub te/errors
 ```
 
 ```log title="Output"
-[te/errors] Invalid JSON: Unexpected end of JSON: {"temperature":23,"pressure":220
-[te/errors] Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not a number.
+[te/errors] Failed to convert a message on topic 'te/device/main///m/': Invalid JSON: EOF while parsing an object at line 1 column 34: `0`
+[te/errors] Failed to convert a message on topic 'te/device/main///m/': Invalid JSON: Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): "oops": the 'year' component could not be parsed at line 1 column 33: `"}
 ```

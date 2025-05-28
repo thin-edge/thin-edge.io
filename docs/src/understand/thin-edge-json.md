@@ -135,7 +135,7 @@ The grouping of measurements is usually done to represent measurements collected
 When %%te%% receives a measurement, it will add a timestamp to it before any further processing.
 If the user doesn't want to rely on %%te%% generated timestamps,
 an explicit timestamp can be provided in the measurement message itself by adding the time value as a string 
-in ISO 8601 format using `time` as the key name, as follows:
+in ISO 8601 format using `time`  or as a unix timestamp (in seconds) as the key name, as follows:
 
 ```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/example '{
@@ -160,7 +160,7 @@ and hence must not be used as measurement keys:
 
 | Key | Description |
 | --- | --- |
-| time | Timestamp in ISO 8601 string format |
+| time | Timestamp in ISO 8601 string format or as a unix timestamp (in seconds) |
 
 ## Events
 
@@ -186,7 +186,7 @@ tedge mqtt pub te/device/main///e/login '{
 |--------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `event_type` | Uniquely identifies the event in the context of the device; part of the MQTT topic                                                                                 |
 | `text`       | Text description of  the event; must be UTF-8 encoded                                                                                                              |
-| `time`  | Optional timestamp that indicates when the event occurred, in ISO 8601 string format; when not provided, %%te%% uses the current system time                      |
+| `time`  | Optional timestamp that indicates when the event occurred, in ISO 8601 string format or as a unix timestamp (in seconds); when not provided, %%te%% uses the current system time                      |
 | `*`          | Additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud |
 
 ## Alarms
@@ -215,6 +215,6 @@ tedge mqtt pub te/device/main///a/temperature_high '{
 | `alarm_type` | Uniquely identifies the alarm in the context of the device; part of the MQTT topic                                                                                 |
 | `severity`   | Severity of the alarm; recommended to be `critical`, `major`, `minor` or `warning`                                                                                           |
 | `text`       | Text description of the alarm; must be UTF-8 encoded                                                                                                               |
-| `timestamp`  | Optional time that indicates when the alarm has occurred, in ISO 8601 string format; when not provided, %%te%% uses the current system time                  |
+| `timestamp`  | Optional time that indicates when the alarm has occurred, in ISO 8601 string format or as a unix timestamp (in seconds); when not provided, %%te%% uses the current system time                  |
 | `*`          | Additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud |
 

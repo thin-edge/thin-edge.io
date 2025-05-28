@@ -155,7 +155,7 @@ graph LR
 
 :::note
 The `command_id` is an arbitrary string however it should be unique.
-It is recommended to either use a unique id generator, or add a unix timestamp as a suffix, e.g. date +%s.
+It is recommended to either use a unique id generator, or add a unix timestamp as a suffix, e.g. `date +%s`.
 This unique id assigned by the requester, who is also responsible for creating the topic
 with an initial state and for finally removing it.
 :::
