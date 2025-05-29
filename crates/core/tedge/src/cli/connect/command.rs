@@ -322,7 +322,7 @@ impl ConnectCommand {
             match spinner.finish(res) {
                 Ok(()) => break Ok(()),
                 Err(err) if attempt >= max_attempts => break Err(err),
-                Err(_) => std::thread::sleep(Duration::from_secs(2)),
+                Err(_) => tokio::time::sleep(Duration::from_secs(2)).await,
             }
         };
 
