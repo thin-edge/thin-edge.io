@@ -383,8 +383,14 @@ export function process (timestamp, message, config) {
         let mut runtime = JsRuntime::try_new().await.unwrap();
         let filter = runtime.load_js("collectd.js", script).unwrap();
 
-        let input = Message::new("collectd/h/memory/percent-used", "1748440192.104:19.9289468288182");
-        let output = Message::new("te/device/main///m/collectd", r#"{"time": 1748440192.104, "memory": {"percent-used": 19.9289468288182}}"#);
+        let input = Message::new(
+            "collectd/h/memory/percent-used",
+            "1748440192.104:19.9289468288182",
+        );
+        let output = Message::new(
+            "te/device/main///m/collectd",
+            r#"{"time": 1748440192.104, "memory": {"percent-used": 19.9289468288182}}"#,
+        );
         assert_eq!(
             filter
                 .process(&runtime, &DateTime::now(), &input)
@@ -393,5 +399,4 @@ export function process (timestamp, message, config) {
             vec![output]
         );
     }
-
 }
