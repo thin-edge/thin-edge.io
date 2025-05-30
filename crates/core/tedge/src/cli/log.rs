@@ -113,17 +113,17 @@ where
 
         let ms = Duration::from_millis(50);
         let mut count_ticks = 0;
-        let mut stdout = std::io::stdout();
+        let mut writer = std::io::stderr();
         let res = loop {
             let start_loop = Instant::now();
-            if stdout.is_terminal() {
+            if writer.is_terminal() {
                 write!(
-                    stdout,
+                    writer,
                     "{title}... {}\r",
                     SPINNER[count_ticks % SPINNER.len()]
                 )
                 .unwrap();
-                stdout.flush().unwrap();
+                writer.flush().unwrap();
             }
             std::thread::sleep(ms.saturating_sub(start_loop.elapsed()));
             count_ticks += 1;
@@ -139,12 +139,12 @@ where
 
         match res.as_ref().err().filter(|&e| filter_err(e)) {
             None => {
-                writeln!(stdout, "{title}... {}", "✓".green().bold()).unwrap();
-                stdout.flush().unwrap();
+                writeln!(writer, "{title}... {}", "✓".green().bold()).unwrap();
+                writer.flush().unwrap();
             }
             Some(e) => {
-                writeln!(stdout, "{title}... {}", "✗".red().bold(),).unwrap();
-                stdout.flush().unwrap();
+                writeln!(writer, "{title}... {}", "✗".red().bold(),).unwrap();
+                writer.flush().unwrap();
                 error!("{e:#}");
             }
         }
@@ -269,7 +269,7 @@ pub struct ConfigLogger<'a> {
 }
 
 impl<'a> ConfigLogger<'a> {
-    /// Print a summary of the bridge config to stdout
+    /// Print a summary of the bridge config to stderr
     #[allow(clippy::too_many_arguments)]
     pub fn log(
         title: impl Into<Cow<'static, str>>,
@@ -281,7 +281,7 @@ impl<'a> ConfigLogger<'a> {
         proxy_url: Option<&'a ProxyUrl>,
         proxy_username: Option<&'a str>,
     ) {
-        println!(
+        eprintln!(
             "{}",
             Self {
                 title: title.into(),
