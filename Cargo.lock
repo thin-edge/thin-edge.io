@@ -4445,6 +4445,7 @@ dependencies = [
  "tokio",
  "toml 0.8.8",
  "tracing",
+ "tracing-subscriber",
  "url",
  "which",
  "x509-parser 0.16.0",

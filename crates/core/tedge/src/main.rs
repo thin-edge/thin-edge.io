@@ -23,6 +23,7 @@ use tedge::TEdgeOptMulticall;
 use tedge_apt_plugin::AptCli;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
+use tedge_config::unconfigured_logger;
 use tracing::log;
 
 #[global_allocator]
@@ -30,10 +31,11 @@ static ALLOCATOR: Cap<alloc::System> = Cap::new(alloc::System, usize::MAX);
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    clap_complete::CompleteEnv::with_factory(TEdgeCli::command).complete();
-    let executable_name = executable_name();
+    let opt = tracing::subscriber::with_default(unconfigured_logger(), || {
+        clap_complete::CompleteEnv::with_factory(TEdgeCli::command).complete();
 
-    let opt = parse_multicall(&executable_name, std::env::args_os());
+        parse_multicall(&executable_name(), std::env::args_os())
+    });
     match opt {
         TEdgeOptMulticall::Component(Component::TedgeMapper(opt)) => {
             let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;

@@ -60,6 +60,7 @@ time = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 toml = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 url = { workspace = true }
 which = { workspace = true }
 yansi = { workspace = true }
