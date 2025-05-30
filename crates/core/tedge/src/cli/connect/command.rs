@@ -134,7 +134,7 @@ impl Command for ConnectCommand {
         validate_config(&tedge_config, &self.cloud)?;
 
         if self.is_test_connection {
-            self.check_bridge(&tedge_config, bridge_config)
+            self.check_bridge(&tedge_config, &bridge_config)
                 .await
                 .map_err(<_>::into)
         } else {
@@ -151,7 +151,7 @@ impl Command for ConnectCommand {
                 }
             };
 
-            let connected = self.connect_bridge(&tedge_config, bridge_config).await;
+            let connected = self.connect_bridge(&tedge_config, &bridge_config).await;
             if connected.is_ok() && shift_failed {
                 println!("Successfully connected, however not using the new certificate");
                 std::process::exit(3);
@@ -165,24 +165,29 @@ impl ConnectCommand {
     async fn check_bridge(
         &self,
         tedge_config: &TEdgeConfig,
-        bridge_config: BridgeConfig,
+        bridge_config: &BridgeConfig,
     ) -> Result<(), Fancy<ConnectError>> {
         // If the bridge is part of the mapper, the bridge config file won't exist
         // TODO tidy me up once mosquitto is no longer required for bridge
         if self
-            .check_if_bridge_exists(tedge_config, &bridge_config)
+            .check_if_bridge_exists(tedge_config, bridge_config)
             .await
         {
             match self.check_connection(tedge_config).await {
                 Ok(DeviceStatus::AlreadyExists) => {
-                    let cloud = bridge_config.cloud_name;
-                    match self.tenant_matches_configured_url(tedge_config).await? {
+                    match self
+                        .tenant_matches_configured_url(tedge_config, bridge_config)
+                        .await?
+                    {
                         // Check failed, warning has been printed already
                         // Don't tell them the connection test succeeded because that's not true
                         Some(false) => {}
                         // Either the check succeeded or it wasn't relevant (e.g. non-Cumulocity connection)
                         Some(true) | None => {
-                            println!("Connection check to {cloud} cloud is successful.")
+                            println!(
+                                "Connection check to {} cloud is successful.",
+                                bridge_config.cloud_name
+                            )
                         }
                     }
 
@@ -202,12 +207,12 @@ impl ConnectCommand {
     async fn connect_bridge(
         &self,
         tedge_config: &TEdgeConfig,
-        bridge_config: BridgeConfig,
+        bridge_config: &BridgeConfig,
     ) -> Result<(), Fancy<ConnectError>> {
         let updated_mosquitto_config = CommonMosquittoConfig::from_tedge_config(tedge_config);
 
         match self
-            .new_bridge(tedge_config, &bridge_config, &updated_mosquitto_config)
+            .new_bridge(tedge_config, bridge_config, &updated_mosquitto_config)
             .await
         {
             Ok(()) => (),
@@ -257,16 +262,13 @@ impl ConnectCommand {
 
         match &self.cloud {
             #[cfg(feature = "c8y")]
-            Cloud::C8y(profile) => {
-                let c8y_config = tedge_config.c8y.try_get(profile.as_deref())?;
-
-                let use_basic_auth = c8y_config
-                    .auth_method
-                    .is_basic(&c8y_config.credentials_path);
-                if !use_basic_auth && !self.offline_mode && connection_check_success {
-                    let _ = self.tenant_matches_configured_url(tedge_config).await;
+            Cloud::C8y(_) => {
+                if connection_check_success {
+                    let _ = self
+                        .tenant_matches_configured_url(tedge_config, bridge_config)
+                        .await;
                 }
-                enable_software_management(&bridge_config, &*self.service_manager).await;
+                enable_software_management(bridge_config, &*self.service_manager).await;
             }
             #[cfg(feature = "aws")]
             Cloud::Aws(_) => (),
@@ -360,7 +362,6 @@ impl ConnectCommand {
         match &self.cloud {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile_name) => {
-                let use_basic_auth = false;
                 let device_type = &tedge_config.device.ty;
                 let c8y_config = tedge_config.c8y.try_get(profile_name.as_deref())?;
                 let mut mqtt_auth_config =
@@ -371,13 +372,8 @@ impl ConnectCommand {
                         .clone_into(&mut client_config.cert_file)
                 }
 
-                create_device_with_direct_connection(
-                    use_basic_auth,
-                    _bridge_config,
-                    device_type,
-                    mqtt_auth_config,
-                )
-                .await
+                create_device_with_direct_connection(_bridge_config, device_type, mqtt_auth_config)
+                    .await
             }
             #[cfg(feature = "aws")]
             Cloud::Aws(_) => Ok(()),
@@ -408,16 +404,14 @@ impl ConnectCommand {
     async fn tenant_matches_configured_url(
         &self,
         tedge_config: &TEdgeConfig,
+        bridge_config: &BridgeConfig,
     ) -> Result<Option<bool>, Fancy<ConnectError>> {
         match &self.cloud {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => {
                 let c8y_config = tedge_config.c8y.try_get(profile.as_deref())?;
 
-                let use_basic_auth = c8y_config
-                    .auth_method
-                    .is_basic(&c8y_config.credentials_path);
-                if !use_basic_auth && !self.offline_mode {
+                if bridge_config.auth_type == AuthType::Certificate && !self.offline_mode {
                     tenant_matches_configured_url(
                         tedge_config,
                         profile.as_ref().map(|g| &***g),
@@ -820,14 +814,11 @@ impl ConnectCommand {
                 if self.offline_mode {
                     println!("Offline mode. Skipping device creation in Cumulocity cloud.")
                 } else {
-                    let use_basic_auth = bridge_config.remote_username.is_some()
-                        && bridge_config.remote_password.is_some();
                     let c8y_config = tedge_config.c8y.try_get(profile_name.as_deref())?;
                     let mqtt_auth_config =
                         tedge_config.mqtt_auth_config_cloud_broker(c8y_config)?;
                     let spinner = Spinner::start("Creating device in Cumulocity cloud");
                     let res = create_device_with_direct_connection(
-                        use_basic_auth,
                         bridge_config,
                         &tedge_config.device.ty,
                         mqtt_auth_config,
