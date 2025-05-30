@@ -1,0 +1,27 @@
+{ "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thin-edge.io/event.schema.json",
+  "title": "Event",
+  "type": "object",
+  "properties": {
+    "time": {
+      "oneOf": [
+        { "$ref": "#/$defs/unixTimestamp" },
+        { "$ref": "#/$defs/dateISO861" }
+      ]
+    },
+    "text": {
+      "description": "Event description",
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "unixTimestamp": {
+      "description": "Unix timestamp in second",
+      "type": "number"
+    },
+    "dateISO861": {
+      "description": "Date and time with time zone",
+      "type": "string"
+    }
+  }
+}
