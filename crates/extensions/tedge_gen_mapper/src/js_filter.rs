@@ -238,8 +238,8 @@ impl<'js> IntoJs<'js> for DateTime {
     fn into_js(self, ctx: &Ctx<'js>) -> rquickjs::Result<Value<'js>> {
         debug!(target: "MAPPING", "into_js({self:?})");
         let msg = Object::new(ctx.clone())?;
-        msg.set("topic", self.seconds)?;
-        msg.set("payload", self.nanoseconds)?;
+        msg.set("seconds", self.seconds)?;
+        msg.set("nanoseconds", self.nanoseconds)?;
         Ok(Value::from_object(msg))
     }
 }
