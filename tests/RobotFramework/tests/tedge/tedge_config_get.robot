@@ -53,6 +53,16 @@ Set unknown configuration via environment variables
     ...    ${stderr}
     ...    Unknown configuration field "c8y_unknown_configuration" from environment variable TEDGE_C8Y_UNKNOWN_CONFIGURATION
 
+Read deprecated key
+    ${stdout}    ${stderr}=    Execute Command
+    ...    cmd=tedge config get mqtt.external.capath
+    ...    stdout=${True}
+    ...    stderr=${True}
+    ...    exp_exit_code=!0
+    Should Be Empty    ${stdout}
+    Should Contain    ${stderr}    The key 'mqtt.external.capath' is deprecated. Use 'mqtt.external.ca_path' instead.
+    Should Contain    ${stderr}    The provided config key: 'mqtt.external.ca_path' is not set
+
 Normalize paths configured with tedge config
     Execute Command    tedge config set c8y.device.csr_path c8y-device.csr
     ${path}=    Execute Command    tedge config get c8y.device.csr_path
