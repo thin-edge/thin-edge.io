@@ -201,4 +201,7 @@ pub enum LoadError {
 
     #[error(transparent)]
     JsError(#[from] rquickjs::Error),
+
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
 }

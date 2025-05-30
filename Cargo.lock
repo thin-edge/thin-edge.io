@@ -4945,6 +4945,7 @@ dependencies = [
 name = "tedge_gen_mapper"
 version = "1.6.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "camino",
  "rquickjs",

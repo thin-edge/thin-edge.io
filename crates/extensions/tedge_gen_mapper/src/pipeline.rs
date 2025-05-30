@@ -179,5 +179,5 @@ impl TryFrom<Message> for MqttMessage {
 }
 
 pub fn error_from_js(err: LoadError) -> FilterError {
-    FilterError::IncorrectSetting(format!("{}", err))
+    FilterError::IncorrectSetting(format!("{err:#}"))
 }
