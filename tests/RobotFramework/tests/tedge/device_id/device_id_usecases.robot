@@ -20,7 +20,7 @@ Use explicit device id during cert creation
     ${output}=    Execute Command    tedge config get device.id    strip=${True}
     Should Be Equal    ${output}    ${BAR}
 
-    ${output}=    Execute Command    tedge connect c8y    ignore_exit_code=${True}
+    ${output}=    Execute Command    tedge connect c8y    ignore_exit_code=${True}    stdout=${False}    stderr=${True}
     Should Contain    ${output}    device id: ${BAR}
 
 Use default device.id
@@ -31,7 +31,7 @@ Use default device.id
     ${output}=    Execute Command    tedge config get device.id    strip=${True}
     Should Be Equal    ${output}    ${FOO}
 
-    ${output}=    Execute Command    tedge connect c8y    ignore_exit_code=${True}
+    ${output}=    Execute Command    tedge connect c8y    ignore_exit_code=${True}    stdout=${False}    stderr=${True}
     Should Contain    ${output}    device id: ${FOO}
 
 Use device id from cert
@@ -41,7 +41,7 @@ Use device id from cert
     ${output}=    Execute Command    tedge config get device.id    strip=${True}
     Should Be Equal    ${output}    ${FOO}
 
-    ${output}=    Execute Command    tedge connect c8y    ignore_exit_code=${True}
+    ${output}=    Execute Command    tedge connect c8y    ignore_exit_code=${True}    stdout=${False}    stderr=${True}
     Should Contain    ${output}    device id: ${FOO}
 
 Use default device.id to create the cert
@@ -55,7 +55,7 @@ Use default device.id to create the cert
     ${output}=    Execute Command    tedge config get device.id    strip=${True}
     Should Be Equal    ${output}    ${FOO}
 
-    ${output}=    Execute Command    tedge connect c8y    ignore_exit_code=${True}
+    ${output}=    Execute Command    tedge connect c8y    ignore_exit_code=${True}    stdout=${False}    stderr=${True}
     Should Contain    ${output}    device id: ${FOO}
 
 

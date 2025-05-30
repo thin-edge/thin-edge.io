@@ -29,7 +29,7 @@ tedge cert upload c8y respects root cert path
     Execute Command    tedge config set c8y.root_cert_path /etc/ssl/certs_test
     Execute Command
     ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
-    ${output}=    Execute Command    sudo tedge connect c8y
+    ${output}=    Execute Command    sudo tedge connect c8y    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Verifying device is connected to cloud... ✓
     Should Contain    ${output}    Checking Cumulocity is connected to intended tenant... ✓
 

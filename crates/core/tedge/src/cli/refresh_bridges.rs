@@ -42,7 +42,7 @@ impl RefreshBridgesCmd {
         let clouds = established_bridges(&config).await;
 
         if clouds.is_empty() && !config.mqtt.bridge.built_in {
-            println!("No bridges to refresh.");
+            eprintln!("No bridges to refresh.");
             return Ok(());
         }
 
@@ -51,7 +51,7 @@ impl RefreshBridgesCmd {
 
         if !config.mqtt.bridge.built_in {
             for cloud in &clouds {
-                println!("Refreshing bridge {cloud}");
+                eprintln!("Refreshing bridge {cloud}");
 
                 let bridge_config = super::connect::bridge_config(&config, cloud)?;
                 refresh_bridge(&bridge_config, &config).await?;
@@ -67,7 +67,7 @@ impl RefreshBridgesCmd {
                 if bridge_config.bridge_location == BridgeLocation::BuiltIn
                     && clouds.contains(&cloud)
                 {
-                    println!(
+                    eprintln!(
                     "Deleting mosquitto bridge configuration for {cloud} in favour of built-in bridge"
                 );
                     super::connect::use_built_in_bridge(&config, &bridge_config).await?;
@@ -75,7 +75,7 @@ impl RefreshBridgesCmd {
             }
         }
 
-        println!("Restarting mosquitto service.\n");
+        eprintln!("Restarting mosquitto service.\n");
         self.service_manager
             .restart_service(SystemService::Mosquitto)
             .await?;

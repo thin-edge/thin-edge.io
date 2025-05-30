@@ -15,7 +15,7 @@ Test Tags           theme:cli    theme:mqtt    theme:c8y
 *** Test Cases ***
 tedge_connect_test_positive
     Execute Command    sudo tedge connect c8y || true    # Connect but don't fail if already connected
-    ${output}=    Execute Command    sudo tedge connect c8y --test
+    ${output}=    Execute Command    sudo tedge connect c8y --test    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Connection check to c8y cloud is successful.
 
 Non-root users should be able to read the mosquitto configuration files #2154
@@ -38,7 +38,7 @@ tedge_connect_test_negative
     ...    stderr=${True}
 
 tedge_connect_test_sm_services
-    ${output}=    Execute Command    sudo tedge connect c8y
+    ${output}=    Execute Command    sudo tedge connect c8y    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Enabling tedge-agent... ✓
     Should Contain    ${output}    Enabling tedge-mapper-c8y... ✓
     Should Not Contain
@@ -47,7 +47,7 @@ tedge_connect_test_sm_services
     ...    message=Warning should not be displayed if the port does not match. Issue #2863
 
 tedge_disconnect_test_sm_services
-    ${output}=    Execute Command    sudo tedge disconnect c8y
+    ${output}=    Execute Command    sudo tedge disconnect c8y    stdout=${False}    stderr=${True}
     Should Not Contain    ${output}    Disabling tedge-agent... ✓
     Should Contain    ${output}    Disabling tedge-mapper-c8y... ✓
 
@@ -74,7 +74,7 @@ Check absence of OpenSSL Error messages #3024
 
 tedge reconnect validates and uses the new certificate if any
     Renew certificate
-    ${output}=    Execute Command    sudo tedge reconnect c8y
+    ${output}=    Execute Command    sudo tedge reconnect c8y    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Validating new certificate
     Should Contain    ${output}    The new certificate is now the active certificate
     ${output}=    Execute Command    tedge cert show c8y --new    exp_exit_code=1    stderr=True
@@ -83,7 +83,7 @@ tedge reconnect validates and uses the new certificate if any
 tedge connect validates and uses the new certificate if any
     Renew certificate
     Execute Command    sudo tedge disconnect c8y
-    ${output}=    Execute Command    sudo tedge connect c8y
+    ${output}=    Execute Command    sudo tedge connect c8y    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Validating new certificate
     Should Contain    ${output}    The new certificate is now the active certificate
     ${output}=    Execute Command    tedge cert show c8y --new    exp_exit_code=1    stderr=True
@@ -102,12 +102,12 @@ tedge reconnect rejects any new invalid certificate
     Renew certificate
     Execute Command    echo garbage | sudo tee "$(tedge config get c8y.device.cert_path).new"
     # The connection should be successful, despite the new certificate being invalid
-    ${output}=    Execute Command    sudo tedge reconnect c8y    exp_exit_code=3
+    ${output}=    Execute Command    sudo tedge reconnect c8y    exp_exit_code=3    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Validating new certificate
     Should Contain    ${output}    Connection error while creating device
     Should Contain    ${output}    attempt 2 of 3
     Should Contain    ${output}    attempt 3 of 3
-    ${output}=    Execute Command    sudo tedge connect c8y --test
+    ${output}=    Execute Command    sudo tedge connect c8y --test    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Connection check to c8y cloud is successful
     # The invalid certificate is left unchanged
     ${new-cert}=    Execute Command    cat "$(tedge config get c8y.device.cert_path).new"

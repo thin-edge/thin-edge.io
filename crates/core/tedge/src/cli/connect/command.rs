@@ -153,7 +153,7 @@ impl Command for ConnectCommand {
 
             let connected = self.connect_bridge(&tedge_config, &bridge_config).await;
             if connected.is_ok() && shift_failed {
-                println!("Successfully connected, however not using the new certificate");
+                eprintln!("Successfully connected, however not using the new certificate");
                 std::process::exit(3);
             }
             connected.map_err(<_>::into)
@@ -184,7 +184,7 @@ impl ConnectCommand {
                         Some(false) => {}
                         // Either the check succeeded or it wasn't relevant (e.g. non-Cumulocity connection)
                         Some(true) | None => {
-                            println!(
+                            eprintln!(
                                 "Connection check to {} cloud is successful.",
                                 bridge_config.cloud_name
                             )
@@ -290,12 +290,12 @@ impl ConnectCommand {
         certificate_shift: CertificateShift,
     ) -> Result<bool, ConfigError> {
         if self.offline_mode {
-            println!("Offline mode. Skipping new device certificate validation");
-            println!(
+            eprintln!("Offline mode. Skipping new device certificate validation");
+            eprintln!(
                 "  => use current certificate {}",
                 &certificate_shift.active_cert_path
             );
-            println!(
+            eprintln!(
                 "  => ignoring new certificate {}",
                 &certificate_shift.new_cert_path
             );
@@ -327,8 +327,8 @@ impl ConnectCommand {
         };
 
         if let Err(err) = res {
-            println!("Error validating the new certificate: {err}");
-            println!(
+            eprintln!("Error validating the new certificate: {err}");
+            eprintln!(
                 "  => keep using the current certificate unchanged {}",
                 &certificate_shift.active_cert_path
             );
@@ -336,15 +336,15 @@ impl ConnectCommand {
         }
 
         if let Err(err) = certificate_shift.promote_new_certificate().await {
-            println!("Error replacing the device certificate by the new one: {err}");
-            println!(
-                "  => keep using the current certificate unchanged{}",
+            eprintln!("Error replacing the device certificate by the new one: {err}");
+            eprintln!(
+                "  => keep using the current certificate unchanged {}",
                 certificate_shift.active_cert_path
             );
             return Ok(false);
         }
 
-        println!(
+        eprintln!(
             "The new certificate is now the active certificate {}",
             certificate_shift.active_cert_path
         );
@@ -447,7 +447,7 @@ impl ConnectCommand {
             if let Ok(DeviceStatus::AlreadyExists) = result {
                 return result;
             }
-            println!(
+            eprintln!(
                 "Connection test failed, attempt {} of {}\n",
                 i, max_attempts,
             );
@@ -809,7 +809,7 @@ impl ConnectCommand {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile_name) => {
                 if self.offline_mode {
-                    println!("Offline mode. Skipping device creation in Cumulocity cloud.")
+                    eprintln!("Offline mode. Skipping device creation in Cumulocity cloud.")
                 } else {
                     let c8y_config = tedge_config.c8y.try_get(profile_name.as_deref())?;
                     let mqtt_auth_config =
