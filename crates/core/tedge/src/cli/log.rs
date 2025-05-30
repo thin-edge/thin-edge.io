@@ -269,7 +269,7 @@ pub struct ConfigLogger<'a> {
 }
 
 impl<'a> ConfigLogger<'a> {
-    /// Print a summary of the bridge config to stdout
+    /// Print a summary of the bridge config to stderr
     #[allow(clippy::too_many_arguments)]
     pub fn log(
         title: impl Into<Cow<'static, str>>,
@@ -281,7 +281,7 @@ impl<'a> ConfigLogger<'a> {
         proxy_url: Option<&'a ProxyUrl>,
         proxy_username: Option<&'a str>,
     ) {
-        println!(
+        eprintln!(
             "{}",
             Self {
                 title: title.into(),

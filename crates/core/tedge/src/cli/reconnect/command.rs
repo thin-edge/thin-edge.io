@@ -24,7 +24,7 @@ impl Command for ReconnectBridgeCommand {
 
     /// calls the disconnect command, followed by the connect command
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        println!("Disconnecting from {}", self.cloud);
+        eprintln!("Disconnecting from {}", self.cloud);
         let disconnect_cmd: DisconnectBridgeCommand = self.into();
         disconnect_cmd.execute_direct().await?;
 
