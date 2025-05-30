@@ -19,9 +19,12 @@ use tedge_utils::file::change_user_and_group_sync;
 use tedge_utils::fs::atomically_write_file_async;
 use tedge_utils::fs::atomically_write_file_sync;
 use tracing::debug;
+use tracing::subscriber::NoSubscriber;
 use tracing::warn;
 
 use super::tedge_config;
+use super::ParseKeyError;
+use super::WritableKey;
 
 const DEFAULT_TEDGE_CONFIG_PATH: &str = "/etc/tedge";
 const ENV_TEDGE_CONFIG_DIR: &str = "TEDGE_CONFIG_DIR";
@@ -304,21 +307,16 @@ fn update_with_environment_variables(
         let tedge_key = match key.strip_prefix("TEDGE_") {
             Some("CONFIG_DIR") => continue,
             Some("CLOUD_PROFILE") => continue,
-            Some(tedge_key) => {
-                let parsed_key = tedge_key
-                    .to_ascii_lowercase()
-                    .parse::<tedge_config::WritableKey>();
-                match parsed_key {
-                    Ok(key) => key,
-                    Err(_) => {
-                        warnings.push(format!(
-                            "Unknown configuration field {:?} from environment variable {key}",
-                            tedge_key.to_ascii_lowercase()
-                        ));
-                        continue;
-                    }
+            Some(tedge_key) => match parse_key_without_warnings(tedge_key) {
+                Ok(key) => key,
+                Err(_) => {
+                    warnings.push(format!(
+                        "Unknown configuration field {:?} from environment variable {key}",
+                        tedge_key.to_ascii_lowercase()
+                    ));
+                    continue;
                 }
-            }
+            },
             None => continue,
         };
 
@@ -344,6 +342,14 @@ fn update_with_environment_variables(
         }
     }
     Ok(())
+}
+
+fn parse_key_without_warnings(tedge_key: &str) -> Result<WritableKey, ParseKeyError> {
+    tracing::subscriber::with_default(NoSubscriber::new(), || {
+        tedge_key
+            .to_ascii_lowercase()
+            .parse::<tedge_config::WritableKey>()
+    })
 }
 
 fn deserialize_toml(
