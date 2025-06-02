@@ -6,12 +6,12 @@ use log::debug;
 use rumqttc::tokio_rustls::rustls;
 use rumqttc::tokio_rustls::rustls::pki_types::CertificateDer;
 use rumqttc::LastWill;
-use std::sync::Mutex;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::Mutex;
 use zeroize::Zeroizing;
 
 pub const MAX_PACKET_SIZE: usize = 268435455;
