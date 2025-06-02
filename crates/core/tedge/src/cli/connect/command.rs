@@ -227,9 +227,7 @@ impl ConnectCommand {
             self.start_mapper().await;
         }
 
-        #[cfg(feature = "c8y")]
         let mut connection_check_success = true;
-        #[cfg(feature = "c8y")]
         if !self.offline_mode {
             match self
                 .check_connection_with_retries(
@@ -445,7 +443,6 @@ impl ConnectCommand {
         }
     }
 
-    #[cfg(feature = "c8y")]
     async fn check_connection_with_retries(
         &self,
         tedge_config: &TEdgeConfig,
