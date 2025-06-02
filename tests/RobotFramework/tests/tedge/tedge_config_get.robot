@@ -53,6 +53,16 @@ Set unknown configuration via environment variables
     ...    ${stderr}
     ...    Unknown configuration field "c8y_unknown_configuration" from environment variable TEDGE_C8Y_UNKNOWN_CONFIGURATION
 
+Read deprecated key
+    ${stdout}    ${stderr}=    Execute Command
+    ...    cmd=tedge config get mqtt.external.capath
+    ...    stdout=${True}
+    ...    stderr=${True}
+    ...    exp_exit_code=!0
+    Should Be Empty    ${stdout}
+    Should Contain    ${stderr}    The key 'mqtt.external.capath' is deprecated. Use 'mqtt.external.ca_path' instead.
+    Should Contain    ${stderr}    The provided config key: 'mqtt.external.ca_path' is not set
+
 Normalize paths configured with tedge config
     Execute Command    tedge config set c8y.device.csr_path c8y-device.csr
     ${path}=    Execute Command    tedge config get c8y.device.csr_path
@@ -66,10 +76,20 @@ Custom Setup
 
 Check known tedge environment settings
     [Arguments]    ${ENV_NAME}    ${KEY_NAME}    ${VALUE}
-    ${output}=    Execute Command    cmd=env ${ENV_NAME}=${VALUE} tedge config get ${KEY_NAME}
-    Should Be Equal    ${output}    ${VALUE}\n
+    ${stdout}    ${stderr}=    Execute Command
+    ...    cmd=env ${ENV_NAME}=${VALUE} tedge config get ${KEY_NAME}
+    ...    stdout=${True}
+    ...    stderr=${True}
+    ...    retries=1
+    Should Be Equal    ${stdout}    ${VALUE}\n
+    Should Be Empty    ${stderr}
 
 Check known tedge environment settings for topics
     [Arguments]    ${ENV_NAME}    ${KEY_NAME}
-    ${output}=    Execute Command    cmd=env ${ENV_NAME}=topic/1,topic/2/+,topic/3/# tedge config get ${KEY_NAME}
-    Should Be Equal    ${output}    ["topic/1", "topic/2/+", "topic/3/#"]\n
+    ${stdout}    ${stderr}=    Execute Command
+    ...    cmd=env ${ENV_NAME}=topic/1,topic/2/+,topic/3/# tedge config get ${KEY_NAME}
+    ...    stdout=${True}
+    ...    stderr=${True}
+    ...    retries=1
+    Should Be Equal    ${stdout}    ["topic/1", "topic/2/+", "topic/3/#"]\n
+    Should Be Empty    ${stderr}

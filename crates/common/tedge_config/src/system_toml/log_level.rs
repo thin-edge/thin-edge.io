@@ -1,10 +1,21 @@
-use camino::Utf8Path;
-
 use super::SystemConfig;
 use super::SystemTomlError;
 use crate::cli::LogConfigArgs;
+use camino::Utf8Path;
 use std::io::IsTerminal;
 use std::str::FromStr;
+use std::sync::Arc;
+
+#[macro_export]
+/// The basic subscriber
+macro_rules! subscriber_builder {
+    () => {
+        tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
+            .with_ansi(std::io::stderr().is_terminal())
+            .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
+    };
+}
 
 /// Configures and enables logging taking into account flags, env variables and file config.
 ///
@@ -19,10 +30,7 @@ pub fn log_init(
     flags: &LogConfigArgs,
     config_dir: &Utf8Path,
 ) -> Result<(), SystemTomlError> {
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_ansi(std::io::stderr().is_terminal())
-        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
+    let subscriber = subscriber_builder!();
 
     let log_level = flags
         .log_level
@@ -47,6 +55,51 @@ pub fn log_init(
 
     Ok(())
 }
+
+pub fn unconfigured_logger() -> Arc<dyn tracing::Subscriber + Send + Sync> {
+    logger(
+        "tedge",
+        &LogConfigArgs {
+            debug: false,
+            log_level: None,
+        },
+        None,
+    )
+    .unwrap()
+}
+
+fn logger(
+    sname: &str,
+    flags: &LogConfigArgs,
+    config_dir: Option<&Utf8Path>,
+) -> Result<Arc<dyn tracing::Subscriber + Send + Sync>, SystemTomlError> {
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_ansi(std::io::stderr().is_terminal())
+        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
+    let log_level = flags
+        .log_level
+        .or(flags.debug.then_some(tracing::Level::DEBUG));
+
+    if let Some(log_level) = log_level {
+        Ok(Arc::new(subscriber.with_max_level(log_level).finish()))
+    } else if std::env::var("RUST_LOG").is_ok() {
+        Ok(Arc::new(
+            subscriber
+                .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+                .with_file(true)
+                .with_line_number(true)
+                .finish(),
+        ))
+    } else {
+        let log_level = config_dir
+            .map(|config_dir| get_log_level(sname, config_dir))
+            .unwrap_or(Ok(DEFAULT_MAX_LEVEL))?;
+        Ok(Arc::new(subscriber.with_max_level(log_level).finish()))
+    }
+}
+
+const DEFAULT_MAX_LEVEL: tracing::Level = tracing::Level::INFO;
 
 pub fn get_log_level(
     sname: &str,
