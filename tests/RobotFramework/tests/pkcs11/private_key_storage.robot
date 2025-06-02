@@ -17,7 +17,7 @@ Test Tags           adapter:docker    theme:cryptoki
 
 
 *** Variables ***
-${CERT_TEMPLATE}     /etc/tedge/hsm/cert.template    # created by init_softhsm script
+${CERT_TEMPLATE}    /etc/tedge/hsm/cert.template    # created by init_softhsm script
 
 
 *** Test Cases ***
