@@ -27,7 +27,7 @@ pub enum TEdgeDiagCli {
         ///
         /// [default: tedge-diag_<TIMESTAMP>]
         #[clap(long)]
-        tarball_name: Option<String>,
+        name: Option<String>,
 
         /// Whether to keep intermediate output files after the tarball is created
         #[clap(long)]
@@ -49,7 +49,7 @@ impl BuildCommand for TEdgeDiagCli {
             TEdgeDiagCli::Collect {
                 plugin_dir,
                 output_dir,
-                tarball_name,
+                name,
                 keep_dir,
                 timeout,
                 forceful_timeout,
@@ -62,7 +62,7 @@ impl BuildCommand for TEdgeDiagCli {
                             .unwrap(),
                     )
                     .unwrap();
-                let tarball_name = tarball_name.unwrap_or(format!("tedge-diag-{now}"));
+                let tarball_name = name.unwrap_or(format!("tedge-diag-{now}"));
 
                 let cmd = DiagCollectCommand {
                     plugin_dir,
