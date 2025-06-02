@@ -27,6 +27,7 @@ use rumqttc::QoS;
 use rumqttc::QoS::AtLeastOnce;
 use rumqttc::TlsError;
 use rumqttc::Transport;
+use tedge_config::models::auth_method::AuthType;
 use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
@@ -35,7 +36,6 @@ const CONNECTION_ERROR_CONTEXT: &str = "Connection error while creating device i
 
 // Connect directly to the c8y cloud over mqtt and publish device create message.
 pub async fn create_device_with_direct_connection(
-    use_basic_auth: bool,
     bridge_config: &BridgeConfig,
     device_type: &str,
     // TODO: put into general authentication struct
@@ -53,7 +53,7 @@ pub async fn create_device_with_direct_connection(
     );
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
 
-    let tls_config = if use_basic_auth {
+    let tls_config = if bridge_config.auth_type == AuthType::Basic {
         mqtt_options.set_credentials(
             bridge_config
                 .remote_username
