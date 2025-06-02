@@ -10,7 +10,7 @@ A `tedge` sub command to interact with the HTTP services hosted on the device by
 
 - the [Cumulocity Proxy](../../cumulocity-proxy/)
 - the [File Transfer Service](../../file-transfer-service/)
-- the [Entity Store Service](../../../operate/registration/register/).
+- the [Entity Store Service](../../../operate/registration/).
 
 This command uses `tedge config` to get the appropriate host, port and credentials to reach these local HTTP services.
 So the same command can be used unchanged from the main device or a child device, with TLS or mTLS enabled or not.
@@ -54,7 +54,7 @@ The requests are forwarded to the appropriate service depending on the URL prefi
    tedge http put /te/v1/files/target.txt --file source.txt
    ```
   
-- URIs starting with `/te/v1/entities` are directed to the [Entity Store Service](../../../operate/registration/register)
+- URIs starting with `/te/v1/entities` are directed to the [Entity Store Service](../../../operate/registration/)
 
    ```sh title="Listing all entities"
    tedge http get /te/v1/entities
