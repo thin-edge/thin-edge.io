@@ -51,10 +51,10 @@ export function process(t, message, config) {
     type: type
   }
 
-  let meta = config[`${message.topic}/meta`] || {}
+  let meta = (config || {})[`${message.topic}/meta`] || {}
 
   for (let [k, v] of Object.entries(payload)) {
-    let k_meta = meta[k] || {}
+    let k_meta = (meta || {})[k] || {}
     if (k === "time") {
       let fragment = { time: v }
       Object.assign(c8y_msg, fragment)
@@ -114,6 +114,9 @@ export function update_config(message, config) {
 
   let fragment = {
     [type]: metadata
+  }
+  if (!config) {
+    config = {}
   }
   Object.assign(config, fragment)
 
