@@ -307,11 +307,9 @@ impl<'js> FromJs<'js> for JsonValue {
         }
         if let Some(object) = value.as_object() {
             let mut js_object = serde_json::Map::new();
-            for key in object.keys::<String>() {
-                if let Ok(k) = key {
-                    if let Ok(JsonValue(v)) = object.get(&k) {
-                        js_object.insert(k, v.clone());
-                    }
+            for key in object.keys::<String>().flatten() {
+                if let Ok(JsonValue(v)) = object.get(&key) {
+                    js_object.insert(key, v.clone());
                 }
             }
             return Ok(JsonValue(serde_json::Value::Object(js_object)));
