@@ -17,7 +17,7 @@ Test Tags           adapter:docker    theme:cryptoki
 
 
 *** Variables ***
-${CERT_TEMPLATE}     /etc/tedge/hsm/cert.template    # created by init_softhsm script
+${CERT_TEMPLATE}    /etc/tedge/hsm/cert.template    # created by init_softhsm script
 
 
 *** Test Cases ***
@@ -69,17 +69,17 @@ Select Private key using a request URI
     ...    we can select different keys without restarting tedge-p11-server.
 
     Execute Command    cmd=tedge config set device.key_uri pkcs11:token=token123
-    ${stdout}=    Tedge Reconnect Should Fail With    Failed to find a signing key
-    Should Contain    ${stdout}    item=cryptoki: socket (key: pkcs11:token=token123)
+    ${stderr}=    Tedge Reconnect Should Fail With    Failed to find a signing key
+    Should Contain    ${stderr}    item=cryptoki: socket (key: pkcs11:token=token123)
 
     Execute Command    cmd=tedge config unset device.key_uri
     Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:token=token123
-    ${stdout}=    Tedge Reconnect Should Fail With    Failed to find a signing key
-    Should Contain    ${stdout}    item=cryptoki: socket (key: pkcs11:token=token123)
+    ${stderr}=    Tedge Reconnect Should Fail With    Failed to find a signing key
+    Should Contain    ${stderr}    item=cryptoki: socket (key: pkcs11:token=token123)
 
     Execute Command    cmd=tedge config set c8y.device.key_uri "pkcs11:token=tedge;object=tedge"
-    ${stdout}=    Tedge Reconnect Should Succeed
-    Should Contain    ${stdout}    item=cryptoki: socket (key: pkcs11:token=tedge;object=tedge)
+    ${stderr}=    Tedge Reconnect Should Succeed
+    Should Contain    ${stderr}    item=cryptoki: socket (key: pkcs11:token=tedge;object=tedge)
 
 Connects to C8y using an RSA key
     [Documentation]    Test that we can connect to C8y using an RSA private keys of all sizes.
@@ -233,14 +233,14 @@ Set tedge-p11-server Uri
     Restart Service    tedge-p11-server
 
 Tedge Reconnect Should Succeed
-    ${stdout}=    Execute Command    tedge reconnect c8y
-    RETURN    ${stdout}
+    ${stderr}=    Execute Command    tedge reconnect c8y    stdout=false    stderr=true
+    RETURN    ${stderr}
 
 Tedge Reconnect Should Fail With
     [Arguments]    ${error}
-    ${stdout}    ${stderr}=    Execute Command    tedge reconnect c8y    exp_exit_code=!0    stdout=true    stderr=true
+    ${stderr}=    Execute Command    tedge reconnect c8y    exp_exit_code=!0    stdout=false    stderr=true
     Should Contain    ${stderr}    ${error}
-    RETURN    ${stdout}
+    RETURN    ${stderr}
 
 Upload Currently Used Certificates To Cumulocity
     Execute Command

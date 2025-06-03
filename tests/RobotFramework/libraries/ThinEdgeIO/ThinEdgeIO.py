@@ -903,6 +903,8 @@ class ThinEdgeIO(DeviceLibrary):
         key_file: str = "",
         user: str = "",
         exp_exit_code: int = 0,
+        stdout: bool = True,
+        stderr: bool = False,
         **kwargs,
     ) -> str:
         """Execute a command using the Cumulocity Remote Access feature (using ssh)
@@ -951,15 +953,28 @@ class ThinEdgeIO(DeviceLibrary):
         timeout = kwargs.pop("timeout", 30)
         proc.wait(timeout)
 
-        stdout = proc.stdout.read()
-        stderr = proc.stderr.read()
+        out = proc.stdout.read()
+        err = proc.stderr.read()
         if exp_exit_code is not None:
             assert (
                 proc.returncode == exp_exit_code
-            ), f"Failed to connect via remote access.\nstdout: <<EOT{stdout}\nEOT\n\nstderr <<EOT\n{stderr}\nEOT"
+            ), f"Failed to connect via remote access.\nstdout: <<EOT{out}\nEOT\n\nstderr <<EOT\n{err}\nEOT"
 
-        log.info(f"Command:\n%s", stdout)
-        return stdout
+        log.info(f"Command:\n%s", out)
+
+        output = []
+        if stdout:
+            output.append(out)
+        if stderr:
+            output.append(err)
+
+        if len(output) == 0:
+            return
+
+        if len(output) == 1:
+            return output[0]
+
+        return tuple(output)
 
     @keyword("Configure SSH")
     def configure_ssh(self, user: str = "root", device: str = None) -> str:

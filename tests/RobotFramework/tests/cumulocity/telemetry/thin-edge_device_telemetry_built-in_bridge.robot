@@ -392,5 +392,5 @@ Custom Setup
     ThinEdgeIO.Execute Command    tedge config set c8y.bridge.topic_prefix custom-c8y-prefix
     ThinEdgeIO.Execute Command    tedge reconnect c8y
     Service Health Status Should Be Up    tedge-mapper-custom-c8y-prefix
-    ${output}=    Execute Command    sudo tedge connect c8y --test
+    ${output}=    Execute Command    sudo tedge connect c8y --test    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Connection check to c8y cloud is successful.

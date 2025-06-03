@@ -49,12 +49,14 @@ Remote access session is independent from mapper (when using socket activation)
     Add Remote Access Passthrough Configuration
 
     # Restart mapper via tedge reconnect
-    ${stdout}=    Execute Remote Access Command
+    ${stderr}=    Execute Remote Access Command
     ...    command=tedge reconnect c8y
     ...    exp_exit_code=0
     ...    user=root
     ...    key_file=${KEY_FILE}
-    Should Contain    ${stdout}    Enabling tedge-agent... ✓
+    ...    stdout=${False}
+    ...    stderr=${True}
+    Should Contain    ${stderr}    Enabling tedge-agent... ✓
     Cumulocity.Should Only Have Completed Operations
 
     # Transfer a test script to the device to reduce errors with complex one-liners
