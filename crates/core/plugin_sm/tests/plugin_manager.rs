@@ -62,7 +62,7 @@ mod tests {
         let _ = File::create(plugin_file_path).unwrap();
 
         let result = ExternalPlugins::open(
-            plugin_dir.keep(),
+            plugin_dir.path(),
             Some("dummy".into()),
             SudoCommandBuilder::enabled(false),
             config_dir.utf8_path_buf(),
