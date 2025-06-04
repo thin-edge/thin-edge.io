@@ -1,14 +1,13 @@
+use crate::js_runtime::JsRuntime;
 use crate::pipeline;
 use crate::pipeline::DateTime;
 use crate::pipeline::FilterError;
 use crate::pipeline::Message;
-use crate::LoadError;
+use anyhow::Context;
 use rquickjs::Ctx;
 use rquickjs::FromJs;
 use rquickjs::IntoJs;
-use rquickjs::Object;
 use rquickjs::Value;
-use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use tracing::debug;
@@ -20,7 +19,7 @@ pub struct JsFilter {
     tick_every_seconds: u64,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct JsonValue(serde_json::Value);
 
 impl JsFilter {
@@ -30,6 +29,10 @@ impl JsFilter {
             config: JsonValue::default(),
             tick_every_seconds: 0,
         }
+    }
+
+    pub fn module_name(&self) -> String {
+        self.path.display().to_string()
     }
 
     pub fn with_config(self, config: Option<serde_json::Value>) -> Self {
@@ -68,11 +71,16 @@ impl JsFilter {
         timestamp: &DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FilterError> {
-        debug!(target: "MAPPING", "{}: process({timestamp:?}, {message:?})", self.path.display());
-        let input = (timestamp.clone(), message.clone(), self.config.clone());
-        js.call_function(self, "process", input)
+        debug!(target: "MAPPING", "{}: process({timestamp:?}, {message:?})", self.module_name());
+        let input = vec![
+            timestamp.clone().into(),
+            message.clone().into(),
+            self.config.clone(),
+        ];
+        js.call_function(&self.path, "process", input)
             .await
-            .map_err(pipeline::error_from_js)
+            .map_err(pipeline::error_from_js)?
+            .try_into()
     }
 
     /// Update the filter config using a metadata message
@@ -87,10 +95,10 @@ impl JsFilter {
         js: &JsRuntime,
         message: &Message,
     ) -> Result<(), FilterError> {
-        debug!(target: "MAPPING", "{}: update_config({message:?})", self.path.display());
-        let input = (message.clone(), self.config.clone());
+        debug!(target: "MAPPING", "{}: update_config({message:?})", self.module_name());
+        let input = vec![message.clone().into(), self.config.clone()];
         let config = js
-            .call_function(self, "update_config", input)
+            .call_function(&self.path, "update_config", input)
             .await
             .map_err(pipeline::error_from_js)?;
         self.config = config;
@@ -112,143 +120,78 @@ impl JsFilter {
         if !timestamp.tick_now(self.tick_every_seconds) {
             return Ok(vec![]);
         }
-        debug!(target: "MAPPING", "{}: tick({timestamp:?})", self.path.display());
-        let input = (timestamp.clone(), self.config.clone());
-        js.call_function(self, "tick", input)
+        debug!(target: "MAPPING", "{}: tick({timestamp:?})", self.module_name());
+        let input = vec![timestamp.clone().into(), self.config.clone()];
+        js.call_function(&self.path, "tick", input)
             .await
-            .map_err(pipeline::error_from_js)
+            .map_err(pipeline::error_from_js)?
+            .try_into()
     }
 }
 
-pub struct JsRuntime {
-    context: rquickjs::AsyncContext,
-    modules: HashMap<PathBuf, Vec<u8>>,
+impl From<Message> for JsonValue {
+    fn from(value: Message) -> Self {
+        JsonValue(value.json())
+    }
 }
 
-impl JsRuntime {
-    pub async fn try_new() -> Result<Self, LoadError> {
-        let runtime = rquickjs::AsyncRuntime::new()?;
-        let context = rquickjs::AsyncContext::full(&runtime).await?;
-        let modules = HashMap::new();
-        Ok(JsRuntime { context, modules })
+impl From<DateTime> for JsonValue {
+    fn from(value: DateTime) -> Self {
+        JsonValue(value.json())
     }
+}
 
-    pub async fn load_file(&mut self, path: impl AsRef<Path>) -> Result<JsFilter, LoadError> {
-        let path = path.as_ref();
-        let source = tokio::fs::read_to_string(path).await?;
-        self.load_js(path, source)
+impl TryFrom<serde_json::Value> for Message {
+    type Error = FilterError;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        let message = serde_json::from_value(value)
+            .with_context(|| "Couldn't extract message payload and topic")?;
+        Ok(message)
     }
+}
 
-    pub fn load_js(
-        &mut self,
-        path: impl AsRef<Path>,
-        source: impl Into<Vec<u8>>,
-    ) -> Result<JsFilter, LoadError> {
-        let path = path.as_ref().to_path_buf();
-        self.modules.insert(path.clone(), source.into());
-        Ok(JsFilter::new(path))
+impl TryFrom<JsonValue> for Message {
+    type Error = FilterError;
+
+    fn try_from(value: JsonValue) -> Result<Self, Self::Error> {
+        Message::try_from(value.0)
     }
+}
 
-    pub fn loaded_module(&self, path: PathBuf) -> Result<JsFilter, LoadError> {
-        match self.modules.get(&path) {
-            None => Err(LoadError::ScriptNotLoaded { path }),
-            Some(_) => Ok(JsFilter::new(path)),
-        }
-    }
+impl TryFrom<JsonValue> for Vec<Message> {
+    type Error = FilterError;
 
-    pub async fn call_function<Args, Ret>(
-        &self,
-        module: &JsFilter,
-        function: &str,
-        args: Args,
-    ) -> Result<Ret, LoadError>
-    where
-        for<'a> Args: rquickjs::function::IntoArgs<'a> + Send + 'a,
-        for<'a> Ret: FromJs<'a> + Send + 'a,
-    {
-        let Some(source) = self.modules.get(&module.path) else {
-            return Err(LoadError::ScriptNotLoaded {
-                path: module.path.clone(),
-            });
-        };
-
-        let name = module.path.display().to_string();
-
-        rquickjs::async_with!(self.context => |ctx| {
-            debug!(target: "MAPPING", "compile({name})");
-            let m = rquickjs::Module::declare(ctx.clone(), name.clone(), source.clone())?;
-            let (m,p) = m.eval()?;
-            let () = p.finish()?;
-
-            debug!(target: "MAPPING", "link({name})");
-            let f: rquickjs::Value = m.get(function)?;
-            let f = rquickjs::Function::from_value(f)?;
-
-            debug!(target: "MAPPING", "execute({name})");
-            let r = f.call(args);
-            if r.is_err() {
-                if let Some(ex) = ctx.catch().as_exception() {
-                    let err = anyhow::anyhow!("{ex}");
-                    Err(err.context("JS raised exception").into())
-                } else {
-                let err = r.err().unwrap();
-                debug!(target: "MAPPING", "execute({name}) => {err:?}");
-                Err(err.into())
-                }
-            } else {
-                Ok(r.unwrap())
+    fn try_from(value: JsonValue) -> Result<Self, Self::Error> {
+        match value.0 {
+            serde_json::Value::Array(array) => array.into_iter().map(Message::try_from).collect(),
+            serde_json::Value::Object(map) => {
+                Message::try_from(serde_json::Value::Object(map)).map(|message| vec![message])
             }
-        })
-        .await
-    }
-}
-
-impl<'js> FromJs<'js> for Message {
-    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
-        debug!(target: "MAPPING", "from_js(...)");
-        match value.as_object() {
-            None => Ok(Message {
-                topic: "".to_string(),
-                payload: "".to_string(),
-            }),
-            Some(object) => {
-                let topic = object.get("topic");
-                let payload = object.get("payload");
-                debug!(target: "MAPPING", "from_js(...) -> topic = {:?}, payload = {:?}", topic, payload);
-                Ok(Message {
-                    topic: topic?,
-                    payload: payload?,
-                })
-            }
+            _ => Err(anyhow::anyhow!("Filters are expected to return an array of messages").into()),
         }
     }
 }
 
-impl<'js> IntoJs<'js> for Message {
-    fn into_js(self, ctx: &Ctx<'js>) -> rquickjs::Result<Value<'js>> {
-        debug!(target: "MAPPING", "into_js({self:?})");
-        let msg = Object::new(ctx.clone())?;
-        msg.set("topic", self.topic)?;
-        msg.set("payload", self.payload)?;
-        Ok(Value::from_object(msg))
-    }
-}
-
-impl<'js> IntoJs<'js> for DateTime {
-    fn into_js(self, ctx: &Ctx<'js>) -> rquickjs::Result<Value<'js>> {
-        debug!(target: "MAPPING", "into_js({self:?})");
-        let msg = Object::new(ctx.clone())?;
-        msg.set("seconds", self.seconds)?;
-        msg.set("nanoseconds", self.nanoseconds)?;
-        Ok(Value::from_object(msg))
-    }
-}
+struct JsonValueRef<'a>(&'a serde_json::Value);
 
 impl<'js> IntoJs<'js> for JsonValue {
     fn into_js(self, ctx: &Ctx<'js>) -> rquickjs::Result<Value<'js>> {
+        JsonValueRef(&self.0).into_js(ctx)
+    }
+}
+
+impl<'js> IntoJs<'js> for &JsonValue {
+    fn into_js(self, ctx: &Ctx<'js>) -> rquickjs::Result<Value<'js>> {
+        JsonValueRef(&self.0).into_js(ctx)
+    }
+}
+
+impl<'a, 'js> IntoJs<'js> for JsonValueRef<'a> {
+    fn into_js(self, ctx: &Ctx<'js>) -> rquickjs::Result<Value<'js>> {
         match self.0 {
             serde_json::Value::Null => Ok(Value::new_null(ctx.clone())),
-            serde_json::Value::Bool(value) => Ok(Value::new_bool(ctx.clone(), value)),
+            serde_json::Value::Bool(value) => Ok(Value::new_bool(ctx.clone(), *value)),
             serde_json::Value::Number(value) => {
                 if let Some(n) = value.as_i64() {
                     if let Ok(n) = i32::try_from(n) {
@@ -262,20 +205,20 @@ impl<'js> IntoJs<'js> for JsonValue {
                 Ok(nan.into_value())
             }
             serde_json::Value::String(value) => {
-                let string = rquickjs::String::from_str(ctx.clone(), &value)?;
+                let string = rquickjs::String::from_str(ctx.clone(), value)?;
                 Ok(string.into_value())
             }
             serde_json::Value::Array(values) => {
                 let array = rquickjs::Array::new(ctx.clone())?;
-                for (i, value) in values.into_iter().enumerate() {
-                    array.set(i, JsonValue(value))?;
+                for (i, value) in values.iter().enumerate() {
+                    array.set(i, JsonValueRef(value))?;
                 }
                 Ok(array.into_value())
             }
             serde_json::Value::Object(values) => {
                 let object = rquickjs::Object::new(ctx.clone())?;
                 for (key, value) in values.into_iter() {
-                    object.set(key, JsonValue(value))?;
+                    object.set(key, JsonValueRef(value))?;
                 }
                 Ok(object.into_value())
             }
@@ -327,7 +270,8 @@ mod tests {
     async fn identity_filter() {
         let script = "export function process(t,msg) { return [msg]; };";
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        let filter = runtime.load_js("id.js", script).unwrap();
+        runtime.load_js("id.js", script).await.unwrap();
+        let filter = JsFilter::new("id.js".into());
 
         let input = Message::new("te/main/device///m/", "hello world");
         let output = input.clone();
@@ -344,7 +288,8 @@ mod tests {
     async fn error_filter() {
         let script = r#"export function process(t,msg) { throw new Error("Cannot process that message"); };"#;
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        let filter = runtime.load_js("err.js", script).unwrap();
+        runtime.load_js("err.js", script).await.unwrap();
+        let filter = JsFilter::new("err.js".into());
 
         let input = Message::new("te/main/device///m/", "hello world");
         let error = filter
@@ -379,7 +324,8 @@ export function process (timestamp, message, config) {
 }
         "#;
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        let filter = runtime.load_js("collectd.js", script).unwrap();
+        runtime.load_js("collectd.js", script).await.unwrap();
+        let filter = JsFilter::new("collectd.js".into());
 
         let input = Message::new(
             "collectd/h/memory/percent-used",
