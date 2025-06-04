@@ -1,4 +1,5 @@
-use crate::js_filter::JsRuntime;
+use crate::js_filter::JsFilter;
+use crate::js_runtime::JsRuntime;
 use crate::pipeline::Pipeline;
 use crate::pipeline::Stage;
 use crate::LoadError;
@@ -65,13 +66,12 @@ impl PipelineConfig {
 }
 
 impl StageConfig {
-    pub fn compile(self, js_runtime: &JsRuntime, config_dir: &Path) -> Result<Stage, ConfigError> {
+    pub fn compile(self, _js_runtime: &JsRuntime, config_dir: &Path) -> Result<Stage, ConfigError> {
         let path = match self.filter {
             FilterSpec::JavaScript(path) if path.is_absolute() => path.into(),
             FilterSpec::JavaScript(path) => config_dir.join(path),
         };
-        let filter = js_runtime
-            .loaded_module(path)?
+        let filter = JsFilter::new(path)
             .with_config(self.config)
             .with_tick_every_seconds(self.tick_every_seconds);
         let config_topics = topic_filters(&self.meta_topics)?;

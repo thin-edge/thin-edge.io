@@ -1,5 +1,5 @@
 use crate::js_filter::JsFilter;
-use crate::js_filter::JsRuntime;
+use crate::js_runtime::JsRuntime;
 use crate::LoadError;
 use camino::Utf8PathBuf;
 use serde_json::json;
@@ -44,6 +44,9 @@ pub enum FilterError {
 
     #[error("No messages can be processed due to an incorrect setting: {0}")]
     IncorrectSetting(String),
+
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
 }
 
 impl Pipeline {
@@ -122,6 +125,10 @@ impl DateTime {
 
     pub fn tick_now(&self, tick_every_seconds: u64) -> bool {
         tick_every_seconds != 0 && (self.seconds % tick_every_seconds == 0)
+    }
+
+    pub fn json(&self) -> Value {
+        json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
     }
 }
 

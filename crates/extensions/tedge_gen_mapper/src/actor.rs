@@ -1,5 +1,5 @@
 use crate::config::PipelineConfig;
-use crate::js_filter::JsRuntime;
+use crate::js_runtime::JsRuntime;
 use crate::pipeline::DateTime;
 use crate::pipeline::Message;
 use crate::pipeline::Pipeline;
@@ -84,9 +84,8 @@ impl GenMapper {
             for stage in &mut pipeline.stages {
                 if stage.filter.path() == path {
                     match self.js_runtime.load_file(&path).await {
-                        Ok(filter) => {
+                        Ok(()) => {
                             info!("Reloaded filter {path}");
-                            stage.filter = filter
                         }
                         Err(e) => {
                             error!("Failed to reload filter {path}: {e}");
@@ -174,6 +173,9 @@ impl GenMapper {
 
     async fn tick(&mut self) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
+        if timestamp.seconds % 300 == 0 {
+            self.js_runtime.dump_memory_stats().await;
+        }
         for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
             match pipeline.tick(&self.js_runtime, &timestamp).await {
                 Ok(messages) => {
