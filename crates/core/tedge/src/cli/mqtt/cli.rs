@@ -30,6 +30,12 @@ pub enum TEdgeMqttCli {
         /// Retain flag
         #[clap(short, long = "retain")]
         retain: bool,
+        /// Repeat the message
+        #[clap(long)]
+        repeat: Option<u32>,
+        /// Pause between repeated messages (e.g., 60s, 1h)
+        #[clap(long, default_value = "1s")]
+        sleep: SecondsOrHumanTime,
     },
 
     /// Subscribe a MQTT topic.
@@ -69,6 +75,8 @@ impl BuildCommand for TEdgeMqttCli {
                     message,
                     qos,
                     retain,
+                    repeat,
+                    sleep,
                 } => MqttPublishCommand {
                     host: config.mqtt.client.host.clone(),
                     port: config.mqtt.client.port.into(),
@@ -80,6 +88,8 @@ impl BuildCommand for TEdgeMqttCli {
                     ca_file: auth_config.ca_file.clone(),
                     ca_dir: auth_config.ca_dir,
                     client_auth_config: auth_config.client,
+                    count: repeat.unwrap_or(1),
+                    sleep: sleep.duration(),
                 }
                 .into_boxed(),
                 TEdgeMqttCli::Sub {
