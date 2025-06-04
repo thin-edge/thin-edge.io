@@ -213,7 +213,7 @@ impl ServiceCommand<'_> {
             ),
             Self::Start(service) => ExecCommand::try_new_with_placeholder(
                 service_manager.init_config.start.clone(),
-                ServiceCommand::Enable(service),
+                ServiceCommand::Start(service),
                 config_path,
                 service,
             ),
