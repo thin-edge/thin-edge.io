@@ -1,0 +1,4 @@
+[exec]
+command = "c8y-remote-access-plugin"
+topic = "c8y/s/ds"
+on_message = "530"

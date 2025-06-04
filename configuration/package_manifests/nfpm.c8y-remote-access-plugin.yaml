@@ -49,6 +49,19 @@ contents:
       mode: 0644
     packager: rpm
 
+  # Some package manager (e.g. apk) require at least one file to included
+  # in the package in order to run the maintainer scripts (preinstall, postinstall)
+  # so include the configuration file by default in all packages for consistency across
+  # the different package managers.
+  # Note: the contents of the file should align with what is generated when running
+  # c8y-remote-access-plugin --init (for consistency)
+  - src: ./configuration/contrib/operations/c8y_RemoteAccessConnect
+    dst: /etc/tedge/operations/c8y/c8y_RemoteAccessConnect
+    file_info:
+      mode: 0644
+      owner: tedge
+    type: config
+
 overrides:
   apk:
     scripts:
