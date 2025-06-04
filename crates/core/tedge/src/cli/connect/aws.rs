@@ -81,7 +81,7 @@ pub async fn check_device_status_aws(
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
                 err = Some(if acknowledged {
-                    anyhow!("Didn't receive response from AWS")
+                    anyhow!("Didn't receive a response from AWS")
                 } else {
                     anyhow!("Local MQTT publish has timed out")
                 });

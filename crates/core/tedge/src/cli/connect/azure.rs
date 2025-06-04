@@ -89,7 +89,7 @@ pub(crate) async fn check_device_status_azure(
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
                 err = Some(if acknowledged {
-                    anyhow!("Didn't receive response from Azure")
+                    anyhow!("Didn't receive a response from Azure")
                 } else {
                     anyhow!("Local MQTT publish has timed out")
                 });
