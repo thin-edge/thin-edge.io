@@ -22,6 +22,8 @@ pub struct MqttPublishCommand {
     pub ca_file: Option<Utf8PathBuf>,
     pub ca_dir: Option<Utf8PathBuf>,
     pub client_auth_config: Option<MqttAuthClientConfig>,
+    pub count: u32,
+    pub sleep: std::time::Duration,
 }
 
 #[async_trait::async_trait]
@@ -36,7 +38,15 @@ impl Command for MqttPublishCommand {
     }
 
     async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        Ok(publish(self).await?)
+        let mut i = 0;
+        loop {
+            publish(self).await?;
+            i += 1;
+            if i == self.count {
+                return Ok(());
+            }
+            tokio::time::sleep(self.sleep).await;
+        }
     }
 }
 
