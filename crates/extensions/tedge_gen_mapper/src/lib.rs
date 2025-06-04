@@ -1,11 +1,12 @@
 mod actor;
 mod config;
 mod js_filter;
+mod js_runtime;
 mod pipeline;
 
 use crate::actor::GenMapper;
 use crate::config::PipelineConfig;
-use crate::js_filter::JsRuntime;
+use crate::js_runtime::JsRuntime;
 use crate::pipeline::Pipeline;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -189,8 +190,14 @@ impl Builder<GenMapper> for GenMapperBuilder {
 
 #[derive(thiserror::Error, Debug)]
 pub enum LoadError {
-    #[error("Script not loaded: {path}")]
-    ScriptNotLoaded { path: PathBuf },
+    #[error("JavaScript module not found: {module_name}")]
+    UnknownModule { module_name: String },
+
+    #[error("JavaScript function not found: {function} in {module_name}")]
+    UnknownFunction {
+        module_name: String,
+        function: String,
+    },
 
     #[error(transparent)]
     IoError(#[from] std::io::Error),

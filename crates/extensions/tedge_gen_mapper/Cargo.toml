@@ -12,7 +12,7 @@ repository.workspace = true
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true, features = ["serde1"] }
-rquickjs = { workspace = true, features = ["futures", "parallel"] }
+rquickjs = { workspace = true, default-features = false, features = ["futures", "parallel"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
@@ -20,7 +20,7 @@ tedge_file_system_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
-tokio = { workspace = true, features = ["fs", "macros", "time"] }
+tokio = { workspace = true, features = ["fs", "macros", "time", "sync"] }
 toml = { workspace = true, features = ["parse"] }
 tracing = { workspace = true }
 
