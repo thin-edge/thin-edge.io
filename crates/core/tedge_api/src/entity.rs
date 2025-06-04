@@ -1,9 +1,11 @@
+use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::TopicIdError;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
+use std::collections::BTreeSet;
 use std::fmt::Display;
 use std::str::FromStr;
 use thiserror::Error;
@@ -57,7 +59,7 @@ impl From<&EntityExternalId> for String {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
 pub struct EntityMetadata {
     #[serde(rename = "@topic-id")]
     pub topic_id: EntityTopicId,
@@ -72,6 +74,8 @@ pub struct EntityMetadata {
 
     #[serde(skip)]
     pub twin_data: Map<String, JsonValue>,
+    #[serde(skip)]
+    pub persistent_channels: BTreeSet<Channel>,
 }
 
 impl EntityMetadata {
@@ -83,6 +87,7 @@ impl EntityMetadata {
             parent: None,
             health_endpoint: None,
             twin_data: Map::new(),
+            persistent_channels: BTreeSet::new(),
         }
     }
 
@@ -110,6 +115,7 @@ impl EntityMetadata {
             parent: None,
             health_endpoint: None,
             twin_data: Map::new(),
+            persistent_channels: BTreeSet::new(),
         }
     }
 
@@ -122,6 +128,7 @@ impl EntityMetadata {
             parent: Some(EntityTopicId::default_main_device()),
             health_endpoint: None,
             twin_data: Map::new(),
+            persistent_channels: BTreeSet::new(),
         })
     }
 
@@ -131,6 +138,18 @@ impl EntityMetadata {
 
     pub fn display_type(&self) -> Option<&str> {
         self.twin_data.get("type").and_then(|v| v.as_str())
+    }
+}
+
+impl PartialEq for EntityMetadata {
+    fn eq(&self, other: &Self) -> bool {
+        // Ignoring the `persistent_channels` field as it is a runtime data
+        self.topic_id == other.topic_id
+            && self.r#type == other.r#type
+            && self.external_id == other.external_id
+            && self.parent == other.parent
+            && self.health_endpoint == other.health_endpoint
+            && self.twin_data == other.twin_data
     }
 }
 

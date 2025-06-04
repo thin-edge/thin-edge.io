@@ -1,4 +1,5 @@
 use std::collections::hash_map::Entry;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
@@ -209,6 +210,7 @@ impl EntityCache {
             parent,
             health_endpoint: entity.health_endpoint,
             twin_data: entity.twin_data,
+            persistent_channels: BTreeSet::new(),
         };
 
         self.entities.insert(
@@ -258,6 +260,7 @@ impl EntityCache {
                 .clone()
                 .or_else(|| existing_entity.health_endpoint.clone()),
             twin_data: existing_entity.twin_data.clone(),
+            persistent_channels: BTreeSet::new(),
         };
 
         if existing_entity == updated_entity {

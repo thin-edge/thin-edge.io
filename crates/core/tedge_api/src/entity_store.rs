@@ -106,6 +106,7 @@ impl EntityStore {
             parent: None,
             health_endpoint: None,
             twin_data: main_device.twin_data,
+            persistent_channels: BTreeSet::new(),
         };
 
         let message_log = if clean_start {
@@ -196,8 +197,7 @@ impl EntityStore {
                                             fragment_key,
                                             fragment_value,
                                         );
-                                        if let Err(err) =
-                                            self.register_twin_fragment(twin_data.clone())
+                                        if let Err(err) = self.set_twin_fragment(twin_data.clone())
                                         {
                                             error!("Failed to restore twin fragment: {twin_data:?} from the persistent entity store due to {err}");
                                             continue;
@@ -367,6 +367,7 @@ impl EntityStore {
             parent,
             health_endpoint: message.health_endpoint,
             twin_data: message.twin_data,
+            persistent_channels: BTreeSet::new(),
         };
 
         match self.entities.insert(topic_id.clone(), entity_metadata) {
@@ -482,18 +483,33 @@ impl EntityStore {
         &mut self,
         twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
-        self.register_and_persist_twin_fragment(twin_message.clone())
+        let updated = self.set_twin_fragment(twin_message.clone())?;
+        if updated {
+            self.message_log
+                .append_message(&twin_message.to_mqtt_message(&self.mqtt_schema))?;
+        }
+
+        Ok(updated)
     }
 
-    pub fn register_twin_fragment(
+    pub fn set_twin_fragment(
         &mut self,
         twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
         let fragment_key = twin_message.fragment_key;
         let fragment_value = twin_message.fragment_value;
 
-        if fragment_key.is_empty() || fragment_key.starts_with('@') || fragment_key.contains('/') {
-            return Err(Error::InvalidTwinData(fragment_key));
+        Self::validate_fragment_key(&fragment_key)?;
+
+        let channel = Channel::EntityTwinData {
+            fragment_key: fragment_key.clone(),
+        };
+        if !fragment_value.is_null() {
+            // If the value is not null, we are tracking the fragment
+            self.track_persistent_channel(&twin_message.topic_id, channel);
+        } else {
+            // If the value is null, we are removing the fragment
+            self.untrack_persistent_channel(&twin_message.topic_id, &channel);
         }
 
         let entity = self.try_get_mut(&twin_message.topic_id)?;
@@ -514,17 +530,11 @@ impl EntityStore {
         Ok(true)
     }
 
-    pub fn register_and_persist_twin_fragment(
-        &mut self,
-        twin_message: EntityTwinMessage,
-    ) -> Result<bool, entity_store::Error> {
-        let updated = self.register_twin_fragment(twin_message.clone())?;
-        if updated {
-            self.message_log
-                .append_message(&twin_message.to_mqtt_message(&self.mqtt_schema))?;
+    fn validate_fragment_key(fragment_key: &str) -> Result<(), entity_store::Error> {
+        if fragment_key.is_empty() || fragment_key.starts_with('@') || fragment_key.contains('/') {
+            return Err(Error::InvalidTwinData(fragment_key.to_string()));
         }
-
-        Ok(updated)
+        Ok(())
     }
 
     pub fn get_twin_fragments(
@@ -540,8 +550,27 @@ impl EntityStore {
         topic_id: &EntityTopicId,
         fragments: Map<String, JsonValue>,
     ) -> Result<Map<String, JsonValue>, entity_store::Error> {
+        for key in fragments.keys() {
+            Self::validate_fragment_key(key)?;
+        }
         let entity = self.try_get_mut(topic_id)?;
-        let old = mem::replace(&mut entity.twin_data, fragments);
+        let old = mem::replace(&mut entity.twin_data, Map::new());
+        for (key, _) in old.iter() {
+            self.untrack_persistent_channel(
+                topic_id,
+                &Channel::EntityTwinData {
+                    fragment_key: key.clone(),
+                },
+            );
+        }
+
+        for (fragment_key, fragment_value) in fragments {
+            self.update_twin_fragment(EntityTwinMessage::new(
+                topic_id.clone(),
+                fragment_key,
+                fragment_value,
+            ))?;
+        }
         Ok(old)
     }
 
@@ -551,6 +580,14 @@ impl EntityStore {
 
     pub fn list_entity_tree(&self, filters: ListFilters) -> Vec<&EntityMetadata> {
         self.entities.list_entity_tree(filters)
+    }
+
+    pub fn track_persistent_channel(&mut self, topic_id: &EntityTopicId, channel: Channel) {
+        self.entities.track_persistent_channel(topic_id, channel)
+    }
+
+    pub fn untrack_persistent_channel(&mut self, topic_id: &EntityTopicId, channel: &Channel) {
+        self.entities.untrack_persistent_channel(topic_id, channel)
     }
 }
 
@@ -701,6 +738,7 @@ impl EntityTree {
                 merged_other.extend(entity_metadata.twin_data.clone());
                 let merged_entity = EntityMetadata {
                     twin_data: merged_other,
+                    persistent_channels: existing_entity.persistent_channels.clone(),
                     ..entity_metadata
                 };
 
@@ -864,6 +902,16 @@ impl EntityTree {
             current = parent;
         }
         Ok(ancestors)
+    }
+
+    pub fn track_persistent_channel(&mut self, topic_id: &EntityTopicId, channel: Channel) {
+        self.get_mut(topic_id)
+            .map(|entity| entity.persistent_channels.insert(channel));
+    }
+
+    pub fn untrack_persistent_channel(&mut self, topic_id: &EntityTopicId, channel: &Channel) {
+        self.get_mut(topic_id)
+            .map(|entity| entity.persistent_channels.remove(channel));
     }
 }
 
@@ -1683,14 +1731,8 @@ mod tests {
             })
             .unwrap();
 
-        let expected_entity_metadata = EntityMetadata {
-            topic_id: main_topic_id.clone(),
-            parent: None,
-            r#type: EntityType::MainDevice,
-            external_id: None,
-            health_endpoint: None,
-            twin_data: Map::new(),
-        };
+        let expected_entity_metadata =
+            EntityMetadata::new(main_topic_id.clone(), EntityType::MainDevice);
         // Assert main device registered with custom topic scheme
         assert_eq!(
             store.get(&main_topic_id).unwrap(),
@@ -1710,14 +1752,9 @@ mod tests {
             })
             .unwrap();
 
-        let expected_entity_metadata = EntityMetadata {
-            topic_id: service_topic_id.clone(),
-            parent: Some(main_topic_id),
-            r#type: EntityType::Service,
-            external_id: None,
-            health_endpoint: None,
-            twin_data: Map::new(),
-        };
+        let expected_entity_metadata =
+            EntityMetadata::new(service_topic_id.clone(), EntityType::Service)
+                .with_parent(main_topic_id);
         // Assert service registered under main device with custom topic scheme
         assert_eq!(
             store.get(&service_topic_id).unwrap(),

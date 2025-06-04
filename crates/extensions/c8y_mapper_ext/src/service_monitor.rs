@@ -77,7 +77,6 @@ pub(crate) fn convert_health_status_message(
 mod tests {
     use super::*;
     use crate::converter::CumulocityConverter;
-    use serde_json::Map;
     use tedge_api::entity::EntityMetadata;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_mqtt_ext::Topic;
@@ -200,14 +199,9 @@ mod tests {
 
         let entity = CloudEntityMetadata::new(
             external_id.clone(),
-            EntityMetadata {
-                topic_id: entity_topic_id,
-                external_id: Some(external_id),
-                r#type: EntityType::Service,
-                parent,
-                health_endpoint: None,
-                twin_data: Map::new(),
-            },
+            EntityMetadata::new(entity_topic_id.clone(), EntityType::Service)
+                .with_parent(parent.unwrap())
+                .with_external_id(external_id.clone()),
         );
 
         let msg = convert_health_status_message(

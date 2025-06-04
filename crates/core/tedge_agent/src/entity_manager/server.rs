@@ -211,6 +211,23 @@ impl EntityStoreServer {
             }
         }
 
+        if channel.is_alarm()
+            || channel.is_command()
+            || channel.is_command_metadata()
+            || channel.is_health()
+        {
+            if !message.payload_bytes().is_empty() {
+                // Messages published to any persistent/retained channels which must be tracked
+                // so that they can be cleared when the entity is deregistered.
+                self.entity_store
+                    .track_persistent_channel(&topic_id, channel.clone());
+            } else {
+                // Untrack previously tracked channels when they are cleared from the broker.
+                self.entity_store
+                    .untrack_persistent_channel(&topic_id, &channel);
+            }
+        }
+
         if let Channel::EntityTwinData { fragment_key } = channel {
             let fragment_value = serde_json::from_slice(message.payload_bytes())?;
             let twin_message = EntityTwinMessage::new(topic_id, fragment_key, fragment_value);
@@ -307,16 +324,11 @@ impl EntityStoreServer {
     async fn deregister_entity(&mut self, topic_id: &EntityTopicId) -> Vec<EntityMetadata> {
         let deleted = self.entity_store.deregister_entity(topic_id);
         for entity in deleted.iter().rev() {
-            for twin_key in entity.twin_data.keys() {
-                let topic = self.mqtt_schema.topic_for(
-                    &entity.topic_id,
-                    &Channel::EntityTwinData {
-                        fragment_key: twin_key.to_string(),
-                    },
-                );
-                let clear_twin_msg = MqttMessage::new(&topic, "").with_retain();
+            for channel in &entity.persistent_channels {
+                let topic = self.mqtt_schema.topic_for(&entity.topic_id, channel);
+                let clear_data_msg = MqttMessage::new(&topic, "").with_retain();
 
-                self.publish_message(clear_twin_msg).await;
+                self.publish_message(clear_data_msg).await;
             }
             let topic = self
                 .mqtt_schema
