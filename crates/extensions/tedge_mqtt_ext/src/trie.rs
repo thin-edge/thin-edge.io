@@ -3,6 +3,77 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 #[derive(Debug)]
+/// A Trie for matching incoming MQTT messages with their subscribers
+///
+/// # Structure
+/// Each node of the trie contains:
+/// - a list of subscribers to the current topic
+/// - a map of segments to trie nodes
+///
+/// As an example, if we subscribed a subscriber `"tedge-mapper"` to topic
+/// `c8y/s/us`, the structure would look like:
+///
+/// ```text
+/// {
+///     "c8y": {
+///         subscribers: [],
+///         sub_nodes: {
+///             "s": {
+///                 subscribers: [],
+///                 sub_nodes: {
+///                     "us": {
+///                         subscribers: ["tedge-mapper"],
+///                         sub_nodes: {}
+///                     }
+///                 }
+///             }
+///         }
+///     }
+/// }
+/// ```
+///
+/// In practice, this is achieved by having a root node that always has no
+/// subscribers. What is shown above is the `sub_nodes` field of the root node.
+///
+/// # Subscription management
+/// One of the requirements for the tedge MQTT actor is to manage subscriptions
+/// from a bunch of clients and process them as a single MQTT channel client.
+/// This means the actor maintains a minimal set of MQTT topic subscriptions to
+/// cover all possible messages to its clients.
+///
+/// For example, if `client-a` subscribes to `a/b/c` and `client-b` subscribes
+/// to `a/#`, the actor should subscribe to `a/#` only, since this wildcard
+/// topic captures all messages on `a/b/c`, so we don't require a separate
+/// subscription.
+///
+/// To allow the actor to subscribe/unsubscribe when appropriate,
+/// [MqtTrie::insert] and [MqtTrie::remove] both return [Diff] objects. This
+/// gives a list of topics that need subscribing to/unsubscribing from
+/// following.
+///
+/// Here are some examples of diffs that are returned
+///
+/// ```
+/// # use tedge_mqtt_ext::trie::*;
+///
+/// let mut t = MqtTrie::default();
+/// // First subscriber -> subscribe to that topic
+/// assert_eq!(t.insert("a/b", 1), Diff { subscribe: vec!["a/b".into()], unsubscribe: vec![] });
+/// // Another subscriber to the same topics -> don't need to change subscriptions
+/// assert_eq!(t.insert("a/b", 2), Diff { subscribe: vec![], unsubscribe: vec![] });
+/// // Subscriber to a different topic -> subscribe to that topic
+/// assert_eq!(t.insert("a", 1), Diff { subscribe: vec!["a".into()], unsubscribe: vec![] });
+/// // Subscriber to a segment wildcard -> subscribe to that topic, unsubscribe from static topic
+/// assert_eq!(t.insert("a/+", 1), Diff { subscribe: vec!["a/+".into()], unsubscribe: vec!["a/b".into()] });
+/// // Subscriber to a wildcard -> subscribe to that topic and unsubscribe from the matching ones
+/// // Don't unsubscribe from the already unsubscribed a/b topic though
+/// assert_eq!(t.insert("#", 1), Diff { subscribe: vec!["#".into()], unsubscribe: vec!["a".into(), "a/+".into()] });
+/// ```
+///
+/// It is still possible to end up with overlapping subscriptions via this
+/// method. For instance, `a/+/c` and `a/b/+` both subscribe to messages on
+/// `a/b/c`, but aren't overlapping. Currently, [MqtTrie] handles this by
+/// subscribing to both `a/+/c` and `a/b/+`.
 pub struct MqtTrie<T> {
     root: TrieNode<T>,
 }
@@ -22,16 +93,19 @@ pub struct Diff {
 }
 
 impl<T: Debug + Eq> MqtTrie<T> {
+    /// Queries the trie for people subscribed to a given topic
     pub fn matches<'a>(&'a self, topic: &str) -> Vec<&'a T> {
         let mut nodes = Vec::new();
         self.root.matches(Some(topic), &mut nodes);
         nodes
     }
 
+    /// Add a new subscriber
     pub fn insert(&mut self, topic: &str, subscriber: T) -> Diff {
         self.root.insert(topic, subscriber)
     }
 
+    /// Removes an existing subscription
     pub fn remove(&mut self, topic: &str, id: &T) -> Diff {
         self.root.remove(topic, id)
     }
@@ -425,7 +499,7 @@ impl<T: Debug + Eq> TrieNode<T> {
             };
             Diff {
                 subscribe: vec![topic.to_owned()],
-                unsubscribe,
+                unsubscribe: remove_unneeded_topics(&unsubscribe),
             }
         }
     }
@@ -724,6 +798,22 @@ mod tests {
             t.insert("a/b/+/+", 1);
 
             assert_eq!(t.insert("a/b/+/d", 2), Diff::empty());
+        }
+
+        #[test]
+        fn unsubscribes_only_to_subscribed_topics() {
+            let mut t = MqtTrie::default();
+            t.insert("a", 1);
+            t.insert("a/+", 1);
+            t.insert("a/b", 1);
+
+            assert_eq!(
+                t.insert("#", 1),
+                Diff {
+                    subscribe: vec!["#".into()],
+                    unsubscribe: vec!["a".into(), "a/+".into()]
+                }
+            );
         }
     }
 
