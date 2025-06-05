@@ -89,7 +89,7 @@ pub(crate) async fn check_device_status_azure(
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
                 err = Some(if acknowledged {
-                    anyhow!("Didn't receive response from Azure")
+                    anyhow!("Didn't receive a response from Azure")
                 } else {
                     anyhow!("Local MQTT publish has timed out")
                 });
@@ -124,9 +124,10 @@ pub(crate) async fn check_device_status_azure(
 
     match err {
         None => Ok(DeviceStatus::AlreadyExists),
-        // The request has been sent but without a response
-        Some(_) if acknowledged => Ok(DeviceStatus::Unknown),
-        // The request has not even been sent
+        // In Cumulocity we connect directly first to create a device so we know we can connect so
+        // we return `DeviceStatus::Unknown` when we can't check its status, but here we can fail to
+        // even connect because we're connecting through the bridge and haven't connected directly
+        // prior
         Some(err) => Err(err
             .context("Failed to verify device is connected to Azure")
             .into()),

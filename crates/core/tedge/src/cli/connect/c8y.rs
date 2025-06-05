@@ -248,7 +248,7 @@ pub(crate) async fn check_device_status_c8y(
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
                 err = Some(if acknowledged {
-                    anyhow!("Didn't receive response from Cumulocity")
+                    anyhow!("Didn't receive a response from Cumulocity")
                 } else {
                     anyhow!("Local MQTT publish has timed out")
                 });
