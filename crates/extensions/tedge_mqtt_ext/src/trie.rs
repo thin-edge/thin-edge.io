@@ -329,6 +329,8 @@ impl<T: Debug + Eq> TrieNode<T> {
                     if !target.is_active() {
                         self.sub_nodes.remove(head);
                         if head == "+" {
+                            // We can safely discard diff.subscribe at this
+                            // point since no subscriptions exist (`!target.is_active()`)
                             return Diff {
                                 subscribe: self
                                     .sub_nodes
@@ -338,11 +340,6 @@ impl<T: Debug + Eq> TrieNode<T> {
                                             .into_iter()
                                             .map(move |topic| format!("{head}/{topic}"))
                                     })
-                                    .chain(
-                                        diff.subscribe
-                                            .into_iter()
-                                            .map(|topic| format!("{head}/{topic}")),
-                                    )
                                     .collect(),
                                 unsubscribe: diff
                                     .unsubscribe
@@ -356,7 +353,10 @@ impl<T: Debug + Eq> TrieNode<T> {
                         Diff::empty()
                     } else {
                         let mut diff = diff.with_topic_prefix(head);
-                        if rest == "#" && !self.sub_nodes.contains_key("#") && current_node_subscribed_to {
+                        if rest == "#"
+                            && !self.sub_nodes.contains_key("#")
+                            && current_node_subscribed_to
+                        {
                             diff.subscribe.push(head.to_owned());
                         }
                         diff
@@ -648,6 +648,15 @@ mod tests {
             assert_eq!(RankTopic("a/b/c").partial_cmp(&RankTopic("a/b/d")), None);
         }
 
+        // (Some(_), Some("+"), Some(Winner::This)) => break None
+        #[test]
+        fn topics_with_disjoint_wildcards_do_not_compare_bis() {
+            assert_eq!(
+                RankTopic("+/a").partial_cmp(&RankTopic("a/+")),
+                None
+            )
+        }
+
         #[test]
         fn topic_with_more_wildcards_ranks_higher() {
             assert_eq!(
@@ -671,6 +680,43 @@ mod tests {
                 Some(Ordering::Greater)
             )
         }
+
+        //(None, Some("#"), Some(Winner::This)) => break None,
+        #[test]
+        fn global_wildcard_does_not_compare_with_larger_prefix() {
+            assert_eq!(
+                RankTopic("+").partial_cmp(&RankTopic("a/#")),
+                None
+            );
+        }
+
+        // (Some("#"), None, Some(Winner::Other)) => break None
+        #[test]
+        fn global_wildcard_does_not_compare_with_larger_prefix_bis() {
+            assert_eq!(
+                RankTopic("a/#").partial_cmp(&RankTopic("+")),
+                None
+            );
+        }
+
+        // (Some(_), Some("#"), Some(Winner::This)) => break None
+        #[test]
+        fn global_wildcard_does_not_compare_with_larger_prefix_ter() {
+            assert_eq!(
+                RankTopic("+/a").partial_cmp(&RankTopic("a/#")),
+                None
+            );
+        }
+
+        // (Some("#"), Some(_), Some(Winner::Other)) => break None
+        #[test]
+        fn global_wildcard_does_not_compare_with_larger_prefix_4() {
+            assert_eq!(
+                RankTopic("a/#").partial_cmp(&RankTopic("+/a")),
+                None
+            );
+        }
+
     }
 
     mod insert {
@@ -969,6 +1015,53 @@ mod tests {
                 Diff {
                     unsubscribe: vec!["a/+/+/d".to_owned()],
                     subscribe: vec!["a/+/c/d".to_owned()],
+                }
+            );
+        }
+
+        #[test]
+        fn unsubscribing_from_topic_masked_by_global_wildcard_subscription_changes_nothing() {
+            let mut t = MqtTrie::default();
+            t.insert("a/#", 1);
+            t.insert("a/b/c", 2);
+
+            assert_eq!(t.remove("a/b/c", &2), Diff::empty());
+        }
+
+        #[test]
+        fn unsubscribing_from_a_non_subscribed_topic_changes_nothing() {
+            let mut t = MqtTrie::default();
+
+            assert_eq!(t.remove("a/b/c", &1), Diff::empty());
+        }
+
+        #[test]
+        fn unsubscribing_from_an_end_segment_wildcard_resubscribes_to_existing_topics() {
+            let mut t = MqtTrie::default();
+            t.insert("a/b", 1);
+            t.insert("a/+", 2);
+
+            assert_eq!(
+                t.remove("a/+", &2),
+                Diff {
+                    unsubscribe: vec!["a/+".into()],
+                    subscribe: vec!["a/b".into()],
+                }
+            );
+        }
+
+        #[test]
+        fn unsubscribing_from_an_end_segment_wildcard_does_not_resubscribe_to_non_subscribed_topics(
+        ) {
+            let mut t = MqtTrie::default();
+            t.insert("a/b/c", 1);
+            t.insert("a/+", 2);
+
+            assert_eq!(
+                t.remove("a/+", &2),
+                Diff {
+                    unsubscribe: vec!["a/+".into()],
+                    subscribe: vec![],
                 }
             );
         }
