@@ -170,6 +170,8 @@ struct RankTopic<'a>(&'a str);
 
 impl PartialOrd for RankTopic<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        use std::cmp::Ordering;
+
         #[derive(PartialEq, Clone, Copy, Debug)]
         /// The current higher ranked subscription
         enum Winner {
@@ -186,19 +188,23 @@ impl PartialOrd for RankTopic<'_> {
             match (self_seg, other_seg, current_winner) {
                 (Some(a), Some(b), _) if a == b => continue,
                 (Some("#"), Some(_), Some(Winner::Other)) => break None,
-                (Some("#"), Some(_), _) => break Some(std::cmp::Ordering::Greater),
+                (Some("#"), Some(_), _) => break Some(Ordering::Greater),
                 (Some(_), Some("#"), Some(Winner::This)) => break None,
-                (Some(_), Some("#"), _) => break Some(std::cmp::Ordering::Less),
+                (Some(_), Some("#"), _) => break Some(Ordering::Less),
                 (Some("+"), Some(_), Some(Winner::Other)) => break None,
                 (Some("+"), Some(_), _) => current_winner = Some(Winner::This),
                 (Some(_), Some("+"), Some(Winner::This)) => break None,
                 (Some(_), Some("+"), _) => current_winner = Some(Winner::Other),
                 (Some(_), Some(_), _) => break None,
+                (None, Some("#"), Some(Winner::This)) => break None,
+                (None, Some("#"), _) => break Some(Ordering::Less),
                 (None, Some(_), _) => break None,
+                (Some("#"), None, Some(Winner::Other)) => break None,
+                (Some("#"), None, _) => break Some(Ordering::Greater),
                 (Some(_), None, _) => break None,
-                (None, None, Some(Winner::This)) => break Some(std::cmp::Ordering::Greater),
-                (None, None, Some(Winner::Other)) => break Some(std::cmp::Ordering::Less),
-                (None, None, None) => break Some(std::cmp::Ordering::Equal),
+                (None, None, Some(Winner::This)) => break Some(Ordering::Greater),
+                (None, None, Some(Winner::Other)) => break Some(Ordering::Less),
+                (None, None, None) => break Some(Ordering::Equal),
             }
         }
     }
@@ -319,6 +325,7 @@ impl<T: Debug + Eq> TrieNode<T> {
             Some((head, rest)) => {
                 if let Some(target) = self.sub_nodes.get_mut(head) {
                     let diff = target.remove(rest, id);
+                    let current_node_subscribed_to = target.has_subscribers();
                     if !target.is_active() {
                         self.sub_nodes.remove(head);
                         if head == "+" {
@@ -348,7 +355,11 @@ impl<T: Debug + Eq> TrieNode<T> {
                     if self.sub_nodes.contains_key("#") {
                         Diff::empty()
                     } else {
-                        diff.with_topic_prefix(head)
+                        let mut diff = diff.with_topic_prefix(head);
+                        if rest == "#" && !self.sub_nodes.contains_key("#") && current_node_subscribed_to {
+                            diff.subscribe.push(head.to_owned());
+                        }
+                        diff
                     }
                 } else {
                     Diff::empty()
@@ -411,6 +422,9 @@ impl<T: Debug + Eq> TrieNode<T> {
             }
         } else {
             nodes.extend(&self.subscribers);
+            if let Some(node) = self.sub_nodes.get("#") {
+                nodes.extend(&node.subscribers);
+            }
         }
     }
 
@@ -442,6 +456,13 @@ impl<T: Debug + Eq> TrieNode<T> {
                         diff.subscribe.retain(|t| {
                             RankTopic(t).is_ranked_higher_than(&overlapping_subscribers)
                         })
+                    }
+                    if rest == "#" {
+                        if let Some(h) = self.sub_nodes.get(head) {
+                            if h.has_subscribers() {
+                                diff.unsubscribe.push(head.to_owned());
+                            }
+                        }
                     }
                     diff.unsubscribe = remove_unneeded_topics(&diff.unsubscribe);
                     diff
@@ -479,6 +500,10 @@ impl<T: Debug + Eq> TrieNode<T> {
                     .get("+")
                     .is_some_and(|node| node.has_subscribers())
                     || self.sub_nodes.contains_key("#")
+                    || self
+                        .sub_nodes
+                        .get(topic)
+                        .is_some_and(|node| node.sub_nodes.contains_key("#"))
             }
         };
         if wildcard_subscription_exists {
@@ -637,6 +662,14 @@ mod tests {
                 RankTopic("a/b/+/d").partial_cmp(&RankTopic("a/+/c/d")),
                 None
             );
+        }
+
+        #[test]
+        fn global_wildcard_suffix_ranks_higher_than_unsuffixed_topic() {
+            assert_eq!(
+                RankTopic("a/#").partial_cmp(&RankTopic("a")),
+                Some(Ordering::Greater)
+            )
         }
     }
 
@@ -815,6 +848,28 @@ mod tests {
                 }
             );
         }
+
+        #[test]
+        fn subscribing_to_global_wildcard_unsubscribes_parent_topic() {
+            let mut t = MqtTrie::default();
+            t.insert("a", 1);
+
+            assert_eq!(
+                t.insert("a/#", 2),
+                Diff {
+                    subscribe: vec!["a/#".into()],
+                    unsubscribe: vec!["a".into()],
+                }
+            );
+        }
+
+        #[test]
+        fn does_not_subscribe_parent_of_existing_global_wildcard() {
+            let mut t = MqtTrie::default();
+            t.insert("a/#", 1);
+
+            assert_eq!(t.insert("a", 2), Diff::empty());
+        }
     }
 
     mod remove {
@@ -888,25 +943,29 @@ mod tests {
         }
 
         #[test]
-        fn removing_something() {
+        fn unsubscribing_to_global_wildcard_resubscribes_parent_topic() {
             let mut t = MqtTrie::default();
-            assert_eq!(t.insert("a/b/c/d", 1), SubscribeTo("a/b/c/d"));
+            t.insert("a", 1);
+            t.insert("a/#", 2);
+
             assert_eq!(
-                t.insert("a/+/c/d", 2),
+                t.remove("a/#", &2),
                 Diff {
-                    subscribe: vec!["a/+/c/d".to_owned()],
-                    unsubscribe: vec!["a/b/c/d".to_owned()],
+                    unsubscribe: vec!["a/#".into()],
+                    subscribe: vec!["a".into()],
                 }
             );
+        }
+
+        #[test]
+        fn removing_double_segment_wildcard_resubscribes_single_segment_but_not_static_topic() {
+            let mut t = MqtTrie::default();
+            t.insert("a/b/c/d", 1);
+            t.insert("a/+/c/d", 2);
+            t.insert("a/+/+/d", 3);
+
             assert_eq!(
-                t.insert("a/+/+/d", 2),
-                Diff {
-                    subscribe: vec!["a/+/+/d".to_owned()],
-                    unsubscribe: vec!["a/+/c/d".to_owned()],
-                }
-            );
-            assert_eq!(
-                t.remove("a/+/+/d", &2),
+                t.remove("a/+/+/d", &3),
                 Diff {
                     unsubscribe: vec!["a/+/+/d".to_owned()],
                     subscribe: vec!["a/+/c/d".to_owned()],
@@ -973,6 +1032,14 @@ mod tests {
                 sorted_matches(&t, "a/b/c"),
                 [&"a/#", &"a/b/#", &"a/b/+", &"a/b/c"]
             );
+        }
+
+        #[test]
+        fn global_wildcard_suffix_matches_parent() {
+            let mut t = MqtTrie::default();
+            t.insert("a/#", "a/#");
+
+            assert_eq!(sorted_matches(&t, "a"), [&"a/#"]);
         }
 
         fn sorted_matches<'a, T: Ord + Debug>(t: &'a MqtTrie<T>, topic: &str) -> Vec<&'a T> {
