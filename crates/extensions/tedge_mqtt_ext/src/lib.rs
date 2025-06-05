@@ -2,6 +2,7 @@
 pub mod test_helpers;
 #[cfg(test)]
 mod tests;
+mod trie;
 
 use async_trait::async_trait;
 use mqtt_channel::Connection;
