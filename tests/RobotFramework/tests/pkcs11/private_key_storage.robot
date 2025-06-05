@@ -7,6 +7,7 @@ Documentation       Test thin-edge.io MQTT client authentication using a Hardwar
 
 # it would be good to explain here why we use the tedge-p11-server exclusively and not the module mode
 Resource            ../resources/common.resource
+Library             String
 Library             Cumulocity
 Library             ThinEdgeIO
 
@@ -99,6 +100,14 @@ Connects to C8y supporting all TLS13 ECDSA signature algorithms
     type=ecdsa    curve=secp384r1
     type=ecdsa    curve=secp521r1
 
+Can use PKCS11 key to renew the public certificate
+    [Setup]    Set tedge-p11-server Uri    value=${EMPTY}
+    Connect to C8y using new keypair    type=ecdsa    curve=secp256r1
+    Execute Command    tedge cert renew c8y
+    Connect to C8y using new keypair    type=rsa    bits=2048
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
     ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0
@@ -167,7 +176,7 @@ Warn the user if tedge.toml cannot be parsed
 
 *** Keywords ***
 Connect to C8y using new keypair
-    [Documentation]    Generates a new key/cert pair, uploads it to c8y, and connects using it.
+    [Documentation]    Generates a new private key/cert pair, uploads it to c8y, and connects using it. After the keyword completes, thin-edge will be configured to use the new private key.
     [Arguments]    ${type}    # ecdsa or rsa
     ...    ${curve}=secp256r1    # if type == ECDSA, curve of the key - one of {secp256r1, secp384r1, secp521r1}
     ...    ${bits}=4096    # if type == RSA, length in bits of the RSA key - one of {1024, 2048, 3072, 4096}
@@ -181,6 +190,11 @@ Connect to C8y using new keypair
     ELSE
         Fail    Wrong key type provided.
     END
+
+    # guarantee name of the object is unique even if multiple keys of the same type and bits/curve are generated
+    ${identifier}=    String.Generate Random String
+    VAR    ${object_name}=    ${object_name}-${identifier}
+
     VAR    ${cert_path}=    /etc/tedge/device-certs/${object_name}.pem
 
     Execute Command
@@ -196,9 +210,6 @@ Connect to C8y using new keypair
     Upload Currently Used Certificates To Cumulocity
 
     Tedge Reconnect Should Succeed
-
-    Execute Command    tedge config unset c8y.device.cert_path
-    Execute Command    tedge config unset c8y.device.key_uri
 
 Custom Setup
     ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
