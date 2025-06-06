@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::ops::AddAssign;
 
 #[derive(Debug)]
 /// A Trie for matching incoming MQTT messages with their subscribers
@@ -47,9 +48,9 @@ use std::fmt::Debug;
 /// subscription.
 ///
 /// To allow the actor to subscribe/unsubscribe when appropriate,
-/// [MqtTrie::insert] and [MqtTrie::remove] both return [Diff] objects. This
-/// gives a list of topics that need subscribing to/unsubscribing from
-/// following.
+/// [MqtTrie::insert] and [MqtTrie::remove] both return [SubscriptionDiff]
+/// objects. This returns the subscribe/unsubscribe requests that need to be
+/// made to the MQTT broker following the internal subscription change. 
 ///
 /// Here are some examples of diffs that are returned
 ///
@@ -58,16 +59,16 @@ use std::fmt::Debug;
 ///
 /// let mut t = MqtTrie::default();
 /// // First subscriber -> subscribe to that topic
-/// assert_eq!(t.insert("a/b", 1), Diff { subscribe: vec!["a/b".into()], unsubscribe: vec![] });
+/// assert_eq!(t.insert("a/b", 1), SubscriptionDiff { subscribe: ["a/b".into()].into(), unsubscribe: [].into() });
 /// // Another subscriber to the same topics -> don't need to change subscriptions
-/// assert_eq!(t.insert("a/b", 2), Diff { subscribe: vec![], unsubscribe: vec![] });
+/// assert_eq!(t.insert("a/b", 2), SubscriptionDiff { subscribe: [].into(), unsubscribe: [].into() });
 /// // Subscriber to a different topic -> subscribe to that topic
-/// assert_eq!(t.insert("a", 1), Diff { subscribe: vec!["a".into()], unsubscribe: vec![] });
+/// assert_eq!(t.insert("a", 1), SubscriptionDiff { subscribe: ["a".into()].into(), unsubscribe: [].into() });
 /// // Subscriber to a segment wildcard -> subscribe to that topic, unsubscribe from static topic
-/// assert_eq!(t.insert("a/+", 1), Diff { subscribe: vec!["a/+".into()], unsubscribe: vec!["a/b".into()] });
+/// assert_eq!(t.insert("a/+", 1), SubscriptionDiff { subscribe: ["a/+".into()].into(), unsubscribe: ["a/b".into()].into() });
 /// // Subscriber to a wildcard -> subscribe to that topic and unsubscribe from the matching ones
 /// // Don't unsubscribe from the already unsubscribed a/b topic though
-/// assert_eq!(t.insert("#", 1), Diff { subscribe: vec!["#".into()], unsubscribe: vec!["a".into(), "a/+".into()] });
+/// assert_eq!(t.insert("#", 1), SubscriptionDiff { subscribe: ["#".into()].into(), unsubscribe: ["a".into(), "a/+".into()].into() });
 /// ```
 ///
 /// It is still possible to end up with overlapping subscriptions via this
@@ -86,10 +87,10 @@ impl<T> Default for MqtTrie<T> {
     }
 }
 
-#[derive(Debug)]
-pub struct Diff {
-    pub subscribe: Vec<String>,
-    pub unsubscribe: Vec<String>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubscriptionDiff {
+    pub subscribe: HashSet<String>,
+    pub unsubscribe: HashSet<String>,
 }
 
 impl<T: Debug + Eq> MqtTrie<T> {
@@ -101,12 +102,12 @@ impl<T: Debug + Eq> MqtTrie<T> {
     }
 
     /// Add a new subscriber
-    pub fn insert(&mut self, topic: &str, subscriber: T) -> Diff {
+    pub fn insert(&mut self, topic: &str, subscriber: T) -> SubscriptionDiff {
         self.root.insert(topic, subscriber)
     }
 
     /// Removes an existing subscription
-    pub fn remove(&mut self, topic: &str, id: &T) -> Diff {
+    pub fn remove(&mut self, topic: &str, id: &T) -> SubscriptionDiff {
         self.root.remove(topic, id)
     }
 }
@@ -126,11 +127,28 @@ impl<T> Default for TrieNode<T> {
     }
 }
 
-impl Diff {
-    fn empty() -> Self {
+impl AddAssign for SubscriptionDiff {
+    fn add_assign(&mut self, rhs: Self) {
+        self.subscribe.extend(rhs.subscribe);
+        self.unsubscribe.extend(rhs.unsubscribe);
+
+        let overlap = self
+            .subscribe
+            .intersection(&self.unsubscribe)
+            .cloned()
+            .collect::<Vec<_>>();
+        for filter in overlap {
+            self.subscribe.remove(&filter);
+            self.unsubscribe.remove(&filter);
+        }
+    }
+}
+
+impl SubscriptionDiff {
+    pub fn empty() -> Self {
         Self {
-            subscribe: vec![],
-            unsubscribe: vec![],
+            subscribe: <_>::default(),
+            unsubscribe: <_>::default(),
         }
     }
 
@@ -147,21 +165,6 @@ impl Diff {
                 .map(|t| format!("{prefix}/{t}"))
                 .collect(),
         }
-    }
-}
-
-impl PartialEq for Diff {
-    fn eq(&self, other: &Self) -> bool {
-        let mut s = HashSet::new();
-        s.extend(&self.subscribe);
-        let mut os = HashSet::new();
-        os.extend(&other.subscribe);
-        let mut us = HashSet::new();
-        us.extend(&self.unsubscribe);
-        let mut ous = HashSet::new();
-        ous.extend(&other.unsubscribe);
-
-        s == os && us == ous
     }
 }
 
@@ -186,22 +189,31 @@ impl PartialOrd for RankTopic<'_> {
             let self_seg = self_segs.next();
             let other_seg = other_segs.next();
             match (self_seg, other_seg, current_winner) {
+                // Identical segments, keep searching for differences
                 (Some(a), Some(b), _) if a == b => continue,
+
+                // # > anything other than #
                 (Some("#"), Some(_), Some(Winner::Other)) => break None,
                 (Some("#"), Some(_), _) => break Some(Ordering::Greater),
                 (Some(_), Some("#"), Some(Winner::This)) => break None,
                 (Some(_), Some("#"), _) => break Some(Ordering::Less),
+
+                // + > static segment, but keep going as there may be more segments
                 (Some("+"), Some(_), Some(Winner::Other)) => break None,
                 (Some("+"), Some(_), _) => current_winner = Some(Winner::This),
                 (Some(_), Some("+"), Some(Winner::This)) => break None,
                 (Some(_), Some("+"), _) => current_winner = Some(Winner::Other),
                 (Some(_), Some(_), _) => break None,
+
+                // a/# > a
                 (None, Some("#"), Some(Winner::This)) => break None,
                 (None, Some("#"), _) => break Some(Ordering::Less),
                 (None, Some(_), _) => break None,
                 (Some("#"), None, Some(Winner::Other)) => break None,
                 (Some("#"), None, _) => break Some(Ordering::Greater),
                 (Some(_), None, _) => break None,
+
+                // Both filters have the same length
                 (None, None, Some(Winner::This)) => break Some(Ordering::Greater),
                 (None, None, Some(Winner::Other)) => break Some(Ordering::Less),
                 (None, None, None) => break Some(Ordering::Equal),
@@ -223,11 +235,11 @@ impl RankTopic<'_> {
     }
 }
 
-fn remove_unneeded_topics(topics: &[impl AsRef<str>]) -> Vec<String> {
+fn remove_unneeded_topics(topics: &[impl AsRef<str>]) -> HashSet<String> {
     use std::cmp::Ordering;
 
     let mut outranked = HashSet::new();
-    let mut valid_topics = Vec::new();
+    let mut valid_topics = HashSet::new();
     'outer: for i in 0..topics.len() {
         if outranked.contains(&i) {
             continue;
@@ -247,7 +259,7 @@ fn remove_unneeded_topics(topics: &[impl AsRef<str>]) -> Vec<String> {
                 None => (),
             }
         }
-        valid_topics.push(topics[i].as_ref().to_owned());
+        valid_topics.insert(topics[i].as_ref().to_owned());
     }
     valid_topics
 }
@@ -320,7 +332,7 @@ impl<T: Debug + Eq> TrieNode<T> {
         }
     }
 
-    fn remove(&mut self, topic: &str, id: &T) -> Diff {
+    fn remove(&mut self, topic: &str, id: &T) -> SubscriptionDiff {
         match topic.split_once("/") {
             Some((head, rest)) => {
                 if let Some(target) = self.sub_nodes.get_mut(head) {
@@ -331,7 +343,7 @@ impl<T: Debug + Eq> TrieNode<T> {
                         if head == "+" {
                             // We can safely discard diff.subscribe at this
                             // point since no subscriptions exist (`!target.is_active()`)
-                            return Diff {
+                            return SubscriptionDiff {
                                 subscribe: self
                                     .sub_nodes
                                     .iter()
@@ -350,19 +362,19 @@ impl<T: Debug + Eq> TrieNode<T> {
                         }
                     }
                     if self.sub_nodes.contains_key("#") {
-                        Diff::empty()
+                        SubscriptionDiff::empty()
                     } else {
                         let mut diff = diff.with_topic_prefix(head);
                         if rest == "#"
                             && !self.sub_nodes.contains_key("#")
                             && current_node_subscribed_to
                         {
-                            diff.subscribe.push(head.to_owned());
+                            diff.subscribe.insert(head.to_owned());
                         }
                         diff
                     }
                 } else {
-                    Diff::empty()
+                    SubscriptionDiff::empty()
                 }
             }
             None => {
@@ -370,11 +382,11 @@ impl<T: Debug + Eq> TrieNode<T> {
                     let i = target.subscribers.iter().position(|t| t == id).unwrap();
                     target.subscribers.remove(i);
                     if target.has_subscribers() {
-                        Diff::empty()
+                        SubscriptionDiff::empty()
                     } else {
-                        let mut diff = Diff {
-                            subscribe: vec![],
-                            unsubscribe: vec![topic.to_owned()],
+                        let mut diff = SubscriptionDiff {
+                            subscribe: HashSet::new(),
+                            unsubscribe: HashSet::from([topic.to_owned()]),
                         };
                         if !target.is_active() {
                             self.sub_nodes.remove(topic);
@@ -391,19 +403,18 @@ impl<T: Debug + Eq> TrieNode<T> {
                                     })
                                     .collect();
                             } else if topic == "#" {
-                                diff.subscribe = self.subscribers();
+                                diff.subscribe.extend(self.subscribers());
                             }
                         }
                         diff
                     }
                 } else {
-                    Diff::empty()
+                    SubscriptionDiff::empty()
                 }
             }
         }
     }
 
-    // TODO this should only accept valid message topic, not containing wildcards
     fn matches<'a>(&'a self, topic: Option<&str>, nodes: &mut Vec<&'a T>) {
         if let Some(topic) = topic {
             let (head, rest) = match topic.split_once("/") {
@@ -436,7 +447,7 @@ impl<T: Debug + Eq> TrieNode<T> {
         !self.subscribers.is_empty()
     }
 
-    fn insert(&mut self, topic: &str, subscriber: T) -> Diff {
+    fn insert(&mut self, topic: &str, subscriber: T) -> SubscriptionDiff {
         // TODO clone strings less when getting entries
         match topic.split_once("/") {
             Some((head, rest)) => {
@@ -447,7 +458,7 @@ impl<T: Debug + Eq> TrieNode<T> {
                     .or_default()
                     .insert(rest, subscriber);
                 if self.sub_nodes.contains_key("#") {
-                    Diff::empty()
+                    SubscriptionDiff::empty()
                 } else {
                     diff = diff.with_topic_prefix(head);
                     if head == "+" {
@@ -460,11 +471,10 @@ impl<T: Debug + Eq> TrieNode<T> {
                     if rest == "#" {
                         if let Some(h) = self.sub_nodes.get(head) {
                             if h.has_subscribers() {
-                                diff.unsubscribe.push(head.to_owned());
+                                diff.unsubscribe.insert(head.to_owned());
                             }
                         }
                     }
-                    diff.unsubscribe = remove_unneeded_topics(&diff.unsubscribe);
                     diff
                 }
             }
@@ -473,7 +483,7 @@ impl<T: Debug + Eq> TrieNode<T> {
                     let already_subscribed = entry.has_subscribers();
                     entry.subscribers.push(subscriber);
                     if already_subscribed {
-                        Diff::empty()
+                        SubscriptionDiff::empty()
                     } else {
                         self.insert_diff_for(topic)
                     }
@@ -491,7 +501,7 @@ impl<T: Debug + Eq> TrieNode<T> {
         }
     }
 
-    fn insert_diff_for(&self, topic: &str) -> Diff {
+    fn insert_diff_for(&self, topic: &str) -> SubscriptionDiff {
         let wildcard_subscription_exists = match topic {
             "+" => self.sub_nodes.contains_key("#"),
             "#" => false,
@@ -507,7 +517,7 @@ impl<T: Debug + Eq> TrieNode<T> {
             }
         };
         if wildcard_subscription_exists {
-            Diff::empty()
+            SubscriptionDiff::empty()
         } else {
             let unsubscribe = match topic {
                 "+" => self
@@ -520,17 +530,17 @@ impl<T: Debug + Eq> TrieNode<T> {
                     .into_iter()
                     .filter(|t| t != topic)
                     .collect(),
-                _ => vec![],
+                _ => Vec::new(),
             };
-            Diff {
-                subscribe: vec![topic.to_owned()],
+            SubscriptionDiff {
+                subscribe: HashSet::from([topic.to_owned()]),
                 unsubscribe: remove_unneeded_topics(&unsubscribe),
             }
         }
     }
 
     fn direct_sub_topics(&self) -> Vec<String> {
-        let mut res = vec![];
+        let mut res = Vec::new();
         for (topic, node) in &self.sub_nodes {
             if node.has_subscribers() {
                 res.push(topic.to_owned());
@@ -540,7 +550,7 @@ impl<T: Debug + Eq> TrieNode<T> {
     }
 
     fn all_sub_topics(&self) -> Vec<String> {
-        let mut res = vec![];
+        let mut res = Vec::new();
         for (topic, node) in &self.sub_nodes {
             if node.has_subscribers() {
                 res.push(topic.to_owned());
@@ -564,17 +574,96 @@ mod tests {
     #[derive(Debug)]
     struct SubscribeTo(&'static str);
 
-    impl PartialEq<SubscribeTo> for Diff {
+    impl PartialEq<SubscribeTo> for SubscriptionDiff {
         fn eq(&self, other: &SubscribeTo) -> bool {
             self.unsubscribe.is_empty()
                 && self.subscribe.len() <= 1
-                && self.subscribe.first().map(|s| s.as_str()) == Some(other.0)
+                && self.subscribe.iter().next().map(|s| s.as_str()) == Some(other.0)
         }
     }
 
-    impl PartialEq<Option<Infallible>> for Diff {
+    impl PartialEq<Option<Infallible>> for SubscriptionDiff {
         fn eq(&self, _: &Option<Infallible>) -> bool {
             self.unsubscribe.is_empty() && self.subscribe.is_empty()
+        }
+    }
+
+    mod diff {
+        use super::*;
+
+        #[test]
+        fn adding_to_an_empty_diff_preserves_all_values() {
+            let mut target = SubscriptionDiff::empty();
+            let rhs = SubscriptionDiff {
+                subscribe: ["some/#".into()].into(),
+                unsubscribe: ["some/topic".into()].into(),
+            };
+            target += rhs.clone();
+
+            assert_eq!(target, rhs);
+        }
+
+        #[test]
+        fn adding_an_empty_diff_to_a_nonempty_diff_preserves_all_values() {
+            let original = SubscriptionDiff {
+                subscribe: ["some/#".into()].into(),
+                unsubscribe: ["some/topic".into()].into(),
+            };
+            let mut target = original.clone();
+            target += SubscriptionDiff::empty();
+
+            assert_eq!(target, original);
+        }
+
+        #[test]
+        fn adding_two_disjoint_diffs_preserves_all_values() {
+            let mut diff = SubscriptionDiff {
+                subscribe: ["different/topic".into()].into(),
+                unsubscribe: ["different/+".into()].into(),
+            };
+            let rhs = SubscriptionDiff {
+                subscribe: ["some/#".into()].into(),
+                unsubscribe: ["some/topic".into()].into(),
+            };
+            diff += rhs.clone();
+
+            assert_eq!(
+                diff,
+                SubscriptionDiff {
+                    subscribe: ["different/topic".into(), "some/#".into()].into(),
+                    unsubscribe: ["different/+".into(), "some/topic".into()].into(),
+                }
+            );
+        }
+
+        #[test]
+        fn merging_a_subscribe_with_a_matching_unsubscribe_cancels_out() {
+            let mut diff = SubscriptionDiff {
+                subscribe: ["some/topic".into()].into(),
+                unsubscribe: [].into(),
+            };
+            let rhs = SubscriptionDiff {
+                subscribe: [].into(),
+                unsubscribe: ["some/topic".into()].into(),
+            };
+            diff += rhs.clone();
+
+            assert_eq!(diff, SubscriptionDiff::empty());
+        }
+
+        #[test]
+        fn merging_an_usubscribe_with_a_matching_subscribe_cancels_out() {
+            let mut diff = SubscriptionDiff {
+                subscribe: [].into(),
+                unsubscribe: ["some/topic".into()].into(),
+            };
+            let rhs = SubscriptionDiff {
+                subscribe: ["some/topic".into()].into(),
+                unsubscribe: [].into(),
+            };
+            diff += rhs.clone();
+
+            assert_eq!(diff, SubscriptionDiff::empty());
         }
     }
 
@@ -651,10 +740,7 @@ mod tests {
         // (Some(_), Some("+"), Some(Winner::This)) => break None
         #[test]
         fn topics_with_disjoint_wildcards_do_not_compare_bis() {
-            assert_eq!(
-                RankTopic("+/a").partial_cmp(&RankTopic("a/+")),
-                None
-            )
+            assert_eq!(RankTopic("+/a").partial_cmp(&RankTopic("a/+")), None)
         }
 
         #[test]
@@ -674,47 +760,47 @@ mod tests {
         }
 
         #[test]
-        fn global_wildcard_suffix_ranks_higher_than_unsuffixed_topic() {
+        fn global_wildcard_suffix_ranks_higher_than_parent_topic() {
             assert_eq!(
                 RankTopic("a/#").partial_cmp(&RankTopic("a")),
                 Some(Ordering::Greater)
             )
         }
 
+        // (None, Some("#"), _) => break Some(Ordering::Less),
+        #[test]
+        fn parent_topic_ranks_lower_than_its_global_wildcard_suffix() {
+            assert_eq!(RankTopic("a").partial_cmp(&RankTopic("a/#")), Some(Ordering::Less));
+        }
+
         //(None, Some("#"), Some(Winner::This)) => break None,
         #[test]
         fn global_wildcard_does_not_compare_with_larger_prefix() {
-            assert_eq!(
-                RankTopic("+").partial_cmp(&RankTopic("a/#")),
-                None
-            );
+            assert_eq!(RankTopic("+").partial_cmp(&RankTopic("a/#")), None);
         }
 
         // (Some("#"), None, Some(Winner::Other)) => break None
         #[test]
         fn global_wildcard_does_not_compare_with_larger_prefix_bis() {
-            assert_eq!(
-                RankTopic("a/#").partial_cmp(&RankTopic("+")),
-                None
-            );
+            assert_eq!(RankTopic("a/#").partial_cmp(&RankTopic("+")), None);
         }
 
         // (Some(_), Some("#"), Some(Winner::This)) => break None
         #[test]
         fn global_wildcard_does_not_compare_with_larger_prefix_ter() {
-            assert_eq!(
-                RankTopic("+/a").partial_cmp(&RankTopic("a/#")),
-                None
-            );
+            assert_eq!(RankTopic("+/a").partial_cmp(&RankTopic("a/#")), None);
         }
 
         // (Some("#"), Some(_), Some(Winner::Other)) => break None
         #[test]
         fn global_wildcard_does_not_compare_with_larger_prefix_4() {
-            assert_eq!(
-                RankTopic("a/#").partial_cmp(&RankTopic("+/a")),
-                None
-            );
+            assert_eq!(RankTopic("a/#").partial_cmp(&RankTopic("+/a")), None);
+        }
+
+        // (Some(_), None, _) => break None
+        #[test]
+        fn static_topics_of_different_lengths_do_not_compare() {
+            assert_eq!(RankTopic("a/b/c").partial_cmp(&RankTopic("a/b")), None);
         }
 
     }
@@ -766,9 +852,9 @@ mod tests {
 
             assert_eq!(
                 t.insert("a/#", 3),
-                Diff {
-                    unsubscribe: vec!["a/b/c".to_owned(), "a/+".to_owned()],
-                    subscribe: vec!["a/#".to_owned()]
+                SubscriptionDiff {
+                    unsubscribe: ["a/b/c".into(), "a/+".into()].into(),
+                    subscribe: ["a/#".into()].into(),
                 }
             );
         }
@@ -828,9 +914,9 @@ mod tests {
 
             assert_eq!(
                 t.insert("a/+/c/d", 2),
-                Diff {
-                    subscribe: vec!["a/+/c/d".to_owned()],
-                    unsubscribe: vec!["a/b/c/d".to_owned()],
+                SubscriptionDiff {
+                    subscribe: ["a/+/c/d".into()].into(),
+                    unsubscribe: ["a/b/c/d".into()].into(),
                 }
             );
         }
@@ -860,9 +946,9 @@ mod tests {
 
             assert_eq!(
                 t.insert("a/+/+/d", 2),
-                Diff {
-                    subscribe: vec!["a/+/+/d".to_owned()],
-                    unsubscribe: vec!["a/+/c/d".to_owned()],
+                SubscriptionDiff {
+                    subscribe: ["a/+/+/d".into()].into(),
+                    unsubscribe: ["a/+/c/d".into()].into(),
                 }
             );
         }
@@ -872,11 +958,11 @@ mod tests {
             let mut t = MqtTrie::default();
             t.insert("a/+/+/d", 1);
 
-            assert_eq!(t.insert("a/b/+/d", 2), Diff::empty());
+            assert_eq!(t.insert("a/b/+/d", 2), SubscriptionDiff::empty());
             let mut t = MqtTrie::default();
             t.insert("a/b/+/+", 1);
 
-            assert_eq!(t.insert("a/b/+/d", 2), Diff::empty());
+            assert_eq!(t.insert("a/b/+/d", 2), SubscriptionDiff::empty());
         }
 
         #[test]
@@ -888,9 +974,9 @@ mod tests {
 
             assert_eq!(
                 t.insert("#", 1),
-                Diff {
-                    subscribe: vec!["#".into()],
-                    unsubscribe: vec!["a".into(), "a/+".into()]
+                SubscriptionDiff {
+                    subscribe: ["#".into()].into(),
+                    unsubscribe: ["a".into(), "a/+".into()].into(),
                 }
             );
         }
@@ -902,9 +988,9 @@ mod tests {
 
             assert_eq!(
                 t.insert("a/#", 2),
-                Diff {
-                    subscribe: vec!["a/#".into()],
-                    unsubscribe: vec!["a".into()],
+                SubscriptionDiff {
+                    subscribe: ["a/#".into()].into(),
+                    unsubscribe: ["a".into()].into(),
                 }
             );
         }
@@ -914,7 +1000,7 @@ mod tests {
             let mut t = MqtTrie::default();
             t.insert("a/#", 1);
 
-            assert_eq!(t.insert("a", 2), Diff::empty());
+            assert_eq!(t.insert("a", 2), SubscriptionDiff::empty());
         }
     }
 
@@ -928,9 +1014,9 @@ mod tests {
 
             assert_eq!(
                 t.remove("a/b", &1),
-                Diff {
-                    subscribe: vec![],
-                    unsubscribe: vec!["a/b".to_owned()],
+                SubscriptionDiff {
+                    subscribe: [].into(),
+                    unsubscribe: ["a/b".into()].into(),
                 }
             )
         }
@@ -941,7 +1027,7 @@ mod tests {
             t.insert("a/b", 1);
             t.insert("a/b", 2);
 
-            assert_eq!(t.remove("a/b", &1), Diff::empty())
+            assert_eq!(t.remove("a/b", &1), SubscriptionDiff::empty())
         }
 
         #[test]
@@ -951,9 +1037,9 @@ mod tests {
 
             assert_eq!(
                 t.remove("a/+/c/#", &1),
-                Diff {
-                    unsubscribe: vec!["a/+/c/#".to_owned()],
-                    subscribe: vec![],
+                SubscriptionDiff {
+                    unsubscribe: ["a/+/c/#".into()].into(),
+                    subscribe: [].into(),
                 }
             );
         }
@@ -966,9 +1052,9 @@ mod tests {
 
             assert_eq!(
                 t.remove("a/+/c", &2),
-                Diff {
-                    unsubscribe: vec!["a/+/c".to_owned()],
-                    subscribe: vec!["a/b/c".to_owned()],
+                SubscriptionDiff {
+                    unsubscribe: ["a/+/c".into()].into(),
+                    subscribe: ["a/b/c".into()].into(),
                 }
             );
         }
@@ -981,9 +1067,9 @@ mod tests {
 
             assert_eq!(
                 t.remove("a/#", &2),
-                Diff {
-                    unsubscribe: vec!["a/#".to_owned()],
-                    subscribe: vec!["a/b/c".to_owned()],
+                SubscriptionDiff {
+                    unsubscribe: ["a/#".into()].into(),
+                    subscribe: ["a/b/c".into()].into(),
                 }
             );
         }
@@ -996,9 +1082,9 @@ mod tests {
 
             assert_eq!(
                 t.remove("a/#", &2),
-                Diff {
-                    unsubscribe: vec!["a/#".into()],
-                    subscribe: vec!["a".into()],
+                SubscriptionDiff {
+                    unsubscribe: ["a/#".into()].into(),
+                    subscribe: ["a".into()].into(),
                 }
             );
         }
@@ -1012,9 +1098,9 @@ mod tests {
 
             assert_eq!(
                 t.remove("a/+/+/d", &3),
-                Diff {
-                    unsubscribe: vec!["a/+/+/d".to_owned()],
-                    subscribe: vec!["a/+/c/d".to_owned()],
+                SubscriptionDiff {
+                    unsubscribe: ["a/+/+/d".into()].into(),
+                    subscribe: ["a/+/c/d".into()].into(),
                 }
             );
         }
@@ -1025,14 +1111,14 @@ mod tests {
             t.insert("a/#", 1);
             t.insert("a/b/c", 2);
 
-            assert_eq!(t.remove("a/b/c", &2), Diff::empty());
+            assert_eq!(t.remove("a/b/c", &2), SubscriptionDiff::empty());
         }
 
         #[test]
         fn unsubscribing_from_a_non_subscribed_topic_changes_nothing() {
             let mut t = MqtTrie::default();
 
-            assert_eq!(t.remove("a/b/c", &1), Diff::empty());
+            assert_eq!(t.remove("a/b/c", &1), SubscriptionDiff::empty());
         }
 
         #[test]
@@ -1043,9 +1129,9 @@ mod tests {
 
             assert_eq!(
                 t.remove("a/+", &2),
-                Diff {
-                    unsubscribe: vec!["a/+".into()],
-                    subscribe: vec!["a/b".into()],
+                SubscriptionDiff {
+                    unsubscribe: ["a/+".into()].into(),
+                    subscribe: ["a/b".into()].into(),
                 }
             );
         }
@@ -1059,9 +1145,9 @@ mod tests {
 
             assert_eq!(
                 t.remove("a/+", &2),
-                Diff {
-                    unsubscribe: vec!["a/+".into()],
-                    subscribe: vec![],
+                SubscriptionDiff {
+                    unsubscribe: ["a/+".into()].into(),
+                    subscribe: [].into(),
                 }
             );
         }

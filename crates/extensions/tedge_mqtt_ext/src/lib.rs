@@ -14,13 +14,14 @@ use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
 pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
+use rumqttc::SubscribeFilter;
 use std::convert::Infallible;
-use std::sync::Arc;
-use std::sync::Mutex;
+use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
@@ -29,7 +30,12 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
-use tracing::info;
+use tedge_actors::Sequential;
+use tedge_actors::Server;
+use tedge_actors::ServerActorBuilder;
+use tedge_actors::ServerConfig;
+use trie::MqtTrie;
+use trie::SubscriptionDiff;
 
 pub type MqttConfig = mqtt_channel::Config;
 
@@ -40,6 +46,9 @@ pub struct MqttActorBuilder {
     publish_sender: mpsc::Sender<MqttMessage>,
     subscriber_addresses: Vec<DynMqttSender>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
+    trie: TrieService,
+    current_id: usize,
+    subscription_diff: SubscriptionDiff,
 }
 
 struct InputCombiner {
@@ -98,6 +107,7 @@ impl MqttActorBuilder {
         let (publish_sender, publish_receiver) = mpsc::channel(10);
         let (subscription_request_sender, subscription_request_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
+        let trie = TrieService::new(MqtTrie::default());
         let pub_or_sub_sender = PubOrSubSender {
             subscription_request_sender,
             publish_sender: publish_sender.clone(),
@@ -115,25 +125,29 @@ impl MqttActorBuilder {
             subscriber_addresses: Vec::new(),
             signal_sender,
             pub_or_sub_sender,
+            trie,
+            subscription_diff: SubscriptionDiff::empty(),
+            current_id: 0,
         }
     }
 
     pub(crate) fn build_actor(self) -> MqttActor {
-        let mut combined_topic_filter = TopicFilter::empty();
-        for subscriber in self.subscriber_addresses.iter() {
-            combined_topic_filter.add_all(subscriber.topic_filter());
-        }
-
-        let removed = combined_topic_filter.remove_overlapping_patterns();
-        for pattern in combined_topic_filter.patterns() {
+        let mut topic_filter = TopicFilter::empty();
+        for pattern in &self.subscription_diff.subscribe {
+            topic_filter.add(pattern).unwrap();
             tracing::info!(target: "MQTT sub", "{pattern}");
         }
-        for pattern in removed {
+        for pattern in self.subscription_diff.unsubscribe {
             tracing::warn!(target: "MQTT sub", "ignoring overlapping subscription to {pattern}");
         }
 
-        let mqtt_config = self.mqtt_config.with_subscriptions(combined_topic_filter);
-        MqttActor::new(mqtt_config, self.input_receiver, self.subscriber_addresses)
+        let mqtt_config = self.mqtt_config.with_subscriptions(topic_filter);
+        MqttActor::new(
+            mqtt_config,
+            self.input_receiver,
+            self.subscriber_addresses,
+            self.trie.builder(),
+        )
     }
 }
 
@@ -146,9 +160,13 @@ impl AsMut<MqttConfig> for MqttActorBuilder {
 impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
     fn connect_sink(&mut self, topics: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
         let sender = DynMqttSender {
-            topics: Subscription::Static(topics),
+            client: ClientId(self.current_id),
             sender: peer.get_sender(),
         };
+        self.current_id += 1;
+        for topic in topics.patterns() {
+            self.subscription_diff += self.trie.trie.insert(topic, sender.client);
+        }
         self.subscriber_addresses.push(sender);
     }
 }
@@ -159,61 +177,76 @@ impl MessageSink<MqttMessage> for MqttActorBuilder {
     }
 }
 
-impl MessageSource<MqttMessage, Subscription> for MqttActorBuilder {
-    fn connect_sink(&mut self, topics: Subscription, peer: &impl MessageSink<MqttMessage>) {
-        let sender = DynMqttSender {
-            topics,
-            sender: peer.get_sender(),
-        };
-        self.subscriber_addresses.push(sender);
+pub struct TrieService {
+    trie: MqtTrie<ClientId>,
+}
+
+impl TrieService {
+    pub fn new(trie: MqtTrie<ClientId>) -> Self {
+        Self { trie }
+    }
+    pub fn builder(self) -> ServerActorBuilder<Self, Sequential> {
+        ServerActorBuilder::new(
+            self,
+            &ServerConfig::new().with_max_concurrency(1),
+            Sequential,
+        )
     }
 }
 
-pub enum Subscription {
-    Static(TopicFilter),
-    Dynamic(Arc<Mutex<TopicFilter>>),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClientId(usize);
+
+type MatchRequest = String;
+
+fan_in_message_type!(TrieRequest[SubscriptionRequest, MatchRequest]: Clone, Debug);
+
+#[derive(Debug)]
+pub enum TrieResponse {
+    Diff(SubscriptionDiff),
+    Matched(Vec<ClientId>),
 }
 
-impl Subscription {
-    pub fn topic_filter(&self) -> TopicFilter {
-        match self {
-            Subscription::Static(topic_filter) => topic_filter.clone(),
-            Subscription::Dynamic(topic_filter) => topic_filter.lock().unwrap().clone(),
-        }
+#[async_trait]
+impl Server for TrieService {
+    type Request = TrieRequest;
+
+    type Response = TrieResponse;
+
+    fn name(&self) -> &str {
+        "mqtt-subscription-manager"
     }
 
-    pub fn accept(&self, message: &MqttMessage) -> bool {
-        match self {
-            Subscription::Static(topic_filter) => topic_filter.accept(message),
-            Subscription::Dynamic(topic_filter) => topic_filter.lock().unwrap().accept(message),
+    async fn handle(&mut self, request: Self::Request) -> Self::Response {
+        match request {
+            TrieRequest::SubscriptionRequest(req) => {
+                let mut diff = SubscriptionDiff::empty();
+                for filter in req.diff.subscribe {
+                    diff += self.trie.insert(&filter, req.client_id);
+                }
+                for filter in req.diff.unsubscribe {
+                    diff += self.trie.remove(&filter, &req.client_id);
+                }
+                TrieResponse::Diff(diff)
+            }
+            TrieRequest::MatchRequest(req) => {
+                let res = self.trie.matches(&req);
+                TrieResponse::Matched(res.into_iter().cloned().collect())
+            }
         }
     }
 }
 
 struct DynMqttSender {
-    topics: Subscription,
+    client: ClientId,
     sender: DynSender<MqttMessage>,
 }
 
-impl DynMqttSender {
-    pub fn topic_filter(&self) -> TopicFilter {
-        self.topics.topic_filter()
-    }
-}
-
-#[async_trait]
-impl Sender<MqttMessage> for DynMqttSender {
-    async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
-        if self.topics.accept(&message) {
-            self.sender.send(message).await
-        } else {
-            Ok(())
-        }
-    }
-}
-
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SubscriptionRequest(pub TopicFilter);
+pub struct SubscriptionRequest {
+    diff: SubscriptionDiff,
+    client_id: ClientId,
+}
 
 #[derive(Clone, Debug)]
 struct PubOrSubSender {
@@ -261,10 +294,12 @@ impl Builder<MqttActor> for MqttActorBuilder {
 
 pub struct FromPeers {
     input_receiver: InputCombiner,
+    subscriptions: ClientMessageBox<TrieRequest, TrieResponse>,
 }
 
 pub struct ToPeers {
     peer_senders: Vec<DynMqttSender>,
+    subscriptions: ClientMessageBox<TrieRequest, TrieResponse>,
 }
 
 impl FromPeers {
@@ -272,7 +307,6 @@ impl FromPeers {
         &mut self,
         outgoing_mqtt: &mut mpsc::UnboundedSender<MqttMessage>,
         client: mqtt_channel::AsyncClient,
-        subscriptions: Arc<Mutex<TopicFilter>>,
     ) -> Result<(), RuntimeError> {
         while let Ok(Some(message)) = self.try_recv().await {
             match message {
@@ -282,30 +316,28 @@ impl FromPeers {
                         .await
                         .map_err(Box::new)?;
                 }
-                PublishOrSubscribe::Subscribe(mut request) => {
-                    let overlap = {
-                        let mut subscriptions = subscriptions.lock().unwrap();
-                        subscriptions.add_all(request.0.clone());
-                        subscriptions.remove_overlapping_patterns()
+                PublishOrSubscribe::Subscribe(request) => {
+                    let TrieResponse::Diff(diff) = self
+                        .subscriptions
+                        .await_response(TrieRequest::SubscriptionRequest(request))
+                        .await
+                        .map_err(Box::new)?
+                    else {
+                        unreachable!("Subscription request always returns diff")
                     };
-                    let mut to_unsub = TopicFilter::empty();
-                    for o in overlap {
-                        if request.0.remove(&o).is_none() {
-                            to_unsub.add_unchecked(&o);
+                    let client = client.clone();
+                    tokio::spawn(async move {
+                        client
+                            .subscribe_many(
+                                diff.subscribe
+                                    .into_iter()
+                                    .map(|path| SubscribeFilter::new(path, QoS::AtLeastOnce)),
+                            )
+                            .await;
+                        for unsub in diff.unsubscribe {
+                            client.unsubscribe(unsub).await;
                         }
-                    }
-                    let to_sub = request.0;
-                    let to_sub = to_sub.filters();
-                    if !to_sub.is_empty() {
-                        info!("Updating MQTT subscription to include {to_sub:?}");
-                        client.subscribe_many(to_sub).await.unwrap();
-                    }
-                    if !to_unsub.patterns().is_empty() {
-                        info!("Updating MQTT subscription to not include {to_unsub:?}");
-                        for topic in to_unsub.patterns() {
-                            client.unsubscribe(topic).await.unwrap();
-                        }
-                    }
+                    });
                 }
             }
         }
@@ -343,8 +375,18 @@ impl ToPeers {
     }
 
     async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
-        for peer_sender in self.peer_senders.iter_mut() {
-            peer_sender.send(message.clone()).await?;
+        let subscribed = self
+            .subscriptions
+            .await_response(TrieRequest::MatchRequest(message.topic.name.clone()))
+            .await?;
+        let TrieResponse::Matched(matches) = subscribed else {
+            unreachable!("MatchRequest always returns Matched")
+        };
+        for client in matches {
+            self.peer_senders[client.0]
+                .sender
+                .send(message.clone())
+                .await?;
         }
         Ok(())
     }
@@ -369,6 +411,7 @@ pub struct MqttActor {
     mqtt_config: mqtt_channel::Config,
     from_peers: FromPeers,
     to_peers: ToPeers,
+    trie_service: ServerActorBuilder<TrieService, Sequential>,
 }
 
 impl MqttActor {
@@ -376,11 +419,19 @@ impl MqttActor {
         mqtt_config: mqtt_channel::Config,
         input_receiver: InputCombiner,
         peer_senders: Vec<DynMqttSender>,
+        mut trie_service: ServerActorBuilder<TrieService, Sequential>,
     ) -> Self {
         MqttActor {
             mqtt_config,
-            from_peers: FromPeers { input_receiver },
-            to_peers: ToPeers { peer_senders },
+            from_peers: FromPeers {
+                input_receiver,
+                subscriptions: ClientMessageBox::new(&mut trie_service),
+            },
+            to_peers: ToPeers {
+                peer_senders,
+                subscriptions: ClientMessageBox::new(&mut trie_service),
+            },
+            trie_service,
         }
     }
 }
@@ -402,12 +453,11 @@ impl Actor for MqttActor {
             }
         };
 
+        tokio::spawn(async move { self.trie_service.run().await });
+
         tedge_utils::futures::select(
-            self.from_peers.relay_messages_to(
-                &mut mqtt_client.published,
-                mqtt_client.client.clone(),
-                mqtt_client.subscriptions.clone(),
-            ),
+            self.from_peers
+                .relay_messages_to(&mut mqtt_client.published, mqtt_client.client.clone()),
             self.to_peers.relay_messages_from(&mut mqtt_client.received),
         )
         .await
