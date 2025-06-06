@@ -583,7 +583,7 @@ pub enum TopicIdError {
 /// A channel identifies the type of the messages exchanged over a topic
 ///
 /// <https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-channel>
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Channel {
     EntityMetadata,
     EntityTwinData {
@@ -694,12 +694,24 @@ impl Channel {
         matches!(self, Channel::Measurement { .. })
     }
 
+    pub fn is_alarm(&self) -> bool {
+        matches!(self, Channel::Alarm { .. })
+    }
+
+    pub fn is_command(&self) -> bool {
+        matches!(self, Channel::Command { .. })
+    }
+
+    pub fn is_command_metadata(&self) -> bool {
+        matches!(self, Channel::CommandMetadata { .. })
+    }
+
     pub fn is_health(&self) -> bool {
         matches!(self, Channel::Health)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum OperationType {
     Restart,
     SoftwareList,
