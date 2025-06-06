@@ -648,6 +648,15 @@ mod tests {
             assert_eq!(RankTopic("a/b/c").partial_cmp(&RankTopic("a/b/d")), None);
         }
 
+        // (Some(_), Some("+"), Some(Winner::This)) => break None
+        #[test]
+        fn topics_with_disjoint_wildcards_do_not_compare_bis() {
+            assert_eq!(
+                RankTopic("+/a").partial_cmp(&RankTopic("a/+")),
+                None
+            )
+        }
+
         #[test]
         fn topic_with_more_wildcards_ranks_higher() {
             assert_eq!(
@@ -671,6 +680,43 @@ mod tests {
                 Some(Ordering::Greater)
             )
         }
+
+        //(None, Some("#"), Some(Winner::This)) => break None,
+        #[test]
+        fn global_wildcard_does_not_compare_with_larger_prefix() {
+            assert_eq!(
+                RankTopic("+").partial_cmp(&RankTopic("a/#")),
+                None
+            );
+        }
+
+        // (Some("#"), None, Some(Winner::Other)) => break None
+        #[test]
+        fn global_wildcard_does_not_compare_with_larger_prefix_bis() {
+            assert_eq!(
+                RankTopic("a/#").partial_cmp(&RankTopic("+")),
+                None
+            );
+        }
+
+        // (Some(_), Some("#"), Some(Winner::This)) => break None
+        #[test]
+        fn global_wildcard_does_not_compare_with_larger_prefix_ter() {
+            assert_eq!(
+                RankTopic("+/a").partial_cmp(&RankTopic("a/#")),
+                None
+            );
+        }
+
+        // (Some("#"), Some(_), Some(Winner::Other)) => break None
+        #[test]
+        fn global_wildcard_does_not_compare_with_larger_prefix_4() {
+            assert_eq!(
+                RankTopic("a/#").partial_cmp(&RankTopic("+/a")),
+                None
+            );
+        }
+
     }
 
     mod insert {
