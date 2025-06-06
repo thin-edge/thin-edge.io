@@ -17,19 +17,34 @@ Further details about this can be found in the %%te%% documentation at [Manage t
 1. In the Cumulocity tenant, open the **Device Management** app, go to the **Management** menu option and select the **Software repository**.
 2. Click **Add software** at the right of the top menu bar. 
 3. In the **ADD SOFTWARE** dialog enter the following details:
-    - **Software**: apama-repo
-    - **Description**: apama-repo (or something else if you choose)
-    - **Device Filter Type**: (leave empty)
-    - **Software Type**: apt
-    - **Version**: 2022
-    - **SOFTWARE FILE**: check the *Provide a file path* option and enter the URL:	https://downloads.apamacommunity.com/debian/apama-repo_2022_all.deb
+
+    |Property|Value|
+    |--------|-----|
+    |Software|apama-repo|
+    |Description|apama-repo (or something else if you choose)|
+    |Device Filter Type|(leave empty)|
+    |Software Type|apt|
+    |Version|1:26.0-1|
+    |Software File - *Provide a File* option|https://download.cumulocity.com/Apama/Debian/apama-repo_26.0-1_all.deb|
+
+    :::note
+    The repository item's version **MUST** match the the Debian package's "Version" (including the debian epoch number if present). If it doesn't, the package will fail to install due to a meta-information mismatch.
+
+    If you have having trouble finding a package's version number, you can use a Debian based distribution to download the package manually, and use the `dpkg-deb` command to view the exact version number of the package. Below shows an example of the command:
+
+    ```sh
+    wget -qO - https://download.cumulocity.com/Apama/Debian/apama-repo_26.0-1_all.deb \
+    | dpkg-deb --info - \
+    | grep "Version: "
+    ```
+    :::
 
 4. Click the **Add Software** button.
 5. Now select the **Devices** menu option and then select **All devices**.
 6. In the list of devices, select the %%te%% device installed previously.
 7. In the sub-menu for the device, select the **Software** option.
 8. Click the **Install software** button in the bottom left; the apama-repo should be listed.
-9. Click the drop-down arrow on the right and check the `2022` radio button, then click **Install**.
+9. Click the drop-down arrow on the right and select the desired version, then click **Install**.
 10. Finally, click the **Apply changes** button in the lower right of the panel.
 
 #### Add the Apama thin-edge support package to the tenant software repository and deploy it to thin-edge
