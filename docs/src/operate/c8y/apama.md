@@ -28,9 +28,9 @@ Further details about this can be found in the %%te%% documentation at [Manage t
     |Software File - *Provide a File* option|https://download.cumulocity.com/Apama/Debian/apama-repo_26.0-1_all.deb|
 
     :::note
-    The **version** field **MUST** match the the Debian package's "Version" field (including the debian epoch number if present).
+    The repository item's version **MUST** match the the Debian package's "Version" (including the debian epoch number if present). If it doesn't, the package will fail to install due to a meta-information mismatch.
 
-    If you have having trouble with getting the correct version number, you can use a Debian base distribution, to download the package manually, and use `dpkg-deb` to view the exact version number of the package. Below shows an example of the command:
+    If you have having trouble finding a package's version number, you can use a Debian based distribution to download the package manually, and use the `dpkg-deb` command to view the exact version number of the package. Below shows an example of the command:
 
     ```sh
     wget -qO - https://download.cumulocity.com/Apama/Debian/apama-repo_26.0-1_all.deb \
