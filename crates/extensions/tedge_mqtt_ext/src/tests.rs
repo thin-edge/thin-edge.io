@@ -1,5 +1,6 @@
 use crate::*;
 use mqtt_channel::Topic;
+use std::future::Future;
 use std::time::Duration;
 use tedge_actors::Builder;
 use tedge_actors::SimpleMessageBox;
@@ -134,11 +135,11 @@ async fn communicate_over_mqtt() {
         .await
         .is_ok());
     assert_eq!(
-        bob.recv().await,
+        timeout(bob.recv()).await,
         Some(MqttMessage::new(&bob_topic, "Hi Bob"))
     );
     assert_eq!(
-        spy.recv().await,
+        timeout(spy.recv()).await,
         Some(MqttMessage::new(&bob_topic, "Hi Bob"))
     );
 
@@ -151,21 +152,30 @@ async fn communicate_over_mqtt() {
     assert!(alice.send(MqttMessage::new(&bob_topic, "C")).await.is_ok());
 
     // A subscriber receives only the messages for its subscriptions
-    assert_eq!(bob.recv().await, Some(MqttMessage::new(&bob_topic, "A")));
-    assert_eq!(bob.recv().await, Some(MqttMessage::new(&bob_topic, "B")));
-    assert_eq!(bob.recv().await, Some(MqttMessage::new(&bob_topic, "C")));
+    assert_eq!(
+        timeout(bob.recv()).await,
+        Some(MqttMessage::new(&bob_topic, "A"))
+    );
+    assert_eq!(
+        timeout(bob.recv()).await,
+        Some(MqttMessage::new(&bob_topic, "B"))
+    );
+    assert_eq!(
+        timeout(bob.recv()).await,
+        Some(MqttMessage::new(&bob_topic, "C"))
+    );
 
     // When messages are pub/sub on a single topic; they are received in order
     assert_eq!(
-        alice.recv().await,
+        timeout(alice.recv()).await,
         Some(MqttMessage::new(&alice_topic, "1"))
     );
     assert_eq!(
-        alice.recv().await,
+        timeout(alice.recv()).await,
         Some(MqttMessage::new(&alice_topic, "2"))
     );
     assert_eq!(
-        alice.recv().await,
+        timeout(alice.recv()).await,
         Some(MqttMessage::new(&alice_topic, "3"))
     );
 
@@ -178,6 +188,12 @@ async fn communicate_over_mqtt() {
     }
     messages.sort();
     assert_eq!(messages, vec!["1", "2", "3", "A", "B", "C"])
+}
+
+async fn timeout<T>(fut: impl Future<Output = T>) -> T {
+    tokio::time::timeout(Duration::from_secs(1), fut)
+        .await
+        .expect("Timed out")
 }
 
 async fn mqtt_actor(builder: MqttActorBuilder) {
