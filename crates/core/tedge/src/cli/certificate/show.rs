@@ -125,27 +125,76 @@ impl ShowCertCmd {
     }
 }
 
+/// Formats duration into a human-readable string shown
+/// in years, days, hours, minutes and seconds.
+/// Months are explicitly not used when due to the irregular
+/// number of days per month where any estimation to calculate
+/// how many months there are, skews other units such as hours.
+///
+/// Examples:
+/// 364d 8h 42m 43s
+/// 5y 219d 2h 59m
+/// 2y
+/// 2h 1m 3s
+///
+fn format_duration_ydhms(duration: Duration) -> String {
+    let total_seconds = duration.as_secs();
+
+    if total_seconds == 0 {
+        return "0s".to_string();
+    }
+
+    const SECS_IN_MINUTE: u64 = 60;
+    const SECS_IN_HOUR: u64 = 60 * SECS_IN_MINUTE;
+    const SECS_IN_DAY: u64 = 24 * SECS_IN_HOUR;
+    const SECS_IN_YEAR: u64 = 365 * SECS_IN_DAY;
+
+    let years = total_seconds / SECS_IN_YEAR;
+    let remaining_secs = total_seconds % SECS_IN_YEAR;
+    let days = remaining_secs / SECS_IN_DAY;
+    let remaining_secs = remaining_secs % SECS_IN_DAY;
+    let hours = remaining_secs / SECS_IN_HOUR;
+    let remaining_secs = remaining_secs % SECS_IN_HOUR;
+    let minutes = remaining_secs / SECS_IN_MINUTE;
+    let seconds = remaining_secs % SECS_IN_MINUTE;
+
+    let mut parts = Vec::new();
+    if years > 0 {
+        parts.push(format!("{}y", years));
+    }
+    if days > 0 {
+        parts.push(format!("{}d", days));
+    }
+    if hours > 0 {
+        parts.push(format!("{}h", hours));
+    }
+    if minutes > 0 {
+        parts.push(format!("{}m", minutes));
+    }
+    if seconds > 0 {
+        parts.push(format!("{}s", seconds));
+    }
+    parts.join(" ")
+}
+
 fn display_status(status: ValidityStatus, minimum: Duration) -> String {
     let text = match status {
         ValidityStatus::Valid { expired_in } if expired_in > minimum => {
-            format!(
-                "VALID (expires in: {})",
-                humantime::format_duration(expired_in)
-            )
+            format!("VALID (expires in: {})", format_duration_ydhms(expired_in))
         }
         ValidityStatus::Valid { expired_in } => {
             format!(
                 "EXPIRES SOON (expires in: {})",
-                humantime::format_duration(expired_in)
+                format_duration_ydhms(expired_in)
             )
         }
         ValidityStatus::Expired { since } => {
-            format!("EXPIRED (since: {})", humantime::format_duration(since))
+            format!("EXPIRED (since: {})", format_duration_ydhms(since))
         }
         ValidityStatus::NotValidYet { valid_in } => {
             format!(
                 "NOT VALID YET (will be in: {})",
-                humantime::format_duration(valid_in)
+                format_duration_ydhms(valid_in)
             )
         }
     };
@@ -165,5 +214,101 @@ fn need_renewal(status: ValidityStatus, minimum: Duration) -> bool {
         ValidityStatus::Valid { expired_in } => expired_in <= minimum,
         ValidityStatus::Expired { .. } => true,
         ValidityStatus::NotValidYet { .. } => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn test_format_duration_dhms_zero() {
+        assert_eq!(format_duration_ydhms(Duration::from_secs(0)), "0s");
+    }
+
+    #[test]
+    fn test_format_duration_dhms_milliseconds() {
+        assert_eq!(format_duration_ydhms(Duration::from_millis(500)), "0s");
+        assert_eq!(format_duration_ydhms(Duration::from_millis(1500)), "1s");
+    }
+
+    #[test]
+    fn test_format_duration_dhms_seconds_only() {
+        assert_eq!(format_duration_ydhms(Duration::from_secs(5)), "5s");
+        assert_eq!(format_duration_ydhms(Duration::from_secs(59)), "59s");
+    }
+
+    #[test]
+    fn test_format_duration_dhms_minutes_and_seconds() {
+        assert_eq!(format_duration_ydhms(Duration::from_secs(60)), "1m");
+        assert_eq!(format_duration_ydhms(Duration::from_secs(65)), "1m 5s");
+        assert_eq!(format_duration_ydhms(Duration::from_secs(125)), "2m 5s");
+    }
+
+    #[test]
+    fn test_format_duration_dhms_hours_minutes_seconds() {
+        assert_eq!(format_duration_ydhms(Duration::from_secs(3600)), "1h");
+        assert_eq!(format_duration_ydhms(Duration::from_secs(3660)), "1h 1m");
+        assert_eq!(format_duration_ydhms(Duration::from_secs(3665)), "1h 1m 5s");
+        assert_eq!(
+            format_duration_ydhms(Duration::from_secs(3600 + 60 * 2 + 5)),
+            "1h 2m 5s"
+        );
+    }
+
+    #[test]
+    fn test_format_duration_dhms_days_hours_minutes_seconds() {
+        assert_eq!(format_duration_ydhms(Duration::from_secs(86400)), "1d");
+        assert_eq!(
+            format_duration_ydhms(Duration::from_secs(86400 + 3600)),
+            "1d 1h"
+        );
+        assert_eq!(
+            format_duration_ydhms(Duration::from_secs(86400 + 3600 + 60)),
+            "1d 1h 1m"
+        );
+        assert_eq!(
+            format_duration_ydhms(Duration::from_secs(2 * 86400 + 3 * 3600 + 4 * 60 + 5)),
+            "2d 3h 4m 5s"
+        );
+    }
+
+    #[test]
+    fn test_format_duration_dhms_many_days() {
+        // 35 days, 5 hours, 30 minutes
+        assert_eq!(
+            format_duration_ydhms(Duration::from_secs(35 * 86400 + 5 * 3600 + 30 * 60)),
+            "35d 5h 30m"
+        );
+        // Exactly 30 days
+        assert_eq!(
+            format_duration_ydhms(Duration::from_secs(30 * 86400)),
+            "30d"
+        );
+    }
+
+    #[test]
+    fn test_format_duration_dhms_many_years() {
+        // 5 years, 219 days, 2 hours, 59 minutes
+        assert_eq!(
+            format_duration_ydhms(Duration::from_secs(
+                (5 * 365 * 86400) + 219 * 86400 + 2 * 3600 + 59 * 60
+            )),
+            "5y 219d 2h 59m"
+        );
+        // Exactly 2 years
+        assert_eq!(
+            format_duration_ydhms(Duration::from_secs(2 * 365 * 86400)),
+            "2y"
+        );
+    }
+
+    #[test]
+    fn test_format_duration_dhms_less_than_a_day() {
+        assert_eq!(
+            format_duration_ydhms(Duration::from_secs(23 * 3600 + 59 * 60 + 59)),
+            "23h 59m 59s"
+        );
     }
 }
