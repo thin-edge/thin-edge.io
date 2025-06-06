@@ -760,11 +760,17 @@ mod tests {
         }
 
         #[test]
-        fn global_wildcard_suffix_ranks_higher_than_unsuffixed_topic() {
+        fn global_wildcard_suffix_ranks_higher_than_parent_topic() {
             assert_eq!(
                 RankTopic("a/#").partial_cmp(&RankTopic("a")),
                 Some(Ordering::Greater)
             )
+        }
+
+        // (None, Some("#"), _) => break Some(Ordering::Less),
+        #[test]
+        fn parent_topic_ranks_lower_than_its_global_wildcard_suffix() {
+            assert_eq!(RankTopic("a").partial_cmp(&RankTopic("a/#")), Some(Ordering::Less));
         }
 
         //(None, Some("#"), Some(Winner::This)) => break None,
@@ -790,6 +796,13 @@ mod tests {
         fn global_wildcard_does_not_compare_with_larger_prefix_4() {
             assert_eq!(RankTopic("a/#").partial_cmp(&RankTopic("+/a")), None);
         }
+
+        // (Some(_), None, _) => break None
+        #[test]
+        fn static_topics_of_different_lengths_do_not_compare() {
+            assert_eq!(RankTopic("a/b/c").partial_cmp(&RankTopic("a/b")), None);
+        }
+
     }
 
     mod insert {

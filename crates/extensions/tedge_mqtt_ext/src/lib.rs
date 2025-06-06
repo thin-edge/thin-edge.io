@@ -15,8 +15,6 @@ pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
 use rumqttc::SubscribeFilter;
 use std::convert::Infallible;
-use std::sync::Arc;
-use std::sync::Mutex;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
