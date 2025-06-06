@@ -18,6 +18,7 @@ test-helpers = ["dep:assert-json-diff"]
 assert-json-diff = { workspace = true, optional = true }
 async-trait = { workspace = true }
 mqtt_channel = { workspace = true }
+rumqttc = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_utils = { workspace = true }
