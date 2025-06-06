@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thin-edge.io/measurement.schema.json",
+  "title": "Measurement",
+  "type": "object",
+  "properties": {
+    "time": {
+      "description": "Timestamp of the measurement in ISO 8601 or UNIX timestamp format.",
+      "oneOf": [
+        { "$ref": "#/$defs/unixTimestamp" },
+        { "$ref": "#/$defs/dateISO861" }
+      ]
+    }
+  },
+  "additionalProperties": {
+     "oneOf": [
+       { "$ref": "#/$defs/simpleValue" },
+       { "$ref": "#/$defs/multiValues" }
+     ]
+  },
+  "$defs": {
+    "unixTimestamp": {
+       "description": "Unix timestamp in second",
+       "type": "number"
+    },
+    "dateISO861": {
+      "description": "Date and time with time zone",
+      "type": "string",
+      "format": "date-time"
+    },
+    "simpleValue": {
+       "description": "Measurement numeric value",
+       "type": "number"
+    },
+    "multiValues": {
+      "description": "Multi-valued measurement",
+      "type": "object",
+      "additionalProperties": {
+          "$ref": "#/$defs/simpleValue"
+      }
+    }
+  }
+}
