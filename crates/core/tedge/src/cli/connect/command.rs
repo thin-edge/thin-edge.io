@@ -10,10 +10,6 @@ use crate::bridge::CommonMosquittoConfig;
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 use crate::cli::common::Cloud;
 use crate::cli::common::MaybeBorrowedCloud;
-#[cfg(feature = "aws")]
-use crate::cli::connect::aws::check_device_status_aws;
-#[cfg(feature = "azure")]
-use crate::cli::connect::azure::check_device_status_azure;
 #[cfg(feature = "c8y")]
 use crate::cli::connect::c8y::*;
 use crate::cli::connect::*;
@@ -274,7 +270,11 @@ impl ConnectCommand {
             Cloud::Azure(_) => (),
         }
 
-        Ok(())
+        if connection_check_success {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Connection check failed").into())
+        }
     }
 
     /// Validate that the new certificate is actually accepted by the cloud endpoint
@@ -464,10 +464,12 @@ impl ConnectCommand {
         let res = match &self.cloud {
             #[cfg(feature = "azure")]
             Cloud::Azure(profile) => {
-                check_device_status_azure(tedge_config, profile.as_deref()).await
+                azure::check_device_status_azure(tedge_config, profile.as_deref()).await
             }
             #[cfg(feature = "aws")]
-            Cloud::Aws(profile) => check_device_status_aws(tedge_config, profile.as_deref()).await,
+            Cloud::Aws(profile) => {
+                aws::check_device_status_aws(tedge_config, profile.as_deref()).await
+            }
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => check_device_status_c8y(tedge_config, profile.as_deref()).await,
         };
