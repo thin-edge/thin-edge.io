@@ -469,10 +469,12 @@ impl<T: Debug + Eq> TrieNode<T> {
                         })
                     }
                     if rest == "#" {
-                        if let Some(h) = self.sub_nodes.get(head) {
-                            if h.has_subscribers() {
-                                diff.unsubscribe.insert(head.to_owned());
-                            }
+                        let parent_subscribed = self
+                            .sub_nodes
+                            .get(head)
+                            .is_some_and(|p| p.has_subscribers());
+                        if parent_subscribed {
+                            diff.unsubscribe.insert(head.to_owned());
                         }
                     }
                     diff
@@ -1154,6 +1156,36 @@ mod tests {
                 }
             );
         }
+
+        #[test]
+        fn unsubscribing_from_static_parent_does_not_unsubscribe_child() {
+            let mut t = MqtTrie::default();
+            t.insert("a/b/c", 1);
+            t.insert("a/b", 2);
+
+            assert_eq!(
+                t.remove("a/b", &2),
+                SubscriptionDiff {
+                    unsubscribe: ["a/b".into()].into(),
+                    subscribe: [].into(),
+                }
+            );
+            assert_eq!(t.matches("a/b/c"), [&1]);
+        }
+
+        #[test]
+        fn unsubscribing_from_a_non_subscribed_topic_produces_an_empty_diff() {
+            let mut t = MqtTrie::default();
+            t.insert("a/b/c", 1);
+
+            assert_eq!(
+                t.remove("a/b/d", &1),
+                SubscriptionDiff {
+                    unsubscribe: [].into(),
+                    subscribe: [].into(),
+                }
+            );
+        }
     }
 
     mod matches {
@@ -1228,6 +1260,19 @@ mod tests {
             let mut matches = t.matches(topic);
             matches.sort();
             matches
+        }
+    }
+
+    mod remove_unneeded_topics {
+        use super::*;
+
+        #[test]
+        fn cover_all_branches() {
+            // This is tested elsewhere, but non-deterministically
+            assert_eq!(
+                remove_unneeded_topics(&["a/+", "#", "a/b"]),
+                ["#".into()].into()
+            )
         }
     }
 }
