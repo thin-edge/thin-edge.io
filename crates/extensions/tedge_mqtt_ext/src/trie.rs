@@ -50,7 +50,7 @@ use std::ops::AddAssign;
 /// To allow the actor to subscribe/unsubscribe when appropriate,
 /// [MqtTrie::insert] and [MqtTrie::remove] both return [SubscriptionDiff]
 /// objects. This returns the subscribe/unsubscribe requests that need to be
-/// made to the MQTT broker following the internal subscription change. 
+/// made to the MQTT broker following the internal subscription change.
 ///
 /// Here are some examples of diffs that are returned
 ///
@@ -759,6 +759,7 @@ mod tests {
             );
         }
 
+        // (Some("#"), None, _) => break Some(Ordering::Greater),
         #[test]
         fn global_wildcard_suffix_ranks_higher_than_parent_topic() {
             assert_eq!(
@@ -770,7 +771,10 @@ mod tests {
         // (None, Some("#"), _) => break Some(Ordering::Less),
         #[test]
         fn parent_topic_ranks_lower_than_its_global_wildcard_suffix() {
-            assert_eq!(RankTopic("a").partial_cmp(&RankTopic("a/#")), Some(Ordering::Less));
+            assert_eq!(
+                RankTopic("a").partial_cmp(&RankTopic("a/#")),
+                Some(Ordering::Less)
+            );
         }
 
         //(None, Some("#"), Some(Winner::This)) => break None,
@@ -802,7 +806,6 @@ mod tests {
         fn static_topics_of_different_lengths_do_not_compare() {
             assert_eq!(RankTopic("a/b/c").partial_cmp(&RankTopic("a/b")), None);
         }
-
     }
 
     mod insert {

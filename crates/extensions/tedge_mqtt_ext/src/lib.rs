@@ -159,15 +159,27 @@ impl AsMut<MqttConfig> for MqttActorBuilder {
 
 impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
     fn connect_sink(&mut self, topics: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
+        self.connect_id_sink(topics, peer);
+    }
+}
+
+impl MqttActorBuilder {
+    pub fn connect_id_sink(
+        &mut self,
+        topics: TopicFilter,
+        peer: &impl MessageSink<MqttMessage>,
+    ) -> ClientId {
         let sender = DynMqttSender {
             client: ClientId(self.current_id),
             sender: peer.get_sender(),
         };
+        let client_id = sender.client;
         self.current_id += 1;
         for topic in topics.patterns() {
-            self.subscription_diff += self.trie.trie.insert(topic, sender.client);
+            self.subscription_diff += self.trie.trie.insert(topic, client_id);
         }
         self.subscriber_addresses.push(sender);
+        client_id
     }
 }
 

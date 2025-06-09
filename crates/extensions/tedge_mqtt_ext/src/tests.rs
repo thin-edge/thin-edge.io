@@ -3,6 +3,7 @@ use mqtt_channel::Topic;
 use std::future::Future;
 use std::time::Duration;
 use tedge_actors::Builder;
+use tedge_actors::NoConfig;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 
@@ -188,6 +189,59 @@ async fn communicate_over_mqtt() {
     }
     messages.sort();
     assert_eq!(messages, vec!["1", "2", "3", "A", "B", "C"])
+}
+
+#[tokio::test]
+async fn dynamic_subscriptions() {
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mqtt_config = MqttConfig::default().with_port(broker.port);
+    let mut mqtt = MqttActorBuilder::new(mqtt_config);
+
+    let mut msgs_0 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber", 16);
+    let mut msgs_1 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber1", 16);
+    let client_id_0 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/b"), &msgs_0);
+    let _client_id_1 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/+"), &msgs_1);
+    msgs_0.connect_sink(NoConfig, &mqtt);
+    msgs_1.connect_sink(NoConfig, &mqtt);
+    let mqtt = mqtt.build();
+    tokio::spawn(async move { mqtt.run().await.unwrap() });
+    let mut msgs_0 = msgs_0.build();
+    let mut msgs_1 = msgs_1.build();
+
+    let msg = MqttMessage::new(&Topic::new_unchecked("a/b"), "hello");
+    msgs_0
+        .send(PublishOrSubscribe::Publish(msg.clone()))
+        .await
+        .unwrap();
+    assert_eq!(timeout(msgs_0.recv()).await.unwrap(), msg);
+    assert_eq!(timeout(msgs_1.recv()).await.unwrap(), msg);
+
+    msgs_0
+        .send(PublishOrSubscribe::Subscribe(SubscriptionRequest {
+            diff: SubscriptionDiff {
+                subscribe: ["b/c".into()].into(),
+                unsubscribe: [].into(),
+            },
+            client_id: client_id_0,
+        }))
+        .await
+        .unwrap();
+
+    // Send the messages as retain so we don't have a race for the subscription
+    let msg = MqttMessage::new(&Topic::new_unchecked("b/c"), "hello").with_retain();
+    msgs_0
+        .send(PublishOrSubscribe::Publish(msg.clone()))
+        .await
+        .unwrap();
+    assert_eq!(timeout(msgs_0.recv()).await.unwrap(), msg);
+
+    // Verify that messages
+    let msg = MqttMessage::new(&Topic::new_unchecked("a/b"), "hello");
+    msgs_0
+        .send(PublishOrSubscribe::Publish(msg.clone()))
+        .await
+        .unwrap();
+    assert_eq!(timeout(msgs_1.recv()).await.unwrap(), msg);
 }
 
 async fn timeout<T>(fut: impl Future<Output = T>) -> T {
