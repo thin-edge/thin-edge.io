@@ -17,7 +17,7 @@ the registration attempt fails and the feedback is provided immediately in the H
 
 ## Create new entity
 
-Successful creation of an entity results in its definition getting published to the MQTT broker as well.
+Successful creation of an entity results in its definition getting published to the local MQTT broker as well.
 
 **Endpoint**
 
@@ -132,7 +132,7 @@ curl http://localhost:8000/te/v1/entities/device/child01 \
 
 Deleting an entity results in the deregistration of that entity and its descendants (immediate and nested child entities) as well,
 to avoid leaving orphan entities behind.
-The deregistered entities are cleared from the MQTT broker as well.
+The deregistered entities are cleared from the local MQTT broker as well.
 
 **Endpoint**
 
@@ -173,7 +173,7 @@ curl -X DELETE http://localhost:8000/te/v1/entities/device/child21
 ## Set entity twin data
 
 The twin data fragments for an entity can be set either individually or together in a single message.
-The twin data set/deleted with these HTTP APIs are published as retained `twin` messages to the MQTT broker as well.
+The twin data set/deleted with these HTTP APIs are published as retained `twin` messages to the local MQTT broker as well.
 
 ### Set a single twin fragment
 
