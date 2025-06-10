@@ -17,14 +17,16 @@ pub use upload::UploadCertCmd;
 /// Return the CSR in the format expected by c8y CA
 async fn create_device_csr(
     common_name: String,
-    key_path: Utf8PathBuf,
+    key: super::create_csr::Key,
+    current_cert: Option<Utf8PathBuf>,
     csr_path: Utf8PathBuf,
     csr_template: CsrTemplate,
 ) -> Result<(), CertError> {
     let create_cmd = CreateCsrCmd {
         id: common_name,
         csr_path: csr_path.clone(),
-        key_path,
+        key,
+        current_cert,
         user: "tedge".to_string(),
         group: "tedge".to_string(),
         csr_template,

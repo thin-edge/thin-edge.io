@@ -7,6 +7,7 @@ Documentation       Test thin-edge.io MQTT client authentication using a Hardwar
 
 # it would be good to explain here why we use the tedge-p11-server exclusively and not the module mode
 Resource            ../resources/common.resource
+Library             String
 Library             Cumulocity
 Library             ThinEdgeIO
 
@@ -99,6 +100,61 @@ Connects to C8y supporting all TLS13 ECDSA signature algorithms
     type=ecdsa    curve=secp384r1
     type=ecdsa    curve=secp521r1
 
+Can use PKCS11 key to renew the public certificate
+    [Documentation]    Test that `tedge cert renew c8y` works with all supported keys. We do renew 2 times to see if we
+    ...    can renew both a self-signed certificate and a certificate signed by C8y CA.
+    [Setup]    Set tedge-p11-server Uri    value=${EMPTY}
+
+    Connect to C8y using new keypair    type=ecdsa    curve=secp256r1
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
+    Connect to C8y using new keypair    type=ecdsa    curve=secp384r1
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
+    # renewal isn't supported for P521 because rcgen doesn't support it
+    # https://github.com/rustls/rcgen/issues/60
+
+    # Connect to C8y using new keypair    type=ecdsa    curve=secp521r1
+    # Execute Command    tedge cert renew c8y
+    # Tedge Reconnect Should Succeed
+    # Execute Command    tedge cert renew c8y
+    # Tedge Reconnect Should Succeed
+
+    Connect to C8y using new keypair    type=rsa    bits=2048
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
+    Connect to C8y using new keypair    type=rsa    bits=3072
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
+    Connect to C8y using new keypair    type=rsa    bits=4096
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
+    Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
+    Command Should Fail With
+    ...    tedge cert renew c8y
+    ...    error=PEM error: Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
+
+    Execute Command    systemctl start tedge-p11-server.socket
+    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
+    Command Should Fail With
+    ...    tedge cert renew c8y
+    ...    error=PEM error: protocol error: bad response, expected sign, received: Error(ProtocolError("PKCS #11 service failed: Failed to find a signing key: Failed to find a private key"))
+
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
     ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0
@@ -167,10 +223,15 @@ Warn the user if tedge.toml cannot be parsed
 
 *** Keywords ***
 Connect to C8y using new keypair
-    [Documentation]    Generates a new key/cert pair, uploads it to c8y, and connects using it.
+    [Documentation]    Connects to C8y with a newly generated keypair and a self-signed certificate.
+    ...    The private key is saved on the token, and the self-signed certificate is registered with c8y.
     [Arguments]    ${type}    # ecdsa or rsa
     ...    ${curve}=secp256r1    # if type == ECDSA, curve of the key - one of {secp256r1, secp384r1, secp521r1}
     ...    ${bits}=4096    # if type == RSA, length in bits of the RSA key - one of {1024, 2048, 3072, 4096}
+
+    # We could alternatively use Cumulocity CA to start with a signed cert, but for testing certificate renewal, we want
+    # to test both renewing a self-signed cert and a cert issued by C8y CA. When we start with self-signed cert, after
+    # the first renewal we get a cert signed by CA, so we test all scenarios by just doing renew 2 times.
 
     IF    '${type}' == 'ecdsa'
         VAR    ${object_name}=    ${type}-${curve}
@@ -181,24 +242,30 @@ Connect to C8y using new keypair
     ELSE
         Fail    Wrong key type provided.
     END
-    ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=${True}
+
+    # guarantee name of the object is unique even if multiple keys of the same type and bits/curve are generated
+    ${identifier}=    String.Generate Random String
+    VAR    ${object_name}=    ${object_name}-${identifier}
+
+    VAR    ${cert_path}=    /etc/tedge/device-certs/${object_name}.csr
+    Execute Command    cmd=tedge config set device.cert_path ${cert_path}
 
     Execute Command
     ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ${type} ${p11tool_args} --label ${object_name} "pkcs11:token=tedge"
     Execute Command
-    ...    cmd=GNUTLS_PIN=123456 certtool --generate-request --template "${CERT_TEMPLATE}" --outfile "${csr_path}" --load-privkey "pkcs11:token=tedge;object=${object_name}"
+    ...    cmd=GNUTLS_PIN=123456 certtool --generate-self-signed --template "${CERT_TEMPLATE}" --outfile "${cert_path}" --load-privkey "pkcs11:token=tedge;object=${object_name}"
 
     Execute Command    cmd=tedge config set device.key_uri "pkcs11:token=tedge;object=${object_name}"
 
-    Register Device With Cumulocity CA    ${csr_path}
+    Execute Command
+    ...    cmd=sudo env C8Y_USER="${C8Y_CONFIG.username}" C8Y_PASSWORD="${C8Y_CONFIG.password}" tedge cert upload c8y
+    ThinEdgeIO.Register Certificate For Cleanup
 
     Tedge Reconnect Should Succeed
 
-    Execute Command    tedge config unset device.key_uri
-
 Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
-    Set Suite Variable    $DEVICE_SN
+    Set Suite Variable    ${DEVICE_SN}
     # Allow the tedge user to access softhsm
     Execute Command    sudo usermod -a -G softhsm tedge
     Transfer To Device    ${CURDIR}/data/init_softhsm.sh    /usr/bin/
@@ -230,11 +297,17 @@ Tedge Reconnect Should Succeed
 
 Tedge Reconnect Should Fail With
     [Arguments]    ${error}
-    ${stderr}=    Execute Command    tedge reconnect c8y    exp_exit_code=!0    stdout=false    stderr=true
+    ${stderr}=    Command Should Fail With    tedge reconnect c8y    ${error}
+    RETURN    ${stderr}
+
+Command Should Fail With
+    [Arguments]    ${command}    ${error}
+    ${stderr}=    Execute Command    ${command}    exp_exit_code=!0    stdout=false    stderr=true
     Should Contain    ${stderr}    ${error}
     RETURN    ${stderr}
 
 Register Device With Cumulocity CA
+    [Documentation]    Registers a new certificate with Cumulocity CA and places it under `c8y.device.cert_path`
     [Arguments]    ${csr_path}
     ${credentials}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN}
     Execute Command

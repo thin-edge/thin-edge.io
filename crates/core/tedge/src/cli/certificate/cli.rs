@@ -5,6 +5,7 @@ use super::renew::RenewCertCmd;
 use super::show::ShowCertCmd;
 use crate::certificate_is_self_signed;
 use crate::cli::certificate::c8y;
+use crate::cli::certificate::create_csr::Key;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
@@ -22,6 +23,7 @@ use tedge_config::models::HTTPS_PORT;
 use tedge_config::tedge_toml::OptionalConfigError;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
+use tracing::debug;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeCertCli {
@@ -183,10 +185,28 @@ impl BuildCommand for TEdgeCertCli {
                 cloud,
             } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
+                debug!(?cloud);
+                let cloud_config = cloud
+                    .as_ref()
+                    .map(|c| config.as_cloud_config((c).into()))
+                    .transpose()?;
+                let cryptoki = config.device.cryptoki_config(cloud_config)?;
+                let key = cryptoki
+                    .map(super::create_csr::Key::Cryptoki)
+                    .unwrap_or(Key::Local(
+                        config.device_key_path(cloud.as_ref())?.to_owned(),
+                    ));
+                debug!(?key);
 
+                let current_cert = config
+                    .device_cert_path(cloud.as_ref())
+                    .map(|c| c.to_owned())
+                    .ok();
+                debug!(?current_cert);
                 let cmd = CreateCsrCmd {
                     id: get_device_id(id, config, &cloud)?,
-                    key_path: config.device_key_path(cloud.as_ref())?.to_owned(),
+                    key,
+                    current_cert,
                     // Use output file instead of csr_path from tedge config if provided
                     csr_path: if let Some(output_path) = output_path {
                         output_path
@@ -279,13 +299,23 @@ impl BuildCommand for TEdgeCertCli {
                     None => c8y_config.http.or_err()?.to_owned(),
                 };
 
+                let cryptoki = config.device.cryptoki_config(Some(c8y_config))?;
+                let key = cryptoki
+                    .map(super::create_csr::Key::Cryptoki)
+                    .unwrap_or(Key::Local(
+                        config
+                            .device_key_path(Some(tedge_config::tedge_toml::Cloud::C8y(
+                                profile.as_ref(),
+                            )))?
+                            .to_owned(),
+                    ));
                 let cmd = c8y::DownloadCertCmd {
                     device_id: id,
                     one_time_password: token,
                     c8y_url,
                     root_certs: config.cloud_root_certs()?,
                     cert_path: c8y_config.device.cert_path.to_owned().into(),
-                    key_path: c8y_config.device.key_path.to_owned().into(),
+                    key,
                     csr_path,
                     generate_csr,
                     retry_every,
@@ -338,7 +368,7 @@ impl BuildCommand for TEdgeCertCli {
                         None => (config.device_csr_path(cloud.as_ref())?.to_owned(), true),
                         Some(csr_path) => (csr_path, false),
                     };
-                    let c8y = match cloud {
+                    let c8y = match &cloud {
                         None => C8yEndPoint::local_proxy(config, None)?,
                         #[cfg(feature = "c8y")]
                         Some(Cloud::C8y(profile)) => C8yEndPoint::local_proxy(
@@ -352,13 +382,24 @@ impl BuildCommand for TEdgeCertCli {
                             )
                         }
                     };
+
+                    let cloud_config = cloud
+                        .as_ref()
+                        .map(|c| config.as_cloud_config((c).into()))
+                        .transpose()?;
+                    let cryptoki = config.device.cryptoki_config(cloud_config)?;
+                    let key = cryptoki
+                        .map(super::create_csr::Key::Cryptoki)
+                        .unwrap_or(Key::Local(
+                            config.device_key_path(cloud.as_ref())?.to_owned(),
+                        ));
                     let cmd = c8y::RenewCertCmd {
                         c8y,
                         http_config: config.cloud_root_certs()?,
                         identity: config.http.client.auth.identity()?,
                         cert_path,
                         new_cert_path,
-                        key_path,
+                        key,
                         csr_path,
                         generate_csr,
                         csr_template,

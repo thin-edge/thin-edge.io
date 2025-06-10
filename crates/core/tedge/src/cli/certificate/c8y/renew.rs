@@ -2,6 +2,7 @@ use crate::certificate_cn;
 use crate::cli::certificate::c8y::create_device_csr;
 use crate::cli::certificate::c8y::read_csr_from_file;
 use crate::cli::certificate::c8y::store_device_cert;
+use crate::cli::certificate::create_csr::Key;
 use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::get_webpki_error_from_reqwest;
@@ -17,6 +18,8 @@ use hyper::StatusCode;
 use reqwest::Identity;
 use reqwest::Response;
 use tedge_config::TEdgeConfig;
+use tracing::debug;
+use tracing::instrument;
 use url::Url;
 
 /// Command to renew a device certificate from Cumulocity
@@ -37,7 +40,7 @@ pub struct RenewCertCmd {
     pub new_cert_path: Utf8PathBuf,
 
     /// The path of the private key to re-use
-    pub key_path: Utf8PathBuf,
+    pub key: Key,
 
     /// The path where the device CSR file will be stored
     pub csr_path: Utf8PathBuf,
@@ -74,18 +77,21 @@ impl RenewCertCmd {
         self.c8y.get_base_url()
     }
 
+    #[instrument(skip_all)]
     async fn renew_device_certificate(&self) -> Result<(), Error> {
         if self.generate_csr {
             let common_name = certificate_cn(&self.cert_path).await?;
             create_device_csr(
                 common_name,
-                self.key_path.clone(),
+                self.key.clone(),
+                Some(self.cert_path.clone()),
                 self.csr_path.clone(),
                 self.csr_template.clone(),
             )
             .await?;
         }
         let csr = read_csr_from_file(&self.csr_path).await?;
+        debug!(?self.csr_path, "Created CSR");
 
         let http_builder = self.http_config.client_builder();
         let http_builder = if let Some(identity) = &self.identity {
