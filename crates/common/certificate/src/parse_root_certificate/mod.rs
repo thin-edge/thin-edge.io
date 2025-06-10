@@ -49,7 +49,7 @@ pub fn create_tls_config_cryptoki(
 
     let certified_key = CertifiedKey {
         cert: cert_chain,
-        key,
+        key: key.to_rustls_signing_key(),
         ocsp: None,
     };
     let resolver: SingleCertAndKey = certified_key.into();
