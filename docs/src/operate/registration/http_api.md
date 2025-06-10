@@ -286,7 +286,7 @@ curl http://localhost:8000/te/v1/entities/device/child01///twin \
       "name": "Child 01",
       "hardware": {
           "serialNo": "98761234"
-      },
+      }
   }
   ```
 * 400: Bad Request (Invalid JSON payload or payload with fragment keys starting with the reserved `@` character)
@@ -357,7 +357,7 @@ curl http://localhost:8000/te/v1/entities/device/child01///twin
       "name": "Child 01",
       "hardware": {
           "serialNo": "98761234"
-      },
+      }
   }
   ```
 * 404: Not Found
