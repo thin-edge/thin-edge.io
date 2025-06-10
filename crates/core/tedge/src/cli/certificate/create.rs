@@ -14,6 +14,7 @@ use tedge_config::TEdgeConfig;
 use tokio::fs::File;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
+use tracing::debug;
 
 /// Create a self-signed device certificate
 pub struct CreateCertCmd {
@@ -105,6 +106,7 @@ pub async fn override_public_key(
 ) -> Result<(), CertError> {
     let key_file = override_file(cert_path).await?;
     persist_public_key(key_file, pem_string).await?;
+    debug!(path = ?cert_path, "Certificate PEM written to file");
     Ok(())
 }
 
