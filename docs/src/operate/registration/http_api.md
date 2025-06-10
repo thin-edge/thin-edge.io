@@ -47,7 +47,7 @@ POST /v1/entities
 
 **Example**
 
-```bash
+```sh
 curl http://localhost:8000/te/v1/entities \
   -X POST \
   -H "Content-Type: application/json" \
@@ -79,7 +79,7 @@ GET /v1/entities/{topic-id}
 
 **Example**
 
-```shell
+```sh
 curl http://localhost:8000/te/v1/entities/device/child01
 ```
 
@@ -110,7 +110,7 @@ PATCH /v1/entities/{topic-id}
 
 **Example**
 
-```bash
+```sh
 curl http://localhost:8000/te/v1/entities/device/child01 \
   -X PATCH \
   -H "Content-Type: application/json" \
@@ -142,7 +142,7 @@ DELETE /v1/entities/{topic-id}
 
 **Example**
 
-```shell
+```sh
 curl -X DELETE http://localhost:8000/te/v1/entities/device/child21
 ```
 
@@ -193,21 +193,21 @@ Any JSON value.
 
 * Set `name` fragment with a `string` value (Additional `"` quotes are required for JSON strings):
 
-  ```shell
+  ```sh
   curl http://localhost:8000/te/v1/entities/device/child01///twin/name \
     -X PUT \
     -H "Content-Type: application/json" \
     -d '"Child 01"'
   ```
 * Set `maintenanceMode` fragment with a `boolean` value:
-  ```shell
+  ```sh
   curl http://localhost:8000/te/v1/entities/device/child01///twin/maintenanceMode \
     -X PUT \
     -H "Content-Type: application/json" \
     -d 'true'
   ```
 * Set `hardware` fragment with an `object` value:
-  ```shell
+  ```sh
   curl http://localhost:8000/te/v1/entities/device/child01///twin/hardware \
     -X PUT \
     -H "Content-Type: application/json" \
@@ -265,7 +265,7 @@ Fragments to be removed are specified with a `null` value.
 
 Update existing fragment: `name`, add new fragment: `hardware` and remove existing fragment: `maintenanceMode` (with a `null` value):
 
-```shell
+```sh
 curl http://localhost:8000/te/v1/entities/device/child01///twin \
   -X PUT \
   -H "Content-Type: application/json" \
@@ -316,7 +316,7 @@ GET /v1/entities/{topic-id}/twin/{fragment-key}
 
 **Example**
 
-```shell
+```sh
 curl http://localhost:8000/te/v1/entities/device/child01///twin/hardware
 ```
 
@@ -345,7 +345,7 @@ GET /v1/entities/{topic-id}/twin
 
 **Example**
 
-```shell
+```sh
 curl http://localhost:8000/te/v1/entities/device/child01///twin
 ```
 
@@ -381,13 +381,13 @@ DELETE /v1/entities/{topic-id}/twin/{fragment-key}
 
 **Example**
 
-```shell
+```sh
 curl -X DELETE http://localhost:8000/te/v1/entities/device/child01///twin/maintenanceMode
 ```
 
 This is equivalent to using the `PUT` API with a `null` value as follows:
 
-```shell
+```sh
 curl http://localhost:8000/te/v1/entities/device/child01///twin/maintenanceMode \
   -X PUT \
   -H "Content-Type: application/json" \
@@ -408,7 +408,7 @@ DELETE /v1/entities/{topic-id}/twin
 
 **Example**
 
-```shell
+```sh
 curl -X DELETE http://localhost:8000/te/v1/entities/device/child01///twin
 ```
 
@@ -496,7 +496,7 @@ List all entities registered with thin-edge starting from the `main` device at t
 
 **Request**
 
-```shell
+```sh
 curl http://localhost:8000/te/v1/entities
 ```
 
@@ -587,7 +587,7 @@ Query the entity tree from a given root node.
 
 **Request**
 
-```shell
+```sh
 curl http://localhost:8000/te/v1/entities?root=device/child2//
 ```
 
@@ -644,7 +644,7 @@ Query only the immediate child entities of a `parent`, excluding any nested enti
 
 **Request**
 
-```shell
+```sh
 curl http://localhost:8000/te/v1/entities?parent=device/child2//
 ```
 
@@ -681,7 +681,7 @@ Query all entities of type: `child-device`
 
 **Request**
 
-```shell
+```sh
 curl http://localhost:8000/te/v1/entities?type=child-device
 ```
 
@@ -743,7 +743,7 @@ Query all child services of the parent: `device/child2//`.
 
 **Request**
 
-```shell
+```sh
 curl 'http://localhost:8000/te/v1/entities?parent=device/child2//&type=service'
 ```
 
