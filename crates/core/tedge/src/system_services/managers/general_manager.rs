@@ -193,48 +193,26 @@ impl ServiceCommand<'_> {
         service_manager: &GeneralServiceManager,
     ) -> Result<ExecCommand, SystemServiceError> {
         let config_path = service_manager.config_path.clone();
+        let config = match self {
+            Self::CheckManager => &service_manager.init_config.is_available,
+            Self::Stop(_) => &service_manager.init_config.stop,
+            Self::Restart(_) => &service_manager.init_config.restart,
+            Self::Start(_) => &service_manager.init_config.start,
+            Self::Enable(_) => &service_manager.init_config.enable,
+            Self::Disable(_) => &service_manager.init_config.disable,
+            Self::IsActive(_) => &service_manager.init_config.is_active,
+        };
+
         match self {
-            Self::CheckManager => ExecCommand::try_new(
-                service_manager.init_config.is_available.clone(),
-                ServiceCommand::CheckManager,
-                config_path,
-            ),
-            Self::Stop(service) => ExecCommand::try_new_with_placeholder(
-                service_manager.init_config.stop.clone(),
-                ServiceCommand::Stop(service),
-                config_path,
-                service,
-            ),
-            Self::Restart(service) => ExecCommand::try_new_with_placeholder(
-                service_manager.init_config.restart.clone(),
-                ServiceCommand::Restart(service),
-                config_path,
-                service,
-            ),
-            Self::Start(service) => ExecCommand::try_new_with_placeholder(
-                service_manager.init_config.start.clone(),
-                ServiceCommand::Enable(service),
-                config_path,
-                service,
-            ),
-            Self::Enable(service) => ExecCommand::try_new_with_placeholder(
-                service_manager.init_config.enable.clone(),
-                ServiceCommand::Enable(service),
-                config_path,
-                service,
-            ),
-            Self::Disable(service) => ExecCommand::try_new_with_placeholder(
-                service_manager.init_config.disable.clone(),
-                ServiceCommand::Disable(service),
-                config_path,
-                service,
-            ),
-            Self::IsActive(service) => ExecCommand::try_new_with_placeholder(
-                service_manager.init_config.is_active.clone(),
-                ServiceCommand::IsActive(service),
-                config_path,
-                service,
-            ),
+            Self::CheckManager => ExecCommand::try_new(config.clone(), self, config_path),
+            Self::Stop(service)
+            | Self::Restart(service)
+            | Self::Start(service)
+            | Self::Enable(service)
+            | Self::Disable(service)
+            | Self::IsActive(service) => {
+                ExecCommand::try_new_with_placeholder(config.clone(), self, config_path, service)
+            }
         }
     }
 }
