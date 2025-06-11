@@ -203,6 +203,8 @@ impl PartialOrd for RankTopic<'_> {
                 (Some("+"), Some(_), _) => current_winner = Some(Winner::This),
                 (Some(_), Some("+"), Some(Winner::This)) => break None,
                 (Some(_), Some("+"), _) => current_winner = Some(Winner::Other),
+
+                // a/.. and b/.. are not comparable
                 (Some(_), Some(_), _) => break None,
 
                 // a/# > a
@@ -265,7 +267,7 @@ fn remove_unneeded_topics(topics: &[impl AsRef<str>]) -> HashSet<String> {
 }
 
 impl<T: Debug + Eq> TrieNode<T> {
-    fn subscribers_matching(&self, topic: &str) -> Vec<String> {
+    fn subscribed_topics_matching(&self, topic: &str) -> Vec<String> {
         match topic.split_once("/") {
             Some(("+", rest)) => {
                 if self.sub_nodes.contains_key("#") {
@@ -274,7 +276,7 @@ impl<T: Debug + Eq> TrieNode<T> {
                     self.sub_nodes
                         .iter()
                         .flat_map(|(key, node)| {
-                            node.subscribers_matching(rest)
+                            node.subscribed_topics_matching(rest)
                                 .into_iter()
                                 .map(move |t| format!("{key}/{t}"))
                         })
@@ -293,14 +295,14 @@ impl<T: Debug + Eq> TrieNode<T> {
                             self.sub_nodes.get(head)
                         })
                         .map_or_else(Vec::new, |node| {
-                            node.subscribers_matching(rest)
+                            node.subscribed_topics_matching(rest)
                                 .into_iter()
                                 .map(|t| format!("{key}/{t}"))
                                 .collect()
                         })
                 }
             }
-            None if topic == "#" => self.subscribers(),
+            None if topic == "#" => self.subscribed_topics(),
             None => self
                 .sub_nodes
                 .get(topic)
@@ -311,7 +313,7 @@ impl<T: Debug + Eq> TrieNode<T> {
         }
     }
 
-    fn subscribers(&self) -> Vec<String> {
+    fn subscribed_topics(&self) -> Vec<String> {
         if self.sub_nodes.contains_key("#") {
             vec!["#".to_owned()]
         } else {
@@ -319,7 +321,7 @@ impl<T: Debug + Eq> TrieNode<T> {
                 .iter()
                 .flat_map(|(key, node)| {
                     let mut subs: Vec<_> = node
-                        .subscribers()
+                        .subscribed_topics()
                         .into_iter()
                         .map(|t| format!("{key}/{t}"))
                         .collect();
@@ -348,9 +350,11 @@ impl<T: Debug + Eq> TrieNode<T> {
                                     .sub_nodes
                                     .iter()
                                     .flat_map(|(head, node)| {
-                                        remove_unneeded_topics(&node.subscribers_matching(rest))
-                                            .into_iter()
-                                            .map(move |topic| format!("{head}/{topic}"))
+                                        remove_unneeded_topics(
+                                            &node.subscribed_topics_matching(rest),
+                                        )
+                                        .into_iter()
+                                        .map(move |topic| format!("{head}/{topic}"))
                                     })
                                     .collect(),
                                 unsubscribe: diff
@@ -403,7 +407,7 @@ impl<T: Debug + Eq> TrieNode<T> {
                                     })
                                     .collect();
                             } else if topic == "#" {
-                                diff.subscribe.extend(self.subscribers());
+                                diff.subscribe.extend(self.subscribed_topics());
                             }
                         }
                         diff
@@ -448,10 +452,9 @@ impl<T: Debug + Eq> TrieNode<T> {
     }
 
     fn insert(&mut self, topic: &str, subscriber: T) -> SubscriptionDiff {
-        // TODO clone strings less when getting entries
         match topic.split_once("/") {
             Some((head, rest)) => {
-                let overlapping_subscribers = self.subscribers_matching(topic);
+                let overlapping_subscribers = self.subscribed_topics_matching(topic);
                 let mut diff = self
                     .sub_nodes
                     .entry(head.to_owned())

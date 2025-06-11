@@ -17,6 +17,7 @@ use rumqttc::Event;
 use rumqttc::EventLoop;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
+use rumqttc::SubscribeFilter;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -41,9 +42,75 @@ pub struct Connection {
     /// A channel to notify that all the published messages have been actually published.
     pub pub_done: oneshot::Receiver<()>,
 
-    pub client: AsyncClient,
+    pub subscriptions: SubscriberHandle,
+}
 
-    pub subscriptions: Arc<Mutex<TopicFilter>>,
+#[derive(Clone)]
+/// A client for changing the subscribed topics
+pub struct SubscriberHandle {
+    client: AsyncClient,
+    subscriptions: Arc<Mutex<TopicFilter>>,
+}
+
+impl SubscriberHandle {
+    pub fn new(client: AsyncClient, subscriptions: Arc<Mutex<TopicFilter>>) -> Self {
+        Self {
+            client,
+            subscriptions,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+pub trait SubscriberOps {
+    async fn subscribe_many(
+        &self,
+        topics: impl IntoIterator<Item = String> + Send,
+    ) -> Result<(), MqttError>;
+    async fn unsubscribe_many(
+        &self,
+        topics: impl IntoIterator<Item = String> + Send,
+    ) -> Result<(), MqttError>;
+}
+
+#[async_trait::async_trait]
+impl SubscriberOps for SubscriberHandle {
+    async fn subscribe_many(
+        &self,
+        topics: impl IntoIterator<Item = String> + Send,
+    ) -> Result<(), MqttError> {
+        let topics = topics.into_iter().collect::<Vec<_>>();
+        {
+            let mut subs = self.subscriptions.lock().unwrap();
+            for topic in &topics {
+                subs.add(topic)?;
+            }
+        }
+        self.client
+            .subscribe_many(topics.into_iter().map(|path| SubscribeFilter {
+                path,
+                qos: rumqttc::QoS::AtLeastOnce,
+            }))
+            .await?;
+        Ok(())
+    }
+
+    async fn unsubscribe_many(
+        &self,
+        topics: impl IntoIterator<Item = String> + Send,
+    ) -> Result<(), MqttError> {
+        let topics = topics.into_iter().collect::<Vec<_>>();
+        {
+            let mut subs = self.subscriptions.lock().unwrap();
+            for topic in &topics {
+                subs.add(topic)?;
+            }
+        }
+        for topic in topics {
+            self.client.unsubscribe(topic).await?;
+        }
+        Ok(())
+    }
 }
 
 impl Connection {
@@ -127,8 +194,7 @@ impl Connection {
             published: published_sender,
             errors: error_receiver,
             pub_done: pub_done_receiver,
-            client: mqtt_client,
-            subscriptions: config.subscriptions.clone(),
+            subscriptions: SubscriberHandle::new(mqtt_client, config.subscriptions.clone()),
         })
     }
 
