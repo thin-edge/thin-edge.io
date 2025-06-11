@@ -197,26 +197,26 @@ async fn dynamic_subscriptions() {
     let mqtt_config = MqttConfig::default().with_port(broker.port);
     let mut mqtt = MqttActorBuilder::new(mqtt_config);
 
-    let mut msgs_0 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber", 16);
-    let mut msgs_1 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber1", 16);
-    let client_id_0 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/b"), &msgs_0);
-    let _client_id_1 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/+"), &msgs_1);
-    msgs_0.connect_sink(NoConfig, &mqtt);
-    msgs_1.connect_sink(NoConfig, &mqtt);
+    let mut client_0 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber", 16);
+    let mut client_1 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber1", 16);
+    let client_id_0 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/b"), &client_0);
+    let _client_id_1 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/+"), &client_1);
+    client_0.connect_sink(NoConfig, &mqtt);
+    client_1.connect_sink(NoConfig, &mqtt);
     let mqtt = mqtt.build();
     tokio::spawn(async move { mqtt.run().await.unwrap() });
-    let mut msgs_0 = msgs_0.build();
-    let mut msgs_1 = msgs_1.build();
+    let mut client_0 = client_0.build();
+    let mut client_1 = client_1.build();
 
     let msg = MqttMessage::new(&Topic::new_unchecked("a/b"), "hello");
-    msgs_0
+    client_0
         .send(PublishOrSubscribe::Publish(msg.clone()))
         .await
         .unwrap();
-    assert_eq!(timeout(msgs_0.recv()).await.unwrap(), msg);
-    assert_eq!(timeout(msgs_1.recv()).await.unwrap(), msg);
+    assert_eq!(timeout(client_0.recv()).await.unwrap(), msg);
+    assert_eq!(timeout(client_1.recv()).await.unwrap(), msg);
 
-    msgs_0
+    client_0
         .send(PublishOrSubscribe::Subscribe(SubscriptionRequest {
             diff: SubscriptionDiff {
                 subscribe: ["b/c".into()].into(),
@@ -229,19 +229,24 @@ async fn dynamic_subscriptions() {
 
     // Send the messages as retain so we don't have a race for the subscription
     let msg = MqttMessage::new(&Topic::new_unchecked("b/c"), "hello").with_retain();
-    msgs_0
+    client_0
         .send(PublishOrSubscribe::Publish(msg.clone()))
         .await
         .unwrap();
-    assert_eq!(timeout(msgs_0.recv()).await.unwrap(), msg);
+    assert_eq!(timeout(client_0.recv()).await.unwrap(), msg);
 
-    // Verify that messages
-    let msg = MqttMessage::new(&Topic::new_unchecked("a/b"), "hello");
-    msgs_0
+    // Verify that messages aren't sent to clients
+    let msg = MqttMessage::new(&Topic::new_unchecked("a/c"), "hello");
+    client_0
         .send(PublishOrSubscribe::Publish(msg.clone()))
         .await
         .unwrap();
-    assert_eq!(timeout(msgs_1.recv()).await.unwrap(), msg);
+    assert_eq!(timeout(client_1.recv()).await.unwrap(), msg);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(10), client_0.recv())
+            .await
+            .is_err()
+    );
 }
 
 async fn timeout<T>(fut: impl Future<Output = T>) -> T {
