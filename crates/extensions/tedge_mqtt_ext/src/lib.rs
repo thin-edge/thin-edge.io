@@ -390,9 +390,7 @@ impl ToPeers {
             unreachable!("MatchRequest always returns Matched")
         };
         for client in matches {
-            self.peer_senders[client.0]
-                .send(message.clone())
-                .await?;
+            self.peer_senders[client.0].send(message.clone()).await?;
         }
         Ok(())
     }
