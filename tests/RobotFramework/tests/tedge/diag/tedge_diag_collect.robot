@@ -60,8 +60,8 @@ Validate preset plugins
     [Arguments]    ${tarball_name}
     ${result}=    Execute Command    ls /usr/share/tedge/diag-plugins
     ${plugins}=    Split String    ${result}    \n
-    ${cleared_list}=    Evaluate    [x for x in @{plugins} if x]
-    FOR    ${plugin}    IN    @{cleared_list}
+    ${filtered_plugins}=    Evaluate    [x for x in ${plugins} if x and not x.endswith('.ignore')]
+    FOR    ${plugin}    IN    @{filtered_plugins}
         ${base}=    Replace String    ${plugin}    .sh    ${EMPTY}
         File Should Exist    /tmp/${tarball_name}/${base}/output.log
     END
