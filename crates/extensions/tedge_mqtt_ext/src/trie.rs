@@ -137,9 +137,9 @@ impl AddAssign for SubscriptionDiff {
             .intersection(&self.unsubscribe)
             .cloned()
             .collect::<Vec<_>>();
-        for filter in overlap {
-            self.subscribe.remove(&filter);
-            self.unsubscribe.remove(&filter);
+        for topic in overlap {
+            self.subscribe.remove(&topic);
+            self.unsubscribe.remove(&topic);
         }
     }
 }
@@ -169,9 +169,29 @@ impl SubscriptionDiff {
 }
 
 #[derive(PartialEq)]
-struct RankTopic<'a>(&'a str);
+/// A partial ordering for topics, used to remove overlapping subscriptions
+///
+/// The ordering is defined such that:
+/// - a > b iff a is a wildcard topic fully containing b
+/// - a == b iff a and b are identical
+/// - a < b iff b > a
+/// - topics that are disjoint are not comparable
+///
+/// The result of this is that a <= b implies that any topic accepted by filter
+/// a is also accepted by filter b.
+///
+/// # Examples
+/// "a/#" > "a/b/c"
+/// "a/+" > "a/b"
+/// "a/b" == "a/b"
+/// "a" < "a/#"
+/// "a" < "#"
+/// "a/+" does not compare to "a/b/c"
+/// "a/+/c" does not compare to "a/b/+"
+/// "a/b" does not compare to "c/d"
+struct RankTopicFilter<'a>(&'a str);
 
-impl PartialOrd for RankTopic<'_> {
+impl PartialOrd for RankTopicFilter<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         use std::cmp::Ordering;
 
@@ -224,13 +244,13 @@ impl PartialOrd for RankTopic<'_> {
     }
 }
 
-impl RankTopic<'_> {
-    fn is_ranked_higher_than(&self, topics: &[impl AsRef<str>]) -> bool {
+impl RankTopicFilter<'_> {
+    fn is_ranked_higher_than(&self, filters: &[impl AsRef<str>]) -> bool {
         use std::cmp::Ordering;
 
-        !topics.iter().any(|t| {
+        !filters.iter().any(|t| {
             matches!(
-                self.partial_cmp(&RankTopic(t.as_ref())),
+                self.partial_cmp(&RankTopicFilter(t.as_ref())),
                 Some(Ordering::Less)
             )
         })
@@ -241,7 +261,7 @@ fn remove_unneeded_topics(topics: &[impl AsRef<str>]) -> HashSet<String> {
     use std::cmp::Ordering;
 
     let mut outranked = HashSet::new();
-    let mut valid_topics = HashSet::new();
+    let mut minimal_set = HashSet::new();
     'outer: for i in 0..topics.len() {
         if outranked.contains(&i) {
             continue;
@@ -250,7 +270,9 @@ fn remove_unneeded_topics(topics: &[impl AsRef<str>]) -> HashSet<String> {
             if outranked.contains(&j) {
                 continue;
             }
-            match RankTopic(topics[i].as_ref()).partial_cmp(&RankTopic(topics[j].as_ref())) {
+            match RankTopicFilter(topics[i].as_ref())
+                .partial_cmp(&RankTopicFilter(topics[j].as_ref()))
+            {
                 Some(Ordering::Greater | Ordering::Equal) => {
                     outranked.insert(j);
                 }
@@ -261,17 +283,17 @@ fn remove_unneeded_topics(topics: &[impl AsRef<str>]) -> HashSet<String> {
                 None => (),
             }
         }
-        valid_topics.insert(topics[i].as_ref().to_owned());
+        minimal_set.insert(topics[i].as_ref().to_owned());
     }
-    valid_topics
+    minimal_set
 }
 
 impl<T: Debug + Eq> TrieNode<T> {
-    fn subscribed_topics_matching(&self, topic: &str) -> Vec<String> {
-        match topic.split_once("/") {
+    fn subscribed_topics_matching(&self, topic_suffix: &str) -> Vec<String> {
+        match topic_suffix.split_once("/") {
             Some(("+", rest)) => {
                 if self.sub_nodes.contains_key("#") {
-                    vec![]
+                    vec!["#".into()]
                 } else {
                     self.sub_nodes
                         .iter()
@@ -285,29 +307,32 @@ impl<T: Debug + Eq> TrieNode<T> {
             }
             Some((head, rest)) => {
                 if self.sub_nodes.contains_key("#") {
-                    vec![]
+                    vec!["#".into()]
                 } else {
-                    let mut key = "+";
-                    self.sub_nodes
-                        .get("+")
-                        .or_else(|| {
-                            key = head;
-                            self.sub_nodes.get(head)
-                        })
-                        .map_or_else(Vec::new, |node| {
+                    let mut matching_nodes = Vec::new();
+                    if let Some(node) = self.sub_nodes.get("+") {
+                        matching_nodes.extend(
                             node.subscribed_topics_matching(rest)
                                 .into_iter()
-                                .map(|t| format!("{key}/{t}"))
-                                .collect()
-                        })
+                                .map(|t| format!("+/{t}")),
+                        );
+                    }
+                    if let Some(node) = self.sub_nodes.get(head) {
+                        matching_nodes.extend(
+                            node.subscribed_topics_matching(rest)
+                                .into_iter()
+                                .map(|t| format!("{head}/{t}")),
+                        );
+                    }
+                    matching_nodes
                 }
             }
-            None if topic == "#" => self.subscribed_topics(),
+            None if topic_suffix == "#" => self.subscribed_topics(),
             None => self
                 .sub_nodes
-                .get(topic)
+                .get(topic_suffix)
                 .filter(|node| node.has_subscribers())
-                .map(|_| topic.to_owned())
+                .map(|_| topic_suffix.to_owned())
                 .into_iter()
                 .collect(),
         }
@@ -334,8 +359,8 @@ impl<T: Debug + Eq> TrieNode<T> {
         }
     }
 
-    fn remove(&mut self, topic: &str, id: &T) -> SubscriptionDiff {
-        match topic.split_once("/") {
+    fn remove(&mut self, topic_suffix: &str, id: &T) -> SubscriptionDiff {
+        match topic_suffix.split_once("/") {
             Some((head, rest)) => {
                 if let Some(target) = self.sub_nodes.get_mut(head) {
                     let diff = target.remove(rest, id);
@@ -382,7 +407,7 @@ impl<T: Debug + Eq> TrieNode<T> {
                 }
             }
             None => {
-                if let Some(target) = self.sub_nodes.get_mut(topic) {
+                if let Some(target) = self.sub_nodes.get_mut(topic_suffix) {
                     let i = target.subscribers.iter().position(|t| t == id).unwrap();
                     target.subscribers.remove(i);
                     if target.has_subscribers() {
@@ -390,11 +415,11 @@ impl<T: Debug + Eq> TrieNode<T> {
                     } else {
                         let mut diff = SubscriptionDiff {
                             subscribe: HashSet::new(),
-                            unsubscribe: HashSet::from([topic.to_owned()]),
+                            unsubscribe: HashSet::from([topic_suffix.to_owned()]),
                         };
                         if !target.is_active() {
-                            self.sub_nodes.remove(topic);
-                            if topic == "+" {
+                            self.sub_nodes.remove(topic_suffix);
+                            if topic_suffix == "+" {
                                 diff.subscribe = self
                                     .sub_nodes
                                     .iter()
@@ -406,7 +431,7 @@ impl<T: Debug + Eq> TrieNode<T> {
                                         }
                                     })
                                     .collect();
-                            } else if topic == "#" {
+                            } else if topic_suffix == "#" {
                                 diff.subscribe.extend(self.subscribed_topics());
                             }
                         }
@@ -419,8 +444,8 @@ impl<T: Debug + Eq> TrieNode<T> {
         }
     }
 
-    fn matches<'a>(&'a self, topic: Option<&str>, nodes: &mut Vec<&'a T>) {
-        if let Some(topic) = topic {
+    fn matches<'a>(&'a self, topic_suffix: Option<&str>, nodes: &mut Vec<&'a T>) {
+        if let Some(topic) = topic_suffix {
             let (head, rest) = match topic.split_once("/") {
                 Some((head, rest)) => (head, Some(rest)),
                 None => (topic, None),
@@ -451,10 +476,10 @@ impl<T: Debug + Eq> TrieNode<T> {
         !self.subscribers.is_empty()
     }
 
-    fn insert(&mut self, topic: &str, subscriber: T) -> SubscriptionDiff {
-        match topic.split_once("/") {
+    fn insert(&mut self, topic_suffix: &str, subscriber: T) -> SubscriptionDiff {
+        match topic_suffix.split_once("/") {
             Some((head, rest)) => {
-                let overlapping_subscribers = self.subscribed_topics_matching(topic);
+                let overlapping_subscribers = self.subscribed_topics_matching(topic_suffix);
                 let mut diff = self
                     .sub_nodes
                     .entry(head.to_owned())
@@ -468,7 +493,7 @@ impl<T: Debug + Eq> TrieNode<T> {
                         diff.unsubscribe.extend(overlapping_subscribers);
                     } else {
                         diff.subscribe.retain(|t| {
-                            RankTopic(t).is_ranked_higher_than(&overlapping_subscribers)
+                            RankTopicFilter(t).is_ranked_higher_than(&overlapping_subscribers)
                         })
                     }
                     if rest == "#" {
@@ -484,30 +509,30 @@ impl<T: Debug + Eq> TrieNode<T> {
                 }
             }
             None => {
-                if let Some(entry) = self.sub_nodes.get_mut(topic) {
+                if let Some(entry) = self.sub_nodes.get_mut(topic_suffix) {
                     let already_subscribed = entry.has_subscribers();
                     entry.subscribers.push(subscriber);
                     if already_subscribed {
                         SubscriptionDiff::empty()
                     } else {
-                        self.insert_diff_for(topic)
+                        self.insert_diff_for(topic_suffix)
                     }
                 } else {
                     self.sub_nodes.insert(
-                        topic.to_owned(),
+                        topic_suffix.to_owned(),
                         TrieNode {
                             subscribers: vec![subscriber],
                             ..<_>::default()
                         },
                     );
-                    self.insert_diff_for(topic)
+                    self.insert_diff_for(topic_suffix)
                 }
             }
         }
     }
 
-    fn insert_diff_for(&self, topic: &str) -> SubscriptionDiff {
-        let wildcard_subscription_exists = match topic {
+    fn insert_diff_for(&self, topic_suffix: &str) -> SubscriptionDiff {
+        let wildcard_subscription_exists = match topic_suffix {
             "+" => self.sub_nodes.contains_key("#"),
             "#" => false,
             _ => {
@@ -517,28 +542,28 @@ impl<T: Debug + Eq> TrieNode<T> {
                     || self.sub_nodes.contains_key("#")
                     || self
                         .sub_nodes
-                        .get(topic)
+                        .get(topic_suffix)
                         .is_some_and(|node| node.sub_nodes.contains_key("#"))
             }
         };
         if wildcard_subscription_exists {
             SubscriptionDiff::empty()
         } else {
-            let unsubscribe = match topic {
+            let unsubscribe = match topic_suffix {
                 "+" => self
                     .direct_sub_topics()
                     .into_iter()
-                    .filter(|t| t != topic)
+                    .filter(|t| t != topic_suffix)
                     .collect(),
                 "#" => self
                     .all_sub_topics()
                     .into_iter()
-                    .filter(|t| t != topic)
+                    .filter(|t| t != topic_suffix)
                     .collect(),
                 _ => Vec::new(),
             };
             SubscriptionDiff {
-                subscribe: HashSet::from([topic.to_owned()]),
+                subscribe: HashSet::from([topic_suffix.to_owned()]),
                 unsubscribe: remove_unneeded_topics(&unsubscribe),
             }
         }
@@ -679,7 +704,7 @@ mod tests {
         #[test]
         fn single_segment_wildcard_ranks_higher_than_static_topic() {
             assert_eq!(
-                RankTopic("a/+/c").partial_cmp(&RankTopic("a/b/c")),
+                RankTopicFilter("a/+/c").partial_cmp(&RankTopicFilter("a/b/c")),
                 Some(Ordering::Greater)
             );
         }
@@ -687,7 +712,7 @@ mod tests {
         #[test]
         fn static_topic_ranks_lower_than_single_wildcard() {
             assert_eq!(
-                RankTopic("a/b/c").partial_cmp(&RankTopic("a/+/c")),
+                RankTopicFilter("a/b/c").partial_cmp(&RankTopicFilter("a/+/c")),
                 Some(Ordering::Less)
             );
         }
@@ -695,7 +720,7 @@ mod tests {
         #[test]
         fn static_topic_ranks_lower_than_global_wildcard() {
             assert_eq!(
-                RankTopic("a/b/c").partial_cmp(&RankTopic("a/#")),
+                RankTopicFilter("a/b/c").partial_cmp(&RankTopicFilter("a/#")),
                 Some(Ordering::Less)
             );
         }
@@ -703,7 +728,7 @@ mod tests {
         #[test]
         fn global_wildcard_ranks_higher_than_segment_wildcard() {
             assert_eq!(
-                RankTopic("a/#").partial_cmp(&RankTopic("a/+")),
+                RankTopicFilter("a/#").partial_cmp(&RankTopicFilter("a/+")),
                 Some(Ordering::Greater)
             );
         }
@@ -711,7 +736,7 @@ mod tests {
         #[test]
         fn matching_static_topics_rank_equally() {
             assert_eq!(
-                RankTopic("a/b/c").partial_cmp(&RankTopic("a/b/c")),
+                RankTopicFilter("a/b/c").partial_cmp(&RankTopicFilter("a/b/c")),
                 Some(Ordering::Equal)
             );
         }
@@ -719,7 +744,7 @@ mod tests {
         #[test]
         fn matching_global_wildcard_topics_rank_equally() {
             assert_eq!(
-                RankTopic("a/b/#").partial_cmp(&RankTopic("a/b/#")),
+                RankTopicFilter("a/b/#").partial_cmp(&RankTopicFilter("a/b/#")),
                 Some(Ordering::Equal)
             );
         }
@@ -727,31 +752,40 @@ mod tests {
         #[test]
         fn matching_segment_wildcard_topics_rank_equally() {
             assert_eq!(
-                RankTopic("a/b/+").partial_cmp(&RankTopic("a/b/+")),
+                RankTopicFilter("a/b/+").partial_cmp(&RankTopicFilter("a/b/+")),
                 Some(Ordering::Equal)
             );
         }
 
         #[test]
         fn disjoint_static_topics_do_not_compare() {
-            assert_eq!(RankTopic("a/b").partial_cmp(&RankTopic("b/c")), None);
+            assert_eq!(
+                RankTopicFilter("a/b").partial_cmp(&RankTopicFilter("b/c")),
+                None
+            );
         }
 
         #[test]
         fn partially_disjoint_static_topics_do_not_compare() {
-            assert_eq!(RankTopic("a/b/c").partial_cmp(&RankTopic("a/b/d")), None);
+            assert_eq!(
+                RankTopicFilter("a/b/c").partial_cmp(&RankTopicFilter("a/b/d")),
+                None
+            );
         }
 
         // (Some(_), Some("+"), Some(Winner::This)) => break None
         #[test]
         fn topics_with_disjoint_wildcards_do_not_compare_bis() {
-            assert_eq!(RankTopic("+/a").partial_cmp(&RankTopic("a/+")), None)
+            assert_eq!(
+                RankTopicFilter("+/a").partial_cmp(&RankTopicFilter("a/+")),
+                None
+            )
         }
 
         #[test]
         fn topic_with_more_wildcards_ranks_higher() {
             assert_eq!(
-                RankTopic("a/+/+/d").partial_cmp(&RankTopic("a/+/c/d")),
+                RankTopicFilter("a/+/+/d").partial_cmp(&RankTopicFilter("a/+/c/d")),
                 Some(Ordering::Greater)
             );
         }
@@ -759,7 +793,7 @@ mod tests {
         #[test]
         fn topics_with_disjoint_wildcards_do_not_compare() {
             assert_eq!(
-                RankTopic("a/b/+/d").partial_cmp(&RankTopic("a/+/c/d")),
+                RankTopicFilter("a/b/+/d").partial_cmp(&RankTopicFilter("a/+/c/d")),
                 None
             );
         }
@@ -768,7 +802,7 @@ mod tests {
         #[test]
         fn global_wildcard_suffix_ranks_higher_than_parent_topic() {
             assert_eq!(
-                RankTopic("a/#").partial_cmp(&RankTopic("a")),
+                RankTopicFilter("a/#").partial_cmp(&RankTopicFilter("a")),
                 Some(Ordering::Greater)
             )
         }
@@ -777,7 +811,7 @@ mod tests {
         #[test]
         fn parent_topic_ranks_lower_than_its_global_wildcard_suffix() {
             assert_eq!(
-                RankTopic("a").partial_cmp(&RankTopic("a/#")),
+                RankTopicFilter("a").partial_cmp(&RankTopicFilter("a/#")),
                 Some(Ordering::Less)
             );
         }
@@ -785,31 +819,46 @@ mod tests {
         //(None, Some("#"), Some(Winner::This)) => break None,
         #[test]
         fn global_wildcard_does_not_compare_with_larger_prefix() {
-            assert_eq!(RankTopic("+").partial_cmp(&RankTopic("a/#")), None);
+            assert_eq!(
+                RankTopicFilter("+").partial_cmp(&RankTopicFilter("a/#")),
+                None
+            );
         }
 
         // (Some("#"), None, Some(Winner::Other)) => break None
         #[test]
         fn global_wildcard_does_not_compare_with_larger_prefix_bis() {
-            assert_eq!(RankTopic("a/#").partial_cmp(&RankTopic("+")), None);
+            assert_eq!(
+                RankTopicFilter("a/#").partial_cmp(&RankTopicFilter("+")),
+                None
+            );
         }
 
         // (Some(_), Some("#"), Some(Winner::This)) => break None
         #[test]
         fn global_wildcard_does_not_compare_with_larger_prefix_ter() {
-            assert_eq!(RankTopic("+/a").partial_cmp(&RankTopic("a/#")), None);
+            assert_eq!(
+                RankTopicFilter("+/a").partial_cmp(&RankTopicFilter("a/#")),
+                None
+            );
         }
 
         // (Some("#"), Some(_), Some(Winner::Other)) => break None
         #[test]
         fn global_wildcard_does_not_compare_with_larger_prefix_4() {
-            assert_eq!(RankTopic("a/#").partial_cmp(&RankTopic("+/a")), None);
+            assert_eq!(
+                RankTopicFilter("a/#").partial_cmp(&RankTopicFilter("+/a")),
+                None
+            );
         }
 
         // (Some(_), None, _) => break None
         #[test]
         fn static_topics_of_different_lengths_do_not_compare() {
-            assert_eq!(RankTopic("a/b/c").partial_cmp(&RankTopic("a/b")), None);
+            assert_eq!(
+                RankTopicFilter("a/b/c").partial_cmp(&RankTopicFilter("a/b")),
+                None
+            );
         }
     }
 
@@ -1186,6 +1235,22 @@ mod tests {
                 SubscriptionDiff {
                     unsubscribe: [].into(),
                     subscribe: [].into(),
+                }
+            );
+        }
+
+        #[test]
+        fn unsubscribing_resubscribes_to_matching_static_topic_if_wildcard_does_not_match() {
+            let mut t = MqtTrie::default();
+            t.insert("a/+/c/d", 0);
+            t.insert("a/b/+/e", 1);
+            t.insert("a/b/c/d", 2);
+
+            assert_eq!(
+                t.remove("a/+/c/d", &0),
+                SubscriptionDiff {
+                    subscribe: ["a/b/c/d".into()].into(),
+                    unsubscribe: ["a/+/c/d".into()].into()
                 }
             );
         }
