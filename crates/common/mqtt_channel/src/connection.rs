@@ -49,7 +49,7 @@ pub struct Connection {
 /// A client for changing the subscribed topics
 pub struct SubscriberHandle {
     client: AsyncClient,
-    subscriptions: Arc<Mutex<TopicFilter>>,
+    pub(crate) subscriptions: Arc<Mutex<TopicFilter>>,
 }
 
 impl SubscriberHandle {
@@ -103,7 +103,7 @@ impl SubscriberOps for SubscriberHandle {
         {
             let mut subs = self.subscriptions.lock().unwrap();
             for topic in &topics {
-                subs.add(topic)?;
+                subs.remove(topic);
             }
         }
         for topic in topics {
