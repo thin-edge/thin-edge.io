@@ -7,9 +7,8 @@ use crate::entity_manager::tests::model::Commands;
 use crate::entity_manager::tests::model::Protocol::HTTP;
 use crate::entity_manager::tests::model::Protocol::MQTT;
 use async_trait::async_trait;
-use mqtt_channel::MqttError;
-use mqtt_channel::UnboundedReceiver;
-use mqtt_channel::UnboundedSender;
+use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::UnboundedSender;
 use proptest::proptest;
 use serde_json::json;
 use std::collections::HashMap;
@@ -22,6 +21,7 @@ use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttConnector;
+use tedge_mqtt_ext::MqttError;
 use tedge_mqtt_ext::MqttMessage;
 
 #[tokio::test]
