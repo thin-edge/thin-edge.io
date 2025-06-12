@@ -10,6 +10,7 @@ use tracing::instrument;
 use crate::client::TedgeP11Client;
 use crate::pkcs11::Cryptoki;
 use crate::pkcs11::CryptokiConfigDirect;
+use crate::pkcs11::Pkcs11Signer;
 
 #[derive(Debug, Clone)]
 pub enum CryptokiConfig {
@@ -20,10 +21,26 @@ pub enum CryptokiConfig {
     },
 }
 
+/// A signer using a private key object located on the PKCS11 token.
+///
+/// Is backed by either direct cryptoki library usage or by tedge-p11-server client.
+///
+/// Contains a handle to Pkcs11-backed private key that will be used for signing, selected at construction time.
+pub trait TedgeP11Signer: SigningKey {
+    /// Signs the message using the selected private key.
+    fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>>;
+}
+
+impl TedgeP11Signer for Pkcs11Signer {
+    fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>> {
+        Pkcs11Signer::sign(self, msg)
+    }
+}
+
 /// Returns a rustls SigningKey that depending on the config, either connects to
 /// tedge-p11-server or calls cryptoki module directly.
-pub fn signing_key(config: CryptokiConfig) -> anyhow::Result<Arc<dyn SigningKey>> {
-    let signing_key: Arc<dyn SigningKey> = match config {
+pub fn signing_key(config: CryptokiConfig) -> anyhow::Result<Arc<dyn TedgeP11Signer>> {
+    let signing_key: Arc<dyn TedgeP11Signer> = match config {
         CryptokiConfig::Direct(config_direct) => {
             let uri = config_direct.uri.clone();
             let cryptoki =
@@ -47,6 +64,13 @@ pub fn signing_key(config: CryptokiConfig) -> anyhow::Result<Arc<dyn SigningKey>
 pub struct TedgeP11ClientSigningKey {
     pub client: TedgeP11Client,
     pub uri: Option<Arc<str>>,
+}
+
+impl TedgeP11Signer for TedgeP11ClientSigningKey {
+    fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>> {
+        self.client
+            .sign(msg, self.uri.as_ref().map(|s| s.to_string()))
+    }
 }
 
 impl SigningKey for TedgeP11ClientSigningKey {
