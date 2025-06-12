@@ -4,8 +4,11 @@ pub mod test_helpers;
 mod tests;
 
 use async_trait::async_trait;
+use mqtt_channel::Connection;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
+use mqtt_channel::UnboundedReceiver;
+use std::collections::HashMap;
 use std::convert::Infallible;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
@@ -20,6 +23,10 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
+use tedge_api::mqtt_topics::ChannelFilter;
+use tedge_api::mqtt_topics::EntityFilter;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub use mqtt_channel::DebugPayload;
@@ -221,5 +228,61 @@ impl Actor for MqttActor {
             self.to_peers.relay_messages_from(&mut mqtt_client.received),
         )
         .await
+    }
+}
+
+#[async_trait]
+pub trait MqttConnector: Send {
+    async fn connection_for(&mut self, entity: &EntityTopicId) -> Result<(), MqttError>;
+
+    fn get_message_receiver(
+        &mut self,
+        entity: &EntityTopicId,
+    ) -> Option<&mut UnboundedReceiver<MqttMessage>>;
+
+    async fn disconnect(&mut self, entity: &EntityTopicId);
+}
+
+pub struct MqttConnectionFactory {
+    base_mqtt_config: MqttConfig,
+    mqtt_schema: MqttSchema,
+    connections: HashMap<EntityTopicId, Connection>,
+}
+
+impl MqttConnectionFactory {
+    pub fn new(base_mqtt_config: MqttConfig, mqtt_schema: MqttSchema) -> Self {
+        Self {
+            base_mqtt_config,
+            mqtt_schema,
+            connections: HashMap::new(),
+        }
+    }
+}
+
+#[async_trait]
+impl MqttConnector for MqttConnectionFactory {
+    async fn connection_for(&mut self, entity: &EntityTopicId) -> Result<(), MqttError> {
+        let topics = self
+            .mqtt_schema
+            .topics(EntityFilter::Entity(entity), ChannelFilter::AnyData);
+        let mqtt_config = self.base_mqtt_config.clone().with_subscriptions(topics);
+        let connection = mqtt_channel::Connection::new(&mqtt_config).await?;
+        self.connections.insert(entity.clone(), connection);
+        Ok(())
+    }
+
+    fn get_message_receiver(
+        &mut self,
+        entity: &EntityTopicId,
+    ) -> Option<&mut UnboundedReceiver<MqttMessage>> {
+        self.connections
+            .get_mut(entity)
+            .map(|connection| &mut connection.received)
+    }
+
+    async fn disconnect(&mut self, entity: &EntityTopicId) {
+        if let Some(connection) = self.connections.remove(entity) {
+            connection.close().await;
+        }
     }
 }

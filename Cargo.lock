@@ -4893,6 +4893,7 @@ dependencies = [
  "mqtt_tests",
  "serde_json",
  "tedge_actors",
+ "tedge_api",
  "tedge_utils",
  "tokio",
  "tracing",
