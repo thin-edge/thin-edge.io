@@ -1,6 +1,5 @@
 use crate::pkcs11::Cryptoki;
 use crate::pkcs11::CryptokiConfigDirect;
-use crate::pkcs11::PkcsSigner;
 
 use anyhow::Context;
 use rustls::sign::SigningKey;
@@ -66,12 +65,11 @@ impl SigningService for TedgeP11Service {
     fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse> {
         trace!(?request);
         let uri = request.uri;
-        let signing_key = self
+        let signer = self
             .cryptoki
             .signing_key(uri.as_deref())
             .context("Failed to find a signing key")?;
 
-        let signer = PkcsSigner::from_key(signing_key);
         let signature = signer
             .sign(&request.to_sign)
             .context("Failed to sign using PKCS #11")?;
