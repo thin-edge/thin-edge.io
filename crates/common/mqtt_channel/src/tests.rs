@@ -474,3 +474,97 @@ async fn test_max_packet_size_validation() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn dynamic_subscriptions() {
+    // Given an MQTT broker
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mqtt_config = Config::default().with_port(broker.port);
+
+    // A client subscribes to a topic on connect
+    let topic = uniquify!("a/test/topic");
+    let topic2 = uniquify!("a/test/topic/2");
+
+    // Publish a retain message before any client connects
+    broker
+        .publish_with_opts(topic2, "msg 0", QoS::AtLeastOnce, true)
+        .await
+        .unwrap();
+
+    let mqtt_config = mqtt_config.with_session_name(uniquify!("test_client"));
+    let mut con = Connection::new(&mqtt_config).await.unwrap();
+
+    assert_eq!(
+        *con.subscriptions.subscriptions.lock().unwrap(),
+        TopicFilter::empty()
+    );
+    con.subscriptions
+        .subscribe_many([topic.to_owned()])
+        .await
+        .unwrap();
+
+    // Assert we have added the newly subscribed topic to the list we need to
+    // resubscribe to if the connection drops
+    assert_eq!(
+        *con.subscriptions.subscriptions.lock().unwrap(),
+        TopicFilter::new_unchecked(topic)
+    );
+
+    broker
+        .publish_with_opts(topic, "msg 1", QoS::AtLeastOnce, true)
+        .await
+        .unwrap();
+
+    // Assert just against the payload since the retain flag may be true or
+    // false depending on the ordering of the publish/subscribe messages (retain
+    // flag is only set on an incoming message if the message was published
+    // before we subscribe)
+    assert_payload_received(&mut con, "msg 1").await;
+
+    // Unsubscribe from one topic and subscribe to another
+    con.subscriptions
+        .unsubscribe_many([topic.to_owned()])
+        .await
+        .unwrap();
+    con.subscriptions
+        .subscribe_many([topic2.to_owned()])
+        .await
+        .unwrap();
+
+    // Check we've updated the subscription list with both those changes
+    assert_eq!(
+        *con.subscriptions.subscriptions.lock().unwrap(),
+        TopicFilter::new_unchecked(topic2)
+    );
+
+    // We expect now to receive the retained message that has been published before the connection created
+    // on the topic2 which the connection only subscribed to now.
+    assert_payload_received(&mut con, "msg 0").await;
+
+    // Wait for the new subscription to be enacted
+    broker
+        .publish_with_opts(topic2, "msg 2", QoS::AtLeastOnce, true)
+        .await
+        .unwrap();
+
+    assert_payload_received(&mut con, "msg 2").await;
+
+    // At this point, we are unsubscribed from topic, and therefore we shouldn't receive the messages
+    broker
+        .publish_with_opts(topic, "msg 3", QoS::AtLeastOnce, true)
+        .await
+        .unwrap();
+    broker
+        .publish_with_opts(topic2, "msg 4", QoS::AtLeastOnce, true)
+        .await
+        .unwrap();
+
+    assert_payload_received(&mut con, "msg 4").await;
+}
+
+async fn assert_payload_received(con: &mut Connection, payload: &'static str) {
+    match next_message(&mut con.received).await {
+        MaybeMessage::Next(msg) => assert_eq!(msg.payload.as_str().unwrap(), payload),
+        not_msg => panic!("Expected message to be received, got {not_msg:?}"),
+    }
+}
