@@ -1,16 +1,18 @@
 ---
-title: Diagnostic Collection
+title: Collecting diagnostic logs
 tags: [Operate]
 sidebar_position: 1
 description: How to collect logs and system diagnostics using plugin-based automation
 ---
 
-%%te%% helps you collect useful diagnostic information about your device and services by executing diagnostic plugins.
-These diagnostics are bundled into a single compressed archive (`.tar.gz`) for easy analysis or sharing with support.
+import UserContext from '@site/src/components/UserContext';
 
-This guide explains how to use the diagnostic collection tool and how plugins work.
+%%te%% helps you collect all diagnostic information about your device and services with a single command running user-defined diagnostic plugins.
+The collected diagnostics are bundled into a single compressed archive (`.tar.gz`) for easy analysis or sharing with support.
 
-## Getting Started
+This guide explains how to use the diagnostic collection command and how to add or customize diagnostic plugins.
+
+## Quick Start
 
 To collect a snapshot of diagnostic data, run:
 
@@ -22,11 +24,11 @@ This command performs the following steps:
 * Discovers all available diagnostic plugins (default location: `/usr/share/tedge/diag-plugins`)
 * Executes each plugin in sequence
 * Captures their logs and outputs
-* Bundles all collected data into a .`tar.gz` archive (e.g., `/tmp/tedge-diag-YYYY-MM-DD_HH-MM-SS.tar.gz`)
+* Bundles all collected data into a `.tar.gz` archive (e.g., `/tmp/tedge-diag-2025-06-12_13-38-53.tar.gz`)
 
-All directory paths and the package name can be customized using command-line arguments or the `tedge config` command.
+You can customize the directory paths and archive name using command-line options or the `tedge config` command.
 
-To see all available options, run:
+To view all available options, run:
 
 ```sh
 tedge diag collect --help
@@ -34,26 +36,102 @@ tedge diag collect --help
 
 ## Diagnostic Plugins
 
-Diagnostic plugins are executable scripts or binaries invoked by `tedge diag collect` (referred to as the "runner") to gather diagnostic data.
+A diagnostic plugin is an executable that collects a bunch of debug and diagnostic data, status and log files related to a process or service.
+It is invoked by `tedge diag collect` (referred to as the _runner_).
 
-Each plugin is called with the collect subcommand, along with two options:
-* `--output-dir`: where the plugin should store generated files
-* `--config-dir:` the directory containing the configuration (`tedge.toml`)
+Each plugin runs as a child process, and its `stdout` and `stderr` are automatically captured by the runner.
+Furthermore, each plugin is executed with command-line arguments that include its dedicated output directory path, where it can create any files.
+These files are then bundled into the final tarball archive.
 
-Some diagnostic plugins are included with the %%te%% package and installed by default in `/usr/share/tedge/diag-plugins`.
-You can also create your own plugins and store them in any directory.
+Plugins are intended to be customized according to your system and diagnostic needs.
 
-Each plugin is expected to finish within a limited time. If it runs too long, the runner will terminate it.
+### Plugin locations
 
-The plugin may print to `stdout` and `stderr`, which will be captured into an `output.log` file by the runner.
-Additionally, it can write its own files into the specified output directory.
+If %%te%% is installed via a [package](../../install/index.md#installupdate),
+pre-defined diagnostic plugins are installed in `/usr/share/tedge/diag-plugins`.
 
-### Plugin Exit Codes
+In addition, multiple plugin directories are supported.
+You can specify multiple `--plugin-path` options:
 
-* `0`: for successful completion
-* `2`: if the plugin chooses to skip itself (for example, if it's not relevant for the current system)
-* any other non-zero value to indicate an error
+```sh
+tedge diag collect --plugin-path /usr/share/tedge/diag-plugins --plugin-path /your/own/dir/path
+```
 
-To disable a plugin temporarily, simply rename it to include a `.ignore` extension—the runner will skip such files.
+Alternatively, you can add a custom directory path permanently by `tedge config add` command.
+In this case, you don't need to give specific path by command-line.
 
-For more details, see the [specification](../../references/diagnostic-plugin.md).
+```sh
+sudo tedge config add diag.plugin_paths "your/own/dir/path"
+tedge diag collect
+```
+
+### Disabling plugins
+
+To diable a plugin, add `.ignore` extension to its filename (e.g., `10_test.sh.ignore`).
+
+### Predefined plugins
+
+The [predefined plugins](https://github.com/thin-edge/thin-edge.io/tree/main/configuration/contrib/diag-plugins) include:
+
+| Plugin Name        | Description                                                      |
+| ------------------ | ---------------------------------------------------------------- |
+| 01_tedge.sh        | Collects logs from `tedge-mapper` and `tedge-agent`              |
+| 02_os.sh           | Collects system information                                      |
+| 03_mqtt.sh         | Collects output of `tedge mqtt sub`                              |
+| 04_workflow.sh     | Copies workflow logs                                             |
+| 05_entities.sh     | Collects entity data                                             |
+| 06_internal.sh     | Copies internal backup files                                     |
+| 07_mosquitto.sh    | Collects mosquitto logs (skipped when using the built-in bridge) |
+| template.sh.ignore | A template for creating custom diagnostic plugin                 |
+
+
+### Writing your own diagnostic plugin
+
+The easiest way to create a custom plugin is to start from the [template script](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/contrib/diag-plugins/template.sh.ignore).
+
+First, rename it to remove the `.ignore` extension and copy it to your desired location:
+
+```sh
+mkdir -p /etc/tedge/diag-plugins
+cp /usr/share/tedge/diag-plugins/template.sh.ignore /etc/tedge/diag-plugins/100_my-plugin.sh
+```
+
+Open the file in a text editor and modify the `collect()` function.
+Here’s an example that outputs system information to `stdout` and a log file:
+
+```sh title="file: /etc/tedge/diag-plugins/100_my-plugin.sh"
+collect() {
+    # output to stdout (captured in `100_my-plugin/output.log`)
+    echo "system data"
+    uname -a
+
+    # output to a file (saved as `100_my-plugin/system.log`)
+    uname -a > "$OUTPUT_DIR"/system.log 2>&1
+}
+```
+
+The `$OUTPUT_DIR` variable is the path of the subdirectory that the runner creates for a plugin.
+All files from the plugin should be stored in the directory, so that the runner can package them in the end.
+
+To test your plugin, specify your custom plugin directory:
+
+```sh
+tedge diag collect --plugin-dir /etc/tedge/diag-plugins
+```
+
+<UserContext language="text" title="Output">
+
+```text title="Output"
+Executing /etc/tedge/diag-plugins/100_my-plugin.sh... ✓
+
+Total 1 executed: 1 completed, 0 failed, 0 skipped
+Diagnostic information saved to /tmp/tedge-diag-2025-06-12_14-25-35.tar.gz
+```
+
+</UserContext>
+
+You can decompress the archive to check the contents.
+
+### Reference
+
+For more details about diagnostic plugins, please see the [specification](../../references/diagnostic-plugin.md).
