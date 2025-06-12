@@ -28,9 +28,7 @@ if [ -n "$OUTPUT_DIR" ] && [ ! -d "$OUTPUT_DIR" ]; then
 fi
 
 mosquitto_journal() {
-    if command -V journalctl >/dev/null 2>&1; then
-        journalctl -u "mosquitto" -n 1000 --no-pager > "$OUTPUT_DIR/mosquitto-journal.log" 2>&1 ||:
-    fi
+    journalctl -u "mosquitto" -n 1000 --no-pager > "$OUTPUT_DIR/mosquitto-journal.log" 2>&1 ||:
 }
 
 mosquitto_log() {
@@ -44,8 +42,11 @@ mosquitto_log() {
 collect() {
     if [ "$(tedge config get mqtt.bridge.built_in)" = "false" ]; then
         if command -V mosquitto > /dev/null 2>&1; then
-            mosquitto_journal
-            mosquitto_log
+            if command -V journalctl >/dev/null 2>&1; then
+                mosquitto_journal
+            else
+                mosquitto_log
+            fi
         else
             echo "mosquitto not found" >&2
         fi
