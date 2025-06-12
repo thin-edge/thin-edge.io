@@ -180,6 +180,7 @@ impl MqttSchema {
             ChannelFilter::AnyCommandMetadata => "/cmd/+".to_string(),
             ChannelFilter::CommandMetadata(operation) => format!("/cmd/{operation}"),
             ChannelFilter::Health => "/status/health".to_string(),
+            ChannelFilter::AnyData => "/+/#".to_string(),
         };
 
         TopicFilter::new_unchecked(&format!("{}/{entity}{channel}", self.root))
@@ -809,6 +810,7 @@ pub enum ChannelFilter {
     AnyCommandMetadata,
     CommandMetadata(OperationType),
     Health,
+    AnyData,
 }
 
 impl From<&Channel> for ChannelFilter {

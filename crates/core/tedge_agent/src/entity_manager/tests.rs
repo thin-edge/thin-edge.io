@@ -307,6 +307,7 @@ mod entity {
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::EntityStore;
+    use tedge_mqtt_ext::MqttConfig;
     use tedge_mqtt_ext::MqttMessage;
     use tempfile::TempDir;
 
@@ -396,6 +397,7 @@ mod entity {
         let server = EntityStoreServer::new(
             entity_store,
             mqtt_schema,
+            MqttConfig::default(),
             &mut mqtt_actor,
             entity_auto_register,
         );

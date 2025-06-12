@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use futures::StreamExt;
 use serde_json::Map;
 use serde_json::Value;
 use tedge_actors::LoggingSender;
@@ -12,13 +13,17 @@ use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::entity_store::EntityUpdateMessage;
 use tedge_api::entity_store::ListFilters;
 use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::ChannelFilter;
+use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_api::EntityStore;
+use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
+use tokio::time::timeout;
+use tokio::time::Duration;
 use tracing::error;
 
 #[derive(Debug)]
@@ -52,6 +57,7 @@ pub enum EntityStoreResponse {
 pub struct EntityStoreServer {
     entity_store: EntityStore,
     mqtt_schema: MqttSchema,
+    mqtt_config: MqttConfig,
     mqtt_publisher: LoggingSender<MqttMessage>,
     entity_auto_register: bool,
 }
@@ -60,6 +66,7 @@ impl EntityStoreServer {
     pub fn new(
         entity_store: EntityStore,
         mqtt_schema: MqttSchema,
+        mqtt_config: MqttConfig,
         mqtt_actor: &mut impl MessageSink<MqttMessage>,
         entity_auto_register: bool,
     ) -> Self {
@@ -68,6 +75,7 @@ impl EntityStoreServer {
         Self {
             entity_store,
             mqtt_schema,
+            mqtt_config,
             mqtt_publisher,
             entity_auto_register,
         }
@@ -307,23 +315,39 @@ impl EntityStoreServer {
     async fn deregister_entity(&mut self, topic_id: &EntityTopicId) -> Vec<EntityMetadata> {
         let deleted = self.entity_store.deregister_entity(topic_id);
         for entity in deleted.iter().rev() {
-            for twin_key in entity.twin_data.keys() {
-                let topic = self.mqtt_schema.topic_for(
-                    &entity.topic_id,
-                    &Channel::EntityTwinData {
-                        fragment_key: twin_key.to_string(),
-                    },
-                );
-                let clear_twin_msg = MqttMessage::new(&topic, "").with_retain();
+            let mqtt_config = self
+                .mqtt_config
+                .clone()
+                .with_no_session()
+                .with_subscriptions(self.mqtt_schema.topics(
+                    EntityFilter::Entity(&entity.topic_id),
+                    ChannelFilter::AnyData,
+                ));
 
-                self.publish_message(clear_twin_msg).await;
+            // Clear all retained metadata/data associated with the entity
+            match mqtt_channel::Connection::new(&mqtt_config).await {
+                Ok(mut connection) => {
+                    while let Ok(Some(message)) =
+                        timeout(Duration::from_secs(2), connection.received.next()).await
+                    {
+                        if message.retain && !message.payload_bytes().is_empty() {
+                            let clear_msg = MqttMessage::new(&message.topic, "").with_retain();
+                            self.publish_message(clear_msg).await;
+                        }
+                    }
+
+                    connection.close().await;
+                }
+                Err(err) => {
+                    error!("Failed to create MQTT connection for clearing entity data: {err}");
+                }
             }
+
+            // Clear the entity metadata
             let topic = self
                 .mqtt_schema
                 .topic_for(&entity.topic_id, &Channel::EntityMetadata);
-            let clear_entity_msg = MqttMessage::new(&topic, "")
-                .with_retain()
-                .with_qos(QoS::AtLeastOnce);
+            let clear_entity_msg = MqttMessage::new(&topic, "").with_retain();
 
             self.publish_message(clear_entity_msg).await;
         }

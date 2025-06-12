@@ -4471,6 +4471,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.6.0",
  "log",
+ "mqtt_channel",
  "path-clean",
  "plugin_sm",
  "proptest",
