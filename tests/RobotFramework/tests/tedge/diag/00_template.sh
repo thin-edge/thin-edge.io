@@ -6,7 +6,7 @@ set -e
 # ./00_template.sh collect --output-dir /tmp --config-dir /etc/tedge/diag-plugins
 
 OUTPUT_DIR=""
-CONFIG_DIR=${TEDGE_CONFIG_DIR:-/etc/tedge}
+TEDGE_CONFIG_DIR=${TEDGE_CONFIG_DIR:-/etc/tedge}
 COMMAND=""
 
 # Parse arguments
@@ -18,7 +18,7 @@ while [ $# -gt 0 ]; do
             ;;
         --config-dir)
             # shellcheck disable=SC2034
-            CONFIG_DIR="$2"
+            TEDGE_CONFIG_DIR="$2"
             shift 2
             ;;
         collect)

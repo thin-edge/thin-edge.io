@@ -2,7 +2,7 @@
 set -e
 
 OUTPUT_DIR=""
-CONFIG_DIR=${TEDGE_CONFIG_DIR:-/etc/tedge}
+TEDGE_CONFIG_DIR=${TEDGE_CONFIG_DIR:-/etc/tedge}
 COMMAND=""
 
 # Parse arguments
@@ -13,7 +13,7 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         --config-dir)
-            CONFIG_DIR="$2"
+            TEDGE_CONFIG_DIR="$2"
             shift 2
             ;;
         collect)
@@ -33,10 +33,10 @@ if [ -n "$OUTPUT_DIR" ] && [ ! -d "$OUTPUT_DIR" ]; then
 fi
 
 entity_store() {
-    if [ -f "$CONFIG_DIR"/.agent/entity_store.jsonl ]; then
-        cp "$CONFIG_DIR"/.agent/entity_store.jsonl "$OUTPUT_DIR"/
-    elif [ -f "$CONFIG_DIR"/.tedge-mapper-c8y/entity_store.jsonl ]; then
-        cp "$CONFIG_DIR"/.tedge-mapper-c8y/entity_store.jsonl  "$OUTPUT_DIR"/
+    if [ -f "$TEDGE_CONFIG_DIR"/.agent/entity_store.jsonl ]; then
+        cp "$TEDGE_CONFIG_DIR"/.agent/entity_store.jsonl "$OUTPUT_DIR"/
+    elif [ -f "$TEDGE_CONFIG_DIR"/.tedge-mapper-c8y/entity_store.jsonl ]; then
+        cp "$TEDGE_CONFIG_DIR"/.tedge-mapper-c8y/entity_store.jsonl  "$OUTPUT_DIR"/
     else
         echo "entity_store.jsonl not found" >&2
     fi

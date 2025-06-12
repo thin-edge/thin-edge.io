@@ -28,9 +28,7 @@ if [ -n "$OUTPUT_DIR" ] && [ ! -d "$OUTPUT_DIR" ]; then
 fi
 
 mosquitto_journal() {
-    if command -V journalctl >/dev/null 2>&1; then
-        journalctl -u "mosquitto" -n 1000 --no-pager > "$OUTPUT_DIR/mosquitto-journal.log" 2>&1 ||:
-    fi
+    journalctl -u "mosquitto" -n 1000 --no-pager > "$OUTPUT_DIR/mosquitto-journal.log" 2>&1 ||:
 }
 
 mosquitto_log() {
@@ -42,17 +40,16 @@ mosquitto_log() {
 }
 
 collect() {
-    if [ "$(tedge config get mqtt.bridge.built_in)" = "false" ]; then
-        if command -V mosquitto > /dev/null 2>&1; then
+    if command -V mosquitto > /dev/null 2>&1; then
+        if command -V journalctl >/dev/null 2>&1; then
             mosquitto_journal
-            mosquitto_log
-        else
-            echo "mosquitto not found" >&2
         fi
+        mosquitto_log
     else
-      # built-in bridge is used, hence this plugin should be skipped
-      exit 2
-    fi 
+        echo "mosquitto not found" >&2
+        # this plugin is not applicable when mosquitto doesn't exist
+        exit 2
+    fi
 }
 
 case "$COMMAND" in
