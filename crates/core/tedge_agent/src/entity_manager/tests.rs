@@ -6,19 +6,28 @@ use crate::entity_manager::tests::model::Command;
 use crate::entity_manager::tests::model::Commands;
 use crate::entity_manager::tests::model::Protocol::HTTP;
 use crate::entity_manager::tests::model::Protocol::MQTT;
+use async_trait::async_trait;
+use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::UnboundedSender;
+use futures::StreamExt;
 use proptest::proptest;
 use serde_json::json;
 use std::collections::HashSet;
 use tedge_actors::test_helpers::MessageReceiverExt;
+use tedge_actors::Sender;
 use tedge_actors::Server;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::EntityType;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
+use tedge_mqtt_ext::MqttConnection;
+use tedge_mqtt_ext::MqttConnector;
+use tedge_mqtt_ext::MqttError;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::TopicFilter;
 
 #[tokio::test]
 async fn new_entity_store() {
-    let (mut entity_store, _mqtt_output) = entity::server("device-under-test");
+    let (mut entity_store, _mqtt_output, _mqtt_sender) = entity::server("device-under-test");
 
     assert_eq!(
         entity::get(&mut entity_store, "device/main//").await,
@@ -64,7 +73,7 @@ async fn removing_a_child_using_mqtt() {
 
 #[tokio::test]
 async fn twin_fragment_updates_published_to_mqtt() {
-    let (mut entity_store, mut mqtt_box) = entity::server("device-under-test");
+    let (mut entity_store, mut mqtt_box, _mqtt_sender) = entity::server("device-under-test");
     entity::set_twin_fragments(
         &mut entity_store,
         "device/main//",
@@ -81,8 +90,8 @@ async fn twin_fragment_updates_published_to_mqtt() {
 }
 
 #[tokio::test]
-async fn delete_entity_clears_twin_data() {
-    let (mut entity_store, mut mqtt_box) = entity::server("device-under-test");
+async fn delete_entity_clears_retained_data() {
+    let (mut entity_store, mut mqtt_box, mut mqtt_sender) = entity::server("device-under-test");
     entity::create_entity(
         &mut entity_store,
         "device/child0//",
@@ -93,34 +102,55 @@ async fn delete_entity_clears_twin_data() {
     .unwrap();
     mqtt_box.skip(1).await; // Skip the registration message
 
-    entity::set_twin_fragments(
-        &mut entity_store,
-        "device/child0//",
-        json!({"x": 9, "y": true, "z": "foo"})
-            .as_object()
-            .unwrap()
-            .clone(),
-    )
-    .await
-    .unwrap();
-    mqtt_box.skip(3).await; // Skip the twin messages
+    // Simulate retained twin messages of child0 with the broker
+    for (topic, payload, retain) in [
+        ("te/device/child0///twin/x", json!(9), true),
+        ("te/device/child0///twin/y", json!(true), true),
+        ("te/device/child0///m/temp", json!({"temp": 102}), false),
+        (
+            "te/device/child0///a/high_temp",
+            json!({"severity": "critical"}),
+            true,
+        ),
+        (
+            "te/device/child0///e/temp_change",
+            json!({"text": "Temperature changed"}),
+            false,
+        ),
+        ("te/device/child0///cmd/restart", json!({}), true),
+        (
+            "te/device/child0///cmd/restart/123",
+            json!({"status": "init"}),
+            true,
+        ),
+    ] {
+        mqtt_sender
+            .send(MqttMessage::from((topic, &payload.to_string())).with_retain_flag(retain))
+            .await
+            .unwrap();
+    }
 
     entity::delete_entity(&mut entity_store, "device/child0//")
         .await
         .unwrap();
+
+    // Assert that all retained messages for the entity are cleared,
+    // excluding the non-retained `temp` measurement and `temp_change` event
     mqtt_box
         .assert_received([
             MqttMessage::from(("te/device/child0///twin/x", "")).with_retain(),
             MqttMessage::from(("te/device/child0///twin/y", "")).with_retain(),
-            MqttMessage::from(("te/device/child0///twin/z", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///a/high_temp", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///cmd/restart", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///cmd/restart/123", "")).with_retain(),
             MqttMessage::from(("te/device/child0//", "")).with_retain(),
         ])
         .await;
 }
 
 #[tokio::test]
-async fn delete_entity_tree_clears_entity_data_bottom_up() {
-    let (mut entity_store, mut mqtt_box) = entity::server("device-under-test");
+async fn delete_entity_tree_clears_entities_bottom_up() {
+    let (mut entity_store, mut mqtt_box, _mqtt_sender) = entity::server("device-under-test");
     for entity in [
         ("device/child0//", EntityType::ChildDevice, None),
         ("device/child1//", EntityType::ChildDevice, None),
@@ -146,18 +176,6 @@ async fn delete_entity_tree_clears_entity_data_bottom_up() {
             .await
             .unwrap();
         mqtt_box.skip(1).await; // Skip the registration message
-
-        entity::set_twin_fragments(
-            &mut entity_store,
-            entity.0,
-            json!({"x": 9, "y": true, "z": "foo"})
-                .as_object()
-                .unwrap()
-                .clone(),
-        )
-        .await
-        .unwrap();
-        mqtt_box.skip(3).await; // Skip the twin messages
     }
 
     entity::delete_entity(&mut entity_store, "device/child0//")
@@ -165,21 +183,9 @@ async fn delete_entity_tree_clears_entity_data_bottom_up() {
         .unwrap();
     mqtt_box
         .assert_received([
-            MqttMessage::from(("te/device/child000/service/service0/twin/x", "")).with_retain(),
-            MqttMessage::from(("te/device/child000/service/service0/twin/y", "")).with_retain(),
-            MqttMessage::from(("te/device/child000/service/service0/twin/z", "")).with_retain(),
             MqttMessage::from(("te/device/child000/service/service0", "")).with_retain(),
-            MqttMessage::from(("te/device/child000///twin/x", "")).with_retain(),
-            MqttMessage::from(("te/device/child000///twin/y", "")).with_retain(),
-            MqttMessage::from(("te/device/child000///twin/z", "")).with_retain(),
             MqttMessage::from(("te/device/child000//", "")).with_retain(),
-            MqttMessage::from(("te/device/child00///twin/x", "")).with_retain(),
-            MqttMessage::from(("te/device/child00///twin/y", "")).with_retain(),
-            MqttMessage::from(("te/device/child00///twin/z", "")).with_retain(),
             MqttMessage::from(("te/device/child00//", "")).with_retain(),
-            MqttMessage::from(("te/device/child0///twin/x", "")).with_retain(),
-            MqttMessage::from(("te/device/child0///twin/y", "")).with_retain(),
-            MqttMessage::from(("te/device/child0///twin/z", "")).with_retain(),
             MqttMessage::from(("te/device/child0//", "")).with_retain(),
         ])
         .await;
@@ -198,7 +204,7 @@ proptest! {
 }
 
 async fn check_registrations(registrations: Commands) {
-    let (mut entity_store, _mqtt_output) = entity::server("device-under-test");
+    let (mut entity_store, _mqtt_output, _mqtt_sender) = entity::server("device-under-test");
     let mut state = model::State::new();
 
     for Command { protocol, action } in registrations.0 {
@@ -245,7 +251,7 @@ proptest! {
 }
 
 async fn check_registrations_from_user_pov(registrations: Commands) {
-    let (mut entity_store, _mqtt_output) = entity::server("device-under-test");
+    let (mut entity_store, _mqtt_output, _mqtt_sender) = entity::server("device-under-test");
 
     // Trigger all operations over HTTP to avoid pending entities (which are not visible to the user)
     for action in registrations.0.into_iter().map(|c| c.action) {
@@ -293,6 +299,8 @@ mod entity {
     use crate::entity_manager::server::EntityStoreRequest;
     use crate::entity_manager::server::EntityStoreResponse;
     use crate::entity_manager::server::EntityStoreServer;
+    use crate::entity_manager::tests::TestMqttConnector;
+    use futures::channel::mpsc::UnboundedSender;
     use serde_json::Map;
     use serde_json::Value;
     use std::str::FromStr;
@@ -376,7 +384,11 @@ mod entity {
 
     pub fn server(
         device_id: &str,
-    ) -> (EntityStoreServer, SimpleMessageBox<MqttMessage, NoMessage>) {
+    ) -> (
+        EntityStoreServer,
+        SimpleMessageBox<MqttMessage, NoMessage>,
+        UnboundedSender<MqttMessage>,
+    ) {
         let mqtt_schema = MqttSchema::default();
         let main_device = EntityRegistrationMessage::main_device(Some(device_id.to_string()));
         let telemetry_cache_size = 0;
@@ -392,16 +404,71 @@ mod entity {
         )
         .unwrap();
 
+        let mqtt_connector = TestMqttConnector::new();
+        let mqtt_sender = mqtt_connector.get_message_sender();
         let mut mqtt_actor = SimpleMessageBoxBuilder::new("MQTT", 64);
         let server = EntityStoreServer::new(
             entity_store,
             mqtt_schema,
+            Box::new(mqtt_connector),
             &mut mqtt_actor,
             entity_auto_register,
         );
 
         let mqtt_output = mqtt_actor.build();
-        (server, mqtt_output)
+        (server, mqtt_output, mqtt_sender)
+    }
+}
+
+#[derive(Debug)]
+struct TestMqttConnector {
+    sender: UnboundedSender<MqttMessage>,
+    receiver: UnboundedReceiver<MqttMessage>,
+}
+
+impl TestMqttConnector {
+    pub fn new() -> Self {
+        let (sender, receiver) = futures::channel::mpsc::unbounded();
+        TestMqttConnector { sender, receiver }
+    }
+
+    pub fn get_message_sender(&self) -> UnboundedSender<MqttMessage> {
+        self.sender.clone()
+    }
+}
+
+#[async_trait]
+impl MqttConnector for TestMqttConnector {
+    async fn connect(
+        &mut self,
+        _topics: TopicFilter,
+    ) -> Result<Box<dyn MqttConnection>, MqttError> {
+        let (mut sender, receiver) = futures::channel::mpsc::unbounded();
+        while let Ok(Some(msg)) = self.receiver.try_next() {
+            sender.send(msg).await.unwrap();
+        }
+        Ok(Box::new(TestMqttConnection::new(receiver)))
+    }
+}
+
+struct TestMqttConnection {
+    receiver: UnboundedReceiver<MqttMessage>,
+}
+
+impl TestMqttConnection {
+    pub fn new(receiver: UnboundedReceiver<MqttMessage>) -> Self {
+        TestMqttConnection { receiver }
+    }
+}
+
+#[async_trait]
+impl MqttConnection for TestMqttConnection {
+    async fn next_message(&mut self) -> Option<MqttMessage> {
+        self.receiver.next().await
+    }
+
+    async fn disconnect(self: Box<Self>) {
+        // Do nothing
     }
 }
 
