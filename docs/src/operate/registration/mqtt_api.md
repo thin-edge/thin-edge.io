@@ -8,9 +8,14 @@ description: Register child devices and services with MQTT
 # MQTT APIs for Entity Management
 
 %%te%% provides an MQTT API to manage all the entities (devices and services) attached to a main device.
-These interfaces let you create and delete entities as well as observe changes.
+These interfaces let you create, update and delete entities as well as observe changes.
 
-When compared to the HTTP APIs, the MQTT API shines when the point is to react to entity related changes as new child devices, new services or metadata updates. 
+When compared to the HTTP APIs, the MQTT API excels at notifying subscribers in real-time about entity-related changes
+such as creation, updates, or deletion of child devices and services.
+However, unlike HTTP APIs, the MQTT API doesn't provide immediate feedback on whether an operation succeeded or failed,
+making it less suitable for scenarios where confirmation is crucial.
+For example, when an entity registration is attempted by publishing the metadata payload,
+there is no feedback on whether the registration succeeded or not.
 
 ## Register entity
 
@@ -31,7 +36,7 @@ Other supported (optional) fields in the registration payload include:
   Valid only for `child-device` entities.
   By default, it is the `tedge-agent` service on that device.
 
-Any additional fields included in the payload are considered as initial twin data for that entity,
+Any additional fields included in the payload are considered as initial [twin data](../../references/mqtt-api.md#twin-metadata) for that entity,
 and they are re-published to the corresponding twin topics.
 
 **Example: Register a child device**
