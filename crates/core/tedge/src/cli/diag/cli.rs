@@ -63,12 +63,14 @@ impl BuildCommand for TEdgeDiagCli {
                     )
                     .unwrap();
                 let tarball_name = name.unwrap_or(format!("tedge-diag-{now}"));
+                let diag_dir = output_dir.join(&tarball_name);
 
                 let cmd = DiagCollectCommand {
                     plugin_dir,
                     config_dir: get_absolute_path(config.root_dir().to_path_buf())?,
                     working_dir: get_absolute_path(output_dir.clone())?,
-                    diag_dir: get_absolute_path(output_dir.join(&tarball_name))?,
+                    diag_dir: get_absolute_path(diag_dir.clone())?,
+                    summary_file: get_absolute_path(diag_dir.join("summary.log"))?,
                     tarball_name,
                     keep_dir,
                     graceful_timeout: timeout.duration(),

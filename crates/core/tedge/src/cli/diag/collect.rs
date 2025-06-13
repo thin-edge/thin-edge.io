@@ -1,9 +1,11 @@
+use crate::cli::diag::log_to_file;
 use crate::command::Command;
+use crate::diag_log;
+use crate::diag_warning;
 use crate::error;
 use crate::info;
 use crate::log::MaybeFancy;
 use crate::log::Spinner;
-use crate::warning;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -26,6 +28,7 @@ pub struct DiagCollectCommand {
     pub config_dir: AbsolutePath,
     pub working_dir: AbsolutePath,
     pub diag_dir: AbsolutePath,
+    pub summary_file: AbsolutePath,
     pub tarball_name: String,
     pub keep_dir: bool,
     pub graceful_timeout: Duration,
@@ -52,31 +55,48 @@ impl Command for DiagCollectCommand {
 
         let mut skipped_count = 0;
         let mut error_count = 0;
+        let mut log_buffer = Vec::new(); // To avoid output while spinner is running
 
         for plugin in plugins {
             let banner = format!("Executing {plugin}");
-            let spinner = Spinner::start(banner);
+            let spinner = Spinner::start(banner.clone());
             let res = self.execute_diag_plugin(&plugin).await;
 
             match spinner.finish(res) {
-                Ok(exit_status) if exit_status.success() => {}
-                Ok(exit_status) if exit_status.code() == Some(2) => {
-                    skipped_count += 1;
-                    info!("{plugin} is marked skipped");
-                }
                 Ok(exit_status) => {
-                    error_count += 1;
-                    error!("{plugin} failed with exit status: {exit_status}");
+                    log_buffer.push(format!("{banner}... ✓"));
+
+                    match exit_status.code() {
+                        Some(0) => {}
+                        Some(2) => {
+                            skipped_count += 1;
+                            info!("{plugin} is marked skipped");
+                            log_buffer.push(format!("{plugin} is marked skipped"));
+                        }
+                        Some(code) => {
+                            error_count += 1;
+                            error!("{plugin} failed with exit status: {code}");
+                            log_buffer.push(format!("{plugin} failed with exit status: {code}"));
+                        }
+                        None => {
+                            error_count += 1;
+                            error!("{plugin} terminated by signal");
+                            log_buffer.push(format!("{plugin} terminated by signal"));
+                        }
+                    }
                 }
                 Err(err) => {
                     error_count += 1;
                     error!("{plugin} failed with error: {err}");
+                    log_buffer.push(format!("{banner}... ✗"));
                 }
             }
         }
 
+        log_to_file(&self.summary_file, &log_buffer.join("\n"));
+
         let success_count = plugin_count - skipped_count - error_count;
-        eprintln!("\nTotal {plugin_count} executed: {success_count} completed, {error_count} failed, {skipped_count} skipped");
+        diag_log!(&self.summary_file, "\nTotal {plugin_count} executed: {success_count} completed, {error_count} failed, {skipped_count} skipped");
 
         self.compress_into_a_tarball()
             .with_context(|| "Failed to compress diagnostic information")?;
@@ -99,12 +119,15 @@ impl DiagCollectCommand {
     async fn read_diag_plugins(&self) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
         let mut plugins = BTreeSet::new();
         for dir_path in &self.plugin_dir {
-            match Self::read_diag_plugins_from_dir(dir_path.as_ref()).await {
+            match self.read_diag_plugins_from_dir(dir_path.as_ref()).await {
                 Ok(plugin_files) => {
                     plugins.extend(plugin_files);
                 }
                 Err(err) => {
-                    warning!("Failed to read plugins from {dir_path}: {err}");
+                    diag_warning!(
+                        &self.summary_file,
+                        "Failed to read plugins from {dir_path}: {err}"
+                    );
                     continue;
                 }
             }
@@ -113,6 +136,7 @@ impl DiagCollectCommand {
     }
 
     async fn read_diag_plugins_from_dir(
+        &self,
         dir_path: &Utf8Path,
     ) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
         let mut plugins = BTreeSet::new();
@@ -126,10 +150,18 @@ impl DiagCollectCommand {
                     plugins.insert(path);
                     continue;
                 } else {
-                    warning!("Skipping non-executable file: {:?}", entry.path());
+                    diag_warning!(
+                        &self.summary_file,
+                        "Skipping non-executable file: {:?}",
+                        entry.path()
+                    );
                 }
             } else {
-                warning!("Ignoring invalid path: {:?}", entry.path());
+                diag_warning!(
+                    &self.summary_file,
+                    "Ignoring invalid path: {:?}",
+                    entry.path()
+                );
             }
         }
         Ok(plugins)
@@ -180,7 +212,10 @@ impl DiagCollectCommand {
         tar.append_dir_all(&self.tarball_name, &self.diag_dir)?;
         tar.finish()?;
 
-        eprintln!("Diagnostic information saved to {tarball_path}");
+        diag_log!(
+            &self.summary_file,
+            "Diagnostic information saved to {tarball_path}"
+        );
         Ok(tarball_path)
     }
 }
@@ -350,6 +385,8 @@ mod tests {
                 config_dir: AbsolutePath::from_path(config_dir.utf8_path_buf()).unwrap(),
                 working_dir: AbsolutePath::from_path(working_dir.utf8_path_buf()).unwrap(),
                 diag_dir: AbsolutePath::from_path(diag_dir.utf8_path_buf()).unwrap(),
+                summary_file: AbsolutePath::from_path(diag_dir.utf8_path_buf().join("summary.log"))
+                    .unwrap(),
                 tarball_name: "tarball".to_string(),
                 keep_dir: false,
                 graceful_timeout: Duration::from_secs(60),
