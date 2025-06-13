@@ -28,7 +28,7 @@ if [ -n "$OUTPUT_DIR" ] && [ ! -d "$OUTPUT_DIR" ]; then
 fi
 
 mosquitto_journal() {
-    journalctl -u "mosquitto" -n 1000 --no-pager > "$OUTPUT_DIR/mosquitto-journal.log" 2>&1 ||:
+    journalctl -u "mosquitto" --no-pager > "$OUTPUT_DIR/mosquitto-journal.log" 2>&1 ||:
 }
 
 mosquitto_log() {

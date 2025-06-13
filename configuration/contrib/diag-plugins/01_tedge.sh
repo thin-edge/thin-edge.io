@@ -36,7 +36,7 @@ fi
 collect_logs() {
     SERVICE="$1"
     if command -V journalctl >/dev/null 2>&1; then
-        journalctl -u "$SERVICE" -n 1000 --no-pager > "$OUTPUT_DIR/${SERVICE}.log" 2>&1 ||:
+        journalctl -u "$SERVICE" --no-pager > "$OUTPUT_DIR/${SERVICE}.log" 2>&1 ||:
     fi
 }
 
