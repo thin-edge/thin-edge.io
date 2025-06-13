@@ -365,7 +365,7 @@ impl CumulocityConverter {
         }
 
         // Process configuration before installing software as it is fulfills more out-of-the-box scenarios than the other way around
-        // 
+        //
         // Advantages
         // * Repositories can be configured (with credentials or proxy settings) before applications/containers are installed via software
         // * Configuration can be applied before the application/container starts the first time (also removes need for restarting the software)
