@@ -23,6 +23,8 @@ use cryptoki::object::KeyType;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use rsa::pkcs1::EncodeRsaPublicKey;
+use rsa::BigUint;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
@@ -181,11 +183,22 @@ impl Cryptoki {
                     sigscheme,
                 }
             }
-            KeyType::RSA => Pkcs11Signer {
-                session,
-                key,
-                sigscheme: SigScheme::RsaPssSha256,
-            },
+            KeyType::RSA => {
+                let attrs = session.session.lock().unwrap().get_attributes(
+                    key,
+                    &[
+                        AttributeType::PublicKeyInfo,
+                        AttributeType::Modulus,
+                        AttributeType::PublicExponent,
+                    ],
+                );
+                dbg!(&attrs);
+                Pkcs11Signer {
+                    session,
+                    key,
+                    sigscheme: SigScheme::RsaPssSha256,
+                }
+            }
             _ => anyhow::bail!("unsupported key type"),
         };
 
@@ -297,6 +310,58 @@ impl Pkcs11Signer {
             signature_asn1
         );
         Ok(signature_asn1)
+    }
+
+    pub fn public_key_pem(&self) -> anyhow::Result<String> {
+        let session = self.session.session.lock().unwrap();
+
+        let key_type = session
+            .get_attributes(self.key, &[AttributeType::KeyType])?
+            .into_iter()
+            .next()
+            .context("no keytype attribute")?;
+
+        let Attribute::KeyType(keytype) = key_type else {
+            anyhow::bail!("can't get key type");
+        };
+
+        match keytype {
+            KeyType::RSA => {
+                let mut attrs = session
+                    .get_attributes(
+                        self.key,
+                        &[
+                            AttributeType::Modulus,
+                            AttributeType::PublicExponent,
+                            AttributeType::PublicKeyInfo,
+                        ],
+                    )
+                    .unwrap()
+                    .into_iter();
+                dbg!(&attrs);
+                let Attribute::Modulus(modulus) = attrs.next().unwrap() else {
+                    todo!()
+                };
+                let Attribute::PublicExponent(pubexp) = attrs.next().unwrap() else {
+                    todo!()
+                };
+                let pubinfo = attrs.next();
+
+                let pubkey = rsa::RsaPublicKey::new(
+                    BigUint::from_bytes_le(&modulus),
+                    BigUint::from_bytes_le(&pubexp),
+                )
+                .unwrap();
+                let pem = pubkey.to_pkcs1_pem(rsa::pkcs8::LineEnding::LF).unwrap();
+                Ok(pem)
+            }
+
+            KeyType::EC => {
+                todo!()
+            }
+
+            _ => todo!(),
+        }
     }
 }
 

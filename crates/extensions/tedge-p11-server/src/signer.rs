@@ -29,12 +29,17 @@ pub enum CryptokiConfig {
 pub trait TedgeP11Signer: SigningKey {
     /// Signs the message using the selected private key.
     fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>>;
+    fn public_key_pem(&self) -> anyhow::Result<String>;
     fn to_rustls_signing_key(self: Arc<Self>) -> Arc<dyn rustls::sign::SigningKey>;
 }
 
 impl TedgeP11Signer for Pkcs11Signer {
     fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>> {
         Pkcs11Signer::sign(self, msg)
+    }
+
+    fn public_key_pem(&self) -> anyhow::Result<String> {
+        self.public_key_pem()
     }
 
     fn to_rustls_signing_key(self: Arc<Self>) -> Arc<dyn rustls::sign::SigningKey> {
@@ -76,6 +81,12 @@ impl TedgeP11Signer for TedgeP11ClientSigningKey {
         self.client
             .sign(msg, self.uri.as_ref().map(|s| s.to_string()))
     }
+
+    fn public_key_pem(&self) -> anyhow::Result<String> {
+        self.client
+            .public_key_pem(self.uri.as_ref().map(|u| u.to_string()))
+    }
+
     fn to_rustls_signing_key(self: Arc<Self>) -> Arc<dyn rustls::sign::SigningKey> {
         self
     }

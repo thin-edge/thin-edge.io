@@ -51,7 +51,8 @@ impl TedgeP11Server {
         let response = match request {
             Frame1::Error(_)
             | Frame1::ChooseSchemeResponse { .. }
-            | Frame1::SignResponse { .. } => {
+            | Frame1::SignResponse { .. }
+            | Frame1::PublicKeyResponse(_) => {
                 let error = ProtocolError("invalid request".to_string());
                 let _ = connection.write_frame(&Frame1::Error(error));
                 anyhow::bail!("protocol error: invalid request")
@@ -73,6 +74,20 @@ impl TedgeP11Server {
                 let response = self.service.sign(request);
                 match response {
                     Ok(response) => Frame1::SignResponse(response),
+                    Err(err) => {
+                        let response = Frame1::Error(ProtocolError(format!(
+                            "PKCS #11 service failed: {err:#}"
+                        )));
+                        connection.write_frame(&response)?;
+                        anyhow::bail!(err);
+                    }
+                }
+            }
+
+            Frame1::PublicKeyRequest(request) => {
+                let response = self.service.public_key(request);
+                match response {
+                    Ok(response) => Frame1::PublicKeyResponse(response),
                     Err(err) => {
                         let response = Frame1::Error(ProtocolError(format!(
                             "PKCS #11 service failed: {err:#}"
@@ -118,6 +133,10 @@ mod tests {
 
         fn sign(&self, _request: SignRequest) -> anyhow::Result<SignResponse> {
             Ok(SignResponse(SIGNATURE.to_vec()))
+        }
+
+        fn public_key(&self, uri: PublicKeyRequest) -> anyhow::Result<PublicKeyResponse> {
+            todo!()
         }
     }
 
