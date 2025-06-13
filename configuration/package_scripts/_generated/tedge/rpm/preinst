@@ -56,11 +56,6 @@ fi
 if [ -d /etc/sudoers.d ]; then
     echo "tedge    ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" > /etc/sudoers.d/tedge
     echo "tedge    ALL = (ALL) NOPASSWD: /usr/bin/tedge-write /etc/*" >> /etc/sudoers.d/tedge
-
-    if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
-        echo "tedge    ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" > /etc/sudoers.d/tedge-nopasswd
-        echo "tedge    ALL = (ALL) NOPASSWD: /usr/bin/tedge-write /etc/*" >> /etc/sudoers.d/tedge-nopasswd
-    fi
 fi
 
 
