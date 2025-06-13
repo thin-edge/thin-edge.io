@@ -81,7 +81,7 @@ async fn twin_fragment_updates_published_to_mqtt() {
 }
 
 #[tokio::test]
-async fn delete_entity_clears_twin_data() {
+async fn delete_entity_clears_retained_data() {
     let (mut entity_store, mut mqtt_box) = entity::server("device-under-test");
     entity::create_entity(
         &mut entity_store,
@@ -93,26 +93,45 @@ async fn delete_entity_clears_twin_data() {
     .unwrap();
     mqtt_box.skip(1).await; // Skip the registration message
 
-    entity::set_twin_fragments(
+    entity::send_mqtt_message(
         &mut entity_store,
-        "device/child0//",
-        json!({"x": 9, "y": true, "z": "foo"})
-            .as_object()
-            .unwrap()
-            .clone(),
+        MqttMessage::from((
+            "te/device/child0///a/high_temp",
+            json!({"severity": "critical"}).to_string(),
+        ))
+        .with_retain(),
     )
-    .await
-    .unwrap();
-    mqtt_box.skip(3).await; // Skip the twin messages
+    .await;
+    entity::send_mqtt_message(
+        &mut entity_store,
+        MqttMessage::from(("te/device/child0///twin/foo", "\"bar\"")).with_retain(),
+    )
+    .await;
+    entity::send_mqtt_message(
+        &mut entity_store,
+        MqttMessage::from(("te/device/child0///cmd/restart", "{}")).with_retain(),
+    )
+    .await;
+    entity::send_mqtt_message(
+        &mut entity_store,
+        MqttMessage::from((
+            "te/device/child0///cmd/restart/123",
+            json!({"status": "init"}).to_string(),
+        ))
+        .with_retain(),
+    )
+    .await;
 
     entity::delete_entity(&mut entity_store, "device/child0//")
         .await
         .unwrap();
+
     mqtt_box
         .assert_received([
-            MqttMessage::from(("te/device/child0///twin/x", "")).with_retain(),
-            MqttMessage::from(("te/device/child0///twin/y", "")).with_retain(),
-            MqttMessage::from(("te/device/child0///twin/z", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///twin/foo", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///a/high_temp", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///cmd/restart/123", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///cmd/restart", "")).with_retain(),
             MqttMessage::from(("te/device/child0//", "")).with_retain(),
         ])
         .await;
@@ -336,6 +355,12 @@ mod entity {
             return result.map_err(Into::into);
         };
         anyhow::bail!("Unexpected response");
+    }
+
+    pub async fn send_mqtt_message(entity_store: &mut EntityStoreServer, message: MqttMessage) {
+        entity_store
+            .handle(EntityStoreRequest::MqttMessage(message))
+            .await;
     }
 
     pub async fn create_entity(
