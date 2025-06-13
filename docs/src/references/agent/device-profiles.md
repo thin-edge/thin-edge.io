@@ -386,7 +386,7 @@ Each artifact type is mapped to the corresponding operation type in thin-edge
 
 Since the thin-edge payload is an ordered list of operations offering flexibility in defining them in any order,
 the C8y payload is mapped to the equivalent tedge JSON format by applying an implicit order between the artifact types,
-starting with the `firmware_update` operation followed by `software_update` and then `config_update`.
+starting with the `firmware_update` operation followed by `config_update` and then `software_update`.
 Since both `software` and `configuration` values are arrays with a defined order, it is maintained during the mapping as well.
 
 The above payload, meant for the main device, is mapped to thin-edge JSON format as follows:
@@ -403,6 +403,14 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/523244' '{
         "name": "core-image-tedge-rauc",
         "version": "20240430.1139",
         "remoteUrl": "https://t2373.basic.stage.c8y.io/inventory/binaries/43226"
+      }
+    },
+    {
+      "operation": "config_update",
+      "@skip": false,
+      "payload": {
+        "type": "collectd.conf",
+        "remoteUrl":"https://t2373.basic.stage.c8y.io/inventory/binaries/88395"
       }
     },
     {
@@ -427,14 +435,6 @@ tedge mqtt pub -r 'te/device/main///cmd/device_profile/523244' '{
             ]
           }
         ]
-      }
-    },
-    {
-      "operation": "config_update",
-      "@skip": false,
-      "payload": {
-        "type": "collectd.conf",
-        "remoteUrl":"https://t2373.basic.stage.c8y.io/inventory/binaries/88395"
       }
     }
   ]

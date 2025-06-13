@@ -364,17 +364,17 @@ impl CumulocityConverter {
             request.add_firmware(firmware.into());
         }
 
-        if let Some(mut software) = device_profile_request.software {
-            software.lists.iter_mut().for_each(|module| {
-                if let Some(url) = &mut module.url {
-                    if let Ok(cumulocity_url) = self.http_proxy.local_proxy_url(url) {
-                        *url = cumulocity_url.into();
-                    }
-                }
-            });
-            request.add_software(software.try_into()?);
-        }
-
+        // Process configuration before installing software as it is fulfills more out-of-the-box scenarios than the other way around
+        //
+        // Advantages
+        // * Repositories can be configured (with credentials or proxy settings) before applications/containers are installed via software
+        // * Configuration can be applied before the application/container starts the first time (also removes need for restarting the software)
+        //
+        // Disadvantages
+        // * Short period of time where potentially incompatible configuration is applied before the new application version has been installed
+        // * Potential that application could overwrite config (generally only occurs if app builders haven't defined the linux package definition correctly)
+        //
+        // See https://github.com/thin-edge/thin-edge.io/issues/3684 for more details
         for config in device_profile_request.configuration {
             let remote_url = if let Ok(c8y_url) = self.http_proxy.local_proxy_url(&config.url) {
                 c8y_url.to_string()
@@ -390,6 +390,17 @@ impl CumulocityConverter {
             };
 
             request.add_config(config);
+        }
+
+        if let Some(mut software) = device_profile_request.software {
+            software.lists.iter_mut().for_each(|module| {
+                if let Some(url) = &mut module.url {
+                    if let Ok(cumulocity_url) = self.http_proxy.local_proxy_url(url) {
+                        *url = cumulocity_url.into();
+                    }
+                }
+            });
+            request.add_software(software.try_into()?);
         }
 
         // Command messages must be retained
