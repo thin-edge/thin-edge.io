@@ -8,210 +8,213 @@ This page details how to build %%te%% from the source code.
 
 ## Requirements
 
-You can use any OS to build from source (below has been tested on Ubuntu, but we also use Debian, macOS, and FreeBSD successfully).
+Whilst you should be able to build %%te%% on different Operating Systems and CPU architectures, it is best to stick with one of the following setups if you would like support when something goes wrong.
 
-Our recommended setup and required tools are:
-
-* Ubuntu 20.04 or Debian 12 (Bookworm)
+* One of the following Operating Systems
+    * Linux (we recommend using either Debian or Ubuntu)
+    * WSL 2 (Windows Subsystem for Linux)
+    * macOS
 * git
-* Rust toolchain
-
-Following packages are required:
-
-* build-essentials
-* curl
-* gcc
+* Rust toolchain, the Minimum Supported Rust Version (MSRV) is 1.78
+* [just](https://github.com/casey/just)
 
 A list of our test platforms can be found [here](../references/supported-platforms.md).
 
-## Get the code
+### Initial setup
 
-%%te%% code is in git repository on github to acquire the code use following command:
+The instructions below walk you through the process of installing the required tools and checking out the project for the first time.
 
-* via SSH:
+1. Install the dependencies
 
-```sh
-git clone git@github.com:thin-edge/thin-edge.io.git
-```
+    ```sh tab={"label":"macOS"}
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    cargo install just
+    ```
 
-* or via HTTPS:
+    ```sh tab={"label":"Linux"}
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    cargo install just
+    ```
 
-```sh
-git clone https://github.com/thin-edge/thin-edge.io.git
-```
+    ```sh tab={"label":"WSL2"}
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    cargo install just
+    ```
 
-## Installing toolchain
+    :::note
+    
+    * If you have any problems installing Rust then consult the [official Rust installation guide](https://www.rust-lang.org/tools/install).
+    * [just](https://just.systems/) is also written in Rust, so it can also be installed directly using Rust's package manager, Cargo.
+    :::
 
-### Rust toolchain
 
-To install Rust follow [Official installation guide](https://www.rust-lang.org/tools/install).
-To get started you need Cargo's bin directory (`$HOME/.cargo/bin`) in your `PATH` environment variable.
+2. Checkout the project
 
-```sh
-export PATH=$PATH:$HOME/.cargo/bin
-```
+    :::tip
+    If you plan on contributing to the project, then please [fork the project](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) first, then clone your fork instead of the main project.
+    :::
 
-And then you can run `rustc` to view current version:
+    The %%te%% source is hosted in a git repository by GitHub, so you can get the project by using the one of the following commands:
 
-```sh
-rustc --version
-```
+    ```sh tab={"label":"HTTPS"}
+    git clone https://github.com/thin-edge/thin-edge.io.git
+    cd thin-edge.io
+    ```
 
-```text title="Output"
-rustc 1.65.0 (897e37553 2022-11-02)
-```
+    ```sh tab={"label":"SSH"}
+    git clone git@github.com:thin-edge/thin-edge.io.git
+    cd thin-edge.io
+    ```
 
-:::note
-Above command will add rust to path only for existing session,
-after you restart the session you will have to add it again,
-to add rust to the path permanently it will depend on your shell but for Bash,
-you simply need to add the line from above, `export PATH=$PATH:$HOME/.cargo/bin` to your `~/.bashrc`.
+    ```sh tab={"label":"GitHub CLI"}
+    gh repo clone thin-edge/thin-edge.io
+    cd thin-edge.io
+    ```
 
-For other shells, you'll want to find the appropriate place to set a configuration at start time,
-eg. zsh uses `~/.zshrc`. Check your shell's documentation to find what file it uses.
-:::
+    
 
-%%te%% operates the `MSRV` (Minimum Supported Rust Version) and uses stable toolchain.
+## Building
 
-Current MSRV is `1.65`.
+### Build Packages
 
-### Cross compilation toolchain (optional)
-
-%%te%% can be compiled for target architecture on non-target device, this is called cross compilation.
-Currently we support `Raspberry Pi 3B` for `armv7` architecture with Rust's cross compilation toolchain called [cargo cross](https://github.com/cross-rs/cross).
-
-To install [cargo cross](https://github.com/cross-rs/cross):
-
-```sh
-cargo install cross
-```
-
-### Linux packaging (optional)
-
-We use [nfpm](https://github.com/goreleaser/nfpm) to build our linux packages (deb, rpm and apk).
-
-Follow the [nfpm install instructions](https://nfpm.goreleaser.com/install/) to install the dependency. The linux packages will automatically be built when running `just release`.
-
+By default, if no target is provided, then the target architecture will be automatically detected, and the linux variant will be chosen.
 
 ```sh
 just release
 ```
 
-The virtual packages (e.g. `tedge-full` and `tedge-minimal`) can be built using the following command:
+```text title="Output"
+target/aarch64-unknown-linux-gnu/packages
+```
+
+:::note
+For macOS users, `just release` will use chose the default target based on your machine's CPU architecture. The table below shows the default targets based on the type of CPU architecture of your machine.
+
+|Processor|Default Target|
+|---|--------------|
+|Apple Silicon|aarch64-unknown-linux-musl|
+|Intel (x86_64) processor|x86_64-unknown-linux-musl|
+:::
+
+You can build for other targets (e.g. cross compiling), by simply providing the Rust target as an additional argument:
+
+```sh
+# Intel/AMD (64 bit)
+just release x86_64-unknown-linux-musl
+
+# Intel/AMD (32 bit)
+just release i686-unknown-linux-musl
+
+# arm64 (64 bit), e.g. Raspberry Pi 3, 4, 5
+just release aarch64-unknown-linux-musl
+
+# armv7 (32 bit), e.g. Raspberry Pi 2, 3
+just release armv7-unknown-linux-musleabihf
+
+# armv6 (32 bit, hard-float), e.g. Raspberry Pi 1
+just release arm-unknown-linux-musleabihf
+```
+
+:::tip
+By default, [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) is used for cross compilation as it has minimal dependencies and works on different host machines (e.g.  aarch64 or x86_64) without requiring docker. You are free to use other cross compilation tools, however we might not be able to give advice if it does not work.
+
+If you're looking to build other targets, then have a look at our [build-workflow](https://github.com/thin-edge/thin-edge.io/blob/main/.github/workflows/build-workflow.yml) as it provides another way to build the project but it requires a host machine with an x86_64 CPU.
+:::
+
+The `release` task will also build the linux packages, e.g. dep, rpm, apk and plain tarballs. Under the hood, we use [nfpm](https://github.com/goreleaser/nfpm) for the packaging. The task will attempt to installing it for you, however if that fails, you can manually install it by following the [nfpm install instructions](https://nfpm.goreleaser.com/install/).
+
+### Build Linux virtual packages
+
+%%te%% is composed of multiple packages (e.g. tedge, tedge-agent, tedge-mapper), so installing all of them can be complicated for new users, so to make this easier, we also create two virtual packages which allow you to install different combinations of the packages from a single package name. The virtual packages don't include any code themselves, they just have specific packages listed as dependencies so that the package manager will automatically install all of the dependencies when installing the virtual package.
+
+The Linux virtual packages (e.g. `tedge-full` and `tedge-minimal`) can be built using the following command:
 
 ```sh
 just release-linux-virtual
 ```
 
-## Compiling
+```text title="Output"
+-----------------------------------------------------
+thin-edge.io packager: build_virtual
+-----------------------------------------------------
+Parameters
 
-To build %%te%% we are using `cargo`.
+  packages: 
+  version: 
+  types: deb,apk,rpm,tarball
+  output_dir: target/virtual-packages
 
-As we are using  `cargo workspace` for all our crates. All compiled files are put in `./target/` directory with target's name eg: `./target/debug` or `./target/release` for native builds and for cross compiled targets `./target/<architecture>/debug` or `./target/<architecture>/release` dependent on the target of the build.
+Cleaning output directory: target/virtual-packages
+using deb packager...
+created package: target/virtual-packages/tedge-full_1.4.3~230+gcfaf55d_all.deb
+using rpm packager...
+created package: target/virtual-packages/tedge-full-1.4.3~230+gcfaf55d-1.noarch.rpm
+using apk packager...
+created package: target/virtual-packages/tedge-full_1.4.3_rc230+gcfaf55d_pr0_noarch.apk
+using deb packager...
+created package: target/virtual-packages/tedge-minimal_1.4.3~230+gcfaf55d_all.deb
+using rpm packager...
+created package: target/virtual-packages/tedge-minimal-1.4.3~230+gcfaf55d-1.noarch.rpm
+using apk packager...
+created package: target/virtual-packages/tedge-minimal_1.4.3_rc230+gcfaf55d_pr0_noarch.apk
 
-### Compiling dev
+Successfully created packages
+```
 
-To compile dev profile (with debug symbols) we use following command:
+## Development
+
+### Build (debug)
+
+To build a non-optimized binary with debugging information, use the following command:
 
 ```sh
 cargo build
 ```
 
-Build artifacts can be found in `./target/debug` and will include executables:
+Build artifacts can be found in `./target/debug` and will include the executable:
 
 ```sh
-ls -l ./target/debug/tedge*
+ls -l ./target/debug/tedge
 ```
 
 ```text title="Output"
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
--rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge-mapper
 ```
 
-Binaries can be run eg: `./target/debug/tedge`.
+:::note
+The `tedge` is a multi-call binaries, which means that the single binary includes the core components of %%te%%, e.g. tedge, tedge-agent, tedge-mapper etc.
+
+The easiest way to run a specific component manually is to use the `tedge run <component>` command, for example:
+
+```sh
+tedge run tedge-agent
+```
+
+You can run the same component by creating a symlink called `tedge-agent` which links to the `tedge` binary, and call the symlink instead.
+:::
+
 Alternatively, you can use `cargo` to build and run executable in a single command:
 
 ```sh
-cargo run --bin tedge
+cargo run
 ```
 
-### Compiling release
-
-To compile release profile we use following command:
+If you need to pass arguments to the %%te%% component, then you use the `--` syntax, and everything afterwards will be passed to the binary being run and not to the `cargo run` command.
 
 ```sh
-cargo build --release
+cargo run -- mqtt sub '#'
 ```
 
-Build artifacts can be found in `./target/release` and will include executables:
+### Running tests
+
+When contributing to %%te%%, we ask you to write tests for the code you have written. The tests will be run by the build pipeline when you create a pull request, but you can easily run all the tests whilst you are developing with following command:
 
 ```sh
-ls -l ./target/release/tedge*
+just test
 ```
 
-```text title="Output"
--rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
--rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge-mapper
-```
-
-Binaries can be run eg: `./target/release/tedge`.
-
-## Building deb package
-
-Currently %%te%% contains 2 binaries, `tedge` (cli) and `tedge-mapper` which are packaged as separate debian packages. To create following commands are to be issued:
+This will run all tests from the repository and may take some time to complete. Alternatively, you can run a specific test or set of tests for a given binary:
 
 ```sh
-cargo deb -p tedge
-cargo deb -p tedge-mapper
-```
-
-All resulting packages are going to be in: `./target/debian/` directory:
-
-```sh
-ls -l ./target/debian
-```
-
-```text title="Output"
-total 2948
--rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_0.9.0_amd64.deb
--rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge-mapper_0.9.0_amd64.deb
-```
-
-## Cross compiling
-
-To create binaries which can run on different platform than one you are currently on you can use [cargo cross](https://github.com/cross-rs/cross):
-
-```sh
-cross build --target armv7-unknown-linux-gnueabihf
-```
-
-Build artifacts can be found in `./target/armv7-unknown-linux-gnueabihf/debug` and will include executables:
-
-```sh
-ls -l ./target/armv7-unknown-linux-gnueabihf/debug/tedge*
-```
-
-```text title="Output"
--rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
--rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge-mapper
-```
-
-To cross compile release version of the binaries just add `--release` to the above command like so:
-
-```sh
-cross build --target armv7-unknown-linux-gnueabihf --release
-```
-
-## Running tests
-
-When contributing to %%te%% we ask you to write tests for the code you have written. The tests will be run by build pipeline when you create pull request, but you can easily run all the tests when you are developing with following command:
-
-```sh
-cargo test
-```
-
-This will run all tests from the repository and sometime may take long time, `cargo` allows you to run specific test or set of tests for binary:
-
-```sh
-cargo test --bin tedge
+just test --bin tedge
 ```
