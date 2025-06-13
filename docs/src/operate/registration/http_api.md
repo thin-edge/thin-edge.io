@@ -480,20 +480,17 @@ To demonstrate different query examples, the following entity tree is assumed as
 
 ```
 main
-|-- service0
-|-- service1
+|-- tedge-mapper-c8y
+|-- tedge-agent
 |-- child0
 |   |-- child00
-|   |   |-- child000
 |-- child1
-|   |-- service10
+|   |-- tedge-agent
 |-- child2
-|   |-- service20
+|   |-- tedge-agent
 |   |-- child20
 |   |   |-- child200
 |   |-- child21
-|   |   |-- service210
-|   |   |-- child210
 |   |-- child22
 ```
 
@@ -516,12 +513,12 @@ curl http://localhost:8000/te/v1/entities
         "@type": "device"
     },
     {
-        "@topic-id": "device/main/service/service0",
+        "@topic-id": "device/main/service/tedge-mapper-c8y",
         "@type": "service",
         "@parent": "device/main//"
     },
     {
-        "@topic-id": "device/main/service/service1",
+        "@topic-id": "device/main/service/tedge-agent",
         "@type": "service",
         "@parent": "device/main//"
     },
@@ -541,17 +538,22 @@ curl http://localhost:8000/te/v1/entities
         "@parent": "device/main//"
     },
     {
+        "@topic-id": "device/child0/service/tedge-agent",
+        "@type": "service",
+        "@parent": "device/child0//"
+    },
+    {
         "@topic-id": "device/child00//",
         "@type": "child-device",
         "@parent": "device/child0//"
     },
     {
-        "@topic-id": "device/child1/service/service10",
+        "@topic-id": "device/child1/service/tedge-agent",
         "@type": "service",
         "@parent": "device/child1//"
     },
     {
-        "@topic-id": "device/child2/service/service20",
+        "@topic-id": "device/child2/service/tedge-agent",
         "@type": "service",
         "@parent": "device/child2//"
     },
@@ -574,16 +576,6 @@ curl http://localhost:8000/te/v1/entities
         "@topic-id": "device/child200//",
         "@type": "child-device",
         "@parent": "device/child20//"
-    },
-    {
-        "@topic-id": "device/child21/service/service210",
-        "@type": "service",
-        "@parent": "device/child21//"
-    },
-    {
-        "@topic-id": "device/child210//",
-        "@type": "child-device",
-        "@parent": "device/child21//"
     }
 ]
 ```
@@ -608,7 +600,7 @@ curl http://localhost:8000/te/v1/entities?root=device/child2//
         "@parent": "device/main//"
     },
     {
-        "@topic-id": "device/child2/service/service20",
+        "@topic-id": "device/child2/service/tedge-agent",
         "@type": "service",
         "@parent": "device/child2//"
     },
@@ -631,16 +623,6 @@ curl http://localhost:8000/te/v1/entities?root=device/child2//
         "@topic-id": "device/child200//",
         "@type": "child-device",
         "@parent": "device/child20//"
-    },
-    {
-        "@topic-id": "device/child21/service/service210",
-        "@type": "service",
-        "@parent": "device/child21//"
-    },
-    {
-        "@topic-id": "device/child210//",
-        "@type": "child-device",
-        "@parent": "device/child21//"
     }
 ]
 ```
@@ -660,7 +642,7 @@ curl http://localhost:8000/te/v1/entities?parent=device/child2//
 ```json
 [
     {
-        "@topic-id": "device/child2/service/service20",
+        "@topic-id": "device/child2/service/tedge-agent",
         "@type": "service",
         "@parent": "device/child2//"
     },
@@ -735,11 +717,6 @@ curl http://localhost:8000/te/v1/entities?type=child-device
         "@topic-id": "device/child200//",
         "@type": "child-device",
         "@parent": "device/child20//"
-    },
-    {
-        "@topic-id": "device/child210//",
-        "@type": "child-device",
-        "@parent": "device/child21//"
     }
 ]
 ```
@@ -759,14 +736,9 @@ curl 'http://localhost:8000/te/v1/entities?parent=device/child2//&type=service'
 ```json
 [
     {
-        "@topic-id": "device/child2/service/service20",
+        "@topic-id": "device/child2/service/tedge-agent",
         "@type": "service",
         "@parent": "device/child2//"
-    },
-    {
-        "@topic-id": "device/child21/service/service210",
-        "@type": "service",
-        "@parent": "device/child21//"
     }
 ]
 ```
