@@ -23,6 +23,8 @@ use cryptoki::object::KeyType;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use rsa::pkcs1::EncodeRsaPublicKey;
+use rsa::BigUint;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
@@ -87,7 +89,7 @@ impl Cryptoki {
         })
     }
 
-    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11SigningKey> {
+    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
         let mut config_uri = self
             .config
             .uri
@@ -151,7 +153,7 @@ impl Cryptoki {
             anyhow::bail!("can't get key type");
         };
 
-        let pkcs11 = PKCS11 {
+        let session = Pkcs11Session {
             session: Arc::new(Mutex::new(session)),
         };
 
@@ -172,20 +174,31 @@ impl Cryptoki {
 
         let key = match keytype {
             KeyType::EC => {
-                let sigscheme = get_ec_mechanism(&pkcs11.session.lock().unwrap(), key)
+                let sigscheme = get_ec_mechanism(&session.session.lock().unwrap(), key)
                     .unwrap_or(SigScheme::EcdsaNistp256Sha256);
 
-                Pkcs11SigningKey {
-                    session: pkcs11,
-                    handle: key,
+                Pkcs11Signer {
+                    session,
+                    key,
                     sigscheme,
                 }
             }
-            KeyType::RSA => Pkcs11SigningKey {
-                session: pkcs11,
-                handle: key,
-                sigscheme: SigScheme::RsaPssSha256,
-            },
+            KeyType::RSA => {
+                let attrs = session.session.lock().unwrap().get_attributes(
+                    key,
+                    &[
+                        AttributeType::PublicKeyInfo,
+                        AttributeType::Modulus,
+                        AttributeType::PublicExponent,
+                    ],
+                );
+                dbg!(&attrs);
+                Pkcs11Signer {
+                    session,
+                    key,
+                    sigscheme: SigScheme::RsaPssSha256,
+                }
+            }
             _ => anyhow::bail!("unsupported key type"),
         };
 
@@ -225,56 +238,20 @@ impl Cryptoki {
 }
 
 #[derive(Debug, Clone)]
-pub struct Pkcs11SigningKey {
-    session: PKCS11,
-    handle: ObjectHandle,
-    sigscheme: SigScheme,
-}
-
-impl SigningKey for Pkcs11SigningKey {
-    fn choose_scheme(&self, offered: &[SignatureScheme]) -> Option<Box<dyn Signer>> {
-        debug!("Offered signature schemes. offered={:?}", offered);
-        let key_scheme = self.sigscheme.into();
-        if offered.contains(&key_scheme) {
-            debug!("Matching scheme: {key_scheme:?}");
-            Some(Box::new(PkcsSigner {
-                pkcs11: self.session.clone(),
-                key: self.handle,
-                sigscheme: self.sigscheme,
-            }))
-        } else {
-            None
-        }
-    }
-
-    fn algorithm(&self) -> SignatureAlgorithm {
-        self.sigscheme.into()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct PKCS11 {
+pub struct Pkcs11Session {
     pub session: Arc<Mutex<Session>>,
 }
 
-#[derive(Debug)]
-pub struct PkcsSigner {
-    pkcs11: PKCS11,
+#[derive(Debug, Clone)]
+pub struct Pkcs11Signer {
+    session: Pkcs11Session,
     key: ObjectHandle,
     sigscheme: SigScheme,
 }
 
-impl PkcsSigner {
-    pub fn from_key(key: Pkcs11SigningKey) -> Self {
-        Self {
-            pkcs11: key.session,
-            key: key.handle,
-            sigscheme: key.sigscheme,
-        }
-    }
-
+impl Pkcs11Signer {
     pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
-        let session = self.pkcs11.session.lock().unwrap();
+        let session = self.session.session.lock().unwrap();
 
         let mechanism = self.sigscheme.into();
         let (mechanism, digest_mechanism) = match mechanism {
@@ -334,6 +311,58 @@ impl PkcsSigner {
         );
         Ok(signature_asn1)
     }
+
+    pub fn public_key_pem(&self) -> anyhow::Result<String> {
+        let session = self.session.session.lock().unwrap();
+
+        let key_type = session
+            .get_attributes(self.key, &[AttributeType::KeyType])?
+            .into_iter()
+            .next()
+            .context("no keytype attribute")?;
+
+        let Attribute::KeyType(keytype) = key_type else {
+            anyhow::bail!("can't get key type");
+        };
+
+        match keytype {
+            KeyType::RSA => {
+                let mut attrs = session
+                    .get_attributes(
+                        self.key,
+                        &[
+                            AttributeType::Modulus,
+                            AttributeType::PublicExponent,
+                            AttributeType::PublicKeyInfo,
+                        ],
+                    )
+                    .unwrap()
+                    .into_iter();
+                dbg!(&attrs);
+                let Attribute::Modulus(modulus) = attrs.next().unwrap() else {
+                    todo!()
+                };
+                let Attribute::PublicExponent(pubexp) = attrs.next().unwrap() else {
+                    todo!()
+                };
+                let pubinfo = attrs.next();
+
+                let pubkey = rsa::RsaPublicKey::new(
+                    BigUint::from_bytes_le(&modulus),
+                    BigUint::from_bytes_le(&pubexp),
+                )
+                .unwrap();
+                let pem = pubkey.to_pkcs1_pem(rsa::pkcs8::LineEnding::LF).unwrap();
+                Ok(pem)
+            }
+
+            KeyType::EC => {
+                todo!()
+            }
+
+            _ => todo!(),
+        }
+    }
 }
 
 /// Currently supported signature schemes.
@@ -385,7 +414,24 @@ impl From<SigScheme> for Mechanism<'_> {
     }
 }
 
-impl Signer for PkcsSigner {
+impl SigningKey for Pkcs11Signer {
+    fn choose_scheme(&self, offered: &[SignatureScheme]) -> Option<Box<dyn Signer>> {
+        debug!("Offered signature schemes. offered={:?}", offered);
+        let key_scheme = self.sigscheme.into();
+        if offered.contains(&key_scheme) {
+            debug!("Matching scheme: {key_scheme:?}");
+            Some(Box::new(self.clone()))
+        } else {
+            None
+        }
+    }
+
+    fn algorithm(&self) -> SignatureAlgorithm {
+        self.sigscheme.into()
+    }
+}
+
+impl Signer for Pkcs11Signer {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
         Self::sign(self, message).map_err(|e| rustls::Error::General(e.to_string()))
     }

@@ -1,6 +1,5 @@
 use crate::pkcs11::Cryptoki;
 use crate::pkcs11::CryptokiConfigDirect;
-use crate::pkcs11::PkcsSigner;
 
 use anyhow::Context;
 use rustls::sign::SigningKey;
@@ -13,6 +12,8 @@ use tracing::warn;
 pub trait SigningService {
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse>;
     fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse>;
+    /// Returns a public key derived from the private key object
+    fn public_key(&self, uri: PublicKeyRequest) -> anyhow::Result<PublicKeyResponse>;
 }
 
 #[derive(Debug)]
@@ -66,16 +67,27 @@ impl SigningService for TedgeP11Service {
     fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse> {
         trace!(?request);
         let uri = request.uri;
-        let signing_key = self
+        let signer = self
             .cryptoki
             .signing_key(uri.as_deref())
             .context("Failed to find a signing key")?;
 
-        let signer = PkcsSigner::from_key(signing_key);
         let signature = signer
             .sign(&request.to_sign)
             .context("Failed to sign using PKCS #11")?;
         Ok(SignResponse(signature))
+    }
+
+    #[instrument(skip_all)]
+    fn public_key(&self, request: PublicKeyRequest) -> anyhow::Result<PublicKeyResponse> {
+        let PublicKeyRequest(uri) = request;
+        let signer = self
+            .cryptoki
+            .signing_key(uri.as_deref())
+            .context("Failed to find a signing key")?;
+
+        let public_key_pem = signer.public_key_pem().unwrap();
+        Ok(PublicKeyResponse(public_key_pem))
     }
 }
 
@@ -99,6 +111,12 @@ pub struct SignRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignResponse(pub Vec<u8>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublicKeyRequest(pub Option<String>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublicKeyResponse(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureScheme(pub rustls::SignatureScheme);
