@@ -293,6 +293,15 @@ mod tests {
                             }
                         },
                         {
+                            "operation": "config_update",
+                            "@skip": false,
+                            "payload": {
+                                "name": "test-config",
+                                "type": "path/config/test-config",
+                                "remoteUrl":"http://www.my.url/"
+                            }
+                        },
+                        {
                             "operation": "software_update",
                             "@skip": false,
                             "payload": {
@@ -313,15 +322,6 @@ mod tests {
                                         ]
                                     }
                                 ]
-                            }
-                        },
-                        {
-                            "operation": "config_update",
-                            "@skip": false,
-                            "payload": {
-                                "name": "test-config",
-                                "type": "path/config/test-config",
-                                "remoteUrl":"http://www.my.url/"
                             }
                         }
                     ]
@@ -414,6 +414,15 @@ mod tests {
                             }
                         },
                         {
+                            "operation": "config_update",
+                            "@skip": false,
+                            "payload": {
+                                "name": "test-config",
+                                "type": "path/config/test-config",
+                                "remoteUrl":"http://www.my.url/"
+                            }
+                        },
+                        {
                             "operation": "software_update",
                             "@skip": false,
                             "payload": {
@@ -434,15 +443,6 @@ mod tests {
                                         ]
                                     }
                                 ]
-                            }
-                        },
-                        {
-                            "operation": "config_update",
-                            "@skip": false,
-                            "payload": {
-                                "name": "test-config",
-                                "type": "path/config/test-config",
-                                "remoteUrl":"http://www.my.url/"
                             }
                         }
                     ]
@@ -523,6 +523,15 @@ mod tests {
                             }
                         },
                         {
+                            "operation": "config_update",
+                            "@skip": false,
+                            "payload": {
+                                "name": "test-config",
+                                "type": "path/config/test-config",
+                                "remoteUrl":"http://www.my.url/"
+                            }
+                        },
+                        {
                             "operation": "software_update",
                             "@skip": false,
                             "payload": {
@@ -543,15 +552,6 @@ mod tests {
                                         ]
                                     }
                                 ]
-                            }
-                        },
-                        {
-                            "operation": "config_update",
-                            "@skip": false,
-                            "payload": {
-                                "name": "test-config",
-                                "type": "path/config/test-config",
-                                "remoteUrl":"http://www.my.url/"
                             }
                         }
                     ]
@@ -634,6 +634,15 @@ mod tests {
                             }
                         },
                         {
+                            "operation": "config_update",
+                            "@skip": false,
+                            "payload": {
+                                "name": "test-config",
+                                "type": "path/config/test-config",
+                                "remoteUrl":"http://127.0.0.1:8001/c8y/test/config/123456"
+                            }
+                        },
+                        {
                             "operation": "software_update",
                             "@skip": false,
                             "payload": {
@@ -655,15 +664,6 @@ mod tests {
                                         ]
                                     }
                                 ]
-                            }
-                        },
-                        {
-                            "operation": "config_update",
-                            "@skip": false,
-                            "payload": {
-                                "name": "test-config",
-                                "type": "path/config/test-config",
-                                "remoteUrl":"http://127.0.0.1:8001/c8y/test/config/123456"
                             }
                         }
                     ]
@@ -744,6 +744,15 @@ mod tests {
                             }
                         },
                         {
+                            "operation": "config_update",
+                            "@skip": false,
+                            "payload": {
+                                "name": "test-config",
+                                "type": "path/config/test-config",
+                                "remoteUrl":"http://www.my.url/"
+                            }
+                        },
+                        {
                             "operation": "software_update",
                             "@skip": false,
                             "payload": {
@@ -764,15 +773,6 @@ mod tests {
                                         ]
                                     }
                                 ]
-                            }
-                        },
-                        {
-                            "operation": "config_update",
-                            "@skip": false,
-                            "payload": {
-                                "name": "test-config",
-                                "type": "path/config/test-config",
-                                "remoteUrl":"http://www.my.url/"
                             }
                         }
                     ]
@@ -841,6 +841,15 @@ mod tests {
                     "name": "test-profile",
                     "operations": [
                         {
+                            "operation": "config_update",
+                            "@skip": false,
+                            "payload": {
+                                "name": "test-config",
+                                "type": "path/config/test-config",
+                                "remoteUrl":"http://www.my.url/"
+                            }
+                        },
+                        {
                             "operation": "software_update",
                             "@skip": false,
                             "payload": {
@@ -861,15 +870,6 @@ mod tests {
                                         ]
                                     }
                                 ]
-                            }
-                        },
-                        {
-                            "operation": "config_update",
-                            "@skip": false,
-                            "payload": {
-                                "name": "test-config",
-                                "type": "path/config/test-config",
-                                "remoteUrl":"http://www.my.url/"
                             }
                         }
                     ]
@@ -1072,6 +1072,15 @@ mod tests {
                         }
                     },
                     {
+                        "operation": "config_update",
+                        "@skip": false,
+                        "payload": {
+                            "name": "test-config",
+                            "type": "path/config/test-config",
+                            "remoteUrl":"http://www.my.url"
+                        }
+                    },
+                    {
                         "operation": "software_update",
                         "@skip": false,
                         "payload": {
@@ -1092,15 +1101,6 @@ mod tests {
                                     ]
                                 }
                             ]
-                        }
-                    },
-                    {
-                        "operation": "config_update",
-                        "@skip": false,
-                        "payload": {
-                            "name": "test-config",
-                            "type": "path/config/test-config",
-                            "remoteUrl":"http://www.my.url"
                         }
                     }
                 ]
@@ -1289,6 +1289,15 @@ mod tests {
                         }
                     },
                     {
+                        "operation": "config_update",
+                        "@skip": false,
+                        "payload": {
+                            "name": "test-config",
+                            "type": "path/config/test-config",
+                            "remoteUrl":"http://www.my.url"
+                        }
+                    },
+                    {
                         "operation": "software_update",
                         "@skip": false,
                         "payload": {
@@ -1309,15 +1318,6 @@ mod tests {
                                     ]
                                 }
                             ]
-                        }
-                    },
-                    {
-                        "operation": "config_update",
-                        "@skip": false,
-                        "payload": {
-                            "name": "test-config",
-                            "type": "path/config/test-config",
-                            "remoteUrl":"http://www.my.url"
                         }
                     }
                 ]
