@@ -5,8 +5,6 @@ sidebar_position: 1
 description: How to collect logs and system diagnostics using plugin-based automation
 ---
 
-import UserContext from '@site/src/components/UserContext';
-
 %%te%% helps you collect all diagnostic information about your device and services with a single command running user-defined diagnostic plugins.
 The collected diagnostics are bundled into a single compressed archive (`.tar.gz`) for easy analysis or sharing with support.
 
@@ -65,25 +63,24 @@ sudo tedge config add diag.plugin_paths "your/own/dir/path"
 tedge diag collect
 ```
 
-### Disabling plugins
-
-To diable a plugin, add `.ignore` extension to its filename (e.g., `10_test.sh.ignore`).
-
 ### Predefined plugins
 
 The [predefined plugins](https://github.com/thin-edge/thin-edge.io/tree/main/configuration/contrib/diag-plugins) include:
 
-| Plugin Name        | Description                                                      |
-| ------------------ | ---------------------------------------------------------------- |
-| 01_tedge.sh        | Collects logs from `tedge-mapper` and `tedge-agent`              |
-| 02_os.sh           | Collects system information                                      |
-| 03_mqtt.sh         | Collects output of `tedge mqtt sub`                              |
-| 04_workflow.sh     | Copies workflow logs                                             |
-| 05_entities.sh     | Collects entity data                                             |
-| 06_internal.sh     | Copies internal backup files                                     |
-| 07_mosquitto.sh    | Collects mosquitto logs (skipped when using the built-in bridge) |
-| template.sh.ignore | A template for creating custom diagnostic plugin                 |
+| Plugin Name        | Description                                                                             |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| 01_tedge.sh        | Collects logs from `tedge-mapper` and `tedge-agent`, along with `tedge config` settings |
+| 02_os.sh           | Collects system information                                                             |
+| 03_mqtt.sh         | Collects output of `tedge mqtt sub`                                                     |
+| 04_workflow.sh     | Copies workflow logs                                                                    |
+| 05_entities.sh     | Collects entity data                                                                    |
+| 06_internal.sh     | Copies internal backup files                                                            |
+| 07_mosquitto.sh    | Collects mosquitto logs (skipped when using the built-in bridge)                        |
+| template.sh.ignore | A template for creating custom diagnostic plugin                                        |
 
+### Disabling plugins
+
+To disable a plugin, add `.ignore` extension to its filename (e.g., `10_test.sh.ignore`).
 
 ### Writing your own diagnostic plugin
 
@@ -96,7 +93,9 @@ mkdir -p /etc/tedge/diag-plugins
 cp /usr/share/tedge/diag-plugins/template.sh.ignore /etc/tedge/diag-plugins/100_my-plugin.sh
 ```
 
-Open the file in a text editor and modify the `collect()` function.
+Then, modify the `collect()` function to gather all relevant diagnostic data for your service,
+by printing status data and collecting log files.
+
 Here’s an example that outputs system information to `stdout` and a log file:
 
 ```sh title="file: /etc/tedge/diag-plugins/100_my-plugin.sh"
@@ -119,8 +118,6 @@ To test your plugin, specify your custom plugin directory:
 tedge diag collect --plugin-dir /etc/tedge/diag-plugins
 ```
 
-<UserContext language="text" title="Output">
-
 ```text title="Output"
 Executing /etc/tedge/diag-plugins/100_my-plugin.sh... ✓
 
@@ -128,9 +125,15 @@ Total 1 executed: 1 completed, 0 failed, 0 skipped
 Diagnostic information saved to /tmp/tedge-diag-2025-06-12_14-25-35.tar.gz
 ```
 
-</UserContext>
+After decompressing the archive, you will see the following directory structure.
+Check the contents of the files.
 
-You can decompress the archive to check the contents.
+```text title="Directory tree"
+tedge-diag-2025-06-12_14-25-35
+`-- 100_my-plugin
+    |-- output.log
+    `-- system.log
+```
 
 ### Reference
 
