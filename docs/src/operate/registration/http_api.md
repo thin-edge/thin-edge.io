@@ -1,14 +1,14 @@
 ---
-title: Entity management REST APIs
+title: Entity REST APIs
 tags: [Child-Device, Registration]
 sidebar_position: 1
-description: Register child devices and services with %%te%%
+description: Register child devices and services with HTTP
 ---
 
 # REST APIs for Entity Management
 
-%%te%% provides REST APIs to manage all the entities (devices and services) attached to a main device.
-These APIs let you create, retrieve, update and delete entities.
+%%te%% provides a REST API to manage all the entities (devices and services) attached to the main device.
+These interfaces let you create, retrieve, update and delete entities.
 
 When compared to the MQTT APIs, the REST APIs provide an added advantage of immediate feedback to the user,
 if the respective call succeeded or not, which is lacking with the MQTT APIs.
@@ -85,13 +85,18 @@ curl http://localhost:8000/te/v1/entities/device/child01
 
 ## Update entity
 
-An existing entity can be updated using the PATCH API.
-But the updates are limited to the `@parent` and `@health` endpoints only.
-Other properties like `@type` and `@id` can not be updated after the registration.
+The PATCH API can be used to:
+* change the parent of a child device or a service
+* change the health endpoint of a device
 
+Updates are limited to the `@parent` and `@health` properties only,
+so other properties like `@type` and `@id` cannot be updated after the registration.
+
+:::note
 The `@parent` must be another device, as services cannot have children.
 Similarly, the `@health` endpoint must be a service, as only services publish their health statuses.
 The entities specified in either fields must be registered up-front, before they can be used.
+:::
 
 **Endpoint**
 
@@ -109,6 +114,8 @@ PATCH /v1/entities/{topic-id}
 ```
 
 **Example**
+
+Update the parent of the entity `device/child01//` by making it a child of `device/child0//`:
 
 ```sh
 curl http://localhost:8000/te/v1/entities/device/child01 \
