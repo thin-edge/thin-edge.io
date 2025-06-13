@@ -1,9 +1,7 @@
+use crate::cli::diag::logger::DualLogger;
 use crate::command::Command;
-use crate::error;
-use crate::info;
 use crate::log::MaybeFancy;
 use crate::log::Spinner;
-use crate::warning;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -39,44 +37,57 @@ impl Command for DiagCollectCommand {
     }
 
     async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let plugins = self.read_diag_plugins().await?;
-        let plugin_count = plugins.len();
-        if plugin_count == 0 {
-            error!("No diagnostic plugins were found");
-            std::process::exit(2)
-        }
-
         file::create_directory_with_defaults(&self.diag_dir)
             .await
             .with_context(|| format!("failed to create directory at {}", self.diag_dir))?;
+        let mut logger = DualLogger::new(self.diag_dir.join("summary.log"))
+            .context("Failed to initialize logging")?;
+
+        let plugins = self.read_diag_plugins(&mut logger).await?;
+        let plugin_count = plugins.len();
+        if plugin_count == 0 {
+            logger.error("No diagnostic plugins were found");
+            std::process::exit(2)
+        }
 
         let mut skipped_count = 0;
         let mut error_count = 0;
 
         for plugin in plugins {
             let banner = format!("Executing {plugin}");
-            let spinner = Spinner::start(banner);
+            let spinner = Spinner::start(banner.clone());
             let res = self.execute_diag_plugin(&plugin).await;
 
             match spinner.finish(res) {
-                Ok(exit_status) if exit_status.success() => {}
-                Ok(exit_status) if exit_status.code() == Some(2) => {
-                    skipped_count += 1;
-                    info!("{plugin} is marked skipped");
-                }
                 Ok(exit_status) => {
-                    error_count += 1;
-                    error!("{plugin} failed with exit status: {exit_status}");
+                    logger.only_to_file(&format!("{banner}... ✓"));
+
+                    match exit_status.code() {
+                        Some(0) => {}
+                        Some(2) => {
+                            skipped_count += 1;
+                            logger.info(&format!("{plugin} is marked skipped"));
+                        }
+                        Some(code) => {
+                            error_count += 1;
+                            logger.error(&format!("{plugin} failed with exit status: {code}"));
+                        }
+                        None => {
+                            error_count += 1;
+                            logger.error(&format!("{plugin} terminated by signal"));
+                        }
+                    }
                 }
                 Err(err) => {
                     error_count += 1;
-                    error!("{plugin} failed with error: {err}");
+                    logger.only_to_file(&format!("{banner}... ✗"));
+                    logger.error(&format!("{plugin} failed with error: {err}"));
                 }
             }
         }
 
         let success_count = plugin_count - skipped_count - error_count;
-        eprintln!("\nTotal {plugin_count} executed: {success_count} completed, {error_count} failed, {skipped_count} skipped");
+        logger.log(&format!("\nTotal {plugin_count} executed: {success_count} completed, {error_count} failed, {skipped_count} skipped"));
 
         self.compress_into_a_tarball()
             .with_context(|| "Failed to compress diagnostic information")?;
@@ -96,15 +107,21 @@ impl Command for DiagCollectCommand {
 }
 
 impl DiagCollectCommand {
-    async fn read_diag_plugins(&self) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
+    async fn read_diag_plugins(
+        &self,
+        logger: &mut DualLogger,
+    ) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
         let mut plugins = BTreeSet::new();
         for dir_path in &self.plugin_dir {
-            match Self::read_diag_plugins_from_dir(dir_path.as_ref()).await {
+            match self
+                .read_diag_plugins_from_dir(logger, dir_path.as_ref())
+                .await
+            {
                 Ok(plugin_files) => {
                     plugins.extend(plugin_files);
                 }
                 Err(err) => {
-                    warning!("Failed to read plugins from {dir_path}: {err}");
+                    logger.warning(&format!("Failed to read plugins from {dir_path}: {err}"));
                     continue;
                 }
             }
@@ -113,6 +130,8 @@ impl DiagCollectCommand {
     }
 
     async fn read_diag_plugins_from_dir(
+        &self,
+        logger: &mut DualLogger,
         dir_path: &Utf8Path,
     ) -> Result<BTreeSet<Utf8PathBuf>, anyhow::Error> {
         let mut plugins = BTreeSet::new();
@@ -126,10 +145,10 @@ impl DiagCollectCommand {
                     plugins.insert(path);
                     continue;
                 } else {
-                    warning!("Skipping non-executable file: {:?}", entry.path());
+                    logger.warning(&format!("Skipping non-executable file: {:?}", entry.path()));
                 }
             } else {
-                warning!("Ignoring invalid path: {:?}", entry.path());
+                logger.warning(&format!("Ignoring invalid path: {:?}", entry.path()));
             }
         }
         Ok(plugins)
@@ -180,6 +199,7 @@ impl DiagCollectCommand {
         tar.append_dir_all(&self.tarball_name, &self.diag_dir)?;
         tar.finish()?;
 
+        // Cannot write this message to summary.log since the tarball has already been created
         eprintln!("Diagnostic information saved to {tarball_path}");
         Ok(tarball_path)
     }
@@ -206,7 +226,8 @@ mod tests {
         with_exec_permission(command.first_plugin_dir().join("plugin_b"), "pwd");
         with_exec_permission(command.first_plugin_dir().join("plugin_c"), "pwd");
 
-        let plugins = command.read_diag_plugins().await.unwrap();
+        let mut logger = DualLogger::new(command.diag_dir.join("summary.log")).unwrap();
+        let plugins = command.read_diag_plugins(&mut logger).await.unwrap();
         assert_eq!(plugins.len(), 3);
     }
 
@@ -225,7 +246,8 @@ mod tests {
         with_exec_permission(third_plugin_dir.utf8_path().join("plugin_3a"), "pwd");
         with_exec_permission(third_plugin_dir.utf8_path().join("plugin_3b"), "pwd");
 
-        let plugins = command.read_diag_plugins().await.unwrap();
+        let mut logger = DualLogger::new(command.diag_dir.join("summary.log")).unwrap();
+        let plugins = command.read_diag_plugins(&mut logger).await.unwrap();
         assert_eq!(plugins.len(), 6);
     }
 
@@ -238,7 +260,8 @@ mod tests {
         let mut command = DiagCollectCommand::new(&ttd);
         command.add_plugin_dir(&second_plugin_dir);
 
-        let plugins = command.read_diag_plugins().await.unwrap();
+        let mut logger = DualLogger::new(command.diag_dir.join("summary.log")).unwrap();
+        let plugins = command.read_diag_plugins(&mut logger).await.unwrap();
         assert_eq!(plugins.len(), 0);
     }
 
@@ -257,7 +280,8 @@ mod tests {
             "pwd",
         );
 
-        let plugins = command.read_diag_plugins().await.unwrap();
+        let mut logger = DualLogger::new(command.diag_dir.join("summary.log")).unwrap();
+        let plugins = command.read_diag_plugins(&mut logger).await.unwrap();
         assert_eq!(plugins.len(), 0);
     }
 
@@ -268,7 +292,8 @@ mod tests {
         ttd.dir("plugins").file("plugin_a.ignore");
         ttd.dir("plugins").file("plugin_b.ignore");
 
-        let plugins = command.read_diag_plugins().await.unwrap();
+        let mut logger = DualLogger::new(command.diag_dir.join("summary.log")).unwrap();
+        let plugins = command.read_diag_plugins(&mut logger).await.unwrap();
         assert_eq!(plugins.len(), 0);
     }
 
