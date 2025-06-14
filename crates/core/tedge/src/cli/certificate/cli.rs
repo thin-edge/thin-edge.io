@@ -17,6 +17,8 @@ use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
 use clap::ValueHint;
 use std::time::Duration;
+use tedge_config::models::HostPort;
+use tedge_config::models::HTTPS_PORT;
 use tedge_config::tedge_toml::OptionalConfigError;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
@@ -261,6 +263,7 @@ impl BuildCommand for TEdgeCertCli {
                 one_time_password: token,
                 profile,
                 csr_path,
+                url,
                 retry_every,
                 max_timeout,
             }) => {
@@ -271,10 +274,15 @@ impl BuildCommand for TEdgeCertCli {
                     Some(csr_path) => (csr_path, false),
                 };
 
+                let c8y_url = match url {
+                    Some(v) => v,
+                    None => c8y_config.http.or_err()?.to_owned(),
+                };
+
                 let cmd = c8y::DownloadCertCmd {
                     device_id: id,
                     one_time_password: token,
-                    c8y_url: c8y_config.http.or_err()?.to_owned(),
+                    c8y_url,
                     root_certs: config.cloud_root_certs()?,
                     cert_path: c8y_config.device.cert_path.to_owned().into(),
                     key_path: c8y_config.device.key_path.to_owned().into(),
@@ -463,6 +471,12 @@ pub enum DownloadCertCli {
         /// configured for the given cloud profile.
         #[clap(long = "csr-path", global = true, value_hint = ValueHint::FilePath)]
         csr_path: Option<Utf8PathBuf>,
+
+        /// URL to download the certificate from
+        /// If not provided, the c8y.http value from the configuration will be used.
+        /// Example: example.eu-latest.cumulocity.com
+        #[clap(long, value_hint = ValueHint::Url)]
+        url: Option<HostPort<HTTPS_PORT>>,
 
         #[clap(long, default_value = "30s")]
         #[arg(value_parser = humantime::parse_duration)]
