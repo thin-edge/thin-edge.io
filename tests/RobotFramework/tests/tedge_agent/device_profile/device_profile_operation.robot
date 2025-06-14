@@ -200,7 +200,7 @@ Send device profile operation locally
 *** Keywords ***
 Custom Test Setup
     Execute Command
-    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/on_shutdown.sh, /usr/bin/tedge-write /etc/*' > /etc/sudoers.d/tedge
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/on_shutdown.sh, /usr/bin/tedge-write /etc/*' > /etc/sudoers.d/tedge
 
 Custom Setup
     ${DEVICE_SN}=    Setup

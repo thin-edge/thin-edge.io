@@ -536,3 +536,9 @@ set/unset apt.maintainer
     Execute Command    sudo tedge config unset apt.maintainer
     ${unset}    Execute Command    tedge config list
     Should Not Contain    ${unset}    apt.maintainer=
+
+Allow setting env variable under sudo
+    ${output}    Execute Command
+    ...    cmd=sudo -u tedge sudo TEDGE_C8Y_URL=example.com tedge config get c8y.url
+    ...    strip=${True}
+    Should Be Equal    ${output}    example.com

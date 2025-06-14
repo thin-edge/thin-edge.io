@@ -989,8 +989,8 @@ configure_test_user() {
 
 post_configure() {
     echo "Setting sudoers.d config"
-    sudo sh -c "echo '%sudo ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/all"
-    sudo sh -c "echo 'tedge  ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/tedge-write' > /etc/sudoers.d/tedge"
+    sudo sh -c "echo '%sudo ALL=(ALL) NOPASSWD:SETENV:ALL' > /etc/sudoers.d/all"
+    sudo sh -c "echo 'tedge  ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/tedge-write' > /etc/sudoers.d/tedge"
 }
 
 main() {

@@ -54,8 +54,8 @@ fi
 
 ### Create file in /etc/sudoers.d directory. With this configuration, the tedge user have the right to call the tedge command with sudo rights, which is required for system-wide configuration in "/etc/tedge"
 if [ -d /etc/sudoers.d ]; then
-    echo "tedge    ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" > /etc/sudoers.d/tedge
-    echo "tedge    ALL = (ALL) NOPASSWD: /usr/bin/tedge-write /etc/*" >> /etc/sudoers.d/tedge
+    echo "tedge    ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" > /etc/sudoers.d/tedge
+    echo "tedge    ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge-write /etc/*" >> /etc/sudoers.d/tedge
 fi
 
 
