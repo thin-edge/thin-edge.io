@@ -80,7 +80,7 @@ Trigger Agent Restart
 
 Trigger native-reboot within workflow (on_success)
     Execute Command
-    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/sbin/reboot, /usr/bin/on_shutdown.sh' > /etc/sudoers.d/tedge
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/sbin/reboot, /usr/bin/on_shutdown.sh' > /etc/sudoers.d/tedge
     ${pid_before}    Execute Command    sudo systemctl show --property MainPID tedge-agent
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/native-reboot/robot-1 '{"status":"init"}'
     Should Have MQTT Messages
@@ -98,7 +98,7 @@ Trigger native-reboot within workflow (on_success)
 
 Trigger native-reboot within workflow (on_error) - missing sudoers entry for reboot
     Execute Command
-    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync' > /etc/sudoers.d/tedge
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync' > /etc/sudoers.d/tedge
     ${pid_before}    Execute Command    sudo systemctl show --property MainPID tedge-agent
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/native-reboot/robot-2 '{"status":"init"}'
     Should Have MQTT Messages
@@ -197,7 +197,7 @@ Placeholder workflow created for ill-defined operations
 *** Keywords ***
 Custom Test Setup
     Execute Command
-    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/on_shutdown.sh' > /etc/sudoers.d/tedge
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/on_shutdown.sh' > /etc/sudoers.d/tedge
 
 Custom Setup
     ${DEVICE_SN}    Setup
