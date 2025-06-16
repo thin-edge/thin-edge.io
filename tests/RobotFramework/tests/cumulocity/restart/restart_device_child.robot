@@ -95,7 +95,7 @@ Setup Child Device
     Execute Command
     ...    cmd=chmod a+x /usr/bin/*.sh && chmod 644 /etc/systemd/system/*.service && systemctl enable on_startup.service
     Execute Command
-    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/on_shutdown.sh, /usr/bin/on_shutdown_no_reboot.sh, /usr/bin/on_shutdown_does_not_exist.sh, /usr/bin/on_shutdown_does_not_exist.sh, /usr/bin/on_shutdown_signal_interrupt.sh, !/sbin/reboot' > /etc/sudoers.d/tedge
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/on_shutdown.sh, /usr/bin/on_shutdown_no_reboot.sh, /usr/bin/on_shutdown_does_not_exist.sh, /usr/bin/on_shutdown_does_not_exist.sh, /usr/bin/on_shutdown_signal_interrupt.sh, !/sbin/reboot' > /etc/sudoers.d/tedge
     Set Restart Command    ["/usr/bin/on_shutdown.sh"]
     Set Restart Timeout    default
 
