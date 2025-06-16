@@ -5,7 +5,10 @@
 //! - PKCS#11: https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html
 
 use anyhow::Context;
+use asn1_rs::BigInt;
 use asn1_rs::FromDer as _;
+use asn1_rs::Integer;
+use asn1_rs::SequenceOf;
 use asn1_rs::ToDer;
 use camino::Utf8PathBuf;
 use cryptoki::context::CInitializeArgs;
@@ -397,19 +400,32 @@ impl Signer for PkcsSigner {
     }
 }
 
-fn format_asn1_ecdsa_signature(r_bytes: &[u8], s_bytes: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
-    let mut writer = Vec::new();
+/// Formats the output of PKCS11 EC signature as an ASN.1 Ecdsa-Sig-Value.
+///
+/// This function takes the raw `r` and `s` byte slices and encodes them as ASN.1 INTEGERs,
+/// then wraps them in an ASN.1 SEQUENCE, and finally serializes the structure to DER.
+///
+/// PKCS#11 EC signature operations typically return a raw concatenation of the `r` and `s` values,
+/// each representing a big-endian positive integer of fixed length (depending on the curve).
+/// However, most cryptographic protocols (including TLS and X.509) expect ECDSA signatures to be
+/// encoded as an ASN.1 DER SEQUENCE of two INTEGERs, as described in RFC 3279 section 2.2.3.
+///
+/// - https://docs.oasis-open.org/pkcs11/pkcs11-curr/v3.0/os/pkcs11-curr-v3.0-os.html#_Toc30061178
+/// - https://www.ietf.org/rfc/rfc3279#section-2.2.3
+fn format_asn1_ecdsa_signature(r_bytes: &[u8], s_bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
+    let r = format_asn1_integer(r_bytes).to_signed_bytes_be();
+    let r = Integer::new(&r);
+    let s = format_asn1_integer(s_bytes).to_signed_bytes_be();
+    let s = Integer::new(&s);
 
-    write_asn1_integer(&mut writer, r_bytes);
-
-    write_asn1_integer(&mut writer, s_bytes);
-
-    let seq = asn1_rs::Sequence::new(writer.into());
-    let b = seq.to_der_vec().unwrap();
-    Ok(b)
+    let seq = SequenceOf::<Integer>::from_iter([r, s]);
+    let seq_der = seq
+        .to_der_vec()
+        .context("Unexpected ASN.1 error when serializing Ecdsa-Sig-Value")?;
+    Ok(seq_der)
 }
 
-fn write_asn1_integer(writer: &mut dyn std::io::Write, b: &[u8]) {
+fn format_asn1_integer(b: &[u8]) -> BigInt {
     let mut i = asn1_rs::BigInt::from_signed_bytes_be(b);
     if i.sign() == asn1_rs::Sign::Minus {
         // Prepend a most significant zero byte if value < 0
@@ -418,9 +434,7 @@ fn write_asn1_integer(writer: &mut dyn std::io::Write, b: &[u8]) {
 
         i = asn1_rs::BigInt::from_signed_bytes_be(&positive);
     }
-    let i = i.to_signed_bytes_be();
-    let i = asn1_rs::Integer::new(&i);
-    let _ = i.write_der(writer);
+    i
 }
 
 fn get_ec_mechanism(session: &Session, key: ObjectHandle) -> anyhow::Result<SigScheme> {
@@ -448,5 +462,36 @@ fn get_ec_mechanism(session: &Session, key: ObjectHandle) -> anyhow::Result<SigS
         SECP384R1_OID => Ok(SigScheme::EcdsaNistp384Sha384),
         SECP521R1_OID => Ok(SigScheme::EcdsaNistp521Sha512),
         _ => anyhow::bail!("Parsed oID({oid}) doesn't match any supported EC curve"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use asn1_rs::Any;
+    use asn1_rs::Integer;
+    use asn1_rs::SequenceOf;
+
+    #[test]
+    fn test_format_asn1_ecdsa_signature_invalid_asn1() {
+        // Use 32-byte r and s (as for P-256)
+        let r = [0x01u8; 32];
+        let s = [0xffu8; 32];
+
+        let der = format_asn1_ecdsa_signature(&r, &s).expect("Should encode");
+
+        // Try to parse as ASN.1 SEQUENCE of two INTEGERs
+        let parsed = Any::from_der(&der);
+        assert!(parsed.is_ok(), "Should parse as ASN.1");
+
+        // Now check that the sequence contains exactly two INTEGERs
+        let seq: SequenceOf<Integer> = SequenceOf::from_der(&der)
+            .expect("Should parse as sequence")
+            .1;
+        assert_eq!(seq.len(), 2, "ASN.1 sequence should have two items");
+
+        // make sure input is not misinterpreted as negative numbers
+        assert_eq!(seq[0].as_bigint().to_bytes_be().1, r);
+        assert_eq!(seq[1].as_bigint().to_bytes_be().1, s);
     }
 }
