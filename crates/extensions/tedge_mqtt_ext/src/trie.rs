@@ -245,10 +245,10 @@ impl PartialOrd for RankTopicFilter<'_> {
 }
 
 impl RankTopicFilter<'_> {
-    fn is_ranked_higher_than(&self, filters: &[impl AsRef<str>]) -> bool {
+    fn is_ranked_higher_than<S: AsRef<str>>(&self, filters: impl IntoIterator<Item = S>) -> bool {
         use std::cmp::Ordering;
 
-        !filters.iter().any(|t| {
+        !filters.into_iter().any(|t| {
             matches!(
                 self.partial_cmp(&RankTopicFilter(t.as_ref())),
                 Some(Ordering::Less)
@@ -328,6 +328,12 @@ impl<T: Debug + Eq> TrieNode<T> {
                 }
             }
             None if topic_suffix == "#" => self.subscribed_topics(),
+            None if topic_suffix == "+" => self
+                .sub_nodes
+                .iter()
+                .filter(|(_, node)| node.has_subscribers())
+                .map(|(key, _)| key.clone())
+                .collect(),
             None => self
                 .sub_nodes
                 .get(topic_suffix)
@@ -373,7 +379,7 @@ impl<T: Debug + Eq> TrieNode<T> {
                             return SubscriptionDiff {
                                 subscribe: self
                                     .sub_nodes
-                                    .iter()
+                                    .iter_mut()
                                     .flat_map(|(head, node)| {
                                         remove_unneeded_topics(
                                             &node.subscribed_topics_matching(rest),
@@ -490,7 +496,9 @@ impl<T: Debug + Eq> TrieNode<T> {
                 } else {
                     diff = diff.with_topic_prefix(head);
                     if head == "+" {
-                        diff.unsubscribe.extend(overlapping_subscribers);
+                        if !diff.subscribe.is_empty() {
+                            diff.unsubscribe.extend(overlapping_subscribers);
+                        }
                     } else {
                         diff.subscribe.retain(|t| {
                             RankTopicFilter(t).is_ranked_higher_than(&overlapping_subscribers)
@@ -550,48 +558,45 @@ impl<T: Debug + Eq> TrieNode<T> {
             SubscriptionDiff::empty()
         } else {
             let unsubscribe = match topic_suffix {
-                "+" => self
-                    .direct_sub_topics()
-                    .into_iter()
-                    .filter(|t| t != topic_suffix)
-                    .collect(),
-                "#" => self
-                    .all_sub_topics()
-                    .into_iter()
-                    .filter(|t| t != topic_suffix)
-                    .collect(),
-                _ => Vec::new(),
+                "+" => self.direct_sub_topics_except(topic_suffix),
+                "#" => self.all_sub_topics_except(topic_suffix),
+                _ => HashSet::new(),
             };
             SubscriptionDiff {
                 subscribe: HashSet::from([topic_suffix.to_owned()]),
-                unsubscribe: remove_unneeded_topics(&unsubscribe),
+                unsubscribe,
             }
         }
     }
 
-    fn direct_sub_topics(&self) -> Vec<String> {
-        let mut res = Vec::new();
+    fn direct_sub_topics_except(&self, except: &str) -> HashSet<String> {
+        let mut res = HashSet::new();
         for (topic, node) in &self.sub_nodes {
-            if node.has_subscribers() {
-                res.push(topic.to_owned());
+            if node.has_subscribers() && topic != except {
+                res.insert(topic.to_owned());
             }
         }
         res
     }
 
-    fn all_sub_topics(&self) -> Vec<String> {
-        let mut res = Vec::new();
-        for (topic, node) in &self.sub_nodes {
-            if node.has_subscribers() {
-                res.push(topic.to_owned());
-            }
-            res.extend(
-                node.all_sub_topics()
-                    .into_iter()
-                    .map(|s| format!("{topic}/{s}")),
-            );
-        }
+    fn all_sub_topics_except(&self, except: &str) -> HashSet<String> {
+        let mut res = HashSet::new();
+        self.all_sub_topics_except_inner(except, &mut res, "");
         res
+    }
+
+    fn all_sub_topics_except_inner(&self, except: &str, res: &mut HashSet<String>, prefix: &str) {
+        let possible_plus = self.sub_nodes.get_key_value("+");
+        for (topic, node) in possible_plus.into_iter().chain(&self.sub_nodes) {
+            let full_topic = format!("{prefix}{topic}");
+            if node.has_subscribers()
+                && full_topic != except
+                && RankTopicFilter(&full_topic).is_ranked_higher_than(&*res)
+            {
+                res.insert(full_topic.clone());
+            }
+            node.all_sub_topics_except_inner(except, res, &format!("{full_topic}/"));
+        }
     }
 }
 
@@ -1059,6 +1064,28 @@ mod tests {
 
             assert_eq!(t.insert("a", 2), SubscriptionDiff::empty());
         }
+
+        #[test]
+        fn subscribing_to_multi_level_segment_wildcard_unsubscribes_matching_static_topic() {
+            let mut t = MqtTrie::default();
+            t.insert("a/b/c/d", 1);
+
+            assert_eq!(
+                t.insert("a/+/+/+", 2),
+                SubscriptionDiff {
+                    subscribe: ["a/+/+/+".into()].into(),
+                    unsubscribe: ["a/b/c/d".into()].into(),
+                }
+            );
+        }
+
+        #[test]
+        fn resubscribing_to_the_mid_level_segment_wildcard_produces_an_empty_diff() {
+            let mut t = MqtTrie::default();
+
+            assert_eq!(t.insert("a/+/c", 1), SubscribeTo("a/+/c"));
+            assert_eq!(t.insert("a/+/c", 2), SubscriptionDiff::empty());
+        }
     }
 
     mod remove {
@@ -1112,6 +1139,22 @@ mod tests {
                 SubscriptionDiff {
                     unsubscribe: ["a/+/c".into()].into(),
                     subscribe: ["a/b/c".into()].into(),
+                }
+            );
+        }
+
+        #[test]
+        fn removing_wildcard_topic_resubscribes_only_to_required_topics() {
+            let mut t = MqtTrie::default();
+            t.insert("a/b/c/d", 1);
+            t.insert("a/+/+/+", 2);
+            t.insert("a/b/+/d", 3);
+
+            assert_eq!(
+                t.remove("a/+/+/+", &2),
+                SubscriptionDiff {
+                    unsubscribe: ["a/+/+/+".into()].into(),
+                    subscribe: ["a/b/+/d".into()].into(),
                 }
             );
         }
@@ -1341,6 +1384,65 @@ mod tests {
                 remove_unneeded_topics(&["a/+", "#", "a/b"]),
                 ["#".into()].into()
             )
+        }
+    }
+
+    mod cases {
+        use super::*;
+
+        #[test]
+        fn c8y_mapper() {
+            let topics = [
+                "c8y-internal/alarms/+/+/+/+/+/a/+",
+                "c8y/s/ds",
+                "c8y/devicecontrol/notifications",
+                "te/+/+/+/+/cmd/+/+",
+                "te/+/+/+/+/cmd/+",
+                "te/+/+/+/+",
+                "te/+/+/+/+/twin/+",
+                "te/+/+/+/+/m/+",
+                "te/+/+/+/+/e/+",
+                "te/+/+/+/+/a/+",
+                "te/+/+/+/+/status/health",
+            ];
+
+            let mut t = MqtTrie::default();
+            let mut diff = SubscriptionDiff::empty();
+            for topic in topics {
+                diff += t.insert(topic, 0);
+            }
+            assert_eq!(
+                diff,
+                SubscriptionDiff {
+                    subscribe: topics.into_iter().map(<_>::to_owned).collect(),
+                    unsubscribe: <_>::default(),
+                }
+            );
+            t.insert("te/#", 1);
+
+            assert_eq!(
+                t.matches("te/device/child-007/service/tedge-agent"),
+                [&0, &1]
+            );
+        }
+
+        #[test]
+        fn tedge_agent() {
+            // Jun 16 16:14:13 james-Precision-3591 tedge-agent[357845]: [crates/extensions/tedge_mqtt_ext/src/lib.rs:172:66] topic = "te/+/+/+/+/cmd/config_update/+"
+            // Jun 16 16:14:13 james-Precision-3591 tedge-agent[357845]: [crates/extensions/tedge_mqtt_ext/src/lib.rs:172:39] self.trie.trie.insert(dbg!(topic), client_id) = SubscriptionDiff {
+            // Jun 16 16:14:13 james-Precision-3591 tedge-agent[357845]:     subscribe: {},
+            // Jun 16 16:14:13 james-Precision-3591 tedge-agent[357845]:     unsubscribe: {
+            // Jun 16 16:14:13 james-Precision-3591 tedge-agent[357845]:         "te/+/+/+/+/#",
+            // Jun 16 16:14:13 james-Precision-3591 tedge-agent[357845]:         "te/device/main///cmd/+/+",
+            // Jun 16 16:14:13 james-Precision-3591 tedge-agent[357845]:     },
+            // Jun 16 16:14:13 james-Precision-3591 tedge-agent[357845]: }
+            let mut t = MqtTrie::default();
+            t.insert("te/+/+/+/+/#", 0);
+            t.insert("te/device/main///cmd/+/+", 1);
+            assert_eq!(
+                t.insert("te/+/+/+/+/cmd/config_update/+", 2),
+                SubscriptionDiff::empty()
+            );
         }
     }
 }
