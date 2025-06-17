@@ -89,6 +89,8 @@ pub enum Frame1 {
     SignRequest(SignRequest),
     ChooseSchemeResponse(ChooseSchemeResponse),
     SignResponse(SignResponse),
+    CreateKeyRequest(Option<String>),
+    CreateKeyResponse,
 }
 
 /// An error that can be returned to the client by the server.
