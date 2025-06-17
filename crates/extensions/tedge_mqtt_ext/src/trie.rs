@@ -569,6 +569,8 @@ impl<T: Debug + Eq> TrieNode<T> {
         }
     }
 
+    // Direct sub topics are topics in the segment below, e.g. a/b/c and a/b/#
+    // are direct sub-topics of a/b
     fn direct_sub_topics_except(&self, except: &str) -> HashSet<String> {
         let mut res = HashSet::new();
         for (topic, node) in &self.sub_nodes {
@@ -579,6 +581,9 @@ impl<T: Debug + Eq> TrieNode<T> {
         res
     }
 
+    // All sub topics contains both the direct sub topics (see above) and
+    // recursively finds the sub topics, e.g. a/b/c and a/b/c/d are both sub
+    // topics of a/b as far as this method is concerned
     fn all_sub_topics_except(&self, except: &str) -> HashSet<String> {
         let mut res = HashSet::new();
         self.all_sub_topics_except_inner(except, &mut res, "");
@@ -1085,6 +1090,30 @@ mod tests {
 
             assert_eq!(t.insert("a/+/c", 1), SubscribeTo("a/+/c"));
             assert_eq!(t.insert("a/+/c", 2), SubscriptionDiff::empty());
+        }
+
+        #[test]
+        fn does_not_subscribe_sibling_of_top_level_global_wildcard() {
+            let mut t = MqtTrie::default();
+
+            t.insert("#", 0);
+            assert_eq!(t.insert("a", 1), SubscriptionDiff::empty());
+        }
+
+        #[test]
+        fn does_not_subscribe_sibling_of_top_level_segment_wildcard() {
+            let mut t = MqtTrie::default();
+
+            t.insert("+", 0);
+            assert_eq!(t.insert("a", 1), SubscriptionDiff::empty());
+        }
+
+        #[test]
+        fn subscribes_sibling_of_non_subscribed_top_level_segment_wildcard() {
+            let mut t = MqtTrie::default();
+
+            t.insert("+/b", 0);
+            assert_eq!(t.insert("a", 1), SubscribeTo("a"));
         }
     }
 
