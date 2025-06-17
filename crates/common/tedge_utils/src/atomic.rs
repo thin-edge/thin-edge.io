@@ -39,6 +39,14 @@ pub fn write_file_atomic_set_permissions_if_doesnt_exist(
     let target_permissions = target_permissions(dest, permissions)
         .context("failed to compute target permissions of the file")?;
 
+    // Create parent directories of the file
+    std::fs::create_dir_all(dest.parent().unwrap()).with_context(|| {
+        format!(
+            "could not create parent directories of file '{}'",
+            dest.to_string_lossy()
+        )
+    })?;
+
     // TODO: create tests to ensure writes we expect are atomic
     let mut tempfile = tempfile::Builder::new()
         .permissions(std::fs::Permissions::from_mode(0o600))
