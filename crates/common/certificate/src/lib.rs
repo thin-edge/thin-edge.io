@@ -216,9 +216,14 @@ impl rcgen::RemoteKeyPair for RemoteKeyPair {
     }
 
     fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, rcgen::Error> {
+        // the error here is not PEM-related, but we need to return a foreign error type, and there
+        // are no other better variants that could let us return context, so we'll have to use this
+        // until `rcgen::Error::RemoteKeyError` can take a parameter
         let signer = tedge_p11_server::signing_key(self.cryptoki_config.clone())
-            .map_err(|_| rcgen::Error::RemoteKeyError)?;
-        signer.sign(msg).map_err(|_| rcgen::Error::RemoteKeyError)
+            .map_err(|e| rcgen::Error::PemError(e.to_string()))?;
+        signer
+            .sign(msg)
+            .map_err(|e| rcgen::Error::PemError(e.to_string()))
     }
 
     fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
@@ -255,7 +260,9 @@ impl KeyCertPair {
         // as rcgen library will not parse it for certificate signing request
         let params = Self::create_csr_parameters(config, id, key_kind)?;
         Ok(KeyCertPair {
-            certificate: Zeroizing::new(Certificate::from_params(params)?),
+            certificate: Zeroizing::new(
+                Certificate::from_params(params).context("Failed to create CSR")?,
+            ),
         })
     }
 
