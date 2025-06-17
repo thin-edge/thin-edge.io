@@ -10,6 +10,7 @@ pub trait TedgeP11Service: Send + Sync {
 
     /// Signs the message using the private key object on the token (denoted by uri).
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse>;
+    fn create_key(&self, uri: Option<&str>) -> anyhow::Result<()>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

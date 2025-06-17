@@ -6,6 +6,7 @@ use super::show::ShowCertCmd;
 use crate::certificate_is_self_signed;
 use crate::cli::certificate::c8y;
 use crate::cli::certificate::create_csr::Key;
+use crate::cli::certificate::create_key::CreateKeyCmd;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
@@ -50,6 +51,9 @@ pub enum TEdgeCertCli {
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
     },
+
+    /// Create a new keypair
+    CreateKey,
 
     /// Renew the device certificate
     ///
@@ -219,6 +223,8 @@ impl BuildCommand for TEdgeCertCli {
                 };
                 cmd.into_boxed()
             }
+
+            TEdgeCertCli::CreateKey => CreateKeyCmd.into_boxed(),
 
             TEdgeCertCli::Show {
                 cloud,

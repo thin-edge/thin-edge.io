@@ -101,6 +101,10 @@ impl TedgeP11Service for Cryptoki {
         let signature = signing_key.sign(&request.to_sign, request.sigscheme)?;
         Ok(SignResponse(signature))
     }
+
+    fn create_key(&self, uri: Option<&str>) -> anyhow::Result<()> {
+        self.create_key(uri)
+    }
 }
 
 impl Cryptoki {
@@ -126,23 +130,7 @@ impl Cryptoki {
         })
     }
 
-    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
-        let mut config_uri = self
-            .config
-            .uri
-            .as_deref()
-            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        let request_uri = uri
-            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        config_uri.append_attributes(request_uri);
-        let uri_attributes = config_uri;
-
+    fn open_session(&self, uri_attributes: &uri::Pkcs11Uri) -> anyhow::Result<Session> {
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
 
@@ -173,10 +161,19 @@ impl Cryptoki {
         let token_info = self.context.get_token_info(slot)?;
         debug!(?slot_info, ?token_info, "Selected slot");
 
-        let session = self.context.open_ro_session(slot)?;
+        // TODO: open ro sessions for requests other than creating the key
+        // let session = self.context.open_ro_session(slot)?;
+        let session = self.context.open_rw_session(slot)?;
         session.login(UserType::User, Some(&self.config.pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
+
+        Ok(session)
+    }
+
+    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
 
         // get the signing key
         let key = Self::find_key_by_attributes(&uri_attributes, &session)?;
@@ -231,6 +228,15 @@ impl Cryptoki {
         Ok(key)
     }
 
+    pub fn create_key(&self, uri: Option<&str>) -> anyhow::Result<()> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
+
+        create_key(&session).context("Failed to create a new private key")?;
+
+        Ok(())
+    }
+
     fn find_key_by_attributes(
         uri: &uri::Pkcs11Uri,
         session: &Session,
@@ -263,6 +269,49 @@ impl Cryptoki {
 
         Ok(key)
     }
+
+    fn request_uri<'a>(
+        &'a self,
+        request_uri: Option<&'a str>,
+    ) -> anyhow::Result<uri::Pkcs11Uri<'a>> {
+        let mut config_uri = self
+            .config
+            .uri
+            .as_deref()
+            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        let request_uri = request_uri
+            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        config_uri.append_attributes(request_uri);
+        Ok(config_uri)
+    }
+}
+
+fn create_key(session: &Session) -> anyhow::Result<()> {
+    session
+        .generate_key_pair(
+            &Mechanism::RsaPkcsKeyPairGen,
+            &[
+                Attribute::Token(true),
+                Attribute::Verify(true),
+                Attribute::Encrypt(true),
+                Attribute::ModulusBits(2048.into()),
+            ],
+            &[
+                Attribute::Token(true),
+                Attribute::Sensitive(true),
+                Attribute::Extractable(false),
+                Attribute::Sign(true),
+                Attribute::Decrypt(true),
+            ],
+        )
+        .context("Failed to generate keypair")?;
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
