@@ -4432,6 +4432,7 @@ dependencies = [
  "tedge-agent",
  "tedge-apt-plugin",
  "tedge-mapper",
+ "tedge-p11-server",
  "tedge-watchdog",
  "tedge-write",
  "tedge_api",

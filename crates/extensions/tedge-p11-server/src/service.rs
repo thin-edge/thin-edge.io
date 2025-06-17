@@ -13,6 +13,7 @@ use tracing::warn;
 pub trait SigningService {
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse>;
     fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse>;
+    fn create_key(&self, uri: Option<&str>) -> anyhow::Result<()>;
 }
 
 #[derive(Debug)]
@@ -76,6 +77,11 @@ impl SigningService for TedgeP11Service {
             .sign(&request.to_sign)
             .context("Failed to sign using PKCS #11")?;
         Ok(SignResponse(signature))
+    }
+
+    fn create_key(&self, uri: Option<&str>) -> anyhow::Result<()> {
+        self.cryptoki.create_key(uri)?;
+        Ok(())
     }
 }
 
