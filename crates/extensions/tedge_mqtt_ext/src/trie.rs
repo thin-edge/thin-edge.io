@@ -94,6 +94,10 @@ pub struct SubscriptionDiff {
 }
 
 impl<T: Debug + Eq> MqtTrie<T> {
+    pub fn is_empty(&self) -> bool {
+        self.root.is_empty()
+    }
+
     /// Queries the trie for people subscribed to a given topic
     pub fn matches<'a>(&'a self, topic: &str) -> Vec<&'a T> {
         let mut nodes = Vec::new();
@@ -289,16 +293,28 @@ fn remove_unneeded_topics(topics: &[impl AsRef<str>]) -> HashSet<String> {
 }
 
 impl<T: Debug + Eq> TrieNode<T> {
+    fn is_empty(&self) -> bool {
+        self.sub_nodes.is_empty() && self.subscribers.is_empty()
+    }
+
     fn subscribed_topics_matching(&self, topic_suffix: &str) -> Vec<String> {
+        self.subscribed_topics_matching_inner(topic_suffix, None)
+    }
+    fn subscribed_topics_matching_inner(
+        &self,
+        topic_suffix: &str,
+        ord: Option<std::cmp::Ordering>,
+    ) -> Vec<String> {
+        use std::cmp::Ordering;
         match topic_suffix.split_once("/") {
-            Some(("+", rest)) => {
+            Some(("+", rest)) if ord != Some(Ordering::Less) => {
                 if self.sub_nodes.contains_key("#") {
                     vec!["#".into()]
                 } else {
                     self.sub_nodes
                         .iter()
                         .flat_map(|(key, node)| {
-                            node.subscribed_topics_matching(rest)
+                            node.subscribed_topics_matching_inner(rest, Some(Ordering::Greater))
                                 .into_iter()
                                 .map(move |t| format!("{key}/{t}"))
                         })
@@ -310,12 +326,14 @@ impl<T: Debug + Eq> TrieNode<T> {
                     vec!["#".into()]
                 } else {
                     let mut matching_nodes = Vec::new();
-                    if let Some(node) = self.sub_nodes.get("+") {
-                        matching_nodes.extend(
-                            node.subscribed_topics_matching(rest)
-                                .into_iter()
-                                .map(|t| format!("+/{t}")),
-                        );
+                    if ord != Some(Ordering::Greater) {
+                        if let Some(node) = self.sub_nodes.get("+") {
+                            matching_nodes.extend(
+                                node.subscribed_topics_matching_inner(rest, Some(Ordering::Less))
+                                    .into_iter()
+                                    .map(|t| format!("+/{t}")),
+                            );
+                        }
                     }
                     if let Some(node) = self.sub_nodes.get(head) {
                         matching_nodes.extend(
@@ -328,19 +346,34 @@ impl<T: Debug + Eq> TrieNode<T> {
                 }
             }
             None if topic_suffix == "#" => self.subscribed_topics(),
-            None if topic_suffix == "+" => self
+            None if topic_suffix == "+" && ord != Some(Ordering::Less) => self
                 .sub_nodes
                 .iter()
                 .filter(|(_, node)| node.has_subscribers())
+                .filter(|(_, node)| !node.sub_nodes.contains_key("#"))
                 .map(|(key, _)| key.clone())
                 .collect(),
-            None => self
-                .sub_nodes
-                .get(topic_suffix)
-                .filter(|node| node.has_subscribers())
-                .map(|_| topic_suffix.to_owned())
-                .into_iter()
-                .collect(),
+            None if self.sub_nodes.contains_key("#") => vec!["#".into()],
+            None => {
+                let mut matching_nodes: Vec<_> = self
+                    .sub_nodes
+                    .get(topic_suffix)
+                    .filter(|node| node.has_subscribers())
+                    .filter(|node| !node.sub_nodes.contains_key("#"))
+                    .map(|_| topic_suffix.to_owned())
+                    .into_iter()
+                    .collect();
+                if ord != Some(Ordering::Greater) {
+                    matching_nodes.extend(
+                        self.sub_nodes
+                            .get("+")
+                            .filter(|node| node.has_subscribers())
+                            .filter(|node| !node.sub_nodes.contains_key("#"))
+                            .map(|_| "+".into()),
+                    );
+                }
+                matching_nodes
+            }
         }
     }
 
@@ -385,6 +418,9 @@ impl<T: Debug + Eq> TrieNode<T> {
                                             &node.subscribed_topics_matching(rest),
                                         )
                                         .into_iter()
+                                        .filter(|topic| {
+                                            RankTopicFilter(rest) >= RankTopicFilter(topic)
+                                        })
                                         .map(move |topic| format!("{head}/{topic}"))
                                     })
                                     .collect(),
@@ -413,8 +449,11 @@ impl<T: Debug + Eq> TrieNode<T> {
                 }
             }
             None => {
+                let has_sibling_global_wildcard = self.sub_nodes.contains_key("#");
                 if let Some(target) = self.sub_nodes.get_mut(topic_suffix) {
-                    let i = target.subscribers.iter().position(|t| t == id).unwrap();
+                    let Some(i) = target.subscribers.iter().position(|t| t == id) else {
+                        return SubscriptionDiff::empty();
+                    };
                     target.subscribers.remove(i);
                     if target.has_subscribers() {
                         SubscriptionDiff::empty()
@@ -425,7 +464,7 @@ impl<T: Debug + Eq> TrieNode<T> {
                         };
                         if !target.is_active() {
                             self.sub_nodes.remove(topic_suffix);
-                            if topic_suffix == "+" {
+                            if topic_suffix == "+" && !has_sibling_global_wildcard {
                                 diff.subscribe = self
                                     .sub_nodes
                                     .iter()
@@ -479,13 +518,15 @@ impl<T: Debug + Eq> TrieNode<T> {
     }
 
     fn has_subscribers(&self) -> bool {
-        !self.subscribers.is_empty()
+        !self.subscribers.is_empty() && !self.sub_nodes.contains_key("#")
     }
 
     fn insert(&mut self, topic_suffix: &str, subscriber: T) -> SubscriptionDiff {
         match topic_suffix.split_once("/") {
             Some((head, rest)) => {
                 let overlapping_subscribers = self.subscribed_topics_matching(topic_suffix);
+                let possible_overlapping_subscribers = self.subscribed_topics();
+
                 let mut diff = self
                     .sub_nodes
                     .entry(head.to_owned())
@@ -497,19 +538,30 @@ impl<T: Debug + Eq> TrieNode<T> {
                     diff = diff.with_topic_prefix(head);
                     if head == "+" {
                         if !diff.subscribe.is_empty() {
-                            diff.unsubscribe.extend(overlapping_subscribers);
+                            diff.unsubscribe.extend(
+                                remove_unneeded_topics(&overlapping_subscribers)
+                                    .into_iter()
+                                    .filter(|t| {
+                                        RankTopicFilter(topic_suffix) >= RankTopicFilter(t)
+                                    }),
+                            );
                         }
                     } else {
                         diff.subscribe.retain(|t| {
                             RankTopicFilter(t).is_ranked_higher_than(&overlapping_subscribers)
-                        })
+                        });
                     }
-                    if rest == "#" {
+                    diff.unsubscribe.retain(|t| {
+                        RankTopicFilter(t).is_ranked_higher_than(&possible_overlapping_subscribers)
+                    });
+                    if rest == "#" && !diff.subscribe.is_empty() {
                         let parent_subscribed = self
                             .sub_nodes
                             .get(head)
-                            .is_some_and(|p| p.has_subscribers());
-                        if parent_subscribed {
+                            .is_some_and(|p| !p.subscribers.is_empty());
+                        let parent_wildcard_subscribed =
+                            self.sub_nodes.get("+").is_some_and(|p| p.has_subscribers());
+                        if parent_subscribed && !parent_wildcard_subscribed {
                             diff.unsubscribe.insert(head.to_owned());
                         }
                     }
@@ -518,7 +570,7 @@ impl<T: Debug + Eq> TrieNode<T> {
             }
             None => {
                 if let Some(entry) = self.sub_nodes.get_mut(topic_suffix) {
-                    let already_subscribed = entry.has_subscribers();
+                    let already_subscribed = !entry.subscribers.is_empty();
                     entry.subscribers.push(subscriber);
                     if already_subscribed {
                         SubscriptionDiff::empty()
@@ -872,6 +924,252 @@ mod tests {
         }
     }
 
+    mod prop_rank_topic {
+        use super::*;
+        use proptest::collection;
+        use proptest::prop_compose;
+        use proptest::proptest;
+        use std::cmp::Ordering;
+
+        prop_compose! {
+            pub fn random_name()(id in "[abc]") -> String {
+                id.to_string()
+            }
+        }
+
+        prop_compose! {
+            pub fn random_name_or_wildcard()(id in "[abc+]") -> String {
+                id.to_string()
+            }
+        }
+
+        prop_compose! {
+            pub fn random_topic(max_length: usize)(
+                vec in collection::vec(random_name(), 0..max_length)
+            ) -> String
+            {
+                vec.join("/")
+            }
+        }
+
+        prop_compose! {
+            pub fn random_filter_not_global(max_length: usize)(
+                vec in collection::vec(random_name_or_wildcard(), 0..max_length)
+            ) -> String
+            {
+                vec.join("/")
+            }
+        }
+
+        prop_compose! {
+            pub fn random_filter(max_length: usize)(
+                base in random_filter_not_global(max_length),
+                global in proptest::bool::weighted(0.25),
+            ) -> String
+            {
+                if global {
+                    format!("{base}/#")
+                } else {
+                    base
+                }
+            }
+        }
+
+        prop_compose! {
+            pub fn random_subscriptions(max_count: usize, max_length: usize)(
+                vec in collection::vec(random_filter(max_length), 0..max_count)
+            ) -> Vec<String>
+            {
+                vec
+            }
+        }
+
+        pub fn matching_topic(filter: &str) -> String {
+            let mut parts = filter.split('/').collect::<Vec<_>>();
+            for part in parts.iter_mut() {
+                *part = match *part {
+                    "#" => "e/f",
+                    "+" => "d",
+                    s => s,
+                };
+            }
+            parts.join("/")
+        }
+
+        fn add_wildcard(filter: &str, pos: usize) -> String {
+            let mut parts = filter.split('/').collect::<Vec<_>>();
+            if pos < parts.len() && parts[pos] != "#" {
+                parts[pos] = "+"
+            };
+            parts.join("/")
+        }
+
+        proptest! {
+            #[test]
+            fn equality_is_reflexive(x in random_filter(5)) {
+                assert_eq!(
+                    RankTopicFilter(&x).partial_cmp(&RankTopicFilter(&x)),
+                    Some(Ordering::Equal)
+                );
+            }
+
+            #[test]
+            fn rank_is_asymmetric(x in random_filter(5), y in random_filter(5)) {
+                let x_cmp_y = RankTopicFilter(&x).partial_cmp(&RankTopicFilter(&y));
+                let y_cmp_x = RankTopicFilter(&y).partial_cmp(&RankTopicFilter(&x));
+                match (x_cmp_y, y_cmp_x) {
+                    (Some(Ordering::Less), Some(Ordering::Greater)) => (),
+                    (Some(Ordering::Greater), Some(Ordering::Less)) => (),
+                    (Some(Ordering::Equal), Some(Ordering::Equal)) => (),
+                    (None, None) => (),
+                    (_,_) => panic!(),
+                }
+            }
+
+            #[test]
+            fn rank_is_transitive(x in random_filter(5), y in random_filter(5), z in random_filter(5)) {
+                let x_cmp_y = RankTopicFilter(&x).partial_cmp(&RankTopicFilter(&y));
+                let y_cmp_z = RankTopicFilter(&y).partial_cmp(&RankTopicFilter(&z));
+                let x_cmp_z = RankTopicFilter(&x).partial_cmp(&RankTopicFilter(&z));
+                match (x_cmp_y, y_cmp_z) {
+                    (Some(Ordering::Less), Some(Ordering::Less))
+                    | (Some(Ordering::Equal), Some(Ordering::Less))
+                    | (Some(Ordering::Less), Some(Ordering::Equal))
+                    => assert_eq!(x_cmp_z, Some(Ordering::Less)),
+
+                    (Some(Ordering::Greater), Some(Ordering::Greater))
+                    | (Some(Ordering::Equal), Some(Ordering::Greater))
+                    | (Some(Ordering::Greater), Some(Ordering::Equal))
+                    => assert_eq!(x_cmp_z, Some(Ordering::Greater)),
+
+                    (_, _) => (),
+                }
+            }
+
+            #[test]
+            fn wildcard_is_greater_than_base(base in random_filter(5), i in 0..5) {
+                let filter = add_wildcard(&base, i as usize);
+                let cmp = RankTopicFilter(&filter).partial_cmp(&RankTopicFilter(&base));
+                if cmp != Some(Ordering::Equal) {
+                    assert_eq!(cmp, Some(Ordering::Greater));
+                }
+            }
+
+            #[test]
+            fn global_wildcard_is_greater_than_base(base in random_filter_not_global(5)) {
+                let global = format!("{base}/#");
+                assert_eq!(
+                    RankTopicFilter(&global).partial_cmp(&RankTopicFilter(&base)),
+                    Some(Ordering::Greater)
+                );
+            }
+
+            #[test]
+            fn global_wildcard_is_greater_than_any_suffix(base in random_filter_not_global(5), suffix in random_filter(5)) {
+                let global = format!("{base}/#");
+                let suffix = format!("{base}/{suffix}");
+                assert_eq!(
+                    RankTopicFilter(&global).partial_cmp(&RankTopicFilter(&suffix)),
+                    Some(Ordering::Greater)
+                );
+            }
+
+            #[test]
+            fn mqttrie_matches_all_its_subscriptions(subscriptions in random_subscriptions(10, 5)) {
+                let mut t = MqtTrie::default();
+                for s in &subscriptions {
+                    t.insert(s,1);
+                }
+                for topic in subscriptions.iter().map(|s| matching_topic(s)) {
+                    assert!(!t.matches(&topic).is_empty());
+                }
+            }
+
+            #[test]
+            fn removing_all_subscriptions_lead_to_an_empty_mqttrie(subscriptions in random_subscriptions(10, 5)) {
+                let mut t = MqtTrie::default();
+                for s in &subscriptions {
+                    t.insert(s,1);
+                }
+                for s in &subscriptions {
+                    t.remove(s,&1);
+                }
+                assert!(t.is_empty())
+            }
+
+            #[test]
+            fn mqttrie_extend_is_growing_when_adding_subscriptions(subscriptions in random_subscriptions(10, 5)) {
+                let mut t = MqtTrie::default();
+                for s in subscriptions {
+                    let diff = t.insert(&s,1);
+                    match diff.subscribe.iter().collect::<Vec<_>>()[..] {
+                        [] => (),
+                        [added] => assert_eq!(added, &s, "Insert({s}) subscribed to a different topic: {added}"),
+                        _ => panic!("Insert subscribed more than one topic at once: {diff:?}")
+                    }
+                    for removed in &diff.unsubscribe {
+                        assert!(
+                            RankTopicFilter(&s) > RankTopicFilter(removed),
+                            "Subscribing to {s} unsubscribed to topic that isn't smaller ({removed}): {diff:?}");
+                    }
+                }
+            }
+
+            #[test]
+            fn mqttrie_extend_is_decreasing_when_removing_subscriptions(
+                subscriptions in random_subscriptions(10, 5))
+            {
+                let mut t = MqtTrie::default();
+                for s in &subscriptions {
+                    t.insert(s,1);
+                }
+                for s in subscriptions {
+                    let diff = t.remove(&s,&1);
+                    match diff.unsubscribe.iter().collect::<Vec<_>>()[..] {
+                        [] => (),
+                        [removed] => assert_eq!(removed, &s, "Remove({s}) unsubscribed to a different topic: {removed}"),
+                        _ => panic!("Remove unsubscribed more than one topic at once: {diff:?}")
+                    }
+                    for added in &diff.subscribe {
+                        assert!(
+                            RankTopicFilter(&s) > RankTopicFilter(added),
+                            "Unsubscribing from {s} resubscribed to topic that isn't smaller ({added}): {diff:?}");
+                    }
+                }
+            }
+
+            #[test]
+            fn removing_subscriptions_only_ever_unsubscribes_the_target_topic(
+                subscriptions in random_subscriptions(10, 5))
+            {
+                let mut t = MqtTrie::default();
+                for s in &subscriptions {
+                    t.insert(s,1);
+                }
+                for s in subscriptions {
+                    let diff = t.remove(&s,&1);
+                    assert!(diff.unsubscribe.len() <= 1, "Diff contained more than one unsubscribe when removing {s}: {diff:?}");
+                    if !diff.unsubscribe.is_empty() {
+                        assert_eq!(diff.unsubscribe, [s.clone()].into(), "Diff contained unsubscribe for non-removed topic")
+                    }
+                }
+            }
+
+            #[test]
+            fn cumulated_diff_over_added_subscriptions_should_contains_no_unsubscriptions(
+                subscriptions in random_subscriptions(10, 5)
+            ) {
+                let mut diff = SubscriptionDiff::empty();
+                let mut t = MqtTrie::default();
+                for s in &subscriptions {
+                    let prev_diff = diff.clone();
+                    diff += t.insert(s,1);
+                    assert!(diff.unsubscribe.is_empty(), "Inserting {s} (prev_diff={prev_diff:?}, diff={diff:?})");
+                }
+            }
+        }
+    }
+
     mod insert {
         use super::*;
 
@@ -1068,6 +1366,15 @@ mod tests {
             t.insert("a/#", 1);
 
             assert_eq!(t.insert("a", 2), SubscriptionDiff::empty());
+        }
+
+        #[test]
+        fn does_not_unsubscribe_parent_of_existing_global_wildcard() {
+            let mut t = MqtTrie::default();
+            t.insert("a", 0);
+            t.insert("a/#", 1);
+
+            assert_eq!(t.insert("a/#", 2), SubscriptionDiff::empty());
         }
 
         #[test]
@@ -1326,6 +1633,20 @@ mod tests {
                 }
             );
         }
+
+        #[test]
+        fn testing() {
+            let mut t = MqtTrie::default();
+            t.insert("+/+/a/+", 1);
+            assert_eq!(t.insert("a/#", 1), SubscribeTo("a/#"));
+            assert_eq!(
+                t.remove("+/+/a/+", &1),
+                SubscriptionDiff {
+                    unsubscribe: ["+/+/a/+".into()].into(),
+                    subscribe: [].into()
+                }
+            );
+        }
     }
 
     mod matches {
@@ -1471,6 +1792,147 @@ mod tests {
             assert_eq!(
                 t.insert("te/+/+/+/+/cmd/config_update/+", 2),
                 SubscriptionDiff::empty()
+            );
+        }
+
+        #[test]
+        fn issue_1() {
+            let mut t = MqtTrie::default();
+            t.insert("/#", 0);
+            assert!(t.insert("+/+", 1).unsubscribe.is_empty(),);
+        }
+
+        #[test]
+        fn issue_2() {
+            let mut t = MqtTrie::default();
+            t.insert("+/a/a", 0);
+            t.insert("/#", 0);
+            assert!(t.remove("+/a/a", &0).subscribe.is_empty());
+            assert!(t.remove("/#", &0).subscribe.is_empty());
+        }
+
+        #[test]
+        fn issue_3() {
+            let mut t = MqtTrie::default();
+            t.insert("a/+/+/a", 0);
+
+            assert_eq!(t.insert("+/a/+/+", 0), SubscribeTo("+/a/+/+"));
+        }
+
+        #[test]
+        fn issue_4() {
+            let mut t = MqtTrie::default();
+            t.insert("a", 0);
+            t.insert("+", 0);
+
+            assert_eq!(t.insert("a/#", 0), SubscribeTo("a/#"));
+        }
+
+        #[test]
+        fn issue_5() {
+            let mut t = MqtTrie::default();
+            t.insert("a/#", 0);
+            t.insert("a", 0);
+
+            assert_eq!(t.insert("+", 0), SubscribeTo("+"));
+        }
+
+        #[test]
+        fn issue_6() {
+            let mut t = MqtTrie::default();
+            t.insert("a/b/#", 0);
+            t.insert("a/b", 1);
+
+            assert_eq!(t.insert("a/+", 2), SubscribeTo("a/+"));
+        }
+
+        #[test]
+        fn issue_7() {
+            let mut t = MqtTrie::default();
+            t.insert("c/a", 0);
+            t.insert("+/+", 1);
+
+            assert_eq!(t.insert("c/+", 2), SubscriptionDiff::empty());
+        }
+
+        #[test]
+        fn issue_8() {
+            let mut t = MqtTrie::default();
+            t.insert("b/a", 0);
+            t.insert("+/#", 1);
+
+            assert_eq!(t.insert("b/+", 2), SubscriptionDiff::empty());
+        }
+
+        #[test]
+        fn issue_9() {
+            let mut t = MqtTrie::default();
+            t.insert("+/+/a/#", 0);
+            t.insert("+/+/#", 1);
+
+            assert_eq!(
+                t.insert("+/#", 2),
+                SubscriptionDiff {
+                    subscribe: ["+/#".into()].into(),
+                    unsubscribe: ["+/+/#".into()].into(),
+                }
+            );
+        }
+
+        #[test]
+        fn issue_10() {
+            let mut t = MqtTrie::default();
+            t.insert("+/a/#", 0);
+            t.insert("b/a/+", 1);
+
+            // b/a/+ is superseded by +/a/#
+            assert_eq!(
+                t.insert("b/+/+", 2),
+                SubscriptionDiff {
+                    subscribe: ["b/+/+".into()].into(),
+                    unsubscribe: [].into(),
+                }
+            );
+        }
+
+        #[test]
+        fn issue_11() {
+            let mut t = MqtTrie::default();
+            t.insert("c/+", 0);
+            t.insert("c/c", 1);
+
+            assert_eq!(
+                t.insert("+/c", 2),
+                SubscriptionDiff {
+                    subscribe: ["+/c".into()].into(),
+                    unsubscribe: [].into(),
+                }
+            );
+        }
+
+        #[test]
+        fn issue_12() {
+            let mut t = MqtTrie::default();
+            t.insert("a/+", 0);
+            t.insert("+/+", 1);
+            t.insert("+/+/#", 2);
+
+            assert_eq!(t.insert("+/+", 3), SubscriptionDiff::empty());
+        }
+
+        #[test]
+        fn issue_13() {
+            let mut t = MqtTrie::default();
+            t.insert("+/c/a/+", 0);
+            t.insert("b/c/a/c", 1);
+
+            // b/c/a/c < +/c/a/+ so isn't currently subscribed
+            assert_eq!(
+                t.insert("b/+/+/c", 2),
+                SubscriptionDiff {
+                    subscribe: ["b/+/+/c".into()].into(),
+                    unsubscribe: [].into(),
+                }
             );
         }
     }
