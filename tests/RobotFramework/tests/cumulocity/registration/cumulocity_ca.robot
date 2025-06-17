@@ -17,6 +17,15 @@ Register Device Using Cumulocity CA
     ...    tedge cert download c8y --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --retry-every 5s --max-timeout 30s
     Execute Command    tedge connect c8y
 
+Register Device Using Cumulocity CA with url flag
+    [Setup]    Custom Setup
+    ${credentials}=    Bulk Register Device With Cumulocity CA    ${DEVICE_SN}
+    ${DOMAIN}=    Cumulocity.Get Domain
+    Execute Command
+    ...    tedge cert download c8y --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --url ${DOMAIN} --retry-every 5s --max-timeout 30s
+    Execute Command    tedge config set c8y.url "${DOMAIN}"
+    Execute Command    tedge connect c8y
+
 Certificate Renewal Service Using Cumulocity Certificate Authority
     [Setup]    Setup With Self-Signed Certificate
     ${cert_before}=    Execute Command    tedge cert show | grep -v Status:
