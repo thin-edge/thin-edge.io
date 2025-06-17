@@ -69,6 +69,21 @@ Set Configuration when tedge-write is in another location
     Text file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    ${CURDIR}/config1-version2.json    664    root:root    delete_file_before=${false}
     Binary file (Child Device)    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1_BINARY    /etc/binary-config1.tar.gz    ${CURDIR}/binary-config1.tar.gz    664    root:root    delete_file_before=${false}
 
+Set Configuration Should Create Parent Directories
+    Cumulocity.Set Device    ${PARENT_SN}
+
+    ${config_url}=    Cumulocity.Create Inventory Binary    temp_file    harbor-certificate    contents=DUMMY CONTENTS
+    ${operation}=    Cumulocity.Set Configuration    harbor-certificate    url=${config_url}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+    ThinEdgeIO.Set Device Context    ${PARENT_SN}
+    ${contents}=    Execute Command    cat /etc/containers/certs.d/example/ca.crt    strip=${True}
+    Should Be Equal    ${contents}    DUMMY CONTENTS
+    ${mode}=    Execute Command    stat -c '%a' /etc/containers/certs.d/example    strip=${True}
+    Should Be Equal    ${mode}    700
+    ${ownership}=    Execute Command    stat -c '%U:%G' /etc/containers/certs.d/example    strip=${True}
+    Should Be Equal    ${ownership}    root:root
+
 Set configuration with broken url
     [Template]    Set Configuration from URL
     Main Device    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    invalid://hellö.zip
@@ -378,6 +393,25 @@ Set Configuration from URL
     Log    Test Description: ${test_desc}
 
     ThinEdgeIO.Set Device Context    ${device}
+    ThinEdgeIO.File Should Exist    ${device_file}
+    ${hash_before}=    Execute Command    md5sum ${device_file}
+    ${stat_before}=    Execute Command    stat ${device_file}
+
+    Cumulocity.Set Device    ${external_id}
+    ${operation}=    Cumulocity.Set Configuration    ${config_type}    url=${config_url}
+    ${operation}=    Operation Should Be FAILED    ${operation}    timeout=120
+
+    ${hash_after}=    Execute Command    md5sum ${device_file}
+    ${stat_after}=    Execute Command    stat ${device_file}
+    Should Be Equal    ${hash_before}    ${hash_after}
+    Should Be Equal    ${stat_before}    ${stat_after}
+
+Set Configuration
+    [Arguments]    ${test_desc}    ${device}    ${external_id}    ${config_type}    ${device_file}    ${config_url}
+    Log    Test Description: ${test_desc}
+
+    ThinEdgeIO.Set Device Context    ${device}
+    ThinEdgeIO.File Should Exist    ${device_file}
     ${hash_before}=    Execute Command    md5sum ${device_file}
     ${stat_before}=    Execute Command    stat ${device_file}
 
@@ -443,6 +477,7 @@ Update configuration plugin config via cloud
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
+    ...    harbor-certificate
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG-ROOT
@@ -468,6 +503,7 @@ Modify configuration plugin config via local filesystem modify inplace
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
+    ...    harbor-certificate
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG-ROOT
@@ -477,6 +513,7 @@ Modify configuration plugin config via local filesystem modify inplace
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
+    ...    harbor-certificate
     ...    system.toml
     ...    CONFIG3
     ...    CONFIG3_BINARY
@@ -492,6 +529,7 @@ Modify configuration plugin config via local filesystem overwrite
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
+    ...    harbor-certificate
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG1_BINARY
@@ -502,6 +540,7 @@ Modify configuration plugin config via local filesystem overwrite
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
+    ...    harbor-certificate
     ...    system.toml
     ...    CONFIG3
     ...    CONFIG3_BINARY
@@ -517,6 +556,7 @@ Update configuration plugin config via local filesystem copy
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
+    ...    harbor-certificate
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG1_BINARY
@@ -542,6 +582,7 @@ Update configuration plugin config via local filesystem move (different director
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
+    ...    harbor-certificate
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG-ROOT
@@ -567,6 +608,7 @@ Update configuration plugin config via local filesystem move (same directory)
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
+    ...    harbor-certificate
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG-ROOT
