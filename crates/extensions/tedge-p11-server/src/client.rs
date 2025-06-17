@@ -157,4 +157,29 @@ impl TedgeP11Client {
 
         Ok(response.0)
     }
+
+    pub fn create_key(&self, uri: Option<String>) -> anyhow::Result<()> {
+        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
+            format!(
+                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
+                self.socket_path.display()
+            )
+        })?;
+        let mut connection = crate::connection::Connection::new(stream);
+        debug!("Connected to socket");
+
+        let request = Frame1::CreateKeyRequest(uri);
+        trace!(?request);
+        connection.write_frame(&request)?;
+
+        let response = connection.read_frame()?;
+
+        let Frame1::CreateKeyResponse = response else {
+            bail!("protocol error: bad response, expected sign, received: {response:?}");
+        };
+
+        debug!("Sign complete");
+
+        Ok(())
+    }
 }
