@@ -4,6 +4,19 @@ tags: [Operate, Security]
 description: Configuring certificates for your cloud connection
 ---
 
+import UserContext from '@site/src/components/UserContext';
+import UserContextForm from '@site/src/components/UserContextForm';
+
+:::tip
+#### User Context {#user-context}
+
+You can customize the documentation and commands shown on this page by providing relevant settings which will be reflected in the instructions. It makes it even easier to explore and use %%te%%.
+
+<UserContextForm settings="DEVICE_ID,C8Y_URL,C8Y_USER" />
+
+The user context will be persisted in your web browser's local storage.
+:::
+
 When %%te%% connects a cloud, the cloud endpoint is authenticated using X.509 certificates.
 For that to work, the signing certificate of the cloud certificate must be trusted by the device.
 Usually, these certificates are stored in `/etc/ssl/certs` and nothing specific has to done on the device.
@@ -66,10 +79,29 @@ Copy your root certificate (in `PEM` format with `.crt` extension) to the create
 sudo cp <full_path_to_the_certificate> /usr/local/share/ca-certificates/
 ```
 
+:::tip
+
+If you have openssl and awk available on your device, then you can download the root certificate (e.g. the last certificate in the chain) from a given server using the following command:
+
+<UserContext>
+
+```sh
+openssl s_client -connect $C8Y_URL:443 -showcerts 2>/dev/null </dev/null \
+| awk '/-*BEGIN CERTIFICATE-*/{m=1; last_cert=""} m{last_cert=last_cert"\n"$0} m{if( /-*END CERTIFICATE-*/ ) m=0} END{ sub(/^\n/, "", last_cert); print last_cert}' \
+| sudo tee /usr/local/share/ca-certificates/$C8Y_URL.crt
+```
+
+</UserContext>
+
+:::
+
 Install the certificates:
 
 ```sh
 sudo update-ca-certificates
+
+# If you need to reprocess all certificates (not just the certs that were added/removed) then use:
+sudo update-ca-certificates -f
 ```
 
 ```text title="Output"
