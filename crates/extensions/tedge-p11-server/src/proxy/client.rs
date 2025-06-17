@@ -44,6 +44,10 @@ impl TedgeP11Service for TedgeP11Client {
 
         Ok(crate::service::SignResponse(response))
     }
+
+    fn create_key(&self, uri: Option<&str>) -> anyhow::Result<()> {
+        self.create_key(uri.map(|s| s.into()))
+    }
 }
 
 impl TedgeP11Client {
@@ -160,6 +164,19 @@ impl TedgeP11Client {
         debug!("Sign complete");
 
         Ok(response.0)
+    }
+
+    pub fn create_key(&self, uri: Option<String>) -> anyhow::Result<()> {
+        let request = Frame1::CreateKeyRequest(uri);
+        let response = self.do_request(request)?;
+
+        let Frame1::CreateKeyResponse = response else {
+            bail!("protocol error: bad response, expected create key, received: {response:?}");
+        };
+
+        debug!("Sign complete");
+
+        Ok(())
     }
 
     fn do_request(&self, request: Frame1) -> anyhow::Result<Frame1> {
