@@ -102,11 +102,23 @@ Connects to C8y supporting all TLS13 ECDSA signature algorithms
 
 Can use PKCS11 key to renew the public certificate
     [Setup]    Set tedge-p11-server Uri    value=${EMPTY}
+
     Connect to C8y using new keypair    type=ecdsa    curve=secp256r1
     Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
     Connect to C8y using new keypair    type=rsa    bits=2048
     Execute Command    tedge cert renew c8y
     Tedge Reconnect Should Succeed
+
+    Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
+    Command Should Fail With    tedge cert renew c8y
+    ...    error=PEM error: Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
+
+    Execute Command    systemctl start tedge-p11-server.socket
+    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
+    Command Should Fail With    tedge cert renew c8y
+    ...    error=PEM error: protocol error: bad response, expected sign, received: Error(ProtocolError("PKCS #11 service failed: Failed to find a signing key: Failed to find a private key"))
 
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
@@ -249,7 +261,12 @@ Tedge Reconnect Should Succeed
 
 Tedge Reconnect Should Fail With
     [Arguments]    ${error}
-    ${stderr}=    Execute Command    tedge reconnect c8y    exp_exit_code=!0    stdout=false    stderr=true
+    ${stderr}=    Command Should Fail With    tedge reconnect c8y    ${error}
+    RETURN    ${stderr}
+
+Command Should Fail With
+    [Arguments]    ${command}    ${error}
+    ${stderr}=    Execute Command    ${command}    exp_exit_code=!0    stdout=false    stderr=true
     Should Contain    ${stderr}    ${error}
     RETURN    ${stderr}
 
