@@ -6,6 +6,10 @@ use super::show::ShowCertCmd;
 use crate::certificate_is_self_signed;
 use crate::cli::certificate::c8y;
 use crate::cli::certificate::create_csr::Key;
+use crate::cli::certificate::create_key::CreateKeyCmd;
+use crate::cli::certificate::create_key::EcCurve;
+use crate::cli::certificate::create_key::KeyType;
+use crate::cli::certificate::create_key::RsaBits;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
@@ -13,6 +17,7 @@ use crate::command::Command;
 use crate::CertificateShift;
 use crate::ConfigError;
 use anyhow::anyhow;
+use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
@@ -46,6 +51,27 @@ pub enum TEdgeCertCli {
         /// Path where a Certificate signing request will be stored
         #[clap(long = "output-path", global = true, value_hint = ValueHint::FilePath)]
         output_path: Option<Utf8PathBuf>,
+
+        #[clap(subcommand)]
+        cloud: Option<CloudArg>,
+    },
+
+    /// Create a new keypair using a PKCS11 token.
+    ///
+    /// Generates a keypair on the PKCS11 token, saves the private key on the token, and generates a
+    /// CSR using the newly generated keypair.
+    CreateKey {
+        #[arg(long)]
+        label: String,
+
+        #[arg(long)]
+        r#type: KeyType,
+
+        #[arg(long, default_value = "2048", group = "key_params")]
+        bits: RsaBits,
+
+        #[arg(long, default_value = "p256", group = "key_params")]
+        curve: EcCurve,
 
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
@@ -214,6 +240,34 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
+            TEdgeCertCli::CreateKey {
+                bits,
+                label,
+                r#type,
+                curve,
+
+                cloud,
+            } => {
+                let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
+                let cloud_config = cloud
+                    .as_ref()
+                    .map(|c| config.as_cloud_config((c).into()))
+                    .transpose()?;
+                let cryptoki_config = config
+                    .device
+                    .cryptoki_config(cloud_config)?
+                    .context("Cryptoki config is not enabled")?;
+
+                CreateKeyCmd {
+                    cryptoki_config,
+
+                    bits,
+                    label,
+                    r#type,
+                    curve,
+                }
+                .into_boxed()
+            }
             TEdgeCertCli::Show {
                 cloud,
                 cert_path,
