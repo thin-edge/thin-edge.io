@@ -2,6 +2,7 @@
 set -e
 
 OUTPUT_DIR=""
+TEDGE_CONFIG_DIR=${TEDGE_CONFIG_DIR:-/etc/tedge}
 COMMAND=""
 
 # Parse arguments
@@ -9,6 +10,10 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --output-dir)
             OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --config-dir)
+            TEDGE_CONFIG_DIR="$2"
             shift 2
             ;;
         collect)
@@ -46,6 +51,17 @@ collect() {
             collect_logs "tedge-mapper-${cloud}"
         fi
     done
+
+    # Collectd mapper log
+    if systemctl list-unit-files tedge-mapper-collectd.service  >/dev/null 2>&1; then
+        collect_logs tedge-mapper-collectd
+    fi
+
+    # Copy tedge.toml
+    cp "$TEDGE_CONFIG_DIR"/tedge.toml "$OUTPUT_DIR"/tedge.toml
+
+    # tedge config list
+    tedge config list --all > "$OUTPUT_DIR"/tedge-config-list.log
 }
 
 # Execute the specified command
