@@ -113,6 +113,7 @@ Update Configuration Should Fail
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
+    ...    harbor-certificate
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG1_BINARY
@@ -137,6 +138,7 @@ Update Configuration Should Succeed
     Cumulocity.Should Support Configurations
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
+    ...    harbor-certificate
     ...    system.toml
     ...    CONFIG1
     ...    CONFIG1_BINARY
