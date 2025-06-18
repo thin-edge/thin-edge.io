@@ -11,10 +11,16 @@ Test Tags           theme:troubleshooting    theme:cli    theme:plugins
 
 *** Test Cases ***
 Run tedge diag collect
-    Execute Command    tedge diag collect --name default    stdout=${False}
+    Execute Command    tedge diag collect --name default
     File Should Exist    /tmp/default.tar.gz
+    Directory Should Not Exist    /tmp/default
+
     Execute Command    tar -xvzf /tmp/default.tar.gz -C /tmp
     Validate preset plugins    default
+
+    File Should Exist    /tmp/default/summary.log
+    ${summary}=    Execute Command    cat /tmp/default/summary.log
+    Should Contain    ${summary}    Executing
 
 Run tedge diag collect with multiple plugin directories
     Transfer To Device    ${CURDIR}/00_template.sh    /setup/diag-plugins/00_template.sh
@@ -53,6 +59,16 @@ No tarball is created when there is no plugin
     ...    tedge diag collect --name tedge-diag-no-plugin --plugin-dir /setup/diag-plugins    stdout=${False}
     ...    exp_exit_code=2
     File Should Not Exist    /tmp/tedge-diag-no-plugin.tar.gz
+
+Invalid plugin is skipped
+    Execute Command    touch /setup/diag-plugins/not_plugin
+    ${stderr}=    Execute Command
+    ...    tedge diag collect --name tedge-diag-invalid --plugin-dir /setup/diag-plugins --plugin-dir /usr/share/tedge/diag-plugins --keep-dir
+    ...    stdout=${False}
+    ...    stderr=${True}
+    ${summary}=    Execute Command    cat /tmp/tedge-diag-invalid/summary.log
+    Should Contain    ${stderr}    warning: Skipping
+    Should Contain    ${summary}    warning: Skipping
 
 
 *** Keywords ***
