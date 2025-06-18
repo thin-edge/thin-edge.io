@@ -106,8 +106,39 @@ Can use PKCS11 key to renew the public certificate
     Connect to C8y using new keypair    type=ecdsa    curve=secp256r1
     Execute Command    tedge cert renew c8y
     Tedge Reconnect Should Succeed
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
+    Connect to C8y using new keypair    type=ecdsa    curve=secp384r1
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
+    # renewal isn't supported for P521 because rcgen doesn't support it
+    # https://github.com/rustls/rcgen/issues/60
+
+    # Connect to C8y using new keypair    type=ecdsa    curve=secp521r1
+    # Execute Command    tedge cert renew c8y
+    # Tedge Reconnect Should Succeed
+    # Execute Command    tedge cert renew c8y
+    # Tedge Reconnect Should Succeed
 
     Connect to C8y using new keypair    type=rsa    bits=2048
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
+    Connect to C8y using new keypair    type=rsa    bits=3072
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
+    Connect to C8y using new keypair    type=rsa    bits=4096
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
     Execute Command    tedge cert renew c8y
     Tedge Reconnect Should Succeed
 

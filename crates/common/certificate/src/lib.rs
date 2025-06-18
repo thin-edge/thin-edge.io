@@ -11,6 +11,8 @@ use std::path::PathBuf;
 use tedge_p11_server::CryptokiConfig;
 use time::Duration;
 use time::OffsetDateTime;
+use x509_parser::oid_registry;
+use x509_parser::public_key::PublicKey;
 pub use zeroize::Zeroizing;
 #[cfg(feature = "reqwest")]
 mod cloud_root_certificate;
@@ -160,17 +162,35 @@ impl KeyKind {
     ) -> Result<Self, CertificateError> {
         let cert = PemCertificate::from_pem_file(current_cert)?;
         let cert = PemCertificate::extract_certificate(&cert.pem)?;
-        let algorithm_oid: Vec<u64> = cert
-            .signature_algorithm
-            .oid()
+        let public_key_raw = cert.public_key().subject_public_key.data.to_vec();
+
+        // map public key to signature identifier (some keys support many types of signatures, on
+        // our side we only do P256/P384/RSA2048 with a single type of signature each)
+        // for P256/P384, former has only SHA256 and latter only SHA384 signature, so no questions there
+        // but for RSA, AFAIK we can use SHA256 with all of them. RSA_PSS also isn't supported by
+        // rcgen, but we're free to use regular RSA_PKCS1_SHA256
+        let public_key = cert
+            .public_key()
+            .parsed()
+            .context("Failed to read public key from the certificate")?;
+        let signature_algorithm = match public_key {
+            PublicKey::EC(ec) => match ec.key_size() {
+                256 => oid_registry::OID_SIG_ECDSA_WITH_SHA256,
+                384 => oid_registry::OID_SIG_ECDSA_WITH_SHA384,
+                // P521 (size 528 reported by key_size() is not yet supported by rcgen)
+                // https://github.com/rustls/rcgen/issues/60
+                _ => {
+                    return Err(anyhow::anyhow!("Unsupported public key. Only P256/P384/RSA2048/RSA3072/RSA4096 are supported for certificate renewal").into());
+                }
+            },
+            PublicKey::RSA(_) => oid_registry::OID_PKCS1_SHA256WITHRSA,
+            _ => return Err(anyhow::anyhow!("Unsupported public key. Only P256/P384/RSA2048/RSA3072/RSA4096 are supported for certificate renewal").into())
+        };
+        let signature_algorithm: Vec<u64> = signature_algorithm
             .iter()
-            // in practice this should never happen, but if any arc of the oid doesn't fit in u64,
-            // then it's wrong and doesn't match any algorithm, so we can just use an empty vec
             .map(|i| i.collect())
             .unwrap_or_default();
-        let algorithm = rcgen::SignatureAlgorithm::from_oid(&algorithm_oid)
-            .context("Unknown certificate algorithm")?;
-        let public_key_raw = cert.public_key().subject_public_key.data.to_vec();
+        let algorithm = rcgen::SignatureAlgorithm::from_oid(&signature_algorithm)?;
 
         Ok(Self::ReuseRemote(RemoteKeyPair {
             cryptoki_config,
