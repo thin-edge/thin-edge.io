@@ -11,9 +11,10 @@ Test Tags           theme:troubleshooting    theme:cli    theme:plugins
 
 *** Test Cases ***
 Run tedge diag collect
-    Execute Command    tedge diag collect --name default
+    ${stdout}=    Execute Command    tedge diag collect --name default    strip=${True}
     File Should Exist    /tmp/default.tar.gz
     Directory Should Not Exist    /tmp/default
+    Should Be Equal    ${stdout}    /tmp/default.tar.gz
 
     Execute Command    tar -xvzf /tmp/default.tar.gz -C /tmp
     Validate preset plugins    default
