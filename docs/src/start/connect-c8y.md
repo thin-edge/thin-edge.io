@@ -113,13 +113,13 @@ This is the certificate chain of the server and not the device's certificate kep
 :::
 
 If the Cumulocity server's certificate chain file isn't available locally, it can be downloaded using a web browser or using some other
-third-party tools like openssl command as follows:
+third-party tools like openssl command to download the root certificate for a given instance:
 
 <UserContext>
 
 ```sh
-openssl s_client -connect $C8Y_URL:443 < /dev/null 2>/dev/null \
-| sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p'
+openssl s_client -connect $C8Y_URL:443 -showcerts 2>/dev/null </dev/null \
+| awk '/-*BEGIN CERTIFICATE-*/{m=1; last_cert=""} m{last_cert=last_cert"\n"$0} m{if( /-*END CERTIFICATE-*/ ) m=0} END{ sub(/^\n/, "", last_cert); print last_cert}'
 ```
 
 </UserContext>
