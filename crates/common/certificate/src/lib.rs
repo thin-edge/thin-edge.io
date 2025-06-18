@@ -4,6 +4,7 @@ use device_id::DeviceIdError;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::KeyPair;
+use rustls::SignatureScheme;
 use sha1::Digest;
 use sha1::Sha1;
 use std::path::Path;
@@ -227,7 +228,33 @@ impl rcgen::RemoteKeyPair for RemoteKeyPair {
     }
 
     fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
-        self.algorithm
+        let sigalg = tedge_p11_server::signing_key(self.cryptoki_config.clone())
+            .unwrap()
+            .choose_scheme(&[
+                SignatureScheme::ECDSA_NISTP256_SHA256,
+                SignatureScheme::RSA_PKCS1_SHA1,
+                SignatureScheme::ECDSA_SHA1_Legacy,
+                SignatureScheme::RSA_PKCS1_SHA256,
+                SignatureScheme::ECDSA_NISTP256_SHA256,
+                SignatureScheme::RSA_PKCS1_SHA384,
+                SignatureScheme::ECDSA_NISTP384_SHA384,
+                SignatureScheme::RSA_PKCS1_SHA512,
+                SignatureScheme::ECDSA_NISTP521_SHA512,
+                SignatureScheme::RSA_PSS_SHA256,
+                SignatureScheme::RSA_PSS_SHA384,
+                SignatureScheme::RSA_PSS_SHA512,
+                SignatureScheme::ED25519,
+                SignatureScheme::ED448,
+            ])
+            .unwrap()
+            .scheme();
+
+        match sigalg {
+            SignatureScheme::ECDSA_NISTP256_SHA256 => &rcgen::PKCS_ECDSA_P256_SHA256,
+            SignatureScheme::ECDSA_NISTP384_SHA384 => &rcgen::PKCS_ECDSA_P384_SHA384,
+            SignatureScheme::RSA_PSS_SHA256 => &rcgen::PKCS_RSA_SHA256,
+            _ => panic!("signature algorithm {sigalg:?} unsupported"),
+        }
     }
 }
 

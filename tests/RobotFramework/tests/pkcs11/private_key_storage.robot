@@ -110,6 +110,14 @@ Can use PKCS11 key to renew the public certificate
     Connect to C8y using new keypair    type=rsa    bits=2048
     Execute Command    tedge cert renew c8y
     Tedge Reconnect Should Succeed
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
+    Connect to C8y using new keypair    type=rsa    bits=4096
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
 
     Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
     Command Should Fail With    tedge cert renew c8y
