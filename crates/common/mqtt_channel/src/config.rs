@@ -11,7 +11,6 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::Mutex;
 use zeroize::Zeroizing;
 
 pub const MAX_PACKET_SIZE: usize = 268435455;
@@ -33,7 +32,7 @@ pub struct Config {
     /// The list of topics to subscribe to on connect
     ///
     /// Default: An empty topic list
-    pub subscriptions: Arc<Mutex<TopicFilter>>,
+    pub subscriptions: TopicFilter,
 
     /// Clean the MQTT session upon connect if set to `true`.
     ///
@@ -164,7 +163,7 @@ impl Default for Config {
                 authentication: None,
             },
             session_name: None,
-            subscriptions: Arc::new(Mutex::new(TopicFilter::empty())),
+            subscriptions: TopicFilter::empty(),
             clean_session: false,
             queue_capacity: 1024,
             max_packet_size: 16 * 1024 * 1024,
@@ -214,8 +213,8 @@ impl Config {
     /// Add a list of topics to subscribe to on connect
     ///
     /// Can be called several times to subscribe to many topics.
-    pub fn with_subscriptions(self, topics: TopicFilter) -> Self {
-        self.subscriptions.lock().unwrap().add_all(topics);
+    pub fn with_subscriptions(mut self, topics: TopicFilter) -> Self {
+        self.subscriptions.add_all(topics);
         self
     }
 

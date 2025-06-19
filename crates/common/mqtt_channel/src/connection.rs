@@ -164,9 +164,15 @@ impl Connection {
         let (published_sender, published_receiver) = mpsc::unbounded();
         let (error_sender, error_receiver) = mpsc::unbounded();
         let (pub_done_sender, pub_done_receiver) = oneshot::channel();
+        let subscriptions = Arc::new(Mutex::new(config.subscriptions.clone()));
 
-        let (mqtt_client, event_loop) =
-            Connection::open(config, received_sender.clone(), error_sender.clone()).await?;
+        let (mqtt_client, event_loop) = Connection::open(
+            config,
+            received_sender.clone(),
+            error_sender.clone(),
+            subscriptions.clone(),
+        )
+        .await?;
         let permits = Arc::new(Semaphore::new(1));
         let permit = permits.clone().acquire_owned().await.unwrap();
         let pub_count = Arc::new(AtomicUsize::new(0));
@@ -179,6 +185,7 @@ impl Connection {
             pub_done_sender,
             permits,
             pub_count.clone(),
+            subscriptions.clone(),
         ));
         tokio::spawn(Connection::sender_loop(
             mqtt_client.clone(),
@@ -194,7 +201,7 @@ impl Connection {
             published: published_sender,
             errors: error_receiver,
             pub_done: pub_done_receiver,
-            subscriptions: SubscriberHandle::new(mqtt_client, config.subscriptions.clone()),
+            subscriptions: SubscriberHandle::new(mqtt_client, subscriptions),
         })
     }
 
@@ -207,6 +214,7 @@ impl Connection {
         config: &Config,
         mut message_sender: mpsc::UnboundedSender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
+        subscriptions: Arc<Mutex<TopicFilter>>,
     ) -> Result<(AsyncClient, EventLoop), MqttError> {
         const INSECURE_MQTT_PORT: u16 = 1883;
         const SECURE_MQTT_PORT: u16 = 8883;
@@ -234,7 +242,7 @@ impl Connection {
                     };
                     info!(target: "MQTT", "Connection established");
 
-                    let subscriptions = config.subscriptions.lock().unwrap().filters();
+                    let subscriptions = subscriptions.lock().unwrap().filters();
 
                     // Need check here otherwise it will hang waiting for a SubAck, and none will come when there is no subscription.
                     if subscriptions.is_empty() {
@@ -291,6 +299,7 @@ impl Connection {
         done: oneshot::Sender<()>,
         permits: Arc<Semaphore>,
         pub_count: Arc<AtomicUsize>,
+        subscriptions: Arc<Mutex<TopicFilter>>,
     ) -> Result<(), MqttError> {
         let mut triggered_disconnect = false;
         let mut disconnect_permit = None;
@@ -363,7 +372,7 @@ impl Connection {
                             // If session_name is not provided or if the broker session persistence
                             // is not enabled or working, then re-subscribe
 
-                            let subscriptions = config.subscriptions.lock().unwrap().filters();
+                            let subscriptions = subscriptions.lock().unwrap().filters();
                             // Need check here otherwise it will hang waiting for a SubAck, and none will come when there is no subscription.
                             if subscriptions.is_empty() {
                                 break;
