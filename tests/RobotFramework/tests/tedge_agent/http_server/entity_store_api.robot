@@ -486,7 +486,7 @@ Entity twin api errors
     ...    ${resp}
     ...    Failed to buffer the request body: length limit exceeded|413
 
-Delete entity clears entity registration and twin messages
+Delete entity clears entity registration and all retained data messages
     Register Entity    device/child0//    child-device    device/main//
     Register Entity    device/child1//    child-device    device/main//
     Register Entity    device/child2//    child-device    device/main//
@@ -496,9 +496,13 @@ Delete entity clears entity registration and twin messages
 
     Execute Command    tedge http put /te/v1/entities/device/child0///twin '{"x": 1, "y": 2, "z": 3}'
     Execute Command    tedge mqtt pub --retain 'te/device/child0///twin/foo' '"bar"'
+    Execute Command    tedge mqtt pub --retain 'te/device/child0///a/high_temp' '{"severity": "critical"}'
     Execute Command    tedge mqtt pub --retain 'te/device/child0/service/service0/twin/foo' '"bar"'
+    Execute Command    tedge mqtt pub --retain 'te/device/child0/service/service0/status/health' '{"status": "up"}'
     Execute Command    tedge mqtt pub --retain 'te/device/child00///twin/foo' '"bar"'
+    Execute Command    tedge mqtt pub --retain 'te/device/child00///cmd/log_upload/123' '{"status": "init"}'
     Execute Command    tedge mqtt pub --retain 'te/device/child000///twin/foo' '"bar"'
+    Execute Command    tedge mqtt pub --retain 'te/device/child000///cmd/restart' '{}'
 
     Should Have Retained MQTT Messages    te/device/child0///twin/foo    message_contains="bar"
     Should Have Retained MQTT Messages    te/device/child0///twin/x    message_contains=1
@@ -509,9 +513,9 @@ Delete entity clears entity registration and twin messages
 
     ${deleted}=    Deregister Entity    device/child0//
 
-    Should Not Have Retained MQTT Messages    te/device/child0//#
-    Should Not Have Retained MQTT Messages    te/device/child00//#
     Should Not Have Retained MQTT Messages    te/device/child000//#
+    Should Not Have Retained MQTT Messages    te/device/child00//#
+    Should Not Have Retained MQTT Messages    te/device/child0//#
 
 
 *** Keywords ***

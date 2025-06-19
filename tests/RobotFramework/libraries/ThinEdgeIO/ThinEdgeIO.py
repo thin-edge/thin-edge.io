@@ -748,7 +748,7 @@ class ThinEdgeIO(DeviceLibrary):
             self,
             topic: str,
             device_name: str = None 
-    ) -> str:
+    ):
         """
         Assert that there are no retained messages on the given topic
 
@@ -756,7 +756,7 @@ class ThinEdgeIO(DeviceLibrary):
             topic (str): Filter by topic. Supports MQTT wildcard patterns
 
         *Example:*
-        | ${messages}= | `Should Not Have Retained MQTT Messages` | te/device/child01/# |
+        | `Should Not Have Retained MQTT Messages` | te/device/child01/# |
         """
         device = self.current
         if device_name:
@@ -768,10 +768,13 @@ class ThinEdgeIO(DeviceLibrary):
                 f"Unable to execute the command as the device: '{device_name}' has not been setup"
             )
         
-        command = f"tedge mqtt sub {topic} --retained-only --no-topic --duration 1s"
-        output = device.execute_command(command).stdout
-        assert output == "", f"Expected no messages, but received: {output}"
-        return output
+        for _ in range(5):
+            command = f"tedge mqtt sub {topic} --retained-only --no-topic --duration 1s"
+            output = device.execute_command(command).stdout
+            if output == "":
+                return ""
+            time.sleep(1)
+        raise AssertionError(f"Expected no messages, but received: {output}")
 
     @keyword("Register Child Device")
     def register_child(

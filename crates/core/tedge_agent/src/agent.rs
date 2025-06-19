@@ -58,6 +58,7 @@ use tedge_log_manager::LogManagerConfig;
 use tedge_log_manager::LogManagerOptions;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
+use tedge_mqtt_ext::MqttDynamicConnector;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
@@ -271,7 +272,7 @@ impl Agent {
         let mut restart_actor_builder = RestartManagerBuilder::new(self.config.restart_config);
 
         // Mqtt actor
-        let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config);
+        let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config.clone());
 
         // Software update actor
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
@@ -387,6 +388,7 @@ impl Agent {
             let entity_store_server = EntityStoreServer::new(
                 entity_store,
                 mqtt_schema.clone(),
+                Box::new(MqttDynamicConnector::new(self.config.mqtt_config)),
                 &mut mqtt_actor_builder,
                 self.config.entity_auto_register,
             );

@@ -4,6 +4,7 @@ pub mod test_helpers;
 mod tests;
 
 use async_trait::async_trait;
+use mqtt_channel::Connection;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
 use std::convert::Infallible;
@@ -221,5 +222,57 @@ impl Actor for MqttActor {
             self.to_peers.relay_messages_from(&mut mqtt_client.received),
         )
         .await
+    }
+}
+
+#[async_trait]
+pub trait MqttConnector: Send {
+    async fn connect(&mut self, topics: TopicFilter) -> Result<Box<dyn MqttConnection>, MqttError>;
+}
+
+#[async_trait]
+pub trait MqttConnection: Send {
+    async fn next_message(&mut self) -> Option<MqttMessage>;
+
+    async fn disconnect(self: Box<Self>);
+}
+
+pub struct MqttConnectionImpl {
+    connection: Connection,
+}
+
+impl MqttConnectionImpl {
+    fn new(connection: Connection) -> Self {
+        Self { connection }
+    }
+}
+
+#[async_trait]
+impl MqttConnection for MqttConnectionImpl {
+    async fn next_message(&mut self) -> Option<MqttMessage> {
+        self.connection.received.next().await
+    }
+
+    async fn disconnect(self: Box<Self>) {
+        self.connection.close().await;
+    }
+}
+
+pub struct MqttDynamicConnector {
+    base_mqtt_config: MqttConfig,
+}
+
+impl MqttDynamicConnector {
+    pub fn new(base_mqtt_config: MqttConfig) -> Self {
+        Self { base_mqtt_config }
+    }
+}
+
+#[async_trait]
+impl MqttConnector for MqttDynamicConnector {
+    async fn connect(&mut self, topics: TopicFilter) -> Result<Box<dyn MqttConnection>, MqttError> {
+        let mqtt_config = self.base_mqtt_config.clone().with_subscriptions(topics);
+        let connection = mqtt_channel::Connection::new(&mqtt_config).await?;
+        Ok(Box::new(MqttConnectionImpl::new(connection)))
     }
 }
