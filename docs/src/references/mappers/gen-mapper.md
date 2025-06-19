@@ -63,6 +63,7 @@ stages = [
 ```
 
 - A filter has to export at least one `process` function.
+  - `process(t: Timestamp, msg: Message, config: Json) -> Vec<Message>` 
   - This function is called for each message to be transformed
   - The arguments passed to the function are:
     - The current time as `{ seconds: u64, nanoseconds: u32 }` 
@@ -81,12 +82,34 @@ stages = [
   - The filter can then return zero, one or many transformed messages
   - By sharing an internal state between the `process` and `tick` functions,
     the filter can implement aggregations over a time window.
+    When messages are received they are pushed by the `process` function into that state
+    and the final outcome is extracted by the `tick` function at the end of the time window.
 
-## Ideas and alternatives
+## First release
 
-### Combine builtin and user-provided filters
+While the POC provides a generic mapper that is fully independent of the legacy mappers,
+the plan is not to abandon the latter in favor of the former
+but to revisit the legacy mappers to include the ability for users to add their own mapping rules.
 
-### Several kinds of filters
+To be lovable, the first release of an extensible mapper should at least:
+
+- be a drop-in replacement of the current mapper (for c8y, aws, az or collect)
+- feature the ability to customize MEA processing by combining builtin filters with user-provided functions written in JavaScript
+- provide tools to create, test, monitor and debug filters and pipelines
+- be stable enough that user-defined filters will still work without changes with future releases.
+
+To keep things simple for the first release, the following questions are deferred:
+
+- Could a generic mapper let users define bridge rules as well as message transformation pipelines?
+- Does it make sense to run such a mapper on child-devices?
+- Could a pipeline send HTTP messages? Or could a filter tell the runtime to send messages over HTTP?
+- How to handle binary payloads on the MQTT bus? 
+- Could operations be managed is a similar way with user-provided functions to transform commands?
+- To handle operations, would the plugins be expanded to do more complex things like HTTP calls, file-system interactions, etc.? 
+- What are the pros and cons to persist filter states?
+- Split a pipeline, forwarding transformed messages to different pipelines for further processing
+
+### API
 
 The POC expects the filter to implement a bunch of functions. This gives a quite expressive interface
 (filtering, mapping, splitting, dynamic configuration, aggregation over time windows), but at the cost of some complexity.
@@ -102,20 +125,44 @@ An alternative is to let the user implement more specific functions with simpler
 - `filter_map(msg: Message, config: Json) -> Option<Message>`
 - `flat_map(msg: Message, config: Json) -> Vec<Message>`
 
-### Inline definition
+One can also rearrange the argument order for these functions,
+making life easier when a transformation does need a config or the current time
+leveraging that one can pass more arguments than declared to a javascript function:
 
-### Use JSON for all parameters
+- `process(msg: Message, config: Json, t: Timestamp) -> Vec<Message>`
+- `process(msg: Message, config: Json) -> Vec<Message>`
+- `process(msg: Message) -> Vec<Message>`
 
-### Feed filters with message excerpts as done for the workflows
+One can even use a bit further the flexibility of javascript, to let the process function freely return:
+- An array of message objects
+- A single message object
+- A null value interpreted as no messages
+- A boolean
 
-### Test tools
+Other ideas to explore to make the API more flexible:
 
-```shell
-$ tedge mapping test [pipeline.toml | filter.js] topic message
-```
+- Interaction with the entity store and tedge config.
+- Allow a pipeline to subscribe to topics related to the device/entity it is running on
+- Feed filters with message excerpts as done for the workflows
 
-One should be able to pipe `tedge mqtt sub` and `tedge mapping test`
+### Devops tools
 
-```shell
-$ tedge mqtt sub 'te/+/+/+/+/m/+' | tedge mapping test te-to-c8y.js
-```
+The flexibility to customize MQTT message processing with user-provided functions comes with risks:
+- a filter might not behave as expected,
+- pipelines might be overlapping or conflicting, possibly sending duplicate messages or creating infinite loops
+- builtin pipelines might be accidentally disconnected or broken
+- a filter might introduce a performance bottleneck.
+
+To help mitigating these risks, the `tedge mapping` sub-commands provide the tools to test, monitor and debug filters and pipelines.
+
+- `tedge mapping flow [topic]` displays pipelines and filters messages received on this topic will flow through
+  - can be used with a set of pipelines not configured yet for a mapper
+- `tedge mapping test [filter]` feeds a filter or pipeline with input messages and produces the transformed output messages
+  - allow users to run an assertion based on the input/output of a filter
+  - ability to pipe `tedge mqtt sub` and `tedge mapping test`
+  - control of the timestamps
+  - test aggregation over ticks
+  - can be used with a set of pipelines not configured yet for a mapper
+- `tedge mapping stats [pipeline]` returns statistics on the messages processed by a pipeline
+  - count message in, message out
+  - processing time min, median, max per filter
