@@ -201,6 +201,7 @@ impl DiagCollectCommand {
 
         // Cannot write this message to summary.log since the tarball has already been created
         eprintln!("Diagnostic information saved to {tarball_path}");
+        println!("{tarball_path}");
         Ok(tarball_path)
     }
 }
