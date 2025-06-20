@@ -2,5 +2,5 @@ input_topics = ["collectd/+/+/+"]
 
 stages = [
     { filter = "collectd-to-te.js" },
-    { filter = "group_by_timestamp.js", tick_every_seconds = 3 }
+    { filter = "average.js", tick_every_seconds = 10 }
 ]
