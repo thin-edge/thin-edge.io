@@ -4,6 +4,7 @@ use crate::MqttError;
 use crate::MqttMessage;
 use crate::PubChannel;
 use crate::SubChannel;
+use crate::TopicFilter;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::SinkExt;
@@ -16,10 +17,12 @@ use rumqttc::Event;
 use rumqttc::EventLoop;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
+use rumqttc::SubscribeFilter;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -38,6 +41,76 @@ pub struct Connection {
 
     /// A channel to notify that all the published messages have been actually published.
     pub pub_done: oneshot::Receiver<()>,
+
+    pub subscriptions: SubscriberHandle,
+}
+
+#[derive(Clone)]
+/// A client for changing the subscribed topics
+pub struct SubscriberHandle {
+    client: AsyncClient,
+    pub(crate) subscriptions: Arc<Mutex<TopicFilter>>,
+}
+
+impl SubscriberHandle {
+    pub fn new(client: AsyncClient, subscriptions: Arc<Mutex<TopicFilter>>) -> Self {
+        Self {
+            client,
+            subscriptions,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+pub trait SubscriberOps {
+    async fn subscribe_many(
+        &self,
+        topics: impl IntoIterator<Item = String> + Send,
+    ) -> Result<(), MqttError>;
+    async fn unsubscribe_many(
+        &self,
+        topics: impl IntoIterator<Item = String> + Send,
+    ) -> Result<(), MqttError>;
+}
+
+#[async_trait::async_trait]
+impl SubscriberOps for SubscriberHandle {
+    async fn subscribe_many(
+        &self,
+        topics: impl IntoIterator<Item = String> + Send,
+    ) -> Result<(), MqttError> {
+        let topics = topics.into_iter().collect::<Vec<_>>();
+        {
+            let mut subs = self.subscriptions.lock().unwrap();
+            for topic in &topics {
+                subs.add(topic)?;
+            }
+        }
+        self.client
+            .subscribe_many(topics.into_iter().map(|path| SubscribeFilter {
+                path,
+                qos: rumqttc::QoS::AtLeastOnce,
+            }))
+            .await?;
+        Ok(())
+    }
+
+    async fn unsubscribe_many(
+        &self,
+        topics: impl IntoIterator<Item = String> + Send,
+    ) -> Result<(), MqttError> {
+        let topics = topics.into_iter().collect::<Vec<_>>();
+        {
+            let mut subs = self.subscriptions.lock().unwrap();
+            for topic in &topics {
+                subs.remove(topic);
+            }
+        }
+        for topic in topics {
+            self.client.unsubscribe(topic).await?;
+        }
+        Ok(())
+    }
 }
 
 impl Connection {
@@ -91,9 +164,15 @@ impl Connection {
         let (published_sender, published_receiver) = mpsc::unbounded();
         let (error_sender, error_receiver) = mpsc::unbounded();
         let (pub_done_sender, pub_done_receiver) = oneshot::channel();
+        let subscriptions = Arc::new(Mutex::new(config.subscriptions.clone()));
 
-        let (mqtt_client, event_loop) =
-            Connection::open(config, received_sender.clone(), error_sender.clone()).await?;
+        let (mqtt_client, event_loop) = Connection::open(
+            config,
+            received_sender.clone(),
+            error_sender.clone(),
+            subscriptions.clone(),
+        )
+        .await?;
         let permits = Arc::new(Semaphore::new(1));
         let permit = permits.clone().acquire_owned().await.unwrap();
         let pub_count = Arc::new(AtomicUsize::new(0));
@@ -106,9 +185,10 @@ impl Connection {
             pub_done_sender,
             permits,
             pub_count.clone(),
+            subscriptions.clone(),
         ));
         tokio::spawn(Connection::sender_loop(
-            mqtt_client,
+            mqtt_client.clone(),
             published_receiver,
             error_sender,
             config.last_will_message.clone(),
@@ -121,6 +201,7 @@ impl Connection {
             published: published_sender,
             errors: error_receiver,
             pub_done: pub_done_receiver,
+            subscriptions: SubscriberHandle::new(mqtt_client, subscriptions),
         })
     }
 
@@ -133,6 +214,7 @@ impl Connection {
         config: &Config,
         mut message_sender: mpsc::UnboundedSender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
+        subscriptions: Arc<Mutex<TopicFilter>>,
     ) -> Result<(AsyncClient, EventLoop), MqttError> {
         const INSECURE_MQTT_PORT: u16 = 1883;
         const SECURE_MQTT_PORT: u16 = 8883;
@@ -160,7 +242,7 @@ impl Connection {
                     };
                     info!(target: "MQTT", "Connection established");
 
-                    let subscriptions = config.subscriptions.filters();
+                    let subscriptions = subscriptions.lock().unwrap().filters();
 
                     // Need check here otherwise it will hang waiting for a SubAck, and none will come when there is no subscription.
                     if subscriptions.is_empty() {
@@ -217,6 +299,7 @@ impl Connection {
         done: oneshot::Sender<()>,
         permits: Arc<Semaphore>,
         pub_count: Arc<AtomicUsize>,
+        subscriptions: Arc<Mutex<TopicFilter>>,
     ) -> Result<(), MqttError> {
         let mut triggered_disconnect = false;
         let mut disconnect_permit = None;
@@ -289,7 +372,7 @@ impl Connection {
                             // If session_name is not provided or if the broker session persistence
                             // is not enabled or working, then re-subscribe
 
-                            let subscriptions = config.subscriptions.filters();
+                            let subscriptions = subscriptions.lock().unwrap().filters();
                             // Need check here otherwise it will hang waiting for a SubAck, and none will come when there is no subscription.
                             if subscriptions.is_empty() {
                                 break;

@@ -4890,6 +4890,7 @@ dependencies = [
  "futures",
  "mqtt_channel",
  "mqtt_tests",
+ "proptest",
  "serde_json",
  "tedge_actors",
  "tedge_utils",

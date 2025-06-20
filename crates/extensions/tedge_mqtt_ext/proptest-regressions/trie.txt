@@ -1,0 +1,26 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc c2af50542642d11276b3414120dba5d319b7e79bc5c4b593b0f0e3e551bb216e # shrinks to subscriptions = ["/#", "+/+"]
+cc 35ff8c20ac897723b2f45738d88b5c3fdfb3e5f1dbdbfd3a170a70913ebc368d # shrinks to subscriptions = ["+/a/a", "/#"]
+cc c305db36e62ac105b2011d441fca4e88224159738d637aae88679fdeb967de3d # shrinks to subscriptions = ["a/+/a"], unsubscriptions = ["a"]
+cc 3faad8e1ecbe0502bf89b9dfed357f774e1912712f66a63943df74a6310f93f1 # shrinks to subscriptions = ["+"], unsubscriptions = ["+/#"]
+cc 8509be48aeb210d202da60447c6fbe0b99d491808274aefe12a2a0e3828426cd # shrinks to subscriptions = [], unsubscriptions = ["+/+/a/+", "a/#"]
+cc e055cb4e6e9c214f73ee66f2080422dbf5ba5fffca89008a304081ceb942e0c2 # shrinks to subscriptions = [], unsubscriptions = ["+/+", "/#"]
+cc 0951d4466b6ca4c30105fee3c2d5fcc047f0133be17b69ee9b12a6ba7358f48a # shrinks to subscriptions = [], unsubscriptions = ["c/+", "c/#"]
+cc 77a623802e2f52b94bf7fcf10040927a15037ada1641a3209594985fadf76d14 # shrinks to subscriptions = ["a/+/a"], unsubscriptions = ["+/a/+"]
+cc ab19cb84992e7141ae210779904cd516408022c7bc85937942030ebec26ebef1 # shrinks to subscriptions = ["+/+/a/+", "a/a/+/a"]
+cc 5637b36f5f378ae9bcc4ed1d442f93368bcd7cc03cfdb052cc98ab942c4aa29d # shrinks to subscriptions = ["c/+/+", "c/a/+", "+/#"]
+cc 5255ea6f0768fd462c21e020972c4221a202345c0b898b502012f557d1542b76 # shrinks to subscriptions = ["/#", "+/a/+"]
+cc 9638071b32ed1148858f0b0a693cac06b2857b38a8181a56154429b181a61fc1 # shrinks to subscriptions = ["+", "", "/#"]
+cc 09fc525d653ff597e455644305a5bcf0a9143b5b50c5e0b668ab69b72a8094f4 # shrinks to subscriptions = ["/#", "", "+"]
+cc 72dbc7091f98279af02f2b825dcd9440526b9d475a0a33222e2a69389581af6e # shrinks to subscriptions = ["c/a", "+/+", "c/+"]
+cc e6fe7dfd3c0771d88dc0e1d8da448d9ec3e5402059423622b36d2dc6020bd607 # shrinks to subscriptions = ["b/a", "+/#", "b/+"]
+cc 7fcaadecf97f9f29c2b119f46c53992ff8b687dee107eec3e6bb775d4cf467e3 # shrinks to subscriptions = ["+/+/a", "+/+/#", "+/#"]
+cc 6d35905cd0547e000e5a89edfe24818f4fa2e2947ff8a40ad19f7cc89f75bb0d # shrinks to subscriptions = ["+/a/#", "b/a/+", "b/+/+"]
+cc 3368368c515c9bbb99afc5c7f7079f3930cd56049c3e164cb9be5ea916e3d183 # shrinks to subscriptions = ["c/+", "c/c", "+/c"]
+cc 83857d88a8be534674f2326f109b667f7076aecb6b8c8bcc0b3d282959fb3a1e # shrinks to subscriptions = ["a/+", "+/+", "+/+/#", "+/+"]
+cc 321d11e2a9be7ffbd83775f65e48763715103d79f1cf6d83938199b25fc66f99 # shrinks to subscriptions = ["+/c/a/+", "b/c/a/c", "b/+/+/c"]
