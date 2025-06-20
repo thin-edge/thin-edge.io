@@ -25,6 +25,8 @@ Run tedge diag collect
 
 Run tedge diag collect with multiple plugin directories
     Transfer To Device    ${CURDIR}/00_template.sh    /setup/diag-plugins/00_template.sh
+    Execute Command    chown root:root /setup/diag-plugins/00_template.sh
+
     Execute Command
     ...    tedge diag collect --name tedge-diag-now --plugin-dir /usr/share/tedge/diag-plugins --plugin-dir /setup/diag-plugins
     ...    stdout=${False}
@@ -68,8 +70,21 @@ Invalid plugin is skipped
     ...    stdout=${False}
     ...    stderr=${True}
     ${summary}=    Execute Command    cat /tmp/tedge-diag-invalid/summary.log
-    Should Contain    ${stderr}    warning: Skipping
-    Should Contain    ${summary}    warning: Skipping
+    Should Contain    ${stderr}    (not executable)
+    Should Contain    ${summary}    (not executable)
+
+Extra security guard when the command is run by root
+    Execute Command
+    ...    touch /setup/diag-plugins/owned_by_non_root.sh && chown tedge:tedge /setup/diag-plugins/owned_by_non_root.sh && chmod +x /setup/diag-plugins/owned_by_non_root.sh
+    Execute Command
+    ...    sudo touch /setup/diag-plugins/writable_by_other_users.sh && chmod a+wx /setup/diag-plugins/writable_by_other_users.sh
+    ${stderr}=    Execute Command
+    ...    sudo tedge diag collect --plugin-dir /setup/diag-plugins
+    ...    stdout=${False}
+    ...    stderr=${True}
+    ...    ignore_exit_code=${True}
+    Should Contain    ${stderr}    owned_by_non_root.sh (not owned by root)
+    Should Contain    ${stderr}    writable_by_other_users.sh (writable by non-root users)
 
 
 *** Keywords ***

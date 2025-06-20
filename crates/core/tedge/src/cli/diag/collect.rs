@@ -8,6 +8,7 @@ use camino::Utf8PathBuf;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use std::collections::BTreeSet;
+use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::process::ExitStatus;
 use std::time::Duration;
@@ -17,6 +18,7 @@ use tedge_config::models::AbsolutePath;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file;
 use tracing::debug;
+use uzers;
 
 #[derive(Debug)]
 pub struct DiagCollectCommand {
@@ -139,13 +141,9 @@ impl DiagCollectCommand {
 
         while let Some(entry) = entries.next_entry().await? {
             if let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) {
-                if path.extension() == Some("ignore") {
-                    debug!("Skipping ignored file: {:?}", entry.path());
-                } else if path.is_file() && is_executable(&path).await {
+                if validate_plugin(&path, logger).await {
                     plugins.insert(path);
                     continue;
-                } else {
-                    logger.warning(&format!("Skipping non-executable file: {:?}", entry.path()));
                 }
             } else {
                 logger.warning(&format!("Ignoring invalid path: {:?}", entry.path()));
@@ -160,7 +158,7 @@ impl DiagCollectCommand {
     ) -> Result<ExitStatus, anyhow::Error> {
         let plugin_name = plugin_path
             .file_stem()
-            .with_context(|| format!("No file name for {}", plugin_path))?;
+            .with_context(|| format!("No file name for {plugin_path}"))?;
         let plugin_output_dir = self.diag_dir.join(plugin_name);
         let output_file = plugin_output_dir.join("output.log");
         file::create_directory_with_defaults(&plugin_output_dir)
@@ -206,9 +204,40 @@ impl DiagCollectCommand {
     }
 }
 
-async fn is_executable(path: &Utf8Path) -> bool {
+async fn validate_plugin(path: &Utf8Path, logger: &mut DualLogger) -> bool {
+    if path.extension() == Some("ignore") {
+        debug!("Skipping file: {path} (ignored file)");
+        return false;
+    }
+
+    if !path.is_file() {
+        debug!("Skipping file: {path} (not a regular file)");
+        return false;
+    }
+
     match tokio::fs::metadata(path).await {
-        Ok(metadata) => metadata.permissions().mode() & 0o111 != 0,
+        Ok(metadata) => {
+            if metadata.permissions().mode() & 0o111 == 0 {
+                logger.warning(&format!("Skipping file: {path} (not executable)"));
+                return false;
+            }
+
+            // extra metadata check when the process is running by the root user for the security
+            if uzers::get_current_uid() == 0 {
+                if metadata.uid() != 0 {
+                    logger.warning(&format!("Skipping file: {path} (not owned by root)"));
+                    return false;
+                }
+                if metadata.permissions().mode() & 0o022 != 0 {
+                    logger.warning(&format!(
+                        "Skipping file: {path} (writable by non-root users)",
+                    ));
+                    return false;
+                }
+            }
+
+            true
+        }
         Err(_) => false,
     }
 }
