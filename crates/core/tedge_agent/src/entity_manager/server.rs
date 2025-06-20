@@ -317,6 +317,9 @@ impl EntityStoreServer {
 
     async fn deregister_entity(&mut self, topic_id: &EntityTopicId) -> Vec<EntityMetadata> {
         let deleted = self.entity_store.deregister_entity(topic_id);
+        if deleted.is_empty() {
+            return deleted;
+        }
 
         let mut topics = TopicFilter::empty();
         for entity in deleted.iter() {
@@ -338,12 +341,15 @@ impl EntityStoreServer {
         }
 
         // A single connection to retrieve all retained metadata messages for all deleted entities
-        match self.mqtt_connector.connect(topics).await {
+        match self.mqtt_connector.connect(topics.clone()).await {
             Ok(mut connection) => {
                 while let Ok(Some(message)) =
                     timeout(Duration::from_secs(1), connection.next_message()).await
                 {
-                    if message.retain && !message.payload_bytes().is_empty() {
+                    if message.retain
+                        && !message.payload_bytes().is_empty()
+                        && topics.accept(&message)
+                    {
                         let clear_msg = MqttMessage::new(&message.topic, "").with_retain();
                         if let Err(err) = self.mqtt_publisher.send(clear_msg).await {
                             error!(
