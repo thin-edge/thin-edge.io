@@ -17,7 +17,7 @@ ${DEVICE_SN}    ${EMPTY}    # Main device serial number
 *** Test Cases ***
 CRUD apis
     Execute Command
-    ...    curl -X POST http://localhost:8000/te/v1/entities -H 'Content-Type: application/json' -d '{"@topic-id": "device/child01//", "@type": "child-device"}'
+    ...    curl -X POST http://localhost:8000/te/v1/entities -H 'Content-Type: application/json' -d '{"@topic-id": "device/child01//", "@type": "child-device", "name": "child01"}'
     Should Have MQTT Messages
     ...    te/device/child01//
     ...    message_contains="@type":"child-device"

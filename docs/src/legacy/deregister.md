@@ -2,7 +2,7 @@
 title: Deregister entities
 tags: [Child-Device, Registration]
 sidebar_position: 2
-description: Deregister child devices and services from %%te%%
+description: Deregister child devices and services from %%te%% using mosquitto_sub
 ---
 
 # Deregister entities
