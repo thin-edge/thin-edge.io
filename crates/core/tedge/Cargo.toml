@@ -62,6 +62,7 @@ toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
+uzers = { workspace = true }
 which = { workspace = true }
 yansi = { workspace = true }
 

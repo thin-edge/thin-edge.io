@@ -4447,6 +4447,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uzers",
  "which",
  "x509-parser 0.16.0",
  "yansi",
