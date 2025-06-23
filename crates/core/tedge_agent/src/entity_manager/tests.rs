@@ -123,6 +123,11 @@ async fn delete_entity_clears_retained_data() {
             json!({"status": "init"}),
             true,
         ),
+        (
+            "te/device/child0///status/health",
+            json!({"status": "up"}),
+            true,
+        ),
     ] {
         mqtt_sender
             .send(MqttMessage::from((topic, &payload.to_string())).with_retain_flag(retain))
@@ -143,6 +148,7 @@ async fn delete_entity_clears_retained_data() {
             MqttMessage::from(("te/device/child0///a/high_temp", "")).with_retain(),
             MqttMessage::from(("te/device/child0///cmd/restart", "")).with_retain(),
             MqttMessage::from(("te/device/child0///cmd/restart/123", "")).with_retain(),
+            MqttMessage::from(("te/device/child0///status/health", "")).with_retain(),
             MqttMessage::from(("te/device/child0//", "")).with_retain(),
         ])
         .await;
