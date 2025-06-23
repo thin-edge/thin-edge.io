@@ -386,7 +386,10 @@ impl C8yAuthRetriever {
         mqtt_config: &mqtt_channel::Config,
         topic_prefix: &TopicPrefix,
     ) -> Result<SmartRestJwtResponse, JwtError> {
-        let mut mqtt_con = Connection::new(mqtt_config).await?;
+        let connection_timeout = Duration::from_secs(30);
+        let mut mqtt_con = tokio::time::timeout(connection_timeout, Connection::new(mqtt_config))
+            .await
+            .map_err(|_| JwtError::MqttConnectionTimeout(connection_timeout))??;
         let pub_topic = format!("{}/s/uat", topic_prefix);
 
         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -471,6 +474,9 @@ pub enum JwtError {
 
     #[error("No JWT token has been received")]
     NoJwtReceived,
+
+    #[error("Timed out after {0:?} when trying to connect to the local MQTT broker")]
+    MqttConnectionTimeout(Duration),
 }
 
 #[cfg(test)]
