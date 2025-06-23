@@ -149,7 +149,7 @@ impl Server for EntityStoreServer {
 }
 
 impl EntityStoreServer {
-    async fn process_mqtt_message(&mut self, message: MqttMessage) {
+    pub(crate) async fn process_mqtt_message(&mut self, message: MqttMessage) {
         if let Ok((topic_id, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) {
             if let Channel::EntityMetadata = channel {
                 self.process_entity_registration(topic_id, message.payload_bytes())
@@ -219,7 +219,11 @@ impl EntityStoreServer {
         }
 
         if let Channel::EntityTwinData { fragment_key } = channel {
-            let fragment_value = serde_json::from_slice(message.payload_bytes())?;
+            let fragment_value = if message.payload().is_empty() {
+                Value::Null
+            } else {
+                serde_json::from_slice(message.payload_bytes())?
+            };
             let twin_message = EntityTwinMessage::new(topic_id, fragment_key, fragment_value);
             self.entity_store.update_twin_fragment(twin_message)?;
         }

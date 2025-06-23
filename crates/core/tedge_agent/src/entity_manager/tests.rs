@@ -18,6 +18,7 @@ use tedge_actors::Sender;
 use tedge_actors::Server;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::EntityType;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttConnection;
 use tedge_mqtt_ext::MqttConnector;
@@ -189,6 +190,27 @@ async fn delete_entity_tree_clears_entities_bottom_up() {
             MqttMessage::from(("te/device/child0//", "")).with_retain(),
         ])
         .await;
+}
+
+#[tokio::test]
+async fn clear_entity_twin_data() {
+    let (mut entity_store, _mqtt_box, _mqtt_sender) = entity::server("device-under-test");
+
+    entity_store
+        .process_mqtt_message(MqttMessage::from(("te/device/main///twin/x", "9")).with_retain())
+        .await;
+    let entity = entity_store
+        .get(&"device/main//".parse::<EntityTopicId>().unwrap())
+        .unwrap();
+    assert_eq!(entity.twin_data.get("x"), Some(&9.into()));
+
+    entity_store
+        .process_mqtt_message(MqttMessage::from(("te/device/main///twin/x", "")).with_retain())
+        .await;
+    let entity = entity_store
+        .get(&"device/main//".parse::<EntityTopicId>().unwrap())
+        .unwrap();
+    assert_eq!(entity.twin_data.get("x"), None);
 }
 
 proptest! {
