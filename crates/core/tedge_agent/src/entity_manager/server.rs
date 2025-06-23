@@ -328,6 +328,7 @@ impl EntityStoreServer {
                 ChannelFilter::EntityTwinData,
                 ChannelFilter::AnyCommand,
                 ChannelFilter::AnyCommandMetadata,
+                ChannelFilter::Health,
             ] {
                 let topic = self
                     .mqtt_schema

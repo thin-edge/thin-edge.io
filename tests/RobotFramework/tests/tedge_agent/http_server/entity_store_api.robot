@@ -513,9 +513,9 @@ Delete entity clears entity registration and all retained data messages
 
     ${deleted}=    Deregister Entity    device/child0//
 
-    Should Not Have Retained MQTT Messages    te/device/child000//#
-    Should Not Have Retained MQTT Messages    te/device/child00//#
-    Should Not Have Retained MQTT Messages    te/device/child0//#
+    Should Not Have Retained MQTT Messages    te/device/child000/#
+    Should Not Have Retained MQTT Messages    te/device/child00/#
+    Should Not Have Retained MQTT Messages    te/device/child0/#
 
 
 *** Keywords ***
