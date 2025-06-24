@@ -149,7 +149,7 @@ so other properties like `@type` and `@id` cannot be updated after the registrat
 
 :::note
 The complete definition of the new entity must be provided in the payload
-unlike the [HTTP PATCH API](./http_api.md#update-entity), that accepts the specific fragments to be updated.
+unlike the [HTTP PATCH API](./rest_api.md#update-entity), that accepts the specific fragments to be updated.
 :::note
 
 ### Example: Update the parent of an entity
@@ -179,5 +179,5 @@ tedge mqtt pub -r 'te/device/child01//' ''
 :::note
 The deregistration of descendant entities is done asynchronously by the `tedge-agent`
 and hence the completion time would vary based on how deep the hierarchy is.
-Using the [HTTP API](./http_api.md#delete-entity) is recommended for deregistration as it provides clear feedback on completion.
+Using the [HTTP API](./rest_api.md#delete-entity) is recommended for deregistration as it provides clear feedback on completion.
 :::
