@@ -55,3 +55,4 @@ Setup With Self-Signed Certificate
     ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
     Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --cert-method selfsigned
     Set Test Variable    $DEVICE_SN
+    Register Certificate For Cleanup
