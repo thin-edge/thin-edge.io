@@ -1,3 +1,5 @@
+use anyhow::Context;
+use camino::Utf8Path;
 use device_id::DeviceIdError;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
@@ -6,8 +8,11 @@ use sha1::Digest;
 use sha1::Sha1;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_p11_server::CryptokiConfig;
 use time::Duration;
 use time::OffsetDateTime;
+use x509_parser::oid_registry;
+use x509_parser::public_key::PublicKey;
 pub use zeroize::Zeroizing;
 #[cfg(feature = "reqwest")]
 mod cloud_root_certificate;
@@ -140,11 +145,110 @@ pub enum ValidityStatus {
     NotValidYet { valid_in: std::time::Duration },
 }
 
+#[derive(Debug, Clone)]
 pub enum KeyKind {
     /// Create a new key
     New,
     /// Reuse the existing PEM-encoded key pair
     Reuse { keypair_pem: String },
+    /// Reuse the keypair where we can't read the private key because it's on the HSM.
+    ReuseRemote(RemoteKeyPair),
+}
+
+impl KeyKind {
+    pub fn from_cryptoki_and_existing_cert(
+        cryptoki_config: CryptokiConfig,
+        current_cert: &Utf8Path,
+    ) -> Result<Self, CertificateError> {
+        let cert = PemCertificate::from_pem_file(current_cert)?;
+        let cert = PemCertificate::extract_certificate(&cert.pem)?;
+        let public_key_raw = cert.public_key().subject_public_key.data.to_vec();
+
+        // map public key to signature identifier (some keys support many types of signatures, on
+        // our side we only do P256/P384/RSA2048 with a single type of signature each)
+        // for P256/P384, former has only SHA256 and latter only SHA384 signature, so no questions there
+        // but for RSA, AFAIK we can use SHA256 with all of them. RSA_PSS also isn't supported by
+        // rcgen, but we're free to use regular RSA_PKCS1_SHA256
+        let public_key = cert
+            .public_key()
+            .parsed()
+            .context("Failed to read public key from the certificate")?;
+        let signature_algorithm = match public_key {
+            PublicKey::EC(ec) => match ec.key_size() {
+                256 => oid_registry::OID_SIG_ECDSA_WITH_SHA256,
+                384 => oid_registry::OID_SIG_ECDSA_WITH_SHA384,
+                // P521 (size 528 reported by key_size() is not yet supported by rcgen)
+                // https://github.com/rustls/rcgen/issues/60
+                _ => {
+                    return Err(anyhow::anyhow!("Unsupported public key. Only P256/P384/RSA2048/RSA3072/RSA4096 are supported for certificate renewal").into());
+                }
+            },
+            PublicKey::RSA(_) => oid_registry::OID_PKCS1_SHA256WITHRSA,
+            _ => return Err(anyhow::anyhow!("Unsupported public key. Only P256/P384/RSA2048/RSA3072/RSA4096 are supported for certificate renewal").into())
+        };
+        let signature_algorithm: Vec<u64> = signature_algorithm
+            .iter()
+            .map(|i| i.collect())
+            .unwrap_or_default();
+        let algorithm = rcgen::SignatureAlgorithm::from_oid(&signature_algorithm)?;
+
+        Ok(Self::ReuseRemote(RemoteKeyPair {
+            cryptoki_config,
+            public_key_raw,
+            algorithm,
+        }))
+    }
+}
+
+/// A key pair using a remote private key.
+///
+/// To generate a CSR we need:
+/// - the public key, because the public key is a part of the certificate (subject public key info)
+/// - the private key, to sign the CSR to prove that the public key is ours
+///
+/// With private key in the HSM, we can't access its private parts, but we can still use it to sign.
+/// For the public key, instead of deriving it from the private key, which needs some additions to
+/// our PKCS11 code, we can just reuse the SPKI section from an existing certificate if we have it,
+/// i.e. we're renewing and not getting a brand new cert.
+///
+/// An alternative, looking at how it's done in gnutls (_pkcs11_privkey_get_pubkey and
+/// pkcs11_read_pubkey functions), seems to be:
+/// - if the key is RSA, a public key can be trivially derived from the public properties of PKCS11
+///   private key object
+/// - for EC key, it should also be possible to derive public from private
+/// - if that fails, a public key object may also be present on the token
+#[derive(Debug, Clone)]
+pub struct RemoteKeyPair {
+    cryptoki_config: CryptokiConfig,
+    public_key_raw: Vec<u8>,
+    algorithm: &'static rcgen::SignatureAlgorithm,
+}
+
+impl RemoteKeyPair {
+    pub fn to_key_pair(&self) -> Result<KeyPair, CertificateError> {
+        Ok(KeyPair::from_remote(Box::new(self.clone()))?)
+    }
+}
+
+impl rcgen::RemoteKeyPair for RemoteKeyPair {
+    fn public_key(&self) -> &[u8] {
+        &self.public_key_raw
+    }
+
+    fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, rcgen::Error> {
+        // the error here is not PEM-related, but we need to return a foreign error type, and there
+        // are no other better variants that could let us return context, so we'll have to use this
+        // until `rcgen::Error::RemoteKeyError` can take a parameter
+        let signer = tedge_p11_server::signing_key(self.cryptoki_config.clone())
+            .map_err(|e| rcgen::Error::PemError(e.to_string()))?;
+        signer
+            .sign(msg)
+            .map_err(|e| rcgen::Error::PemError(e.to_string()))
+    }
+
+    fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
+        self.algorithm
+    }
 }
 
 pub struct KeyCertPair {
@@ -176,7 +280,9 @@ impl KeyCertPair {
         // as rcgen library will not parse it for certificate signing request
         let params = Self::create_csr_parameters(config, id, key_kind)?;
         Ok(KeyCertPair {
-            certificate: Zeroizing::new(Certificate::from_params(params)?),
+            certificate: Zeroizing::new(
+                Certificate::from_params(params).context("Failed to create CSR")?,
+            ),
         })
     }
 
@@ -215,15 +321,23 @@ impl KeyCertPair {
         let mut params = CertificateParams::default();
         params.distinguished_name = distinguished_name;
 
-        if let KeyKind::Reuse { keypair_pem } = key_kind {
-            // Use the same signing algorithm as the existing key
-            // Failing to do so leads to an error telling the algorithm is not compatible
-            let key_pair = KeyPair::from_pem(keypair_pem)?;
-            params.alg = key_pair.algorithm();
-            params.key_pair = Some(key_pair);
-        } else {
-            // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
-            params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+        match key_kind {
+            KeyKind::New => {
+                // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
+                params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+            }
+            KeyKind::Reuse { keypair_pem } => {
+                // Use the same signing algorithm as the existing key
+                // Failing to do so leads to an error telling the algorithm is not compatible
+                let key_pair = KeyPair::from_pem(keypair_pem)?;
+                params.alg = key_pair.algorithm();
+                params.key_pair = Some(key_pair);
+            }
+            KeyKind::ReuseRemote(key_pair) => {
+                let key_pair = key_pair.to_key_pair()?;
+                params.alg = key_pair.algorithm();
+                params.key_pair = Some(key_pair)
+            }
         }
 
         Ok(params)
