@@ -73,11 +73,11 @@ Select Private key using a request URI
     Should Contain    ${stderr}    item=cryptoki: socket (key: pkcs11:token=token123)
 
     Execute Command    cmd=tedge config unset device.key_uri
-    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:token=token123
+    Execute Command    cmd=tedge config set device.key_uri pkcs11:token=token123
     ${stderr}=    Tedge Reconnect Should Fail With    Failed to find a signing key
     Should Contain    ${stderr}    item=cryptoki: socket (key: pkcs11:token=token123)
 
-    Execute Command    cmd=tedge config set c8y.device.key_uri "pkcs11:token=tedge;object=tedge"
+    Execute Command    cmd=tedge config set device.key_uri "pkcs11:token=tedge;object=tedge"
     ${stderr}=    Tedge Reconnect Should Succeed
     Should Contain    ${stderr}    item=cryptoki: socket (key: pkcs11:token=tedge;object=tedge)
 
@@ -181,24 +181,20 @@ Connect to C8y using new keypair
     ELSE
         Fail    Wrong key type provided.
     END
-    VAR    ${cert_path}=    /etc/tedge/device-certs/${object_name}.pem
+    ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=${True}
 
     Execute Command
     ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ${type} ${p11tool_args} --label ${object_name} "pkcs11:token=tedge"
-    # we should probably generate certs signed by CA instead of uploading them
     Execute Command
-    ...    cmd=GNUTLS_PIN=123456 certtool --generate-self-signed --template ${CERT_TEMPLATE} --outfile ${cert_path} --load-privkey "pkcs11:token=tedge;object=${object_name}"
+    ...    cmd=GNUTLS_PIN=123456 certtool --generate-request --template "${CERT_TEMPLATE}" --outfile "${csr_path}" --load-privkey "pkcs11:token=tedge;object=${object_name}"
 
-    Execute Command    tedge config set c8y.device.cert_path ${cert_path}
-    Execute Command    cmd=tedge config set c8y.device.key_uri "pkcs11:token=tedge;object=${object_name}"
+    Execute Command    cmd=tedge config set device.key_uri "pkcs11:token=tedge;object=${object_name}"
 
-    # upload (THIS STAYS ON C8Y AND ISN'T DELETED)
-    Upload Currently Used Certificates To Cumulocity
+    Register Device With Cumulocity CA    ${csr_path}
 
     Tedge Reconnect Should Succeed
 
-    Execute Command    tedge config unset c8y.device.cert_path
-    Execute Command    tedge config unset c8y.device.key_uri
+    Execute Command    tedge config unset device.key_uri
 
 Custom Setup
     ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
@@ -208,10 +204,10 @@ Custom Setup
     Execute Command    sudo usermod -a -G softhsm tedge
     Transfer To Device    ${CURDIR}/data/init_softhsm.sh    /usr/bin/
 
-    # initialize the soft hsm and create a self-signed certificate
+    # initialize the soft hsm and create a certificate signing request
     Execute Command    tedge config set device.cryptoki.pin 123456
     Execute Command    tedge config set device.cryptoki.module_path /usr/lib/softhsm/libsofthsm2.so
-    Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --self-signed --device-id "${DEVICE_SN}" --pin 123456
+    Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --device-id "${DEVICE_SN}" --pin 123456
 
     # configure tedge
     ${domain}=    Cumulocity.Get Domain
@@ -219,7 +215,8 @@ Custom Setup
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge config set device.cryptoki.mode socket
 
-    Upload Currently Used Certificates To Cumulocity
+    ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=${True}
+    Register Device With Cumulocity CA    ${csr_path}
 
     Set tedge-p11-server Uri    value=
 
@@ -238,7 +235,8 @@ Tedge Reconnect Should Fail With
     Should Contain    ${stderr}    ${error}
     RETURN    ${stderr}
 
-Upload Currently Used Certificates To Cumulocity
+Register Device With Cumulocity CA
+    [Arguments]    ${csr_path}
+    ${credentials}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN}
     Execute Command
-    ...    cmd=sudo env C8Y_USER="${C8Y_CONFIG.username}" C8Y_PASSWORD="${C8Y_CONFIG.password}" tedge cert upload c8y
-    Register Certificate For Cleanup
+    ...    cmd=tedge cert download c8y --csr-path "${csr_path}" --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --retry-every 5s --max-timeout 60s
