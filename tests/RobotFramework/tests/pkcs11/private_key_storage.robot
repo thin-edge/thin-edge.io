@@ -203,11 +203,10 @@ Connect to C8y using new keypair
 Custom Setup
     ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
     Set Suite Variable    $DEVICE_SN
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
+    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-bootstrap --no-connect || true
     # Allow the tedge user to access softhsm
     Execute Command    sudo usermod -a -G softhsm tedge
     Transfer To Device    ${CURDIR}/data/init_softhsm.sh    /usr/bin/
-    Remove Existing Certificates
 
     # initialize the soft hsm and create a self-signed certificate
     Execute Command    tedge config set device.cryptoki.pin 123456
@@ -223,9 +222,6 @@ Custom Setup
     Upload Currently Used Certificates To Cumulocity
 
     Set tedge-p11-server Uri    value=
-
-Remove Existing Certificates
-    Execute Command    cmd=rm -f "$(tedge config get device.key_path)" "$(tedge config get device.cert_path)"
 
 Set tedge-p11-server Uri
     [Arguments]    ${value}
@@ -245,3 +241,4 @@ Tedge Reconnect Should Fail With
 Upload Currently Used Certificates To Cumulocity
     Execute Command
     ...    cmd=sudo env C8Y_USER="${C8Y_CONFIG.username}" C8Y_PASSWORD="${C8Y_CONFIG.password}" tedge cert upload c8y
+    Register Certificate For Cleanup
