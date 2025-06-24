@@ -4,10 +4,11 @@
 //! - thin-edge: docs/src/references/hsm-support.md
 //! - PKCS#11: https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html
 
-use asn1_rs::FromDer as _;
-pub use cryptoki::types::AuthPin;
-
 use anyhow::Context;
+use asn1_rs::BigInt;
+use asn1_rs::FromDer as _;
+use asn1_rs::Integer;
+use asn1_rs::SequenceOf;
 use asn1_rs::ToDer;
 use camino::Utf8PathBuf;
 use cryptoki::context::CInitializeArgs;
@@ -34,6 +35,10 @@ use tracing::warn;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::Mutex;
+
+pub use cryptoki::types::AuthPin;
+
+mod uri;
 
 // oIDs for curves defined here: https://datatracker.ietf.org/doc/html/rfc5480#section-2.1.1.1
 // other can be browsed here: https://oid-base.com/get/1.3.132.0.34
@@ -395,19 +400,32 @@ impl Signer for PkcsSigner {
     }
 }
 
-fn format_asn1_ecdsa_signature(r_bytes: &[u8], s_bytes: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
-    let mut writer = Vec::new();
+/// Formats the output of PKCS11 EC signature as an ASN.1 Ecdsa-Sig-Value.
+///
+/// This function takes the raw `r` and `s` byte slices and encodes them as ASN.1 INTEGERs,
+/// then wraps them in an ASN.1 SEQUENCE, and finally serializes the structure to DER.
+///
+/// PKCS#11 EC signature operations typically return a raw concatenation of the `r` and `s` values,
+/// each representing a big-endian positive integer of fixed length (depending on the curve).
+/// However, most cryptographic protocols (including TLS and X.509) expect ECDSA signatures to be
+/// encoded as an ASN.1 DER SEQUENCE of two INTEGERs, as described in RFC 3279 section 2.2.3.
+///
+/// - https://docs.oasis-open.org/pkcs11/pkcs11-curr/v3.0/os/pkcs11-curr-v3.0-os.html#_Toc30061178
+/// - https://www.ietf.org/rfc/rfc3279#section-2.2.3
+fn format_asn1_ecdsa_signature(r_bytes: &[u8], s_bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
+    let r = format_asn1_integer(r_bytes).to_signed_bytes_be();
+    let r = Integer::new(&r);
+    let s = format_asn1_integer(s_bytes).to_signed_bytes_be();
+    let s = Integer::new(&s);
 
-    write_asn1_integer(&mut writer, r_bytes);
-
-    write_asn1_integer(&mut writer, s_bytes);
-
-    let seq = asn1_rs::Sequence::new(writer.into());
-    let b = seq.to_der_vec().unwrap();
-    Ok(b)
+    let seq = SequenceOf::<Integer>::from_iter([r, s]);
+    let seq_der = seq
+        .to_der_vec()
+        .context("Unexpected ASN.1 error when serializing Ecdsa-Sig-Value")?;
+    Ok(seq_der)
 }
 
-fn write_asn1_integer(writer: &mut dyn std::io::Write, b: &[u8]) {
+fn format_asn1_integer(b: &[u8]) -> BigInt {
     let mut i = asn1_rs::BigInt::from_signed_bytes_be(b);
     if i.sign() == asn1_rs::Sign::Minus {
         // Prepend a most significant zero byte if value < 0
@@ -416,9 +434,7 @@ fn write_asn1_integer(writer: &mut dyn std::io::Write, b: &[u8]) {
 
         i = asn1_rs::BigInt::from_signed_bytes_be(&positive);
     }
-    let i = i.to_signed_bytes_be();
-    let i = asn1_rs::Integer::new(&i);
-    let _ = i.write_der(writer);
+    i
 }
 
 fn get_ec_mechanism(session: &Session, key: ObjectHandle) -> anyhow::Result<SigScheme> {
@@ -449,196 +465,33 @@ fn get_ec_mechanism(session: &Session, key: ObjectHandle) -> anyhow::Result<SigS
     }
 }
 
-pub mod uri {
-    use std::borrow::Cow;
-    use std::collections::HashMap;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use asn1_rs::Any;
+    use asn1_rs::Integer;
+    use asn1_rs::SequenceOf;
 
-    /// Attributes decoded from a PKCS #11 URL.
-    ///
-    /// Attributes only relevant to us shall be put into fields and the rest is in `other` hashmap.
-    ///
-    /// https://www.rfc-editor.org/rfc/rfc7512.html
-    #[derive(Debug, Clone, Default)]
-    pub struct Pkcs11Uri<'a> {
-        pub token: Option<Cow<'a, str>>,
-        pub serial: Option<Cow<'a, str>>,
-        pub id: Option<Vec<u8>>,
-        pub object: Option<Cow<'a, str>>,
-        pub other: HashMap<&'a str, Cow<'a, str>>,
-    }
+    #[test]
+    fn test_format_asn1_ecdsa_signature_invalid_asn1() {
+        // Use 32-byte r and s (as for P-256)
+        let r = [0x01u8; 32];
+        let s = [0xffu8; 32];
 
-    impl<'a> Pkcs11Uri<'a> {
-        pub fn parse(uri: &'a str) -> anyhow::Result<Self> {
-            let path = uri
-                .strip_prefix("pkcs11:")
-                .ok_or_else(|| anyhow::anyhow!("missing PKCS #11 URI scheme"))?;
+        let der = format_asn1_ecdsa_signature(&r, &s).expect("Should encode");
 
-            // split of the query component
-            let path = path.split_once('?').map(|(l, _)| l).unwrap_or(path);
+        // Try to parse as ASN.1 SEQUENCE of two INTEGERs
+        let parsed = Any::from_der(&der);
+        assert!(parsed.is_ok(), "Should parse as ASN.1");
 
-            // parse attributes, duplicate attributes are an error (RFC section 2.3)
-            let pairs_iter = path.split(';').filter_map(|pair| pair.split_once('='));
-            let mut pairs: HashMap<&str, &str> = HashMap::new();
-            for (k, v) in pairs_iter {
-                let prev_value = pairs.insert(k, v);
-                if prev_value.is_some() {
-                    anyhow::bail!("PKCS#11 URI contains duplicate attribute ({k})");
-                }
-            }
+        // Now check that the sequence contains exactly two INTEGERs
+        let seq: SequenceOf<Integer> = SequenceOf::from_der(&der)
+            .expect("Should parse as sequence")
+            .1;
+        assert_eq!(seq.len(), 2, "ASN.1 sequence should have two items");
 
-            let token = pairs
-                .remove("token")
-                .map(|v| percent_encoding::percent_decode_str(v).decode_utf8_lossy());
-            let serial = pairs
-                .remove("serial")
-                .map(|v| percent_encoding::percent_decode_str(v).decode_utf8_lossy());
-            let object = pairs
-                .remove("object")
-                .map(|v| percent_encoding::percent_decode_str(v).decode_utf8_lossy());
-
-            let id: Option<Vec<u8>> = pairs
-                .remove("id")
-                .map(|id| percent_encoding::percent_decode_str(id).collect());
-
-            let other = pairs
-                .into_iter()
-                .map(|(k, v)| {
-                    (
-                        k,
-                        percent_encoding::percent_decode_str(v).decode_utf8_lossy(),
-                    )
-                })
-                .collect();
-
-            Ok(Self {
-                token,
-                serial,
-                id,
-                object,
-                other,
-            })
-        }
-
-        /// Add new attributes from `other` to `self`.
-        ///
-        /// If other contains new attributes not present in self, add them to self. If these
-        /// attributes are already present in self, preserve value currently in self.
-        pub fn append_attributes(&mut self, other: Self) {
-            self.token = self.token.take().or(other.token);
-            self.serial = self.serial.take().or(other.serial);
-            self.id = self.id.take().or(other.id);
-            self.object = self.object.take().or(other.object);
-
-            for (attribute, value) in other.other {
-                if !self.other.contains_key(attribute) {
-                    self.other.insert(attribute, value);
-                }
-            }
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test]
-        fn decodes_valid_pkcs11_uri() {
-            // test input URIs taken from RFC examples section and combined with properties we actually use
-            // https://www.rfc-editor.org/rfc/rfc7512.html#section-3
-            let input = "pkcs11:token=The%20Software%20PKCS%2311%20Softtoken;\
-            manufacturer=Snake%20Oil,%20Inc.;\
-            model=1.0;\
-            object=my-certificate;\
-            type=cert;\
-            id=%69%95%3E%5C%F4%BD%EC%91;\
-            serial=\
-            ?pin-source=file:/etc/token_pin";
-
-            let attributes = Pkcs11Uri::parse(input).unwrap();
-
-            assert_eq!(attributes.token.unwrap(), "The Software PKCS#11 Softtoken");
-            assert_eq!(
-                attributes.other.get("manufacturer").unwrap(),
-                "Snake Oil, Inc."
-            );
-            assert_eq!(attributes.other.get("model").unwrap(), "1.0");
-            assert_eq!(attributes.serial.unwrap(), "");
-            assert_eq!(attributes.object.unwrap(), "my-certificate");
-            assert_eq!(
-                attributes.id,
-                Some(vec![0x69, 0x95, 0x3e, 0x5c, 0xf4, 0xbd, 0xec, 0x91])
-            );
-        }
-
-        #[test]
-        fn fails_on_uris_with_duplicate_attributes() {
-            let input = "pkcs11:token=my-token;token=my-token";
-            let err = Pkcs11Uri::parse(input).unwrap_err();
-            assert!(err
-                .to_string()
-                .contains("PKCS#11 URI contains duplicate attribute (token)"));
-        }
-
-        #[test]
-        fn fails_on_uris_with_invalid_scheme() {
-            let input = "not a pkcs#11 uri";
-            let err = Pkcs11Uri::parse(input).unwrap_err();
-            assert!(err.to_string().contains("missing PKCS #11 URI scheme"));
-        }
-
-        #[test]
-        fn appends_attributes_correctly() {
-            let mut uri1 = Pkcs11Uri::parse("pkcs11:token=token1").unwrap();
-            let uri2 = Pkcs11Uri::parse(
-                "pkcs11:token=token2;serial=serial2;id=%01%02;object=object2;key1=value1",
-            )
-            .unwrap();
-
-            uri1.append_attributes(uri2);
-
-            assert_eq!(uri1.token.unwrap(), "token1");
-            assert_eq!(uri1.serial.unwrap(), "serial2");
-            assert_eq!(uri1.id, Some(vec![0x01, 0x02]));
-            assert_eq!(uri1.object.unwrap(), "object2");
-            assert_eq!(uri1.other.get("key1").unwrap(), "value1");
-        }
-
-        #[test]
-        fn appends_attributes_with_no_conflicts() {
-            let mut uri1 = Pkcs11Uri::parse("pkcs11:").unwrap();
-            let uri2 = Pkcs11Uri::parse(
-                "pkcs11:token=token2;serial=serial2;id=%01%02;object=object2;key1=value1",
-            )
-            .unwrap();
-
-            uri1.append_attributes(uri2);
-
-            assert_eq!(uri1.token.unwrap(), "token2");
-            assert_eq!(uri1.serial.unwrap(), "serial2");
-            assert_eq!(uri1.id, Some(vec![0x01, 0x02]));
-            assert_eq!(uri1.object.unwrap(), "object2");
-            assert_eq!(uri1.other.get("key1").unwrap(), "value1");
-        }
-
-        #[test]
-        fn does_not_override_existing_attributes() {
-            let mut uri1 = Pkcs11Uri::parse(
-                "pkcs11:token=token1;serial=serial1;id=%01;object=object1;key1=value1",
-            )
-            .unwrap();
-            let uri2 = Pkcs11Uri::parse(
-                "pkcs11:token=token2;serial=serial2;id=%02;object=object2;key2=value2",
-            )
-            .unwrap();
-
-            uri1.append_attributes(uri2);
-
-            assert_eq!(uri1.token.unwrap(), "token1");
-            assert_eq!(uri1.serial.unwrap(), "serial1");
-            assert_eq!(uri1.id, Some(vec![0x01]));
-            assert_eq!(uri1.object.unwrap(), "object1");
-            assert_eq!(uri1.other.get("key1").unwrap(), "value1");
-            assert_eq!(uri1.other.get("key2").unwrap(), "value2");
-        }
+        // make sure input is not misinterpreted as negative numbers
+        assert_eq!(seq[0].as_bigint().to_bytes_be().1, r);
+        assert_eq!(seq[1].as_bigint().to_bytes_be().1, s);
     }
 }
