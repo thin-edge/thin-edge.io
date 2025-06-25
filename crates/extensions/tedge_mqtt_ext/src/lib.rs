@@ -16,6 +16,7 @@ use mqtt_channel::SubscriberOps;
 pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
 use std::convert::Infallible;
+use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
@@ -36,6 +37,7 @@ use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
 use trie::MqtTrie;
+use trie::RankTopicFilter;
 use trie::SubscriptionDiff;
 
 pub type MqttConfig = mqtt_channel::Config;
@@ -139,9 +141,10 @@ impl MqttActorBuilder {
             tracing::info!(target: "MQTT sub", "{pattern}");
         }
 
-        let mqtt_config = self.mqtt_config.with_subscriptions(topic_filter);
+        let mqtt_config = self.mqtt_config.clone().with_subscriptions(topic_filter);
         MqttActor::new(
             mqtt_config,
+            self.mqtt_config,
             self.input_receiver,
             self.subscriber_addresses,
             self.trie.builder(),
@@ -303,6 +306,7 @@ impl Builder<MqttActor> for MqttActorBuilder {
 
 pub struct FromPeers {
     input_receiver: InputCombiner,
+    base_config: mqtt_channel::Config,
     subscriptions: ClientMessageBox<TrieRequest, TrieResponse>,
 }
 
@@ -315,25 +319,41 @@ impl FromPeers {
     async fn relay_messages_to(
         &mut self,
         outgoing_mqtt: &mut mpsc::UnboundedSender<MqttMessage>,
+        tx_to_peers: &mut mpsc::UnboundedSender<(ClientId, MqttMessage)>,
         client: impl SubscriberOps + Clone + Send + 'static,
     ) -> Result<(), RuntimeError> {
         while let Ok(Some(message)) = self.try_recv().await {
             match message {
                 PublishOrSubscribe::Publish(message) => {
                     tracing::debug!(target: "MQTT pub", "{message}");
-                    SinkExt::send(outgoing_mqtt, message)
+                    SinkExt::send(outgoing_mqtt,  message)
                         .await
                         .map_err(Box::new)?;
                 }
                 PublishOrSubscribe::Subscribe(request) => {
                     let TrieResponse::Diff(diff) = self
                         .subscriptions
-                        .await_response(TrieRequest::SubscriptionRequest(request))
+                        .await_response(TrieRequest::SubscriptionRequest(request.clone()))
                         .await
                         .map_err(Box::new)?
                     else {
                         unreachable!("Subscription request always returns diff")
                     };
+                    let overlapping_subscriptions = request
+                        .diff
+                        .subscribe
+                        .iter()
+                        .filter(|s| {
+                            !diff
+                                .subscribe
+                                .iter()
+                                .any(|s2| RankTopicFilter(s2) >= RankTopicFilter(s))
+                        })
+                        .collect::<Vec<_>>();
+                    let mut tf = TopicFilter::empty();
+                    for sub in overlapping_subscriptions {
+                        tf.add_unchecked(&sub);
+                    }
                     let client = client.clone();
                     tokio::spawn(async move {
                         // We're running outside the main task, so we can't return an error
@@ -343,6 +363,18 @@ impl FromPeers {
                         }
                         if !diff.unsubscribe.is_empty() {
                             client.unsubscribe_many(diff.unsubscribe).await.unwrap();
+                        }
+                    });
+                    let dynamic_connection_config = self.base_config.clone().with_subscriptions(tf);
+                    let mut sender = tx_to_peers.clone();
+                    tokio::spawn(async move {
+                        let mut conn = mqtt_channel::Connection::new(&dynamic_connection_config).await.unwrap();
+                        while let Ok(msg) = tokio::time::timeout(Duration::from_secs(10), conn.received.next()).await {
+                            if let Some(msg) = msg {
+                                if msg.retain {
+                                    SinkExt::send(&mut sender, (request.client_id, msg)).await.unwrap();
+                                }
+                            }
                         }
                     });
                 }
@@ -373,10 +405,21 @@ impl ToPeers {
     async fn relay_messages_from(
         mut self,
         incoming_mqtt: &mut mpsc::UnboundedReceiver<MqttMessage>,
+        rx_from_peers: &mut mpsc::UnboundedReceiver<(ClientId, MqttMessage)>,
     ) -> Result<(), RuntimeError> {
-        while let Some(message) = incoming_mqtt.next().await {
-            tracing::debug!(target: "MQTT recv", "{message}");
-            self.send(message).await?;
+        loop {
+            tokio::select! {
+                message = incoming_mqtt.next() => {
+                    let Some(message) = message else { break };
+                    tracing::debug!(target: "MQTT recv", "{message}");
+                    self.send(message).await?;
+                }
+                message = rx_from_peers.next() => {
+                    let Some((client, message)) = message else { break };
+                    tracing::debug!(target: "MQTT recv", "{message}");
+                    self.sender_by_id(client).send(message.clone()).await?;
+                }
+            };
         }
         Ok(())
     }
@@ -390,9 +433,13 @@ impl ToPeers {
             unreachable!("MatchRequest always returns Matched")
         };
         for client in matches {
-            self.peer_senders[client.0].send(message.clone()).await?;
+            self.sender_by_id(client).send(message.clone()).await?;
         }
         Ok(())
+    }
+
+    fn sender_by_id(&mut self, id: ClientId) -> &mut Box<dyn CloneSender<MqttMessage>> {
+        &mut self.peer_senders[id.0]
     }
 }
 
@@ -421,6 +468,7 @@ pub struct MqttActor {
 impl MqttActor {
     fn new(
         mqtt_config: mqtt_channel::Config,
+        base_config: mqtt_channel::Config,
         input_receiver: InputCombiner,
         peer_senders: Vec<DynSender<MqttMessage>>,
         mut trie_service: ServerActorBuilder<TrieService, Sequential>,
@@ -429,6 +477,7 @@ impl MqttActor {
             mqtt_config,
             from_peers: FromPeers {
                 input_receiver,
+                base_config,
                 subscriptions: ClientMessageBox::new(&mut trie_service),
             },
             to_peers: ToPeers {
@@ -456,13 +505,14 @@ impl Actor for MqttActor {
                 return Ok(())
             }
         };
+        let (mut to_peer, mut from_peer) = mpsc::unbounded();
 
         tokio::spawn(async move { self.trie_service.run().await });
 
         tedge_utils::futures::select(
             self.from_peers
-                .relay_messages_to(&mut mqtt_client.published, mqtt_client.subscriptions),
-            self.to_peers.relay_messages_from(&mut mqtt_client.received),
+                .relay_messages_to(&mut mqtt_client.published, &mut to_peer, mqtt_client.subscriptions),
+            self.to_peers.relay_messages_from(&mut mqtt_client.received, &mut from_peer),
         )
         .await
     }
@@ -559,6 +609,8 @@ mod unit_tests {
             .subscribe_client
             .assert_subscribed_to(["a/b".into()])
             .await;
+
+        actor.close().await;
     }
 
     #[tokio::test]
@@ -572,11 +624,13 @@ mod unit_tests {
                 id: 0
             ))
             .await;
-
+        
         actor
             .subscribe_client
             .assert_unsubscribed_from(["a/b".into()])
             .await;
+    
+        actor.close().await;
     }
 
     #[tokio::test]
@@ -595,6 +649,8 @@ mod unit_tests {
             .subscribe_client
             .assert_subscribed_to(["#".into()])
             .await;
+
+        actor.close().await;
     }
 
     #[tokio::test]
@@ -612,7 +668,9 @@ mod unit_tests {
                 &Topic::new("a/b").unwrap(),
                 "test message"
             ))
-        )
+        );
+
+        actor.close().await;
     }
 
     #[tokio::test]
@@ -631,6 +689,8 @@ mod unit_tests {
             .unwrap()
             .try_next()
             .is_err());
+
+        actor.close().await;
     }
 
     struct MqttActorTest {
@@ -640,6 +700,17 @@ mod unit_tests {
         sent_to_channel: mpsc::UnboundedReceiver<MqttMessage>,
         sent_to_clients: HashMap<usize, mpsc::Receiver<MqttMessage>>,
         inject_received_message: mpsc::UnboundedSender<MqttMessage>,
+        from_peers: Option<tokio::task::JoinHandle<Result<(), RuntimeError>>>,
+        to_peers: Option<tokio::task::JoinHandle<Result<(), RuntimeError>>>,
+        waited: bool,
+    }
+
+    impl Drop for MqttActorTest {
+        fn drop(&mut self) {
+            if !self.waited {
+                panic!("Call `MqttActorTest::close` at the end of the test")
+            }
+        }
     }
 
     impl MqttActorTest {
@@ -658,6 +729,7 @@ mod unit_tests {
             let mut ts = TrieService::with_default_subscriptions(default_subscriptions);
             let mut fp = FromPeers {
                 input_receiver: input_combiner,
+                base_config: <_>::default(),
                 subscriptions: ClientMessageBox::new(&mut ts),
             };
             let mut sent_to_clients = HashMap::new();
@@ -676,12 +748,13 @@ mod unit_tests {
             };
             tokio::spawn(async move { ts.build().run().await });
 
+            let (mut tx, mut rx) = mpsc::unbounded();
             let subscribe_client = MockSubscriberOps::default();
-            {
+            let from_peers = {
                 let client = subscribe_client.clone();
-                tokio::spawn(async move { fp.relay_messages_to(&mut outgoing_mqtt, client).await });
-            }
-            tokio::spawn(async move { tp.relay_messages_from(&mut incoming_messages).await });
+                tokio::spawn(async move { fp.relay_messages_to(&mut outgoing_mqtt, &mut tx, client).await })
+            };
+            let to_peers = tokio::spawn(async move { tp.relay_messages_from(&mut incoming_messages, &mut rx).await });
 
             Self {
                 subscribe_client,
@@ -690,7 +763,24 @@ mod unit_tests {
                 sent_to_clients,
                 sent_to_channel: sent_messages,
                 inject_received_message,
+                from_peers: Some(from_peers),
+                to_peers: Some(to_peers),
+                waited: false,
             }
+        }
+
+        /// Closes the channels associated with this actor and waits for both
+        /// loops to finish executing
+        /// 
+        /// This allows the `SubscriberOps::drop` implementation to reliably
+        /// flag any unasserted communication
+        pub async fn close(mut self) {
+            self.pub_tx.close_channel();
+            self.sub_tx.close_channel();
+            self.inject_received_message.close_channel();
+            self.from_peers.take().unwrap().await.unwrap().unwrap();
+            self.to_peers.take().unwrap().await.unwrap().unwrap();
+            self.waited = true;
         }
 
         /// Simulates a client sending a subscription request to the mqtt actor
@@ -698,6 +788,7 @@ mod unit_tests {
             SinkExt::send(&mut self.sub_tx, req).await.unwrap();
         }
 
+        /// Simulates a client sending a publish request to the mqtt actor
         pub async fn publish(&mut self, topic: &str, payload: &str) {
             SinkExt::send(
                 &mut self.pub_tx,
@@ -801,6 +892,9 @@ mod unit_tests {
     impl Drop for MockSubscriberOps {
         fn drop(&mut self) {
             if std::thread::panicking() {
+                return;
+            }
+            if Arc::strong_count(&self.subscribe_many) > 1 {
                 return;
             }
             let subscribe = self.subscribe_many.lock().unwrap().clone();
