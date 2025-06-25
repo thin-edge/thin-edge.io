@@ -18,7 +18,6 @@ impl TEdgeComponent for GenMapper {
 
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut gen_mapper = GenMapperBuilder::try_new("/etc/tedge/gen-mapper").await?;
-        gen_mapper.load().await;
         gen_mapper.connect(&mut mqtt_actor);
         gen_mapper.connect_fs(&mut fs_actor);
 
