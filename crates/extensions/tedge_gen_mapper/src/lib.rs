@@ -3,14 +3,10 @@ mod config;
 mod js_filter;
 mod js_runtime;
 mod pipeline;
+mod runtime;
 
 use crate::actor::GenMapper;
-use crate::config::PipelineConfig;
-use crate::js_runtime::JsRuntime;
-use crate::pipeline::Pipeline;
-use camino::Utf8Path;
-use camino::Utf8PathBuf;
-use std::collections::HashMap;
+use crate::runtime::MessageProcessor;
 use std::convert::Infallible;
 use std::path::Path;
 use std::path::PathBuf;
@@ -31,104 +27,25 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::PublishOrSubscribe;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
-use tokio::fs::read_dir;
-use tokio::fs::read_to_string;
 use tracing::error;
-use tracing::info;
 
 fan_in_message_type!(InputMessage[MqttMessage, FsWatchEvent]: Clone, Debug, Eq, PartialEq);
 fan_in_message_type!(OutputMessage[MqttMessage, SubscriptionDiff]: Clone, Debug, Eq, PartialEq);
 
 pub struct GenMapperBuilder {
-    config_dir: PathBuf,
     message_box: SimpleMessageBoxBuilder<InputMessage, OutputMessage>,
-    pipelines: HashMap<String, Pipeline>,
-    pipeline_specs: HashMap<String, (Utf8PathBuf, PipelineConfig)>,
     subscriptions: Arc<Mutex<TopicFilter>>,
-    js_runtime: JsRuntime,
+    processor: MessageProcessor,
 }
 
 impl GenMapperBuilder {
     pub async fn try_new(config_dir: impl AsRef<Path>) -> Result<Self, LoadError> {
-        let config_dir = config_dir.as_ref().to_owned();
-        let js_runtime = JsRuntime::try_new().await?;
+        let processor = MessageProcessor::try_new(config_dir).await?;
         Ok(GenMapperBuilder {
-            config_dir,
             message_box: SimpleMessageBoxBuilder::new("GenMapper", 16),
-            pipelines: HashMap::default(),
-            pipeline_specs: HashMap::default(),
             subscriptions: Arc::new(Mutex::new(TopicFilter::empty())),
-            js_runtime,
+            processor,
         })
-    }
-
-    pub async fn load(&mut self) {
-        let Ok(mut entries) = read_dir(&self.config_dir).await.map_err(|err|
-            error!(target: "MAPPING", "Failed to read filters from {}: {err}", self.config_dir.display())
-        ) else {
-            return;
-        };
-
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let Some(path) = Utf8Path::from_path(&entry.path()).map(|p| p.to_path_buf()) else {
-                error!(target: "MAPPING", "Skipping non UTF8 path: {}", entry.path().display());
-                continue;
-            };
-            if let Ok(file_type) = entry.file_type().await {
-                if file_type.is_file() {
-                    match path.extension() {
-                        Some("toml") => {
-                            info!(target: "MAPPING", "Loading pipeline: {path}");
-                            if let Err(err) = self.load_pipeline(path).await {
-                                error!(target: "MAPPING", "Failed to load pipeline: {err}");
-                            }
-                        }
-                        Some("js") | Some("ts") => {
-                            info!(target: "MAPPING", "Loading filter: {path}");
-                            if let Err(err) = self.load_filter(path).await {
-                                error!(target: "MAPPING", "Failed to load filter: {err}");
-                            }
-                        }
-                        _ => {
-                            info!(target: "MAPPING", "Skipping file which type is unknown: {path}");
-                        }
-                    }
-                }
-            }
-        }
-
-        // Done here to ease the computation of the topics to subscribe to
-        // as these topics have to be known when connect is called
-        self.compile()
-    }
-
-    async fn load_pipeline(&mut self, file: impl AsRef<Utf8Path>) -> Result<(), LoadError> {
-        if let Some(name) = file.as_ref().file_name() {
-            let specs = read_to_string(file.as_ref()).await?;
-            let pipeline: PipelineConfig = toml::from_str(&specs)?;
-            self.pipeline_specs
-                .insert(name.to_string(), (file.as_ref().to_owned(), pipeline));
-        }
-
-        Ok(())
-    }
-
-    async fn load_filter(&mut self, file: impl AsRef<Utf8Path>) -> Result<(), LoadError> {
-        self.js_runtime.load_file(file.as_ref()).await?;
-        Ok(())
-    }
-
-    fn compile(&mut self) {
-        for (name, (source, specs)) in self.pipeline_specs.drain() {
-            match specs.compile(&self.js_runtime, &self.config_dir, source) {
-                Ok(pipeline) => {
-                    let _ = self.pipelines.insert(name, pipeline);
-                }
-                Err(err) => {
-                    error!(target: "MAPPING", "Failed to compile pipeline {name}: {err}")
-                }
-            }
-        }
     }
 
     pub fn connect(
@@ -150,17 +67,15 @@ impl GenMapperBuilder {
     }
 
     pub fn connect_fs(&mut self, fs: &mut impl MessageSource<FsWatchEvent, PathBuf>) {
-        fs.connect_mapped_sink(self.config_dir.clone(), &self.message_box, |msg| {
-            Some(InputMessage::FsWatchEvent(msg))
-        });
+        fs.connect_mapped_sink(
+            self.processor.config_dir.clone(),
+            &self.message_box,
+            |msg| Some(InputMessage::FsWatchEvent(msg)),
+        );
     }
 
     fn topics(&self) -> TopicFilter {
-        let mut topics = TopicFilter::empty();
-        for pipeline in self.pipelines.values() {
-            topics.add_all(pipeline.topics())
-        }
-        topics
+        self.processor.subscriptions()
     }
 }
 
@@ -180,10 +95,8 @@ impl Builder<GenMapper> for GenMapperBuilder {
     fn build(self) -> GenMapper {
         GenMapper {
             messages: self.message_box.build(),
-            pipelines: self.pipelines,
             subscriptions: self.subscriptions,
-            js_runtime: self.js_runtime,
-            config_dir: self.config_dir,
+            processor: self.processor,
         }
     }
 }
