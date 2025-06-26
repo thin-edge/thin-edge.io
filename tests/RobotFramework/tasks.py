@@ -138,12 +138,7 @@ def is_ci():
     return bool(os.getenv("CI"))
 
 
-@task
-def lint(c):
-    """Run linter"""
-    c.run(f"{sys.executable} -m pylint libraries")
-
-@task
+@task(aliases=["lint"])
 def lint_tests(c, threshold="W"):
     """Run RobotFramework Test Linter and Formatter check
 
@@ -154,17 +149,19 @@ def lint_tests(c, threshold="W"):
     print("Checking formatting of RobotFramework tests...", file=sys.stderr)
     c.run(f"{sys.executable} -m robocop check --threshold {threshold}")
 
-@task(name="format")
-def formatcode(c):
-    """Format python code"""
-    c.run(f"{sys.executable} -m black libraries")
+    print("Checking linting of RobotFramework libraries...", file=sys.stderr)
+    c.run(f"{sys.executable} -m pylint libraries")
 
-@task
+
+@task(aliases=["format"])
 def format_tests(c):
-    """Format RobotFramework tests
-    """
+    """Format RobotFramework tests"""
     print("Formatting of RobotFramework tests...", file=sys.stderr)
     c.run(f"{sys.executable} -m robocop format")
+
+    print("Formatting of RobotFramework libraries...", file=sys.stderr)
+    c.run(f"{sys.executable} -m black .")
+
 
 @task(name="reports")
 def start_server(c, port=9000):
@@ -281,7 +278,13 @@ def use_local(c, arch="", package_type="deb"):
     },
 )
 def build(
-    c, name="debian-systemd", cache=True, local=True, binary=None, arch="", build_options=""
+    c,
+    name="debian-systemd",
+    cache=True,
+    local=True,
+    binary=None,
+    arch="",
+    build_options="",
 ):
     """Build the container integration test image
 
