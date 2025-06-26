@@ -4,7 +4,7 @@ set -e
 show_usage() {
     echo "
 DESCRIPTION
-    Install and bootstrap thin-edge.io.
+    Install thin-edge.io and prepare the device for testing
 
 USAGE
 
@@ -14,18 +14,7 @@ FLAGS
     WORKFLOW FLAGS
     --clean/--no-clean                      Clean the device of any existing tedge installations before installing/connecting. Default False
     --install/--no-install                  Install thin-edge.io. Default True
-    --bootstrap/--no-bootstrap              Bootstrap tedge by setting c8y.url and creating and uploading the device certificate. Default True
     --secure/--no-secure                    Configure certificate-based broker and client authentication. Default True.
-    --connect/--no-connect                  Connect the mapper. Provide the type of mapper via '--mapper <name>'. Default True
-    --mapper <name>                         Name of the mapper to use when connecting (if user has specified the --connect option).
-                                            Defaults to 'c8y'. Currently only c8y works.
-    --bridge-type <mosquitto|builtin>       Which bridge type to use. mosquitto or builtin
-
-    DEVICE FLAGS
-    --device-id <name>                      Use a specific device-id. A prefix will be added to the device id
-    --random                                Use a random device-id. This will override the --device-id flag value
-    --prefix <prefix>                       Device id prefix to add to the device-id or random device id. Defaults to 'tedge_'
-    --cert-method <method>                  Specify certificate creation method, e.g. selfsigned or local-ca.
 
     INSTALLATION FLAGS
     --version <version>                     Thin-edge.io version to install. Only applies for apt/script installation methods
@@ -33,13 +22,6 @@ FLAGS
     --install-method <apt|script|local>     Type of method to use to install thin.edge.io. Checkout the 'Install method' section for more info
     --install-sourcedir <path>              Path where to look for local deb files to install
 
-    CUMULOCITY FLAGS
-    --c8y-url <host>                        Cumulocity url, e.g. 'mydomain.c8y.example.io'
-    --c8y-user <username>                   Cumulocity username (required when a new device certificate is created)
-
-    MISC FLAGS
-    --prompt/--no-prompt                    Set if the script should prompt the user for input or not. By default prompts
-                                            will be disabled on non-interactive shells
     --help/-h                               Show this help
 
 INSTALL METHODS
@@ -49,22 +31,13 @@ INSTALL METHODS
 
 EXAMPLES
     sudo -E $0
-    # Install and bootstrap thin-edge.io using the default settings
+    # Install thin-edge.io using the default settings
 
-    sudo -E $0 --device-id mydevice --bootstrap
-    # Install latest version and force bootstrapping using a given device id
-
-    sudo -E $0 --device-id mydevice --bootstrap --prefix ''
-    # Install latest version, and bootstrap with a device name without the default prefix
-
-    sudo -E $0 --random --bootstrap
-    # Install latest version and force bootstrapping using a random device id
-    
     sudo -E $0 --clean
-    # Clean the device before installing, then install and bootstrap
+    # Clean the device before installing, then install thin-edge.io
 
     sudo -E $0 ./packages/
-    # Install and bootstrap using locally found tedge debian files under ./packages/ folder
+    # Install using locally found tedge debian files under ./packages/ folder
 
     sudo -E $0 --channel main
     # Install the latest available version from the main repository. It will includes the latest version built from main
@@ -84,20 +57,6 @@ fail () { echo "$1" >&2; exit 1; }
 warning () { echo "$1" >&2; }
 command_exists() { command -v "$1" >/dev/null 2>&1; }
 
-uses_old_package_name() {
-    version="$1"
-    echo "$version" | grep --silent "^0\.[0-8]\."
-}
-
-uses_new_package_name() {
-    version="$1"
-    echo "$version" | grep --silent -e "^0\.[9]\." -e "^0\.[1-9][0-9]" -e "^[1-9]"
-}
-
-parse_domain() {
-    echo "$1" | sed -E 's|^.*://||g' | sed -E 's|/$||g'
-}
-
 banner() {
     echo
     echo "----------------------------------------------------------"
@@ -106,31 +65,16 @@ banner() {
 }
 
 # Defaults
-DEVICE_ID=${DEVICE_ID:-}
-BOOTSTRAP=${BOOTSTRAP:-}
 SECURE=${SECURE:-1}
-CONNECT=${CONNECT:-1}
-INSTALL=${INSTALL:-1}
 CLEAN=${CLEAN:-0}
+INSTALL=${INSTALL:-1}
 VERSION=${VERSION:-}
 INSTALL_METHOD="${INSTALL_METHOD:-}"
 INSTALL_SOURCEDIR=${INSTALL_SOURCEDIR:-.}
-MAX_CONNECT_ATTEMPTS=${MAX_CONNECT_ATTEMPTS:-2}
-TEDGE_MAPPER=${TEDGE_MAPPER:-c8y}
-BRIDGE_TYPE=${BRIDGE_TYPE:-mosquitto}
+REPO_CHANNEL=${REPO_CHANNEL:-main}
 ARCH=${ARCH:-}
-USE_RANDOM_ID=${USE_RANDOM_ID:-0}
-SHOULD_PROMPT=${SHOULD_PROMPT:-1}
-CAN_PROMPT=0
-UPLOAD_CERT_WAIT=${UPLOAD_CERT_WAIT:-1}
 CONFIGURE_TEST_SETUP=${CONFIGURE_TEST_SETUP:-1}
 TEST_USER=${TEST_USER:-petertest}
-PREFIX=${PREFIX:-tedge_}
-REPO_CHANNEL=${REPO_CHANNEL:-main}
-C8Y_BASEURL=${C8Y_BASEURL:-}
-CERT_METHOD=${CERT_METHOD:-}
-KEY_ALG="${KEY_ALG:-ec}"
-
 
 get_debian_arch() {
     arch=
@@ -160,54 +104,6 @@ get_debian_arch() {
     echo "$arch"
 }
 
-generate_device_id() {
-    #
-    # Generate a device id
-    # Either use a random device, or the device's hostname
-    #
-    if [ "$USE_RANDOM_ID" = "1" ]; then
-        if [ -n "$DEVICE_ID" ]; then
-            echo "Overriding the non-empty DEVICE_ID variable with a random name" >&2
-        fi
-
-        RANDOM_ID=
-        if [ -e /dev/urandom ]; then
-            RANDOM_ID=$(head -c 128 /dev/urandom | md5sum | head -c 10)
-        elif [ -e /dev/random ]; then
-            RANDOM_ID=$(head -c 128 /dev/random | md5sum | head -c 10)
-        fi
-
-        if [ -n "$RANDOM_ID" ]; then
-            DEVICE_ID="${PREFIX}${RANDOM_ID}"
-        else
-            warning "Could not generate a random id. Check if /dev/random is available or not"
-        fi
-    fi
-
-    if [ -n "$DEVICE_ID" ]; then
-        echo "$DEVICE_ID"
-        return
-    fi
-
-    if [ -n "$HOSTNAME" ]; then
-        echo "${PREFIX}${HOSTNAME}"
-        return
-    fi
-    if [ -n "$HOST" ]; then
-        echo "${PREFIX}${HOST}"
-        return
-    fi
-    echo "${PREFIX}unknown-device"
-}
-
-check_sudo() {
-    if [ "$(id -u)" -ne 0 ]; then
-        echo "Please run as root or using sudo"
-        show_usage
-        exit 1
-    fi
-}
-
 # ---------------------------------------
 # Argument parsing
 # ---------------------------------------
@@ -217,10 +113,9 @@ do
         # ----------------------
         # Clean
         # ----------------------
-        # Should the device be cleaned prior to installation/bootstrapping
+        # Should the device be cleaned prior to installation
         --clean)
             CLEAN=1
-            BOOTSTRAP=1
             ;;
         --no-clean)
             CLEAN=0
@@ -256,37 +151,8 @@ do
             ;;
         
         # ----------------------
-        # Bootstrap
+        # Additional configuration
         # ----------------------
-        # Device id options
-        --device-id)
-            DEVICE_ID="$2"
-            shift
-            ;;
-        --cert-method)
-            CERT_METHOD="$2"
-            shift
-            ;;
-        --key-alg)
-            KEY_ALG="$2"
-            shift
-            ;;
-        --prefix)
-            PREFIX="$2"
-            shift
-            ;;
-        --random)
-            USE_RANDOM_ID=1
-            ;;
-
-        --bootstrap)
-            BOOTSTRAP=1
-            ;;
-
-        --no-bootstrap)
-            BOOTSTRAP=0
-            ;;
-
         --secure)
             SECURE=1
             ;;
@@ -295,48 +161,8 @@ do
             ;;
 
         # ----------------------
-        # Connect mapper
-        # ----------------------
-        --connect)
-            CONNECT=1
-            ;;
-        --no-connect)
-            CONNECT=0
-            ;;
-
-        # Preferred mapper
-        --mapper)
-            TEDGE_MAPPER="$2"
-            shift
-            ;;
-
-        # Which bridge type to use. mosquitto or builtin
-        --bridge-type)
-            BRIDGE_TYPE="$2"
-            shift
-            ;;
-        
-        # Cumulocity settings
-        --c8y-user)
-            C8Y_USER="$2"
-            shift
-            ;;
-        --c8y-url)
-            C8Y_BASEURL="$2"
-            shift
-            ;;
-
-        # ----------------------
         # Misc
         # ----------------------
-        # Should prompt for use if information is missing?
-        --prompt)
-            SHOULD_PROMPT=1
-            ;;
-        --no-prompt)
-            SHOULD_PROMPT=0
-            ;;
-
         --help|-h)
             show_usage
             exit 0
@@ -383,53 +209,6 @@ if [ -z "$REPO_CHANNEL" ]; then
             REPO_CHANNEL="main"
         fi
     fi
-fi
-
-#
-# Detect settings
-if command_exists tedge; then
-    if [ -z "$C8Y_BASEURL" ]; then
-        C8Y_BASEURL=$( tedge config list | grep "^c8y.url=" | sed 's/^c8y.url=//' )    
-    fi
-
-    if [ -z "$DEVICE_ID" ]; then
-        DEVICE_ID=$( tedge config list | grep "^device.id=" | sed 's/^device.id=//' )
-    fi
-
-    # Detect if bootstrapping is required or not?
-    if [ -z "$BOOTSTRAP" ]; then
-        # If connection already exists, then assume bootstrapping does not need to occur again
-        # If already connected, then stick with using the same certificate
-        if tedge connect "$TEDGE_MAPPER" --test >/dev/null 2>&1; then
-            echo "No need for bootstrapping as $TEDGE_MAPPER mapper is already connected. You can force bootstrapping using either --bootstrap or --clean flags"
-            BOOTSTRAP=0
-        fi
-    fi
-fi
-
-if [ -z "$DEVICE_ID" ] || [ "$CLEAN" = 1 ]; then
-    DEVICE_ID=$(generate_device_id)
-fi
-
-if [ -z "$BOOTSTRAP" ]; then
-    BOOTSTRAP=1
-fi
-
-if [ -z "$CERT_METHOD" ]; then
-    # Auto detect which certificate signing should be used
-    if [ -n "$CA_PUB" ] && [ -n "$CA_KEY" ]; then
-        CERT_METHOD="local-ca"
-    else
-        CERT_METHOD="selfsigned"
-    fi
-fi
-
-#
-# Detect if the shell is running in interactive mode or not
-if [ -t 0 ]; then
-    CAN_PROMPT=1
-else
-    CAN_PROMPT=0
 fi
 
 #
@@ -572,13 +351,6 @@ install_via_local_files() {
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge-p11-server*_$ARCH.deb"
 }
 
-clean_files() {
-    echo "Cleaning up tedge files"
-    sudo rm -f /etc/tedge/tedge.toml
-    sudo rm -f /etc/tedge/system.toml
-    sudo rm -f /var/log/tedge/agent/*.log
-}
-
 stop_services() {
     if command_exists systemctl; then
         sudo systemctl stop tedge-agent >/dev/null 2>&1 || true
@@ -597,6 +369,11 @@ purge_tedge() {
 
     # Refresh path, to ensure old binaries are still not being detected
     hash -r
+
+    echo "Cleaning up tedge files"
+    sudo rm -f /etc/tedge/tedge.toml
+    sudo rm -f /etc/tedge/system.toml
+    sudo rm -f /var/log/tedge/agent/*.log
 }
 
 remove_tedge() {
@@ -621,50 +398,6 @@ install_tedge() {
             configure_repos
             ;;
     esac
-
-    # Check if any packages are incompatible, if so remove the previous version first
-    # Use new and old packages names, and check each of them one by one
-    packages="tedge tedge-mapper tedge-agent tedge-log-plugin tedge-configuration-plugin c8y-remote-access-plugin"
-    packages="$packages tedge tedge_mapper tedge_agent c8y_log_plugin c8y-log-plugin c8y_configuration_plugin c8y-configuration-plugin"
-    REMOVE_BEFORE_INSTALL=0
-
-    for package in $packages; do
-        if command_exists "$package"; then
-            EXISTING_VERSION=$("$package" --version | tail -1 | cut -d' ' -f2 || true)
-
-            if [ -n "$EXISTING_VERSION" ]; then
-                if uses_old_package_name "$VERSION" && uses_new_package_name "$EXISTING_VERSION"; then
-                    REMOVE_BEFORE_INSTALL=1
-                    break
-                fi
-            fi
-        fi
-    done
-
-    if [ "$REMOVE_BEFORE_INSTALL" = 1 ]; then
-        echo "Uninstalling tedge before downgrading because the package names changed"
-        # TODO: This does not work as the script requires bash and not sh
-        curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh | sudo bash -s remove
-
-        # Preserve c8y settings
-        if [ -n "$C8Y_BASEURL" ]; then
-            c8y_url=$(parse_domain "$C8Y_BASEURL")
-            sudo sh -c "
-            echo '[c8y]' > /etc/tedge/tedge.toml;
-            echo 'url = \"${c8y_url}\"' >> /etc/tedge/tedge.toml
-            "
-        else
-            sudo rm -f /etc/tedge/tedge.toml
-        fi
-        sudo rm -f /etc/tedge/system.toml
-        # Refresh path, to ensure old binaries are still not being detected
-        hash -r
-    fi
-
-    if [ "$INSTALL_METHOD" = "apt" ] && uses_old_package_name "$VERSION"; then
-        echo "Installing versions older than 0.9.0 is not supported via apt. Using the 'script' install method"
-        INSTALL_METHOD="script"
-    fi
 
     case "$INSTALL_METHOD" in
         apt)
@@ -782,203 +515,6 @@ check_systemd_cgroup_compat() {
     fi
 }
 
-prompt_value() {
-    user_text="$1"
-    value="$2"
-
-    if [ "$SHOULD_PROMPT" = 1 ] && [ "$CAN_PROMPT" = 1 ]; then
-        printf "\n%s (%s): " "$user_text" "${value:-not set}" >&2
-        read -r user_input
-        if [ -n "$user_input" ]; then
-            value="$user_input"
-        fi
-    fi
-    echo "$value"
-}
-
-sign_local_ca() {
-    # Use a local-ca file (to minimize dependencies)
-    CN="$1"
-    LEAF_EXPIRE_DAYS="${2:-7}"
-    # Note: older thin-edge.io versions the device certificate key/path
-    # config names changed. Support the newer name but still fallback to the previous
-    # name as some tests use the older agent version
-    DEVICE_KEY_PATH=$(tedge config get device.key_path 2>/dev/null || tedge config get device.key.path)
-
-    KEY_ALG=$(echo "$KEY_ALG" | tr '[:upper:]' '[:lower:]')
-    case "$KEY_ALG" in
-        rsa)
-            sudo openssl genrsa -out "$DEVICE_KEY_PATH" 2048
-            ;;
-        ec)
-            sudo openssl ecparam -genkey -out "$DEVICE_KEY_PATH.tmp" -name secp256r1
-            sudo openssl pkcs8 -topk8 -nocrypt -in "$DEVICE_KEY_PATH.tmp" -out "$DEVICE_KEY_PATH"
-            sudo rm -f "$DEVICE_KEY_PATH.tmp"
-            ;;
-        *)
-            echo "Invalid key algorithm type ($KEY_ALG). Expected either 'rsa' or 'ec'"
-            exit 1
-            ;;
-    esac
-
-    DEVICE_CSR=$(sudo openssl req \
-        -key "$DEVICE_KEY_PATH" \
-        -new \
-        -subj "/O=thin-edge/OU=Test\ Device/CN=${CN}"
-    )
-
-    CERT_EXT=$(cat << EOF
-authorityKeyIdentifier=keyid
-basicConstraints=CA:FALSE
-keyUsage = digitalSignature, keyAgreement
-extendedKeyUsage = serverAuth, clientAuth
-subjectAltName=DNS:${CN},DNS:localhost,IP:127.0.0.1
-EOF
-    )
-
-    DEVICE_CERT_PATH=$(tedge config get device.cert_path 2>/dev/null || tedge config get device.cert.path)
-    openssl x509 -req \
-        -in <(echo "$DEVICE_CSR") \
-        -out "$DEVICE_CERT_PATH" \
-        -CA <(echo "$CA_PUB" | base64 -d) \
-        -CAkey <(echo "$CA_KEY" | base64 -d) \
-        -extfile <(echo "$CERT_EXT") \
-        -days "$LEAF_EXPIRE_DAYS"
-
-    # Build certificate chain (from leaf cert to the signing cert)
-    # sudo sh -c "echo '$CA_PUB' | base64 -d >> '$DEVICE_CERT_PATH'"
-    echo "$CA_PUB" | base64 -d | sudo tee -a "$DEVICE_CERT_PATH"
-
-    # Set permissions
-    sudo chown mosquitto:root "$DEVICE_KEY_PATH"
-    sudo chmod 600 "$DEVICE_KEY_PATH"
-
-    sudo chown mosquitto:root "$DEVICE_CERT_PATH"
-    sudo chmod 644 "$DEVICE_CERT_PATH"
-}
-
-bootstrap_c8y() {
-    # If bootstrapping is called, then it assumes the full bootstrapping
-    # needs to be done.
-
-    # Force disconnection of mapper before setting url
-    sudo tedge disconnect "$TEDGE_MAPPER" >/dev/null 2>&1 || true
-
-    DEVICE_ID=$(prompt_value "Enter the device.id" "$DEVICE_ID")
-
-    # Remove existing certificate if it does not match
-    if tedge cert show >/dev/null 2>&1; then
-        echo "Removing existing device certificate"
-        sudo tedge cert remove
-    fi
-
-    SHOULD_UPLOAD_CERT=0
-
-    echo "Creating certificate: $DEVICE_ID (using $CERT_METHOD)"
-
-    case "$CERT_METHOD" in
-        local-ca)
-            sign_local_ca "$DEVICE_ID"
-            ;;
-        *)
-            # default: selfsigned
-            sudo tedge cert create --device-id "$DEVICE_ID"
-            SHOULD_UPLOAD_CERT=1
-            ;;
-    esac
-
-    # Cumulocity URL
-    C8Y_BASEURL=$(prompt_value "Enter the Cumulocity url" "$C8Y_BASEURL")
-
-    # Normalize url, by stripping url schema
-    if [ -n "$C8Y_BASEURL" ]; then
-        C8Y_BASEURL=$(parse_domain "$C8Y_BASEURL")
-    fi
-
-    echo "Setting c8y.url to $C8Y_BASEURL"
-    sudo tedge config set c8y.url "$C8Y_BASEURL"
-
-    if [ "$SHOULD_UPLOAD_CERT" = 1 ]; then
-        C8Y_USER=$(prompt_value "Enter your Cumulocity user" "$C8Y_USER")
-
-        if [ -n "$C8Y_USER" ]; then
-            echo "Uploading certificate to Cumulocity using tedge"
-            if [ -n "$C8Y_PASSWORD" ]; then
-                C8YPASS="$C8Y_PASSWORD" tedge cert upload c8y --user "$C8Y_USER"
-            else
-                echo ""
-                tedge cert upload c8y --user "$C8Y_USER"
-            fi
-        else
-            fail "When manually bootstrapping you have to upload the certificate again as the device certificate is recreated"
-        fi
-
-        # Grace period for the server to process the certificate
-        # but it is not critical for the connection, as the connection
-        # supports automatic retries, but it can improve the first connection success rate
-        sleep "$UPLOAD_CERT_WAIT"
-    fi
-}
-
-connect_mappers() {
-    # retry connection attempts
-    sudo tedge disconnect "$TEDGE_MAPPER" || true
-
-    # Only set the bridge type setting if it is supported (as it is a relatively new setting)
-    if tedge config get mqtt.bridge.built_in >/dev/null 2>&1; then
-        current_built_in_value=$(tedge config get mqtt.bridge.built_in)
-        desired_built_in_value=
-
-        case "$BRIDGE_TYPE" in
-            builtin|built_in)
-                desired_built_in_value=true
-                ;;
-            mosquitto)
-                desired_built_in_value=false
-                ;;
-            *)
-                echo "FAIL: Invalid bridge-type setting. got=$BRIDGE_TYPE, expected one of [builtin, mosquitto]"
-                exit 1
-                ;;
-        esac
-
-        if [ -n "$desired_built_in_value" ] && [ "$current_built_in_value" != "$desired_built_in_value" ]; then
-            echo "Setting mqtt.bridge.built_in to $desired_built_in_value"
-            sudo tedge config set mqtt.bridge.built_in "$desired_built_in_value"
-        fi
-    fi
-
-    CONNECT_ATTEMPT=0
-    while true; do
-        CONNECT_ATTEMPT=$((CONNECT_ATTEMPT + 1))
-        if sudo tedge connect "$TEDGE_MAPPER"; then
-            break
-        else
-            if [ "$CONNECT_ATTEMPT" -ge "$MAX_CONNECT_ATTEMPTS" ]; then
-                echo "Failed after $CONNECT_ATTEMPT connection attempts. Giving up"
-                exit 2
-            fi
-        fi
-
-        echo "WARNING: Connection attempt failed ($CONNECT_ATTEMPT of $MAX_CONNECT_ATTEMPTS)! Retrying to connect in 2s"
-        sleep 2
-    done
-}
-
-display_banner_c8y() {
-    echo
-    echo "----------------------------------------------------------"
-    echo "Device information"
-    echo "----------------------------------------------------------"
-    echo ""
-    echo "tedge.version:   $(tedge --version 2>/dev/null | tail -1 | cut -d' ' -f2)"
-    echo "device.id:       ${DEVICE_ID}"
-    DEVICE_SEARCH="${DEVICE_ID//-/*}"
-    echo "Cumulocity:  https://${C8Y_BASEURL}/apps/devicemanagement/index.html#/assetsearch?filter=*${DEVICE_SEARCH}*"
-    echo ""
-    echo "----------------------------------------------------------"    
-}
-
 configure_test_user() {
     if [ -n "$TEST_USER" ]; then
         if ! id -u "$TEST_USER" >/dev/null 2>&1; then
@@ -990,7 +526,7 @@ configure_test_user() {
 post_configure() {
     echo "Setting sudoers.d config"
     sudo sh -c "echo '%sudo ALL=(ALL) NOPASSWD:SETENV:ALL' > /etc/sudoers.d/all"
-    sudo sh -c "echo 'tedge  ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/bin/tedge-write' > /etc/sudoers.d/tedge"
+    sudo sh -c "echo 'tedge  ALL = (ALL) NOPASSWD:SETENV: /sbin/shutdown' > /etc/sudoers.d/shutdown"
 }
 
 main() {
@@ -1003,7 +539,6 @@ main() {
     if [ "$CLEAN" = 1 ]; then
         banner "Preparing device"
         purge_tedge
-        clean_files
     fi
 
     # ---------------------------------------
@@ -1023,27 +558,6 @@ main() {
     fi
 
     # ---------------------------------------
-    # Bootstrap
-    # ---------------------------------------
-    if [ "$BOOTSTRAP" = 1 ]; then
-        banner "Bootstrapping device"
-        # Check if tedge is installed before trying to bootstrap
-        if ! command_exists tedge; then
-            fail "Can not bootstrap as tedge is not installed"
-        fi
-
-        bootstrap_c8y
-    fi
-
-    # ---------------------------------------
-    # Connect
-    # ---------------------------------------
-    if [ "$CONNECT" = 1 ]; then
-        banner "Connecting mapper"
-        connect_mappers
-    fi
-
-    # ---------------------------------------
     # Post setup
     # ---------------------------------------
     if [ "$CONFIGURE_TEST_SETUP" = 1 ]; then
@@ -1054,10 +568,6 @@ main() {
         if command_exists systemctl; then
             sudo systemctl start ssh
         fi
-    fi
-
-    if [ "$BOOTSTRAP" = 1 ] || [ "$CONNECT" = 1 ]; then
-        display_banner_c8y
     fi
 }
 
