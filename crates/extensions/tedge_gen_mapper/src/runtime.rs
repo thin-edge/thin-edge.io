@@ -15,6 +15,7 @@ use tokio::fs::read_dir;
 use tokio::fs::read_to_string;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 pub struct MessageProcessor {
     pub config_dir: PathBuf,
@@ -87,6 +88,17 @@ impl MessageProcessor {
         self.js_runtime.dump_memory_stats().await;
     }
 
+    pub async fn add_filter(&mut self, path: Utf8PathBuf) {
+        match self.js_runtime.load_file(&path).await {
+            Ok(()) => {
+                info!(target: "gen-mapper", "Loaded filter {path}");
+            }
+            Err(e) => {
+                error!(target: "gen-mapper", "Failed to load filter {path}: {e}");
+            }
+        }
+    }
+
     pub async fn reload_filter(&mut self, path: Utf8PathBuf) {
         for pipeline in self.pipelines.values_mut() {
             for stage in &mut pipeline.stages {
@@ -105,31 +117,67 @@ impl MessageProcessor {
         }
     }
 
-    pub async fn reload_pipeline(&mut self, path: Utf8PathBuf) {
-        for pipeline in self.pipelines.values_mut() {
-            if pipeline.source == path {
-                let Ok(source) = tokio::fs::read_to_string(&path).await else {
-                    error!(target: "gen-mapper", "Failed to read updated pipeline {path}");
-                    break;
-                };
-                let config: PipelineConfig = match toml::from_str(&source) {
-                    Ok(config) => config,
-                    Err(e) => {
-                        error!(target: "gen-mapper", "Failed to parse toml for updated pipeline {path}: {e}");
-                        break;
-                    }
-                };
-                match config.compile(&self.js_runtime, &self.config_dir, path.clone()) {
-                    Ok(p) => {
-                        *pipeline = p;
-                        info!(target: "gen-mapper", "Reloaded pipeline {path}");
-                    }
-                    Err(e) => {
-                        error!(target: "gen-mapper", "Failed to load updated pipeline {path}: {e}")
-                    }
-                };
+    pub async fn remove_filter(&mut self, path: Utf8PathBuf) {
+        for (pipeline_id, pipeline) in self.pipelines.iter() {
+            for stage in pipeline.stages.iter() {
+                if stage.filter.path() == path {
+                    warn!(target: "gen-mapper", "Removing a filter used by {pipeline_id}: {path}");
+                    return;
+                }
             }
         }
+    }
+
+    pub async fn load_pipeline(&mut self, pipeline_id: String, path: Utf8PathBuf) -> bool {
+        let Ok(source) = tokio::fs::read_to_string(&path).await else {
+            self.remove_pipeline(path).await;
+            return false;
+        };
+        let config: PipelineConfig = match toml::from_str(&source) {
+            Ok(config) => config,
+            Err(e) => {
+                error!(target: "gen-mapper", "Failed to parse toml for pipeline {path}: {e}");
+                return false;
+            }
+        };
+        match config.compile(&self.js_runtime, &self.config_dir, path.clone()) {
+            Ok(pipeline) => {
+                self.pipelines.insert(pipeline_id, pipeline);
+                true
+            }
+            Err(e) => {
+                error!(target: "gen-mapper", "Failed to compile pipeline {path}: {e}");
+                false
+            }
+        }
+    }
+
+    pub async fn add_pipeline(&mut self, path: Utf8PathBuf) {
+        let pipeline_id = path.file_name().unwrap();
+        if !self.pipelines.contains_key(pipeline_id)
+            && self
+                .load_pipeline(pipeline_id.to_string(), path.clone())
+                .await
+        {
+            info!(target: "gen-mapper", "Loaded new pipeline {path}");
+        }
+    }
+
+    pub async fn reload_pipeline(&mut self, path: Utf8PathBuf) {
+        let pipeline_id = path.file_name().unwrap();
+        if self.pipelines.contains_key(pipeline_id)
+            && self
+                .load_pipeline(pipeline_id.to_string(), path.clone())
+                .await
+        {
+            info!(target: "gen-mapper", "Reloaded updated pipeline {path}");
+        }
+    }
+
+    pub async fn remove_pipeline(&mut self, path: Utf8PathBuf) {
+        let pipeline_id = path.file_name().unwrap();
+        self.pipelines.remove(pipeline_id);
+        info!(target: "gen-mapper", "Removed deleted pipeline {path}");
     }
 }
 

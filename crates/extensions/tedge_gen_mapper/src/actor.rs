@@ -57,10 +57,29 @@ impl Actor for GenMapper {
                                 self.send_updated_subscriptions().await?;
                             }
                         },
-                        Some(InputMessage::FsWatchEvent(e)) => {
-                            tracing::warn!("TODO do something with {e:?}")
+                        Some(InputMessage::FsWatchEvent(FsWatchEvent::FileCreated(path))) => {
+                            let Ok(path) = Utf8PathBuf::try_from(path) else {
+                                continue;
+                            };
+                            if matches!(path.extension(), Some("js" | "ts")) {
+                                self.processor.add_filter(path).await;
+                            } else if path.extension() == Some("toml") {
+                                self.processor.add_pipeline(path).await;
+                                self.send_updated_subscriptions().await?;
+                            }
                         },
-                        None => break,
+                        Some(InputMessage::FsWatchEvent(FsWatchEvent::FileDeleted(path))) => {
+                            let Ok(path) = Utf8PathBuf::try_from(path) else {
+                                continue;
+                            };
+                            if matches!(path.extension(), Some("js" | "ts")) {
+                                self.processor.remove_filter(path).await;
+                            } else if path.extension() == Some("toml") {
+                                self.processor.remove_pipeline(path).await;
+                                self.send_updated_subscriptions().await?;
+                            }
+                        },
+                        _ => break,
                     }
                 }
             }
