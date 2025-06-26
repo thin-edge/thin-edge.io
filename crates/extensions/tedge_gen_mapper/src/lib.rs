@@ -10,8 +10,6 @@ pub use crate::runtime::MessageProcessor;
 use std::convert::Infallible;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -34,7 +32,6 @@ fan_in_message_type!(OutputMessage[MqttMessage, SubscriptionDiff]: Clone, Debug,
 
 pub struct GenMapperBuilder {
     message_box: SimpleMessageBoxBuilder<InputMessage, OutputMessage>,
-    subscriptions: Arc<Mutex<TopicFilter>>,
     processor: MessageProcessor,
 }
 
@@ -43,7 +40,6 @@ impl GenMapperBuilder {
         let processor = MessageProcessor::try_new(config_dir).await?;
         Ok(GenMapperBuilder {
             message_box: SimpleMessageBoxBuilder::new("GenMapper", 16),
-            subscriptions: Arc::new(Mutex::new(TopicFilter::empty())),
             processor,
         })
     }
@@ -94,9 +90,10 @@ impl Builder<GenMapper> for GenMapperBuilder {
     }
 
     fn build(self) -> GenMapper {
+        let subscriptions = self.topics().clone();
         GenMapper {
             messages: self.message_box.build(),
-            subscriptions: self.subscriptions,
+            subscriptions,
             processor: self.processor,
         }
     }
