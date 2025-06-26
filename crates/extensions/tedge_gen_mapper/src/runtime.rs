@@ -24,6 +24,10 @@ pub struct MessageProcessor {
 }
 
 impl MessageProcessor {
+    pub fn pipeline_id(path: impl AsRef<Path>) -> String {
+        format!("{}", path.as_ref().display())
+    }
+
     pub async fn try_new(config_dir: impl AsRef<Path>) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref().to_owned();
         let mut js_runtime = JsRuntime::try_new().await?;
@@ -153,30 +157,26 @@ impl MessageProcessor {
     }
 
     pub async fn add_pipeline(&mut self, path: Utf8PathBuf) {
-        let pipeline_id = path.file_name().unwrap();
-        if !self.pipelines.contains_key(pipeline_id)
-            && self
-                .load_pipeline(pipeline_id.to_string(), path.clone())
-                .await
+        let pipeline_id = Self::pipeline_id(&path);
+        if !self.pipelines.contains_key(&pipeline_id)
+            && self.load_pipeline(pipeline_id, path.clone()).await
         {
             info!(target: "gen-mapper", "Loaded new pipeline {path}");
         }
     }
 
     pub async fn reload_pipeline(&mut self, path: Utf8PathBuf) {
-        let pipeline_id = path.file_name().unwrap();
-        if self.pipelines.contains_key(pipeline_id)
-            && self
-                .load_pipeline(pipeline_id.to_string(), path.clone())
-                .await
+        let pipeline_id = Self::pipeline_id(&path);
+        if self.pipelines.contains_key(&pipeline_id)
+            && self.load_pipeline(pipeline_id, path.clone()).await
         {
             info!(target: "gen-mapper", "Reloaded updated pipeline {path}");
         }
     }
 
     pub async fn remove_pipeline(&mut self, path: Utf8PathBuf) {
-        let pipeline_id = path.file_name().unwrap();
-        self.pipelines.remove(pipeline_id);
+        let pipeline_id = Self::pipeline_id(&path);
+        self.pipelines.remove(&pipeline_id);
         info!(target: "gen-mapper", "Removed deleted pipeline {path}");
     }
 }
@@ -224,12 +224,12 @@ impl PipelineSpecs {
     }
 
     async fn load_pipeline(&mut self, file: impl AsRef<Utf8Path>) -> Result<(), LoadError> {
-        if let Some(name) = file.as_ref().file_name() {
-            let specs = read_to_string(file.as_ref()).await?;
-            let pipeline: PipelineConfig = toml::from_str(&specs)?;
-            self.pipeline_specs
-                .insert(name.to_string(), (file.as_ref().to_owned(), pipeline));
-        }
+        let path = file.as_ref();
+        let pipeline_id = MessageProcessor::pipeline_id(path);
+        let specs = read_to_string(file.as_ref()).await?;
+        let pipeline: PipelineConfig = toml::from_str(&specs)?;
+        self.pipeline_specs
+            .insert(pipeline_id, (path.to_owned(), pipeline));
 
         Ok(())
     }
