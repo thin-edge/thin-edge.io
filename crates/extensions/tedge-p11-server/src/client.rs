@@ -55,17 +55,6 @@ impl TedgeP11Client {
         offered: &[rustls::SignatureScheme],
         uri: Option<String>,
     ) -> anyhow::Result<Option<rustls::SignatureScheme>> {
-        trace!("Connecting to socket...");
-        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
-            format!(
-                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
-                self.socket_path.display()
-            )
-        })?;
-        let mut connection = crate::connection::Connection::new(stream);
-
-        debug!("Connected to socket");
-
         let request = Frame1::ChooseSchemeRequest(ChooseSchemeRequest {
             offered: offered
                 .iter()
@@ -74,10 +63,7 @@ impl TedgeP11Client {
                 .collect::<Vec<_>>(),
             uri,
         });
-        trace!(?request);
-        connection.write_frame(&request)?;
-
-        let response = connection.read_frame()?;
+        let response = self.do_request(request)?;
 
         let Frame1::ChooseSchemeResponse(response) = response else {
             bail!("protocol error: bad response, expected chose scheme, received: {response:?}");
@@ -95,25 +81,12 @@ impl TedgeP11Client {
     // this function is called only on the server when handling ClientHello message, so
     // realistically it won't ever be called in our case
     pub fn algorithm(&self) -> anyhow::Result<rustls::SignatureAlgorithm> {
-        trace!("Connecting to socket...");
-        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
-            format!(
-                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
-                self.socket_path.display()
-            )
-        })?;
-        let mut connection = crate::connection::Connection::new(stream);
-
-        debug!("Connected to socket");
-
         // if passed empty set of schemes, service doesn't return a scheme but returns an algorithm
         let request = Frame1::ChooseSchemeRequest(ChooseSchemeRequest {
             offered: vec![],
             uri: None,
         });
-        connection.write_frame(&request)?;
-
-        let response = connection.read_frame()?;
+        let response = self.do_request(request)?;
 
         let Frame1::ChooseSchemeResponse(response) = response else {
             bail!("protocol error: bad response, expected chose scheme, received: {response:?}");
@@ -130,24 +103,12 @@ impl TedgeP11Client {
         sigscheme: SigScheme,
         uri: Option<String>,
     ) -> anyhow::Result<Vec<u8>> {
-        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
-            format!(
-                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
-                self.socket_path.display()
-            )
-        })?;
-        let mut connection = crate::connection::Connection::new(stream);
-        debug!("Connected to socket");
-
         let request = Frame1::SignRequest(SignRequest {
             to_sign: message.to_vec(),
             sigscheme,
             uri,
         });
-        trace!(?request);
-        connection.write_frame(&request)?;
-
-        let response = connection.read_frame()?;
+        let response = self.do_request(request)?;
 
         let Frame1::SignResponse(response) = response else {
             bail!("protocol error: bad response, expected sign, received: {response:?}");
@@ -175,11 +136,29 @@ impl TedgeP11Client {
         let response = connection.read_frame()?;
 
         let Frame1::CreateKeyResponse = response else {
-            bail!("protocol error: bad response, expected sign, received: {response:?}");
+            bail!("protocol error: bad response, expected create_key, received: {response:?}");
         };
 
         debug!("Sign complete");
 
         Ok(())
+    }
+
+    fn do_request(&self, request: Frame1) -> anyhow::Result<Frame1> {
+        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
+            format!(
+                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
+                self.socket_path.display()
+            )
+        })?;
+        let mut connection = crate::connection::Connection::new(stream);
+        debug!("Connected to socket");
+
+        trace!(?request);
+        connection.write_frame(&request)?;
+
+        let response = connection.read_frame()?;
+
+        Ok(response)
     }
 }
