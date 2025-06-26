@@ -352,7 +352,7 @@ impl FromPeers {
                         .collect::<Vec<_>>();
                     let mut tf = TopicFilter::empty();
                     for sub in overlapping_subscriptions {
-                        tf.add_unchecked(&sub);
+                        tf.add_unchecked(sub);
                     }
                     let client = client.clone();
                     tokio::spawn(async move {
@@ -386,6 +386,7 @@ impl FromPeers {
                                     }
                                 }
                             }
+                            conn.close().await;
                         });
                     }
                 }
