@@ -93,10 +93,10 @@ impl MessageProcessor {
                 if stage.filter.path() == path {
                     match self.js_runtime.load_file(&path).await {
                         Ok(()) => {
-                            info!("Reloaded filter {path}");
+                            info!(target: "gen-mapper", "Reloaded filter {path}");
                         }
                         Err(e) => {
-                            error!("Failed to reload filter {path}: {e}");
+                            error!(target: "gen-mapper", "Failed to reload filter {path}: {e}");
                             return;
                         }
                     }
@@ -109,23 +109,23 @@ impl MessageProcessor {
         for pipeline in self.pipelines.values_mut() {
             if pipeline.source == path {
                 let Ok(source) = tokio::fs::read_to_string(&path).await else {
-                    error!("Failed to read updated filter {path}");
+                    error!(target: "gen-mapper", "Failed to read updated pipeline {path}");
                     break;
                 };
                 let config: PipelineConfig = match toml::from_str(&source) {
                     Ok(config) => config,
                     Err(e) => {
-                        error!("Failed to parse toml for updated filter {path}: {e}");
+                        error!(target: "gen-mapper", "Failed to parse toml for updated pipeline {path}: {e}");
                         break;
                     }
                 };
                 match config.compile(&self.js_runtime, &self.config_dir, path.clone()) {
                     Ok(p) => {
                         *pipeline = p;
-                        info!("Reloaded pipeline {path}");
+                        info!(target: "gen-mapper", "Reloaded pipeline {path}");
                     }
                     Err(e) => {
-                        error!("Failed to load updated pipeline {path}: {e}")
+                        error!(target: "gen-mapper", "Failed to load updated pipeline {path}: {e}")
                     }
                 };
             }

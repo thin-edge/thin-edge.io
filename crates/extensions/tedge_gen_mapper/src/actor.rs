@@ -5,8 +5,6 @@ use crate::InputMessage;
 use crate::OutputMessage;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
 use tedge_actors::Actor;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
@@ -22,7 +20,7 @@ use tracing::error;
 
 pub struct GenMapper {
     pub(super) messages: SimpleMessageBox<InputMessage, OutputMessage>,
-    pub(super) subscriptions: Arc<Mutex<TopicFilter>>,
+    pub(super) subscriptions: TopicFilter,
     pub(super) processor: MessageProcessor,
 }
 
@@ -73,18 +71,18 @@ impl Actor for GenMapper {
 
 impl GenMapper {
     async fn send_updated_subscriptions(&mut self) -> Result<(), RuntimeError> {
-        let topics = self.update_subscriptions();
-        let diff = SubscriptionDiff::new(&topics, &TopicFilter::empty());
+        let diff = self.update_subscriptions();
         self.messages
             .send(OutputMessage::SubscriptionDiff(diff))
             .await?;
         Ok(())
     }
 
-    fn update_subscriptions(&self) -> TopicFilter {
-        let mut topics = self.subscriptions.lock().unwrap();
-        topics.add_all(self.processor.subscriptions());
-        topics.clone()
+    fn update_subscriptions(&mut self) -> SubscriptionDiff {
+        let new_subscriptions = self.processor.subscriptions();
+        let diff = SubscriptionDiff::new(&new_subscriptions, &self.subscriptions);
+        self.subscriptions = new_subscriptions;
+        diff
     }
 
     async fn filter(&mut self, message: Message) -> Result<(), RuntimeError> {
