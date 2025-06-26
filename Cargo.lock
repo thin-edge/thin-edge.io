@@ -4583,6 +4583,7 @@ dependencies = [
  "tedge-write",
  "tedge_api",
  "tedge_config",
+ "tedge_gen_mapper",
  "tedge_test_utils",
  "tedge_utils",
  "tempfile",

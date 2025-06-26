@@ -49,6 +49,7 @@ strum_macros = { workspace = true }
 tar = { workspace = true }
 tedge-agent = { workspace = true }
 tedge-apt-plugin = { workspace = true }
+tedge_gen_mapper = { workspace = true }
 tedge-mapper = { workspace = true, default-features = false }
 tedge-watchdog = { workspace = true }
 tedge-write = { workspace = true }
