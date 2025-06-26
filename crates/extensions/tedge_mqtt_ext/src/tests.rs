@@ -312,6 +312,52 @@ async fn dynamic_subscribers_receive_retain_messages() {
     }
 }
 
+#[tokio::test]
+async fn dynamic_subscribers_receive_retain_messages_when_upgrading_topic() {
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mqtt_config = MqttConfig::default().with_port(broker.port);
+    let mut mqtt = MqttActorBuilder::new(mqtt_config);
+
+    broker
+        .publish_with_opts("a/b", "retain", QoS::AtLeastOnce, true)
+        .await
+        .unwrap();
+
+    let mut client_0 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber", 16);
+    let mut client_1 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber1", 16);
+    let _client_id_0 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/b"), &client_0);
+    let client_id_1 = mqtt.connect_id_sink(TopicFilter::empty(), &client_1);
+    client_0.connect_sink(NoConfig, &mqtt);
+    client_1.connect_sink(NoConfig, &mqtt);
+    let mqtt = mqtt.build();
+    tokio::spawn(async move { mqtt.run().await.unwrap() });
+    let mut client_0 = client_0.build();
+    let mut client_1 = client_1.build();
+
+    let msg = MqttMessage::new(&Topic::new_unchecked("a/b"), "retain").with_retain();
+
+    // client_0 receives retain message upon subscribing to "a/b"
+    assert_eq!(timeout(client_0.recv()).await.unwrap(), msg);
+
+    client_1
+        .send(PublishOrSubscribe::Subscribe(SubscriptionRequest {
+            diff: SubscriptionDiff {
+                subscribe: ["a/+".into()].into(),
+                unsubscribe: [].into(),
+            },
+            client_id: client_id_1,
+        }))
+        .await
+        .unwrap();
+
+    // client_1 should receive both "a/b" and "b/c" retain messages upon subscribing
+    let recv = timeout(client_1.recv()).await.unwrap();
+    assert_eq!(recv, msg);
+
+    // Retain message might be redelivered to client_0, but this is
+    // implementation dependent, don't assert either way
+}
+
 async fn timeout<T>(fut: impl Future<Output = T>) -> T {
     tokio::time::timeout(Duration::from_secs(1), fut)
         .await
