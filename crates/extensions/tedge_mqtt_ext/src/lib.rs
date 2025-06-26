@@ -326,7 +326,7 @@ impl FromPeers {
             match message {
                 PublishOrSubscribe::Publish(message) => {
                     tracing::debug!(target: "MQTT pub", "{message}");
-                    SinkExt::send(outgoing_mqtt,  message)
+                    SinkExt::send(outgoing_mqtt, message)
                         .await
                         .map_err(Box::new)?;
                 }
@@ -365,18 +365,29 @@ impl FromPeers {
                             client.unsubscribe_many(diff.unsubscribe).await.unwrap();
                         }
                     });
-                    let dynamic_connection_config = self.base_config.clone().with_subscriptions(tf);
-                    let mut sender = tx_to_peers.clone();
-                    tokio::spawn(async move {
-                        let mut conn = mqtt_channel::Connection::new(&dynamic_connection_config).await.unwrap();
-                        while let Ok(msg) = tokio::time::timeout(Duration::from_secs(10), conn.received.next()).await {
-                            if let Some(msg) = msg {
-                                if msg.retain {
-                                    SinkExt::send(&mut sender, (request.client_id, msg)).await.unwrap();
+                    if !tf.is_empty() {
+                        let dynamic_connection_config =
+                            self.base_config.clone().with_subscriptions(tf);
+                        let mut sender = tx_to_peers.clone();
+                        tokio::spawn(async move {
+                            let mut conn =
+                                mqtt_channel::Connection::new(&dynamic_connection_config)
+                                    .await
+                                    .unwrap();
+                            while let Ok(msg) =
+                                tokio::time::timeout(Duration::from_secs(10), conn.received.next())
+                                    .await
+                            {
+                                if let Some(msg) = msg {
+                                    if msg.retain {
+                                        SinkExt::send(&mut sender, (request.client_id, msg))
+                                            .await
+                                            .unwrap();
+                                    }
                                 }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
             }
         }
@@ -510,9 +521,13 @@ impl Actor for MqttActor {
         tokio::spawn(async move { self.trie_service.run().await });
 
         tedge_utils::futures::select(
-            self.from_peers
-                .relay_messages_to(&mut mqtt_client.published, &mut to_peer, mqtt_client.subscriptions),
-            self.to_peers.relay_messages_from(&mut mqtt_client.received, &mut from_peer),
+            self.from_peers.relay_messages_to(
+                &mut mqtt_client.published,
+                &mut to_peer,
+                mqtt_client.subscriptions,
+            ),
+            self.to_peers
+                .relay_messages_from(&mut mqtt_client.received, &mut from_peer),
         )
         .await
     }
@@ -624,12 +639,12 @@ mod unit_tests {
                 id: 0
             ))
             .await;
-        
+
         actor
             .subscribe_client
             .assert_unsubscribed_from(["a/b".into()])
             .await;
-    
+
         actor.close().await;
     }
 
@@ -752,9 +767,15 @@ mod unit_tests {
             let subscribe_client = MockSubscriberOps::default();
             let from_peers = {
                 let client = subscribe_client.clone();
-                tokio::spawn(async move { fp.relay_messages_to(&mut outgoing_mqtt, &mut tx, client).await })
+                tokio::spawn(async move {
+                    fp.relay_messages_to(&mut outgoing_mqtt, &mut tx, client)
+                        .await
+                })
             };
-            let to_peers = tokio::spawn(async move { tp.relay_messages_from(&mut incoming_messages, &mut rx).await });
+            let to_peers = tokio::spawn(async move {
+                tp.relay_messages_from(&mut incoming_messages, &mut rx)
+                    .await
+            });
 
             Self {
                 subscribe_client,
@@ -771,7 +792,7 @@ mod unit_tests {
 
         /// Closes the channels associated with this actor and waits for both
         /// loops to finish executing
-        /// 
+        ///
         /// This allows the `SubscriberOps::drop` implementation to reliably
         /// flag any unasserted communication
         pub async fn close(mut self) {
