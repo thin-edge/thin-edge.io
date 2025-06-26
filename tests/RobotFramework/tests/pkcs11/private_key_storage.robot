@@ -88,7 +88,7 @@ Connects to C8y using an RSA key
     type=rsa    bits=4096
     type=rsa    bits=3072
     type=rsa    bits=2048
-    type=rsa    bits=1024
+    # type=rsa    bits=1024    # RSA 1024 is considered to be insecure is not supported when using the Cumulocity Certificate Authority feature
 
 Connects to C8y supporting all TLS13 ECDSA signature algorithms
     [Documentation]    Check that we support all ECDSA sigschemes used in TLS1.3, i.e: ecdsa_secp256r1_sha256,
