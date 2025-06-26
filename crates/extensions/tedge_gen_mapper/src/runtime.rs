@@ -17,8 +17,8 @@ use tracing::error;
 use tracing::info;
 
 pub struct MessageProcessor {
-    pub(super) config_dir: PathBuf,
-    pub(super) pipelines: HashMap<String, Pipeline>,
+    pub config_dir: PathBuf,
+    pub pipelines: HashMap<String, Pipeline>,
     pub(super) js_runtime: JsRuntime,
 }
 
@@ -28,7 +28,7 @@ impl MessageProcessor {
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut pipeline_specs = PipelineSpecs::default();
         pipeline_specs.load(&mut js_runtime, &config_dir).await;
-        let pipelines = pipeline_specs.compile(&mut js_runtime, &config_dir);
+        let pipelines = pipeline_specs.compile(&js_runtime, &config_dir);
 
         Ok(MessageProcessor {
             config_dir,
@@ -52,12 +52,23 @@ impl MessageProcessor {
     ) -> Vec<(String, Result<Vec<Message>, FilterError>)> {
         let mut out_messages = vec![];
         for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
-            let pipeline_output = pipeline
-                .process(&self.js_runtime, &timestamp, &message)
-                .await;
+            let pipeline_output = pipeline.process(&self.js_runtime, timestamp, message).await;
             out_messages.push((pipeline_id.clone(), pipeline_output));
         }
         out_messages
+    }
+
+    pub async fn process_with_pipeline(
+        &mut self,
+        pipeline_id: &String,
+        timestamp: &DateTime,
+        message: &Message,
+    ) -> Result<Vec<Message>, FilterError> {
+        let pipeline = self
+            .pipelines
+            .get_mut(pipeline_id)
+            .ok_or_else(|| anyhow::anyhow!("No such pipeline: {pipeline_id}"))?;
+        pipeline.process(&self.js_runtime, timestamp, message).await
     }
 
     pub async fn tick(
@@ -66,7 +77,7 @@ impl MessageProcessor {
     ) -> Vec<(String, Result<Vec<Message>, FilterError>)> {
         let mut out_messages = vec![];
         for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
-            let pipeline_output = pipeline.tick(&self.js_runtime, &timestamp).await;
+            let pipeline_output = pipeline.tick(&self.js_runtime, timestamp).await;
             out_messages.push((pipeline_id.clone(), pipeline_output));
         }
         out_messages
@@ -184,11 +195,7 @@ impl PipelineSpecs {
         Ok(())
     }
 
-    fn compile(
-        mut self,
-        js_runtime: &JsRuntime,
-        config_dir: &PathBuf,
-    ) -> HashMap<String, Pipeline> {
+    fn compile(mut self, js_runtime: &JsRuntime, config_dir: &Path) -> HashMap<String, Pipeline> {
         let mut pipelines = HashMap::new();
         for (name, (source, specs)) in self.pipeline_specs.drain() {
             match specs.compile(js_runtime, config_dir, source) {

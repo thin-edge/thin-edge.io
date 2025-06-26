@@ -2,11 +2,11 @@ mod actor;
 mod config;
 mod js_filter;
 mod js_runtime;
-mod pipeline;
+pub mod pipeline;
 mod runtime;
 
 use crate::actor::GenMapper;
-use crate::runtime::MessageProcessor;
+pub use crate::runtime::MessageProcessor;
 use std::convert::Infallible;
 use std::path::Path;
 use std::path::PathBuf;
