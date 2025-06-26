@@ -99,6 +99,26 @@ Connects to C8y supporting all TLS13 ECDSA signature algorithms
     type=ecdsa    curve=secp384r1
     type=ecdsa    curve=secp521r1
 
+Creates a private key on the PKCS11 token
+    Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token --pin=123456 --so-pin=123456
+
+    ${output}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=create-key-token"
+    ...    exp_exit_code=!0
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Be Equal    ${output}    No matching objects found
+
+    Set tedge-p11-server Uri    value=pkcs11:token=create-key-token
+    Execute Command    tedge cert create-key
+
+    ${output}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=create-key-token"
+    Should Contain    ${output}    Object 0:
+
+    [Teardown]    Set tedge-p11-server Uri    value=
+
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
     ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0
