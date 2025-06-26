@@ -27,14 +27,14 @@ pub struct Stage {
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
 pub struct DateTime {
-    pub(crate) seconds: u64,
-    pub(crate) nanoseconds: u32,
+    pub seconds: u64,
+    pub nanoseconds: u32,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
 pub struct Message {
-    pub(crate) topic: String,
-    pub(crate) payload: String,
+    pub topic: String,
+    pub payload: String,
 }
 
 #[derive(thiserror::Error, Debug)]
