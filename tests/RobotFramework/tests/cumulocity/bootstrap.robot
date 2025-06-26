@@ -10,12 +10,11 @@ Test Teardown       Get Logs
 *** Test Cases ***
 No unexpected child devices created with service autostart
     [Tags]    \#2584
-    ${DEVICE_SN}=    Setup    skip_bootstrap=True
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
+    ${DEVICE_SN}=    Setup    connect=${False}
     Execute Command    systemctl start mosquitto
     Execute Command    systemctl start tedge-agent
     Execute Command    systemctl start tedge-mapper-c8y
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-install --no-secure || true
+    Execute Command    tedge connect c8y
     Device Should Exist    ${DEVICE_SN}
 
     # wait for messages to be processed
@@ -66,12 +65,11 @@ Mapper restart does not alter device hierarchy
 
 Mapper started early does not miss supported operations
     [Tags]    \#2689
-    ${DEVICE_SN}=    Setup    skip_bootstrap=True
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-bootstrap --no-connect --no-secure || true
+    ${DEVICE_SN}=    Setup    connect=${False}
     Execute Command    systemctl start mosquitto
     Execute Command    systemctl start tedge-agent
     Execute Command    systemctl start tedge-mapper-c8y
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-install --no-secure || true
+    Execute Command    tedge connect c8y
     Device Should Exist    ${DEVICE_SN}
 
     # Assert that there are no child devices present.

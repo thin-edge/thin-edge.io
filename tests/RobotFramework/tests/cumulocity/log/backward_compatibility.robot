@@ -22,8 +22,17 @@ Migrate Legacy Configuration Files
     ...    chown root:root /etc/tedge/c8y/c8y-log-plugin.toml /var/log/example/example.log && touch /var/log/example/example.log
 
     # Bootstrap tedge-agent so that it picks up the legacy c8y-log-plugin.toml
-    Execute Command    ./bootstrap.sh
+    Run Bootstrap    ${DEVICE_SN}
     Cumulocity.Device Should Exist    ${DEVICE_SN}
 
     ${operation}=    Cumulocity.Get Log File    example
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}
+
+
+*** Keywords ***
+Run Bootstrap
+    [Arguments]    ${external_id}
+    ${bootstrap_cmd}=    ThinEdgeIO.Get Bootstrap Command
+    Execute Command    cmd=${bootstrap_cmd}
+    Register Device With Cumulocity CA    external_id=${external_id}
+    Execute Command    cmd=tedge connect c8y

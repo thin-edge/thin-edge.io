@@ -197,9 +197,8 @@ Connect to C8y using new keypair
     Execute Command    tedge config unset device.key_uri
 
 Custom Setup
-    ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
+    ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    $DEVICE_SN
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-bootstrap --no-connect || true
     # Allow the tedge user to access softhsm
     Execute Command    sudo usermod -a -G softhsm tedge
     Transfer To Device    ${CURDIR}/data/init_softhsm.sh    /usr/bin/

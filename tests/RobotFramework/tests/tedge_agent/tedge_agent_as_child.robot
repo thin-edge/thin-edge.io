@@ -28,6 +28,5 @@ tedge-agent should not subscribe to legacy topics when running as a child device
 
 *** Keywords ***
 Custom Setup
-    ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect
+    ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    $DEVICE_SN

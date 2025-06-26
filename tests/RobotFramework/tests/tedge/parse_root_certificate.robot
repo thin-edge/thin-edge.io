@@ -54,15 +54,12 @@ Verify Invalid Path
 
 *** Keywords ***
 Setup With Self-Signed Certificate
-    ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
+    ${DEVICE_SN}=    Setup    register_using=self-signed
     Set Test Variable    $DEVICE_SN
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --cert-method selfsigned
-    Register Certificate For Cleanup
 
 Setup Without Certificate
-    ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
+    ${DEVICE_SN}=    Setup    register=${False}
     Set Test Variable    $DEVICE_SN
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --install --no-bootstrap --no-connect
 
 Should Contain Any Line
     [Arguments]    ${text}    ${cert_file}

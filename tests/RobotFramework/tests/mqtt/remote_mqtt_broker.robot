@@ -51,8 +51,7 @@ Check remote mqtt broker #1773
 *** Keywords ***
 Custom Setup
     # Container 1 running mqtt host and mapper
-    ${CONTAINER_1}=    Setup    skip_bootstrap=${True}
-    Execute Command    ./bootstrap.sh --no-connect --bootstrap --no-secure
+    ${CONTAINER_1}=    Setup    bootstrap_args=--no-secure    register=${True}    connect=${False}
     Set Test Variable    $CONTAINER_1
     ${CONTAINER_1_IP}=    Get IP Address
     Disconnect Mapper    c8y
@@ -70,8 +69,7 @@ Custom Setup
     ${pem}=    Execute Command    cat "$(tedge config get device.cert_path)"
 
     # container 2 running all other services
-    ${CONTAINER_2}=    Setup    skip_bootstrap=${True}
-    Execute Command    ./bootstrap.sh --no-connect --no-bootstrap --no-secure
+    ${CONTAINER_2}=    Setup    bootstrap_args=--no-secure    register=${False}
     Set Test Variable    $CONTAINER_2
 
     # Stop services that don't need to be running on the second device

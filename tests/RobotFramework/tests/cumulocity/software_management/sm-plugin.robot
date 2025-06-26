@@ -134,9 +134,8 @@ Software updates download software packages only once #3062
 
 *** Keywords ***
 Custom Setup
-    ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
+    ${DEVICE_SN}=    Setup    connect=${False}
     Set Test Variable    $DEVICE_SN
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
     # Remove any existing packages to allow for exact assertions
     Execute Command    rm -f /etc/tedge/sm-plugins/*
     Transfer To Device    ${CURDIR}/dummy-plugin.sh    /etc/tedge/sm-plugins/dummy1

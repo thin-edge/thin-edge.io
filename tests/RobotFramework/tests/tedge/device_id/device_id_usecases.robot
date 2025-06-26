@@ -1,5 +1,5 @@
 *** Settings ***
-Documentation       This suite covers all usecases in the issue #3369
+Documentation       This suite covers all use-cases in the issue #3369
 
 Resource            ../../../resources/common.resource
 Library             Cumulocity
@@ -61,8 +61,7 @@ Use default device.id to create the cert
 
 *** Keywords ***
 Custom Setup
-    ${device_sn}=    Setup    skip_bootstrap=${True}
-    Execute Command    ./bootstrap.sh --no-connect
+    ${device_sn}=    Setup    connect=${False}
     Set Test Variable    $FOO    ${device_sn}-1
     Set Test Variable    $BAR    ${device_sn}-2
     Execute Command    tedge cert remove

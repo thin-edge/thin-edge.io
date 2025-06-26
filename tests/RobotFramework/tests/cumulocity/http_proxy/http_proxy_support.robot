@@ -48,8 +48,7 @@ Install thin-edge.io behind a Proxy using curl
 
 *** Keywords ***
 Setup Device With thin-edge.io
-    ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
+    ${DEVICE_SN}=    Setup    connect=${False}
 
     Set Suite Variable    $DEVICE_SN
     Add iptables Rules

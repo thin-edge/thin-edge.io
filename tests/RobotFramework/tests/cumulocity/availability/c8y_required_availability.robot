@@ -11,7 +11,7 @@ Test Tags           theme:c8y    theme:monitoring
 
 *** Test Cases ***
 c8y_RequiredAvailability is set by default to an hour
-    Execute Command    ./bootstrap.sh
+    Execute Command    tedge connect c8y
 
     # Main
     Device Should Exist    ${DEVICE_SN}
@@ -23,9 +23,8 @@ c8y_RequiredAvailability is set by default to an hour
 
 c8y_RequiredAvailability is set with custom value
     # Set tedge config value before connecting
-    Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
     Execute Command    sudo tedge config set c8y.availability.interval 0
-    Execute Command    ./bootstrap.sh --no-install
+    Execute Command    tedge connect c8y
 
     # Main
     Device Should Exist    ${DEVICE_SN}
@@ -37,9 +36,8 @@ c8y_RequiredAvailability is set with custom value
 
 c8y_RequiredAvailability is not set when disabled
     # Set tedge config value before connecting
-    Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
     Execute Command    sudo tedge config set c8y.availability.enable false
-    Execute Command    ./bootstrap.sh --no-install
+    Execute Command    tedge connect c8y
 
     # Main
     Device Should Exist    ${DEVICE_SN}
@@ -52,7 +50,7 @@ c8y_RequiredAvailability is not set when disabled
 
 *** Keywords ***
 Test Setup
-    ${DEVICE_SN}=    Setup    skip_bootstrap=True
+    ${DEVICE_SN}=    Setup    connect=${False}
     Set Test Variable    $DEVICE_SN
 
     ${CHILD_SN}=    Get Random Name

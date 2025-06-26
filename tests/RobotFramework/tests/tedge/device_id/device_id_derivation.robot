@@ -125,8 +125,7 @@ Validate device IDs
     Should Be Equal    ${output}    ${c8y_foo_device_id}
 
 Custom Suite Setup
-    Setup    skip_bootstrap=${True}
-    Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
+    Setup    register=${False}
 
 Custom Test Setup
     Execute Command    tedge config set c8y.url example.com --profile foo

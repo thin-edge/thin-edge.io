@@ -45,9 +45,8 @@ Setup Child Device
 
 Custom Setup
     # Parent
-    ${parent_sn}=    Setup    skip_bootstrap=${True}
+    ${parent_sn}=    Setup    connect=${False}
     Set Suite Variable    $PARENT_SN    ${parent_sn}
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
 
     ${parent_ip}=    Get IP Address
     Set Suite Variable    $PARENT_IP    ${parent_ip}

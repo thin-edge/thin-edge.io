@@ -29,8 +29,7 @@ Publish on a local secure broker with client authentication
 
 *** Keywords ***
 Custom Setup
-    Setup    skip_bootstrap=True
-    Execute Command    /setup/bootstrap.sh --no-connect --no-secure
+    Setup    bootstrap_args=--no-secure    register=${False}
 
 Set up broker server authentication
     Transfer To Device    ${CURDIR}/mosquitto-server-auth.conf    /etc/tedge/mosquitto-conf/
