@@ -98,19 +98,30 @@ fn parse(line: String) -> Result<Option<Message>, Error> {
     Ok(Some(Message { topic, payload }))
 }
 
-async fn next_message(input: &mut BufReader<Stdin>) -> Option<Message> {
-    let mut line = String::new();
-    match input.read_line(&mut line).await {
-        Ok(0) => None,
-        Ok(_) => match parse(line) {
-            Ok(message) => message,
-            Err(err) => {
-                eprintln!("Fail to parse input message {}", err);
-                None
+async fn next_line(input: &mut BufReader<Stdin>) -> Option<String> {
+    loop {
+        let mut line = String::new();
+        match input.read_line(&mut line).await {
+            Ok(0) => return None,
+            Ok(_) => {
+                let line = line.trim();
+                if !line.is_empty() {
+                    return Some(line.to_string());
+                }
             }
-        },
+            Err(err) => {
+                eprintln!("Fail to read input stream {}", err);
+                return None
+            }
+        }
+    }
+}
+async fn next_message(input: &mut BufReader<Stdin>) -> Option<Message> {
+    let line = next_line(input).await?;
+    match parse(line) {
+        Ok(message) => message,
         Err(err) => {
-            eprintln!("Fail to read input stream {}", err);
+            eprintln!("Fail to parse input message {}", err);
             None
         }
     }
