@@ -1,6 +1,8 @@
 use crate::availability::actor::TimerPayload;
+use crate::inventory::inventory_update_topic;
 pub use builder::AvailabilityBuilder;
 use c8y_api::smartrest::inventory::C8ySmartRestSetInterval117;
+use serde_json::json;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_api::entity::EntityExternalId;
@@ -12,7 +14,6 @@ use tedge_config::models::TopicPrefix;
 use tedge_config::tedge_toml::ReadError;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 
@@ -26,27 +27,18 @@ pub type TimerComplete = Timeout<TimerPayload>;
 pub type SourceHealthStatus = (EntityTopicId, HealthStatus);
 
 fan_in_message_type!(AvailabilityInput[EntityRegistrationMessage, SourceHealthStatus, TimerComplete] : Debug);
-fan_in_message_type!(AvailabilityOutput[C8ySmartRestSetInterval117, C8yJsonInventoryUpdate] : Debug);
+fan_in_message_type!(AvailabilityOutput[C8ySmartRestSetInterval117, C8yJsonEmptyInventoryUpdate] : Debug);
 
-// TODO! Make it generic and move to c8y_api crate while refactoring c8y-mapper
 #[derive(Debug)]
-pub struct C8yJsonInventoryUpdate {
+pub struct C8yJsonEmptyInventoryUpdate {
     external_id: String,
-    payload: serde_json::Value,
-    pub prefix: TopicPrefix,
+    prefix: TopicPrefix,
 }
 
-impl From<C8yJsonInventoryUpdate> for MqttMessage {
-    fn from(value: C8yJsonInventoryUpdate) -> Self {
-        let json_over_mqtt_topic = format!(
-            "{prefix}/inventory/managedObjects/update/{external_id}",
-            prefix = value.prefix,
-            external_id = value.external_id
-        );
-        MqttMessage::new(
-            &Topic::new_unchecked(&json_over_mqtt_topic),
-            value.payload.to_string(),
-        )
+impl From<C8yJsonEmptyInventoryUpdate> for MqttMessage {
+    fn from(value: C8yJsonEmptyInventoryUpdate) -> Self {
+        let json_over_mqtt_topic = inventory_update_topic(&value.prefix, &value.external_id);
+        MqttMessage::new(&json_over_mqtt_topic, json!({}).to_string())
     }
 }
 

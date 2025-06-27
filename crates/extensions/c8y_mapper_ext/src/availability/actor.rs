@@ -1,12 +1,11 @@
 use crate::availability::AvailabilityConfig;
 use crate::availability::AvailabilityInput;
 use crate::availability::AvailabilityOutput;
-use crate::availability::C8yJsonInventoryUpdate;
+use crate::availability::C8yJsonEmptyInventoryUpdate;
 use crate::availability::C8ySmartRestSetInterval117;
 use crate::availability::TimerStart;
 use async_trait::async_trait;
 use c8y_api::smartrest::topic::C8yTopic;
-use serde_json::json;
 use std::collections::HashMap;
 use tedge_actors::Actor;
 use tedge_actors::LoggingSender;
@@ -156,44 +155,40 @@ impl AvailabilityActor {
     /// Insert a <"device topic ID" - "health entity topic ID" and "external ID"> pair into the map.
     /// If @health is provided in the registration message, use the value as long as it's valid as entity topic ID.
     /// If @health is not provided, use the "tedge-agent" service topic ID as default.
-    /// @id is the only source to know the device's external ID. Hence, @id must be provided in the registration message.
     fn update_device_service_pair(
         &mut self,
         registration_message: &EntityRegistrationMessage,
     ) -> RegistrationResult {
         let source = &registration_message.topic_id;
 
-        let result = match registration_message.health_endpoint.clone() {
+        let maybe_health_topic_id = match registration_message.health_endpoint.clone() {
             None => registration_message
                 .topic_id
-                .default_service_for_device("tedge-agent")
-                .ok_or_else( || format!("The entity is not in the default topic scheme. Please specify '@health' to enable availability monitoring for the device '{source}'")),
-            Some(topic_id) => Ok(topic_id),
+                .default_service_for_device("tedge-agent"),
+            Some(topic_id) => Some(topic_id),
         };
 
-        match result {
-            Ok(health_topic_id) => match registration_message.external_id.clone() {
-                None => RegistrationResult::Skip(format!("Registration message is skipped since '@id' is missing in the payload. source: '{source}', {registration_message:?}")),
-                Some(external_id) => {
-                    if let Some(ids) = self.device_ids_map.get(source) {
-                        if ids.health_topic_id == health_topic_id {
-                            return RegistrationResult::Skip(format!("Registration message is skipped since no health endpoint change is detected. source: '{source}', {registration_message:?}"))
-                        }
-                    }
-
-                    match self.device_ids_map.insert(
-                        source.clone(),
-                        DeviceIds {
-                            health_topic_id,
-                            external_id,
-                        },
-                    ) {
-                        None => RegistrationResult::New,
-                        Some(_) => RegistrationResult::Update,
+        match (maybe_health_topic_id, registration_message.external_id.clone()) {
+            (None, _) => RegistrationResult::Error(format!("The entity is not in the default topic scheme. Please specify '@health' to enable availability monitoring for the device '{source}'")),
+            (_, None) => RegistrationResult::Error(format!("External ID is missing from the received registration message. source: '{source}', {registration_message:?}")),
+            (Some(health_topic_id), Some(external_id)) => {
+                if let Some(ids) = self.device_ids_map.get(source) {
+                    if ids.health_topic_id == health_topic_id {
+                        return RegistrationResult::Skip(format!("Registration message is skipped since no health endpoint change is detected. source: '{source}', {registration_message:?}"))
                     }
                 }
-            },
-            Err(err) => RegistrationResult::Error(err),
+
+                match self.device_ids_map.insert(
+                    source.clone(),
+                    DeviceIds {
+                        health_topic_id,
+                        external_id,
+                    },
+                ) {
+                    None => RegistrationResult::New,
+                    Some(_) => RegistrationResult::Update,
+                }
+            }
         }
     }
 
@@ -264,9 +259,8 @@ impl AvailabilityActor {
             if let Some(health_status) = self.health_status_map.get(service_topic_id) {
                 // Send an empty JSON over MQTT message if the target service status is "up"
                 if health_status.status == Status::Up {
-                    let json_over_mqtt = C8yJsonInventoryUpdate {
+                    let json_over_mqtt = C8yJsonEmptyInventoryUpdate {
                         external_id: external_id.into(),
-                        payload: json!({}),
                         prefix: self.config.c8y_prefix.clone(),
                     };
                     self.message_box.send(json_over_mqtt.into()).await?;
