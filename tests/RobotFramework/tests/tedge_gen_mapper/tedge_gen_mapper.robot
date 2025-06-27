@@ -37,6 +37,17 @@ Translate complex tedge json to c8y json
     ...    ${transformed_msg}
     ...    [c8y/measurement/measurements/create] {"type":"environment","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":258},"location":{"latitude":32.54,"longitude":-117.67,"altitude":98.6},"pressure":{"pressure":98}}
 
+Units are configured using topic metadata
+    ${transformed_msg}    Execute Command
+    ...    cat /etc/tedge/gen-mapper/measurements.samples | awk '{ print $2 }' FS\='INPUT:' | tedge mapping test
+    ...    strip=True
+    ${expected_msg}    Execute Command
+    ...    cat /etc/tedge/gen-mapper/measurements.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
+    ...    strip=True
+    Should Be Equal
+        ...    ${transformed_msg}
+        ...    ${expected_msg}
+
 
 *** Keywords ***
 Custom Setup
