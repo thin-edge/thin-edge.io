@@ -5,10 +5,12 @@ It currently support the creation of Docker devices only
 """
 # pylint: disable=invalid-name
 
+import inspect
 import logging
 import json
-from typing import Any, Union, List, Dict
+from typing import Any, Union, List, Dict, Optional
 import time
+from dataclasses import dataclass
 from datetime import datetime
 import re
 import base64
@@ -38,6 +40,25 @@ __author__ = "Reuben Miller"
 C8Y_TOKEN_TOPIC = "c8y/s/dat"
 
 
+@dataclass
+class Certificate:
+    issuer: str = ""
+    subject: str = ""
+    thumbprint: str = ""
+
+    @classmethod
+    def from_dict(cls, env):
+        return cls(
+            **{k: v for k, v in env.items() if k in inspect.signature(cls).parameters}
+        )
+
+    @property
+    def is_self_signed(self):
+        if self.issuer is None or self.subject is None:
+            return False
+        return self.issuer and self.issuer == self.subject
+
+
 class MQTTMessage:
     timestamp: float
     topic: str
@@ -58,49 +79,21 @@ class ThinEdgeIO(DeviceLibrary):
     """ThinEdgeIO Library"""
 
     def __init__(
-            self,
-            image: str = DeviceLibrary.DEFAULT_IMAGE,
-            adapter: str = None,
-            bootstrap_script: str = DeviceLibrary.DEFAULT_BOOTSTRAP_SCRIPT,
-            **kwargs,
+        self,
+        image: str = DeviceLibrary.DEFAULT_IMAGE,
+        adapter: str = None,
+        bootstrap_script: str = DeviceLibrary.DEFAULT_BOOTSTRAP_SCRIPT,
+        **kwargs,
     ):
         super().__init__(
             image=image, adapter=adapter, bootstrap_script=bootstrap_script, **kwargs
         )
 
+        # track self-signed devices certificates for cleanup after the suite has finished
+        self._certificates: Dict[str, str] = {}
+
         # Configure retries
         retry.configure_retry_on_members(self, "^_assert_")
-
-    def should_delete_device_certificate(self) -> bool:
-        """Check if the certificate should be deleted or not
-        """
-        # Only delete the certificate if it is a self signed certificate
-
-        # Parse the certificate details via tedge cert show
-        lines = []
-        try:
-            lines = self.execute_command("tedge cert show", ignore_exit_code=True).splitlines()
-        except Exception as ex:
-            # Ignore any errors
-            log.info("Could not read certificate information. %s", ex)
-
-        # Prase output and decode the certificate information
-        # Use simple parser to avoid having to decode the certificate
-        certificate = {}
-        for line in lines:
-            key, _, value = line.partition(":")
-            if key and value:
-                certificate[key.lower().strip()] = value.strip()
-
-        issuer = certificate.get("issuer", None)
-        subject = certificate.get("subject", None)
-
-        if issuer is None or subject is None:
-            return False
-
-        # Self signed certificates generally have the same issue information as the subject
-        is_self_signed = subject == issuer
-        return is_self_signed
 
     def end_suite(self, _data: Any, result: Any):
         """End suite hook which is called by Robot Framework
@@ -112,15 +105,33 @@ class ThinEdgeIO(DeviceLibrary):
         """
         log.info("Suite %s (%s) ending", result.name, result.message)
 
-        for device in self.devices.values():
+        log.info(
+            "Removing the following self-signed certificates (thumbprints): %s",
+            self._certificates,
+        )
+        for thumbprint, device_sn in self._certificates.items():
             try:
-                if isinstance(device, DeviceAdapter):
-                    if device.should_cleanup:
-                        if self.should_delete_device_certificate():
-                            self.remove_certificate(device)
-                        self.remove_device(device)
+                self.remove_certificate(thumbprint)
+                c8y_lib.device_mgmt.inventory.delete_device_and_user(
+                    device_sn, "c8y_Serial"
+                )
             except Exception as ex:
                 log.warning("Could not cleanup certificate/device. %s", ex)
+
+        # remove device management objects and related users
+        # Note: this needs to run in addition to the certificate cleanup
+        # for device that don't use self-signed certificate, and delete_device_and_user
+        # does a no-op if the managed object and/or user does not exist, so it is safe
+        # to run multiple times
+        for device in self.devices.values():
+            try:
+                device_sn = device.get_id()
+                # Note: this is a no-op if the device or user does not exist
+                c8y_lib.device_mgmt.inventory.delete_device_and_user(
+                    device_sn, "c8y_Serial"
+                )
+            except Exception as ex:
+                log.warning("Could not cleanup device. %s", ex)
 
         super().end_suite(_data, result)
 
@@ -136,21 +147,51 @@ class ThinEdgeIO(DeviceLibrary):
         if not result.passed:
             log.info("Test '%s' failed: %s", result.name, result.message)
 
-        # TODO: Only cleanup on the suite?
-        # self.remove_certificate_and_device(self.current)
+        # store self-signed certificates before anything else is done with the devices
+        # record each self-signed certificate within the current set of devices
+        # as the certificates can change within tests which would result in the suite
+        # teardown not knowing about any intermediate artifacts
+        for device in self.devices.values():
+            try:
+                if isinstance(device, DeviceAdapter) and device.should_cleanup:
+                    certificate = self.get_certificate_details(device)
+                    if certificate.is_self_signed and certificate.thumbprint:
+                        self._certificates[certificate.thumbprint] = device.get_id()
+            except Exception as ex:
+                log.warning("Could not cleanup certificate/device. %s", ex)
+
         super().end_test(_data, result)
 
-    @keyword("Delete Managed Object")
-    def delete_managed_object(self, internal_id: str, **kwargs) -> None:
-        """Delete managed object and related device user
+    @keyword("Register Certificate For Cleanup")
+    def register_certificate(
+        self,
+        cloud_profile: Optional[str] = None,
+        common_name: Optional[str] = None,
+        device_name: Optional[str] = None,
+    ):
+        """Register a self-signed certificate for deletion after the test suite
+        has finished.
 
         Args:
-            internal_id (str): Internal id of the managed object
-        """
-        url = f"{c8y_lib.c8y.base_url}/inventory/managedObjects/{internal_id}"
+            device_name (Optional[str], optional): device name. Defaults to current device.
+            cloud_profile (Optional[str], optional): Cloud profile name. Defaults to None.
 
-        response = c8y_lib.c8y.session.delete(url)
-        response.raise_for_status()
+        Raises:
+            ValueError: No device context given
+        """
+        device = self.current
+        if device_name:
+            if device_name in self.devices:
+                device = self.devices.get(device_name)
+
+        if not device:
+            raise ValueError(
+                f"Unable to execute the command as the device: '{device_name}' has not been setup"
+            )
+
+        certificate = self.get_certificate_details(device, cloud_profile=cloud_profile)
+        if certificate.is_self_signed and certificate.thumbprint:
+            self._certificates[certificate.thumbprint] = common_name or device.get_id()
 
     @keyword("Get Debian Architecture")
     def get_debian_architecture(self):
@@ -299,30 +340,60 @@ class ThinEdgeIO(DeviceLibrary):
         else:
             log.info("No operations found")
 
-    def remove_certificate(self, device: DeviceAdapter = None):
-        """Remove trusted certificate"""
+    def get_certificate_details(
+        self, device: DeviceAdapter = None, cloud_profile: Optional[str] = None
+    ) -> Certificate:
+        """Get the details about the device's certificate
+
+        Args:
+            device (DeviceAdapter, optional): Device. Defaults to the current device.
+            cloud_profile (Optional[str], optional): Optional cloud profile name. Defaults to None.
+
+        Returns:
+            Certificate: Information about the current certificate
+        """
+        certificate = Certificate()
         if device is None:
             device = self.current
 
         if not device:
             log.info(f"No certificate to remove as the device as not been set")
-            return
+            return certificate
 
-        result = device.execute_command(
-            "command -v tedge >/dev/null && (tedge cert show | grep '^Thumbprint:' | cut -d' ' -f2 | tr A-Z a-z) || true",
-        )
-        if result.return_code != 0:
-            log.info("Failed to get device certificate fingerprint. %s", result.stdout)
-            return
+        # Parse the certificate details via tedge cert show
+        lines = []
+        try:
+            command = "tedge cert show c8y"
+            if cloud_profile:
+                command += f" --profile {cloud_profile}"
+            lines = self.execute_command(command, ignore_exit_code=True).splitlines()
 
-        fingerprint = result.stdout.strip()
-        if fingerprint:
-            try:
-                c8y_lib.trusted_certificate_delete(fingerprint)
-            except Exception as ex:
-                log.warning(
-                    "Could not remove device certificate. error=%s", ex
-                )
+        except Exception as ex:
+            # Ignore any errors
+            log.info("Could not read certificate information. %s", ex)
+            return certificate
+
+        # Prase output and decode the certificate information
+        # Use simple parser to avoid having to decode the certificate
+        fields = {}
+        for line in lines:
+            key, _, value = line.partition(":")
+            if key and value:
+                fields[key.lower().strip()] = value.strip()
+
+        certificate = Certificate.from_dict(fields)
+        return certificate
+
+    def remove_certificate(self, thumbprint: str):
+        """Remove trusted certificate
+
+        Args:
+            thumbprint (str): Certificate thumbprint/fingerprint
+        """
+        try:
+            c8y_lib.trusted_certificate_delete(thumbprint.lower())
+        except Exception as ex:
+            log.warning("Could not remove device certificate. error=%s", ex)
 
     def remove_device(self, device: DeviceAdapter = None):
         """Remove device from the cloud"""
@@ -340,14 +411,13 @@ class ThinEdgeIO(DeviceLibrary):
                     "Device serial number is empty, so nothing to delete from Cumulocity"
                 )
                 return
-            device_mo = c8y_lib.c8y.identity.get_object(device_sn, "c8y_Serial")
-            c8y_lib.device_mgmt.inventory.delete_device_and_user(device_mo)
+            c8y_lib.device_mgmt.inventory.delete_device_and_user(
+                device_sn, "c8y_Serial"
+            )
         except KeyError:
             log.info("Device does not exist in cloud, nothing to delete")
         except Exception as ex:
-            log.warning(
-                "Could not remove device. error=%s", ex
-            )
+            log.warning("Could not remove device. error=%s", ex)
 
     @keyword("Download From GitHub")
     def download_from_github(self, *run_id: str, arch: str = "aarch64"):
