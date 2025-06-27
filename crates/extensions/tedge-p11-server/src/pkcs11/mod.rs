@@ -24,6 +24,7 @@ use cryptoki::object::KeyType;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use rand::Fill;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
@@ -254,36 +255,67 @@ impl Cryptoki {
 }
 
 fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<()> {
-    let KeyTypeParams::Rsa { bits } = params.key;
-    anyhow::ensure!(
-        bits == 2048 || bits == 3072 || bits == 4096,
-        "Invalid bits value: only 2048/3072/4096 key sizes are valid"
-    );
+    let (mechanism, attrs_pub, attrs_priv) = match params.key {
+        KeyTypeParams::Rsa { bits } => {
+            anyhow::ensure!(
+                bits == 2048 || bits == 3072 || bits == 4096,
+                "Invalid bits value: only 2048/3072/4096 key sizes are valid"
+            );
+            (
+                Mechanism::RsaPkcsKeyPairGen,
+                vec![Attribute::ModulusBits(u64::from(bits).into())],
+                vec![],
+            )
+        }
+        KeyTypeParams::Ec { curve } => {
+            // serialize chosen curve to CKA_EC_PARAMS choice structure
+            // https://docs.oasis-open.org/pkcs11/pkcs11-curr/v3.0/os/pkcs11-curr-v3.0-os.html#_Toc30061181
+            let oid = match curve {
+                256 => SECP256R1_OID,
+                384 => SECP384R1_OID,
+                521 => SECP521R1_OID,
+                _ => anyhow::bail!("Invalid EC curve value: only 256/384/521 valid"),
+            };
+            let components: Vec<u64> = oid.split('.').map(|c| c.parse().unwrap()).collect();
+            let curve_oid = asn1_rs::Oid::from(&components)
+                .unwrap()
+                .to_der_vec()
+                .unwrap();
+            trace!("{curve_oid:x?}");
+            (
+                Mechanism::EccKeyPairGen,
+                vec![Attribute::EcParams(curve_oid)],
+                vec![],
+            )
+        }
+    };
 
-    trace!(bits, "Generating keypair");
+    let mut id = vec![0u8; 20];
+    rand::fill(&mut id[..]);
+
+    let mut pub_key_template = attrs_pub;
+    pub_key_template.extend_from_slice(&[
+        // Attribute::Token(true),
+        Attribute::Private(false),
+        Attribute::Verify(true),
+        Attribute::Encrypt(true),
+    ]);
+
+    let mut priv_key_template = attrs_priv;
+    priv_key_template.extend_from_slice(&[
+        Attribute::Token(true),
+        Attribute::Private(true),
+        Attribute::Sensitive(true),
+        Attribute::Extractable(false),
+        Attribute::Sign(true),
+        Attribute::Decrypt(true),
+        Attribute::Label(params.label.into()),
+        Attribute::Id(id),
+    ]);
+
+    trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
     session
-        .generate_key_pair(
-            &Mechanism::RsaPkcsKeyPairGen,
-            &[
-                // Attribute::Token(true),
-                Attribute::Private(false),
-                Attribute::Verify(true),
-                Attribute::Encrypt(true),
-                Attribute::ModulusBits(u64::from(bits).into()),
-                // Attribute::Label("rsa_public".into()),
-            ],
-            &[
-                Attribute::Token(true),
-                Attribute::Private(true),
-                Attribute::Sensitive(true),
-                Attribute::Extractable(false),
-                Attribute::Sign(true),
-                Attribute::Decrypt(true),
-                Attribute::Label(params.label.into()),
-                // Attribute::ModulusBits(u64::from(bits).into()),
-                // Attribute::KeyType(KeyType::RSA),
-            ],
-        )
+        .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template)
         .context("Failed to generate keypair")?;
     Ok(())
 }
@@ -298,6 +330,7 @@ pub struct CreateKeyParams {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KeyTypeParams {
     Rsa { bits: u16 },
+    Ec { curve: u16 },
 }
 
 #[derive(Debug, Clone)]
