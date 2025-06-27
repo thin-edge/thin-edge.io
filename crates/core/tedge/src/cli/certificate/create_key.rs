@@ -1,3 +1,4 @@
+use clap::ValueEnum;
 use tedge_config::TEdgeConfig;
 use tedge_p11_server::pkcs11::{CreateKeyParams, KeyTypeParams};
 
@@ -6,7 +7,15 @@ use crate::log::MaybeFancy;
 
 pub struct CreateKeyCmd {
     pub bits: u16,
+    pub curve: u16,
     pub label: String,
+    pub r#type: KeyType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, ValueEnum)]
+pub enum KeyType {
+    Rsa,
+    Ec,
 }
 
 #[async_trait::async_trait]
@@ -19,8 +28,12 @@ impl Command for CreateKeyCmd {
         let socket_path = &config.device.cryptoki.socket_path;
         let pkcs11client =
             tedge_p11_server::TedgeP11Client::with_ready_check(socket_path.as_std_path().into());
+        let key = match self.r#type {
+            KeyType::Rsa => KeyTypeParams::Rsa { bits: self.bits },
+            KeyType::Ec => KeyTypeParams::Ec { curve: self.curve },
+        };
         let params = CreateKeyParams {
-            key: KeyTypeParams::Rsa { bits: self.bits },
+            key,
             token: None,
             label: self.label.clone(),
         };
