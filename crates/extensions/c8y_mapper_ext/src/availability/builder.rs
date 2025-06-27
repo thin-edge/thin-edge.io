@@ -86,7 +86,7 @@ impl AvailabilityBuilder {
     fn mqtt_message_builder() -> impl Fn(AvailabilityOutput) -> Option<MqttMessage> {
         move |res| match res {
             AvailabilityOutput::C8ySmartRestSetInterval117(value) => Some(value.into()),
-            AvailabilityOutput::C8yJsonInventoryUpdate(value) => Some(value.into()),
+            AvailabilityOutput::C8yJsonEmptyInventoryUpdate(value) => Some(value.into()),
         }
     }
 }
