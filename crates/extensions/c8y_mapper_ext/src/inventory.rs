@@ -11,6 +11,7 @@ use tedge_api::entity::EntityType;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tracing::info;
@@ -178,11 +179,16 @@ impl CumulocityConverter {
         source: &EntityTopicId,
     ) -> Result<Topic, ConversionError> {
         let entity_external_id = self.entity_cache.try_get(source)?.external_id.as_ref();
-        Ok(Topic::new_unchecked(&format!(
-            "{prefix}/{INVENTORY_MANAGED_OBJECTS_TOPIC}/{entity_external_id}",
-            prefix = self.config.bridge_config.c8y_prefix,
-        )))
+        let topic =
+            inventory_update_topic(&self.config.bridge_config.c8y_prefix, entity_external_id);
+        Ok(topic)
     }
+}
+
+pub fn inventory_update_topic(prefix: &TopicPrefix, external_id: &str) -> Topic {
+    Topic::new_unchecked(&format!(
+        "{prefix}/{INVENTORY_MANAGED_OBJECTS_TOPIC}/{external_id}",
+    ))
 }
 
 #[cfg(test)]
