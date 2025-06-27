@@ -44,12 +44,13 @@ pub enum TEdgeMappingCli {
 
         /// Topic of the message sample
         ///
-        /// If none is provided, messages are read from stdout
+        /// If none is provided, messages are read from stdin expecting a line per message:
+        /// [topic] payload
         topic: Option<String>,
 
         /// Payload of the message sample
         ///
-        /// If none is provided, payloads are read from stdout
+        /// If none is provided, payloads are read from stdin
         payload: Option<String>,
     },
 }
