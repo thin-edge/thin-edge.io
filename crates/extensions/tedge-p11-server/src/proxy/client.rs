@@ -9,9 +9,11 @@ use tracing::trace;
 
 use super::connection::Connection;
 use super::connection::Frame1;
+use crate::pkcs11::CreateKeyParams;
 use crate::pkcs11::SigScheme;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::CreateKeyRequest;
 use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::TedgeP11Service;
@@ -45,8 +47,8 @@ impl TedgeP11Service for TedgeP11Client {
         Ok(crate::service::SignResponse(response))
     }
 
-    fn create_key(&self, uri: Option<&str>) -> anyhow::Result<()> {
-        self.create_key(uri.map(|s| s.into()))
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<()> {
+        self.create_key(uri.map(|s| s.into()), params)
     }
 }
 
@@ -166,8 +168,8 @@ impl TedgeP11Client {
         Ok(response.0)
     }
 
-    pub fn create_key(&self, uri: Option<String>) -> anyhow::Result<()> {
-        let request = Frame1::CreateKeyRequest(uri);
+    pub fn create_key(&self, uri: Option<String>, params: CreateKeyParams) -> anyhow::Result<()> {
+        let request = Frame1::CreateKeyRequest(CreateKeyRequest { uri, params });
         let response = self.do_request(request)?;
 
         let Frame1::CreateKeyResponse = response else {
