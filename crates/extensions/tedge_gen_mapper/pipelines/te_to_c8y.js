@@ -44,7 +44,7 @@
 /// ```
 export function process(t, message, config) {
   let topic_parts = message.topic.split( '/')
-  let type = topic_parts[6]
+  let type = topic_parts[6] || "ThinEdgeMeasurement"
   let payload = JSON.parse(message.payload)
 
   let c8y_msg = {
@@ -56,7 +56,11 @@ export function process(t, message, config) {
   for (let [k, v] of Object.entries(payload)) {
     let k_meta = (meta || {})[k] || {}
     if (k === "time") {
-      let fragment = { time: v }
+      let t = v
+      if (typeof(v) === "number") {
+        t = (new Date(v * 1000)).toISOString()
+      }
+      let fragment = { time: t }
       Object.assign(c8y_msg, fragment)
     }
     else if (typeof(v) === "number") {
@@ -65,15 +69,19 @@ export function process(t, message, config) {
       }
       let fragment = { [k]: { [k]: v } }
       Object.assign(c8y_msg, fragment)
-    } else for (let [sub_k, sub_v] of Object.entries(v)) {
-      let sub_k_meta = k_meta[sub_k]
-      if (typeof(sub_v) === "number") {
-        if (sub_k_meta) {
-          sub_v = { value: sub_v, ...sub_k_meta }
+    } else {
+      let fragment = {}
+      for (let [sub_k, sub_v] of Object.entries(v)) {
+        let sub_k_meta = k_meta[sub_k]
+        if (typeof(sub_v) === "number") {
+          if (sub_k_meta) {
+            sub_v = { value: sub_v, ...sub_k_meta }
+          }
+          let sub_fragment = { [sub_k]: sub_v }
+          Object.assign(fragment, sub_fragment)
         }
-        let fragment = { [k]: { [sub_k]: sub_v } }
-        Object.assign(c8y_msg, fragment)
       }
+      Object.assign(c8y_msg, { [k]: fragment})
     }
   }
 
