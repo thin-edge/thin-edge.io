@@ -197,8 +197,8 @@ async fn dynamic_subscriptions() {
     let mqtt_config = MqttConfig::default().with_port(broker.port);
     let mut mqtt = MqttActorBuilder::new(mqtt_config);
 
-    let mut client_0 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber", 16);
-    let mut client_1 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber1", 16);
+    let mut client_0 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber", 16);
+    let mut client_1 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber1", 16);
     let client_id_0 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/b"), &client_0);
     let _client_id_1 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/+"), &client_1);
     client_0.connect_sink(NoConfig, &mqtt);
@@ -210,14 +210,21 @@ async fn dynamic_subscriptions() {
 
     let msg = MqttMessage::new(&Topic::new_unchecked("a/b"), "hello");
     client_0
-        .send(PublishOrSubscribe::Publish(msg.clone()))
+        .send(MqttRequest::Publish(msg.clone()))
         .await
         .unwrap();
     assert_eq!(timeout(client_0.recv()).await.unwrap(), msg);
     assert_eq!(timeout(client_1.recv()).await.unwrap(), msg);
 
+    // Send the messages as retain so we don't have a race for the subscription
+    let msg = MqttMessage::new(&Topic::new_unchecked("b/c"), "hello").with_retain();
     client_0
-        .send(PublishOrSubscribe::Subscribe(SubscriptionRequest {
+        .send(MqttRequest::Publish(msg.clone()))
+        .await
+        .unwrap();
+
+    client_0
+        .send(MqttRequest::Subscribe(SubscriptionRequest {
             diff: SubscriptionDiff {
                 subscribe: ["b/c".into()].into(),
                 unsubscribe: [].into(),
@@ -227,18 +234,12 @@ async fn dynamic_subscriptions() {
         .await
         .unwrap();
 
-    // Send the messages as retain so we don't have a race for the subscription
-    let msg = MqttMessage::new(&Topic::new_unchecked("b/c"), "hello").with_retain();
-    client_0
-        .send(PublishOrSubscribe::Publish(msg.clone()))
-        .await
-        .unwrap();
     assert_eq!(timeout(client_0.recv()).await.unwrap(), msg);
 
     // Verify that messages aren't sent to clients
     let msg = MqttMessage::new(&Topic::new_unchecked("a/c"), "hello");
     client_0
-        .send(PublishOrSubscribe::Publish(msg.clone()))
+        .send(MqttRequest::Publish(msg.clone()))
         .await
         .unwrap();
     assert_eq!(timeout(client_1.recv()).await.unwrap(), msg);
@@ -264,8 +265,8 @@ async fn dynamic_subscribers_receive_retain_messages() {
         .await
         .unwrap();
 
-    let mut client_0 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber", 16);
-    let mut client_1 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber1", 16);
+    let mut client_0 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber", 16);
+    let mut client_1 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber1", 16);
     let _client_id_0 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/b"), &client_0);
     let client_id_1 = mqtt.connect_id_sink(TopicFilter::empty(), &client_1);
     client_0.connect_sink(NoConfig, &mqtt);
@@ -282,7 +283,7 @@ async fn dynamic_subscribers_receive_retain_messages() {
     assert_eq!(timeout(client_0.recv()).await.unwrap(), msg);
 
     client_1
-        .send(PublishOrSubscribe::Subscribe(SubscriptionRequest {
+        .send(MqttRequest::Subscribe(SubscriptionRequest {
             diff: SubscriptionDiff {
                 subscribe: ["a/b".into(), "b/c".into()].into(),
                 unsubscribe: [].into(),
@@ -323,8 +324,8 @@ async fn dynamic_subscribers_receive_retain_messages_when_upgrading_topic() {
         .await
         .unwrap();
 
-    let mut client_0 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber", 16);
-    let mut client_1 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber1", 16);
+    let mut client_0 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber", 16);
+    let mut client_1 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber1", 16);
     let _client_id_0 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/b"), &client_0);
     let client_id_1 = mqtt.connect_id_sink(TopicFilter::empty(), &client_1);
     client_0.connect_sink(NoConfig, &mqtt);
@@ -340,7 +341,7 @@ async fn dynamic_subscribers_receive_retain_messages_when_upgrading_topic() {
     assert_eq!(timeout(client_0.recv()).await.unwrap(), msg);
 
     client_1
-        .send(PublishOrSubscribe::Subscribe(SubscriptionRequest {
+        .send(MqttRequest::Subscribe(SubscriptionRequest {
             diff: SubscriptionDiff {
                 subscribe: ["a/+".into()].into(),
                 unsubscribe: [].into(),
