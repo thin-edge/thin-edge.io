@@ -1,3 +1,4 @@
+use crate::pkcs11::CreateKeyParams;
 use crate::pkcs11::Cryptoki;
 use crate::pkcs11::CryptokiConfigDirect;
 use crate::pkcs11::SigScheme;
@@ -13,7 +14,7 @@ use tracing::warn;
 pub trait SigningService {
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse>;
     fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse>;
-    fn create_key(&self, uri: Option<&str>) -> anyhow::Result<()>;
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<()>;
 }
 
 #[derive(Debug)]
@@ -78,8 +79,9 @@ impl SigningService for TedgeP11Service {
         Ok(SignResponse(signature))
     }
 
-    fn create_key(&self, uri: Option<&str>) -> anyhow::Result<()> {
-        self.cryptoki.create_key(uri)?;
+    #[instrument(skip_all)]
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<()> {
+        self.cryptoki.create_key(uri, params)?;
         Ok(())
     }
 }
@@ -105,6 +107,12 @@ pub struct SignRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignResponse(pub Vec<u8>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateKeyRequest {
+    pub uri: Option<String>,
+    pub params: CreateKeyParams,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureScheme(pub rustls::SignatureScheme);

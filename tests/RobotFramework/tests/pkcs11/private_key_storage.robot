@@ -138,11 +138,24 @@ Creates a private key on the PKCS11 token
     Should Be Equal    ${output}    No matching objects found
 
     Set tedge-p11-server Uri    value=pkcs11:token=create-key-token
-    Execute Command    tedge cert create-key
 
+    Execute Command    tedge cert create-key --label rsa-2048
     ${output}=    Execute Command
     ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=create-key-token"
     Should Contain    ${output}    Object 0:
+    Should Contain    ${output}    Type: Private key (RSA-2048)\n\tLabel: rsa-2048
+
+    Execute Command    tedge cert create-key --label rsa-3072 --bits 3072
+    ${output}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=create-key-token"
+    Should Contain    ${output}    Object 1:
+    Should Contain    ${output}    Type: Private key (RSA-3072)\n\tLabel: rsa-3072
+
+    Execute Command    tedge cert create-key --label rsa-4096 --bits 4096
+    ${output}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=create-key-token"
+    Should Contain    ${output}    Object 2:
+    Should Contain    ${output}    Type: Private key (RSA-4096)\n\tLabel: rsa-4096
 
     [Teardown]    Set tedge-p11-server Uri    value=
 
