@@ -3,12 +3,13 @@
 It enables the creation of devices which can be used in tests.
 It currently support the creation of Docker devices only
 """
+
 # pylint: disable=invalid-name
 
 import inspect
 import logging
 import json
-from typing import Any, Union, List, Dict, Optional
+from typing import Any, Union, List, Dict, Optional, Tuple
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -19,13 +20,12 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import dateparser
 from paho.mqtt import matcher
 from robot.api.deco import keyword, library
 from DeviceLibrary import DeviceLibrary, DeviceAdapter
+from DeviceLibrary.DeviceLibrary import timestamp
 from Cumulocity import Cumulocity, retry
 
-relativetime_ = Union[datetime, str]
 
 devices_lib = DeviceLibrary()
 c8y_lib = Cumulocity()
@@ -42,24 +42,30 @@ C8Y_TOKEN_TOPIC = "c8y/s/dat"
 
 @dataclass
 class Certificate:
+    """Certificate details"""
+
     issuer: str = ""
     subject: str = ""
     thumbprint: str = ""
 
     @classmethod
     def from_dict(cls, env):
+        """Parse certificate information from a dictionary"""
         return cls(
             **{k: v for k, v in env.items() if k in inspect.signature(cls).parameters}
         )
 
     @property
-    def is_self_signed(self):
+    def is_self_signed(self) -> bool:
+        """check if the certificate is self-signed (e.g. issuer == subject)"""
         if self.issuer is None or self.subject is None:
             return False
-        return self.issuer and self.issuer == self.subject
+        return bool(self.issuer and self.issuer == self.subject)
 
 
 class MQTTMessage:
+    """MQTT Message"""
+
     timestamp: float
     topic: str
     qos: str
@@ -69,6 +75,7 @@ class MQTTMessage:
 
     @property
     def date(self) -> datetime:
+        """Get the message timestamp as a datetime object"""
         return datetime.fromtimestamp(self.timestamp)
 
     # {"tst":"2022-12-27T16:55:44.923776Z+0000","topic":"c8y/s/us","qos":0,"retain":0,"payloadlen":99,"payload":"119,c8y-bridge.conf,c8y-configuration-plugin,example,mosquitto.conf,tedge-mosquitto.conf,tedge.toml"}
@@ -81,7 +88,7 @@ class ThinEdgeIO(DeviceLibrary):
     def __init__(
         self,
         image: str = DeviceLibrary.DEFAULT_IMAGE,
-        adapter: str = None,
+        adapter: Optional[str] = None,
         bootstrap_script: str = DeviceLibrary.DEFAULT_BOOTSTRAP_SCRIPT,
         **kwargs,
     ):
@@ -179,15 +186,7 @@ class ThinEdgeIO(DeviceLibrary):
         Raises:
             ValueError: No device context given
         """
-        device = self.current
-        if device_name:
-            if device_name in self.devices:
-                device = self.devices.get(device_name)
-
-        if not device:
-            raise ValueError(
-                f"Unable to execute the command as the device: '{device_name}' has not been setup"
-            )
+        device = self.get_device(device_name)
 
         certificate = self.get_certificate_details(device, cloud_profile=cloud_profile)
         if certificate.is_self_signed and certificate.thumbprint:
@@ -201,9 +200,7 @@ class ThinEdgeIO(DeviceLibrary):
         )
 
     @keyword("Get Suite Logs")
-    def get_suite_logs(
-            self, name: str = None, show=True
-    ):
+    def get_suite_logs(self, name: Optional[str] = None, show=True):
         """Get device logs from the start of the suite.
 
         See 'Get Logs' Keyword for the full details.
@@ -222,8 +219,11 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Get Logs")
     def get_logs(
-            self, name: str = None, date_from: Union[datetime, float] = None, show=True
-    ):
+        self,
+        name: Optional[str] = None,
+        date_from: Optional[timestamp.Timestamp] = None,
+        show=True,
+    ) -> List[str]:
         """Get device logs (override base class method to add additional debug info)
 
         Note: the date_from only applies to the systemd logs (not file based logs). This is
@@ -248,7 +248,7 @@ class ThinEdgeIO(DeviceLibrary):
 
         if not device:
             log.info("Device has not been setup, so no logs to collect")
-            return
+            return []
 
         device_sn = name or device.get_id()
         try:
@@ -258,7 +258,9 @@ class ThinEdgeIO(DeviceLibrary):
             )
             self.log_operations(managed_object.id)
         except KeyError:
-            log.info("Skip getting managed object as it has not been registered in Cumulocity")
+            log.info(
+                "Skip getting managed object as it has not been registered in Cumulocity"
+            )
         except Exception as ex:  # pylint: disable=broad-except
             # Only log info as not all tests require creating an object in Cumulocity
             log.warning("Failed to get device managed object. %s", ex)
@@ -295,6 +297,8 @@ class ThinEdgeIO(DeviceLibrary):
             for line in log_output:
                 print(hide_sensitive(line))
 
+        return log_output
+
     def _hide_sensitive_factory(self):
         # This is fragile and should be improved upon once a more suitable/robust method of logging and querying
         # the mqtt messages is found.
@@ -303,21 +307,29 @@ class ThinEdgeIO(DeviceLibrary):
         def _hide(line: str) -> str:
             if C8Y_TOKEN_TOPIC in line and "71," in line:
                 line_sensitive = token_replace_pattern.sub(
-                    f"(redacted log entry): Received token: topic={C8Y_TOKEN_TOPIC}, message=71,<redacted>", line)
+                    f"(redacted log entry): Received token: topic={C8Y_TOKEN_TOPIC}, message=71,<redacted>",
+                    line,
+                )
                 return line_sensitive
             return line
 
         return _hide
 
-    def log_operations(self, mo_id: str, status: str = None):
+    def log_operations(self, mo_id: str, status: Optional[str] = None):
         """Log operations to help with debugging
 
         Args:
             mo_id (str): Managed object id
             status (str, optional): Operation status. Defaults to None (which means all statuses).
         """
+        filter_args = {}
+        if status:
+            filter_args["status"] = status
+        if self.test_start_time:
+            filter_args["after"] = self.test_start_time
         operations = c8y_lib.c8y.operations.get_all(
-            device_id=mo_id, status=status, after=self.test_start_time
+            device_id=mo_id,
+            **filter_args,
         )
 
         if operations:
@@ -328,7 +340,7 @@ class ThinEdgeIO(DeviceLibrary):
                 log_method = (
                     log.info
                     if operation.status
-                       in (operation.Status.SUCCESSFUL, operation.Status.FAILED)
+                    in (operation.Status.SUCCESSFUL, operation.Status.FAILED)
                     else log.warning
                 )
                 log_method(
@@ -341,7 +353,9 @@ class ThinEdgeIO(DeviceLibrary):
             log.info("No operations found")
 
     def get_certificate_details(
-        self, device: DeviceAdapter = None, cloud_profile: Optional[str] = None
+        self,
+        device: Optional[DeviceAdapter] = None,
+        cloud_profile: Optional[str] = None,
     ) -> Certificate:
         """Get the details about the device's certificate
 
@@ -357,7 +371,7 @@ class ThinEdgeIO(DeviceLibrary):
             device = self.current
 
         if not device:
-            log.info(f"No certificate to remove as the device as not been set")
+            log.info("No certificate to remove as the device as not been set")
             return certificate
 
         # Parse the certificate details via tedge cert show
@@ -395,13 +409,13 @@ class ThinEdgeIO(DeviceLibrary):
         except Exception as ex:
             log.warning("Could not remove device certificate. error=%s", ex)
 
-    def remove_device(self, device: DeviceAdapter = None):
+    def remove_device(self, device: Optional[DeviceAdapter] = None):
         """Remove device from the cloud"""
         if device is None:
             device = self.current
 
         if not device:
-            log.info(f"No device to remove as device context is not set")
+            log.info("No device to remove as device context is not set")
             return
 
         try:
@@ -536,12 +550,12 @@ class ThinEdgeIO(DeviceLibrary):
     # Assert presence of a topic (with timeout)
     #
     def mqtt_match_messages(
-            self,
-            topic: str,
-            message_pattern: str = None,
-            date_from: relativetime_ = None,
-            date_to: relativetime_ = None,
-            **kwargs,
+        self,
+        topic: str,
+        message_pattern: Optional[str] = None,
+        date_from: Optional[timestamp.Timestamp] = None,
+        date_to: Optional[timestamp.Timestamp] = None,
+        **kwargs,
     ) -> List[Dict[str, Any]]:
         """Match mqtt messages using different types of filters
 
@@ -554,10 +568,11 @@ class ThinEdgeIO(DeviceLibrary):
         if not date_from:
             date_from = self.test_start_time
 
-        cmd += f" --since '@{to_date(date_from).timestamp()}'"
+        if date_from:
+            cmd += f" --since '@{timestamp.parse_timestamp(date_from).timestamp()}'"
 
         if date_to:
-            cmd += f" --until '@{to_date(date_to).timestamp()}'"
+            cmd += f" --until '@{timestamp.parse_timestamp(date_to).timestamp()}'"
 
         output = self.execute_command(cmd, log_output=False, stdout=True, stderr=False)
 
@@ -571,7 +586,7 @@ class ThinEdgeIO(DeviceLibrary):
                 message = json.loads(line)
                 if "message" in message:
                     if message_pattern_re is None or message_pattern_re.match(
-                            message["message"]["payload"]
+                        message["message"]["payload"]
                     ):
                         messages.append(message)
             except Exception as ex:
@@ -584,7 +599,7 @@ class ThinEdgeIO(DeviceLibrary):
             item
             for item in messages
             if not topic
-               or (topic and mqtt_topic_match(mqtt_matcher, item["message"]["topic"]))
+            or (topic and mqtt_topic_match(mqtt_matcher, item["message"]["topic"]))
         ]
         return matching
 
@@ -592,7 +607,9 @@ class ThinEdgeIO(DeviceLibrary):
     # Service Health Status
     #
     @keyword("Service Health Status Should Be Up")
-    def assert_service_health_status_up(self, service: str, device: str = "main", **kwargs) -> Dict[str, Any]:
+    def assert_service_health_status_up(
+        self, service: str, device: str = "main", **kwargs
+    ) -> Dict[str, Any]:
         """Checks if the Service Health Status is up
 
         *Examples:*
@@ -603,20 +620,40 @@ class ThinEdgeIO(DeviceLibrary):
         return self._assert_health_status(service, status="up", device=device, **kwargs)
 
     @keyword("Service Health Status Should Be Down")
-    def assert_service_health_status_down(self, service: str, device: str = "main", **kwargs) -> Dict[str, Any]:
-        return self._assert_health_status(service, status="down", device=device, **kwargs)
+    def assert_service_health_status_down(
+        self, service: str, device: str = "main", **kwargs
+    ) -> Dict[str, Any]:
+        """Checks if the Service Health Status is down
+
+        *Examples:*
+
+        | `Service Health Status Should Be Down` | tedge-mapper-c8y |
+        | `Service Health Status Should Be Down` | tedge-mapper-c8y | device=child01 |
+        """
+        return self._assert_health_status(
+            service, status="down", device=device, **kwargs
+        )
 
     @keyword("Service Health Status Should Be Equal")
     def assert_service_health_status_equal(
-            self, service: str, status: str, device: str = "main", **kwargs
+        self, service: str, status: str, device: str = "main", **kwargs
     ) -> Dict[str, Any]:
+        """Checks if the Service Health Status is equal to a given status
+
+        *Examples:*
+
+        | `Service Health Status Should Be Equal` | tedge-mapper-c8y | status=up |
+        | `Service Health Status Should Be Equal` | tedge-mapper-c8y | status=up | device=child01 |
+        """
         return self._assert_health_status(service, status=status, device=device)
 
-    def _assert_health_status(self, service: str, status: str, device: str = "main", **kwargs) -> Dict[str, Any]:
+    def _assert_health_status(
+        self, service: str, status: str, device: str = "main", **kwargs
+    ) -> Dict[str, Any]:
         # if mqtt.client.auth.ca_file or mqtt.client.auth.ca_dir is set, we pass setting
         # value to mosquitto_sub
         mqtt_config_options = self.execute_command(
-            f"tedge config list", stdout=True, stderr=False, ignore_exit_code=True
+            "tedge config list", stdout=True, stderr=False, ignore_exit_code=True
         )
 
         server_auth = ""
@@ -633,6 +670,7 @@ class ThinEdgeIO(DeviceLibrary):
             stderr=False,
         )
         current_status = ""
+        health = {}
         try:
             health = json.loads(message)
             current_status = health.get("status", "")
@@ -643,36 +681,40 @@ class ThinEdgeIO(DeviceLibrary):
                 message,
             )
             # Convert mosquitto 1/0 to up/down
-            status_mappings = {"1":"up","0":"down"}
-            current_status = status_mappings.get(message.strip(), "unknown") 
+            status_mappings = {"1": "up", "0": "down"}
+            current_status = status_mappings.get(message.strip(), "unknown")
         assert current_status == status
         return health
 
     @keyword("Setup")
     def setup(
-            self,
-            skip_bootstrap: bool = None,
-            cleanup: bool = None,
-            adapter: str = None,
-            wait_for_healthy: bool = True,
+        self,
+        skip_bootstrap: Optional[bool] = None,
+        cleanup: Optional[bool] = None,
+        adapter: Optional[str] = None,
+        env_file: str = ".env",
+        wait_for_healthy: bool = True,
+        **adaptor_config,
     ) -> str:
-        serial_sn = super().setup(skip_bootstrap, cleanup, adapter)
+        serial_sn = super().setup(
+            skip_bootstrap, cleanup, adapter, env_file=env_file, **adaptor_config
+        )
 
         if not skip_bootstrap and wait_for_healthy:
             self.assert_service_health_status_up("tedge-mapper-c8y")
         return serial_sn
 
     def _assert_mqtt_topic_messages(
-            self,
-            topic: str,
-            date_from: relativetime_ = None,
-            date_to: relativetime_ = None,
-            minimum: int = 1,
-            maximum: int = None,
-            message_pattern: str = None,
-            message_contains: str = None,
-            **kwargs,
-    ) -> List[Dict[str, Any]]:
+        self,
+        topic: str,
+        date_from: Optional[timestamp.Timestamp] = None,
+        date_to: Optional[timestamp.Timestamp] = None,
+        minimum: int = 1,
+        maximum: Optional[int] = None,
+        message_pattern: Optional[str] = None,
+        message_contains: Optional[str] = None,
+        **kwargs,
+    ) -> List[str]:
         # log.info("Checking mqtt messages for topic: %s", topic)
         if message_contains:
             message_pattern = r".*" + re.escape(message_contains) + r".*"
@@ -692,17 +734,23 @@ class ThinEdgeIO(DeviceLibrary):
 
         if minimum is not None:
             assert (
-                    len(messages) >= minimum
+                len(messages) >= minimum
             ), f"Matching messages on topic '{topic}' is less than minimum.\nwanted: {minimum}\ngot: {len(messages)}\n\nmessages:\n{messages}"
 
         if maximum is not None:
             assert (
-                    len(messages) <= maximum
+                len(messages) <= maximum
             ), f"Matching messages on topic '{topic}' is greater than maximum.\nwanted: {maximum}\ngot: {len(messages)}\n\nmessages:\n{messages}"
 
         return messages
 
-    def log_mqtt_messages(self, topic: str = "#", date_from: Union[datetime, float] = None, **kwargs):
+    def log_mqtt_messages(
+        self,
+        topic: str = "#",
+        date_from: Optional[timestamp.Timestamp] = None,
+        **kwargs,
+    ):
+        """Log matching MQTT messages"""
         items = self.mqtt_match_messages(
             topic=topic,
             date_from=date_from,
@@ -714,24 +762,30 @@ class ThinEdgeIO(DeviceLibrary):
         # the mqtt messages is found.
         entries = []
         for item in items:
-            payload = bytes.fromhex(item["payload_hex"]).decode("utf8", errors="replace")
-            if item["message"]["topic"] == C8Y_TOKEN_TOPIC and payload.startswith("71,"):
+            payload = bytes.fromhex(item["payload_hex"]).decode(
+                "utf8", errors="replace"
+            )
+            if item["message"]["topic"] == C8Y_TOKEN_TOPIC and payload.startswith(
+                "71,"
+            ):
                 payload = "71,<redacted>"
-            entries.append(f'{item["message"]["tst"].replace("+0000", ""):32} {item["message"]["topic"]:70} {payload}')
+            entries.append(
+                f'{item["message"]["tst"].replace("+0000", ""):32} {item["message"]["topic"]:70} {payload}'
+            )
         log.info("---- mqtt messages ----\n%s", "\n".join(entries))
 
     @keyword("Should Have MQTT Messages")
     def mqtt_should_have_topic(
-            self,
-            topic: str,
-            date_from: relativetime_ = None,
-            date_to: relativetime_ = None,
-            message_pattern: str = None,
-            message_contains: str = None,
-            minimum: int = 1,
-            maximum: int = None,
-            **kwargs,
-    ) -> List[Dict[str, Any]]:
+        self,
+        topic: str,
+        date_from: Optional[timestamp.Timestamp] = None,
+        date_to: Optional[timestamp.Timestamp] = None,
+        message_pattern: Optional[str] = None,
+        message_contains: Optional[str] = None,
+        minimum: int = 1,
+        maximum: Optional[int] = None,
+        **kwargs,
+    ) -> List[str]:
         """
         Check for the presence of a topic
 
@@ -739,9 +793,9 @@ class ThinEdgeIO(DeviceLibrary):
 
         Args:
             topic (str): Filter by topic. Supports MQTT wildcard patterns
-            date_from (relativetime_, optional): Date from filter. Accepts
+            date_from (timestamp.Timestamp, optional): Date from filter. Accepts
                 relative or epoch time
-            date_to (relativetime_, optional): Date to filter. Accepts
+            date_to (timestamp.Timestamp, optional): Date to filter. Accepts
                 relative or epoch time
             message_pattern (str, optional): Only include MQTT messages matching a regular expression
             message_contains (str, optional): Only include MQTT messages containing a given string
@@ -769,11 +823,11 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Should Have Retained MQTT Messages")
     def should_have_retained_mqtt_messages(
-            self,
-            topic: str,
-            message_pattern: str = None,
-            message_contains: str = None,
-            device_name: str = None 
+        self,
+        topic: str,
+        message_pattern: Optional[str] = None,
+        message_contains: Optional[str] = None,
+        device_name: Optional[str] = None,
     ) -> List[str]:
         """
         Check for a retained message on the given topic
@@ -784,16 +838,8 @@ class ThinEdgeIO(DeviceLibrary):
         *Example:*
         | ${messages}= | `Should Have Retained MQTT Messages` | te/device/child01/# |
         """
-        device = self.current
-        if device_name:
-            if device_name in self.devices:
-                device = self.devices.get(device_name)
+        device = self.get_device(device_name)
 
-        if not device:
-            raise ValueError(
-                f"Unable to execute the command as the device: '{device_name}' has not been setup"
-            )
-        
         command = f"tedge mqtt sub {topic} --retained-only --no-topic --duration 1s"
         output = device.execute_command(command).stdout
         lines = output.splitlines()
@@ -810,14 +856,12 @@ class ThinEdgeIO(DeviceLibrary):
             if message_pattern_re is None or message_pattern_re.match(line):
                 messages.append(line)
 
-        assert messages, f"Expected at least one retained message, but received none"
+        assert messages, "Expected at least one retained message, but received none"
         return messages
 
     @keyword("Should Not Have Retained MQTT Messages")
     def should_not_have_retained_mqtt_messages(
-            self,
-            topic: str,
-            device_name: str = None 
+        self, topic: str, device_name: Optional[str] = None
     ):
         """
         Assert that there are no retained messages on the given topic
@@ -828,16 +872,9 @@ class ThinEdgeIO(DeviceLibrary):
         *Example:*
         | `Should Not Have Retained MQTT Messages` | te/device/child01/# |
         """
-        device = self.current
-        if device_name:
-            if device_name in self.devices:
-                device = self.devices.get(device_name)
+        device = self.get_device(device_name)
 
-        if not device:
-            raise ValueError(
-                f"Unable to execute the command as the device: '{device_name}' has not been setup"
-            )
-        
+        output = ""
         for _ in range(5):
             command = f"tedge mqtt sub {topic} --retained-only --no-topic --duration 1s"
             output = device.execute_command(command).stdout
@@ -848,11 +885,10 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Register Child Device")
     def register_child(
-            self,
-            parent_name: str,
-            child_name: str,
-            supported_operations: Union[List[str], str] = None,
-            name: str = None,
+        self,
+        parent_name: str,
+        child_name: str,
+        supported_operations: Optional[Union[List[str], str]] = None,
     ):
         """
         Register a child device to a parent along with a given list of supported operations
@@ -862,7 +898,7 @@ class ThinEdgeIO(DeviceLibrary):
         | `Register Child Device` | parent_name=tedge001 | child_name=child01 | supported_operations=c8y_LogfileRequest,c8y_SoftwareUpdate |
         """
         self.set_current(parent_name)
-        device = self.current
+        device = self.get_device()
         cmd = [f"sudo mkdir -p '/etc/tedge/operations/c8y/{child_name}'"]
 
         if isinstance(supported_operations, str):
@@ -870,7 +906,9 @@ class ThinEdgeIO(DeviceLibrary):
 
         if supported_operations:
             for op_type in supported_operations:
-                cmd.append(f"sudo touch '/etc/tedge/operations/c8y/{child_name}/{op_type}'")
+                cmd.append(
+                    f"sudo touch '/etc/tedge/operations/c8y/{child_name}/{op_type}'"
+                )
 
         device.assert_command(" && ".join(cmd))
 
@@ -898,11 +936,12 @@ class ThinEdgeIO(DeviceLibrary):
         | `Set Restart Timeout` | 60 |
         | `Set Restart Timeout` | default |
         """
-        if str(value).lower() == 'default':
+        if str(value).lower() == "default":
             command = "sed -i -e '/reboot_timeout_seconds/d' /etc/tedge/system.toml"
         else:
-            command = f"sed -i -e '/reboot_timeout_seconds/d' -e '/reboot =/a reboot_timeout_seconds = {value}' /etc/tedge/system.toml",
-        self.execute_command(command, **kwargs, )
+            command = f"sed -i -e '/reboot_timeout_seconds/d' -e '/reboot =/a reboot_timeout_seconds = {value}' /etc/tedge/system.toml"
+
+        self.execute_command(command, **kwargs)
 
     @keyword("Escape Pattern")
     def regexp_escape(self, pattern: str, is_json: bool = False):
@@ -922,7 +961,9 @@ class ThinEdgeIO(DeviceLibrary):
         return value
 
     @keyword("Add Remote Access Passthrough Configuration")
-    def add_remote_access_passthrough_configuration(self, device: str = "", port: int = 22, **kwargs) -> str:
+    def add_remote_access_passthrough_configuration(
+        self, device: str = "", port: int = 22, **kwargs
+    ) -> str:
         """Add the Cumulocity Remote Access Passthrough configuration
         to a device
 
@@ -932,7 +973,7 @@ class ThinEdgeIO(DeviceLibrary):
         | ${stdout} = | Add Remote Access Passthrough Configuration | device=mycustomdevice | port=22222 |
         """
         if not device:
-            device = self.current.get_id()
+            device = self.get_device().get_id()
 
         assert shutil.which(
             "c8y"
@@ -952,7 +993,7 @@ class ThinEdgeIO(DeviceLibrary):
             **os.environ.copy(),
             "CI": "true",
         }
-        proc = subprocess.Popen(
+        with subprocess.Popen(
             cmd,
             text=True,
             encoding="utf8",
@@ -960,13 +1001,14 @@ class ThinEdgeIO(DeviceLibrary):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             env=env,
-        )
-        timeout = kwargs.pop("timeout", 30)
-        proc.wait(timeout)
-        assert (
-            proc.returncode == 0
-        ), f"Failed to add remote access PASSTHROUGH configuration.\n{proc.stdout.read()}"
-        return proc.stdout.read()
+        ) as proc:
+            timeout = kwargs.pop("timeout", 30)
+            proc.wait(timeout)
+            output = proc.stdout.read() if proc.stdout else ""
+            assert (
+                proc.returncode == 0
+            ), f"Failed to add remote access PASSTHROUGH configuration.\n{output}"
+            return output
 
     @keyword("Execute Remote Access Command")
     def execute_remote_access_command(
@@ -979,7 +1021,7 @@ class ThinEdgeIO(DeviceLibrary):
         stdout: bool = True,
         stderr: bool = False,
         **kwargs,
-    ) -> str:
+    ) -> Union[str, Tuple[str]]:
         """Execute a command using the Cumulocity Remote Access feature (using ssh)
 
         You have to supply it a local ssh key (local to the machine running the tests).
@@ -990,7 +1032,7 @@ class ThinEdgeIO(DeviceLibrary):
         | ${stdout} = | Add Remote Access Passthrough Configuration | device=mycustomdevice | port=22222 |
         """
         if not device:
-            device = self.current.get_id()
+            device = self.get_device().get_id()
 
         assert shutil.which(
             "c8y"
@@ -1013,7 +1055,8 @@ class ThinEdgeIO(DeviceLibrary):
             **os.environ.copy(),
             "CI": "true",
         }
-        proc = subprocess.Popen(
+
+        with subprocess.Popen(
             cmd,
             text=True,
             encoding="utf8",
@@ -1021,36 +1064,35 @@ class ThinEdgeIO(DeviceLibrary):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env,
-        )
+        ) as proc:
+            timeout = kwargs.pop("timeout", 30)
+            proc.wait(timeout)
 
-        timeout = kwargs.pop("timeout", 30)
-        proc.wait(timeout)
+            out = proc.stdout.read() if proc.stdout else ""
+            err = proc.stderr.read() if proc.stderr else ""
+            if exp_exit_code is not None:
+                assert (
+                    proc.returncode == exp_exit_code
+                ), f"Failed to connect via remote access.\nstdout: <<EOT{out}\nEOT\n\nstderr <<EOT\n{err}\nEOT"
 
-        out = proc.stdout.read()
-        err = proc.stderr.read()
-        if exp_exit_code is not None:
-            assert (
-                proc.returncode == exp_exit_code
-            ), f"Failed to connect via remote access.\nstdout: <<EOT{out}\nEOT\n\nstderr <<EOT\n{err}\nEOT"
+            log.info("Command:\n%s", out)
 
-        log.info(f"Command:\n%s", out)
+            output = []
+            if stdout:
+                output.append(out)
+            if stderr:
+                output.append(err)
 
-        output = []
-        if stdout:
-            output.append(out)
-        if stderr:
-            output.append(err)
+            if len(output) == 0:
+                return ""
 
-        if len(output) == 0:
-            return
+            if len(output) == 1:
+                return output[0]
 
-        if len(output) == 1:
-            return output[0]
-
-        return tuple(output)
+            return tuple(output)
 
     @keyword("Configure SSH")
-    def configure_ssh(self, user: str = "root", device: str = None) -> str:
+    def configure_ssh(self, user: str = "root", device: Optional[str] = None) -> str:
         """Configure SSH on a device.
 
         The keyword generates a new ssh key pair on the host running the test, then adds
@@ -1058,7 +1100,7 @@ class ThinEdgeIO(DeviceLibrary):
         to the private key (so it can be used in subsequent calls)
         """
         if not device:
-            device = self.current.get_id()
+            device = self.get_device().get_id()
 
         key = Path("/tmp") / device
         pub_key = Path("/tmp") / f"{device}.pub"
@@ -1095,7 +1137,7 @@ class ThinEdgeIO(DeviceLibrary):
         return f"mosquitto-{cloud}-bridge"
 
     @keyword("Bridge Should Be Up")
-    def bridge_should_be_up(self, cloud: str, **kwargs) -> str:
+    def bridge_should_be_up(self, cloud: str, **kwargs) -> Dict[str, Any]:
         """Assert that the bridge should be up/healthy
 
         Examples:
@@ -1108,7 +1150,7 @@ class ThinEdgeIO(DeviceLibrary):
         )
 
     @keyword("Bridge Should Be Down")
-    def bridge_should_be_down(self, cloud: str, **kwargs) -> str:
+    def bridge_should_be_down(self, cloud: str, **kwargs) -> Dict[str, Any]:
         """Assert that the bridge should be down/unhealthy
 
         Examples:
@@ -1120,16 +1162,13 @@ class ThinEdgeIO(DeviceLibrary):
             self.get_bridge_service_name(cloud), **kwargs
         )
 
-    def _get_device_sn(self, name):
-        device = self.current
-        if name:
-            if name in self.devices:
-                device = self.devices.get(name)
-
-        return name or device.get_id()
-
     @keyword("Delete SmartREST 1.0 Template")
     def delete_smartrest_one_template(self, template_id: str):
+        """Delete a SmartREST 1.0 template from Cumulocity
+
+        Examples:
+        | Delete SmartREST 1.0 Template | myCustomName |
+        """
         try:
             mo_id = c8y_lib.c8y.identity.get_id(
                 template_id, "c8y_SmartRestDeviceIdentifier"
@@ -1149,11 +1188,11 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Register Entity")
     def register_entity(
-            self,
-            topic_id: str,
-            type: str,
-            parent: str = "device/main//",
-            device_name: str = None 
+        self,
+        topic_id: str,
+        type: str,
+        parent: str = "device/main//",
+        device_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Register the provided entity in the entity store
@@ -1182,23 +1221,17 @@ class ThinEdgeIO(DeviceLibrary):
                 f"Unable to query the entity store as the device: '{device_name}' has not been setup"
             )
 
-        payload = {
-            "@topic-id": topic_id,
-            "@type": type,
-            "@parent": parent
-        }
+        payload = {"@topic-id": topic_id, "@type": type, "@parent": parent}
         json_payload = json.dumps(payload)
-        
+
         command = f"tedge http post /te/v1/entities --data '{json_payload}'"
         output = device.execute_command(command)
-        json_output = json.loads(output.stdout) if output.stdout else ""
+        json_output = json.loads(output.stdout) if output.stdout else {}
         return json_output
 
     @keyword("Get Entity")
     def get_entity(
-            self,
-            topic_id: str,
-            device_name: str = None 
+        self, topic_id: str, device_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get the entity from the entity store
@@ -1231,10 +1264,8 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Deregister Entity")
     def deregister_entity(
-            self,
-            topic_id: str,
-            device_name: str = None 
-    ) -> Dict[str, Any]:
+        self, topic_id: str, device_name: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
         Delete the given entity and its child tree from the entity store
 
@@ -1249,30 +1280,19 @@ class ThinEdgeIO(DeviceLibrary):
         | ${entities}= | Delete Entity | device/child0// |
         | ${entities}= | Delete Entity | device/child0/service/service0 | device_name=${PARENT_SN} |
         """
-        device = self.current
-        if device_name:
-            if device_name in self.devices:
-                device = self.devices.get(device_name)
-
-        if not device:
-            raise ValueError(
-                f"Unable to query the entity store as the device: '{device_name}' has not been setup"
-            )
-        
-        command = (
-            f"tedge http delete /te/v1/entities/{topic_id}"
-        )
+        device = self.get_device(device_name)
+        command = f"tedge http delete /te/v1/entities/{topic_id}"
         output = device.execute_command(command)
-        json_output = json.loads(output.stdout) if output.stdout else ""
+        json_output = json.loads(output.stdout) if output.stdout else []
         return json_output
 
     @keyword("List Entities")
     def list_entities(
-            self,
-            root: str = None,
-            parent: str = None,
-            type: str = None,
-            device_name: str = None
+        self,
+        root: Optional[str] = None,
+        parent: Optional[str] = None,
+        type: Optional[str] = None,
+        device_name: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Get entity list from the device using the entity store query REST API
@@ -1319,17 +1339,16 @@ class ThinEdgeIO(DeviceLibrary):
             url += f"?{query_string}"
 
         output = device.execute_command(f"tedge http get '{url}'")
-        entities = json.loads(output.stdout) if output.stdout else ""
+        entities = json.loads(output.stdout) if output.stdout else []
         return entities
-
 
     @keyword("Should Contain Entity")
     def assert_contains_entity(
-            self,
-            item: Union[str, Dict[str, Any]],
-            entities: List[Dict[str, Any]] = None,
-            device_name: str = None,
-            **kwargs
+        self,
+        item: Union[str, Dict[str, Any]],
+        entities: Optional[List[Dict[str, Any]]] = None,
+        device_name: Optional[str] = None,
+        **kwargs,
     ) -> List[Dict[str, Any]]:
         """Assert if the entity store contains the given entity
 
@@ -1372,11 +1391,11 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Should Not Contain Entity")
     def assert_does_not_contain_entity(
-            self,
-            topic_id: str,
-            entities: List[Dict[str, Any]] = None,
-            device_name: str = None,
-            **kwargs
+        self,
+        topic_id: str,
+        entities: Optional[List[Dict[str, Any]]] = None,
+        device_name: Optional[str] = None,
+        **kwargs,
     ) -> List[Dict[str, Any]]:
         """Assert that the entity store does not contains the given entity
 
@@ -1393,36 +1412,26 @@ class ThinEdgeIO(DeviceLibrary):
         | ${entities}= | Should Not Contain Entity | topic_id=device/child123// | entities=${entity_list_json} |
         | ${entities}= | Should Not Contain Entity | topic_id=device/child123// | entities=${entity_list_json} | device_name=${PARENT_SN} |
         """
-        device = self.current
-        if device_name:
-            if device_name in self.devices:
-                device = self.devices.get(device_name)
-
-        if not device:
-            raise ValueError(
-                f"Unable to query the entity store as the device: '{device_name}' has not been setup"
-            )
-
         if not entities:
-            entities = self.list_entities()
-        
+            entities = self.list_entities(device_name=device_name)
+
         assert all(entity["@topic-id"] != topic_id for entity in entities)
-        
+
         return entities
 
 
-def to_date(value: relativetime_) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(value)
-    return dateparser.parse(value)
+def mqtt_topic_match(m: matcher.MQTTMatcher, topic: str) -> bool:
+    """check if an MQTT topic matches
 
+    Args:
+        matcher (matcher.MQTTMatcher): MQTT pattern
+        topic (str): topic to match against
 
-def mqtt_topic_match(matcher, topic) -> bool:
+    Returns:
+        bool: Topic matches the given pattern
+    """
     try:
-        next(matcher.iter_match(topic))
+        next(m.iter_match(topic))
         return True
     except StopIteration:
         return False
-
