@@ -96,7 +96,7 @@ tedge connect skips new certificate validation if connected
     Should Contain    ${output}[1]    Connection is already established
     # The invalid certificate is left unchanged
     ${new-cert}=    Execute Command    tedge cert show c8y --new
-    Should Contain    ${new-cert}    O=thin-edge, OU=Test Device
+    Should Contain    ${new-cert}    item=O=Thin Edge, OU=Device
 
 tedge reconnect rejects any new invalid certificate
     Renew certificate
@@ -133,4 +133,4 @@ Renew certificate
     Execute Command
     ...    sudo cp "$(tedge config get c8y.device.cert_path)" "$(tedge config get c8y.device.cert_path).new"
     ${output}=    Execute Command    tedge cert show c8y --new
-    Should Contain    ${output}    O=thin-edge, OU=Test Device
+    Should Contain    ${output}    item=O=Thin Edge, OU=Device
