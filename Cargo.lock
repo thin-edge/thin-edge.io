@@ -4897,6 +4897,7 @@ dependencies = [
 name = "tedge_mqtt_ext"
 version = "1.5.1"
 dependencies = [
+ "anyhow",
  "assert-json-diff",
  "async-trait",
  "futures",
