@@ -12,7 +12,10 @@ repository.workspace = true
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true, features = ["serde1"] }
-rquickjs = { workspace = true, default-features = false, features = ["futures", "parallel"] }
+rquickjs = { workspace = true, default-features = false, features = [
+    "futures",
+    "parallel",
+] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
