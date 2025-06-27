@@ -15,6 +15,7 @@ use tracing::warn;
 
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::CreateKeyRequest;
 use crate::service::SignRequest;
 use crate::service::SignResponse;
 
@@ -89,7 +90,7 @@ pub enum Frame1 {
     SignRequest(SignRequest),
     ChooseSchemeResponse(ChooseSchemeResponse),
     SignResponse(SignResponse),
-    CreateKeyRequest(Option<String>),
+    CreateKeyRequest(CreateKeyRequest),
     CreateKeyResponse,
 }
 

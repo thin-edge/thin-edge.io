@@ -83,8 +83,10 @@ impl TedgeP11Server {
                     }
                 }
             }
-            Frame1::CreateKeyRequest(uri) => {
-                let response = self.service.create_key(uri.as_deref());
+            Frame1::CreateKeyRequest(request) => {
+                let response = self
+                    .service
+                    .create_key(request.uri.as_deref(), request.params);
                 match response {
                     Ok(_) => Frame1::CreateKeyResponse,
                     Err(err) => {
@@ -107,6 +109,7 @@ impl TedgeP11Server {
 #[cfg(test)]
 mod tests {
     use crate::client::TedgeP11Client;
+    use crate::pkcs11::CreateKeyParams;
     use crate::service::*;
     use std::io::Read;
     use std::os::unix::net::UnixStream;
@@ -134,7 +137,7 @@ mod tests {
             Ok(SignResponse(SIGNATURE.to_vec()))
         }
 
-        fn create_key(&self, _uri: Option<&str>) -> anyhow::Result<()> {
+        fn create_key(&self, _uri: Option<&str>, _params: CreateKeyParams) -> anyhow::Result<()> {
             todo!()
         }
     }

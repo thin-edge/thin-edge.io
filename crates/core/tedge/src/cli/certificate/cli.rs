@@ -51,7 +51,13 @@ pub enum TEdgeCertCli {
     },
 
     /// Create a new keypair
-    CreateKey,
+    CreateKey {
+        #[arg(long, default_value = "2048")]
+        bits: u16,
+
+        #[arg(long)]
+        label: String,
+    },
 
     /// Renew the device certificate
     ///
@@ -204,7 +210,7 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::CreateKey => CreateKeyCmd.into_boxed(),
+            TEdgeCertCli::CreateKey { bits, label } => CreateKeyCmd { bits, label }.into_boxed(),
 
             TEdgeCertCli::Show {
                 cloud,
