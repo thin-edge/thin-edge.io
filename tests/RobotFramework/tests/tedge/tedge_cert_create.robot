@@ -80,7 +80,6 @@ Run tedge cert create with cloud profile
 
 *** Keywords ***
 Custom Setup
-    ${device_sn}=    Setup    skip_bootstrap=${True}
-    Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
+    ${device_sn}=    Setup    register=${False}
 
     Set Test Variable    $DEVICE_SN    ${device_sn}

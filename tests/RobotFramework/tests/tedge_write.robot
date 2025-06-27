@@ -109,8 +109,10 @@ Preserves permissions if a destination exists
     There should be no leftover temporary files    ${dest_file}
 
 Custom Setup
-    Setup    skip_bootstrap=True
-    Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
+    Setup    register=${False}
+    # By default tedge-write only has permissions to write to files under /etc/*
+    Execute Command
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge-write /tmp/*' | sudo tee /etc/sudoers.d/tedge_write_tmp
 
     Create a regular user
 

@@ -26,8 +26,7 @@ ${toml}     SEPARATOR=\n
 
 *** Test Cases ***
 Configuration types should be detected on file change (without restarting service)
-    ${DEVICE_SN}=    Setup    skip_bootstrap=True
-    Execute Command    /setup/bootstrap.sh 2>&1
+    ${DEVICE_SN}=    Setup
     Device Should Exist    ${DEVICE_SN}
 
     ${supported_configs}=    Should Support Configurations    tedge-configuration-plugin    includes=True

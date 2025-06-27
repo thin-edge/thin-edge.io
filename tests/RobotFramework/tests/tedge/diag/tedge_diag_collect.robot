@@ -99,8 +99,7 @@ Validate preset plugins
     END
 
 Custom Suite Setup
-    Setup    skip_bootstrap=${True}
-    Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
+    Setup    register=${False}
     Execute Command    mkdir -p /setup/diag-plugins
 
 Custom Test Teardown

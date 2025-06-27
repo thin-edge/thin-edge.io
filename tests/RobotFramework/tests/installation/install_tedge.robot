@@ -36,7 +36,7 @@ Install latest tedge via script
 
 Install then uninstall latest tedge via script (from main branch)
     # Install (just install everything, don't set anything up)
-    Execute Command    ./bootstrap.sh --install --no-bootstrap --no-connect
+    [Setup]    Setup    register=${False}
     Execute Command    dpkg -s tedge
     Execute Command    dpkg -s tedge-watchdog
     Execute Command    dpkg -s tedge-mapper
@@ -52,7 +52,7 @@ Install then uninstall latest tedge via script (from main branch)
 
 *** Keywords ***
 Custom Setup
-    Setup    skip_bootstrap=True
+    Setup    skip_bootstrap=${True}
 
 Tedge Version Should Match Regex
     [Arguments]    ${expected}

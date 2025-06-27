@@ -106,7 +106,7 @@ Child heartbeat is sent based on the custom health topic status
 
 *** Keywords ***
 Test Setup
-    ${DEVICE_SN}=    Setup    skip_bootstrap=True
+    ${DEVICE_SN}=    Setup    connect=${False}
     Set Test Variable    $DEVICE_SN
 
     ${CHILD_SN}=    Get Random Name
@@ -114,9 +114,8 @@ Test Setup
     Set Test Variable    $CHILD_XID    ${DEVICE_SN}:device:${CHILD_SN}
 
     # Set tedge config value before connecting
-    Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
     Execute Command    sudo tedge config set c8y.availability.interval 1m
-    Execute Command    ./bootstrap.sh --no-install
+    Execute Command    tedge connect c8y
 
     Device Should Exist    ${DEVICE_SN}
 

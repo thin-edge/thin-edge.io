@@ -41,6 +41,7 @@ Connect to AWS and Cumulocity using different keys
 
     # c8y setup: create a new token and cert/key and upload it
     Execute Command    tedge cert create --device-id ${DEVICE_SN}
+    Execute Command    tedge config set c8y.url ${C8Y_CONFIG.host}
     Execute Command
     ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
     ...    log_output=${False}
@@ -74,9 +75,8 @@ Connect to AWS and Cumulocity using different keys
 
 *** Keywords ***
 Custom Setup
-    ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
+    ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    $DEVICE_SN
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-connect || true
 
     # Allow the tedge user to access softhsm
     Execute Command    sudo usermod -a -G softhsm tedge

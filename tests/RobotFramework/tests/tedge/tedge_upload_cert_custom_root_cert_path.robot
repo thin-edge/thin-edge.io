@@ -36,7 +36,5 @@ tedge cert upload c8y respects root cert path
 
 *** Keywords ***
 Setup With Self-Signed Certificate
-    ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
+    ${DEVICE_SN}=    Setup    register_using=self-signed
     Set Test Variable    $DEVICE_SN
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --cert-method selfsigned
-    Register Certificate For Cleanup

@@ -5,7 +5,6 @@ Library             String
 Library             ThinEdgeIO
 
 Suite Teardown      Get Suite Logs
-Test Setup          Setup    skip_bootstrap=True
 
 Test Tags           theme:mqtt
 
@@ -13,7 +12,7 @@ Test Tags           theme:mqtt
 *** Test Cases ***
 Publish Connection Closed after publish
     [Documentation]    Tests that the connection to the MQTT broker is closed after publishing.
-    Execute Command    /setup/bootstrap.sh
+    [Setup]    Setup
     ${log_start}    ThinEdgeIO.Get Unix Timestamp
     Execute Command    tedge mqtt pub test/topic Hello
     ${MQTT_PUB}    Execute Command    journalctl -u mosquitto --since "@${log_start}" --no-pager
@@ -21,7 +20,7 @@ Publish Connection Closed after publish
 
 Publish Connection Closed after publish and no error message with TLS
     [Documentation]    same as previous test but with TLS
-    Execute Command    /setup/bootstrap.sh --no-connect --no-secure
+    [Setup]    Setup    bootstrap_args=--no-secure    register=${False}
     Set up broker with server and client authentication
     tedge configure MQTT server authentication
     tedge configure MQTT client authentication
@@ -32,14 +31,14 @@ Publish Connection Closed after publish and no error message with TLS
 
 Subscribe Connection Closed On Interruption
     [Documentation]    Tests that a subscribe connection to MQTT broker closes upon interruption.
-    Execute Command    /setup/bootstrap.sh
+    [Setup]    Setup
     ${log_start}    ThinEdgeIO.Get Unix Timestamp
     Execute Command    timeout 2 tedge mqtt sub test/topic    ignore_exit_code=True
     ${MQTT_SUB}    Execute Command    journalctl -u mosquitto --since "@${log_start}" --no-pager
     Should Contain    ${MQTT_SUB}    Received DISCONNECT from tedge-sub
 
 Stop subscription on SIGINT even when broker is not available
-    Execute Command    /setup/bootstrap.sh
+    [Setup]    Setup
     Execute Command    sudo systemctl stop mosquitto
     ${output}    Execute Command
     ...    cmd=timeout --signal=SIGINT 2 tedge mqtt sub '#'

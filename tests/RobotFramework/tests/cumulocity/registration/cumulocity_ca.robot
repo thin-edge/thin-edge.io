@@ -46,13 +46,9 @@ Certificate Renewal Service Using Cumulocity Certificate Authority
 
 *** Keywords ***
 Custom Setup
-    ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-bootstrap --no-connect || true
-
+    ${DEVICE_SN}=    Setup    register=${False}
     Set Test Variable    $DEVICE_SN
 
 Setup With Self-Signed Certificate
-    ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --cert-method selfsigned
+    ${DEVICE_SN}=    Setup    register_using=self-signed
     Set Test Variable    $DEVICE_SN
-    Register Certificate For Cleanup

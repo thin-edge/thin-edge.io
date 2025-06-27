@@ -19,7 +19,16 @@ Migrate Legacy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/config1.json    /etc/
 
     # Bootstrap the tedge-agent so that it picks up the old c8y-configuration-plugin.toml
-    Execute Command    ./bootstrap.sh
+    Run Bootstrap    ${DEVICE_SN}
     Cumulocity.Device Should Exist    ${DEVICE_SN}
     ${operation}=    Cumulocity.Get Configuration    TEST_CONFIG
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}
+
+
+*** Keywords ***
+Run Bootstrap
+    [Arguments]    ${external_id}
+    ${bootstrap_cmd}=    ThinEdgeIO.Get Bootstrap Command
+    Execute Command    cmd=${bootstrap_cmd}
+    Register Device With Cumulocity CA    external_id=${external_id}
+    Execute Command    cmd=tedge connect c8y

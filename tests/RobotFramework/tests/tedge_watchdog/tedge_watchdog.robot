@@ -108,10 +108,9 @@ Watchdog sends notification if service is up which leads to service continuing t
 
 *** Keywords ***
 Custom Setup
-    Setup    skip_bootstrap=True
-    Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
+    Setup    register=${False}
 
-    # Need to manually restart the mqtt-logger because after --no-bootstrap --no-connect step it
+    # Need to manually restart the mqtt-logger because after the bootstrapping step it
     # isn't restarted, whereas normal bootstrap would have restarted it
     # TODO: update the bootstrap logic to always restart mqtt-logger
     Restart Service    mqtt-logger

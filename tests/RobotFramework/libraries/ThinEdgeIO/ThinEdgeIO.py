@@ -192,6 +192,65 @@ class ThinEdgeIO(DeviceLibrary):
         if certificate.is_self_signed and certificate.thumbprint:
             self._certificates[certificate.thumbprint] = common_name or device.get_id()
 
+    @keyword("Register Device With Cumulocity CA")
+    def register_device_with_cumulocity_ca(
+        self,
+        external_id: str,
+        external_type: str = "c8y_Serial",
+        name: Optional[str] = None,
+        device_type: str = "thin-edge.io",
+        device_name: Optional[str] = None,
+        **kwargs,
+    ):
+        """Register a device with Cumulocity using the Cumulocity Certificate Authority feature
+
+        Examples:
+
+        | Register Device With Cumulocity CA | external_id=tedge001 |
+        | Register Device With Cumulocity CA | external_id=tedge001 | name=Custom Tedge 0001 |
+        """
+        credentials = c8y_lib.device_mgmt.registration.bulk_register_with_ca(
+            external_id=external_id,
+            external_type=external_type,
+            name=name,
+            device_type=device_type,
+        )
+
+        self.execute_command(
+            f"""tedge config set c8y.url '{credentials.url}' && tedge cert download c8y --device-id '{external_id}' --one-time-password '{credentials.one_time_password}' --retry-every 5s --max-timeout 60s""",
+            device_name=device_name,
+        )
+
+    @keyword("Register Device With Self-Signed Certificate")
+    def register_device_with_self_signed_certificate(
+        self,
+        external_id: str,
+        device_name: Optional[str] = None,
+        auto_registration_enabled: bool = True,
+        **kwargs,
+    ):
+        """Register a device with Cumulocity using a self-signed certificate. The self-signed
+        certificate is updated
+
+        Examples:
+
+        | Register Device With Self-Signed Certificate | external_id=tedge001 |
+        """
+        domain = c8y_lib.get_domain()
+        self.execute_command(
+            f"tedge config set c8y.url '{domain}' && tedge cert create --device-id '{external_id}'"
+        )
+        pem_contents = self.execute_command(
+            'cat "$(tedge config get device.cert_path)"'
+        )
+        c8y_lib.upload_trusted_certificate(
+            name=external_id,
+            pem_cert=pem_contents,
+            auto_registration_enabled=auto_registration_enabled,
+            ignore_duplicate=True,
+        )
+        self.register_certificate(common_name=external_id, device_name=device_name)
+
     @keyword("Get Debian Architecture")
     def get_debian_architecture(self):
         """Get the debian architecture"""
@@ -690,18 +749,62 @@ class ThinEdgeIO(DeviceLibrary):
     def setup(
         self,
         skip_bootstrap: Optional[bool] = None,
+        bootstrap_args: Optional[str] = None,
         cleanup: Optional[bool] = None,
         adapter: Optional[str] = None,
         env_file: str = ".env",
-        wait_for_healthy: bool = True,
+        register: bool = True,
+        register_using: str = "c8y-ca",
+        connect: bool = True,
         **adaptor_config,
     ) -> str:
+        """_summary_
+
+        Args:
+            skip_bootstrap (bool, optional): Don't run the bootstrap script. Defaults to None
+            bootstrap_args (str, optional): Additional arguments to be passed to the bootstrap
+                command. Defaults to None.
+            cleanup (bool, optional): Should the cleanup be run or not. Defaults to None
+            adapter (str, optional): Type of adapter to use, e.g. ssh, docker etc. Defaults to None
+            **adaptor_config: Additional configuration that is passed to the adapter. It will override
+                any existing settings.
+
+            env_file (str, optional): dotenv file to pass to the adapter. Defaults to ".env".
+            register (bool, optional): Register the device with Cumulocity. Defaults to True.
+            register_using (str, optional): Registration method. Defaults to "c8y-ca".
+            connect (bool, optional): Connect the mapper to Cumulocity. Defaults to True.
+
+        Raises:
+            ValueError: Invalid 'register_using'
+
+        Returns:
+            str: Serial number
+        """
         serial_sn = super().setup(
-            skip_bootstrap, cleanup, adapter, env_file=env_file, **adaptor_config
+            skip_bootstrap=skip_bootstrap,
+            bootstrap_args=bootstrap_args,
+            cleanup=cleanup,
+            adapter=adapter,
+            env_file=env_file,
+            **adaptor_config,
         )
 
-        if not skip_bootstrap and wait_for_healthy:
-            self.assert_service_health_status_up("tedge-mapper-c8y")
+        if not skip_bootstrap:
+            if register:
+                if register_using == "c8y-ca":
+                    self.register_device_with_cumulocity_ca(external_id=serial_sn)
+                elif register_using == "self-signed":
+                    self.register_device_with_self_signed_certificate(
+                        external_id=serial_sn
+                    )
+                else:
+                    raise ValueError(
+                        "Invalid 'register_using' value. Supported values: [c8y-ca, self-signed]"
+                    )
+
+                if connect:
+                    self.tedge_connect("c8y")
+
         return serial_sn
 
     def _assert_mqtt_topic_messages(

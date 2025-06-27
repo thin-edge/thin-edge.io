@@ -64,8 +64,7 @@ Ignore env variable by using an empty value
 
 *** Keywords ***
 Custom Suite Setup
-    ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
-    Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-bootstrap --no-connect || true
+    ${DEVICE_SN}=    Setup    register=${False}
     Stop Service    tedge-agent
     Stop Service    tedge-mapper-c8y
     Stop Service    c8y-firmware-plugin

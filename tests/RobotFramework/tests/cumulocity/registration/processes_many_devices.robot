@@ -32,8 +32,7 @@ Processes many devices
 
 *** Keywords ***
 Test Setup
-    ${DEVICE_SN}=    Setup    skip_bootstrap=True
-    Execute Command    ./bootstrap.sh
+    ${DEVICE_SN}=    Setup
 
     # Don't actually send topics c8y/... to the cloud, the test is 100% local
     Execute Command    sed -i s/c8y/asdf/ /etc/tedge/mosquitto-conf/c8y-bridge.conf

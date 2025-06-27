@@ -23,8 +23,8 @@ Update tedge version from previous using Cumulocity
     Execute Command    systemctl stop tedge-mapper-az && systemctl disable tedge-mapper-az
 
     # Register device (using already installed version)
-    Execute Command
-    ...    cmd=test -f ./bootstrap.sh && env DEVICE_ID=${DEVICE_SN} ./bootstrap.sh --no-install --no-secure || true
+    Register Legacy thin-edge.io    external_id=${DEVICE_SN}
+    Execute Command    cmd=tedge connect c8y
     Device Should Exist    ${DEVICE_SN}
 
     # WORKAROUND: #1731 Restart service to avoid suspected race condition causing software list message to be lost
@@ -92,8 +92,8 @@ Refreshes mosquitto bridge configuration
     ...    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s ${PREV_VERSION}
 
     # Register device (using already installed version)
-    Execute Command
-    ...    cmd=test -f ./bootstrap.sh && env DEVICE_ID=${DEVICE_SN} ./bootstrap.sh --no-install --no-secure || true
+    Register Legacy thin-edge.io    external_id=${DEVICE_SN}
+    Execute Command    cmd=tedge connect c8y
     Device Should Exist    ${DEVICE_SN}
 
     # get bridge modification time
@@ -120,7 +120,9 @@ Refreshes mosquitto bridge configuration
 Update tedge version from base to current using Cumulocity
     # Install base version (the latest official release) with self-update capability
     Execute Command    wget -O - thin-edge.io/install.sh | sh -s
-    Execute Command    cd /setup && test -f ./bootstrap.sh && ./bootstrap.sh --no-install --no-secure
+
+    Register Device With Cumulocity CA    external_id=${DEVICE_SN}
+    Execute Command    cmd=tedge connect c8y
     Device Should Exist    ${DEVICE_SN}
     ${pid_before}=    Service Should Be Running    tedge-agent
 
@@ -157,8 +159,9 @@ Update tedge Using a Custom Software Update Workflow
     Unpin thin-edge.io APT Packages
 
     # Register device (using already installed version)
-    Execute Command
-    ...    cmd=test -f ./bootstrap.sh && env DEVICE_ID=${DEVICE_SN} ./bootstrap.sh --no-install --no-secure || true
+    # Use self-signed certificate as the older thin-edge.io version does not support Cumulocity CA
+    Register Device With Self-Signed Certificate    external_id=${DEVICE_SN}
+    Execute Command    cmd=tedge connect c8y
     Device Should Exist    ${DEVICE_SN}
 
     Device Should Have Installed Software
@@ -225,3 +228,14 @@ Unpin thin-edge.io APT Packages
     Execute Command    cmd=rm -f /etc/apt/preferences.d/tedge
     # Remove thin-edge.io public repositories to avoid affecting the selected version
     Execute Command    cmd=rm -f /etc/apt/sources.list.d/thinedge-*.list
+
+Register Legacy thin-edge.io
+    [Arguments]    ${external_id}
+    ${domain}=    Cumulocity.Get Domain
+    Execute Command    cmd=tedge config set c8y.url ${domain}
+    Execute Command    cmd=tedge cert create --device-id '${external_id}'
+    ${pem_contents}=    Execute Command    cmd=cat "$(tedge config get device.cert.path)"    strip=${True}
+    Cumulocity.Upload Certificate
+    ...    name=${external_id}
+    ...    pem_cert=${pem_contents}
+    ...    auto_registration_enabled=${True}
