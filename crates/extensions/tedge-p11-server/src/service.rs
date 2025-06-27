@@ -1,3 +1,4 @@
+use crate::pkcs11::CreateKeyParams;
 use crate::pkcs11::Cryptoki;
 use crate::pkcs11::CryptokiConfigDirect;
 use crate::pkcs11::PkcsSigner;
@@ -13,6 +14,7 @@ use tracing::warn;
 pub trait SigningService {
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse>;
     fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse>;
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<()>;
 }
 
 #[derive(Debug)]
@@ -77,6 +79,12 @@ impl SigningService for TedgeP11Service {
             .context("Failed to sign using PKCS #11")?;
         Ok(SignResponse(signature))
     }
+
+    #[instrument(skip_all)]
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<()> {
+        self.cryptoki.create_key(uri, params)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,6 +107,12 @@ pub struct SignRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignResponse(pub Vec<u8>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateKeyRequest {
+    pub uri: Option<String>,
+    pub params: CreateKeyParams,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureScheme(pub rustls::SignatureScheme);

@@ -51,7 +51,8 @@ impl TedgeP11Server {
         let response = match request {
             Frame1::Error(_)
             | Frame1::ChooseSchemeResponse { .. }
-            | Frame1::SignResponse { .. } => {
+            | Frame1::SignResponse { .. }
+            | Frame1::CreateKeyResponse => {
                 let error = ProtocolError("invalid request".to_string());
                 let _ = connection.write_frame(&Frame1::Error(error));
                 anyhow::bail!("protocol error: invalid request")
@@ -82,6 +83,21 @@ impl TedgeP11Server {
                     }
                 }
             }
+            Frame1::CreateKeyRequest(request) => {
+                let response = self
+                    .service
+                    .create_key(request.uri.as_deref(), request.params);
+                match response {
+                    Ok(_) => Frame1::CreateKeyResponse,
+                    Err(err) => {
+                        let response = Frame1::Error(ProtocolError(format!(
+                            "PKCS #11 service failed: {err:#}"
+                        )));
+                        connection.write_frame(&response)?;
+                        anyhow::bail!(err);
+                    }
+                }
+            }
         };
 
         connection.write_frame(&response).context("write")?;
@@ -93,6 +109,7 @@ impl TedgeP11Server {
 #[cfg(test)]
 mod tests {
     use crate::client::TedgeP11Client;
+    use crate::pkcs11::CreateKeyParams;
     use crate::service::*;
     use std::io::Read;
     use std::os::unix::net::UnixStream;
@@ -118,6 +135,10 @@ mod tests {
 
         fn sign(&self, _request: SignRequest) -> anyhow::Result<SignResponse> {
             Ok(SignResponse(SIGNATURE.to_vec()))
+        }
+
+        fn create_key(&self, _uri: Option<&str>, _params: CreateKeyParams) -> anyhow::Result<()> {
+            todo!()
         }
     }
 

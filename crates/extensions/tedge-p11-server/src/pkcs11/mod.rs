@@ -24,10 +24,13 @@ use cryptoki::object::KeyType;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use rand::Fill;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
 use rustls::SignatureScheme;
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::debug;
 use tracing::trace;
 use tracing::warn;
@@ -92,23 +95,7 @@ impl Cryptoki {
         })
     }
 
-    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11SigningKey> {
-        let mut config_uri = self
-            .config
-            .uri
-            .as_deref()
-            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        let request_uri = uri
-            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        config_uri.append_attributes(request_uri);
-        let uri_attributes = config_uri;
-
+    fn open_session(&self, uri_attributes: &uri::Pkcs11Uri) -> anyhow::Result<Session> {
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
 
@@ -139,10 +126,18 @@ impl Cryptoki {
         let token_info = self.context.get_token_info(slot)?;
         debug!(?slot_info, ?token_info, "Selected slot");
 
-        let session = self.context.open_ro_session(slot)?;
+        // let session = self.context.open_ro_session(slot)?;
+        let session = self.context.open_rw_session(slot)?;
         session.login(UserType::User, Some(&self.config.pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
+
+        Ok(session)
+    }
+
+    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11SigningKey> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
 
         // get the signing key
         let key = Self::find_key_by_attributes(&uri_attributes, &session)?;
@@ -197,6 +192,15 @@ impl Cryptoki {
         Ok(key)
     }
 
+    pub fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<()> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
+
+        create_key(&session, params).context("Failed to create a new private key")?;
+
+        Ok(())
+    }
+
     fn find_key_by_attributes(
         uri: &uri::Pkcs11Uri,
         session: &Session,
@@ -227,6 +231,106 @@ impl Cryptoki {
 
         Ok(key)
     }
+
+    fn request_uri<'a>(
+        &'a self,
+        request_uri: Option<&'a str>,
+    ) -> anyhow::Result<uri::Pkcs11Uri<'a>> {
+        let mut config_uri = self
+            .config
+            .uri
+            .as_deref()
+            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        let request_uri = request_uri
+            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        config_uri.append_attributes(request_uri);
+        Ok(config_uri)
+    }
+}
+
+fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<()> {
+    let (mechanism, attrs_pub, attrs_priv) = match params.key {
+        KeyTypeParams::Rsa { bits } => {
+            anyhow::ensure!(
+                bits == 2048 || bits == 3072 || bits == 4096,
+                "Invalid bits value: only 2048/3072/4096 key sizes are valid"
+            );
+            (
+                Mechanism::RsaPkcsKeyPairGen,
+                vec![Attribute::ModulusBits(u64::from(bits).into())],
+                vec![],
+            )
+        }
+        KeyTypeParams::Ec { curve } => {
+            // serialize chosen curve to CKA_EC_PARAMS choice structure
+            // https://docs.oasis-open.org/pkcs11/pkcs11-curr/v3.0/os/pkcs11-curr-v3.0-os.html#_Toc30061181
+            let oid = match curve {
+                256 => SECP256R1_OID,
+                384 => SECP384R1_OID,
+                521 => SECP521R1_OID,
+                _ => anyhow::bail!("Invalid EC curve value: only 256/384/521 valid"),
+            };
+            let components: Vec<u64> = oid.split('.').map(|c| c.parse().unwrap()).collect();
+            let curve_oid = asn1_rs::Oid::from(&components)
+                .unwrap()
+                .to_der_vec()
+                .unwrap();
+            trace!("{curve_oid:x?}");
+            (
+                Mechanism::EccKeyPairGen,
+                vec![Attribute::EcParams(curve_oid)],
+                vec![],
+            )
+        }
+    };
+
+    let mut id = vec![0u8; 20];
+    rand::fill(&mut id[..]);
+
+    let mut pub_key_template = attrs_pub;
+    pub_key_template.extend_from_slice(&[
+        // Attribute::Token(true),
+        Attribute::Private(false),
+        Attribute::Verify(true),
+        Attribute::Encrypt(true),
+    ]);
+
+    let mut priv_key_template = attrs_priv;
+    priv_key_template.extend_from_slice(&[
+        Attribute::Token(true),
+        Attribute::Private(true),
+        Attribute::Sensitive(true),
+        Attribute::Extractable(false),
+        Attribute::Sign(true),
+        Attribute::Decrypt(true),
+        Attribute::Label(params.label.into()),
+        Attribute::Id(id),
+    ]);
+
+    trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
+    session
+        .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template)
+        .context("Failed to generate keypair")?;
+    Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateKeyParams {
+    pub key: KeyTypeParams,
+    pub token: Option<String>,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KeyTypeParams {
+    Rsa { bits: u16 },
+    Ec { curve: u16 },
 }
 
 #[derive(Debug, Clone)]
