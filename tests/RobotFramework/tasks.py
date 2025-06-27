@@ -10,13 +10,14 @@ import shutil
 import subprocess
 import time
 import datetime
+from typing import Any
 
 import invoke
-from invoke import task
+from invoke.tasks import task
 from dotenv import load_dotenv
 
 
-def using_buildx(c: any, binary: str) -> bool:
+def using_buildx(c: Any, binary: str) -> bool:
     """Detect if docker buildx is being used
 
     Args:
@@ -40,14 +41,14 @@ class ColourFormatter(logging.Formatter):
     red = "\x1b[31;20m"
     bold_red = "\x1b[31;1m"
     reset = "\x1b[0m"
-    format = "%(levelname)-8s %(message)s (%(filename)s:%(lineno)d)"
+    template = "%(levelname)-8s %(message)s (%(filename)s:%(lineno)d)"
 
     FORMATS = {
-        logging.DEBUG: grey + format + reset,
-        logging.INFO: grey + format + reset,
-        logging.WARNING: yellow + format + reset,
-        logging.ERROR: red + format + reset,
-        logging.CRITICAL: bold_red + format + reset,
+        logging.DEBUG: grey + template + reset,
+        logging.INFO: grey + template + reset,
+        logging.WARNING: yellow + template + reset,
+        logging.ERROR: red + template + reset,
+        logging.CRITICAL: bold_red + template + reset,
     }
 
     def format(self, record):
@@ -397,8 +398,7 @@ def flake_finder(
 
     if os.path.exists(outputdir):
         if not clean:
-            # sys.exit(1)
-            raise invoke.Exit(
+            raise invoke.exceptions.Exit(
                 (
                     "ERROR: Output directory already exists. "
                     f"Please use --clean if you want to remove it. dir={outputdir}"
@@ -428,7 +428,7 @@ def flake_finder(
                 exclude=exclude,
             )
             passed.append(i)
-        except invoke.exceptions.Failure as ex:
+        except invoke.exceptions.Failure:
             failed.append(i)
 
     duration_sec = time.monotonic() - duration_start
