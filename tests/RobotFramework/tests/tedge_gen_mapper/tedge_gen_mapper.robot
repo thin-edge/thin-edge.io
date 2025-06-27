@@ -51,8 +51,7 @@ Units are configured using topic metadata
 
 *** Keywords ***
 Custom Setup
-    ${DEVICE_SN}=    Setup     skip_bootstrap=${True}
-    Execute Command    ./bootstrap.sh --no-bootstrap --no-connect
+    ${DEVICE_SN}=    Setup    connect=${False}
     Set Suite Variable    $DEVICE_SN
     Copy Configuration Files
 
