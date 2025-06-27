@@ -101,7 +101,7 @@ BUILD_WITH="${BUILD_WITH:-zig}"
 COMMON_BUILD_OPTIONS=(
     "--release"
 )
-TOOLCHAIN="${TOOLCHAIN:-+1.78}"
+TOOLCHAIN="${TOOLCHAIN:-+1.82}"
 # Note: Minimum version that is supported with riscv64gc-unknown-linux-gnu is 2.27
 GLIBC_VERSION="${GLIBC_VERSION:-2.17}"
 RISCV_GLIBC_VERSION="${RISCV_GLIBC_VERSION:-2.27}"
