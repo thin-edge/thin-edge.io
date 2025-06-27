@@ -1,3 +1,4 @@
+use crate::pkcs11::CreateKeyParams;
 use crate::pkcs11::SigScheme;
 use serde::Deserialize;
 use serde::Serialize;
@@ -10,7 +11,7 @@ pub trait TedgeP11Service: Send + Sync {
 
     /// Signs the message using the private key object on the token (denoted by uri).
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse>;
-    fn create_key(&self, uri: Option<&str>) -> anyhow::Result<()>;
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<()>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -41,7 +42,13 @@ pub struct SignRequestWithSigScheme {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignResponse(pub Vec<u8>);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateKeyRequest {
+    pub uri: Option<String>,
+    pub params: CreateKeyParams,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureScheme(pub rustls::SignatureScheme);
 
 impl Serialize for SignatureScheme {
