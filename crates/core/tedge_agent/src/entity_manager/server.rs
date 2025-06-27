@@ -1,7 +1,10 @@
 use async_trait::async_trait;
+use futures::channel::mpsc;
+use futures::StreamExt as _;
 use serde_json::Map;
 use serde_json::Value;
 use tedge_actors::LoggingSender;
+use tedge_actors::MappingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::Sender;
 use tedge_actors::Server;
@@ -18,11 +21,9 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_api::EntityStore;
-use tedge_mqtt_ext::MqttConnector;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::TopicFilter;
-use tokio::time::timeout;
-use tokio::time::Duration;
 use tracing::error;
 
 #[derive(Debug)]
@@ -56,27 +57,37 @@ pub enum EntityStoreResponse {
 pub struct EntityStoreServer {
     entity_store: EntityStore,
     mqtt_schema: MqttSchema,
-    mqtt_connector: Box<dyn MqttConnector>,
     mqtt_publisher: LoggingSender<MqttMessage>,
     entity_auto_register: bool,
+    retain_requests: LoggingSender<(mpsc::UnboundedSender<MqttMessage>, TopicFilter)>,
 }
 
 impl EntityStoreServer {
-    pub fn new(
+    pub fn new<M>(
         entity_store: EntityStore,
         mqtt_schema: MqttSchema,
-        mqtt_connector: Box<dyn MqttConnector>,
-        mqtt_actor: &mut impl MessageSink<MqttMessage>,
+        mqtt_actor: &mut M,
         entity_auto_register: bool,
-    ) -> Self {
-        let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_actor.get_sender());
+    ) -> Self
+    where
+        M: MessageSink<MqttRequest>,
+    {
+        let mqtt_publisher =
+            LoggingSender::new("MqttPublisher".into(), mqtt_actor.get_sender().get_sender());
+        let retain_requests = LoggingSender::new(
+            "DeregistrationClient".into(),
+            Box::new(MappingSender::new(
+                mqtt_actor.get_sender(),
+                move |(tx, topics)| [MqttRequest::RetrieveRetain(tx, topics)],
+            )),
+        );
 
         Self {
             entity_store,
             mqtt_schema,
-            mqtt_connector,
             mqtt_publisher,
             entity_auto_register,
+            retain_requests,
         }
     }
 
@@ -340,31 +351,13 @@ impl EntityStoreServer {
             }
         }
 
-        // A single connection to retrieve all retained metadata messages for all deleted entities
-        match self.mqtt_connector.connect(topics.clone()).await {
-            Ok(mut connection) => {
-                while let Ok(Some(message)) =
-                    timeout(Duration::from_secs(1), connection.next_message()).await
-                {
-                    if message.retain
-                        && !message.payload_bytes().is_empty()
-                        && topics.accept(&message)
-                    {
-                        let clear_msg = MqttMessage::new(&message.topic, "").with_retain();
-                        if let Err(err) = self.mqtt_publisher.send(clear_msg).await {
-                            error!(
-                                    "Failed to clear retained message on topic {} while de-registering {} due to: {err}",
-                                    topic_id,
-                                    message.topic
-                                );
-                        }
-                    }
-                }
+        let (tx, mut rx) = mpsc::unbounded();
+        self.retain_requests.send((tx, topics)).await.unwrap();
 
-                connection.disconnect().await;
-            }
-            Err(err) => {
-                error!("Failed to create MQTT connection for clearing entity data: {err}");
+        while let Some(retain_message) = rx.next().await {
+            if !retain_message.payload.as_bytes().is_empty() {
+                let clear_msg = MqttMessage::new(&retain_message.topic, "").with_retain();
+                self.mqtt_publisher.send(clear_msg).await.unwrap();
             }
         }
 

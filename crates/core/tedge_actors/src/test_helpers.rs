@@ -137,10 +137,11 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// # }
     ///
     /// ```
-    async fn assert_received<Samples>(&mut self, expected: Samples)
+    async fn assert_received<Item, Samples>(&mut self, expected: Samples)
     where
         Samples: IntoIterator + Send,
-        M: From<Samples::Item>;
+        M: PartialEq<Item>,
+        Item: Debug + Send + From<Samples::Item>;
 
     /// Check that all messages are received possibly in a different order or with interleaved messages.
     ///
@@ -179,10 +180,11 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// # }
     ///
     /// ```
-    async fn assert_received_unordered<Samples>(&mut self, expected: Samples)
+    async fn assert_received_unordered<Item, Samples>(&mut self, expected: Samples)
     where
         Samples: IntoIterator + Send,
-        M: From<Samples::Item>;
+        M: PartialEq<Item>,
+        Item: Debug + Send + From<Samples::Item>;
 
     /// Check that at least one matching message is received for each pattern.
     ///
@@ -244,7 +246,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
 impl<T, M> MessageReceiverExt<M> for T
 where
     T: MessageReceiver<M> + Send + 'static,
-    M: Message + Eq + PartialEq,
+    M: Message,
 {
     fn with_timeout(self, timeout: Duration) -> TimedMessageBox<Self> {
         TimedMessageBox {
@@ -259,26 +261,27 @@ where
         }
     }
 
-    #[allow(clippy::needless_collect)] // To avoid issues with Send constraints
-    async fn assert_received<Samples>(&mut self, expected: Samples)
+    async fn assert_received<Item, Samples>(&mut self, expected: Samples)
     where
         Samples: IntoIterator + Send,
-        M: From<Samples::Item>,
+        M: PartialEq<Item>,
+        Item: Debug + Send + From<Samples::Item>,
     {
-        let expected: Vec<M> = expected.into_iter().map(|msg| msg.into()).collect();
-        for expected_msg in expected.into_iter() {
-            let actual_msg = self.recv().await;
-            assert_eq!(actual_msg, Some(expected_msg));
+        let expected = expected.into_iter().map(|i| i.into()).collect::<Vec<_>>();
+        for expected_msg in expected {
+            let actual_msg = self.recv().await.unwrap();
+            assert_eq!(actual_msg, expected_msg);
         }
     }
 
-    async fn assert_received_unordered<Samples>(&mut self, expected: Samples)
+    async fn assert_received_unordered<Item, Samples>(&mut self, expected: Samples)
     where
         Samples: IntoIterator + Send,
-        M: From<Samples::Item>,
+        M: PartialEq<Item>,
+        Item: Debug + Send + From<Samples::Item>,
     {
-        let expected: Vec<M> = expected.into_iter().map(|msg| msg.into()).collect();
-        self.assert_received_matching(|pat: &M, msg: &M| pat == msg, expected)
+        let expected: Vec<_> = expected.into_iter().map(|msg| msg.into()).collect();
+        self.assert_received_matching(|pat, msg| msg == pat, expected)
             .await
     }
 

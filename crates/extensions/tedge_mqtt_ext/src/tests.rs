@@ -197,8 +197,8 @@ async fn dynamic_subscriptions() {
     let mqtt_config = MqttConfig::default().with_port(broker.port);
     let mut mqtt = MqttActorBuilder::new(mqtt_config);
 
-    let mut client_0 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber", 16);
-    let mut client_1 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber1", 16);
+    let mut client_0 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber", 16);
+    let mut client_1 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber1", 16);
     let client_id_0 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/b"), &client_0);
     let _client_id_1 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/+"), &client_1);
     client_0.connect_sink(NoConfig, &mqtt);
@@ -210,14 +210,21 @@ async fn dynamic_subscriptions() {
 
     let msg = MqttMessage::new(&Topic::new_unchecked("a/b"), "hello");
     client_0
-        .send(PublishOrSubscribe::Publish(msg.clone()))
+        .send(MqttRequest::Publish(msg.clone()))
         .await
         .unwrap();
     assert_eq!(timeout(client_0.recv()).await.unwrap(), msg);
     assert_eq!(timeout(client_1.recv()).await.unwrap(), msg);
 
+    // Send the messages as retain so we don't have a race for the subscription
+    let msg = MqttMessage::new(&Topic::new_unchecked("b/c"), "hello").with_retain();
     client_0
-        .send(PublishOrSubscribe::Subscribe(SubscriptionRequest {
+        .send(MqttRequest::Publish(msg.clone()))
+        .await
+        .unwrap();
+
+    client_0
+        .send(MqttRequest::Subscribe(SubscriptionRequest {
             diff: SubscriptionDiff {
                 subscribe: ["b/c".into()].into(),
                 unsubscribe: [].into(),
@@ -227,18 +234,12 @@ async fn dynamic_subscriptions() {
         .await
         .unwrap();
 
-    // Send the messages as retain so we don't have a race for the subscription
-    let msg = MqttMessage::new(&Topic::new_unchecked("b/c"), "hello").with_retain();
-    client_0
-        .send(PublishOrSubscribe::Publish(msg.clone()))
-        .await
-        .unwrap();
     assert_eq!(timeout(client_0.recv()).await.unwrap(), msg);
 
     // Verify that messages aren't sent to clients
     let msg = MqttMessage::new(&Topic::new_unchecked("a/c"), "hello");
     client_0
-        .send(PublishOrSubscribe::Publish(msg.clone()))
+        .send(MqttRequest::Publish(msg.clone()))
         .await
         .unwrap();
     assert_eq!(timeout(client_1.recv()).await.unwrap(), msg);
@@ -252,7 +253,9 @@ async fn dynamic_subscriptions() {
 #[tokio::test]
 async fn dynamic_subscribers_receive_retain_messages() {
     let broker = mqtt_tests::test_mqtt_broker();
-    let mqtt_config = MqttConfig::default().with_port(broker.port);
+    let mqtt_config = MqttConfig::default()
+        .with_port(broker.port)
+        .with_session_name("test");
     let mut mqtt = MqttActorBuilder::new(mqtt_config);
 
     broker
@@ -264,8 +267,8 @@ async fn dynamic_subscribers_receive_retain_messages() {
         .await
         .unwrap();
 
-    let mut client_0 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber", 16);
-    let mut client_1 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber1", 16);
+    let mut client_0 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber", 16);
+    let mut client_1 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber1", 16);
     let _client_id_0 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/b"), &client_0);
     let client_id_1 = mqtt.connect_id_sink(TopicFilter::empty(), &client_1);
     client_0.connect_sink(NoConfig, &mqtt);
@@ -282,7 +285,7 @@ async fn dynamic_subscribers_receive_retain_messages() {
     assert_eq!(timeout(client_0.recv()).await.unwrap(), msg);
 
     client_1
-        .send(PublishOrSubscribe::Subscribe(SubscriptionRequest {
+        .send(MqttRequest::Subscribe(SubscriptionRequest {
             diff: SubscriptionDiff {
                 subscribe: ["a/b".into(), "b/c".into()].into(),
                 unsubscribe: [].into(),
@@ -315,7 +318,9 @@ async fn dynamic_subscribers_receive_retain_messages() {
 #[tokio::test]
 async fn dynamic_subscribers_receive_retain_messages_when_upgrading_topic() {
     let broker = mqtt_tests::test_mqtt_broker();
-    let mqtt_config = MqttConfig::default().with_port(broker.port);
+    let mqtt_config = MqttConfig::default()
+        .with_port(broker.port)
+        .with_session_name("test");
     let mut mqtt = MqttActorBuilder::new(mqtt_config);
 
     broker
@@ -323,8 +328,8 @@ async fn dynamic_subscribers_receive_retain_messages_when_upgrading_topic() {
         .await
         .unwrap();
 
-    let mut client_0 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber", 16);
-    let mut client_1 = SimpleMessageBoxBuilder::<_, PublishOrSubscribe>::new("dyn-subscriber1", 16);
+    let mut client_0 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber", 16);
+    let mut client_1 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber1", 16);
     let _client_id_0 = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/b"), &client_0);
     let client_id_1 = mqtt.connect_id_sink(TopicFilter::empty(), &client_1);
     client_0.connect_sink(NoConfig, &mqtt);
@@ -340,7 +345,7 @@ async fn dynamic_subscribers_receive_retain_messages_when_upgrading_topic() {
     assert_eq!(timeout(client_0.recv()).await.unwrap(), msg);
 
     client_1
-        .send(PublishOrSubscribe::Subscribe(SubscriptionRequest {
+        .send(MqttRequest::Subscribe(SubscriptionRequest {
             diff: SubscriptionDiff {
                 subscribe: ["a/+".into()].into(),
                 unsubscribe: [].into(),
@@ -350,12 +355,127 @@ async fn dynamic_subscribers_receive_retain_messages_when_upgrading_topic() {
         .await
         .unwrap();
 
-    // client_1 should receive both "a/b" and "b/c" retain messages upon subscribing
+    // client_1 should receive "a/b" retain message upon subscribing to a/+
     let recv = timeout(client_1.recv()).await.unwrap();
     assert_eq!(recv, msg);
 
     // Retain message might be redelivered to client_0, but this is
     // implementation dependent, don't assert either way
+}
+
+#[tokio::test]
+async fn actor_retrieves_retain_messages_and_sends_them_back_on_provided_sender() {
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mqtt_config = MqttConfig::default()
+        .with_port(broker.port)
+        .with_session_name("test");
+    let mut mqtt = MqttActorBuilder::new(mqtt_config);
+
+    broker
+        .publish_with_opts("a/b", "retain", QoS::AtLeastOnce, true)
+        .await
+        .unwrap();
+
+    let mut client_0 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber", 16);
+    let _client_id_0 = mqtt.connect_id_sink(TopicFilter::empty(), &client_0);
+    client_0.connect_sink(NoConfig, &mqtt);
+
+    let msg = MqttMessage::new(&Topic::new_unchecked("a/b"), "retain").with_retain();
+    let mqtt = mqtt.build();
+    tokio::spawn(async move { mqtt.run().await.unwrap() });
+    tokio::spawn(async move {
+        loop {
+            broker.publish("a/b", "non retain").await.unwrap();
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    });
+    let mut client_0 = client_0.build();
+    let (tx, mut rx) = mpsc::unbounded();
+    client_0
+        .send(MqttRequest::RetrieveRetain(
+            tx,
+            TopicFilter::new_unchecked("a/b"),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(rx.next().await, Some(msg));
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), rx.next()).await,
+        Ok(None)
+    );
+}
+
+#[tokio::test]
+async fn retrieve_retain_channel_closes_if_no_messages_are_sent() {
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mqtt_config = MqttConfig::default()
+        .with_port(broker.port)
+        .with_session_name("test");
+    let mut mqtt = MqttActorBuilder::new(mqtt_config);
+
+    let mut client_0 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber", 16);
+    let _client_id_0 = mqtt.connect_id_sink(TopicFilter::empty(), &client_0);
+    client_0.connect_sink(NoConfig, &mqtt);
+
+    let mqtt = mqtt.build();
+    tokio::spawn(async move { mqtt.run().await.unwrap() });
+    let mut client_0 = client_0.build();
+    let (tx, mut rx) = mpsc::unbounded();
+    client_0
+        .send(MqttRequest::RetrieveRetain(
+            tx,
+            TopicFilter::new_unchecked("a/b"),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), rx.next()).await,
+        Ok(None)
+    );
+}
+
+#[tokio::test]
+async fn retrieve_retain_does_not_forward_last_will() {
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mut last_will_topic = broker.messages_published_on("last-will").await;
+
+    let mqtt_config = MqttConfig::default()
+        .with_port(broker.port)
+        .with_session_name("test")
+        .with_last_will_message(MqttMessage {
+            topic: Topic::new_unchecked("last-will"),
+            payload: "should not be sent".to_owned().into(),
+            qos: QoS::AtLeastOnce,
+            retain: true,
+        });
+    let mut mqtt = MqttActorBuilder::new(mqtt_config);
+
+    let mut client_0 = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber", 16);
+    let _client_id_0 = mqtt.connect_id_sink(TopicFilter::empty(), &client_0);
+    client_0.connect_sink(NoConfig, &mqtt);
+
+    let mqtt = mqtt.build();
+    tokio::spawn(async move { mqtt.run().await.unwrap() });
+    let mut client_0 = client_0.build();
+    let (tx, mut rx) = mpsc::unbounded();
+    client_0
+        .send(MqttRequest::RetrieveRetain(
+            tx,
+            TopicFilter::new_unchecked("a/b"),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), rx.next()).await,
+        Ok(None)
+    );
+    assert!(
+        last_will_topic.try_next().is_err(),
+        "Last will should not be published by retrieve retain"
+    );
 }
 
 async fn timeout<T>(fut: impl Future<Output = T>) -> T {
