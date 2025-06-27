@@ -7,7 +7,9 @@ use anyhow::Context;
 use tracing::debug;
 use tracing::trace;
 
+use crate::pkcs11::CreateKeyParams;
 use crate::pkcs11::SigScheme;
+use crate::service::CreateKeyRequest;
 
 use super::connection::Frame1;
 use super::service::ChooseSchemeRequest;
@@ -119,7 +121,7 @@ impl TedgeP11Client {
         Ok(response.0)
     }
 
-    pub fn create_key(&self, uri: Option<String>) -> anyhow::Result<()> {
+    pub fn create_key(&self, uri: Option<String>, params: CreateKeyParams) -> anyhow::Result<()> {
         let stream = UnixStream::connect(&self.socket_path).with_context(|| {
             format!(
                 "Failed to connect to tedge-p11-server UNIX socket at '{}'",
@@ -129,7 +131,7 @@ impl TedgeP11Client {
         let mut connection = crate::connection::Connection::new(stream);
         debug!("Connected to socket");
 
-        let request = Frame1::CreateKeyRequest(uri);
+        let request = Frame1::CreateKeyRequest(CreateKeyRequest { uri, params });
         trace!(?request);
         connection.write_frame(&request)?;
 

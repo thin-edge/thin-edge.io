@@ -191,11 +191,11 @@ impl Cryptoki {
         Ok(key)
     }
 
-    pub fn create_key(&self, uri: Option<&str>) -> anyhow::Result<()> {
+    pub fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<()> {
         let uri_attributes = self.request_uri(uri)?;
         let session = self.open_session(&uri_attributes)?;
 
-        create_key(&session).context("Failed to create a new private key")?;
+        create_key(&session, params).context("Failed to create a new private key")?;
 
         Ok(())
     }
@@ -253,26 +253,51 @@ impl Cryptoki {
     }
 }
 
-fn create_key(session: &Session) -> anyhow::Result<()> {
+fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<()> {
+    let KeyTypeParams::Rsa { bits } = params.key;
+    anyhow::ensure!(
+        bits == 2048 || bits == 3072 || bits == 4096,
+        "Invalid bits value: only 2048/3072/4096 key sizes are valid"
+    );
+
+    trace!(bits, "Generating keypair");
     session
         .generate_key_pair(
             &Mechanism::RsaPkcsKeyPairGen,
             &[
-                Attribute::Token(true),
+                // Attribute::Token(true),
+                Attribute::Private(false),
                 Attribute::Verify(true),
                 Attribute::Encrypt(true),
-                Attribute::ModulusBits(2048.into()),
+                Attribute::ModulusBits(u64::from(bits).into()),
+                // Attribute::Label("rsa_public".into()),
             ],
             &[
                 Attribute::Token(true),
+                Attribute::Private(true),
                 Attribute::Sensitive(true),
                 Attribute::Extractable(false),
                 Attribute::Sign(true),
                 Attribute::Decrypt(true),
+                Attribute::Label(params.label.into()),
+                // Attribute::ModulusBits(u64::from(bits).into()),
+                // Attribute::KeyType(KeyType::RSA),
             ],
         )
         .context("Failed to generate keypair")?;
     Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateKeyParams {
+    pub key: KeyTypeParams,
+    pub token: Option<String>,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KeyTypeParams {
+    Rsa { bits: u16 },
 }
 
 #[derive(Debug, Clone)]
