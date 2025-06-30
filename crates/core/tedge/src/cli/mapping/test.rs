@@ -14,6 +14,7 @@ pub struct TestCommand {
     pub mapping_dir: PathBuf,
     pub filter: Option<PathBuf>,
     pub message: Option<Message>,
+    pub final_tick: bool,
 }
 
 #[async_trait::async_trait]
@@ -37,6 +38,10 @@ impl Command for TestCommand {
                 self.process(&mut processor, &message, &timestamp).await;
             }
         }
+        if self.final_tick {
+            let timestamp = DateTime::now();
+            self.tick(&mut processor, &timestamp).await;
+        }
         Ok(())
     }
 }
@@ -59,6 +64,21 @@ impl TestCommand {
             }
             None => processor
                 .process(timestamp, message)
+                .await
+                .into_iter()
+                .map(|(_, v)| v)
+                .for_each(print),
+        }
+    }
+
+    async fn tick(&self, processor: &mut MessageProcessor, timestamp: &DateTime) {
+        match &self.filter {
+            Some(filter) => {
+                let filter_name = filter.display().to_string();
+                print(processor.tick_with_pipeline(&filter_name, timestamp).await)
+            }
+            None => processor
+                .tick(timestamp)
                 .await
                 .into_iter()
                 .map(|(_, v)| v)
@@ -111,7 +131,7 @@ async fn next_line(input: &mut BufReader<Stdin>) -> Option<String> {
             }
             Err(err) => {
                 eprintln!("Fail to read input stream {}", err);
-                return None
+                return None;
             }
         }
     }

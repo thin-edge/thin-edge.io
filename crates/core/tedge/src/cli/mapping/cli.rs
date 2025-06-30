@@ -42,6 +42,10 @@ pub enum TEdgeMappingCli {
         #[clap(long)]
         filter: Option<PathBuf>,
 
+        /// Send a tick after all the message samples
+        #[clap(long = "final-tick")]
+        final_tick: bool,
+
         /// Topic of the message sample
         ///
         /// If none is provided, messages are read from stdin expecting a line per message:
@@ -66,6 +70,7 @@ impl BuildCommand for TEdgeMappingCli {
             TEdgeMappingCli::Test {
                 mapping_dir,
                 filter,
+                final_tick,
                 topic,
                 payload,
             } => {
@@ -80,6 +85,7 @@ impl BuildCommand for TEdgeMappingCli {
                     mapping_dir,
                     filter,
                     message,
+                    final_tick,
                 }
                 .into_boxed())
             }

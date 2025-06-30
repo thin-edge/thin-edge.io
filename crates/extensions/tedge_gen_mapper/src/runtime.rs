@@ -88,6 +88,18 @@ impl MessageProcessor {
         out_messages
     }
 
+    pub async fn tick_with_pipeline(
+        &mut self,
+        pipeline_id: &String,
+        timestamp: &DateTime,
+    ) -> Result<Vec<Message>, FilterError> {
+        let pipeline = self
+            .pipelines
+            .get_mut(pipeline_id)
+            .ok_or_else(|| anyhow::anyhow!("No such pipeline: {pipeline_id}"))?;
+        pipeline.tick(&self.js_runtime, timestamp).await
+    }
+
     pub async fn dump_memory_stats(&self) {
         self.js_runtime.dump_memory_stats().await;
     }
