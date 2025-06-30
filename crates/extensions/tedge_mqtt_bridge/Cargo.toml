@@ -21,12 +21,14 @@ bytes = { workspace = true }
 certificate = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }
+mqttbytes = { workspace = true }
 mutants = { workspace = true }
 rumqttc = { workspace = true, features = ["proxy"] }
 tedge_actors = { workspace = true }
 tedge_config = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["macros"] }
+tokio-util = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

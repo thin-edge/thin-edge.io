@@ -20,11 +20,12 @@ use rumqttc::Outgoing;
 use rumqttc::PubAck;
 use rumqttc::PubRec;
 use rumqttc::Publish;
+use rumqttc::Request;
 use rumqttc::SubscribeFilter;
 use rumqttc::Transport;
 use std::borrow::Cow;
-use std::collections::hash_map;
-use std::collections::HashMap;
+use std::collections::btree_map;
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::sync::atomic::AtomicUsize;
@@ -444,7 +445,7 @@ async fn half_bridge(
         reconnect_policy.maximum_interval.duration(),
         reconnect_policy.reset_window.duration(),
     );
-    let mut forward_pkid_to_received_msg = HashMap::new();
+    let mut forward_pkid_to_received_msg = BTreeMap::<u16, Publish>::new();
     let mut bridge_health = BridgeHealth::new(name, tx_health);
     let mut loop_breaker =
         MessageLoopBreaker::new(recv_client.clone(), bidirectional_topic_filters);
@@ -452,6 +453,9 @@ async fn half_bridge(
     let mut received = 0; // Count of messages received by this half-bridge
     let mut published = 0; // Count of messages published (by the companion)
     let mut acknowledged = 0; // Count of messages acknowledged (by the MQTT end-point of the companion)
+
+    let mut session_present: Option<bool> = None;
+    let mut pending = Vec::new();
 
     loop {
         let res = recv_event_loop.poll().await;
@@ -468,6 +472,11 @@ async fn half_bridge(
                     info!("Waiting {time:?} until attempting reconnection to {name} broker");
                 }
                 tokio::time::sleep(time).await;
+                if session_present.map_or(true, |session_present| !session_present) {
+                    let msgs = recv_event_loop.take_pending();
+                    debug!("Extending pending with: {msgs:?}");
+                    pending.extend(msgs);
+                }
                 continue;
             }
         };
@@ -479,13 +488,24 @@ async fn half_bridge(
         );
 
         match notification {
-            Event::Incoming(Incoming::ConnAck(_)) => {
+            Event::Incoming(Incoming::ConnAck(conn_ack)) => {
                 info!("Bridge {name} connection subscribing to {topics:?}");
-                let recv_client = recv_client.clone();
-                let topics = topics.clone();
-                // We have to subscribe to this asynchronously (i.e. in a task) since we might at
-                // this point have filled our cloud event loop with outgoing messages
-                tokio::spawn(async move { recv_client.subscribe_many(topics).await.unwrap() });
+                {
+                    let recv_client = recv_client.clone();
+                    let topics = topics.clone();
+                    // We have to subscribe to this asynchronously (i.e. in a task) since we might at
+                    // this point have filled our cloud event loop with outgoing messages
+                    tokio::spawn(async move { recv_client.subscribe_many(topics).await.unwrap() });
+                }
+
+                session_present = Some(conn_ack.session_present);
+
+                if !conn_ack.session_present {
+                    // Republish any outstanding messages
+                    let msgs = std::mem::take(&mut pending);
+                    debug!("Setting pending messages to {msgs:?}");
+                    recv_event_loop.set_pending(msgs);
+                }
             }
 
             // Forward messages from event loop to target
@@ -517,7 +537,7 @@ async fn half_bridge(
 
             // Keep track of packet IDs so we can acknowledge messages
             Event::Outgoing(Outgoing::Publish(pkid)) => {
-                if let hash_map::Entry::Vacant(e) = forward_pkid_to_received_msg.entry(pkid) {
+                if let btree_map::Entry::Vacant(e) = forward_pkid_to_received_msg.entry(pkid) {
                     match target.recv().await {
                         // A message was forwarded by the other bridge half, note the packet id
                         Some(Some((topic, msg))) => {
@@ -557,12 +577,22 @@ async fn half_bridge(
 #[async_trait::async_trait]
 trait MqttEvents: Send {
     async fn poll(&mut self) -> Result<Event, ConnectionError>;
+    fn take_pending(&mut self) -> VecDeque<Request>;
+    fn set_pending(&mut self, requests: Vec<Request>);
 }
 
 #[async_trait::async_trait]
 impl MqttEvents for EventLoop {
     async fn poll(&mut self) -> Result<Event, ConnectionError> {
         EventLoop::poll(self).await
+    }
+
+    fn take_pending(&mut self) -> VecDeque<Request> {
+        std::mem::take(&mut self.pending)
+    }
+
+    fn set_pending(&mut self, requests: Vec<Request>) {
+        self.pending = requests.into_iter().collect();
     }
 }
 #[async_trait::async_trait]
