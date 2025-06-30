@@ -228,6 +228,12 @@ impl<'a, 'js> IntoJs<'js> for JsonValueRef<'a> {
 
 impl<'js> FromJs<'js> for JsonValue {
     fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
+        JsonValue::from_js_value(value)
+    }
+}
+
+impl JsonValue {
+    fn from_js_value(value: Value<'_>) -> rquickjs::Result<Self> {
         if let Some(b) = value.as_bool() {
             return Ok(JsonValue(serde_json::Value::Bool(b)));
         }
@@ -259,6 +265,11 @@ impl<'js> FromJs<'js> for JsonValue {
         }
 
         Ok(JsonValue(serde_json::Value::Null))
+    }
+
+    pub(crate) fn display(value: Value<'_>) -> String {
+        let json = JsonValue::from_js_value(value).unwrap_or_default();
+        serde_json::to_string_pretty(&json.0).unwrap()
     }
 }
 

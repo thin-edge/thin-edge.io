@@ -70,6 +70,7 @@ export function process (timestamp, message) {
         State.agg_for_topic[topic] = agg_payload
     }
 
+    console.log("average.state", State.agg_for_topic)
     return []
 }
 
@@ -86,9 +87,13 @@ export function tick() {
             else if (v.sum && v.count) {
                 let fragment = { [k]: v.sum / v.count }
                 Object.assign(payload, fragment)
-            } else for (let [sub_k, sub_v] of Object.entries(v)) {
-                let fragment = { [k]: { [sub_k]: sub_v.sum / sub_v.count } }
-                Object.assign(payload, fragment)
+            } else {
+                let fragment = {}
+                for (let [sub_k, sub_v] of Object.entries(v)) {
+                    let sub_fragment = { [sub_k]: sub_v.sum / sub_v.count }
+                    Object.assign(fragment, sub_fragment)
+                }
+                Object.assign(payload, { [k]: fragment })
             }
         }
 
