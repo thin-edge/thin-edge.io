@@ -1,6 +1,6 @@
 // Compute the average value of a series of measurements received during a time windows
 // - Take care of the topic: messages received over different topics are not mixed
-// - Ignore messages which are not formatted as thin-edge JSON
+// - Ignore messages which are not formated as thin-edge JSON
 // - Ignore values which are not numbers
 // - Use the first timestamp as the timestamp for the aggregate
 class State {
