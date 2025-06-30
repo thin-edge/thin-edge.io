@@ -48,6 +48,17 @@ Units are configured using topic metadata
         ...    ${transformed_msg}
         ...    ${expected_msg}
 
+Computing average over a time window
+    ${transformed_msg}    Execute Command
+    ...    cat /etc/tedge/gen-mapper/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge mapping test --final-tick
+    ...    strip=True
+    ${expected_msg}    Execute Command
+    ...    cat /etc/tedge/gen-mapper/average.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
+    ...    strip=True
+    Should Be Equal
+        ...    ${transformed_msg}
+        ...    ${expected_msg}
+
 
 *** Keywords ***
 Custom Setup
