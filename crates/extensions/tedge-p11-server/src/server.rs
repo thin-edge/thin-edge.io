@@ -52,7 +52,7 @@ impl TedgeP11Server {
             Frame1::Error(_)
             | Frame1::ChooseSchemeResponse { .. }
             | Frame1::SignResponse { .. }
-            | Frame1::CreateKeyResponse => {
+            | Frame1::CreateKeyResponse { .. } => {
                 let error = ProtocolError("invalid request".to_string());
                 let _ = connection.write_frame(&Frame1::Error(error));
                 anyhow::bail!("protocol error: invalid request")
@@ -88,7 +88,7 @@ impl TedgeP11Server {
                     .service
                     .create_key(request.uri.as_deref(), request.params);
                 match response {
-                    Ok(_) => Frame1::CreateKeyResponse,
+                    Ok(pubkey_der) => Frame1::CreateKeyResponse(pubkey_der),
                     Err(err) => {
                         let response = Frame1::Error(ProtocolError(format!(
                             "PKCS #11 service failed: {err:#}"
@@ -137,7 +137,11 @@ mod tests {
             Ok(SignResponse(SIGNATURE.to_vec()))
         }
 
-        fn create_key(&self, _uri: Option<&str>, _params: CreateKeyParams) -> anyhow::Result<()> {
+        fn create_key(
+            &self,
+            _uri: Option<&str>,
+            _params: CreateKeyParams,
+        ) -> anyhow::Result<Vec<u8>> {
             todo!()
         }
     }

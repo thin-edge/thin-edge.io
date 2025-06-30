@@ -121,7 +121,11 @@ impl TedgeP11Client {
         Ok(response.0)
     }
 
-    pub fn create_key(&self, uri: Option<String>, params: CreateKeyParams) -> anyhow::Result<()> {
+    pub fn create_key(
+        &self,
+        uri: Option<String>,
+        params: CreateKeyParams,
+    ) -> anyhow::Result<Vec<u8>> {
         let stream = UnixStream::connect(&self.socket_path).with_context(|| {
             format!(
                 "Failed to connect to tedge-p11-server UNIX socket at '{}'",
@@ -137,13 +141,13 @@ impl TedgeP11Client {
 
         let response = connection.read_frame()?;
 
-        let Frame1::CreateKeyResponse = response else {
+        let Frame1::CreateKeyResponse(pubkey_der) = response else {
             bail!("protocol error: bad response, expected create_key, received: {response:?}");
         };
 
         debug!("Sign complete");
 
-        Ok(())
+        Ok(pubkey_der)
     }
 
     fn do_request(&self, request: Frame1) -> anyhow::Result<Frame1> {

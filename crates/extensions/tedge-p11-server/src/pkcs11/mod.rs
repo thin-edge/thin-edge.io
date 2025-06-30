@@ -24,7 +24,7 @@ use cryptoki::object::KeyType;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
-use rand::Fill;
+use rsa::pkcs1::EncodeRsaPublicKey;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
@@ -192,13 +192,18 @@ impl Cryptoki {
         Ok(key)
     }
 
-    pub fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<()> {
+    pub fn create_key(
+        &self,
+        uri: Option<&str>,
+        params: CreateKeyParams,
+    ) -> anyhow::Result<Vec<u8>> {
         let uri_attributes = self.request_uri(uri)?;
         let session = self.open_session(&uri_attributes)?;
 
-        create_key(&session, params).context("Failed to create a new private key")?;
+        let pubkey_der =
+            create_key(&session, params).context("Failed to create a new private key")?;
 
-        Ok(())
+        Ok(pubkey_der)
     }
 
     fn find_key_by_attributes(
@@ -254,7 +259,7 @@ impl Cryptoki {
     }
 }
 
-fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<()> {
+fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<u8>> {
     let (mechanism, attrs_pub, attrs_priv) = match params.key {
         KeyTypeParams::Rsa { bits } => {
             anyhow::ensure!(
@@ -290,15 +295,19 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<()> 
         }
     };
 
-    let mut id = vec![0u8; 20];
-    rand::fill(&mut id[..]);
+    let mut id_pub = vec![0u8; 20];
+    rand::fill(&mut id_pub[..]);
+
+    let mut id_priv = vec![0u8; 20];
+    rand::fill(&mut id_priv[..]);
 
     let mut pub_key_template = attrs_pub;
     pub_key_template.extend_from_slice(&[
-        // Attribute::Token(true),
+        Attribute::Token(true),
         Attribute::Private(false),
         Attribute::Verify(true),
         Attribute::Encrypt(true),
+        Attribute::Id(id_pub),
     ]);
 
     let mut priv_key_template = attrs_priv;
@@ -310,14 +319,58 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<()> 
         Attribute::Sign(true),
         Attribute::Decrypt(true),
         Attribute::Label(params.label.into()),
-        Attribute::Id(id),
+        Attribute::Id(id_priv),
     ]);
 
     trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
-    session
+    let (pub_handle, priv_handle) = session
         .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template)
         .context("Failed to generate keypair")?;
-    Ok(())
+
+    let priv_attrs = session.get_attributes(priv_handle, &[AttributeType::PublicKeyInfo])?;
+    trace!(?priv_attrs);
+
+    // return the public key as PEM
+    let attrs = session.get_attributes(
+        pub_handle,
+        &[
+            AttributeType::PublicKeyInfo,
+            AttributeType::Modulus,
+            AttributeType::PublicExponent,
+        ],
+    )?;
+    trace!(?attrs);
+    let mut attrs = attrs.into_iter();
+
+    let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
+
+    if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+        if !pubkey_der.is_empty() {
+            return Ok(pubkey_der);
+        }
+    }
+
+    debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+
+    let Attribute::Modulus(modulus) = attrs.next().context("Not modulus")? else {
+        anyhow::bail!("Not modulus");
+    };
+    let modulus = rsa::BigUint::from_bytes_be(&modulus);
+
+    let Attribute::PublicExponent(exponent) = attrs.next().context("Not modulus")? else {
+        anyhow::bail!("Not modulus");
+    };
+    let exponent = rsa::BigUint::from_bytes_be(&exponent);
+
+    let pubkey = rsa::RsaPublicKey::new(modulus, exponent)
+        .context("Failed to construct RSA pubkey from compoennts")?;
+
+    let pubkey_der = pubkey
+        .to_pkcs1_der()
+        .context("Failed to serialize pubkey as DER")?
+        .into_vec();
+
+    Ok(pubkey_der)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
