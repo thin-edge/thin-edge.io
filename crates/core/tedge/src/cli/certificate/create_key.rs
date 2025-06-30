@@ -38,8 +38,13 @@ impl Command for CreateKeyCmd {
             token: None,
             label: self.label.clone(),
         };
-        pkcs11client.create_key(None, params)?;
+        let pubkey_der = pkcs11client.create_key(None, params)?;
+        let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+        let pubkey_pem = pem::encode(&pubkey_pem);
+
         eprintln!("New keypair was successfully created.");
+        eprintln!("Public key:\n{pubkey_pem}\n");
+
         Ok(())
     }
 }

@@ -14,7 +14,8 @@ use tracing::warn;
 pub trait SigningService {
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse>;
     fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse>;
-    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<()>;
+    /// Generate a new keypair, saving the private key on the token and returning the public key as BER.
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<Vec<u8>>;
 }
 
 #[derive(Debug)]
@@ -80,9 +81,9 @@ impl SigningService for TedgeP11Service {
     }
 
     #[instrument(skip_all)]
-    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<()> {
-        self.cryptoki.create_key(uri, params)?;
-        Ok(())
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<Vec<u8>> {
+        let pubkey_der = self.cryptoki.create_key(uri, params)?;
+        Ok(pubkey_der)
     }
 }
 

@@ -32,7 +32,7 @@ mime_guess = { workspace = true }
 mqtt_channel = { workspace = true }
 nix = { workspace = true }
 pad = { workspace = true }
-pem = { workspace = true }
+pem.workspace = true
 rasn = { workspace = true }
 rasn-cms = { workspace = true }
 reqwest = { workspace = true, features = [
