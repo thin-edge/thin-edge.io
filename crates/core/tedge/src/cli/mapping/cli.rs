@@ -108,4 +108,19 @@ impl TEdgeMappingCli {
                 )
             })
     }
+
+    pub async fn load_filter(
+        mapping_dir: &PathBuf,
+        path: &PathBuf,
+    ) -> Result<MessageProcessor, Error> {
+        if let Some("toml") = path.extension().and_then(|s| s.to_str()) {
+            MessageProcessor::try_new_single_pipeline(mapping_dir, path)
+                .await
+                .with_context(|| format!("loading pipeline {pipeline}", pipeline = path.display()))
+        } else {
+            MessageProcessor::try_new_single_filter(mapping_dir, path)
+                .await
+                .with_context(|| format!("loading filter {filter}", filter = path.display()))
+        }
+    }
 }

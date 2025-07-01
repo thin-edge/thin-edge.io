@@ -1,5 +1,0 @@
-input_topics = ["test/average/#"]
-
-stages = [
-    { filter = "average.js", tick_every_seconds = 1 },
-]

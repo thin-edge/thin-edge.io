@@ -45,6 +45,20 @@ pub enum ConfigError {
 }
 
 impl PipelineConfig {
+    pub fn from_filter(filter: Utf8PathBuf) -> Self {
+        let input_topic = "#".to_string();
+        let stage = StageConfig {
+            filter: FilterSpec::JavaScript(filter),
+            config: None,
+            tick_every_seconds: 1,
+            meta_topics: vec![],
+        };
+        Self {
+            input_topics: vec![input_topic],
+            stages: vec![stage],
+        }
+    }
+
     pub fn compile(
         self,
         js_runtime: &JsRuntime,
@@ -69,6 +83,7 @@ impl StageConfig {
     pub fn compile(self, _js_runtime: &JsRuntime, config_dir: &Path) -> Result<Stage, ConfigError> {
         let path = match self.filter {
             FilterSpec::JavaScript(path) if path.is_absolute() => path.into(),
+            FilterSpec::JavaScript(path) if path.starts_with(config_dir) => path.into(),
             FilterSpec::JavaScript(path) => config_dir.join(path),
         };
         let filter = JsFilter::new(path)
