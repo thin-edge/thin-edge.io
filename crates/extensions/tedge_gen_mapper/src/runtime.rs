@@ -32,8 +32,8 @@ impl MessageProcessor {
         let config_dir = config_dir.as_ref().to_owned();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut pipeline_specs = PipelineSpecs::default();
-        pipeline_specs.load(&mut js_runtime, &config_dir).await;
-        let pipelines = pipeline_specs.compile(&js_runtime, &config_dir);
+        pipeline_specs.load(&config_dir).await;
+        let pipelines = pipeline_specs.compile(&mut js_runtime, &config_dir).await;
 
         Ok(MessageProcessor {
             config_dir,
@@ -50,10 +50,8 @@ impl MessageProcessor {
         let pipeline = pipeline.as_ref().to_owned();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut pipeline_specs = PipelineSpecs::default();
-        pipeline_specs
-            .load_single_pipeline(&mut js_runtime, &config_dir, &pipeline)
-            .await;
-        let pipelines = pipeline_specs.compile(&js_runtime, &config_dir);
+        pipeline_specs.load_single_pipeline(&pipeline).await;
+        let pipelines = pipeline_specs.compile(&mut js_runtime, &config_dir).await;
         Ok(MessageProcessor {
             config_dir,
             pipelines,
@@ -68,10 +66,8 @@ impl MessageProcessor {
         let config_dir = config_dir.as_ref().to_owned();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut pipeline_specs = PipelineSpecs::default();
-        pipeline_specs
-            .load_single_filter(&mut js_runtime, &filter)
-            .await;
-        let pipelines = pipeline_specs.compile(&js_runtime, &config_dir);
+        pipeline_specs.load_single_filter(&filter).await;
+        let pipelines = pipeline_specs.compile(&mut js_runtime, &config_dir).await;
         Ok(MessageProcessor {
             config_dir,
             pipelines,
@@ -116,22 +112,15 @@ impl MessageProcessor {
         self.js_runtime.dump_memory_stats().await;
     }
 
-    pub async fn add_filter(&mut self, path: Utf8PathBuf) {
-        match self.js_runtime.load_file(&path).await {
-            Ok(()) => {
-                info!(target: "gen-mapper", "Loaded filter {path}");
-            }
-            Err(e) => {
-                error!(target: "gen-mapper", "Failed to load filter {path}: {e}");
-            }
-        }
-    }
-
     pub async fn reload_filter(&mut self, path: Utf8PathBuf) {
         for pipeline in self.pipelines.values_mut() {
             for stage in &mut pipeline.stages {
                 if stage.filter.path() == path {
-                    match self.js_runtime.load_file(&path).await {
+                    match self
+                        .js_runtime
+                        .load_file(stage.filter.module_name(), &path)
+                        .await
+                    {
                         Ok(()) => {
                             info!(target: "gen-mapper", "Reloaded filter {path}");
                         }
@@ -168,7 +157,10 @@ impl MessageProcessor {
                 return false;
             }
         };
-        match config.compile(&self.js_runtime, &self.config_dir, path.clone()) {
+        match config
+            .compile(&mut self.js_runtime, &self.config_dir, path.clone())
+            .await
+        {
             Ok(pipeline) => {
                 self.pipelines.insert(pipeline_id, pipeline);
                 true
@@ -211,7 +203,7 @@ struct PipelineSpecs {
 }
 
 impl PipelineSpecs {
-    pub async fn load(&mut self, js_runtime: &mut JsRuntime, config_dir: &PathBuf) {
+    pub async fn load(&mut self, config_dir: &PathBuf) {
         let Ok(mut entries) = read_dir(config_dir).await.map_err(|err|
             error!(target: "MAPPING", "Failed to read filters from {}: {err}", config_dir.display())
         ) else {
@@ -225,21 +217,10 @@ impl PipelineSpecs {
             };
             if let Ok(file_type) = entry.file_type().await {
                 if file_type.is_file() {
-                    match path.extension() {
-                        Some("toml") => {
-                            info!(target: "MAPPING", "Loading pipeline: {path}");
-                            if let Err(err) = self.load_pipeline(path).await {
-                                error!(target: "MAPPING", "Failed to load pipeline: {err}");
-                            }
-                        }
-                        Some("js") | Some("ts") => {
-                            info!(target: "MAPPING", "Loading filter: {path}");
-                            if let Err(err) = self.load_filter(js_runtime, path).await {
-                                error!(target: "MAPPING", "Failed to load filter: {err}");
-                            }
-                        }
-                        _ => {
-                            info!(target: "MAPPING", "Skipping file which type is unknown: {path}");
+                    if let Some("toml") = path.extension() {
+                        info!(target: "MAPPING", "Loading pipeline: {path}");
+                        if let Err(err) = self.load_pipeline(path).await {
+                            error!(target: "MAPPING", "Failed to load pipeline: {err}");
                         }
                     }
                 }
@@ -247,61 +228,22 @@ impl PipelineSpecs {
         }
     }
 
-    pub async fn load_single_pipeline(
-        &mut self,
-        js_runtime: &mut JsRuntime,
-        config_dir: &PathBuf,
-        pipeline: &Path,
-    ) {
+    pub async fn load_single_pipeline(&mut self, pipeline: &Path) {
         let Some(path) = Utf8Path::from_path(pipeline).map(|p| p.to_path_buf()) else {
             error!(target: "MAPPING", "Skipping non UTF8 path: {}", pipeline.display());
             return;
         };
         if let Err(err) = self.load_pipeline(&path).await {
             error!(target: "MAPPING", "Failed to load pipeline {path}: {err}");
-            return;
-        }
-
-        let Ok(mut entries) = read_dir(config_dir).await.map_err(|err|
-            error!(target: "MAPPING", "Failed to read filters from {}: {err}", config_dir.display())
-        ) else {
-            return;
-        };
-
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let Some(path) = Utf8Path::from_path(&entry.path()).map(|p| p.to_path_buf()) else {
-                error!(target: "MAPPING", "Skipping non UTF8 path: {}", entry.path().display());
-                continue;
-            };
-            if let Ok(file_type) = entry.file_type().await {
-                if file_type.is_file() {
-                    match path.extension() {
-                        Some("js") | Some("ts") => {
-                            info!(target: "MAPPING", "Loading filter: {path}");
-                            if let Err(err) = self.load_filter(js_runtime, path).await {
-                                error!(target: "MAPPING", "Failed to load filter: {err}");
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
         }
     }
 
-    pub async fn load_single_filter(
-        &mut self,
-        js_runtime: &mut JsRuntime,
-        filter: impl AsRef<Path>,
-    ) {
+    pub async fn load_single_filter(&mut self, filter: impl AsRef<Path>) {
         let filter = filter.as_ref();
         let Some(path) = Utf8Path::from_path(filter).map(|p| p.to_path_buf()) else {
             error!(target: "MAPPING", "Skipping non UTF8 path: {}", filter.display());
             return;
         };
-        if let Err(err) = js_runtime.load_file(&path).await {
-            error!(target: "MAPPING", "Failed to load filter {path}: {err}");
-        }
         let pipeline_id = MessageProcessor::pipeline_id(&path);
         let pipeline = PipelineConfig::from_filter(path.to_owned());
         self.pipeline_specs
@@ -319,19 +261,14 @@ impl PipelineSpecs {
         Ok(())
     }
 
-    async fn load_filter(
-        &mut self,
+    async fn compile(
+        mut self,
         js_runtime: &mut JsRuntime,
-        file: impl AsRef<Path>,
-    ) -> Result<(), LoadError> {
-        js_runtime.load_file(file).await?;
-        Ok(())
-    }
-
-    fn compile(mut self, js_runtime: &JsRuntime, config_dir: &Path) -> HashMap<String, Pipeline> {
+        config_dir: &Path,
+    ) -> HashMap<String, Pipeline> {
         let mut pipelines = HashMap::new();
         for (name, (source, specs)) in self.pipeline_specs.drain() {
-            match specs.compile(js_runtime, config_dir, source) {
+            match specs.compile(js_runtime, config_dir, source).await {
                 Ok(pipeline) => {
                     let _ = pipelines.insert(name, pipeline);
                 }

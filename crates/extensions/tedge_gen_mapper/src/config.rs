@@ -3,9 +3,11 @@ use crate::js_runtime::JsRuntime;
 use crate::pipeline::Pipeline;
 use crate::pipeline::Stage;
 use crate::LoadError;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde_json::Value;
+use std::fmt::Debug;
 use std::path::Path;
 use tedge_mqtt_ext::TopicFilter;
 
@@ -59,20 +61,24 @@ impl PipelineConfig {
         }
     }
 
-    pub fn compile(
+    pub async fn compile(
         self,
-        js_runtime: &JsRuntime,
+        js_runtime: &mut JsRuntime,
         config_dir: &Path,
         source: Utf8PathBuf,
     ) -> Result<Pipeline, ConfigError> {
-        let input = topic_filters(&self.input_topics)?;
-        let stages = self
-            .stages
-            .into_iter()
-            .map(|stage| stage.compile(js_runtime, config_dir))
-            .collect::<Result<Vec<_>, _>>()?;
+        let input_topics = topic_filters(&self.input_topics)?;
+        let mut stages = vec![];
+        for (i, stage) in self.stages.into_iter().enumerate() {
+            let stage = stage.compile(config_dir, i, &source).await?;
+            let filter = &stage.filter;
+            js_runtime
+                .load_file(filter.module_name(), filter.path())
+                .await?;
+            stages.push(stage);
+        }
         Ok(Pipeline {
-            input_topics: input,
+            input_topics,
             stages,
             source,
         })
@@ -80,13 +86,18 @@ impl PipelineConfig {
 }
 
 impl StageConfig {
-    pub fn compile(self, _js_runtime: &JsRuntime, config_dir: &Path) -> Result<Stage, ConfigError> {
+    pub async fn compile(
+        self,
+        config_dir: &Path,
+        index: usize,
+        pipeline: &Utf8Path,
+    ) -> Result<Stage, ConfigError> {
         let path = match self.filter {
             FilterSpec::JavaScript(path) if path.is_absolute() => path.into(),
             FilterSpec::JavaScript(path) if path.starts_with(config_dir) => path.into(),
             FilterSpec::JavaScript(path) => config_dir.join(path),
         };
-        let filter = JsFilter::new(path)
+        let filter = JsFilter::new(pipeline.to_owned().into(), index, path)
             .with_config(self.config)
             .with_tick_every_seconds(self.tick_every_seconds);
         let config_topics = topic_filters(&self.meta_topics)?;

@@ -61,9 +61,7 @@ impl Actor for GenMapper {
                             let Ok(path) = Utf8PathBuf::try_from(path) else {
                                 continue;
                             };
-                            if matches!(path.extension(), Some("js" | "ts")) {
-                                self.processor.add_filter(path).await;
-                            } else if path.extension() == Some("toml") {
+                            if matches!(path.extension(), Some("toml")) {
                                 self.processor.add_pipeline(path).await;
                                 self.send_updated_subscriptions().await?;
                             }
