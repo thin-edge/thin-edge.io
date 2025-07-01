@@ -42,6 +42,43 @@ impl MessageProcessor {
         })
     }
 
+    pub async fn try_new_single_pipeline(
+        config_dir: impl AsRef<Path>,
+        pipeline: impl AsRef<Path>,
+    ) -> Result<Self, LoadError> {
+        let config_dir = config_dir.as_ref().to_owned();
+        let pipeline = pipeline.as_ref().to_owned();
+        let mut js_runtime = JsRuntime::try_new().await?;
+        let mut pipeline_specs = PipelineSpecs::default();
+        pipeline_specs
+            .load_single_pipeline(&mut js_runtime, &config_dir, &pipeline)
+            .await;
+        let pipelines = pipeline_specs.compile(&js_runtime, &config_dir);
+        Ok(MessageProcessor {
+            config_dir,
+            pipelines,
+            js_runtime,
+        })
+    }
+
+    pub async fn try_new_single_filter(
+        config_dir: impl AsRef<Path>,
+        filter: impl AsRef<Path>,
+    ) -> Result<Self, LoadError> {
+        let config_dir = config_dir.as_ref().to_owned();
+        let mut js_runtime = JsRuntime::try_new().await?;
+        let mut pipeline_specs = PipelineSpecs::default();
+        pipeline_specs
+            .load_single_filter(&mut js_runtime, &filter)
+            .await;
+        let pipelines = pipeline_specs.compile(&js_runtime, &config_dir);
+        Ok(MessageProcessor {
+            config_dir,
+            pipelines,
+            js_runtime,
+        })
+    }
+
     pub fn subscriptions(&self) -> TopicFilter {
         let mut topics = TopicFilter::empty();
         for pipeline in self.pipelines.values() {
@@ -63,19 +100,6 @@ impl MessageProcessor {
         out_messages
     }
 
-    pub async fn process_with_pipeline(
-        &mut self,
-        pipeline_id: &String,
-        timestamp: &DateTime,
-        message: &Message,
-    ) -> Result<Vec<Message>, FilterError> {
-        let pipeline = self
-            .pipelines
-            .get_mut(pipeline_id)
-            .ok_or_else(|| anyhow::anyhow!("No such pipeline: {pipeline_id}"))?;
-        pipeline.process(&self.js_runtime, timestamp, message).await
-    }
-
     pub async fn tick(
         &mut self,
         timestamp: &DateTime,
@@ -86,18 +110,6 @@ impl MessageProcessor {
             out_messages.push((pipeline_id.clone(), pipeline_output));
         }
         out_messages
-    }
-
-    pub async fn tick_with_pipeline(
-        &mut self,
-        pipeline_id: &String,
-        timestamp: &DateTime,
-    ) -> Result<Vec<Message>, FilterError> {
-        let pipeline = self
-            .pipelines
-            .get_mut(pipeline_id)
-            .ok_or_else(|| anyhow::anyhow!("No such pipeline: {pipeline_id}"))?;
-        pipeline.tick(&self.js_runtime, timestamp).await
     }
 
     pub async fn dump_memory_stats(&self) {
@@ -235,10 +247,71 @@ impl PipelineSpecs {
         }
     }
 
+    pub async fn load_single_pipeline(
+        &mut self,
+        js_runtime: &mut JsRuntime,
+        config_dir: &PathBuf,
+        pipeline: &Path,
+    ) {
+        let Some(path) = Utf8Path::from_path(pipeline).map(|p| p.to_path_buf()) else {
+            error!(target: "MAPPING", "Skipping non UTF8 path: {}", pipeline.display());
+            return;
+        };
+        if let Err(err) = self.load_pipeline(&path).await {
+            error!(target: "MAPPING", "Failed to load pipeline {path}: {err}");
+            return;
+        }
+
+        let Ok(mut entries) = read_dir(config_dir).await.map_err(|err|
+            error!(target: "MAPPING", "Failed to read filters from {}: {err}", config_dir.display())
+        ) else {
+            return;
+        };
+
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let Some(path) = Utf8Path::from_path(&entry.path()).map(|p| p.to_path_buf()) else {
+                error!(target: "MAPPING", "Skipping non UTF8 path: {}", entry.path().display());
+                continue;
+            };
+            if let Ok(file_type) = entry.file_type().await {
+                if file_type.is_file() {
+                    match path.extension() {
+                        Some("js") | Some("ts") => {
+                            info!(target: "MAPPING", "Loading filter: {path}");
+                            if let Err(err) = self.load_filter(js_runtime, path).await {
+                                error!(target: "MAPPING", "Failed to load filter: {err}");
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn load_single_filter(
+        &mut self,
+        js_runtime: &mut JsRuntime,
+        filter: impl AsRef<Path>,
+    ) {
+        let filter = filter.as_ref();
+        let Some(path) = Utf8Path::from_path(filter).map(|p| p.to_path_buf()) else {
+            error!(target: "MAPPING", "Skipping non UTF8 path: {}", filter.display());
+            return;
+        };
+        if let Err(err) = js_runtime.load_file(&path).await {
+            error!(target: "MAPPING", "Failed to load filter {path}: {err}");
+        }
+        let pipeline_id = MessageProcessor::pipeline_id(&path);
+        let pipeline = PipelineConfig::from_filter(path.to_owned());
+        self.pipeline_specs
+            .insert(pipeline_id, (path.to_owned(), pipeline));
+    }
+
     async fn load_pipeline(&mut self, file: impl AsRef<Utf8Path>) -> Result<(), LoadError> {
         let path = file.as_ref();
         let pipeline_id = MessageProcessor::pipeline_id(path);
-        let specs = read_to_string(file.as_ref()).await?;
+        let specs = read_to_string(path).await?;
         let pipeline: PipelineConfig = toml::from_str(&specs)?;
         self.pipeline_specs
             .insert(pipeline_id, (path.to_owned(), pipeline));
@@ -249,9 +322,9 @@ impl PipelineSpecs {
     async fn load_filter(
         &mut self,
         js_runtime: &mut JsRuntime,
-        file: impl AsRef<Utf8Path>,
+        file: impl AsRef<Path>,
     ) -> Result<(), LoadError> {
-        js_runtime.load_file(file.as_ref()).await?;
+        js_runtime.load_file(file).await?;
         Ok(())
     }
 

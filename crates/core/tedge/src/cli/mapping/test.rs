@@ -27,7 +27,10 @@ impl Command for TestCommand {
     }
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
-        let mut processor = TEdgeMappingCli::load_pipelines(&self.mapping_dir).await?;
+        let mut processor = match &self.filter {
+            None => TEdgeMappingCli::load_pipelines(&self.mapping_dir).await?,
+            Some(filter) => TEdgeMappingCli::load_filter(&self.mapping_dir, filter).await?,
+        };
         if let Some(message) = &self.message {
             let timestamp = DateTime::now();
             self.process(&mut processor, message, &timestamp).await;
@@ -53,37 +56,21 @@ impl TestCommand {
         message: &Message,
         timestamp: &DateTime,
     ) {
-        match &self.filter {
-            Some(filter) => {
-                let filter_name = filter.display().to_string();
-                print(
-                    processor
-                        .process_with_pipeline(&filter_name, timestamp, message)
-                        .await,
-                )
-            }
-            None => processor
-                .process(timestamp, message)
-                .await
-                .into_iter()
-                .map(|(_, v)| v)
-                .for_each(print),
-        }
+        processor
+            .process(timestamp, message)
+            .await
+            .into_iter()
+            .map(|(_, v)| v)
+            .for_each(print)
     }
 
     async fn tick(&self, processor: &mut MessageProcessor, timestamp: &DateTime) {
-        match &self.filter {
-            Some(filter) => {
-                let filter_name = filter.display().to_string();
-                print(processor.tick_with_pipeline(&filter_name, timestamp).await)
-            }
-            None => processor
-                .tick(timestamp)
-                .await
-                .into_iter()
-                .map(|(_, v)| v)
-                .for_each(print),
-        }
+        processor
+            .tick(timestamp)
+            .await
+            .into_iter()
+            .map(|(_, v)| v)
+            .for_each(print)
     }
 }
 
