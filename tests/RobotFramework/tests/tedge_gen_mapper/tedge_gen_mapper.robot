@@ -59,6 +59,17 @@ Computing average over a time window
         ...    ${transformed_msg}
         ...    ${expected_msg}
 
+Each instance of a script must have its own static state
+    ${transformed_msg}    Execute Command
+    ...    cat /etc/tedge/gen-mapper/count-messages.samples | awk '{ print $2 }' FS\='INPUT:' | tedge mapping test --final-tick | sort
+    ...    strip=True
+    ${expected_msg}    Execute Command
+    ...    cat /etc/tedge/gen-mapper/count-messages.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: ' | sort
+    ...    strip=True
+    Should Be Equal
+        ...    ${transformed_msg}
+        ...    ${expected_msg}
+
 
 *** Keywords ***
 Custom Setup
