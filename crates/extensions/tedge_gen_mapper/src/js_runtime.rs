@@ -23,20 +23,22 @@ impl JsRuntime {
         Ok(JsRuntime { runtime, worker })
     }
 
-    pub async fn load_file(&mut self, path: impl AsRef<Path>) -> Result<(), LoadError> {
+    pub async fn load_file(
+        &mut self,
+        module_name: String,
+        path: impl AsRef<Path>,
+    ) -> Result<(), LoadError> {
         let path = path.as_ref();
         let source = tokio::fs::read_to_string(path).await?;
-        self.load_js(path, source).await
+        self.load_js(module_name, source).await
     }
 
     pub async fn load_js(
         &mut self,
-        path: impl AsRef<Path>,
+        name: String,
         source: impl Into<Vec<u8>>,
     ) -> Result<(), LoadError> {
         let (sender, receiver) = oneshot::channel();
-        let path = path.as_ref().to_path_buf();
-        let name = path.display().to_string();
         let source = source.into();
         self.worker
             .send(JsRequest::LoadModule {
@@ -51,14 +53,14 @@ impl JsRuntime {
 
     pub async fn call_function(
         &self,
-        module: &Path,
+        module: &str,
         function: &str,
         args: Vec<JsonValue>,
     ) -> Result<JsonValue, LoadError> {
         let (sender, receiver) = oneshot::channel();
         self.worker
             .send(JsRequest::CallFunction {
-                module: module.display().to_string(),
+                module: module.to_string(),
                 function: function.to_string(),
                 args,
                 sender,

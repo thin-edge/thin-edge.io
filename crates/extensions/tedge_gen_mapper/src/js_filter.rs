@@ -14,6 +14,7 @@ use tracing::debug;
 
 #[derive(Clone)]
 pub struct JsFilter {
+    pub module_name: String,
     pub path: PathBuf,
     pub config: JsonValue,
     pub tick_every_seconds: u64,
@@ -23,8 +24,10 @@ pub struct JsFilter {
 pub struct JsonValue(serde_json::Value);
 
 impl JsFilter {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(pipeline: PathBuf, index: usize, path: PathBuf) -> Self {
+        let module_name = format!("{}|{}|{}", pipeline.display(), index, path.display());
         JsFilter {
+            module_name,
             path,
             config: JsonValue::default(),
             tick_every_seconds: 0,
@@ -32,7 +35,7 @@ impl JsFilter {
     }
 
     pub fn module_name(&self) -> String {
-        self.path.display().to_string()
+        self.module_name.to_owned()
     }
 
     pub fn with_config(self, config: Option<serde_json::Value>) -> Self {
@@ -77,7 +80,7 @@ impl JsFilter {
             message.clone().into(),
             self.config.clone(),
         ];
-        js.call_function(&self.path, "process", input)
+        js.call_function(&self.module_name(), "process", input)
             .await
             .map_err(pipeline::error_from_js)?
             .try_into()
@@ -98,7 +101,7 @@ impl JsFilter {
         debug!(target: "MAPPING", "{}: update_config({message:?})", self.module_name());
         let input = vec![message.clone().into(), self.config.clone()];
         let config = js
-            .call_function(&self.path, "update_config", input)
+            .call_function(&self.module_name(), "update_config", input)
             .await
             .map_err(pipeline::error_from_js)?;
         self.config = config;
@@ -122,7 +125,7 @@ impl JsFilter {
         }
         debug!(target: "MAPPING", "{}: tick({timestamp:?})", self.module_name());
         let input = vec![timestamp.clone().into(), self.config.clone()];
-        js.call_function(&self.path, "tick", input)
+        js.call_function(&self.module_name(), "tick", input)
             .await
             .map_err(pipeline::error_from_js)?
             .try_into()
@@ -281,8 +284,8 @@ mod tests {
     async fn identity_filter() {
         let script = "export function process(t,msg) { return [msg]; };";
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        runtime.load_js("id.js", script).await.unwrap();
-        let filter = JsFilter::new("id.js".into());
+        let filter = JsFilter::new("id.toml".into(), 1, "id.js".into());
+        runtime.load_js(filter.module_name(), script).await.unwrap();
 
         let input = Message::new("te/main/device///m/", "hello world");
         let output = input.clone();
@@ -299,8 +302,8 @@ mod tests {
     async fn error_filter() {
         let script = r#"export function process(t,msg) { throw new Error("Cannot process that message"); };"#;
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        runtime.load_js("err.js", script).await.unwrap();
-        let filter = JsFilter::new("err.js".into());
+        let filter = JsFilter::new("err.toml".into(), 1, "err.js".into());
+        runtime.load_js(filter.module_name(), script).await.unwrap();
 
         let input = Message::new("te/main/device///m/", "hello world");
         let error = filter
@@ -335,8 +338,8 @@ export function process (timestamp, message, config) {
 }
         "#;
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        runtime.load_js("collectd.js", script).await.unwrap();
-        let filter = JsFilter::new("collectd.js".into());
+        let filter = JsFilter::new("collectd.toml".into(), 1, "collectd.js".into());
+        runtime.load_js(filter.module_name(), script).await.unwrap();
 
         let input = Message::new(
             "collectd/h/memory/percent-used",
