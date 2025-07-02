@@ -160,7 +160,7 @@ impl TEdgeConfig {
         cloud: &dyn CloudConfig,
     ) -> anyhow::Result<MqttAuthConfigCloudBroker> {
         // if client cert is set, then either cryptoki or key file must be set
-        let client_auth = match self.device.cryptoki_config(cloud)? {
+        let client_auth = match self.device.cryptoki_config(Some(cloud))? {
             Some(cryptoki_config) => MqttAuthClientConfigCloudBroker {
                 cert_file: cloud.device_cert_path().to_path_buf(),
                 private_key: PrivateKeyType::Cryptoki(cryptoki_config),
@@ -213,12 +213,19 @@ impl TEdgeConfig {
 }
 
 impl TEdgeConfigReaderDevice {
+    /// Returns the cryptoki configuration.
+    ///
+    /// - `Err` if config doesn't fit schema (e.g. set to module but module_path not set)
+    /// - `Ok(None)` if mode set to `off`
+    /// - `Ok(Some(CryptokiConfig))` for mode `socket` or `module`
     pub fn cryptoki_config(
         &self,
-        cloud: &dyn CloudConfig,
+        cloud: Option<&dyn CloudConfig>,
     ) -> Result<Option<CryptokiConfig>, anyhow::Error> {
         let cryptoki = &self.cryptoki;
-        let uri = cloud.key_uri().or(self.key_uri.or_none().cloned());
+        let uri = cloud
+            .and_then(|c| c.key_uri().or(self.key_uri.or_none().cloned()))
+            .or(self.key_uri.or_none().cloned());
         match cryptoki.mode {
             Cryptoki::Off => Ok(None),
             Cryptoki::Module => Ok(Some(CryptokiConfig::Direct(CryptokiConfigDirect {

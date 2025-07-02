@@ -69,11 +69,7 @@ async fn main() -> anyhow::Result<()> {
                 .context("failed to run tedge apt plugin")?
         }
         TEdgeOptMulticall::Tedge(TEdgeCli { cmd, common }) => {
-            log_init(
-                "tedge",
-                &common.log_args.with_default_level(tracing::Level::WARN),
-                &common.config_dir,
-            )?;
+            log_init("tedge", &common.log_args, &common.config_dir)?;
 
             let tedge_config = tedge_config::TEdgeConfig::load(&common.config_dir).await?;
 

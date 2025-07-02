@@ -4,11 +4,15 @@ use crate::log::MaybeFancy;
 use crate::override_public_key;
 use crate::persist_new_private_key;
 use crate::reuse_private_key;
+use anyhow::Context;
 use camino::Utf8PathBuf;
+use certificate::parse_root_certificate::CryptokiConfig;
 use certificate::CsrTemplate;
 use certificate::KeyCertPair;
 use certificate::KeyKind;
 use tedge_config::TEdgeConfig;
+use tracing::debug;
+use tracing::instrument;
 
 /// Create a certificate signing request (CSR)
 pub struct CreateCsrCmd {
@@ -16,7 +20,10 @@ pub struct CreateCsrCmd {
     pub id: String,
 
     /// The path where the device private key will be stored
-    pub key_path: Utf8PathBuf,
+    pub key: Key,
+
+    /// Path to current certificate
+    pub current_cert: Option<Utf8PathBuf>,
 
     /// The path where the device CSR will be stored
     pub csr_path: Utf8PathBuf,
@@ -27,6 +34,12 @@ pub struct CreateCsrCmd {
 
     /// CSR template
     pub csr_template: CsrTemplate,
+}
+
+#[derive(Debug, Clone)]
+pub enum Key {
+    Local(Utf8PathBuf),
+    Cryptoki(CryptokiConfig),
 }
 
 #[async_trait::async_trait]
@@ -43,27 +56,41 @@ impl Command for CreateCsrCmd {
 }
 
 impl CreateCsrCmd {
+    #[instrument(skip_all)]
     pub async fn create_certificate_signing_request(&self) -> Result<(), CertError> {
         let id = &self.id;
         let csr_path = &self.csr_path;
-        let key_path = &self.key_path;
+        debug!(?id, ?csr_path);
 
-        let previous_key = reuse_private_key(key_path)
-            .await
-            .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?;
+        let previous_key = match &self.key {
+            Key::Local(key_path) => reuse_private_key(key_path)
+                .await
+                .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?,
+
+            Key::Cryptoki(cryptoki) => {
+                let current_cert = self
+                    .current_cert
+                    .clone()
+                    .context("Need an existing cert when using an HSM")?;
+                KeyKind::from_cryptoki_and_existing_cert(cryptoki.clone(), &current_cert)?
+            }
+        };
+        debug!(?previous_key);
 
         let cert =
             KeyCertPair::new_certificate_sign_request(&self.csr_template, id, &previous_key)?;
 
-        if let KeyKind::New = previous_key {
-            persist_new_private_key(
-                key_path,
-                cert.private_key_pem_string()?,
-                &self.user,
-                &self.group,
-            )
-            .await
-            .map_err(|err| err.key_context(key_path.clone()))?;
+        if let Key::Local(key_path) = &self.key {
+            if let KeyKind::New = previous_key {
+                persist_new_private_key(
+                    key_path,
+                    cert.private_key_pem_string()?,
+                    &self.user,
+                    &self.group,
+                )
+                .await
+                .map_err(|err| err.key_context(key_path.clone()))?;
+            }
         }
         override_public_key(csr_path, cert.certificate_signing_request_string()?)
             .await
@@ -89,7 +116,8 @@ mod tests {
 
         let cmd = CreateCsrCmd {
             id: id.to_string(),
-            key_path: key_path.clone(),
+            key: Key::Local(key_path.clone()),
+            current_cert: None,
             csr_path: csr_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
@@ -132,7 +160,8 @@ mod tests {
 
         let cmd = CreateCsrCmd {
             id: id.to_string(),
-            key_path: key_path.clone(),
+            key: Key::Local(key_path.clone()),
+            current_cert: None,
             csr_path: csr_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),

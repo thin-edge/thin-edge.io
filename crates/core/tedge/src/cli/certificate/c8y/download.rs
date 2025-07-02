@@ -1,6 +1,7 @@
 use crate::cli::certificate::c8y::create_device_csr;
 use crate::cli::certificate::c8y::read_csr_from_file;
 use crate::cli::certificate::c8y::store_device_cert;
+use crate::cli::certificate::create_csr::Key;
 use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::error;
@@ -41,7 +42,7 @@ pub struct DownloadCertCmd {
     pub cert_path: Utf8PathBuf,
 
     /// The path where the device private key will be stored
-    pub key_path: Utf8PathBuf,
+    pub key: Key,
 
     /// The path where the device CSR file will be stored
     pub csr_path: Utf8PathBuf,
@@ -83,7 +84,8 @@ impl DownloadCertCmd {
         if self.generate_csr {
             create_device_csr(
                 common_name.clone(),
-                self.key_path.clone(),
+                self.key.clone(),
+                None,
                 self.csr_path.clone(),
                 self.csr_template.clone(),
             )

@@ -104,7 +104,7 @@ impl Command for ConnectCommand {
 
         let cryptoki_key_uri = tedge_config
             .device
-            .cryptoki_config(cloud)?
+            .cryptoki_config(Some(cloud))?
             .map(|c| match c {
                 CryptokiConfig::Direct(d) => d.uri,
                 CryptokiConfig::SocketService { uri, .. } => uri,
