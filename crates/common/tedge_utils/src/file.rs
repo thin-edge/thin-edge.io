@@ -79,6 +79,7 @@ pub async fn create_directory<P: AsRef<Path>>(
 ) -> Result<(), FileError> {
     permissions.create_directory(dir.as_ref()).await
 }
+
 /// Create the directory owned by the user running this API with default directory permissions
 pub async fn create_directory_with_defaults<P: AsRef<Path>>(dir: P) -> Result<(), FileError> {
     create_directory(dir, &PermissionEntry::default()).await
@@ -264,6 +265,27 @@ impl PermissionEntry {
         Ok(())
     }
 
+    pub fn apply_sync(self, path: &Path) -> Result<(), FileError> {
+        match (self.user, self.group) {
+            (Some(user), Some(group)) => {
+                change_user_and_group_sync(path, &user, &group)?;
+            }
+            (Some(user), None) => {
+                change_user_sync(path, &user)?;
+            }
+            (None, Some(group)) => {
+                change_group_sync(path, &group)?;
+            }
+            (None, None) => {}
+        }
+
+        if let Some(mode) = &self.mode {
+            change_mode_sync(path, *mode)?;
+        }
+
+        Ok(())
+    }
+
     async fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
         match dir.parent() {
             None => return Ok(()),
@@ -383,9 +405,9 @@ pub async fn change_user_and_group(
         .unwrap()
 }
 
-pub fn change_user_and_group_sync(file: &Path, user: &str, group: &str) -> Result<(), FileError> {
-    let metadata = get_metadata_sync(file)?;
-    debug!("Changing ownership of file: {file:?} with user: {user} and group: {group}",);
+pub fn change_user_and_group_sync(path: &Path, user: &str, group: &str) -> Result<(), FileError> {
+    let metadata = get_metadata_sync(path)?;
+    debug!("Changing ownership of path: {path:?} with user: {user} and group: {group}",);
     let ud = get_user_by_name(&user)
         .map(|u| u.uid())
         .ok_or_else(|| FileError::UserNotFound {
@@ -405,9 +427,9 @@ pub fn change_user_and_group_sync(file: &Path, user: &str, group: &str) -> Resul
 
     // if user and group are same as existing, then do not change
     if (ud != uid) || (gd != gid) {
-        chown(file, Some(Uid::from_raw(ud)), Some(Gid::from_raw(gd))).map_err(|e| {
+        chown(path, Some(Uid::from_raw(ud)), Some(Gid::from_raw(gd))).map_err(|e| {
             FileError::MetaDataError {
-                name: file.display().to_string(),
+                name: path.display().to_string(),
                 from: e.into(),
             }
         })?;

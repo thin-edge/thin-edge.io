@@ -30,3 +30,4 @@ pub mod bin;
 mod api;
 
 pub use api::CopyOptions;
+pub use api::CreateDirsOptions;
