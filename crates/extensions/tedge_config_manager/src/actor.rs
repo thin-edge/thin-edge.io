@@ -1,3 +1,4 @@
+use anyhow::bail;
 use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
@@ -5,7 +6,6 @@ use camino::Utf8PathBuf;
 use log::error;
 use log::info;
 use serde_json::json;
-use std::io::ErrorKind;
 use std::sync::Arc;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -383,57 +383,62 @@ impl ConfigManagerWorker {
 
         let to = Utf8PathBuf::from(&file_entry.path);
 
-        let permissions = MaybePermissions {
-            uid: file_entry
-                .file_permissions
-                .user
-                .as_ref()
-                .map(|u| {
-                    uzers::get_user_by_name(&u).with_context(|| format!("no such user: '{u}'"))
-                })
-                .transpose()?
-                .map(|u| u.uid()),
-
-            gid: file_entry
-                .file_permissions
-                .group
-                .as_ref()
-                .map(|g| {
-                    uzers::get_group_by_name(&g).with_context(|| format!("no such group: '{g}'"))
-                })
-                .transpose()?
-                .map(|g| g.gid()),
-
-            mode: file_entry.file_permissions.mode,
-        };
+        let file_permissions = MaybePermissions::try_from(&file_entry.file_permissions)?;
+        let parent_permissions = MaybePermissions::try_from(&file_entry.parent_permissions)?;
 
         let src = std::fs::File::open(from)
             .with_context(|| format!("failed to open source temporary file '{from}'"))?;
 
-        let Err(err) = tedge_utils::atomic::write_file_atomic_set_permissions_if_doesnt_exist(
-            src,
-            &to,
-            &permissions,
-        )
-        .with_context(|| format!("failed to deploy config file from '{from}' to '{to}'")) else {
-            return Ok(to);
-        };
+        let mut needs_elevation = false;
+        if let Some(parent) = to.parent() {
+            if !parent.exists() {
+                // Attempt to create all parent directories if the immediate parent is expected to be owned by the current user
+                let uid_matches = parent_permissions.uid == Some(uzers::get_current_uid());
+                let gid_matches = parent_permissions.gid == Some(uzers::get_current_gid());
+                if (parent_permissions.uid.is_none() && parent_permissions.gid.is_none())
+                    || (uid_matches && gid_matches)
+                {
+                    if let Err(err) = std::fs::create_dir_all(parent) {
+                        bail!(
+                            "failed to create parent directories. path: '{parent}', error: '{err}'"
+                        );
+                    }
+                } else {
+                    needs_elevation = true;
+                }
+            }
+        }
 
-        if let Some(io_error) = err.downcast_ref::<std::io::Error>() {
-            if io_error.kind() != ErrorKind::PermissionDenied {
-                return Err(err);
+        if !needs_elevation {
+            match tedge_utils::atomic::write_file_atomic_set_permissions_if_doesnt_exist(
+                src,
+                &to,
+                &file_permissions,
+            ) {
+                Ok(_) => return Ok(to),
+                Err(err) => {
+                    if !err
+                        .downcast_ref::<std::io::Error>()
+                        .is_some_and(|e| e.kind() == std::io::ErrorKind::PermissionDenied)
+                    {
+                        return Err(err);
+                    }
+                }
             }
         }
 
         match self.config.use_tedge_write.clone() {
             TedgeWriteStatus::Disabled => {
-                return Err(err);
+                bail!("writing the file/directory requires elevated permissions, but tedge-write is disabled. path: '{to}'");
             }
 
             TedgeWriteStatus::Enabled { sudo } => {
                 let mode = file_entry.file_permissions.mode;
                 let user = file_entry.file_permissions.user.as_deref();
                 let group = file_entry.file_permissions.group.as_deref();
+                let parent_mode = file_entry.parent_permissions.mode;
+                let parent_user = file_entry.parent_permissions.user.as_deref();
+                let parent_group = file_entry.parent_permissions.group.as_deref();
 
                 let options = CopyOptions {
                     from,
@@ -442,13 +447,15 @@ impl ConfigManagerWorker {
                     mode,
                     user,
                     group,
+                    parent_mode,
+                    parent_user,
+                    parent_group,
                 };
 
                 options.copy()?;
+                Ok(to)
             }
         }
-
-        Ok(to)
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), ChannelError> {

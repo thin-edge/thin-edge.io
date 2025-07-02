@@ -113,6 +113,9 @@ pub struct RawFileEntry {
     user: Option<String>,
     group: Option<String>,
     mode: Option<u32>,
+    parent_user: Option<String>,
+    parent_group: Option<String>,
+    parent_mode: Option<u32>,
 }
 
 #[derive(Debug, Eq, PartialEq, Default, Clone)]
@@ -125,6 +128,7 @@ pub struct FileEntry {
     pub path: String,
     pub config_type: String,
     pub file_permissions: PermissionEntry,
+    pub parent_permissions: PermissionEntry,
 }
 
 impl Hash for FileEntry {
@@ -146,17 +150,29 @@ impl Borrow<str> for FileEntry {
 }
 
 impl FileEntry {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         path: String,
         config_type: String,
         user: Option<String>,
         group: Option<String>,
         mode: Option<u32>,
+        parent_user: Option<String>,
+        parent_group: Option<String>,
+        parent_mode: Option<u32>,
     ) -> Self {
+        let parent_user = parent_user.or_else(|| user.clone());
+        let parent_group = parent_group.or_else(|| group.clone());
+
         Self {
             path,
             config_type,
             file_permissions: PermissionEntry { user, group, mode },
+            parent_permissions: PermissionEntry {
+                user: parent_user,
+                group: parent_group,
+                mode: parent_mode,
+            },
         }
     }
 }
@@ -202,6 +218,9 @@ impl PluginConfig {
             None,
             None,
             None,
+            None,
+            None,
+            None,
         );
         Self {
             files: HashSet::from([file_entry]),
@@ -229,6 +248,9 @@ impl PluginConfig {
                 raw_entry.user,
                 raw_entry.group,
                 raw_entry.mode,
+                raw_entry.parent_user,
+                raw_entry.parent_group,
+                raw_entry.parent_mode,
             );
 
             if !self.files.insert(entry) {

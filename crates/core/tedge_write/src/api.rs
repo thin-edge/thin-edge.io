@@ -28,6 +28,15 @@ pub struct CopyOptions<'a> {
 
     /// Group which will become the new owner of the file.
     pub group: Option<&'a str>,
+
+    /// Permission mode for the immediate directory, in octal form.
+    pub parent_mode: Option<u32>,
+
+    /// User which will become the new owner of the immediate directory.
+    pub parent_user: Option<&'a str>,
+
+    /// Group which will become the new owner of the immediate directory.
+    pub parent_group: Option<&'a str>,
 }
 
 impl CopyOptions<'_> {
@@ -78,6 +87,15 @@ impl CopyOptions<'_> {
         if let Some(group) = self.group {
             command.arg("--group").arg(group);
         }
+        if let Some(mode) = self.parent_mode {
+            command.arg("--parent-mode").arg(format!("{mode:o}"));
+        }
+        if let Some(user) = self.parent_user {
+            command.arg("--parent-user").arg(user);
+        }
+        if let Some(group) = self.parent_group {
+            command.arg("--parent-group").arg(group);
+        }
 
         Ok(command)
     }
@@ -107,6 +125,9 @@ mod tests {
             mode: None,
             user: None,
             group: None,
+            parent_mode: None,
+            parent_user: None,
+            parent_group: None,
         };
 
         // when sudo not in path, start tedge-write without sudo
