@@ -42,3 +42,6 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+# [patch.pem-rfc7468]
+# base64ct = "=1.6"
