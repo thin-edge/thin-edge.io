@@ -7,6 +7,7 @@ use tracing::info;
 use super::connection::Connection;
 use crate::connection::Frame1;
 use crate::connection::ProtocolError;
+use crate::service::SignRequestWithSigScheme;
 use crate::service::SigningService;
 
 pub struct TedgeP11Server {
@@ -70,6 +71,24 @@ impl TedgeP11Server {
                 }
             }
             Frame1::SignRequest(request) => {
+                let sign_request_2 = SignRequestWithSigScheme {
+                    to_sign: request.to_sign,
+                    uri: request.uri,
+                    sigscheme: None,
+                };
+                let response = self.service.sign(sign_request_2);
+                match response {
+                    Ok(response) => Frame1::SignResponse(response),
+                    Err(err) => {
+                        let response = Frame1::Error(ProtocolError(format!(
+                            "PKCS #11 service failed: {err:#}"
+                        )));
+                        connection.write_frame(&response)?;
+                        anyhow::bail!(err);
+                    }
+                }
+            }
+            Frame1::SignRequestWithSigScheme(request) => {
                 let response = self.service.sign(request);
                 match response {
                     Ok(response) => Frame1::SignResponse(response),
@@ -116,7 +135,7 @@ mod tests {
             })
         }
 
-        fn sign(&self, _request: SignRequest) -> anyhow::Result<SignResponse> {
+        fn sign(&self, _request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse> {
             Ok(SignResponse(SIGNATURE.to_vec()))
         }
     }
@@ -138,7 +157,10 @@ mod tests {
         tokio::task::spawn_blocking(move || {
             let client = TedgeP11Client::with_ready_check(socket_path.into());
             assert_eq!(client.choose_scheme(&[], None).unwrap().unwrap(), SCHEME);
-            assert_eq!(&client.sign(&[], None).unwrap(), &SIGNATURE[..]);
+            assert_eq!(
+                &client.sign2(&[], None, SCHEME.into()).unwrap(),
+                &SIGNATURE[..]
+            );
         })
         .await
         .unwrap();
