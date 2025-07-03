@@ -12,6 +12,7 @@ use std::sync::Arc;
 pub struct ReconnectBridgeCommand {
     pub config_dir: Utf8PathBuf,
     pub cloud: Cloud,
+    pub offline_mode: bool,
     pub use_mapper: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
 }
@@ -50,7 +51,7 @@ impl From<&ReconnectBridgeCommand> for ConnectCommand {
         ConnectCommand {
             cloud: reconnect_cmd.cloud.clone(),
             is_test_connection: false,
-            offline_mode: false,
+            offline_mode: reconnect_cmd.offline_mode,
             service_manager: reconnect_cmd.service_manager.clone(),
             is_reconnect: true,
         }
