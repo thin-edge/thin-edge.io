@@ -454,6 +454,11 @@ define_tedge_config! {
             /// will be forwarded to the MQTT service endpoint on the `xyz` topic
             #[tedge_config(example = "c8y-mqtt", default(function = "c8y_mqtt_service_topic_prefix"))]
             topic_prefix: TopicPrefix,
+
+            /// Set of MQTT topics the bridge should subscribe to on the Cumulocity MQTT service endpoint
+            #[tedge_config(example = "incoming/topic,another/topic,test/topic")]
+            #[tedge_config(default(value = "$demo/$error"))]
+            topics: TemplatesSet,
         }
     },
 

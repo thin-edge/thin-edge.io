@@ -222,6 +222,7 @@ pub struct BridgeConfigC8yMqttServiceParams {
     pub profile_name: Option<ProfileName>,
     pub mqtt_schema: MqttSchema,
     pub keepalive_interval: Duration,
+    pub sub_topics: TemplatesSet,
 }
 
 impl TryFrom<(&TEdgeConfig, Option<&ProfileName>)> for BridgeConfigC8yMqttServiceParams {
@@ -274,6 +275,7 @@ impl TryFrom<(&TEdgeConfig, Option<&ProfileName>)> for BridgeConfigC8yMqttServic
             profile_name: profile.cloned(),
             mqtt_schema,
             keepalive_interval: c8y_config.bridge.keepalive_interval.duration(),
+            sub_topics: c8y_config.mqtt_service.topics.clone(),
         };
 
         Ok(params)
@@ -298,6 +300,7 @@ impl From<BridgeConfigC8yMqttServiceParams> for BridgeConfig {
             profile_name,
             mqtt_schema,
             keepalive_interval,
+            sub_topics,
         } = params;
 
         let address = mqtt_host
@@ -305,12 +308,15 @@ impl From<BridgeConfigC8yMqttServiceParams> for BridgeConfig {
             .parse::<HostPort<MQTT_TLS_PORT>>()
             .expect("MQTT service address must be in the expected format");
 
-        let topics: Vec<String> = vec![
+        let mut topics: Vec<String> = vec![
             // Outgoing
             format!(r#"# out 1 {topic_prefix}/"#),
-            // Incoming
-            format!(r#"$debug/$error in 1 {topic_prefix}/"#),
         ];
+
+        // Topics to subscribe to
+        for topic in sub_topics.0.iter() {
+            topics.push(format!(r#"{topic} in 1 {topic_prefix}/"#));
+        }
 
         let auth_type = if remote_password.is_some() {
             AuthType::Basic
@@ -638,6 +644,7 @@ mod tests {
             profile_name: None,
             mqtt_schema: MqttSchema::with_root("te".into()),
             keepalive_interval: Duration::from_secs(45),
+            sub_topics: TemplatesSet::try_from(vec!["test/topic", "demo/topic"])?,
         };
 
         let bridge = BridgeConfig::from(params);
@@ -658,7 +665,8 @@ mod tests {
             use_agent: true,
             topics: vec![
                 "# out 1 c8y-mqtt/".into(),
-                "$debug/$error in 1 c8y-mqtt/".into(),
+                "test/topic in 1 c8y-mqtt/".into(),
+                "demo/topic in 1 c8y-mqtt/".into(),
             ],
             try_private: false,
             start_type: "automatic".into(),
@@ -700,6 +708,7 @@ mod tests {
             profile_name: None,
             mqtt_schema: MqttSchema::with_root("te".into()),
             keepalive_interval: Duration::from_secs(45),
+            sub_topics: TemplatesSet::try_from(vec!["test/topic", "demo/topic"])?,
         };
 
         let bridge = BridgeConfig::from(params);
@@ -720,7 +729,8 @@ mod tests {
             use_agent: true,
             topics: vec![
                 "# out 1 c8y-mqtt/".into(),
-                "$debug/$error in 1 c8y-mqtt/".into(),
+                "test/topic in 1 c8y-mqtt/".into(),
+                "demo/topic in 1 c8y-mqtt/".into(),
             ],
             try_private: false,
             start_type: "automatic".into(),
