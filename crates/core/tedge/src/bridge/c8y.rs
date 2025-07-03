@@ -209,7 +209,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
 pub struct BridgeConfigC8yMqttServiceParams {
     pub mqtt_host: HostPort<MQTT_SVC_TLS_PORT>,
     pub config_file: Cow<'static, str>,
-    pub tenant_id: String,
+    pub tenant_id: Option<String>,
     pub remote_clientid: String,
     pub remote_username: Option<String>,
     pub remote_password: Option<String>,
@@ -251,10 +251,17 @@ impl TryFrom<(&TEdgeConfig, Option<&ProfileName>)> for BridgeConfigC8yMqttServic
         } else {
             "c8y-mqtt-svc-bridge.conf".to_string()
         };
+
+        let tenant_id = if remote_password.is_some() {
+            None
+        } else {
+            Some(c8y_config.tenant_id.or_config_not_set()?.clone())
+        };
+
         let params = BridgeConfigC8yMqttServiceParams {
             mqtt_host: c8y_config.mqtt_service.url.or_config_not_set()?.clone(),
             config_file: config_file.into(),
-            tenant_id: c8y_config.tenant_id.or_config_not_set()?.clone(),
+            tenant_id,
             bridge_root_cert_path: c8y_config.root_cert_path.clone().into(),
             remote_clientid: c8y_config.device.id()?.clone(),
             remote_username,
@@ -313,7 +320,7 @@ impl From<BridgeConfigC8yMqttServiceParams> for BridgeConfig {
 
         // When cert based auth is used, provide the tenant id as the username
         if auth_type == AuthType::Certificate {
-            remote_username = Some(tenant_id.clone());
+            remote_username = tenant_id;
         }
 
         let (include_local_clean_session, mosquitto_version) = match include_local_clean_session {
@@ -405,6 +412,7 @@ pub fn is_mosquitto_version_above_2() -> (bool, Option<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::convert::TryFrom;
 
     #[test]
     fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
@@ -609,6 +617,130 @@ mod tests {
 
         assert_eq!(bridge, expected);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_bridge_config_from_c8y_mqtt_service_params_certificate_auth() -> anyhow::Result<()> {
+        let params = BridgeConfigC8yMqttServiceParams {
+            mqtt_host: HostPort::<MQTT_SVC_TLS_PORT>::try_from("test.test.io").unwrap(),
+            config_file: "c8y-mqtt-svc-bridge.conf".into(),
+            tenant_id: Some("t12345678".into()),
+            remote_clientid: "alpha".into(),
+            remote_username: None,
+            remote_password: None,
+            bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
+            bridge_certfile: "./test-certificate.pem".into(),
+            bridge_keyfile: "./test-private-key.pem".into(),
+            include_local_clean_session: AutoFlag::False,
+            bridge_location: BridgeLocation::Mosquitto,
+            topic_prefix: "c8y-mqtt".try_into().unwrap(),
+            profile_name: None,
+            mqtt_schema: MqttSchema::with_root("te".into()),
+            keepalive_interval: Duration::from_secs(45),
+        };
+
+        let bridge = BridgeConfig::from(params);
+
+        let expected = BridgeConfig {
+            cloud_name: "c8y-mqtt".into(),
+            config_file: "c8y-mqtt-svc-bridge.conf".into(),
+            connection: "edge_to_c8y_mqtt_service".into(),
+            address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:9883")?,
+            remote_username: Some("t12345678".into()),
+            remote_password: None,
+            remote_clientid: "alpha".into(),
+            local_clientid: "CumulocityMqttService".into(),
+            bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
+            bridge_certfile: "./test-certificate.pem".into(),
+            bridge_keyfile: "./test-private-key.pem".into(),
+            use_mapper: true,
+            use_agent: true,
+            topics: vec![
+                "# out 1 c8y-mqtt/".into(),
+                "$debug/$error in 1 c8y-mqtt/".into(),
+            ],
+            try_private: false,
+            start_type: "automatic".into(),
+            clean_session: true,
+            include_local_clean_session: false,
+            local_clean_session: false,
+            notifications: true,
+            notifications_local_only: true,
+            notification_topic: "te/device/main/service/mosquitto-c8y-mqtt-bridge/status/health"
+                .into(),
+            bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
+            connection_check_attempts: 3,
+            auth_type: AuthType::Certificate,
+            mosquitto_version: None,
+            keepalive_interval: Duration::from_secs(45),
+            proxy: None,
+        };
+
+        assert_eq!(bridge, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_bridge_config_from_c8y_mqtt_service_params_basic_auth() -> anyhow::Result<()> {
+        let params = BridgeConfigC8yMqttServiceParams {
+            mqtt_host: HostPort::<MQTT_SVC_TLS_PORT>::try_from("test.test.io")?,
+            config_file: "c8y-mqtt-svc-bridge.conf".into(),
+            tenant_id: None,
+            remote_clientid: "alpha".into(),
+            remote_username: Some("octocat".into()),
+            remote_password: Some("abcd1234".into()),
+            bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
+            bridge_certfile: "./test-certificate.pem".into(),
+            bridge_keyfile: "./test-private-key.pem".into(),
+            include_local_clean_session: AutoFlag::False,
+            bridge_location: BridgeLocation::Mosquitto,
+            topic_prefix: "c8y-mqtt".try_into().unwrap(),
+            profile_name: None,
+            mqtt_schema: MqttSchema::with_root("te".into()),
+            keepalive_interval: Duration::from_secs(45),
+        };
+
+        let bridge = BridgeConfig::from(params);
+
+        let expected = BridgeConfig {
+            cloud_name: "c8y-mqtt".into(),
+            config_file: "c8y-mqtt-svc-bridge.conf".into(),
+            connection: "edge_to_c8y_mqtt_service".into(),
+            address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:9883")?,
+            remote_username: Some("octocat".into()),
+            remote_password: Some("abcd1234".into()),
+            remote_clientid: "alpha".into(),
+            local_clientid: "CumulocityMqttService".into(),
+            bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
+            bridge_certfile: "./test-certificate.pem".into(),
+            bridge_keyfile: "./test-private-key.pem".into(),
+            use_mapper: true,
+            use_agent: true,
+            topics: vec![
+                "# out 1 c8y-mqtt/".into(),
+                "$debug/$error in 1 c8y-mqtt/".into(),
+            ],
+            try_private: false,
+            start_type: "automatic".into(),
+            clean_session: true,
+            include_local_clean_session: false,
+            local_clean_session: false,
+            notifications: true,
+            notifications_local_only: true,
+            notification_topic: "te/device/main/service/mosquitto-c8y-mqtt-bridge/status/health"
+                .into(),
+            bridge_attempt_unsubscribe: false,
+            bridge_location: BridgeLocation::Mosquitto,
+            connection_check_attempts: 3,
+            auth_type: AuthType::Basic,
+            mosquitto_version: None,
+            keepalive_interval: Duration::from_secs(45),
+            proxy: None,
+        };
+
+        assert_eq!(bridge, expected);
         Ok(())
     }
 }
