@@ -207,8 +207,8 @@ impl PartialOrd for RankTopicFilter<'_> {
         }
 
         let mut current_winner = None;
-        let mut self_segs = self.0.split("/");
-        let mut other_segs = other.0.split("/");
+        let mut self_segs = self.0.split('/');
+        let mut other_segs = other.0.split('/');
         loop {
             let self_seg = self_segs.next();
             let other_seg = other_segs.next();
@@ -306,7 +306,7 @@ impl<T: Debug + Eq> TrieNode<T> {
         ord: Option<std::cmp::Ordering>,
     ) -> Vec<String> {
         use std::cmp::Ordering;
-        match topic_suffix.split_once("/") {
+        match topic_suffix.split_once('/') {
             Some(("+", rest)) if ord != Some(Ordering::Less) => {
                 if self.sub_nodes.contains_key("#") {
                     vec!["#".into()]
@@ -399,7 +399,7 @@ impl<T: Debug + Eq> TrieNode<T> {
     }
 
     fn remove(&mut self, topic_suffix: &str, id: &T) -> SubscriptionDiff {
-        match topic_suffix.split_once("/") {
+        match topic_suffix.split_once('/') {
             Some((head, rest)) => {
                 if let Some(target) = self.sub_nodes.get_mut(head) {
                     let diff = target.remove(rest, id);
@@ -491,7 +491,7 @@ impl<T: Debug + Eq> TrieNode<T> {
 
     fn matches<'a>(&'a self, topic_suffix: Option<&str>, nodes: &mut Vec<&'a T>) {
         if let Some(topic) = topic_suffix {
-            let (head, rest) = match topic.split_once("/") {
+            let (head, rest) = match topic.split_once('/') {
                 Some((head, rest)) => (head, Some(rest)),
                 None => (topic, None),
             };
@@ -522,7 +522,7 @@ impl<T: Debug + Eq> TrieNode<T> {
     }
 
     fn insert(&mut self, topic_suffix: &str, subscriber: T) -> SubscriptionDiff {
-        match topic_suffix.split_once("/") {
+        match topic_suffix.split_once('/') {
             Some((head, rest)) => {
                 let overlapping_subscribers = self.subscribed_topics_matching(topic_suffix);
                 let possible_overlapping_subscribers = self.subscribed_topics();
