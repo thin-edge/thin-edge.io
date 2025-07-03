@@ -26,13 +26,25 @@ files = [
   { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
   { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto.conf' },
   { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
-  { path = '/etc/tedge/c8y/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o644 }
+  { path = '/etc/tedge/c8y/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o644 },
+  { path = '/etc/containers/certs.d/example/ca.crt', type = 'harbor-certificate', user = 'tedge', group = 'tedge', mode = 0o640, parent_user = 'root', parent_group = 'root', parent_mode = 0o755 },
 ]
 ```
 
 * `path` is the full path to the configuration file.
 * `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI.
-* `user`, `group` and `mode` are UNIX file permission settings to be used to create a configuration file. If not provided, the files will be created with `root` user. If the file exists already, its ownership will be retained.
+* `user`, `group` and `mode` are UNIX file permission settings to be used to create a configuration file. 
+  If not provided, the files will be created with the current user and group, and, if not feasible, using `root`.
+  If the file exists already, its ownership will be retained.
+* `parent_user`, `parent_group` and `parent_mode` are UNIX file permission settings to be used to create the immediate
+  parent directory of the configuration file. It is recommended to set these values if the parent directories are
+  expected to be missing initially.
+    * If these values are not explicitly provided,
+        * the values from `user` and `group` will be used as a fallback.
+        * if `user` and `group` are also not specified,
+            * the directories will be created with the `root` user if `tedge-write` is enabled.
+            * otherwise, the current system user and group will be used.
+    * If the directories already exist, its existing ownership and permissions will be preserved.
 
 :::note
 The Cumulocity legacy configuration operations (e.g. non file-type operations) will be automatically given the "default" type. This will enable you to configure the file location as you would with any other configuration file.
