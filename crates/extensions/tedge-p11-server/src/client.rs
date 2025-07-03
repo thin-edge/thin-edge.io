@@ -7,6 +7,8 @@ use anyhow::Context;
 use tracing::debug;
 use tracing::trace;
 
+use crate::pkcs11::SigScheme;
+
 use super::connection::Frame1;
 use super::service::ChooseSchemeRequest;
 use super::service::SignRequest;
@@ -122,7 +124,12 @@ impl TedgeP11Client {
         Ok(response.algorithm.0)
     }
 
-    pub fn sign(&self, message: &[u8], uri: Option<String>) -> anyhow::Result<Vec<u8>> {
+    pub fn sign(
+        &self,
+        message: &[u8],
+        sigscheme: SigScheme,
+        uri: Option<String>,
+    ) -> anyhow::Result<Vec<u8>> {
         let stream = UnixStream::connect(&self.socket_path).with_context(|| {
             format!(
                 "Failed to connect to tedge-p11-server UNIX socket at '{}'",
@@ -134,6 +141,7 @@ impl TedgeP11Client {
 
         let request = Frame1::SignRequest(SignRequest {
             to_sign: message.to_vec(),
+            sigscheme,
             uri,
         });
         trace!(?request);

@@ -11,6 +11,7 @@ use crate::client::TedgeP11Client;
 use crate::pkcs11::Cryptoki;
 use crate::pkcs11::CryptokiConfigDirect;
 use crate::pkcs11::Pkcs11Signer;
+use crate::pkcs11::SigScheme;
 
 #[derive(Debug, Clone)]
 pub enum CryptokiConfig {
@@ -28,13 +29,13 @@ pub enum CryptokiConfig {
 /// Contains a handle to Pkcs11-backed private key that will be used for signing, selected at construction time.
 pub trait TedgeP11Signer: SigningKey {
     /// Signs the message using the selected private key.
-    fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>>;
+    fn sign(&self, msg: &[u8], sigscheme: SigScheme) -> anyhow::Result<Vec<u8>>;
     fn to_rustls_signing_key(self: Arc<Self>) -> Arc<dyn rustls::sign::SigningKey>;
 }
 
 impl TedgeP11Signer for Pkcs11Signer {
-    fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>> {
-        Pkcs11Signer::sign(self, msg)
+    fn sign(&self, msg: &[u8], sigscheme: SigScheme) -> anyhow::Result<Vec<u8>> {
+        Pkcs11Signer::sign(self, msg, sigscheme)
     }
 
     fn to_rustls_signing_key(self: Arc<Self>) -> Arc<dyn rustls::sign::SigningKey> {
@@ -72,9 +73,9 @@ pub struct TedgeP11ClientSigningKey {
 }
 
 impl TedgeP11Signer for TedgeP11ClientSigningKey {
-    fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>> {
+    fn sign(&self, msg: &[u8], sigscheme: SigScheme) -> anyhow::Result<Vec<u8>> {
         self.client
-            .sign(msg, self.uri.as_ref().map(|s| s.to_string()))
+            .sign(msg, sigscheme, self.uri.as_ref().map(|s| s.to_string()))
     }
     fn to_rustls_signing_key(self: Arc<Self>) -> Arc<dyn rustls::sign::SigningKey> {
         self
@@ -120,10 +121,11 @@ pub struct TedgeP11ClientSigner {
 
 impl Signer for TedgeP11ClientSigner {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
-        let response = match self
-            .client
-            .sign(message, self.uri.as_ref().map(|s| s.to_string()))
-        {
+        let response = match self.client.sign(
+            message,
+            self.scheme.into(),
+            self.uri.as_ref().map(|s| s.to_string()),
+        ) {
             Ok(response) => response,
             Err(err) => {
                 return Err(rustls::Error::Other(rustls::OtherError(Arc::from(

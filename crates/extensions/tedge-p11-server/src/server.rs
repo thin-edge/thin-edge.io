@@ -138,7 +138,10 @@ mod tests {
         tokio::task::spawn_blocking(move || {
             let client = TedgeP11Client::with_ready_check(socket_path.into());
             assert_eq!(client.choose_scheme(&[], None).unwrap().unwrap(), SCHEME);
-            assert_eq!(&client.sign(&[], None).unwrap(), &SIGNATURE[..]);
+            assert_eq!(
+                &client.sign(&[], SCHEME.into(), None).unwrap(),
+                &SIGNATURE[..]
+            );
         })
         .await
         .unwrap();

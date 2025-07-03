@@ -224,6 +224,19 @@ pub struct RemoteKeyPair {
     algorithm: &'static rcgen::SignatureAlgorithm,
 }
 
+fn shit(value: &rcgen::SignatureAlgorithm) -> tedge_p11_server::pkcs11::SigScheme {
+    if *value == rcgen::PKCS_RSA_SHA256 {
+        return tedge_p11_server::pkcs11::SigScheme::RsaPkcs1Sha256;
+    }
+    if *value == rcgen::PKCS_ECDSA_P256_SHA256 {
+        return tedge_p11_server::pkcs11::SigScheme::EcdsaNistp256Sha256;
+    }
+    if *value == rcgen::PKCS_ECDSA_P384_SHA384 {
+        return tedge_p11_server::pkcs11::SigScheme::EcdsaNistp384Sha384;
+    }
+    todo!()
+}
+
 impl RemoteKeyPair {
     pub fn to_key_pair(&self) -> Result<KeyPair, CertificateError> {
         Ok(KeyPair::from_remote(Box::new(self.clone()))?)
@@ -242,7 +255,7 @@ impl rcgen::RemoteKeyPair for RemoteKeyPair {
         let signer = tedge_p11_server::signing_key(self.cryptoki_config.clone())
             .map_err(|e| rcgen::Error::PemError(e.to_string()))?;
         signer
-            .sign(msg)
+            .sign(msg, shit(self.algorithm))
             .map_err(|e| rcgen::Error::PemError(e.to_string()))
     }
 
