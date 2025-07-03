@@ -1,5 +1,9 @@
+use crate::cli::certificate::create_csr::CreateCsrCmd;
+
 pub use self::cli::TEdgeCertCli;
 use camino::Utf8Path;
+use camino::Utf8PathBuf;
+use certificate::CsrTemplate;
 use tokio::io::AsyncReadExt;
 
 mod c8y;
@@ -29,6 +33,29 @@ pub(crate) async fn read_cert_to_string(path: impl AsRef<Utf8Path>) -> Result<St
     file.read_to_string(&mut content).await?;
 
     Ok(content)
+}
+
+/// Create a device private key and CSR
+///
+/// Return the CSR in the format expected by c8y CA
+async fn create_device_csr(
+    common_name: String,
+    key: create_csr::Key,
+    current_cert: Option<Utf8PathBuf>,
+    csr_path: Utf8PathBuf,
+    csr_template: CsrTemplate,
+) -> Result<(), CertError> {
+    let create_cmd = CreateCsrCmd {
+        id: common_name,
+        csr_path: csr_path.clone(),
+        key,
+        current_cert,
+        user: "tedge".to_string(),
+        group: "tedge".to_string(),
+        csr_template,
+    };
+    create_cmd.create_certificate_signing_request().await?;
+    Ok(())
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 use anyhow::Context;
+use asn1_rs::nom::HexDisplay;
 use camino::Utf8Path;
 use device_id::DeviceIdError;
 use rcgen::Certificate;
@@ -9,8 +10,12 @@ use sha1::Sha1;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_p11_server::CryptokiConfig;
+use tedge_p11_server::CryptokiConfigDirect;
 use time::Duration;
 use time::OffsetDateTime;
+use tracing::debug;
+use tracing::instrument;
+use tracing::trace;
 use x509_parser::oid_registry;
 use x509_parser::public_key::PublicKey;
 pub use zeroize::Zeroizing;
@@ -198,6 +203,49 @@ impl KeyKind {
             algorithm,
         }))
     }
+
+    #[instrument]
+    pub fn from_cryptoki_and_public_key_pem(
+        cryptoki_config: CryptokiConfig,
+        private_key_label: String,
+        public_key_pem: String,
+    ) -> Result<Self, CertificateError> {
+        let public_key = pem::parse(public_key_pem).unwrap();
+        let public_key_raw = public_key.into_contents();
+        trace!("pubkey raw: {public_key_raw:x?}");
+
+        // TODO: implement other algs
+        let algorithm = &rcgen::PKCS_RSA_SHA256;
+
+        // construct a URI that uses private key we just created to sign
+        let mut cryptoki_config = cryptoki_config;
+        let uri = match cryptoki_config {
+            CryptokiConfig::Direct(CryptokiConfigDirect { ref mut uri, .. }) => uri,
+            CryptokiConfig::SocketService { ref mut uri, .. } => uri,
+        };
+        let private_key_uri = match uri {
+            Some(uri) if uri.contains("object=") => {
+                let mut uri: String = uri
+                    .strip_prefix("pkcs11:")
+                    .unwrap_or("")
+                    .split(';')
+                    .filter(|a| !a.contains("object="))
+                    .collect();
+
+                format!("pkcs11:{uri};object={private_key_label}")
+            }
+            Some(uri) => format!("{uri};object={private_key_label}"),
+            None => format!("pkcs11:object={private_key_label}"),
+        };
+        *uri = Some(private_key_uri.into());
+        debug!(?uri);
+
+        Ok(Self::ReuseRemote(RemoteKeyPair {
+            cryptoki_config,
+            public_key_raw,
+            algorithm,
+        }))
+    }
 }
 
 /// A key pair using a remote private key.
@@ -252,6 +300,7 @@ impl rcgen::RemoteKeyPair for RemoteKeyPair {
         // the error here is not PEM-related, but we need to return a foreign error type, and there
         // are no other better variants that could let us return context, so we'll have to use this
         // until `rcgen::Error::RemoteKeyError` can take a parameter
+        trace!(?self.cryptoki_config, msg = %String::from_utf8_lossy(msg), "sign");
         let signer = tedge_p11_server::signing_key(self.cryptoki_config.clone())
             .map_err(|e| rcgen::Error::PemError(e.to_string()))?;
         signer

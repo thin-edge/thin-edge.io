@@ -1,7 +1,7 @@
-use crate::cli::certificate::c8y::create_device_csr;
 use crate::cli::certificate::c8y::read_csr_from_file;
 use crate::cli::certificate::c8y::store_device_cert;
 use crate::cli::certificate::create_csr::Key;
+use crate::cli::certificate::create_device_csr;
 use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::error;
@@ -113,6 +113,7 @@ impl DownloadCertCmd {
                     error!("Fail to extract a certificate from the response returned by {c8y_url}");
                 }
                 Ok(response) => {
+                    tracing::error!(?response);
                     let error = Self::c8y_error_message(response).await;
                     error!("The device {common_name} is not registered yet on {c8y_url}: {error}");
                 }
@@ -182,7 +183,7 @@ impl DownloadCertCmd {
 
     async fn c8y_error_message(response: Response) -> String {
         let status = response.status().to_string();
-        if let Ok(C8yAPIError { message, .. }) = response.json().await {
+        if let Ok(C8yAPIError { message, .. }) = dbg!(response.json().await) {
             format!("{status}: {}", message)
         } else {
             status
