@@ -71,13 +71,22 @@ Each configuration file is defined by a record with:
   and a new one is created with these ownership parameters.
   When a configuration file is already present on the device,
   the agent preserves its existing ownership, ignoring these parameters.
+* Optional unix directory ownership of the immediate parent of the file: `parent_user`, `parent_group` and octal `parent_mode`.
+  These parameters apply only when the configuration file and its parent directories do not already exist on the device.
+  In such cases, the immediate parent directory is created with the specified ownership and mode.
+  Any missing directories above the immediate parent are created using the current user and group.
+  If the file’s `user` is specified but `parent_user` is not, `parent_user` will default to the value of `user`.
+  Similarly, if the file’s `group` is specified but `parent_group` is not, `parent_group` will default to the value of `group`.
+  If the parent directories already exist, the agent preserves their existing ownership and ignores these parameters.
 
 ```toml title="file: /etc/tedge/plugins/tedge-configuration-plugin.toml"
 files = [
   { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },
   { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge' },
   { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto' },
-  { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto', user = 'mosquitto', group = 'mosquitto', mode = 0o644 }
+  { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto', user = 'mosquitto', group = 'mosquitto', mode = 0o644 },
+  { path = '/etc/containers/certs.d/example/ca.crt', type = 'harbor-certificate', user = 'tedge', group = 'tedge', mode = 0o640, parent_user = 'root', parent_group = 'root', parent_mode = 0o755 },
+
 ]
 ```
 
