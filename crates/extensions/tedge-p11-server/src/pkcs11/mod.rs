@@ -28,6 +28,8 @@ use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
 use rustls::SignatureScheme;
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::debug;
 use tracing::trace;
 use tracing::warn;
@@ -139,6 +141,9 @@ impl Cryptoki {
         let token_info = self.context.get_token_info(slot)?;
         debug!(?slot_info, ?token_info, "Selected slot");
 
+        // let supported_mechs = self.context.get_mechanism_list(slot)?;
+        // info!(?supported_mechs);
+
         let session = self.context.open_ro_session(slot)?;
         session.login(UserType::User, Some(&self.config.pin))?;
         let session_info = session.get_session_info()?;
@@ -238,22 +243,21 @@ pub struct Pkcs11Session {
 pub struct Pkcs11Signer {
     session: Pkcs11Session,
     key: ObjectHandle,
-    sigscheme: SigScheme,
+    pub sigscheme: SigScheme,
 }
 
 impl Pkcs11Signer {
-    pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+    pub fn sign(&self, message: &[u8], sigscheme: SigScheme) -> Result<Vec<u8>, anyhow::Error> {
         let session = self.session.session.lock().unwrap();
 
-        let mechanism = self.sigscheme.into();
+        let mechanism = sigscheme.into();
         let (mechanism, digest_mechanism) = match mechanism {
             Mechanism::EcdsaSha256 => (Mechanism::Ecdsa, Some(Mechanism::Sha256)),
             Mechanism::EcdsaSha384 => (Mechanism::Ecdsa, Some(Mechanism::Sha384)),
             Mechanism::EcdsaSha512 => (Mechanism::Ecdsa, Some(Mechanism::Sha512)),
-            Mechanism::Sha1RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha1)),
-            Mechanism::Sha256RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha256)),
-            Mechanism::Sha384RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha384)),
-            Mechanism::Sha512RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha512)),
+            Mechanism::Sha256RsaPkcs => (Mechanism::Sha256RsaPkcs, None),
+            Mechanism::Sha384RsaPkcs => (Mechanism::Sha384RsaPkcs, None),
+            Mechanism::Sha512RsaPkcs => (Mechanism::Sha512RsaPkcs, None),
             Mechanism::Sha256RsaPkcsPss(p) => (Mechanism::Sha256RsaPkcsPss(p), None),
             Mechanism::Sha384RsaPkcsPss(p) => (Mechanism::Sha384RsaPkcsPss(p), None),
             Mechanism::Sha512RsaPkcsPss(p) => (Mechanism::Sha512RsaPkcsPss(p), None),
@@ -306,12 +310,13 @@ impl Pkcs11Signer {
 }
 
 /// Currently supported signature schemes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SigScheme {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SigScheme {
     EcdsaNistp256Sha256,
     EcdsaNistp384Sha384,
     EcdsaNistp521Sha512,
     RsaPssSha256,
+    RsaPkcs1Sha256,
 }
 
 impl From<SigScheme> for rustls::SignatureScheme {
@@ -321,6 +326,7 @@ impl From<SigScheme> for rustls::SignatureScheme {
             SigScheme::EcdsaNistp384Sha384 => Self::ECDSA_NISTP384_SHA384,
             SigScheme::EcdsaNistp521Sha512 => Self::ECDSA_NISTP521_SHA512,
             SigScheme::RsaPssSha256 => Self::RSA_PSS_SHA256,
+            SigScheme::RsaPkcs1Sha256 => Self::RSA_PKCS1_SHA256,
         }
     }
 }
@@ -331,7 +337,20 @@ impl From<SigScheme> for rustls::SignatureAlgorithm {
             SigScheme::EcdsaNistp256Sha256
             | SigScheme::EcdsaNistp384Sha384
             | SigScheme::EcdsaNistp521Sha512 => Self::ECDSA,
-            SigScheme::RsaPssSha256 => Self::RSA,
+            SigScheme::RsaPssSha256 | SigScheme::RsaPkcs1Sha256 => Self::RSA,
+        }
+    }
+}
+
+impl From<rustls::SignatureScheme> for SigScheme {
+    fn from(value: rustls::SignatureScheme) -> Self {
+        match value {
+            rustls::SignatureScheme::ECDSA_NISTP256_SHA256 => SigScheme::EcdsaNistp256Sha256,
+            rustls::SignatureScheme::ECDSA_NISTP384_SHA384 => SigScheme::EcdsaNistp384Sha384,
+            rustls::SignatureScheme::ECDSA_NISTP521_SHA512 => SigScheme::EcdsaNistp521Sha512,
+            rustls::SignatureScheme::RSA_PSS_SHA256 => SigScheme::RsaPssSha256,
+            rustls::SignatureScheme::RSA_PKCS1_SHA256 => SigScheme::RsaPkcs1Sha256,
+            _ => todo!(),
         }
     }
 }
@@ -342,6 +361,7 @@ impl From<SigScheme> for Mechanism<'_> {
             SigScheme::EcdsaNistp256Sha256 => Self::EcdsaSha256,
             SigScheme::EcdsaNistp384Sha384 => Self::EcdsaSha384,
             SigScheme::EcdsaNistp521Sha512 => Self::EcdsaSha512,
+            SigScheme::RsaPkcs1Sha256 => Self::Sha256RsaPkcs,
             SigScheme::RsaPssSha256 => Mechanism::Sha256RsaPkcsPss(PkcsPssParams {
                 hash_alg: MechanismType::SHA256,
                 mgf: PkcsMgfType::MGF1_SHA256,
@@ -373,7 +393,7 @@ impl SigningKey for Pkcs11Signer {
 
 impl Signer for Pkcs11Signer {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
-        Self::sign(self, message).map_err(|e| rustls::Error::General(e.to_string()))
+        Self::sign(self, message, self.sigscheme).map_err(|e| rustls::Error::General(e.to_string()))
     }
 
     fn scheme(&self) -> SignatureScheme {

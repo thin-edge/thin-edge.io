@@ -241,9 +241,22 @@ impl rcgen::SigningKey for RemoteKeyPair {
         let signer = tedge_p11_server::signing_key(self.cryptoki_config.clone())
             .map_err(|e| rcgen::Error::PemError(e.to_string()))?;
         signer
-            .sign(msg)
+            .sign(msg, to_sigscheme(self.algorithm))
             .map_err(|e| rcgen::Error::PemError(e.to_string()))
     }
+}
+
+fn to_sigscheme(value: &rcgen::SignatureAlgorithm) -> tedge_p11_server::pkcs11::SigScheme {
+    if *value == rcgen::PKCS_RSA_SHA256 {
+        return tedge_p11_server::pkcs11::SigScheme::RsaPkcs1Sha256;
+    }
+    if *value == rcgen::PKCS_ECDSA_P256_SHA256 {
+        return tedge_p11_server::pkcs11::SigScheme::EcdsaNistp256Sha256;
+    }
+    if *value == rcgen::PKCS_ECDSA_P384_SHA384 {
+        return tedge_p11_server::pkcs11::SigScheme::EcdsaNistp384Sha384;
+    }
+    todo!()
 }
 
 pub struct KeyCertPair {
