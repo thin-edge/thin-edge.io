@@ -12,29 +12,6 @@ pub use download::DownloadCertCmd;
 pub use renew::RenewCertCmd;
 pub use upload::UploadCertCmd;
 
-/// Create a device private key and CSR
-///
-/// Return the CSR in the format expected by c8y CA
-async fn create_device_csr(
-    common_name: String,
-    key: super::create_csr::Key,
-    current_cert: Option<Utf8PathBuf>,
-    csr_path: Utf8PathBuf,
-    csr_template: CsrTemplate,
-) -> Result<(), CertError> {
-    let create_cmd = CreateCsrCmd {
-        id: common_name,
-        csr_path: csr_path.clone(),
-        key,
-        current_cert,
-        user: "tedge".to_string(),
-        group: "tedge".to_string(),
-        csr_template,
-    };
-    create_cmd.create_certificate_signing_request().await?;
-    Ok(())
-}
-
 /// Return the CSR in the format expected by c8y CA
 async fn read_csr_from_file(csr_path: &Utf8PathBuf) -> Result<String, CertError> {
     let csr = read_cert_to_string(csr_path).await?;
