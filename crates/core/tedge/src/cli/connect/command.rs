@@ -2,6 +2,7 @@
 use crate::bridge::aws::BridgeConfigAwsParams;
 #[cfg(feature = "azure")]
 use crate::bridge::azure::BridgeConfigAzureParams;
+use crate::bridge::c8y::BridgeConfigC8yMqttServiceParams;
 #[cfg(feature = "c8y")]
 use crate::bridge::c8y::BridgeConfigC8yParams;
 use crate::bridge::BridgeConfig;
@@ -746,6 +747,10 @@ pub fn bridge_config(
                     }
                 };
 
+            if c8y_config.mqtt_service.enabled && remote_password.is_none() {
+                // If the MQTT service connection is enabled and cert based auth is used, then tenant_id must be set
+                c8y_config.tenant_id.or_config_not_set()?;
+            }
             let params = BridgeConfigC8yParams {
                 mqtt_host: c8y_config.mqtt.or_config_not_set()?.clone(),
                 config_file: cloud.bridge_config_filename(),
@@ -841,10 +846,19 @@ impl ConnectCommand {
         }
 
         if bridge_config.bridge_location == BridgeLocation::Mosquitto {
-            if let Err(err) = write_bridge_config_to_file(tedge_config, bridge_config).await {
-                // We want to preserve previous errors and therefore discard result of this function.
-                let _ = clean_up(tedge_config, bridge_config);
-                return Err(err.into());
+            write_mosquitto_bridge_config_file(tedge_config, bridge_config).await?;
+
+            if let Cloud::C8y(profile_name) = &self.cloud {
+                let c8y_config = tedge_config.c8y.try_get(profile_name.as_deref())?;
+                if c8y_config.mqtt_service.enabled {
+                    let config_params = BridgeConfigC8yMqttServiceParams::try_from((
+                        tedge_config,
+                        profile_name.as_deref(),
+                    ))?;
+                    let mqtt_svc_bridge_config = BridgeConfig::from(config_params);
+                    write_mosquitto_bridge_config_file(tedge_config, &mqtt_svc_bridge_config)
+                        .await?;
+                }
             }
         } else {
             use_built_in_bridge(tedge_config, bridge_config).await?;
@@ -1036,6 +1050,19 @@ async fn write_generic_mosquitto_config_to_file(
     let mut common_draft = DraftFile::new(common_config_path).await?.with_mode(0o644);
     common_mosquitto_config.serialize(&mut common_draft).await?;
     common_draft.persist().await?;
+
+    Ok(())
+}
+
+async fn write_mosquitto_bridge_config_file(
+    tedge_config: &TEdgeConfig,
+    bridge_config: &BridgeConfig,
+) -> Result<(), ConnectError> {
+    if let Err(err) = write_bridge_config_to_file(tedge_config, bridge_config).await {
+        // We want to preserve previous errors and therefore discard result of this function.
+        // let _ = clean_up(tedge_config, bridge_config);
+        return Err(err);
+    }
 
     Ok(())
 }
