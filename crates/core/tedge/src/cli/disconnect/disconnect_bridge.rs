@@ -95,7 +95,7 @@ impl DisconnectBridgeCommand {
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
             .join(config_file.as_ref());
 
-        match tokio::fs::remove_file(&bridge_conf_path).await {
+        let mut result = match tokio::fs::remove_file(&bridge_conf_path).await {
             // If we find the bridge config file we remove it
             // and carry on to see if we need to restart mosquitto.
             Ok(()) => Ok(()),
@@ -106,7 +106,39 @@ impl DisconnectBridgeCommand {
                 Err(DisconnectBridgeError::BridgeFileDoesNotExist)
             }
 
-            Err(e) => Err(e).with_context(|| format!("Failed to delete {bridge_conf_path}"))?,
+            Err(e) => Err(e)
+                .with_context(|| format!("Failed to delete {bridge_conf_path}"))
+                .map_err(|e| e.into()),
+        };
+
+        if let Some(path) = self.c8y_mqtt_service_bridge_config_path() {
+            let res = match tokio::fs::remove_file(&path).await {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(e)
+                    .with_context(|| format!("Failed to delete {path}"))
+                    .map_err(|e| e.into()),
+            };
+
+            if result.is_ok() {
+                result = res;
+            }
+        }
+
+        result
+    }
+
+    pub fn c8y_mqtt_service_bridge_config_path(&self) -> Option<Utf8PathBuf> {
+        let bridge_conf_path = self.config_dir.join(TEDGE_BRIDGE_CONF_DIR_PATH);
+
+        match &self.cloud {
+            #[cfg(feature = "c8y")]
+            Cloud::C8y(None) => Some(bridge_conf_path.join("c8y-mqtt-svc-bridge.conf")),
+            #[cfg(feature = "c8y")]
+            Cloud::C8y(Some(profile)) => {
+                Some(bridge_conf_path.join(format!("c8y-mqtt-svc@{profile}-bridge.conf")))
+            }
+            _ => None,
         }
     }
 

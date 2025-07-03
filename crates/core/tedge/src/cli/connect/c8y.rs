@@ -179,7 +179,14 @@ pub(crate) async fn check_device_status_c8y(
     }
 
     let prefix = &c8y_config.bridge.topic_prefix;
-    let built_in_bridge_health = bridge_health_topic(prefix, tedge_config).unwrap().name;
+    let built_in_bridge = tedge_config.mqtt.bridge.built_in;
+    let mqtt_service_enabled = c8y_config.mqtt_service.enabled;
+    let core_mqtt_bridge_health_topic = bridge_health_topic(prefix, tedge_config).unwrap().name;
+    let mqtt_service_bridge_health_topic =
+        bridge_health_topic(&c8y_config.mqtt_service.topic_prefix, tedge_config)
+            .unwrap()
+            .name;
+
     let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
     let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
     const CLIENT_ID: &str = "check_connection_c8y";
@@ -198,30 +205,24 @@ pub(crate) async fn check_device_status_c8y(
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
     let mut acknowledged = false;
 
-    let built_in_bridge = tedge_config.mqtt.bridge.built_in;
-    if built_in_bridge {
-        client
-            .subscribe(&built_in_bridge_health, AtLeastOnce)
-            .await?;
-    }
+    client
+        .subscribe(&core_mqtt_bridge_health_topic, AtLeastOnce)
+        .await?;
     client
         .subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)
         .await?;
+    if mqtt_service_enabled {
+        client
+            .subscribe(&mqtt_service_bridge_health_topic, AtLeastOnce)
+            .await?;
+    }
+
+    let mut mqtt_service_bridge_healthy = false;
+    let mut core_mqtt_connected = false;
 
     let mut err = None;
     loop {
         match event_loop.poll().await {
-            Ok(Event::Incoming(Packet::SubAck(_))) => {
-                // We are ready to get the response, hence send the request
-                client
-                    .publish(
-                        &c8y_topic_builtin_jwt_token_upstream,
-                        rumqttc::QoS::AtMostOnce,
-                        false,
-                        "",
-                    )
-                    .await?;
-            }
             Ok(Event::Incoming(Packet::PubAck(_))) => {
                 // The request has been sent
                 acknowledged = true;
@@ -232,9 +233,14 @@ pub(crate) async fn check_device_status_c8y(
                     let response = std::str::from_utf8(&response.payload).unwrap();
                     let message_id = get_smartrest_template_id(response);
                     if message_id.parse() == Ok(JWT_TOKEN) {
+                        core_mqtt_connected = true;
                         break;
                     }
-                } else if is_bridge_health_up_message(&response, &built_in_bridge_health) {
+                } else if is_bridge_health_up_message(
+                    &response,
+                    &core_mqtt_bridge_health_topic,
+                    built_in_bridge,
+                ) {
                     client
                         .publish(
                             &c8y_topic_builtin_jwt_token_upstream,
@@ -243,15 +249,16 @@ pub(crate) async fn check_device_status_c8y(
                             "",
                         )
                         .await?;
+                } else if is_bridge_health_up_message(
+                    &response,
+                    &mqtt_service_bridge_health_topic,
+                    built_in_bridge,
+                ) {
+                    mqtt_service_bridge_healthy = true;
                 }
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while
-                err = Some(if acknowledged {
-                    anyhow!("Didn't receive a response from Cumulocity")
-                } else {
-                    anyhow!("Local MQTT publish has timed out")
-                });
                 break;
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
@@ -278,6 +285,21 @@ pub(crate) async fn check_device_status_c8y(
             Ok(Event::Outgoing(Outgoing::Disconnect)) | Err(_) => break,
             _ => {}
         }
+    }
+
+    if core_mqtt_connected {
+        if mqtt_service_enabled && !mqtt_service_bridge_healthy {
+            err = Some(anyhow!(
+                "Cumulocity Core MQTT connection is healthy but MQTT service connection is not healthy"
+            ));
+        }
+    } else {
+        let err_msg = if mqtt_service_enabled && !mqtt_service_bridge_healthy {
+            "Connection to Cumulocity Core MQTT and MQTT service are not healthy"
+        } else {
+            "Connection to Cumulocity Core MQTT is not healthy"
+        };
+        err = Some(anyhow!(err_msg));
     }
 
     match err {

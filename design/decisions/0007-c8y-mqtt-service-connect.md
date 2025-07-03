@@ -32,6 +32,7 @@ To establish a bridge connection to the mqtt service endpoint, the following inf
 
 * host: Same as legacy mqtt endpoint
 * port: 9883 by default
+* client id: device id (but need not be the device id itself)
 * auth:
   * for username/password based authentication
     * username: `<tenant_id>/<user_name>`
@@ -69,6 +70,7 @@ The mqtt service connection related configs are defined under the `[c8y]` table 
 | `c8y.mqtt_service.enabled` | Whether the mqtt server connection must be established or not | `false` |
 | `c8y.mqtt_service.url` | The config URL for the MQTT service | `<c8y.url>:9883` |
 | `c8y.mqtt_service.topic_prefix` | topic prefix used to bridge mqtt topics | `c8y-mqtt` |
+| `c8y.mqtt_service.topics` | topics to subscribe to on the mqtt service | `$debug/$error` |
 
 To support connecting exclusively to the mqtt service, excluding the core mqtt connection,
 a config flag (`c8y.core_mqtt.enabled`) to enable/disable the core mqtt connection can also be introduced.
