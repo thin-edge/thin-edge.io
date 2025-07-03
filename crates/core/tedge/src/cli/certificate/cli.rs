@@ -66,6 +66,13 @@ pub enum TEdgeCertCli {
 
         #[arg(long, default_value = "256")]
         curve: u16,
+
+        /// The device identifier to be used as the common name for the certificate
+        #[clap(long = "device-id", global = true)]
+        id: Option<String>,
+
+        #[clap(subcommand)]
+        cloud: Option<CloudArg>,
     },
 
     /// Renew the device certificate
@@ -209,7 +216,11 @@ impl BuildCommand for TEdgeCertCli {
                     .transpose()?;
                 let cryptoki = config.device.cryptoki_config(cloud_config)?;
                 let key = cryptoki
-                    .map(super::create_csr::Key::Cryptoki)
+                    .map(|config| super::create_csr::Key::Cryptoki {
+                        config,
+                        privkey_label: None,
+                        pubkey_pem: None,
+                    })
                     .unwrap_or(Key::Local(
                         config.device_key_path(cloud.as_ref())?.to_owned(),
                     ));
@@ -242,14 +253,24 @@ impl BuildCommand for TEdgeCertCli {
                 label,
                 r#type,
                 curve,
-            } => CreateKeyCmd {
-                bits,
-                label,
-                r#type,
-                curve,
-            }
-            .into_boxed(),
 
+                id,
+                cloud,
+            } => {
+                let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
+
+                CreateKeyCmd {
+                    bits,
+                    label,
+                    r#type,
+                    curve,
+
+                    device_id: get_device_id(id, config, &cloud)?,
+                    csr_template,
+                    csr_path: config.device_csr_path(cloud.as_ref())?.to_owned(),
+                }
+                .into_boxed()
+            }
             TEdgeCertCli::Show {
                 cloud,
                 cert_path,
@@ -331,7 +352,11 @@ impl BuildCommand for TEdgeCertCli {
 
                 let cryptoki = config.device.cryptoki_config(Some(c8y_config))?;
                 let key = cryptoki
-                    .map(super::create_csr::Key::Cryptoki)
+                    .map(|config| super::create_csr::Key::Cryptoki {
+                        config,
+                        privkey_label: None,
+                        pubkey_pem: None,
+                    })
                     .unwrap_or(Key::Local(
                         config
                             .device_key_path(Some(tedge_config::tedge_toml::Cloud::C8y(
@@ -419,7 +444,11 @@ impl BuildCommand for TEdgeCertCli {
                         .transpose()?;
                     let cryptoki = config.device.cryptoki_config(cloud_config)?;
                     let key = cryptoki
-                        .map(super::create_csr::Key::Cryptoki)
+                        .map(|config| super::create_csr::Key::Cryptoki {
+                            config,
+                            privkey_label: None,
+                            pubkey_pem: None,
+                        })
                         .unwrap_or(Key::Local(
                             config.device_key_path(cloud.as_ref())?.to_owned(),
                         ));

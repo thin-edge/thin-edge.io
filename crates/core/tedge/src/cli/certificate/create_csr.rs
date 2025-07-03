@@ -39,7 +39,12 @@ pub struct CreateCsrCmd {
 #[derive(Debug, Clone)]
 pub enum Key {
     Local(Utf8PathBuf),
-    Cryptoki(CryptokiConfig),
+    Cryptoki {
+        config: CryptokiConfig,
+        // TODO: move it where it makes sense
+        privkey_label: Option<String>,
+        pubkey_pem: Option<String>,
+    },
 }
 
 #[async_trait::async_trait]
@@ -67,12 +72,22 @@ impl CreateCsrCmd {
                 .await
                 .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?,
 
-            Key::Cryptoki(cryptoki) => {
-                let current_cert = self
-                    .current_cert
-                    .clone()
-                    .context("Need an existing cert when using an HSM")?;
-                KeyKind::from_cryptoki_and_existing_cert(cryptoki.clone(), &current_cert)?
+            Key::Cryptoki {
+                config,
+                privkey_label,
+                pubkey_pem,
+            } => {
+                let current_cert = self.current_cert.clone();
+                match current_cert {
+                    Some(current_cert) => {
+                        KeyKind::from_cryptoki_and_existing_cert(config.clone(), &current_cert)?
+                    }
+                    None => KeyKind::from_cryptoki_and_public_key_pem(
+                        config.clone(),
+                        privkey_label.clone().unwrap(),
+                        pubkey_pem.as_ref().unwrap().clone(),
+                    )?,
+                }
             }
         };
         debug!(?previous_key);

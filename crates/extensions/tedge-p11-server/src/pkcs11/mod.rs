@@ -303,7 +303,7 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<
 
     let mut pub_key_template = attrs_pub;
     pub_key_template.extend_from_slice(&[
-        Attribute::Token(true),
+        Attribute::Token(false),
         Attribute::Private(false),
         Attribute::Verify(true),
         Attribute::Encrypt(true),
@@ -353,12 +353,12 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<
     debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
 
     let Attribute::Modulus(modulus) = attrs.next().context("Not modulus")? else {
-        anyhow::bail!("Not modulus");
+        anyhow::bail!("No modulus");
     };
     let modulus = rsa::BigUint::from_bytes_be(&modulus);
 
     let Attribute::PublicExponent(exponent) = attrs.next().context("Not modulus")? else {
-        anyhow::bail!("Not modulus");
+        anyhow::bail!("No public exponent");
     };
     let exponent = rsa::BigUint::from_bytes_be(&exponent);
 
