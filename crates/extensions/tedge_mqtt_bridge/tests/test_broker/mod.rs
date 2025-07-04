@@ -1,6 +1,6 @@
-use bytes::BytesMut; // For working with byte buffers
-use futures::stream::StreamExt; // For StreamExt::next() on Framed
-use futures::SinkExt; // For SinkExt::send on Framed
+use bytes::BytesMut;
+use futures::stream::StreamExt;
+use futures::SinkExt;
 use mqttbytes::v4::ConnAck;
 use mqttbytes::v4::ConnectReturnCode;
 use mqttbytes::v4::Disconnect;
@@ -15,17 +15,17 @@ use mqttbytes::v4::SubAck;
 use mqttbytes::v4::SubscribeReasonCode;
 use mqttbytes::v4::UnsubAck;
 use mqttbytes::QoS;
-use std::collections::{HashMap, VecDeque}; // For managing subscriptions
+use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU16;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::select;
-use tokio::sync::mpsc; // For inter-task communication (sending packets to clients)
+use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio_util::codec::Decoder;
 use tokio_util::codec::Encoder;
@@ -33,7 +33,7 @@ use tokio_util::codec::Framed;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
-use tracing::warn; // For framing the TCP stream // For concurrently listening to client and internal messages
+use tracing::warn;
 
 /// Custom MQTT Codec for use with `tokio_util::codec::Framed`.
 /// This codec handles the encoding and decoding of MQTT `Packet`s.
@@ -44,10 +44,9 @@ impl Decoder for MqttCodec {
     type Error = std::io::Error;
 
     /// Decodes bytes from the source buffer into an MQTT Packet.
-    /// It relies on `mqtt_packet::Packet::decode` which handles the variable length header.
+    /// It relies on `mqttbytes::v4::read` which handles the variable length header.
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         // Attempt to decode a packet from the source buffer.
-        // `mqtt_packet::Packet::decode` advances `src` if a full packet is found.
         match mqttbytes::v4::read(src, 1024 * 1024) {
             Ok(packet) => {
                 // Packet successfully decoded. Return it.
@@ -100,8 +99,14 @@ impl Encoder<Packet> for MqttCodec {
     }
 }
 
+struct TriggerDisconnect;
+
+/// A client ID - channel pair
+type ClientSender = (String, mpsc::Sender<Packet>);
+
 /// Represents a simple MQTT broker for testing purposes.
 pub struct TestMqttBroker {
+    /// The port the broker is listening on
     port: u16,
     /// A shared, mutable list of all `Publish` packets received by the broker.
     received_publishes: Arc<Mutex<VecDeque<Publish>>>,
@@ -112,15 +117,16 @@ pub struct TestMqttBroker {
     /// A flag to determine if the broker should acknowledge incoming publishes.
     should_acknowledge_publishes: Arc<Mutex<bool>>,
     /// Stores active subscriptions: String -> List of client Senders (for sending packets).
-    subscriptions: Arc<Mutex<HashMap<String, Vec<(String, mpsc::Sender<Packet>)>>>>,
+    subscriptions: Arc<Mutex<HashMap<String, Vec<ClientSender>>>>,
     /// Stores a map of client ID to their packet sender, for direct messaging or cleanup.
     client_senders: Arc<Mutex<HashMap<String, mpsc::Sender<Packet>>>>,
     /// The TCP listener that accepts incoming client connections.
     listener: TcpListener,
     /// The next packet id to be assigned to a published message
     pkid: AtomicU16,
-    disconnect_handles: Arc<Mutex<Vec<mpsc::Sender<()>>>>,
-    last_awaited_publish: AtomicUsize,
+    /// A list of channels via which we can close all connections to the broker
+    disconnect_handles: Arc<Mutex<Vec<mpsc::Sender<TriggerDisconnect>>>>,
+    /// A map to keep track of which messages are acknowledged, indexed by client id and pkid
     inflight: Arc<Mutex<HashMap<(String, u16), bool>>>,
 }
 
@@ -144,7 +150,6 @@ impl TestMqttBroker {
             listener,
             pkid: AtomicU16::new(1),
             disconnect_handles: <_>::default(),
-            last_awaited_publish: <_>::default(),
             inflight: <_>::default(),
         })
     }
@@ -152,9 +157,12 @@ impl TestMqttBroker {
     pub async fn disconnect_clients_abruptly(&self) {
         let mut handles = self.disconnect_handles.lock().await;
         for handle in &mut *handles {
-            // If the client has already stopped, we don't care
-            let _ = handle.send(()).await;
+            // If the client has already stopped, we don't care, so ignore the error
+            let _ = handle.send(TriggerDisconnect).await;
         }
+
+        // Wait for all the clients to be disconnected to avoid races where the
+        // client is still connected
         for handle in &mut *handles {
             while !handle.is_closed() {
                 tokio::task::yield_now().await;
@@ -169,15 +177,13 @@ impl TestMqttBroker {
 
     pub async fn next_message_matching(&self, filter: &str) -> Publish {
         tokio::time::timeout(Duration::from_secs(5), async {
-            let mut id = self.last_awaited_publish.fetch_add(1, Ordering::SeqCst);
             loop {
                 {
-                    let pubs = self.received_publishes.lock().await;
-                    if let Some(msg) = pubs.get(id) {
+                    let mut pubs = self.received_publishes.lock().await;
+                    if let Some(msg) = pubs.pop_front() {
                         if mqttbytes::matches(&msg.topic, filter) {
                             return msg.clone();
                         } else {
-                            id = self.last_awaited_publish.fetch_add(1, Ordering::SeqCst);
                             tracing::warn!("Ignoring message: {msg:?}");
                         }
                     }
@@ -206,7 +212,7 @@ impl TestMqttBroker {
         })
         .await;
 
-        if let Err(_) = res {
+        if res.is_err() {
             let ids = last_acks
                 .unwrap()
                 .into_iter()
@@ -217,9 +223,24 @@ impl TestMqttBroker {
         }
     }
 
-    /// Sets whether the broker should acknowledge incoming `Publish` messages.
-    pub async fn set_should_acknowledge_publishes(&self, acknowledge: bool) {
-        *self.should_acknowledge_publishes.lock().await = acknowledge;
+    /// Disables acknowledgements for incoming `Publish` messages.
+    pub async fn disable_acknowledgements(&self) {
+        let mut should_ack = self.should_acknowledge_publishes.lock().await;
+        assert!(
+            *should_ack,
+            "Cannot disable acknowledgements as they are already disabled"
+        );
+        *should_ack = false;
+    }
+
+    /// (Re-)enables acknowledgements for incoming `Publish` messages.
+    pub async fn enable_acknowledgements(&self) {
+        let mut should_ack = self.should_acknowledge_publishes.lock().await;
+        assert!(
+            !*should_ack,
+            "Cannot enable acknowledgements as they are already enabled"
+        );
+        *should_ack = true;
     }
 
     /// Returns a clone of the list of `Publish` packets sent by the broker.
@@ -322,30 +343,29 @@ impl TestMqttBroker {
 
     /// Handles a single client connection.
     /// This function reads MQTT packets from the client, processes them, and sends responses.
+    #[allow(clippy::too_many_arguments)]
     async fn handle_client(
         stream: TcpStream,
         peer_addr: SocketAddr,
         received_publishes: Arc<Mutex<VecDeque<Publish>>>,
         received_acks: Arc<Mutex<VecDeque<PubAck>>>,
         should_acknowledge_publishes: Arc<Mutex<bool>>,
-        subscriptions: Arc<Mutex<HashMap<String, Vec<(String, mpsc::Sender<Packet>)>>>>,
+        subscriptions: Arc<Mutex<HashMap<String, Vec<ClientSender>>>>,
         client_senders: Arc<Mutex<HashMap<String, mpsc::Sender<Packet>>>>,
-        mut disconnect: mpsc::Receiver<()>,
+        mut disconnect: mpsc::Receiver<TriggerDisconnect>,
         inflight: Arc<Mutex<HashMap<(String, u16), bool>>>,
     ) -> Result<(), std::io::Error> {
         // Create a `Framed` instance to handle MQTT packet framing over the TCP stream.
         let mut framed = Framed::new(stream, MqttCodec);
 
         // Create an MPSC channel for this client to receive packets from the broker (e.g., published messages).
-        let (tx, mut rx) = mpsc::channel::<Packet>(100); // Buffer size 100
-                                                         // The first packet from a client must be a CONNECT packet.
+        let (tx, mut rx) = mpsc::channel::<Packet>(100);
+
+        // The first packet from a client must be a CONNECT packet.
         let connect_packet = match framed.next().await {
             Some(Ok(Packet::Connect(c))) => c,
             Some(Ok(p)) => {
-                error!(
-                    "Client {}: Received unexpected packet before CONNECT: {:?}",
-                    peer_addr, p
-                );
+                error!("Client {peer_addr}: Received unexpected packet before CONNECT: {p:?}");
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     "Expected CONNECT packet",
@@ -353,7 +373,7 @@ impl TestMqttBroker {
             }
             Some(Err(e)) => return Err(e), // Propagate I/O errors from the stream
             None => {
-                error!("Client {} disconnected before sending CONNECT.", peer_addr);
+                info!("Client {peer_addr} disconnected before sending CONNECT.");
                 return Ok(()); // Client disconnected gracefully
             }
         };
@@ -381,12 +401,10 @@ impl TestMqttBroker {
             debug!("Waiting for action");
             select! {
                 _ = disconnect.recv() => {
-                    debug!("Disconnecting all clients");
                     break;
                 }
                 // Branch 1: Read incoming packets from the client.
                 client_msg = framed.next() => {
-                    debug!("Reading packet from client");
                     match client_msg {
                         Some(Ok(packet)) => {
                             info!("Client {client_id}: Received packet: {packet:?}");
@@ -455,35 +473,29 @@ impl TestMqttBroker {
                                     framed.send(Packet::PubComp(PubComp::new(pubrel.pkid))).await?;
                                 }
                                 Packet::PingReq => {
-                                    // Respond to PINGREQ with PINGRESP.
                                     framed.send(Packet::PingResp).await?;
                                 }
                                 Packet::Disconnect => {
-                                    // Client explicitly disconnected. Break the loop to close the connection.
                                     info!("Client {client_id}: Sent DISCONNECT. Closing connection.");
                                     break;
                                 }
-                                _ => {
-                                    // Log and ignore other unsupported packet types for this simple broker.
-                                    warn!("Client {client_id}: Ignoring unsupported packet type: {:?}", packet);
+                                packet => {
+                                    warn!("Client {client_id}: Ignoring unsupported packet type: {packet:?}");
                                 }
                             }
                         }
                         Some(Err(e)) => {
-                            // An error occurred while reading from the stream.
                             error!("Client {client_id}: Error reading from stream: {e}");
-                            break; // Break the loop to close the connection.
+                            break;
                         }
                         None => {
-                            // Client disconnected gracefully (stream ended).
                             info!("Client {client_id}: Disconnected gracefully.");
-                            break; // Break the loop to close the connection.
+                            break;
                         }
                     }
                 }
                 // Branch 2: Receive packets to send to the client (from broker's publish_to_clients).
                 internal_msg = rx.recv() => {
-                    debug!("Publishing to client");
                     match internal_msg {
                         Some(packet_to_send) => {
                             info!("Client {client_id}: Sending internal packet: {packet_to_send:?}");
@@ -722,7 +734,7 @@ mod tests {
     async fn test_broker_acknowledges_publishes_flag() -> Result<(), Box<dyn std::error::Error>> {
         let broker = TestMqttBroker::new().await?;
         let port = broker.port();
-        broker.set_should_acknowledge_publishes(false).await; // Disable acknowledgements
+        broker.disable_acknowledgements().await;
 
         tokio::spawn(async move {
             broker.start().await.unwrap();
@@ -745,7 +757,7 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let broker = Arc::new(TestMqttBroker::new().await?);
         let port = broker.port();
-        broker.set_should_acknowledge_publishes(false).await; // Disable acknowledgements
+        broker.disable_acknowledgements().await;
 
         {
             let broker = broker.clone();
@@ -764,7 +776,7 @@ mod tests {
         let next_packet = timeout(Duration::from_millis(100), client.next()).await;
         assert!(next_packet.is_err() || next_packet.unwrap().is_none()); // Expect timeout or None
 
-        broker.set_should_acknowledge_publishes(true).await; // Re-enable acknowledgements
+        broker.enable_acknowledgements().await;
         publish.pkid = 4;
         client.send(Packet::Publish(publish.clone())).await?;
         let puback_packet = timeout(Duration::from_millis(100), client.next())

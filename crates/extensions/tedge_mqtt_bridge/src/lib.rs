@@ -472,7 +472,12 @@ async fn half_bridge(
                     info!("Waiting {time:?} until attempting reconnection to {name} broker");
                 }
                 tokio::time::sleep(time).await;
-                if session_present.map_or(true, |session_present| !session_present) {
+
+                // If the session is not managed by the current connection,
+                // handle the pending messages ourselves. If this isn't the
+                // case, rumqttc will handle republishing messages as per
+                // the MQTT specification.
+                if session_present != Some(true) {
                     let msgs = recv_event_loop.take_pending();
                     debug!("Extending pending with: {msgs:?}");
                     pending.extend(msgs);

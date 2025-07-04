@@ -46,7 +46,10 @@ async fn start_mqtt_bridge(
 const HEALTH: &str = "te/device/main/#";
 
 #[tokio::test]
-async fn bridge_republishes_messages_on_error() {
+async fn bridge_republishes_messages_to_cloud_on_error() {
+    // rumqttc > 0.24 fixes the handling of clean sessions and stopped
+    // republishing unacknowledged messages when we reconnect. This test checks
+    // that we handle the unacknowledged messages correctly.
     std::env::set_var("RUST_LOG", "rumqttd=debug,tedge_mqtt_bridge=debug,info");
     let _ = env_logger::try_init();
     let local_broker = new_broker().await;
@@ -62,7 +65,7 @@ async fn bridge_republishes_messages_on_error() {
         .await
         .unwrap();
 
-    cloud_broker.set_should_acknowledge_publishes(false).await;
+    cloud_broker.disable_acknowledgements().await;
 
     local_broker
         .publish_to_clients("c8y/s/us", b"a,fake,smartrest,message", QoS::AtLeastOnce)
@@ -71,11 +74,13 @@ async fn bridge_republishes_messages_on_error() {
 
     cloud_broker.next_message_matching("s/us").await;
 
-    cloud_broker.set_should_acknowledge_publishes(true).await;
+    cloud_broker.enable_acknowledgements().await;
     cloud_broker.disconnect_clients_abruptly().await;
 
+    // Check the message actually gets delivered
     cloud_broker.next_message_matching("s/us").await;
 
+    // And then that the acknowledgement is successfully forwarded
     local_broker.wait_until_all_messages_acked().await;
 
     let publishes = local_broker.sent_publishes().await;
@@ -91,7 +96,57 @@ async fn bridge_republishes_messages_on_error() {
 }
 
 #[tokio::test]
-async fn bridge_delivers_republishes_before_novel_publishes() {
+async fn bridge_republishes_messages_to_local_on_error() {
+    // The local connection differs from the cloud connection in that it uses a
+    // non-clean session, so rumqttc will republish for us. We should check this
+    // happens
+    std::env::set_var("RUST_LOG", "rumqttd=debug,tedge_mqtt_bridge=debug,info");
+    let _ = env_logger::try_init();
+    let local_broker = new_broker().await;
+    let cloud_broker = new_broker().await;
+
+    let mut rules = BridgeConfig::new();
+    rules.forward_from_local("s/us", "c8y/", "").unwrap();
+    rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
+
+    start_mqtt_bridge(local_broker.port(), cloud_broker.port(), rules, None).await;
+
+    wait_until_health_status_is("up", &local_broker)
+        .await
+        .unwrap();
+
+    local_broker.disable_acknowledgements().await;
+
+    cloud_broker
+        .publish_to_clients("s/ds", b"a,fake,smartrest,message", QoS::AtLeastOnce)
+        .await
+        .unwrap();
+
+    local_broker.next_message_matching("c8y/s/ds").await;
+
+    local_broker.enable_acknowledgements().await;
+    local_broker.disconnect_clients_abruptly().await;
+
+    // Check the message actually gets delivered
+    local_broker.next_message_matching("c8y/s/ds").await;
+
+    // And then that the acknowledgement is successfully forwarded
+    cloud_broker.wait_until_all_messages_acked().await;
+
+    let publishes = cloud_broker.sent_publishes().await;
+    let acks = cloud_broker.received_acks().await;
+    let publish_pkids = publishes
+        .iter()
+        .map(|publish| publish.pkid)
+        .collect::<Vec<_>>();
+    let ack_pkids = acks.iter().map(|ack| ack.pkid).collect::<Vec<_>>();
+
+    // Verify all the messages were acknowledged in order
+    assert_eq!(publish_pkids, ack_pkids);
+}
+
+#[tokio::test]
+async fn bridge_delivers_republishes_to_cloud_before_novel_publishes() {
     std::env::set_var("RUST_LOG", "rumqttd=debug,tedge_mqtt_bridge=debug,info");
     let _ = env_logger::try_init();
     let local_broker = new_broker().await;
@@ -120,7 +175,7 @@ async fn bridge_delivers_republishes_before_novel_publishes() {
         .await
         .unwrap();
 
-    cloud_broker.set_should_acknowledge_publishes(false).await;
+    cloud_broker.disable_acknowledgements().await;
 
     local_broker
         .publish_to_clients("c8y/s/us", b"a,fake,smartrest,message", QoS::AtLeastOnce)
@@ -129,7 +184,7 @@ async fn bridge_delivers_republishes_before_novel_publishes() {
 
     cloud_broker.next_message_matching("s/us").await;
 
-    cloud_broker.set_should_acknowledge_publishes(true).await;
+    cloud_broker.enable_acknowledgements().await;
     cloud_broker.disconnect_clients_abruptly().await;
     local_broker
         .publish_to_clients("c8y/s/us", b"a,different,message", QoS::AtLeastOnce)
@@ -147,7 +202,10 @@ async fn bridge_delivers_republishes_before_novel_publishes() {
     let ack_pkids = acks.iter().map(|ack| ack.pkid).collect::<Vec<_>>();
 
     // Verify all the messages were acknowledged in order
-    assert_eq!(publish_pkids, ack_pkids);
+    assert_eq!(
+        publish_pkids, ack_pkids,
+        "MQTT Acknowledgements were not in the order the messages were published in"
+    );
 
     let payload = String::from_utf8(
         cloud_broker
