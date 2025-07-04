@@ -28,7 +28,7 @@
     },
     {
       "Effect": "Allow",
-      "Action": "iot:Publish",
+      "Action": ["iot:Publish", "iot:RetainPublish"],
       "Resource": [
         "arn:aws:iot:<region>:<account-id>:topic/thinedge/${iot:Connection.Thing.ThingName}/td",
         "arn:aws:iot:<region>:<account-id>:topic/thinedge/${iot:Connection.Thing.ThingName}/td/*",
