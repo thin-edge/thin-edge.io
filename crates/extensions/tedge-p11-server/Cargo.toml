@@ -16,8 +16,11 @@ camino.features = ["serde1"]
 camino.workspace = true
 clap.workspace = true
 cryptoki.workspace = true
+oid-registry = "0.8.1"
 percent-encoding.workspace = true
 postcard.workspace = true
+rand = "0.9.1"
+rsa = "0.9.8"
 rustls.workspace = true
 sd-listen-fds.workspace = true
 serde.workspace = true
@@ -39,3 +42,6 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+# [patch.pem-rfc7468]
+# base64ct = "=1.6"
