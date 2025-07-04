@@ -135,16 +135,7 @@ impl AddAssign for SubscriptionDiff {
     fn add_assign(&mut self, rhs: Self) {
         self.subscribe.extend(rhs.subscribe);
         self.unsubscribe.extend(rhs.unsubscribe);
-
-        let overlap = self
-            .subscribe
-            .intersection(&self.unsubscribe)
-            .cloned()
-            .collect::<Vec<_>>();
-        for topic in overlap {
-            self.subscribe.remove(&topic);
-            self.unsubscribe.remove(&topic);
-        }
+        self.simplify()
     }
 }
 
@@ -154,6 +145,18 @@ impl SubscriptionDiff {
             subscribe: <_>::default(),
             unsubscribe: <_>::default(),
         }
+    }
+
+    pub fn new(
+        subscribe: &mqtt_channel::TopicFilter,
+        unsubscribe: &mqtt_channel::TopicFilter,
+    ) -> Self {
+        let mut diff = Self {
+            subscribe: subscribe.patterns().iter().cloned().collect(),
+            unsubscribe: unsubscribe.patterns().iter().cloned().collect(),
+        };
+        diff.simplify();
+        diff
     }
 
     fn with_topic_prefix(self, prefix: &str) -> Self {
@@ -168,6 +171,18 @@ impl SubscriptionDiff {
                 .into_iter()
                 .map(|t| format!("{prefix}/{t}"))
                 .collect(),
+        }
+    }
+
+    fn simplify(&mut self) {
+        let overlap = self
+            .subscribe
+            .intersection(&self.unsubscribe)
+            .cloned()
+            .collect::<Vec<_>>();
+        for topic in overlap {
+            self.subscribe.remove(&topic);
+            self.unsubscribe.remove(&topic);
         }
     }
 }
