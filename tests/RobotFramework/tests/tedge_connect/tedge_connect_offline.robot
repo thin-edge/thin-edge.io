@@ -20,3 +20,15 @@ Check offline bootstrapping
 
     ThinEdgeIO.Connect To Network
     ThinEdgeIO.Execute Command    sudo tedge connect c8y --test
+
+Check offline bootstrapping using reconnect
+    ThinEdgeIO.Execute Command    sudo tedge disconnect c8y
+    ThinEdgeIO.Service Should Be Stopped    tedge-mapper-c8y
+
+    ThinEdgeIO.Disconnect From Network
+    ThinEdgeIO.Execute Command    sudo tedge reconnect c8y --offline
+    ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
+    ThinEdgeIO.Execute Command    sudo tedge connect c8y --test    exp_exit_code=!0
+
+    ThinEdgeIO.Connect To Network
+    ThinEdgeIO.Execute Command    sudo tedge connect c8y --test    timeout=60
