@@ -143,7 +143,7 @@ Before you can register any devices, you must create a policy which can be assig
         },
         {
           "Effect": "Allow",
-          "Action": "iot:Publish",
+          "Action": ["iot:Publish", "iot:RetainPublish"],
           "Resource": [
             "arn:aws:iot:$AWS_REGION:$AWS_ACCOUNT_ID:topic/thinedge/${iot:Connection.Thing.ThingName}/td",
             "arn:aws:iot:$AWS_REGION:$AWS_ACCOUNT_ID:topic/thinedge/${iot:Connection.Thing.ThingName}/td/*",
