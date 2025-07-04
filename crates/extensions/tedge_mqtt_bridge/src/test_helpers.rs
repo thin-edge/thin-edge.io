@@ -10,6 +10,7 @@ use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::PubAck;
 use rumqttc::Publish;
+use rumqttc::Request;
 
 use rumqttc::QoS;
 use rumqttc::SubscribeFilter;
@@ -96,6 +97,12 @@ impl MqttEvents for FixedEventStream {
             pending().await
         }
     }
+
+    fn take_pending(&mut self) -> VecDeque<Request> {
+        <_>::default()
+    }
+
+    fn set_pending(&mut self, _requests: Vec<Request>) {}
 }
 
 #[async_trait::async_trait]
@@ -280,6 +287,14 @@ impl MqttEvents for ChannelEvents {
                 }
             }
         }
+    }
+
+    fn take_pending(&mut self) -> VecDeque<Request> {
+        unimplemented!()
+    }
+
+    fn set_pending(&mut self, _requests: Vec<Request>) {
+        unimplemented!()
     }
 }
 

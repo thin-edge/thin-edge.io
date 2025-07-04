@@ -32,11 +32,13 @@ tracing = { workspace = true }
 [dev-dependencies]
 env_logger = { workspace = true }
 mockall = { workspace = true }
+mqttbytes = { workspace = true }
 rcgen = { workspace = true }
 rumqttd = { workspace = true }
 serde_json = { workspace = true }
 tedge_config = { workspace = true, features = ["test"] }
 tedge_test_utils = { workspace = true }
+tokio-util = { workspace = true }
 
 [lints]
 workspace = true
