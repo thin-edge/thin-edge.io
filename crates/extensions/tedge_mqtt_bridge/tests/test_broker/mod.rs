@@ -30,7 +30,6 @@ use tokio::sync::Mutex;
 use tokio_util::codec::Decoder;
 use tokio_util::codec::Encoder;
 use tokio_util::codec::Framed;
-use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -398,7 +397,6 @@ impl TestMqttBroker {
 
         // Main loop for handling subsequent packets from the client and sending packets to the client.
         loop {
-            debug!("Waiting for action");
             select! {
                 _ = disconnect.recv() => {
                     break;
