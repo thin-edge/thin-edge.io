@@ -8,6 +8,7 @@ mod topics;
 use async_trait::async_trait;
 use bytes::Bytes;
 pub use rumqttc;
+use rumqttc::tokio_rustls::rustls::crypto::hash::Hash;
 use rumqttc::AsyncClient;
 use rumqttc::ClientError;
 use rumqttc::ConnectionError;
@@ -24,8 +25,8 @@ use rumqttc::Request;
 use rumqttc::SubscribeFilter;
 use rumqttc::Transport;
 use std::borrow::Cow;
-use std::collections::btree_map;
-use std::collections::BTreeMap;
+use std::collections::hash_map;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::sync::atomic::AtomicUsize;
@@ -445,7 +446,7 @@ async fn half_bridge(
         reconnect_policy.maximum_interval.duration(),
         reconnect_policy.reset_window.duration(),
     );
-    let mut forward_pkid_to_received_msg = BTreeMap::<u16, Publish>::new();
+    let mut forward_pkid_to_received_msg = HashMap::<u16, Publish>::new();
     let mut bridge_health = BridgeHealth::new(name, tx_health);
     let mut loop_breaker =
         MessageLoopBreaker::new(recv_client.clone(), bidirectional_topic_filters);
@@ -454,6 +455,10 @@ async fn half_bridge(
     let mut published = 0; // Count of messages published (by the companion)
     let mut acknowledged = 0; // Count of messages acknowledged (by the MQTT end-point of the companion)
 
+    // Keeps track of whether we have a non-clean session with the broker. This
+    // is set based on the value in the `ConnAck` packet to ensure it aligns
+    // with whether a session exists, not just that we requested one. This is
+    // used to republish messages in cases where rumqttc doesn't.
     let mut session_present: Option<bool> = None;
     let mut pending = Vec::new();
 
@@ -495,13 +500,12 @@ async fn half_bridge(
         match notification {
             Event::Incoming(Incoming::ConnAck(conn_ack)) => {
                 info!("Bridge {name} connection subscribing to {topics:?}");
-                {
-                    let recv_client = recv_client.clone();
-                    let topics = topics.clone();
-                    // We have to subscribe to this asynchronously (i.e. in a task) since we might at
-                    // this point have filled our cloud event loop with outgoing messages
-                    tokio::spawn(async move { recv_client.subscribe_many(topics).await.unwrap() });
-                }
+
+                let recv_client = recv_client.clone();
+                let topics = topics.clone();
+                // We have to subscribe to this asynchronously (i.e. in a task) since we might at
+                // this point have filled our cloud event loop with outgoing messages
+                tokio::spawn(async move { recv_client.subscribe_many(topics).await.unwrap() });
 
                 session_present = Some(conn_ack.session_present);
 
@@ -542,7 +546,7 @@ async fn half_bridge(
 
             // Keep track of packet IDs so we can acknowledge messages
             Event::Outgoing(Outgoing::Publish(pkid)) => {
-                if let btree_map::Entry::Vacant(e) = forward_pkid_to_received_msg.entry(pkid) {
+                if let hash_map::Entry::Vacant(e) = forward_pkid_to_received_msg.entry(pkid) {
                     match target.recv().await {
                         // A message was forwarded by the other bridge half, note the packet id
                         Some(Some((topic, msg))) => {
