@@ -445,7 +445,7 @@ define_tedge_config! {
             enabled: bool,
 
             /// MQTT service endpoint for the Cumulocity tenant, with optional port.
-            #[tedge_config(example = "mqtt.your-tenant.cumulocity.com:1234")]
+            #[tedge_config(example = "mqtt.your-tenant.cumulocity.com:9883")]
             #[tedge_config(default(from_optional_key = "c8y.url"))]
             url: HostPort<MQTT_SVC_TLS_PORT>,
 
