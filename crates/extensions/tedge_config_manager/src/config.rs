@@ -150,28 +150,27 @@ impl Borrow<str> for FileEntry {
 }
 
 impl FileEntry {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        path: String,
-        config_type: String,
-        user: Option<String>,
-        group: Option<String>,
-        mode: Option<u32>,
-        parent_user: Option<String>,
-        parent_group: Option<String>,
-        parent_mode: Option<u32>,
+        path: impl Into<String>,
+        config_type: impl Into<String>,
+        file_permissions: PermissionEntry,
+        parent_permissions: PermissionEntry,
     ) -> Self {
-        let parent_user = parent_user.or_else(|| user.clone());
-        let parent_group = parent_group.or_else(|| group.clone());
+        let parent_user = parent_permissions
+            .user
+            .or_else(|| file_permissions.user.clone());
+        let parent_group = parent_permissions
+            .group
+            .or_else(|| file_permissions.group.clone());
 
         Self {
-            path,
-            config_type,
-            file_permissions: PermissionEntry { user, group, mode },
+            path: path.into(),
+            config_type: config_type.into(),
+            file_permissions,
             parent_permissions: PermissionEntry {
                 user: parent_user,
                 group: parent_group,
-                mode: parent_mode,
+                mode: parent_permissions.mode,
             },
         }
     }
@@ -214,13 +213,9 @@ impl PluginConfig {
     fn new_with_config_file_entry(config_file_path: &Path) -> Self {
         let file_entry = FileEntry::new(
             config_file_path.display().to_string(),
-            DEFAULT_PLUGIN_CONFIG_TYPE.into(),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            DEFAULT_PLUGIN_CONFIG_TYPE,
+            PermissionEntry::default(),
+            PermissionEntry::default(),
         );
         Self {
             files: HashSet::from([file_entry]),
@@ -245,12 +240,12 @@ impl PluginConfig {
             let entry = FileEntry::new(
                 raw_entry.path,
                 config_type.clone(),
-                raw_entry.user,
-                raw_entry.group,
-                raw_entry.mode,
-                raw_entry.parent_user,
-                raw_entry.parent_group,
-                raw_entry.parent_mode,
+                PermissionEntry::new(raw_entry.user, raw_entry.group, raw_entry.mode),
+                PermissionEntry::new(
+                    raw_entry.parent_user,
+                    raw_entry.parent_group,
+                    raw_entry.parent_mode,
+                ),
             );
 
             if !self.files.insert(entry) {

@@ -1,8 +1,8 @@
-use anyhow::bail;
 use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use log::debug;
 use log::error;
 use log::info;
 use serde_json::json;
@@ -23,6 +23,7 @@ use tedge_api::commands::ConfigUpdateCmdPayload;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicError;
 use tedge_api::Jsonify;
+use tedge_config::SudoCommandBuilder;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -34,6 +35,7 @@ use tedge_uploader_ext::UploadResult;
 use tedge_utils::atomic::MaybePermissions;
 use tedge_write::CopyOptions;
 
+use crate::FileEntry;
 use crate::TedgeWriteStatus;
 
 use super::config::PluginConfig;
@@ -372,90 +374,84 @@ impl ConfigManagerWorker {
     /// created. If the configuration file already exists, its content is overwritten, but owner and
     /// mode remains unchanged.
     ///
-    /// If `use_tedge_write` is enabled, a `tedge-write` process is spawned when privilege elevation
-    /// is required.
+    /// If `use_tedge_write` is enabled, a `tedge-write` process is spawned with privilege elevation.
     fn deploy_config_file(
         &self,
         from: &Utf8Path,
         config_type: &str,
     ) -> anyhow::Result<Utf8PathBuf> {
         let file_entry = self.plugin_config.get_file_entry_from_type(config_type)?;
-
         let to = Utf8PathBuf::from(&file_entry.path);
 
-        let file_permissions = MaybePermissions::try_from(&file_entry.file_permissions)?;
-        let parent_permissions = MaybePermissions::try_from(&file_entry.parent_permissions)?;
+        let path = match self.config.use_tedge_write.clone() {
+            TedgeWriteStatus::Enabled { sudo } => {
+                debug!("Deploying a config file with elevation from '{from}' to '{to}'");
+                self.deploy_config_file_with_elevation(sudo, from, &to, file_entry)?
+            }
+            TedgeWriteStatus::Disabled => {
+                debug!("Deploying a config file without elevation from '{from}' to '{to}'");
+                self.deploy_config_file_without_elevation(from, &to, file_entry)?
+            }
+        };
 
+        Ok(path)
+    }
+
+    fn deploy_config_file_with_elevation(
+        &self,
+        sudo: SudoCommandBuilder,
+        from: &Utf8Path,
+        to: &Utf8Path,
+        file_entry: &FileEntry,
+    ) -> anyhow::Result<Utf8PathBuf> {
+        let mode = file_entry.file_permissions.mode;
+        let user = file_entry.file_permissions.user.as_deref();
+        let group = file_entry.file_permissions.group.as_deref();
+        let parent_mode = file_entry.parent_permissions.mode;
+        let parent_user = file_entry.parent_permissions.user.as_deref();
+        let parent_group = file_entry.parent_permissions.group.as_deref();
+
+        let options = CopyOptions {
+            from,
+            to,
+            sudo,
+            mode,
+            user,
+            group,
+            parent_mode,
+            parent_user,
+            parent_group,
+        };
+
+        options.copy()?;
+        Ok(to.into())
+    }
+
+    fn deploy_config_file_without_elevation(
+        &self,
+        from: &Utf8Path,
+        to: &Utf8Path,
+        file_entry: &FileEntry,
+    ) -> anyhow::Result<Utf8PathBuf> {
         let src = std::fs::File::open(from)
             .with_context(|| format!("failed to open source temporary file '{from}'"))?;
+        let file_permissions = MaybePermissions::try_from(&file_entry.file_permissions)?;
 
-        let mut needs_elevation = false;
         if let Some(parent) = to.parent() {
-            if !parent.exists() {
-                // Attempt to create all parent directories if the immediate parent is expected to be owned by the current user
-                let uid_matches = parent_permissions.uid == Some(uzers::get_current_uid());
-                let gid_matches = parent_permissions.gid == Some(uzers::get_current_gid());
-                if (parent_permissions.uid.is_none() && parent_permissions.gid.is_none())
-                    || (uid_matches && gid_matches)
-                {
-                    if let Err(err) = std::fs::create_dir_all(parent) {
-                        bail!(
-                            "failed to create parent directories. path: '{parent}', error: '{err}'"
-                        );
-                    }
-                } else {
-                    needs_elevation = true;
-                }
-            }
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create parent directories. path: '{parent}'")
+            })?;
+
+            file_entry.parent_permissions.clone().apply_sync(parent.as_std_path())
+                .with_context(|| format!("failed to change the permissions or mode of the immediate parent directory. path: '{parent}'"))?;
         }
 
-        if !needs_elevation {
-            match tedge_utils::atomic::write_file_atomic_set_permissions_if_doesnt_exist(
-                src,
-                &to,
-                &file_permissions,
-            ) {
-                Ok(_) => return Ok(to),
-                Err(err) => {
-                    if !err
-                        .downcast_ref::<std::io::Error>()
-                        .is_some_and(|e| e.kind() == std::io::ErrorKind::PermissionDenied)
-                    {
-                        return Err(err);
-                    }
-                }
-            }
-        }
-
-        match self.config.use_tedge_write.clone() {
-            TedgeWriteStatus::Disabled => {
-                bail!("writing the file/directory requires elevated permissions, but tedge-write is disabled. path: '{to}'");
-            }
-
-            TedgeWriteStatus::Enabled { sudo } => {
-                let mode = file_entry.file_permissions.mode;
-                let user = file_entry.file_permissions.user.as_deref();
-                let group = file_entry.file_permissions.group.as_deref();
-                let parent_mode = file_entry.parent_permissions.mode;
-                let parent_user = file_entry.parent_permissions.user.as_deref();
-                let parent_group = file_entry.parent_permissions.group.as_deref();
-
-                let options = CopyOptions {
-                    from,
-                    to: to.as_path(),
-                    sudo,
-                    mode,
-                    user,
-                    group,
-                    parent_mode,
-                    parent_user,
-                    parent_group,
-                };
-
-                options.copy()?;
-                Ok(to)
-            }
-        }
+        tedge_utils::atomic::write_file_atomic_set_permissions_if_doesnt_exist(
+            src,
+            to,
+            &file_permissions,
+        )
+        .map(|_| to.into())
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), ChannelError> {
