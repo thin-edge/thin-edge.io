@@ -3,10 +3,12 @@
 use anyhow::bail;
 use anyhow::Context;
 use camino::Utf8PathBuf;
+use clap::arg;
 use clap::Parser;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use tedge_utils::atomic::MaybePermissions;
+use tedge_utils::file::PermissionEntry;
 
 /// tee-like helper for writing to files which `tedge` user does not have write permissions to.
 ///
@@ -19,6 +21,10 @@ pub struct Args {
     /// If the file does not exist, it will be created with the specified owner/group/permissions.
     /// If the file does exist, it will be overwritten, but its owner/group/permissions will remain
     /// unchanged.
+    ///
+    /// If parent directories are missing, they will be created and the specified parent permissions
+    /// will be applied only to the immediate parent.
+    /// If the parents exist, they will remain unchanged.
     destination_path: Utf8PathBuf,
 
     /// Permission mode for the file, in octal form.
@@ -32,6 +38,18 @@ pub struct Args {
     /// Group which will become the new owner of the file.
     #[arg(long)]
     group: Option<Box<str>>,
+
+    /// Permission mode for the immediate parent directory, in octal form.
+    #[arg(long)]
+    parent_mode: Option<Box<str>>,
+
+    /// User which will become the new owner of the immediate parent directory.
+    #[arg(long)]
+    parent_user: Option<Box<str>>,
+
+    /// Group which will become the new owner of the immediate parent directory.
+    #[arg(long)]
+    parent_group: Option<Box<str>>,
 
     #[command(flatten)]
     common: CommonArgs,
@@ -71,34 +89,59 @@ pub fn run(args: Args) -> anyhow::Result<()> {
         );
     }
 
-    let mode = args
-        .mode
-        .map(|m| u32::from_str_radix(&m, 8).with_context(|| format!("invalid mode: {m}")))
-        .transpose()?;
+    // what permissions we want to set if the file/directory doesn't exist
+    let file_permissions = get_permissions(args.mode, args.user, args.group)?;
+    let parent_permissions = PermissionEntry::new(
+        args.parent_user.map(|s| s.into()),
+        args.parent_group.map(|s| s.into()),
+        args.parent_mode
+            .map(|m| u32::from_str_radix(&m, 8).with_context(|| format!("invalid mode: {m}")))
+            .transpose()?,
+    );
 
-    let uid = args
-        .user
-        .map(|u| uzers::get_user_by_name(&*u).with_context(|| format!("no such user: '{u}'")))
-        .transpose()?
-        .map(|u| u.uid());
-
-    let gid = args
-        .group
-        .map(|g| uzers::get_group_by_name(&*g).with_context(|| format!("no such group: '{g}'")))
-        .transpose()?
-        .map(|g| g.gid());
-
-    // what permissions we want to set if the file doesn't exist
-    let permissions = MaybePermissions { uid, gid, mode };
+    if let Some(parent) = target_filepath.parent() {
+        if !parent.exists() {
+            match std::fs::create_dir_all(parent) {
+                Ok(_) => {
+                    parent_permissions.apply_sync(parent.as_std_path())?;
+                }
+                Err(err) => {
+                    bail!("failed to create parent directories. path: '{parent}', error: '{err}'");
+                }
+            }
+        }
+    }
 
     let src = std::io::stdin().lock();
 
     tedge_utils::atomic::write_file_atomic_set_permissions_if_doesnt_exist(
         src,
         &target_filepath,
-        &permissions,
+        &file_permissions,
     )
     .with_context(|| format!("failed to write to destination file '{target_filepath}'"))?;
 
     Ok(())
+}
+
+fn get_permissions(
+    mode: Option<Box<str>>,
+    user: Option<Box<str>>,
+    group: Option<Box<str>>,
+) -> anyhow::Result<MaybePermissions> {
+    let mode = mode
+        .map(|m| u32::from_str_radix(&m, 8).with_context(|| format!("invalid mode: {m}")))
+        .transpose()?;
+
+    let uid = user
+        .map(|u| uzers::get_user_by_name(&*u).with_context(|| format!("no such user: '{u}'")))
+        .transpose()?
+        .map(|u| u.uid());
+
+    let gid = group
+        .map(|g| uzers::get_group_by_name(&*g).with_context(|| format!("no such group: '{g}'")))
+        .transpose()?
+        .map(|g| g.gid());
+
+    Ok(MaybePermissions { uid, gid, mode })
 }

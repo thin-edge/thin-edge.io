@@ -2,10 +2,10 @@ use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use log::debug;
 use log::error;
 use log::info;
 use serde_json::json;
-use std::io::ErrorKind;
 use std::sync::Arc;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -23,6 +23,7 @@ use tedge_api::commands::ConfigUpdateCmdPayload;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicError;
 use tedge_api::Jsonify;
+use tedge_config::SudoCommandBuilder;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -34,6 +35,7 @@ use tedge_uploader_ext::UploadResult;
 use tedge_utils::atomic::MaybePermissions;
 use tedge_write::CopyOptions;
 
+use crate::FileEntry;
 use crate::TedgeWriteStatus;
 
 use super::config::PluginConfig;
@@ -372,83 +374,84 @@ impl ConfigManagerWorker {
     /// created. If the configuration file already exists, its content is overwritten, but owner and
     /// mode remains unchanged.
     ///
-    /// If `use_tedge_write` is enabled, a `tedge-write` process is spawned when privilege elevation
-    /// is required.
+    /// If `use_tedge_write` is enabled, a `tedge-write` process is spawned with privilege elevation.
     fn deploy_config_file(
         &self,
         from: &Utf8Path,
         config_type: &str,
     ) -> anyhow::Result<Utf8PathBuf> {
         let file_entry = self.plugin_config.get_file_entry_from_type(config_type)?;
-
         let to = Utf8PathBuf::from(&file_entry.path);
 
-        let permissions = MaybePermissions {
-            uid: file_entry
-                .file_permissions
-                .user
-                .as_ref()
-                .map(|u| {
-                    uzers::get_user_by_name(&u).with_context(|| format!("no such user: '{u}'"))
-                })
-                .transpose()?
-                .map(|u| u.uid()),
-
-            gid: file_entry
-                .file_permissions
-                .group
-                .as_ref()
-                .map(|g| {
-                    uzers::get_group_by_name(&g).with_context(|| format!("no such group: '{g}'"))
-                })
-                .transpose()?
-                .map(|g| g.gid()),
-
-            mode: file_entry.file_permissions.mode,
+        let path = match self.config.use_tedge_write.clone() {
+            TedgeWriteStatus::Enabled { sudo } => {
+                debug!("Deploying a config file with elevation from '{from}' to '{to}'");
+                self.deploy_config_file_with_elevation(sudo, from, &to, file_entry)?
+            }
+            TedgeWriteStatus::Disabled => {
+                debug!("Deploying a config file without elevation from '{from}' to '{to}'");
+                self.deploy_config_file_without_elevation(from, &to, file_entry)?
+            }
         };
 
+        Ok(path)
+    }
+
+    fn deploy_config_file_with_elevation(
+        &self,
+        sudo: SudoCommandBuilder,
+        from: &Utf8Path,
+        to: &Utf8Path,
+        file_entry: &FileEntry,
+    ) -> anyhow::Result<Utf8PathBuf> {
+        let mode = file_entry.file_permissions.mode;
+        let user = file_entry.file_permissions.user.as_deref();
+        let group = file_entry.file_permissions.group.as_deref();
+        let parent_mode = file_entry.parent_permissions.mode;
+        let parent_user = file_entry.parent_permissions.user.as_deref();
+        let parent_group = file_entry.parent_permissions.group.as_deref();
+
+        let options = CopyOptions {
+            from,
+            to,
+            sudo,
+            mode,
+            user,
+            group,
+            parent_mode,
+            parent_user,
+            parent_group,
+        };
+
+        options.copy()?;
+        Ok(to.into())
+    }
+
+    fn deploy_config_file_without_elevation(
+        &self,
+        from: &Utf8Path,
+        to: &Utf8Path,
+        file_entry: &FileEntry,
+    ) -> anyhow::Result<Utf8PathBuf> {
         let src = std::fs::File::open(from)
             .with_context(|| format!("failed to open source temporary file '{from}'"))?;
+        let file_permissions = MaybePermissions::try_from(&file_entry.file_permissions)?;
 
-        let Err(err) = tedge_utils::atomic::write_file_atomic_set_permissions_if_doesnt_exist(
+        if let Some(parent) = to.parent() {
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create parent directories. path: '{parent}'")
+            })?;
+
+            file_entry.parent_permissions.clone().apply_sync(parent.as_std_path())
+                .with_context(|| format!("failed to change the permissions or mode of the immediate parent directory. path: '{parent}'"))?;
+        }
+
+        tedge_utils::atomic::write_file_atomic_set_permissions_if_doesnt_exist(
             src,
-            &to,
-            &permissions,
+            to,
+            &file_permissions,
         )
-        .with_context(|| format!("failed to deploy config file from '{from}' to '{to}'")) else {
-            return Ok(to);
-        };
-
-        if let Some(io_error) = err.downcast_ref::<std::io::Error>() {
-            if io_error.kind() != ErrorKind::PermissionDenied {
-                return Err(err);
-            }
-        }
-
-        match self.config.use_tedge_write.clone() {
-            TedgeWriteStatus::Disabled => {
-                return Err(err);
-            }
-
-            TedgeWriteStatus::Enabled { sudo } => {
-                let mode = file_entry.file_permissions.mode;
-                let user = file_entry.file_permissions.user.as_deref();
-                let group = file_entry.file_permissions.group.as_deref();
-
-                let options = CopyOptions {
-                    from,
-                    to: to.as_path(),
-                    sudo,
-                    mode,
-                    user,
-                    group,
-                };
-
-                options.copy()?;
-            }
-        }
-
-        Ok(to)
+        .map(|_| to.into())
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), ChannelError> {
