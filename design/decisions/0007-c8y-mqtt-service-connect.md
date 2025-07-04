@@ -32,6 +32,7 @@ To establish a bridge connection to the mqtt service endpoint, the following inf
 
 * host: Same as legacy mqtt endpoint
 * port: 9883 by default
+* client id: device id (but need not be the device id itself)
 * auth:
   * for username/password based authentication
     * username: `<tenant_id>/<user_name>`

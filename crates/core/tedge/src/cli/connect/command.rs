@@ -1060,7 +1060,7 @@ async fn write_mosquitto_bridge_config_file(
 ) -> Result<(), ConnectError> {
     if let Err(err) = write_bridge_config_to_file(tedge_config, bridge_config).await {
         // We want to preserve previous errors and therefore discard result of this function.
-        // let _ = clean_up(tedge_config, bridge_config);
+        let _ = clean_up(tedge_config, bridge_config);
         return Err(err);
     }
 
