@@ -159,24 +159,14 @@ impl FlowsMapper {
     }
 
     async fn filter(&mut self, timestamp: DateTime, message: Message) -> Result<(), RuntimeError> {
-        for (pipeline_id, pipeline_messages) in self.processor.process(&timestamp, &message).await {
-            match pipeline_messages {
+        for (flow_id, flow_messages) in self.processor.process(&timestamp, &message).await {
+            match flow_messages {
                 Ok(messages) => {
-                    for message in messages {
-                        match MqttMessage::try_from(message) {
-                            Ok(message) => {
-                                self.messages
-                                    .send(OutputMessage::MqttMessage(message))
-                                    .await?
-                            }
-                            Err(err) => {
-                                error!(target: "flows", "{pipeline_id}: cannot send transformed message: {err}")
-                            }
-                        }
-                    }
+                    self.publish_messages(flow_id.clone(), timestamp.clone(), messages)
+                        .await?;
                 }
                 Err(err) => {
-                    error!(target: "flows", "{pipeline_id}: {err}");
+                    error!(target: "flows", "{flow_id}: {err}");
                 }
             }
         }
@@ -195,18 +185,8 @@ impl FlowsMapper {
         for (flow_id, flow_messages) in self.processor.on_interval(timestamp, now).await {
             match flow_messages {
                 Ok(messages) => {
-                    for message in messages {
-                        match MqttMessage::try_from(message) {
-                            Ok(message) => {
-                                self.messages
-                                    .send(OutputMessage::MqttMessage(message))
-                                    .await?
-                            }
-                            Err(err) => {
-                                error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
-                            }
-                        }
-                    }
+                    self.publish_messages(flow_id.clone(), timestamp.clone(), messages)
+                        .await?;
                 }
                 Err(err) => {
                     error!(target: "flows", "{flow_id}: {err}");
@@ -217,16 +197,37 @@ impl FlowsMapper {
         Ok(())
     }
 
+    async fn publish_messages(
+        &mut self,
+        flow_id: String,
+        _timestamp: DateTime,
+        messages: Vec<Message>,
+    ) -> Result<(), RuntimeError> {
+        for message in messages {
+            match MqttMessage::try_from(message) {
+                Ok(message) => {
+                    self.messages
+                        .send(OutputMessage::MqttMessage(message))
+                        .await?
+                }
+                Err(err) => {
+                    error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
+                }
+            }
+        }
+        Ok(())
+    }
+
     async fn drain_db(&mut self) -> Result<Vec<(DateTime, Message)>, RuntimeError> {
         let timestamp = DateTime::now();
         let mut messages = vec![];
-        for (pipeline_id, pipeline_messages) in self.processor.drain_db(&timestamp).await {
-            match pipeline_messages {
-                Ok(pipeline_messages) => {
-                    messages.extend(pipeline_messages);
+        for (flow_id, flow_messages) in self.processor.drain_db(&timestamp).await {
+            match flow_messages {
+                Ok(flow_messages) => {
+                    messages.extend(flow_messages);
                 }
                 Err(err) => {
-                    error!(target: "gen-mapper", "{pipeline_id}: {err}");
+                    error!(target: "flows", "{flow_id}: {err}");
                 }
             }
         }
