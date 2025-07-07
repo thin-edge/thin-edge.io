@@ -124,4 +124,7 @@ pub enum LoadError {
 
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
+
+    #[error(transparent)]
+    Fjall(#[from] fjall::Error),
 }

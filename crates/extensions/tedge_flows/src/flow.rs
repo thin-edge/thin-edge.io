@@ -33,7 +33,9 @@ pub enum FlowInput {
     MQTT { topics: TopicFilter },
 }
 
-#[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
+#[derive(
+    Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq, Ord, PartialOrd,
+)]
 pub struct DateTime {
     pub seconds: u64,
     pub nanoseconds: u32,
