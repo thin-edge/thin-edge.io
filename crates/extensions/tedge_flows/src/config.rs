@@ -1,5 +1,6 @@
 use crate::flow::Flow;
 use crate::flow::FlowInput;
+use crate::flow::FlowOutput;
 use crate::flow::FlowStep;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
@@ -16,6 +17,9 @@ use tedge_mqtt_ext::TopicFilter;
 pub struct FlowConfig {
     input: InputConfig,
     steps: Vec<StepConfig>,
+
+    #[serde(default = "default_output")]
+    output: OutputConfig,
 }
 
 #[derive(Deserialize)]
@@ -43,6 +47,35 @@ pub enum ScriptSpec {
 pub enum InputConfig {
     #[serde(rename = "mqtt")]
     Mqtt { topics: Vec<String> },
+    #[serde(rename = "db")]
+    MeaDB {
+        series: String,
+        #[serde(deserialize_with = "parse_human_duration")]
+        frequency: Duration,
+        #[serde(deserialize_with = "parse_human_duration")]
+        max_age: Duration,
+    },
+}
+
+#[derive(Deserialize)]
+pub enum OutputConfig {
+    #[serde(rename = "mqtt")]
+    Mqtt {
+        #[serde(default = "default_output_topics")]
+        topics: Vec<String>,
+    },
+    #[serde(rename = "db")]
+    MeaDB { series: String },
+}
+
+fn default_output() -> OutputConfig {
+    OutputConfig::Mqtt {
+        topics: vec!["#".to_string()],
+    }
+}
+
+fn default_output_topics() -> Vec<String> {
+    vec!["#".to_string()]
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -68,6 +101,7 @@ impl FlowConfig {
                 topics: vec![input_topic],
             },
             steps: vec![step],
+            output: default_output(),
         }
     }
 
@@ -87,10 +121,12 @@ impl FlowConfig {
             step.script.init_next_execution();
             steps.push(step);
         }
+        let output = self.output.try_into()?;
         Ok(Flow {
             input,
             steps,
             source,
+            output,
         })
     }
 }
@@ -125,6 +161,30 @@ impl TryFrom<InputConfig> for FlowInput {
         match input {
             InputConfig::Mqtt { topics } => Ok(FlowInput::MQTT {
                 topics: topic_filters(topics)?,
+            }),
+            InputConfig::MeaDB {
+                series,
+                frequency,
+                max_age,
+            } => Ok(FlowInput::MeaDB {
+                series,
+                frequency,
+                max_age,
+            }),
+        }
+    }
+}
+
+impl TryFrom<OutputConfig> for FlowOutput {
+    type Error = ConfigError;
+
+    fn try_from(output: OutputConfig) -> Result<Self, Self::Error> {
+        match output {
+            OutputConfig::Mqtt { topics } => Ok(FlowOutput::MQTT {
+                output_topics: topic_filters(topics)?,
+            }),
+            OutputConfig::MeaDB { series } => Ok(FlowOutput::MeaDB {
+                output_series: series,
             }),
         }
     }

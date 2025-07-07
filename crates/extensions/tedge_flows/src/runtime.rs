@@ -2,6 +2,7 @@ use crate::config::FlowConfig;
 use crate::flow::DateTime;
 use crate::flow::Flow;
 use crate::flow::FlowError;
+use crate::flow::FlowInput;
 use crate::flow::Message;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
@@ -63,8 +64,7 @@ impl MessageProcessor {
     }
 
     fn db_path() -> Utf8PathBuf {
-        // TODO: Get this from configuration
-        Utf8PathBuf::from("/tmp/tedge_flows_db")
+        "/etc/tedge/tedge-flows.db".into()
     }
 
     pub async fn try_new_single_flow(
@@ -210,13 +210,26 @@ impl MessageProcessor {
 
     pub async fn drain_db(
         &mut self,
-        _timestamp: DateTime,
-    ) -> Vec<(String, Result<Vec<(DateTime, Message)>, FlowError>)> {
+        timestamp: DateTime,
+    ) -> Vec<(String, Result<Vec<(DateTime, Message)>, DatabaseError>)> {
         let mut out_messages = vec![];
-        for (flow_id, _flow) in self.flows.iter() {
-            // TODO: Check if this flow has MeaDB input configuration
-            // For now, return empty results since flow structure doesn't have pipeline input types yet
-            out_messages.push((flow_id.to_owned(), Ok(vec![])));
+        for (flow_id, flow) in self.flows.iter() {
+            if let FlowInput::MeaDB {
+                series: input_series,
+                frequency: input_frequency,
+                max_age: input_span,
+            } = &flow.input
+            {
+                if timestamp.tick_now(*input_frequency) {
+                    let cutoff_time = timestamp.sub_duration(*input_span);
+                    let drained_messages = self
+                        .database
+                        .drain_older_than(cutoff_time, input_series)
+                        .await
+                        .map_err(DatabaseError::from);
+                    out_messages.push((flow_id.to_owned(), drained_messages));
+                }
+            }
         }
         out_messages
     }

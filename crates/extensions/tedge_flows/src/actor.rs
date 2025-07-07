@@ -1,4 +1,5 @@
 use crate::flow::DateTime;
+use crate::flow::FlowOutput;
 use crate::flow::Message;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
@@ -200,18 +201,39 @@ impl FlowsMapper {
     async fn publish_messages(
         &mut self,
         flow_id: String,
-        _timestamp: DateTime,
+        timestamp: DateTime,
         messages: Vec<Message>,
     ) -> Result<(), RuntimeError> {
-        for message in messages {
-            match MqttMessage::try_from(message) {
-                Ok(message) => {
-                    self.messages
-                        .send(OutputMessage::MqttMessage(message))
-                        .await?
+        if let Some(flow) = self.processor.flows.get(&flow_id) {
+            match &flow.output {
+                FlowOutput::MQTT { output_topics } => {
+                    for message in messages {
+                        match MqttMessage::try_from(message) {
+                            Ok(message) if output_topics.accept_topic(&message.topic) => {
+                                self.messages
+                                    .send(OutputMessage::MqttMessage(message))
+                                    .await?
+                            }
+                            Ok(message) => {
+                                error!(target: "flows", "{flow_id}: reject out-of-scope message: {}", message.topic)
+                            }
+                            Err(err) => {
+                                error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
+                            }
+                        }
+                    }
                 }
-                Err(err) => {
-                    error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
+                FlowOutput::MeaDB { output_series } => {
+                    for message in messages {
+                        if let Err(err) = self
+                            .processor
+                            .database
+                            .store(output_series, timestamp, message)
+                            .await
+                        {
+                            error!(target: "flows", "{flow_id}: fail to persist message: {err}");
+                        }
+                    }
                 }
             }
         }
