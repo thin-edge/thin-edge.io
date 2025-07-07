@@ -155,6 +155,48 @@ impl MessageProcessor {
         out_messages
     }
 
+    pub async fn process(
+        &mut self,
+        timestamp: &DateTime,
+        message: &Message,
+    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
+        let mut out_messages = vec![];
+        for (flow_id, flow) in self.flows.iter_mut() {
+            let flow_output = flow
+                .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
+                .await;
+            out_messages.push((flow_id.clone(), flow_output));
+        }
+        out_messages
+    }
+
+    pub async fn tick(
+        &mut self,
+        timestamp: &DateTime,
+    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
+        let mut out_messages = vec![];
+        for (flow_id, flow) in self.flows.iter_mut() {
+            let flow_output = flow
+                .on_interval(&self.js_runtime, &mut self.stats, timestamp)
+                .await;
+            out_messages.push((flow_id.clone(), flow_output));
+        }
+        out_messages
+    }
+
+    pub async fn drain_db(
+        &mut self,
+        _timestamp: &DateTime,
+    ) -> Vec<(String, Result<Vec<(DateTime, Message)>, FlowError>)> {
+        let mut out_messages = vec![];
+        for (flow_id, _flow) in self.flows.iter() {
+            // TODO: Implement actual database draining logic
+            // This is a placeholder that needs to be implemented based on flow input type
+            out_messages.push((flow_id.to_owned(), Ok(vec![])));
+        }
+        out_messages
+    }
+
     pub async fn dump_processing_stats(&self) {
         self.stats.dump_processing_stats();
     }
