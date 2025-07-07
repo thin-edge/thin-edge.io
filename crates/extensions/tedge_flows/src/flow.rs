@@ -21,6 +21,9 @@ pub struct Flow {
     pub steps: Vec<FlowStep>,
 
     pub source: Utf8PathBuf,
+
+    /// Target of the transformed messages
+    pub output: FlowOutput,
 }
 
 /// A message transformation step
@@ -30,7 +33,20 @@ pub struct FlowStep {
 }
 
 pub enum FlowInput {
-    MQTT { topics: TopicFilter },
+    MQTT {
+        topics: TopicFilter,
+    },
+    MeaDB {
+        series: String,
+        frequency: std::time::Duration,
+        max_age: std::time::Duration,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FlowOutput {
+    MQTT { output_topics: TopicFilter },
+    MeaDB { output_series: String },
 }
 
 #[derive(
@@ -190,6 +206,12 @@ impl FlowInput {
     pub fn topics(&self) -> &TopicFilter {
         match self {
             FlowInput::MQTT { topics } => topics,
+            FlowInput::MeaDB { .. } => {
+                // MeaDB inputs don't subscribe to MQTT topics
+                // Return an empty topic filter
+                static EMPTY_TOPICS: std::sync::OnceLock<TopicFilter> = std::sync::OnceLock::new();
+                EMPTY_TOPICS.get_or_init(TopicFilter::empty)
+            }
         }
     }
 }
@@ -199,13 +221,20 @@ impl DateTime {
         DateTime::try_from(OffsetDateTime::now_utc()).unwrap()
     }
 
+    pub fn json(&self) -> Value {
+        json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
+    }
+
     pub fn tick_now(&self, tick_every: std::time::Duration) -> bool {
         let tick_every_secs = tick_every.as_secs();
         tick_every_secs != 0 && (self.seconds % tick_every_secs == 0)
     }
 
-    pub fn json(&self) -> Value {
-        json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
+    pub fn sub_duration(&self, duration: std::time::Duration) -> Self {
+        DateTime {
+            seconds: self.seconds - duration.as_secs(),
+            nanoseconds: self.nanoseconds,
+        }
     }
 }
 
