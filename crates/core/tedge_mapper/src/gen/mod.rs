@@ -11,13 +11,13 @@ impl TEdgeComponent for GenMapper {
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
-        _config_dir: &tedge_config::Path,
+        config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors("tedge-gen-mapper", &tedge_config).await?;
 
         let mut fs_actor = FsWatchActorBuilder::new();
-        let mut gen_mapper = GenMapperBuilder::try_new("/etc/tedge/gen-mapper").await?;
+        let mut gen_mapper = GenMapperBuilder::try_new(config_dir.join("gen-mapper")).await?;
         gen_mapper.connect(&mut mqtt_actor);
         gen_mapper.connect_fs(&mut fs_actor);
 
