@@ -19,6 +19,9 @@ pub struct Pipeline {
 
     /// Path to pipeline source code
     pub source: Utf8PathBuf,
+
+    /// Target of the transformed messages
+    pub output: PipelineOutput,
 }
 
 /// A message transformation stage
@@ -35,6 +38,15 @@ pub enum PipelineInput {
         input_series: String,
         input_frequency: u64,
         input_span: Duration,
+    },
+}
+
+pub enum PipelineOutput {
+    MQTT {
+        output_topics: TopicFilter,
+    },
+    MeaDB {
+        output_series: String,
     },
 }
 
@@ -154,6 +166,13 @@ impl DateTime {
 
     pub fn json(&self) -> Value {
         json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
+    }
+
+    pub fn sub(&self, duration: &Duration) -> Self {
+        DateTime {
+            seconds: self.seconds - duration.as_secs(),
+            nanoseconds: self.nanoseconds,
+        }
     }
 }
 

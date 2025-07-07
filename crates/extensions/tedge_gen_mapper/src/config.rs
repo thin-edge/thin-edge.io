@@ -2,6 +2,7 @@ use crate::js_filter::JsFilter;
 use crate::js_runtime::JsRuntime;
 use crate::pipeline::Pipeline;
 use crate::pipeline::PipelineInput;
+use crate::pipeline::PipelineOutput;
 use crate::pipeline::Stage;
 use crate::LoadError;
 use camino::Utf8Path;
@@ -17,7 +18,11 @@ use tedge_mqtt_ext::TopicFilter;
 pub struct PipelineConfig {
     #[serde(flatten)]
     input: InputConfig,
+
     stages: Vec<StageConfig>,
+
+    #[serde(flatten)]
+    output: OutputConfig,
 }
 
 #[derive(Deserialize)]
@@ -43,13 +48,24 @@ pub enum FilterSpec {
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum InputConfig {
-    MQTT {
+    Mqtt {
         input_topics: Vec<String>,
     },
     MeaDB {
         input_series: String,
         input_frequency: Duration,
         input_span: Duration,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum OutputConfig {
+    Mqtt {
+        output_topics: Vec<String>,
+    },
+    MeaDB {
+        output_series: String,
     },
 }
 
@@ -65,6 +81,7 @@ pub enum ConfigError {
 impl PipelineConfig {
     pub fn from_filter(filter: Utf8PathBuf) -> Self {
         let input_topic = "#".to_string();
+        let output_topic = "#".to_string();
         let stage = StageConfig {
             filter: FilterSpec::JavaScript(filter),
             config: None,
@@ -72,10 +89,13 @@ impl PipelineConfig {
             meta_topics: vec![],
         };
         Self {
-            input: InputConfig::MQTT {
+            input: InputConfig::Mqtt {
                 input_topics: vec![input_topic],
             },
             stages: vec![stage],
+            output: OutputConfig::Mqtt {
+                output_topics: vec![output_topic],
+            },
         }
     }
 
@@ -86,6 +106,7 @@ impl PipelineConfig {
         source: Utf8PathBuf,
     ) -> Result<Pipeline, ConfigError> {
         let input = self.input.try_into()?;
+        let output = self.output.try_into()?;
         let mut stages = vec![];
         for (i, stage) in self.stages.into_iter().enumerate() {
             let stage = stage.compile(config_dir, i, &source).await?;
@@ -99,6 +120,7 @@ impl PipelineConfig {
             input,
             stages,
             source,
+            output,
         })
     }
 }
@@ -131,7 +153,7 @@ impl TryFrom<InputConfig> for PipelineInput {
 
     fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
         match input {
-            InputConfig::MQTT { input_topics } => Ok(PipelineInput::MQTT {
+            InputConfig::Mqtt { input_topics } => Ok(PipelineInput::MQTT {
                 input_topics: topic_filters(input_topics)?,
             }),
             InputConfig::MeaDB {
@@ -158,4 +180,25 @@ fn topic_filters(patterns: Vec<String>) -> Result<TopicFilter, ConfigError> {
             .map_err(|_| ConfigError::IncorrectTopicFilter(pattern))?;
     }
     Ok(topics)
+}
+
+impl Default for OutputConfig {
+    fn default() -> Self {
+        OutputConfig::Mqtt {
+            output_topics: vec!["#".to_string()],
+        }
+    }
+}
+
+impl TryFrom<OutputConfig> for PipelineOutput {
+    type Error = ConfigError;
+
+    fn try_from(value: OutputConfig) -> Result<Self, Self::Error> {
+        match value {
+            OutputConfig::Mqtt { output_topics } => Ok(PipelineOutput::MQTT {
+                output_topics: topic_filters(output_topics)?,
+            }),
+            OutputConfig::MeaDB { output_series } => Ok(PipelineOutput::MeaDB { output_series }),
+        }
+    }
 }

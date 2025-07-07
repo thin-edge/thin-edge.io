@@ -22,6 +22,24 @@ pub struct MessageProcessor {
     pub config_dir: PathBuf,
     pub pipelines: HashMap<String, Pipeline>,
     pub(super) js_runtime: JsRuntime,
+    pub database: MeaDB,
+}
+
+pub struct MeaDB {}
+
+#[derive(thiserror::Error, Debug)]
+pub enum DatabaseError {}
+
+impl MeaDB {
+    pub async fn open(_path: &Path) -> Result<MeaDB, DatabaseError> {
+        Ok(MeaDB{})
+    }
+    pub async fn store(&mut self, _series: String, _timestamp: DateTime, _message: Message) -> Result<(), DatabaseError> {
+        Ok(())
+    }
+    pub async fn drain_older(&mut self, _series: &str, _timestamp: &DateTime) -> Result<Vec<(DateTime,Message)>, DatabaseError> {
+        Ok(vec![])
+    }
 }
 
 impl MessageProcessor {
@@ -40,6 +58,7 @@ impl MessageProcessor {
             config_dir,
             pipelines,
             js_runtime,
+            database: MeaDB{},
         })
     }
 
@@ -57,6 +76,7 @@ impl MessageProcessor {
             config_dir,
             pipelines,
             js_runtime,
+            database: MeaDB{},
         })
     }
 
@@ -73,6 +93,7 @@ impl MessageProcessor {
             config_dir,
             pipelines,
             js_runtime,
+            database: MeaDB{},
         })
     }
 
@@ -112,7 +133,7 @@ impl MessageProcessor {
     pub async fn drain_db(
         &mut self,
         timestamp: &DateTime,
-    ) -> Vec<(String, Result<Vec<(DateTime, Message)>, FilterError>)> {
+    ) -> Vec<(String, Result<Vec<(DateTime, Message)>, DatabaseError>)> {
         let mut out_messages = vec![];
         for (pipeline_id, pipeline) in self.pipelines.iter() {
             if let PipelineInput::MeaDB {
@@ -122,7 +143,7 @@ impl MessageProcessor {
             } = &pipeline.input
             {
                 if timestamp.tick_now(*input_frequency) {
-                    let drained_messages = Ok(vec![]); // db.drain_older(input_series, timestamp, input_span).await;
+                    let drained_messages = self.database.drain_older(input_series, &timestamp.sub(input_span)).await;
                     out_messages.push((pipeline_id.to_owned(), drained_messages));
                 }
             }

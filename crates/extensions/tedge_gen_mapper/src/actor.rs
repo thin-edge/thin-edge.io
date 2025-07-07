@@ -1,11 +1,10 @@
-use crate::pipeline::DateTime;
+use crate::pipeline::{DateTime, PipelineOutput};
 use crate::pipeline::Message;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
 use crate::OutputMessage;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
-use std::fmt::Debug;
 use tedge_actors::Actor;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
@@ -117,18 +116,7 @@ impl GenMapper {
         for (pipeline_id, pipeline_messages) in self.processor.process(&timestamp, &message).await {
             match pipeline_messages {
                 Ok(messages) => {
-                    for message in messages {
-                        match MqttMessage::try_from(message) {
-                            Ok(message) => {
-                                self.messages
-                                    .send(OutputMessage::MqttMessage(message))
-                                    .await?
-                            }
-                            Err(err) => {
-                                error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
-                            }
-                        }
-                    }
+                    self.publish_messages(pipeline_id, timestamp.clone(), messages).await?;
                 }
                 Err(err) => {
                     error!(target: "gen-mapper", "{pipeline_id}: {err}");
@@ -147,12 +135,30 @@ impl GenMapper {
         for (pipeline_id, pipeline_messages) in self.processor.tick(&timestamp).await {
             match pipeline_messages {
                 Ok(messages) => {
+                    self.publish_messages(pipeline_id, timestamp.clone(), messages).await?;
+                }
+                Err(err) => {
+                    error!(target: "gen-mapper", "{pipeline_id}: {err}");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn publish_messages(&mut self, pipeline_id: String, timestamp: DateTime, messages: Vec<Message>) -> Result<(), RuntimeError> {
+        if let Some(pipeline) = self.processor.pipelines.get(&pipeline_id) {
+            match &pipeline.output {
+                PipelineOutput::MQTT { output_topics } => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
-                            Ok(message) => {
+                            Ok(message) if output_topics.accept_topic(&message.topic)=> {
                                 self.messages
                                     .send(OutputMessage::MqttMessage(message))
                                     .await?
+                            }
+                            Ok(message) => {
+                                error!(target: "gen-mapper", "{pipeline_id}: reject out-of-scope message: {}", message.topic)
                             }
                             Err(err) => {
                                 error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
@@ -160,8 +166,12 @@ impl GenMapper {
                         }
                     }
                 }
-                Err(err) => {
-                    error!(target: "gen-mapper", "{pipeline_id}: {err}");
+                PipelineOutput::MeaDB { output_series } => {
+                    for message in messages {
+                        if let Err(err) = self.processor.database.store(output_series.clone(), timestamp.clone(), message).await {
+                            error!(target: "gen-mapper", "{pipeline_id}: fail to persist message: {err}");
+                        }
+                    }
                 }
             }
         }
