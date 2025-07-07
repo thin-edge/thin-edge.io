@@ -55,8 +55,12 @@ impl MessageProcessor {
             config_dir,
             pipelines,
             js_runtime,
-            database: MeaDb::open(todo!()).await?,
+            database: MeaDb::open(Self::db_path()).await?,
         })
+    }
+
+    fn db_path() -> Utf8PathBuf {
+        todo!()
     }
 
     pub async fn try_new_single_pipeline(
@@ -73,7 +77,7 @@ impl MessageProcessor {
             config_dir,
             pipelines,
             js_runtime,
-            database: MeaDb::open(todo!()).await?,
+            database: MeaDb::open(Self::db_path()).await?,
         })
     }
 
@@ -90,7 +94,7 @@ impl MessageProcessor {
             config_dir,
             pipelines,
             js_runtime,
-            database: MeaDb::open(todo!()).await?,
+            database: MeaDb::open(Self::db_path()).await?,
         })
     }
 
