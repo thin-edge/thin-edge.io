@@ -8,11 +8,17 @@ use crate::stats::Counter;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use fjall::Keyspace;
+use fjall::PartitionCreateOptions;
+use fjall::Slice;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::path::Path;
 use tedge_mqtt_ext::TopicFilter;
 use tokio::fs::read_dir;
 use tokio::fs::read_to_string;
+use tokio::task::spawn_blocking;
 use tokio::time::Instant;
 use tracing::error;
 use tracing::info;
@@ -23,7 +29,16 @@ pub struct MessageProcessor {
     pub flows: HashMap<String, Flow>,
     pub(super) js_runtime: JsRuntime,
     pub stats: Counter,
+    pub database: MeaDB,
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum DatabaseError {
+    #[error(transparent)]
+    Fjall(#[from] fjall::Error),
+}
+
+pub type MeaDB = MeaDb<DateTime, Message>;
 
 impl MessageProcessor {
     pub fn flow_id(path: impl AsRef<Path>) -> String {
@@ -43,7 +58,13 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
+            database: MeaDb::open(Self::db_path()).await?,
         })
+    }
+
+    fn db_path() -> Utf8PathBuf {
+        // TODO: Get this from configuration
+        Utf8PathBuf::from("/tmp/tedge_flows_db")
     }
 
     pub async fn try_new_single_flow(
@@ -63,6 +84,7 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
+            database: MeaDb::open(Self::db_path()).await?,
         })
     }
 
@@ -82,6 +104,7 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
+            database: MeaDb::open(Self::db_path()).await?,
         })
     }
 
@@ -157,7 +180,7 @@ impl MessageProcessor {
 
     pub async fn process(
         &mut self,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         message: &Message,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let mut out_messages = vec![];
@@ -172,12 +195,13 @@ impl MessageProcessor {
 
     pub async fn tick(
         &mut self,
-        timestamp: &DateTime,
+        timestamp: DateTime,
+        now: Instant,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let mut out_messages = vec![];
         for (flow_id, flow) in self.flows.iter_mut() {
             let flow_output = flow
-                .on_interval(&self.js_runtime, &mut self.stats, timestamp)
+                .on_interval(&self.js_runtime, &mut self.stats, timestamp, now)
                 .await;
             out_messages.push((flow_id.clone(), flow_output));
         }
@@ -186,12 +210,12 @@ impl MessageProcessor {
 
     pub async fn drain_db(
         &mut self,
-        _timestamp: &DateTime,
+        _timestamp: DateTime,
     ) -> Vec<(String, Result<Vec<(DateTime, Message)>, FlowError>)> {
         let mut out_messages = vec![];
         for (flow_id, _flow) in self.flows.iter() {
-            // TODO: Implement actual database draining logic
-            // This is a placeholder that needs to be implemented based on flow input type
+            // TODO: Check if this flow has MeaDB input configuration
+            // For now, return empty results since flow structure doesn't have pipeline input types yet
             out_messages.push((flow_id.to_owned(), Ok(vec![])));
         }
         out_messages
@@ -362,5 +386,262 @@ impl FlowSpecs {
             }
         }
         flows
+    }
+}
+
+pub struct MeaDb<Timestamp, Payload> {
+    keyspace: Keyspace,
+    oldest: BTreeMap<String, Timestamp>,
+    _payload: PhantomData<Payload>,
+}
+
+pub trait ToFromSlice {
+    fn to_slice(&self) -> Slice;
+    fn from_slice(slice: Slice) -> Self;
+}
+
+impl ToFromSlice for DateTime {
+    fn to_slice(&self) -> Slice {
+        let mut arr = [0u8; 12];
+        *&mut arr[0..8].copy_from_slice(&self.seconds.to_be_bytes());
+        *&mut arr[8..12].copy_from_slice(&self.nanoseconds.to_be_bytes());
+        Slice::new(&arr)
+    }
+
+    fn from_slice(slice: Slice) -> Self {
+        let secs_be = &slice[..8];
+        let nanos_be = &slice[8..];
+        let secs = u64::from_be_bytes(secs_be.try_into().unwrap());
+        let nanos = u32::from_be_bytes(nanos_be.try_into().unwrap());
+
+        Self {
+            seconds: secs,
+            nanoseconds: nanos,
+        }
+    }
+}
+
+impl ToFromSlice for Message {
+    fn to_slice(&self) -> Slice {
+        Slice::new(self.json().to_string().as_bytes())
+    }
+
+    fn from_slice(slice: Slice) -> Self {
+        serde_json::from_slice(&slice).unwrap()
+    }
+}
+
+impl<Timestamp, Payload> MeaDb<Timestamp, Payload>
+where
+    Payload: ToFromSlice + Send + 'static,
+    Timestamp: ToFromSlice + Ord + Copy + Send + 'static,
+{
+    pub async fn drain_older_than(
+        &mut self,
+        timestamp: Timestamp,
+        series: &str,
+    ) -> Result<Vec<(Timestamp, Payload)>, fjall::Error> {
+        let ks = self.keyspace.clone();
+        let (messages, new_oldest) = spawn_blocking({
+            let series = series.to_owned();
+            move || {
+                let partition = ks.open_partition(&series, PartitionCreateOptions::default())?;
+                let messages = partition
+                    .range(..=timestamp.to_slice())
+                    .map(|res| res.map(Self::decode))
+                    .collect::<Result<Vec<_>, _>>()?;
+                for msg in &messages {
+                    partition.remove(msg.0.to_slice())?;
+                }
+                Ok::<_, fjall::Error>((messages, partition.first_key_value()?))
+            }
+        })
+        .await
+        .unwrap()?;
+
+        self.oldest.remove(series);
+        if let Some((ts, _payload)) = new_oldest {
+            self.update_oldest(series, Timestamp::from_slice(ts));
+        }
+        Ok(messages)
+    }
+
+    fn decode((key, value): (Slice, Slice)) -> (Timestamp, Payload) {
+        (Timestamp::from_slice(key), Payload::from_slice(value))
+    }
+
+    pub async fn open(path: impl AsRef<Path> + Send) -> Result<Self, fjall::Error> {
+        let path = path.as_ref().to_owned();
+        let keyspace = spawn_blocking(move || fjall::Config::new(path).open())
+            .await
+            .unwrap()?;
+        Ok(Self {
+            keyspace,
+            oldest: <_>::default(),
+            _payload: PhantomData,
+        })
+    }
+
+    pub async fn store(
+        &mut self,
+        series: &str,
+        timestamp: Timestamp,
+        payload: Payload,
+    ) -> Result<(), fjall::Error> {
+        let result = spawn_blocking({
+            let ks = self.keyspace.clone();
+            let series = series.to_owned();
+            move || {
+                let partition = ks.open_partition(&series, PartitionCreateOptions::default())?;
+                partition.insert(timestamp.to_slice(), payload.to_slice())?;
+                Ok(())
+            }
+        })
+        .await
+        .unwrap();
+        self.update_oldest(series, timestamp);
+        result
+    }
+
+    fn update_oldest(&mut self, topic: &str, inserted_ts: Timestamp) {
+        if let Some(value) = self.oldest.get_mut(topic) {
+            *value = std::cmp::min(*value, inserted_ts)
+        } else {
+            self.oldest.insert(topic.to_owned(), inserted_ts);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use time::macros::datetime;
+
+    use super::*;
+    use std::path::PathBuf;
+
+    // Helper function to create a dummy path
+    fn dummy_path() -> PathBuf {
+        PathBuf::from("/tmp/test_db")
+    }
+
+    impl ToFromSlice for String {
+        fn to_slice(&self) -> Slice {
+            Slice::new(self.as_bytes())
+        }
+
+        fn from_slice(slice: Slice) -> Self {
+            String::from_utf8(slice.to_vec()).unwrap()
+        }
+    }
+
+    #[tokio::test]
+    async fn test_store_single_message() {
+        let path = dummy_path();
+        let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
+
+        let series = "sensor_data";
+        let seconds = datetime!(2023-01-01 10:00 UTC).unix_timestamp();
+        let timestamp = DateTime {
+            seconds: seconds as u64,
+            nanoseconds: 0,
+        };
+        let message = "temp: 25C".to_string();
+
+        let result = db.store(series, timestamp, message.clone()).await;
+        assert!(result.is_ok());
+
+        // Verify the message was stored
+        let stored_messages = db.drain_older_than(timestamp, series).await.unwrap();
+        assert_eq!(stored_messages.len(), 1);
+        assert_eq!(stored_messages[0], (timestamp, message));
+    }
+
+    #[tokio::test]
+    async fn test_store_multiple_messages_same_series() {
+        let path = dummy_path();
+        let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
+
+        let series = "sensor_data".to_string();
+        let ts1 = datetime!(2023-01-01 10:00 UTC).unix_timestamp();
+        let ts1 = DateTime {
+            seconds: ts1 as u64,
+            nanoseconds: 0,
+        };
+        let msg1 = "temp: 25C".to_string();
+        let ts2 = datetime!(2023-01-01 10:05 UTC).unix_timestamp();
+        let ts2 = DateTime {
+            seconds: ts2 as u64,
+            nanoseconds: 0,
+        };
+        let msg2 = "temp: 26C".to_string();
+        let ts3 = datetime!(2023-01-01 09:55 UTC).unix_timestamp();
+        let ts3 = DateTime {
+            seconds: ts3 as u64,
+            nanoseconds: 0,
+        };
+        let msg3 = "temp: 24C".to_string();
+
+        db.store(&series, ts1, msg1.clone()).await.unwrap();
+        db.store(&series, ts2, msg2.clone()).await.unwrap();
+        db.store(&series, ts3, msg3.clone()).await.unwrap();
+
+        let stored_messages = db.drain_older_than(ts2, &series).await.unwrap();
+
+        assert_eq!(stored_messages.len(), 3);
+        // Verify messages are sorted by timestamp
+        assert_eq!(stored_messages[0], (ts3, msg3));
+        assert_eq!(stored_messages[1], (ts1, msg1));
+        assert_eq!(stored_messages[2], (ts2, msg2));
+    }
+
+    #[tokio::test]
+    async fn test_store_messages_different_series() {
+        let path = dummy_path();
+        let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
+
+        let series1 = "sensor_data_a".to_string();
+        let ts1 = datetime!(2023-01-01 10:00 UTC).unix_timestamp();
+        let ts1 = DateTime {
+            seconds: ts1 as u64,
+            nanoseconds: 0,
+        };
+        let msg1 = "data A1".to_string();
+
+        let series2 = "sensor_data_b".to_string();
+        let ts2 = datetime!(2023-01-01 10:01 UTC).unix_timestamp();
+        let ts2 = DateTime {
+            seconds: ts2 as u64,
+            nanoseconds: 0,
+        };
+        let msg2 = "data B1".to_string();
+
+        db.store(&series1, ts1, msg1.clone()).await.unwrap();
+        db.store(&series2, ts2, msg2.clone()).await.unwrap();
+
+        let s1_data = db.drain_older_than(ts1, &series1).await.unwrap();
+        let s2_data = db.drain_older_than(ts2, &series2).await.unwrap();
+        assert_eq!(s1_data.len(), 1);
+        assert_eq!(s2_data.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_drain_removes_data() {
+        let path = dummy_path();
+        let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
+
+        let series = "sensor_data_a".to_string();
+        let timestamp = datetime!(2023-01-01 10:00 UTC).unix_timestamp();
+        let timestamp = DateTime {
+            seconds: timestamp as u64,
+            nanoseconds: 0,
+        };
+        let msg = "data A1".to_string();
+
+        db.store(&series, timestamp, msg.clone()).await.unwrap();
+
+        let data = db.drain_older_than(timestamp, &series).await.unwrap();
+        assert_eq!(data.len(), 1);
+        let data_after_drain = db.drain_older_than(timestamp, &series).await.unwrap();
+        assert_eq!(data_after_drain.len(), 0);
     }
 }

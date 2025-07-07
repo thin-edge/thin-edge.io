@@ -159,10 +159,10 @@ impl FlowsMapper {
     }
 
     async fn filter(&mut self, timestamp: DateTime, message: Message) -> Result<(), RuntimeError> {
-        for (flow_id, flow_messages) in self.processor.process(&timestamp, &message).await {
+        for (flow_id, flow_messages) in self.processor.process(timestamp, &message).await {
             match flow_messages {
                 Ok(messages) => {
-                    self.publish_messages(flow_id.clone(), timestamp.clone(), messages)
+                    self.publish_messages(flow_id.clone(), timestamp, messages)
                         .await?;
                 }
                 Err(err) => {
@@ -185,7 +185,7 @@ impl FlowsMapper {
         for (flow_id, flow_messages) in self.processor.on_interval(timestamp, now).await {
             match flow_messages {
                 Ok(messages) => {
-                    self.publish_messages(flow_id.clone(), timestamp.clone(), messages)
+                    self.publish_messages(flow_id.clone(), timestamp, messages)
                         .await?;
                 }
                 Err(err) => {
@@ -221,7 +221,7 @@ impl FlowsMapper {
     async fn drain_db(&mut self) -> Result<Vec<(DateTime, Message)>, RuntimeError> {
         let timestamp = DateTime::now();
         let mut messages = vec![];
-        for (flow_id, flow_messages) in self.processor.drain_db(&timestamp).await {
+        for (flow_id, flow_messages) in self.processor.drain_db(timestamp).await {
             match flow_messages {
                 Ok(flow_messages) => {
                     messages.extend(flow_messages);
