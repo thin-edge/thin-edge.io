@@ -61,12 +61,8 @@ pub enum InputConfig {
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum OutputConfig {
-    Mqtt {
-        output_topics: Vec<String>,
-    },
-    MeaDB {
-        output_series: String,
-    },
+    Mqtt { output_topics: Vec<String> },
+    MeaDB { output_series: String },
 }
 
 #[derive(thiserror::Error, Debug)]

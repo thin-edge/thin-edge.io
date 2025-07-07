@@ -42,18 +42,30 @@ pub enum PipelineInput {
 }
 
 pub enum PipelineOutput {
-    MQTT {
-        output_topics: TopicFilter,
-    },
-    MeaDB {
-        output_series: String,
-    },
+    MQTT { output_topics: TopicFilter },
+    MeaDB { output_series: String },
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
 pub struct DateTime {
     pub seconds: u64,
     pub nanoseconds: u32,
+}
+
+impl Ord for DateTime {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        match self.seconds.cmp(&other.seconds) {
+            Ordering::Equal => self.nanoseconds.cmp(&other.nanoseconds),
+            ordering => ordering,
+        }
+    }
+}
+
+impl PartialOrd for DateTime {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]

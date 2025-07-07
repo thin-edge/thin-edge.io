@@ -1,5 +1,6 @@
-use crate::pipeline::{DateTime, PipelineOutput};
+use crate::pipeline::DateTime;
 use crate::pipeline::Message;
+use crate::pipeline::PipelineOutput;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
 use crate::OutputMessage;
@@ -116,7 +117,8 @@ impl GenMapper {
         for (pipeline_id, pipeline_messages) in self.processor.process(&timestamp, &message).await {
             match pipeline_messages {
                 Ok(messages) => {
-                    self.publish_messages(pipeline_id, timestamp.clone(), messages).await?;
+                    self.publish_messages(pipeline_id, timestamp.clone(), messages)
+                        .await?;
                 }
                 Err(err) => {
                     error!(target: "gen-mapper", "{pipeline_id}: {err}");
@@ -135,7 +137,8 @@ impl GenMapper {
         for (pipeline_id, pipeline_messages) in self.processor.tick(&timestamp).await {
             match pipeline_messages {
                 Ok(messages) => {
-                    self.publish_messages(pipeline_id, timestamp.clone(), messages).await?;
+                    self.publish_messages(pipeline_id, timestamp.clone(), messages)
+                        .await?;
                 }
                 Err(err) => {
                     error!(target: "gen-mapper", "{pipeline_id}: {err}");
@@ -146,13 +149,18 @@ impl GenMapper {
         Ok(())
     }
 
-    async fn publish_messages(&mut self, pipeline_id: String, timestamp: DateTime, messages: Vec<Message>) -> Result<(), RuntimeError> {
+    async fn publish_messages(
+        &mut self,
+        pipeline_id: String,
+        timestamp: DateTime,
+        messages: Vec<Message>,
+    ) -> Result<(), RuntimeError> {
         if let Some(pipeline) = self.processor.pipelines.get(&pipeline_id) {
             match &pipeline.output {
                 PipelineOutput::MQTT { output_topics } => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
-                            Ok(message) if output_topics.accept_topic(&message.topic)=> {
+                            Ok(message) if output_topics.accept_topic(&message.topic) => {
                                 self.messages
                                     .send(OutputMessage::MqttMessage(message))
                                     .await?
@@ -168,7 +176,12 @@ impl GenMapper {
                 }
                 PipelineOutput::MeaDB { output_series } => {
                     for message in messages {
-                        if let Err(err) = self.processor.database.store(output_series.clone(), timestamp.clone(), message).await {
+                        if let Err(err) = self
+                            .processor
+                            .database
+                            .store(output_series, timestamp.clone(), message)
+                            .await
+                        {
                             error!(target: "gen-mapper", "{pipeline_id}: fail to persist message: {err}");
                         }
                     }
