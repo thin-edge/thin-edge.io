@@ -4,6 +4,7 @@ use crate::pipeline::DateTime;
 use crate::pipeline::FilterError;
 use crate::pipeline::Message;
 use crate::pipeline::Pipeline;
+use crate::pipeline::PipelineInput;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -104,6 +105,27 @@ impl MessageProcessor {
         for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
             let pipeline_output = pipeline.tick(&self.js_runtime, timestamp).await;
             out_messages.push((pipeline_id.clone(), pipeline_output));
+        }
+        out_messages
+    }
+
+    pub async fn drain_db(
+        &mut self,
+        timestamp: &DateTime,
+    ) -> Vec<(String, Result<Vec<(DateTime, Message)>, FilterError>)> {
+        let mut out_messages = vec![];
+        for (pipeline_id, pipeline) in self.pipelines.iter() {
+            if let PipelineInput::MeaDB {
+                input_series,
+                input_frequency,
+                input_span,
+            } = &pipeline.input
+            {
+                if timestamp.tick_now(*input_frequency) {
+                    let drained_messages = Ok(vec![]); // db.drain_older(input_series, timestamp, input_span).await;
+                    out_messages.push((pipeline_id.to_owned(), drained_messages));
+                }
+            }
         }
         out_messages
     }

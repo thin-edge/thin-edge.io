@@ -5,6 +5,7 @@ use crate::InputMessage;
 use crate::OutputMessage;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
+use std::fmt::Debug;
 use tedge_actors::Actor;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
@@ -37,11 +38,14 @@ impl Actor for GenMapper {
             tokio::select! {
                 _ = interval.tick() => {
                     self.tick().await?;
+
+                    let drained_messages = self.drain_db().await?;
+                    self.filter_all(drained_messages).await?;
                 }
                 message = self.messages.recv() => {
                     match message {
                         Some(InputMessage::MqttMessage(message)) => match Message::try_from(message) {
-                            Ok(message) => self.filter(message).await?,
+                            Ok(message) => self.filter(DateTime::now(), message).await?,
                             Err(err) => {
                                 error!(target: "gen-mapper", "Cannot process message: {err}");
                             }
@@ -102,8 +106,14 @@ impl GenMapper {
         diff
     }
 
-    async fn filter(&mut self, message: Message) -> Result<(), RuntimeError> {
-        let timestamp = DateTime::now();
+    async fn filter_all(&mut self, messages: Vec<(DateTime, Message)>) -> Result<(), RuntimeError> {
+        for (timestamp, message) in messages {
+            self.filter(timestamp, message).await?
+        }
+        Ok(())
+    }
+
+    async fn filter(&mut self, timestamp: DateTime, message: Message) -> Result<(), RuntimeError> {
         for (pipeline_id, pipeline_messages) in self.processor.process(&timestamp, &message).await {
             match pipeline_messages {
                 Ok(messages) => {
@@ -157,5 +167,21 @@ impl GenMapper {
         }
 
         Ok(())
+    }
+
+    async fn drain_db(&mut self) -> Result<Vec<(DateTime, Message)>, RuntimeError> {
+        let timestamp = DateTime::now();
+        let mut messages = vec![];
+        for (pipeline_id, pipeline_messages) in self.processor.drain_db(&timestamp).await {
+            match pipeline_messages {
+                Ok(pipeline_messages) => {
+                    messages.extend(pipeline_messages);
+                }
+                Err(err) => {
+                    error!(target: "gen-mapper", "{pipeline_id}: {err}");
+                }
+            }
+        }
+        Ok(messages)
     }
 }

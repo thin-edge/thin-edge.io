@@ -4,6 +4,7 @@ use crate::LoadError;
 use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
+use std::time::Duration;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use time::OffsetDateTime;
@@ -11,11 +12,12 @@ use time::OffsetDateTime;
 /// A chain of transformation of MQTT messages
 pub struct Pipeline {
     /// The source topics
-    pub input_topics: TopicFilter,
+    pub input: PipelineInput,
 
     /// Transformation stages to apply in order to the messages
     pub stages: Vec<Stage>,
 
+    /// Path to pipeline source code
     pub source: Utf8PathBuf,
 }
 
@@ -23,6 +25,17 @@ pub struct Pipeline {
 pub struct Stage {
     pub filter: JsFilter,
     pub config_topics: TopicFilter,
+}
+
+pub enum PipelineInput {
+    MQTT {
+        input_topics: TopicFilter,
+    },
+    MeaDB {
+        input_series: String,
+        input_frequency: u64,
+        input_span: Duration,
+    },
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -51,11 +64,23 @@ pub enum FilterError {
 
 impl Pipeline {
     pub fn topics(&self) -> TopicFilter {
-        let mut topics = self.input_topics.clone();
-        for stage in self.stages.iter() {
-            topics.add_all(stage.config_topics.clone())
+        match &self.input {
+            PipelineInput::MQTT { input_topics } => {
+                let mut topics = input_topics.clone();
+                for stage in self.stages.iter() {
+                    topics.add_all(stage.config_topics.clone())
+                }
+                topics
+            }
+            PipelineInput::MeaDB { .. } => TopicFilter::empty(),
         }
-        topics
+    }
+
+    pub fn accept(&self, message_topic: &str) -> bool {
+        match &self.input {
+            PipelineInput::MQTT { input_topics } => input_topics.accept_topic_name(message_topic),
+            PipelineInput::MeaDB { .. } => true,
+        }
     }
 
     pub async fn update_config(
@@ -78,7 +103,7 @@ impl Pipeline {
         message: &Message,
     ) -> Result<Vec<Message>, FilterError> {
         self.update_config(js_runtime, message).await?;
-        if !self.input_topics.accept_topic_name(&message.topic) {
+        if !self.accept(&message.topic) {
             return Ok(vec![]);
         }
 
