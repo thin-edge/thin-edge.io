@@ -42,6 +42,9 @@ impl Actor for FlowsMapper {
             match message {
                 InputMessage::Tick(_) => {
                     self.on_interval().await?;
+
+                    let drained_messages = self.drain_db().await?;
+                    self.filter_all(drained_messages).await?;
                 }
                 InputMessage::MqttMessage(message) => match Message::try_from(message) {
                     Ok(message) => self.on_message(message).await?,
@@ -148,6 +151,39 @@ impl FlowsMapper {
         Ok(())
     }
 
+    async fn filter_all(&mut self, messages: Vec<(DateTime, Message)>) -> Result<(), RuntimeError> {
+        for (timestamp, message) in messages {
+            self.filter(timestamp, message).await?
+        }
+        Ok(())
+    }
+
+    async fn filter(&mut self, timestamp: DateTime, message: Message) -> Result<(), RuntimeError> {
+        for (pipeline_id, pipeline_messages) in self.processor.process(&timestamp, &message).await {
+            match pipeline_messages {
+                Ok(messages) => {
+                    for message in messages {
+                        match MqttMessage::try_from(message) {
+                            Ok(message) => {
+                                self.messages
+                                    .send(OutputMessage::MqttMessage(message))
+                                    .await?
+                            }
+                            Err(err) => {
+                                error!(target: "flows", "{pipeline_id}: cannot send transformed message: {err}")
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    error!(target: "flows", "{pipeline_id}: {err}");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     async fn on_interval(&mut self) -> Result<(), RuntimeError> {
         let now = Instant::now();
         let timestamp = DateTime::now();
@@ -179,5 +215,21 @@ impl FlowsMapper {
         }
 
         Ok(())
+    }
+
+    async fn drain_db(&mut self) -> Result<Vec<(DateTime, Message)>, RuntimeError> {
+        let timestamp = DateTime::now();
+        let mut messages = vec![];
+        for (pipeline_id, pipeline_messages) in self.processor.drain_db(&timestamp).await {
+            match pipeline_messages {
+                Ok(pipeline_messages) => {
+                    messages.extend(pipeline_messages);
+                }
+                Err(err) => {
+                    error!(target: "gen-mapper", "{pipeline_id}: {err}");
+                }
+            }
+        }
+        Ok(messages)
     }
 }
