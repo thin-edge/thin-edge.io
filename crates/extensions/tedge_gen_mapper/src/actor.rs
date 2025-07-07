@@ -157,7 +157,9 @@ impl GenMapper {
     ) -> Result<(), RuntimeError> {
         if let Some(pipeline) = self.processor.pipelines.get(&pipeline_id) {
             match &pipeline.output {
-                PipelineOutput::MQTT { output_topics } => {
+                PipelineOutput::MQTT {
+                    topics: output_topics,
+                } => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
                             Ok(message) if output_topics.accept_topic(&message.topic) => {
@@ -174,7 +176,9 @@ impl GenMapper {
                         }
                     }
                 }
-                PipelineOutput::MeaDB { output_series } => {
+                PipelineOutput::MeaDB {
+                    series: output_series,
+                } => {
                     for message in messages {
                         if let Err(err) = self
                             .processor

@@ -1,0 +1,9 @@
+input.db.series = "latest-15min-average"
+input.db.frequency = "4h"
+input.db.max_age = "1d"
+
+stages = [
+    { filter = "average.js" }
+]
+
+output.db.series = "latest-4hour-average"

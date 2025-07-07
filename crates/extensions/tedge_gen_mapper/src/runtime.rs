@@ -60,7 +60,7 @@ impl MessageProcessor {
     }
 
     fn db_path() -> Utf8PathBuf {
-        todo!()
+        "/etc/tedge/tedge-gen.db".into()
     }
 
     pub async fn try_new_single_pipeline(
@@ -138,9 +138,9 @@ impl MessageProcessor {
         let mut out_messages = vec![];
         for (pipeline_id, pipeline) in self.pipelines.iter() {
             if let PipelineInput::MeaDB {
-                input_series,
-                input_frequency,
-                input_span,
+                series: input_series,
+                frequency: input_frequency,
+                max_age: input_span,
             } = &pipeline.input
             {
                 if timestamp.tick_now(*input_frequency) {

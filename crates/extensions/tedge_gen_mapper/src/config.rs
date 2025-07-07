@@ -16,12 +16,11 @@ use tedge_mqtt_ext::TopicFilter;
 
 #[derive(Deserialize)]
 pub struct PipelineConfig {
-    #[serde(flatten)]
     input: InputConfig,
 
     stages: Vec<StageConfig>,
 
-    #[serde(flatten)]
+    #[serde(default)]
     output: OutputConfig,
 }
 
@@ -46,23 +45,25 @@ pub enum FilterSpec {
 }
 
 #[derive(Deserialize)]
-#[serde(untagged)]
 pub enum InputConfig {
-    Mqtt {
-        input_topics: Vec<String>,
-    },
+    #[serde(rename = "mqtt")]
+    Mqtt { topics: Vec<String> },
+    #[serde(rename = "db")]
     MeaDB {
-        input_series: String,
-        input_frequency: Duration,
-        input_span: Duration,
+        series: String,
+        #[serde(deserialize_with = "parse_human_duration")]
+        frequency: Duration,
+        #[serde(deserialize_with = "parse_human_duration")]
+        max_age: Duration,
     },
 }
 
 #[derive(Deserialize)]
-#[serde(untagged)]
 pub enum OutputConfig {
-    Mqtt { output_topics: Vec<String> },
-    MeaDB { output_series: String },
+    #[serde(rename = "mqtt")]
+    Mqtt { topics: Vec<String> },
+    #[serde(rename = "db")]
+    MeaDB { series: String },
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -86,11 +87,11 @@ impl PipelineConfig {
         };
         Self {
             input: InputConfig::Mqtt {
-                input_topics: vec![input_topic],
+                topics: vec![input_topic],
             },
             stages: vec![stage],
             output: OutputConfig::Mqtt {
-                output_topics: vec![output_topic],
+                topics: vec![output_topic],
             },
         }
     }
@@ -149,19 +150,19 @@ impl TryFrom<InputConfig> for PipelineInput {
 
     fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
         match input {
-            InputConfig::Mqtt { input_topics } => Ok(PipelineInput::MQTT {
-                input_topics: topic_filters(input_topics)?,
+            InputConfig::Mqtt { topics } => Ok(PipelineInput::MQTT {
+                topics: topic_filters(topics)?,
             }),
             InputConfig::MeaDB {
-                input_series,
-                input_frequency,
-                input_span,
+                series,
+                frequency,
+                max_age: span,
             } => {
-                let input_frequency = input_frequency.as_secs();
+                let frequency = frequency.as_secs();
                 Ok(PipelineInput::MeaDB {
-                    input_series,
-                    input_frequency,
-                    input_span,
+                    series,
+                    frequency,
+                    max_age: span,
                 })
             }
         }
@@ -181,7 +182,7 @@ fn topic_filters(patterns: Vec<String>) -> Result<TopicFilter, ConfigError> {
 impl Default for OutputConfig {
     fn default() -> Self {
         OutputConfig::Mqtt {
-            output_topics: vec!["#".to_string()],
+            topics: vec!["#".to_string()],
         }
     }
 }
@@ -191,10 +192,20 @@ impl TryFrom<OutputConfig> for PipelineOutput {
 
     fn try_from(value: OutputConfig) -> Result<Self, Self::Error> {
         match value {
-            OutputConfig::Mqtt { output_topics } => Ok(PipelineOutput::MQTT {
-                output_topics: topic_filters(output_topics)?,
+            OutputConfig::Mqtt {
+                topics: output_topics,
+            } => Ok(PipelineOutput::MQTT {
+                topics: topic_filters(output_topics)?,
             }),
-            OutputConfig::MeaDB { output_series } => Ok(PipelineOutput::MeaDB { output_series }),
+            OutputConfig::MeaDB { series } => Ok(PipelineOutput::MeaDB { series }),
         }
     }
+}
+
+pub fn parse_human_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    humantime::parse_duration(&value).map_err(|_| serde::de::Error::custom("Invalid duration"))
 }

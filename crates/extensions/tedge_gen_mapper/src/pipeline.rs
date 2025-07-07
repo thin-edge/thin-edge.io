@@ -32,18 +32,18 @@ pub struct Stage {
 
 pub enum PipelineInput {
     MQTT {
-        input_topics: TopicFilter,
+        topics: TopicFilter,
     },
     MeaDB {
-        input_series: String,
-        input_frequency: u64,
-        input_span: Duration,
+        series: String,
+        frequency: u64,
+        max_age: Duration,
     },
 }
 
 pub enum PipelineOutput {
-    MQTT { output_topics: TopicFilter },
-    MeaDB { output_series: String },
+    MQTT { topics: TopicFilter },
+    MeaDB { series: String },
 }
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -89,7 +89,9 @@ pub enum FilterError {
 impl Pipeline {
     pub fn topics(&self) -> TopicFilter {
         match &self.input {
-            PipelineInput::MQTT { input_topics } => {
+            PipelineInput::MQTT {
+                topics: input_topics,
+            } => {
                 let mut topics = input_topics.clone();
                 for stage in self.stages.iter() {
                     topics.add_all(stage.config_topics.clone())
@@ -102,7 +104,9 @@ impl Pipeline {
 
     pub fn accept(&self, message_topic: &str) -> bool {
         match &self.input {
-            PipelineInput::MQTT { input_topics } => input_topics.accept_topic_name(message_topic),
+            PipelineInput::MQTT {
+                topics: input_topics,
+            } => input_topics.accept_topic_name(message_topic),
             PipelineInput::MeaDB { .. } => true,
         }
     }
