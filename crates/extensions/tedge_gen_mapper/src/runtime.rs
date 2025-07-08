@@ -343,11 +343,8 @@ pub trait ToFromSlice {
 impl ToFromSlice for DateTime {
     fn to_slice(&self) -> Slice {
         let mut arr = [0u8; 12];
-        unsafe {
-            *std::mem::transmute::<_, *mut u64>(arr.as_mut_ptr()) = self.seconds.to_be();
-            *std::mem::transmute::<_, *mut u32>(arr.as_mut_ptr().offset(8)) =
-                self.nanoseconds.to_be();
-        }
+        *&mut arr[0..8].copy_from_slice(&self.seconds.to_be_bytes());
+        *&mut arr[8..12].copy_from_slice(&self.nanoseconds.to_be_bytes());
         Slice::new(&arr)
     }
 
@@ -483,7 +480,11 @@ mod tests {
         let mut db = MeaDb::open(&path).await.unwrap();
 
         let series = "sensor_data";
-        let timestamp = datetime!(2023-01-01 10:00 UTC).into();
+        let seconds = datetime!(2023-01-01 10:00 UTC).unix_timestamp();
+        let timestamp = DateTime {
+            seconds: seconds as u64,
+            nanoseconds: 0,
+        };
         let message = "temp: 25C".to_string();
 
         let result = db.store(series, timestamp, message.clone()).await;
@@ -501,11 +502,23 @@ mod tests {
         let mut db = MeaDb::open(&path).await.unwrap();
 
         let series = "sensor_data".to_string();
-        let ts1 = datetime!(2023-01-01 10:00 UTC).into();
+        let ts1 = datetime!(2023-01-01 10:00 UTC).unix_timestamp();
+        let ts1 = DateTime {
+            seconds: ts1 as u64,
+            nanoseconds: 0,
+        };
         let msg1 = "temp: 25C".to_string();
-        let ts2 = datetime!(2023-01-01 10:05 UTC).into();
+        let ts2 = datetime!(2023-01-01 10:05 UTC).unix_timestamp();
+        let ts2 = DateTime {
+            seconds: ts2 as u64,
+            nanoseconds: 0,
+        };
         let msg2 = "temp: 26C".to_string();
-        let ts3 = datetime!(2023-01-01 09:55 UTC).into();
+        let ts3 = datetime!(2023-01-01 09:55 UTC).unix_timestamp();
+        let ts3 = DateTime {
+            seconds: ts3 as u64,
+            nanoseconds: 0,
+        };
         let msg3 = "temp: 24C".to_string();
 
         db.store(&series, ts1, msg1.clone()).await.unwrap();
@@ -527,11 +540,19 @@ mod tests {
         let mut db = MeaDb::open(&path).await.unwrap();
 
         let series1 = "sensor_data_a".to_string();
-        let ts1 = datetime!(2023-01-01 10:00 UTC).into();
+        let ts1 = datetime!(2023-01-01 10:00 UTC).unix_timestamp();
+        let ts1 = DateTime {
+            seconds: ts1 as u64,
+            nanoseconds: 0,
+        };
         let msg1 = "data A1".to_string();
 
         let series2 = "sensor_data_b".to_string();
-        let ts2 = datetime!(2023-01-01 10:01 UTC).into();
+        let ts2 = datetime!(2023-01-01 10:01 UTC).unix_timestamp();
+        let ts2 = DateTime {
+            seconds: ts2 as u64,
+            nanoseconds: 0,
+        };
         let msg2 = "data B1".to_string();
 
         db.store(&series1, ts1, msg1.clone()).await.unwrap();
@@ -549,7 +570,11 @@ mod tests {
         let mut db = MeaDb::open(&path).await.unwrap();
 
         let series = "sensor_data_a".to_string();
-        let timestamp = datetime!(2023-01-01 10:00 UTC).into();
+        let timestamp = datetime!(2023-01-01 10:00 UTC).unix_timestamp();
+        let timestamp = DateTime {
+            seconds: timestamp as u64,
+            nanoseconds: 0,
+        };
         let msg = "data A1".to_string();
 
         db.store(&series, timestamp, msg.clone()).await.unwrap();
