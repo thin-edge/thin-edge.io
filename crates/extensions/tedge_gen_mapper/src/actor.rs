@@ -39,10 +39,10 @@ impl Actor for GenMapper {
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    self.tick().await?;
-
                     let drained_messages = self.drain_db().await?;
                     self.filter_all(MessageSource::MeaDB, drained_messages).await?;
+
+                    self.tick().await?;
                 }
                 message = self.messages.recv() => {
                     match message {

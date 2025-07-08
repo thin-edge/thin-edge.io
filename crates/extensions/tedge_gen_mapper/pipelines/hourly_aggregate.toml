@@ -3,7 +3,7 @@ input.db.frequency = "3min" # "15min"
 input.db.max_age = "15min"     # "1h"
 
 stages = [
-    { filter = "average.js" }
+    { filter = "average.js", tick_every_seconds = 1 }
 ]
 
 output.db.series = "latest-15min-average"

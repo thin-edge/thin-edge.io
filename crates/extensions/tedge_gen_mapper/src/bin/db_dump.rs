@@ -1,5 +1,6 @@
 use anyhow::Context;
-use tedge_gen_mapper::pipeline::{DateTime, Message};
+use tedge_gen_mapper::pipeline::DateTime;
+use tedge_gen_mapper::pipeline::Message;
 
 const DB_PATH: &str = "/etc/tedge/tedge-gen.db";
 

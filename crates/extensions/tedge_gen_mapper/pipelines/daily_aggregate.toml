@@ -1,9 +1,7 @@
 input.db.series = "latest-15min-average"
-input.db.frequency = "4h"
-input.db.max_age = "1d"
+input.db.frequency = "4h" # "1d"
+input.db.max_age = "1h"  # "7d"
 
 stages = [
-    { filter = "average.js" }
+    { filter = "set_topic.js", config = { topic = "te/discarded" } }
 ]
-
-output.db.series = "latest-4hour-average"
