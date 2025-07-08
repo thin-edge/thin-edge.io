@@ -211,11 +211,12 @@ impl MessageProcessor {
     pub async fn tick(
         &mut self,
         timestamp: &DateTime,
+        now: Instant,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let mut out_messages = vec![];
         for (flow_id, flow) in self.flows.iter_mut() {
             let flow_output = flow
-                .on_interval(&self.js_runtime, &mut self.stats, timestamp)
+                .on_interval(&self.js_runtime, &mut self.stats, timestamp, now)
                 .await;
             out_messages.push((flow_id.clone(), flow_output));
         }
