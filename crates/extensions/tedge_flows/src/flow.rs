@@ -48,6 +48,12 @@ pub enum FlowOutput {
     MeaDB { output_series: String },
 }
 
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum MessageSource {
+    MQTT,
+    MeaDB,
+}
+
 #[derive(
     Clone, Copy, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq, Ord, PartialOrd,
 )]
@@ -76,6 +82,15 @@ pub enum FlowError {
 }
 
 impl Flow {
+    pub fn accept(&self, source: MessageSource, message_topic: &str) -> bool {
+        match &self.input {
+            FlowInput::MQTT {
+                topics: input_topics,
+            } => source == MessageSource::MQTT && input_topics.accept_topic_name(message_topic),
+            FlowInput::MeaDB { .. } => source == MessageSource::MeaDB,
+        }
+    }
+
     pub fn topics(&self) -> TopicFilter {
         let mut topics = self.input.topics().clone();
         for step in self.steps.iter() {
@@ -100,12 +115,13 @@ impl Flow {
     pub async fn on_message(
         &mut self,
         js_runtime: &JsRuntime,
+        source: MessageSource,
         stats: &mut Counter,
         timestamp: &DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         self.on_config_update(js_runtime, message).await?;
-        if !self.input.topics().accept_topic_name(&message.topic) {
+        if !self.accept(source, &message.topic) {
             return Ok(vec![]);
         }
 
