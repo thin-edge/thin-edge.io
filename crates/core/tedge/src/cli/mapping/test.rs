@@ -57,7 +57,7 @@ impl TestCommand {
         timestamp: &DateTime,
     ) {
         processor
-            .process(timestamp, message)
+            .process(MessageSource::MQTT, timestamp, message)
             .await
             .into_iter()
             .map(|(_, v)| v)

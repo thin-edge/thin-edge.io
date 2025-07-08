@@ -3,6 +3,7 @@ use crate::js_runtime::JsRuntime;
 use crate::pipeline::DateTime;
 use crate::pipeline::FilterError;
 use crate::pipeline::Message;
+use crate::pipeline::MessageSource;
 use crate::pipeline::Pipeline;
 use crate::pipeline::PipelineInput;
 use crate::LoadError;
@@ -107,12 +108,15 @@ impl MessageProcessor {
 
     pub async fn process(
         &mut self,
+        source: MessageSource,
         timestamp: &DateTime,
         message: &Message,
     ) -> Vec<(String, Result<Vec<Message>, FilterError>)> {
         let mut out_messages = vec![];
         for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
-            let pipeline_output = pipeline.process(&self.js_runtime, timestamp, message).await;
+            let pipeline_output = pipeline
+                .process(&self.js_runtime, source, timestamp, message)
+                .await;
             out_messages.push((pipeline_id.clone(), pipeline_output));
         }
         out_messages

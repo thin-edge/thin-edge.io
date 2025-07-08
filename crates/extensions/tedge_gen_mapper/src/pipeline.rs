@@ -46,6 +46,12 @@ pub enum PipelineOutput {
     MeaDB { series: String },
 }
 
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum MessageSource {
+    MQTT,
+    MeaDB,
+}
+
 #[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
 pub struct DateTime {
     pub seconds: u64,
@@ -102,12 +108,12 @@ impl Pipeline {
         }
     }
 
-    pub fn accept(&self, message_topic: &str) -> bool {
+    pub fn accept(&self, source: MessageSource, message_topic: &str) -> bool {
         match &self.input {
             PipelineInput::MQTT {
                 topics: input_topics,
-            } => input_topics.accept_topic_name(message_topic),
-            PipelineInput::MeaDB { .. } => true,
+            } => source == MessageSource::MeaDB && input_topics.accept_topic_name(message_topic),
+            PipelineInput::MeaDB { .. } => source == MessageSource::MeaDB,
         }
     }
 
@@ -127,11 +133,12 @@ impl Pipeline {
     pub async fn process(
         &mut self,
         js_runtime: &JsRuntime,
+        source: MessageSource,
         timestamp: &DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FilterError> {
         self.update_config(js_runtime, message).await?;
-        if !self.accept(&message.topic) {
+        if !self.accept(source, &message.topic) {
             return Ok(vec![]);
         }
 

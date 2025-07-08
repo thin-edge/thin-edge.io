@@ -1,5 +1,6 @@
 use crate::pipeline::DateTime;
 use crate::pipeline::Message;
+use crate::pipeline::MessageSource;
 use crate::pipeline::PipelineOutput;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
@@ -18,6 +19,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tokio::time::interval;
 use tokio::time::Duration;
 use tracing::error;
+use tracing::info;
 
 pub struct GenMapper {
     pub(super) messages: SimpleMessageBox<InputMessage, OutputMessage>,
@@ -40,12 +42,12 @@ impl Actor for GenMapper {
                     self.tick().await?;
 
                     let drained_messages = self.drain_db().await?;
-                    self.filter_all(drained_messages).await?;
+                    self.filter_all(MessageSource::MeaDB, drained_messages).await?;
                 }
                 message = self.messages.recv() => {
                     match message {
                         Some(InputMessage::MqttMessage(message)) => match Message::try_from(message) {
-                            Ok(message) => self.filter(DateTime::now(), message).await?,
+                            Ok(message) => self.filter(MessageSource::MQTT, DateTime::now(), message).await?,
                             Err(err) => {
                                 error!(target: "gen-mapper", "Cannot process message: {err}");
                             }
@@ -106,15 +108,26 @@ impl GenMapper {
         diff
     }
 
-    async fn filter_all(&mut self, messages: Vec<(DateTime, Message)>) -> Result<(), RuntimeError> {
+    async fn filter_all(
+        &mut self,
+        source: MessageSource,
+        messages: Vec<(DateTime, Message)>,
+    ) -> Result<(), RuntimeError> {
         for (timestamp, message) in messages {
-            self.filter(timestamp, message).await?
+            self.filter(source, timestamp, message).await?
         }
         Ok(())
     }
 
-    async fn filter(&mut self, timestamp: DateTime, message: Message) -> Result<(), RuntimeError> {
-        for (pipeline_id, pipeline_messages) in self.processor.process(&timestamp, &message).await {
+    async fn filter(
+        &mut self,
+        source: MessageSource,
+        timestamp: DateTime,
+        message: Message,
+    ) -> Result<(), RuntimeError> {
+        for (pipeline_id, pipeline_messages) in
+            self.processor.process(source, &timestamp, &message).await
+        {
             match pipeline_messages {
                 Ok(messages) => {
                     self.publish_messages(pipeline_id, timestamp.clone(), messages)
@@ -180,6 +193,7 @@ impl GenMapper {
                     series: output_series,
                 } => {
                     for message in messages {
+                        info!(target: "gen-mapper", "store {output_series} @{}.{} [{}] {}", timestamp.seconds, timestamp.nanoseconds, message.topic, message.payload);
                         if let Err(err) = self
                             .processor
                             .database
@@ -202,6 +216,9 @@ impl GenMapper {
         for (pipeline_id, pipeline_messages) in self.processor.drain_db(&timestamp).await {
             match pipeline_messages {
                 Ok(pipeline_messages) => {
+                    for (t, m) in pipeline_messages.iter() {
+                        info!(target: "gen-mapper", "drained: @{}.{} [{}] {}", t.seconds, t.nanoseconds, m.topic, m.payload);
+                    }
                     messages.extend(pipeline_messages);
                 }
                 Err(err) => {

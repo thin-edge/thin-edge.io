@@ -8,6 +8,7 @@ class State {
 }
 
 export function process (timestamp, message) {
+    //console.log("average.process", timestamp, message)
     let topic = message.topic
     let payload = JSON.parse(message.payload)
     let agg_payload = State.agg_for_topic[topic]
@@ -70,7 +71,7 @@ export function process (timestamp, message) {
         State.agg_for_topic[topic] = agg_payload
     }
 
-    console.log("average.state", State.agg_for_topic)
+    //console.log("average.state", State.agg_for_topic)
     return []
 }
 
