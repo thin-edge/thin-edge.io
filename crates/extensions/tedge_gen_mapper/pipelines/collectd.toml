@@ -1,8 +1,7 @@
 input.mqtt.topics = ["collectd/+/+/+"]
 
 stages = [
-    { filter = "collectd-to-te.js" },
-    { filter = "average.js", tick_every_seconds = 60 }
+    { filter = "collectd-to-te.js" }
 ]
 
 output.db.series = "latest-data-points"

@@ -112,7 +112,7 @@ impl Pipeline {
         match &self.input {
             PipelineInput::MQTT {
                 topics: input_topics,
-            } => source == MessageSource::MeaDB && input_topics.accept_topic_name(message_topic),
+            } => source == MessageSource::MQTT && input_topics.accept_topic_name(message_topic),
             PipelineInput::MeaDB { .. } => source == MessageSource::MeaDB,
         }
     }
