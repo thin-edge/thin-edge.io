@@ -13,6 +13,7 @@ use tokio::time::Instant;
 use tracing::warn;
 
 /// A chain of transformation of MQTT messages
+#[derive(Debug)]
 pub struct Flow {
     /// The source topics
     pub input: FlowInput,
@@ -24,14 +25,22 @@ pub struct Flow {
 
     /// Target of the transformed messages
     pub output: FlowOutput,
+
+    /// Next time to drain database for MeaDB inputs (for deadline-based wakeup)
+    pub next_drain: Option<tokio::time::Instant>,
+
+    /// Last time database was drained (for frequency checking)
+    pub last_drain: Option<DateTime>,
 }
 
 /// A message transformation step
+#[derive(Debug)]
 pub struct FlowStep {
     pub script: JsScript,
     pub config_topics: TopicFilter,
 }
 
+#[derive(Debug)]
 pub enum FlowInput {
     MQTT {
         topics: TopicFilter,
@@ -47,6 +56,12 @@ pub enum FlowInput {
 pub enum FlowOutput {
     MQTT { output_topics: TopicFilter },
     MeaDB { output_series: String },
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum MessageSource {
+    MQTT,
+    MeaDB,
 }
 
 #[derive(
@@ -77,8 +92,57 @@ pub enum FlowError {
 }
 
 impl Flow {
+    pub fn accept(&self, source: MessageSource, message_topic: &str) -> bool {
+        match &self.input {
+            FlowInput::MQTT {
+                topics: input_topics,
+            } => source == MessageSource::MQTT && input_topics.accept_topic_name(message_topic),
+            FlowInput::MeaDB { .. } => source == MessageSource::MeaDB,
+        }
+    }
+
+    pub fn init_next_drain(&mut self) {
+        if let FlowInput::MeaDB { frequency, .. } = &self.input {
+            if !frequency.is_zero() {
+                self.next_drain = Some(tokio::time::Instant::now() + *frequency);
+            }
+        }
+    }
+
+    pub fn should_drain_at(&mut self, timestamp: DateTime) -> bool {
+        if let FlowInput::MeaDB { frequency, .. } = &self.input {
+            if frequency.is_zero() {
+                return false;
+            }
+
+            // Check if enough time has passed since last drain
+            match self.last_drain {
+                Some(last_drain) => {
+                    let elapsed_secs = timestamp.seconds.saturating_sub(last_drain.seconds);
+                    let frequency_secs = frequency.as_secs();
+                    if elapsed_secs >= frequency_secs {
+                        self.last_drain = Some(timestamp);
+                        // Also update the deadline for the actor loop
+                        self.next_drain = Some(tokio::time::Instant::now() + *frequency);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                None => {
+                    // First drain
+                    self.last_drain = Some(timestamp);
+                    self.next_drain = Some(tokio::time::Instant::now() + *frequency);
+                    true
+                }
+            }
+        } else {
+            false
+        }
+    }
+
     pub fn topics(&self) -> TopicFilter {
-        let mut topics = self.input.topics().clone();
+        let mut topics = self.input.topics();
         for step in self.steps.iter() {
             topics.add_all(step.config_topics.clone())
         }
@@ -101,12 +165,13 @@ impl Flow {
     pub async fn on_message(
         &mut self,
         js_runtime: &JsRuntime,
+        source: MessageSource,
         stats: &mut Counter,
         timestamp: DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         self.on_config_update(js_runtime, message).await?;
-        if !self.input.topics().accept_topic_name(&message.topic) {
+        if !self.accept(source, &message.topic) {
             return Ok(vec![]);
         }
 
@@ -203,14 +268,12 @@ impl FlowStep {
 }
 
 impl FlowInput {
-    pub fn topics(&self) -> &TopicFilter {
+    fn topics(&self) -> TopicFilter {
         match self {
-            FlowInput::MQTT { topics } => topics,
+            FlowInput::MQTT { topics } => topics.clone(),
             FlowInput::MeaDB { .. } => {
                 // MeaDB inputs don't subscribe to MQTT topics
-                // Return an empty topic filter
-                static EMPTY_TOPICS: std::sync::OnceLock<TopicFilter> = std::sync::OnceLock::new();
-                EMPTY_TOPICS.get_or_init(TopicFilter::empty)
+                TopicFilter::empty()
             }
         }
     }

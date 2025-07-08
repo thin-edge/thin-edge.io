@@ -4,9 +4,11 @@ use crate::flow::Flow;
 use crate::flow::FlowError;
 use crate::flow::FlowInput;
 use crate::flow::Message;
+use crate::flow::MessageSource;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
 use crate::LoadError;
+use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use fjall::Keyspace;
@@ -59,12 +61,12 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(Self::db_path()).await?,
+            database: MeaDb::open(&Self::db_path(config_dir)).await?,
         })
     }
 
-    fn db_path() -> Utf8PathBuf {
-        "/etc/tedge/tedge-flows.db".into()
+    fn db_path(config_dir: &Utf8Path) -> Utf8PathBuf {
+        config_dir.join("tedge-flows.db")
     }
 
     pub async fn try_new_single_flow(
@@ -84,7 +86,7 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(Self::db_path()).await?,
+            database: MeaDb::open(&Self::db_path(config_dir)).await?,
         })
     }
 
@@ -104,7 +106,7 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(Self::db_path()).await?,
+            database: MeaDb::open(&Self::db_path(config_dir)).await?,
         })
     }
 
@@ -117,10 +119,15 @@ impl MessageProcessor {
     }
 
     fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + '_ {
-        self.flows
+        let script_deadlines = self
+            .flows
             .values()
             .flat_map(|flow| &flow.steps)
-            .filter_map(|step| step.script.next_execution)
+            .filter_map(|step| step.script.next_execution);
+
+        let drain_deadlines = self.flows.values().filter_map(|flow| flow.next_drain);
+
+        script_deadlines.chain(drain_deadlines)
     }
 
     /// Get the next deadline for interval execution across all scripts
@@ -140,6 +147,7 @@ impl MessageProcessor {
 
     pub async fn on_message(
         &mut self,
+        source: MessageSource,
         timestamp: DateTime,
         message: &Message,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
@@ -148,7 +156,13 @@ impl MessageProcessor {
         let mut out_messages = vec![];
         for (flow_id, flow) in self.flows.iter_mut() {
             let flow_output = flow
-                .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
+                .on_message(
+                    &self.js_runtime,
+                    source,
+                    &mut self.stats,
+                    timestamp,
+                    message,
+                )
                 .await;
             if flow_output.is_err() {
                 self.stats.flow_on_message_failed(flow_id);
@@ -178,56 +192,28 @@ impl MessageProcessor {
         out_messages
     }
 
-    pub async fn process(
-        &mut self,
-        timestamp: DateTime,
-        message: &Message,
-    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
-        let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter_mut() {
-            let flow_output = flow
-                .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
-                .await;
-            out_messages.push((flow_id.clone(), flow_output));
-        }
-        out_messages
-    }
-
-    pub async fn tick(
-        &mut self,
-        timestamp: DateTime,
-        now: Instant,
-    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
-        let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter_mut() {
-            let flow_output = flow
-                .on_interval(&self.js_runtime, &mut self.stats, timestamp, now)
-                .await;
-            out_messages.push((flow_id.clone(), flow_output));
-        }
-        out_messages
-    }
-
     pub async fn drain_db(
         &mut self,
         timestamp: DateTime,
     ) -> Vec<(String, Result<Vec<(DateTime, Message)>, DatabaseError>)> {
         let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter() {
-            if let FlowInput::MeaDB {
-                series: input_series,
-                frequency: input_frequency,
-                max_age: input_span,
-            } = &flow.input
-            {
-                if timestamp.tick_now(*input_frequency) {
-                    let cutoff_time = timestamp.sub_duration(*input_span);
-                    let drained_messages = self
-                        .database
-                        .drain_older_than(cutoff_time, input_series)
-                        .await
-                        .map_err(DatabaseError::from);
-                    out_messages.push((flow_id.to_owned(), drained_messages));
+        for (flow_id, flow) in self.flows.iter_mut() {
+            if flow.should_drain_at(timestamp) {
+                if let FlowInput::MeaDB {
+                    series: input_series,
+                    frequency: input_frequency,
+                    max_age: input_span,
+                } = &flow.input
+                {
+                    if timestamp.tick_now(*input_frequency) {
+                        let cutoff_time = timestamp.sub_duration(*input_span);
+                        let drained_messages = self
+                            .database
+                            .drain_older_than(cutoff_time, input_series)
+                            .await
+                            .map_err(DatabaseError::from);
+                        out_messages.push((flow_id.to_owned(), drained_messages));
+                    }
                 }
             }
         }
@@ -453,6 +439,38 @@ where
     Payload: ToFromSlice + Send + 'static,
     Timestamp: ToFromSlice + Ord + Copy + Send + 'static,
 {
+    pub async fn open(path: impl AsRef<Utf8Path>) -> Result<Self, anyhow::Error> {
+        let path = path.as_ref();
+        let config = fjall::Config::new(path);
+        let keyspace = spawn_blocking(move || config.open())
+            .await
+            .unwrap()
+            .with_context(|| format!("opening database at {path}"))?;
+        Ok(Self {
+            keyspace,
+            oldest: <_>::default(),
+            _payload: PhantomData,
+        })
+    }
+
+    pub async fn query_all(
+        &mut self,
+        series: &str,
+    ) -> Result<Vec<(Timestamp, Payload)>, fjall::Error> {
+        let ks = self.keyspace.clone();
+        let series = series.to_owned();
+        spawn_blocking(move || {
+            let partition = ks.open_partition(&series, PartitionCreateOptions::default())?;
+            let messages = partition
+                .iter()
+                .map(|res| res.map(Self::decode))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(messages)
+        })
+        .await
+        .unwrap()
+    }
+
     pub async fn drain_older_than(
         &mut self,
         timestamp: Timestamp,
@@ -487,18 +505,6 @@ where
         (Timestamp::from_slice(key), Payload::from_slice(value))
     }
 
-    pub async fn open(path: impl AsRef<Path> + Send) -> Result<Self, fjall::Error> {
-        let path = path.as_ref().to_owned();
-        let keyspace = spawn_blocking(move || fjall::Config::new(path).open())
-            .await
-            .unwrap()?;
-        Ok(Self {
-            keyspace,
-            oldest: <_>::default(),
-            _payload: PhantomData,
-        })
-    }
-
     pub async fn store(
         &mut self,
         series: &str,
@@ -531,14 +537,14 @@ where
 
 #[cfg(test)]
 mod tests {
+    use tempfile::TempDir;
     use time::macros::datetime;
 
     use super::*;
-    use std::path::PathBuf;
 
     // Helper function to create a dummy path
-    fn dummy_path() -> PathBuf {
-        PathBuf::from("/tmp/test_db")
+    fn temp_dir() -> TempDir {
+        TempDir::new().expect("Failed to create temp dir")
     }
 
     impl ToFromSlice for String {
@@ -553,7 +559,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_store_single_message() {
-        let path = dummy_path();
+        let temp_dir = temp_dir();
+        let path = temp_dir.path().to_str().unwrap();
         let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
 
         let series = "sensor_data";
@@ -565,13 +572,15 @@ mod tests {
 
         // Verify the message was stored
         let stored_messages = db.drain_older_than(timestamp, series).await.unwrap();
+        println!("{:?}", stored_messages);
         assert_eq!(stored_messages.len(), 1);
         assert_eq!(stored_messages[0], (timestamp, message));
     }
 
     #[tokio::test]
     async fn test_store_multiple_messages_same_series() {
-        let path = dummy_path();
+        let temp_dir = temp_dir();
+        let path = temp_dir.path().to_str().unwrap();
         let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
 
         let series = "sensor_data".to_string();
@@ -597,7 +606,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_store_messages_different_series() {
-        let path = dummy_path();
+        let temp_dir = temp_dir();
+        let path = temp_dir.path().to_str().unwrap();
         let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
 
         let series1 = "sensor_data_a".to_string();
@@ -619,7 +629,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_drain_removes_data() {
-        let path = dummy_path();
+        let temp_dir = temp_dir();
+        let path = temp_dir.path().to_str().unwrap();
         let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
 
         let series = "sensor_data_a".to_string();

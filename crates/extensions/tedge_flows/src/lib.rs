@@ -32,6 +32,8 @@ use tedge_mqtt_ext::TopicFilter;
 use tokio::time::Instant;
 use tracing::error;
 
+pub use runtime::MeaDB;
+
 fan_in_message_type!(InputMessage[MqttMessage, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 fan_in_message_type!(OutputMessage[MqttMessage, SubscriptionDiff]: Clone, Debug, Eq, PartialEq);
 

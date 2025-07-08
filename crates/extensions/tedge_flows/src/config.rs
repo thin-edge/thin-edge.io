@@ -122,12 +122,16 @@ impl FlowConfig {
             steps.push(step);
         }
         let output = self.output.try_into()?;
-        Ok(Flow {
+        let mut flow = Flow {
             input,
             steps,
             source,
             output,
-        })
+            next_drain: None,
+            last_drain: None,
+        };
+        flow.init_next_drain();
+        Ok(flow)
     }
 }
 
