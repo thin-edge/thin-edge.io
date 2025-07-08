@@ -11,7 +11,6 @@ use camino::Utf8PathBuf;
 use fjall::Keyspace;
 use fjall::PartitionCreateOptions;
 use fjall::Slice;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::path::Path;
@@ -331,8 +330,7 @@ impl PipelineSpecs {
 
 pub struct MeaDb<Timestamp, Payload> {
     keyspace: Keyspace,
-    oldest: BTreeMap<String, Timestamp>,
-    _payload: PhantomData<Payload>,
+    _types: PhantomData<(Timestamp, Payload)>,
 }
 
 pub trait ToFromSlice {
@@ -376,14 +374,25 @@ where
     Payload: ToFromSlice + Send + 'static,
     Timestamp: ToFromSlice + Ord + Copy + Send + 'static,
 {
+    pub async fn open(path: impl AsRef<Path> + Send) -> Result<Self, fjall::Error> {
+        let path = path.as_ref().to_owned();
+        let keyspace = spawn_blocking(move || fjall::Config::new(path).open())
+            .await
+            .unwrap()?;
+        Ok(Self {
+            keyspace,
+            _types: PhantomData,
+        })
+    }
+
     pub async fn drain_older_than(
         &mut self,
         timestamp: Timestamp,
         series: &str,
     ) -> Result<Vec<(Timestamp, Payload)>, fjall::Error> {
         let ks = self.keyspace.clone();
-        let (messages, new_oldest) = spawn_blocking({
-            let series = series.to_owned();
+        let series = series.to_owned();
+        spawn_blocking({
             move || {
                 let partition = ks.open_partition(&series, PartitionCreateOptions::default())?;
                 let messages = partition
@@ -393,33 +402,15 @@ where
                 for msg in &messages {
                     partition.remove(msg.0.to_slice())?;
                 }
-                Ok::<_, fjall::Error>((messages, partition.first_key_value()?))
+                Ok(messages)
             }
         })
         .await
-        .unwrap()?;
-
-        self.oldest.remove(series);
-        if let Some((ts, _payload)) = new_oldest {
-            self.update_oldest(&series, Timestamp::from_slice(ts));
-        }
-        Ok(messages)
+        .unwrap()
     }
 
     fn decode((key, value): (Slice, Slice)) -> (Timestamp, Payload) {
         (Timestamp::from_slice(key), Payload::from_slice(value))
-    }
-
-    pub async fn open(path: impl AsRef<Path> + Send) -> Result<Self, fjall::Error> {
-        let path = path.as_ref().to_owned();
-        let keyspace = spawn_blocking(move || fjall::Config::new(path).open())
-            .await
-            .unwrap()?;
-        Ok(Self {
-            keyspace,
-            oldest: <_>::default(),
-            _payload: PhantomData,
-        })
     }
 
     pub async fn store(
@@ -428,7 +419,7 @@ where
         timestamp: Timestamp,
         payload: Payload,
     ) -> Result<(), fjall::Error> {
-        let result = spawn_blocking({
+        spawn_blocking({
             let ks = self.keyspace.clone();
             let series = series.to_owned();
             move || {
@@ -438,17 +429,7 @@ where
             }
         })
         .await
-        .unwrap();
-        self.update_oldest(&series, timestamp);
-        result
-    }
-
-    fn update_oldest(&mut self, topic: &str, inserted_ts: Timestamp) {
-        if let Some(value) = self.oldest.get_mut(topic) {
-            *value = std::cmp::min(*value, inserted_ts)
-        } else {
-            self.oldest.insert(topic.to_owned(), inserted_ts);
-        }
+        .unwrap()
     }
 }
 
