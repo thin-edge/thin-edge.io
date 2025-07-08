@@ -44,10 +44,10 @@ impl Actor for FlowsMapper {
 
             tokio::select! {
                 _ = deadline_future => {
-                    self.on_interval().await?;
-
                     let drained_messages = self.drain_db().await?;
                     self.filter_all(MessageSource::MeaDB, drained_messages).await?;
+
+                    self.on_interval().await?;
                 }
                 message = self.messages.recv() => {
                     match message {
