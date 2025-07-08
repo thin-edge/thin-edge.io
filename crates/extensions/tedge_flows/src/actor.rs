@@ -1,6 +1,7 @@
 use crate::flow::DateTime;
 use crate::flow::FlowOutput;
 use crate::flow::Message;
+use crate::flow::MessageSource;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
 use crate::OutputMessage;
@@ -20,6 +21,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tokio::time::sleep_until;
 use tokio::time::Instant;
 use tracing::error;
+use tracing::info;
 
 pub struct FlowsMapper {
     pub(super) messages: SimpleMessageBox<InputMessage, OutputMessage>,
@@ -45,7 +47,7 @@ impl Actor for FlowsMapper {
                     self.on_interval().await?;
 
                     let drained_messages = self.drain_db().await?;
-                    self.filter_all(drained_messages).await?;
+                    self.filter_all(MessageSource::MeaDB, drained_messages).await?;
                 }
                 message = self.messages.recv() => {
                     match message {
@@ -113,7 +115,11 @@ impl FlowsMapper {
 
     async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
-        for (flow_id, flow_messages) in self.processor.on_message(timestamp, &message).await {
+        for (flow_id, flow_messages) in self
+            .processor
+            .on_message(MessageSource::MQTT, timestamp, &message)
+            .await
+        {
             match flow_messages {
                 Ok(messages) => {
                     for message in messages {
@@ -138,15 +144,24 @@ impl FlowsMapper {
         Ok(())
     }
 
-    async fn filter_all(&mut self, messages: Vec<(DateTime, Message)>) -> Result<(), RuntimeError> {
+    async fn filter_all(
+        &mut self,
+        source: MessageSource,
+        messages: Vec<(DateTime, Message)>,
+    ) -> Result<(), RuntimeError> {
         for (timestamp, message) in messages {
-            self.filter(timestamp, message).await?
+            self.filter(source, timestamp, message).await?
         }
         Ok(())
     }
 
-    async fn filter(&mut self, timestamp: DateTime, message: Message) -> Result<(), RuntimeError> {
-        for (flow_id, flow_messages) in self.processor.process(timestamp, &message).await {
+    async fn filter(
+        &mut self,
+        source: MessageSource,
+        timestamp: DateTime,
+        message: Message,
+    ) -> Result<(), RuntimeError> {
+        for (flow_id, flow_messages) in self.processor.process(source, timestamp, &message).await {
             match flow_messages {
                 Ok(messages) => {
                     self.publish_messages(flow_id.clone(), timestamp, messages)
@@ -210,6 +225,7 @@ impl FlowsMapper {
                 }
                 FlowOutput::MeaDB { output_series } => {
                     for message in messages {
+                        info!(target: "flows", "store {output_series} @{}.{} [{}]", timestamp.seconds, timestamp.nanoseconds, message.topic);
                         if let Err(err) = self
                             .processor
                             .database
@@ -231,6 +247,9 @@ impl FlowsMapper {
         for (flow_id, flow_messages) in self.processor.drain_db(timestamp).await {
             match flow_messages {
                 Ok(flow_messages) => {
+                    for (t, m) in flow_messages.iter() {
+                        info!(target: "flows", "drained: @{}.{} [{}]", t.seconds, t.nanoseconds, m.topic);
+                    }
                     messages.extend(flow_messages);
                 }
                 Err(err) => {

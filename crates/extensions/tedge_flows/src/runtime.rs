@@ -4,6 +4,7 @@ use crate::flow::Flow;
 use crate::flow::FlowError;
 use crate::flow::FlowInput;
 use crate::flow::Message;
+use crate::flow::MessageSource;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
 use crate::LoadError;
@@ -140,6 +141,7 @@ impl MessageProcessor {
 
     pub async fn on_message(
         &mut self,
+        source: MessageSource,
         timestamp: DateTime,
         message: &Message,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
@@ -148,7 +150,13 @@ impl MessageProcessor {
         let mut out_messages = vec![];
         for (flow_id, flow) in self.flows.iter_mut() {
             let flow_output = flow
-                .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
+                .on_message(
+                    &self.js_runtime,
+                    source,
+                    &mut self.stats,
+                    timestamp,
+                    message,
+                )
                 .await;
             if flow_output.is_err() {
                 self.stats.flow_on_message_failed(flow_id);
@@ -180,13 +188,20 @@ impl MessageProcessor {
 
     pub async fn process(
         &mut self,
+        source: MessageSource,
         timestamp: DateTime,
         message: &Message,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let mut out_messages = vec![];
         for (flow_id, flow) in self.flows.iter_mut() {
             let flow_output = flow
-                .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
+                .on_message(
+                    &self.js_runtime,
+                    source,
+                    &mut self.stats,
+                    timestamp,
+                    message,
+                )
                 .await;
             out_messages.push((flow_id.clone(), flow_output));
         }
