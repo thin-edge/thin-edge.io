@@ -468,6 +468,24 @@ where
     Payload: ToFromSlice + Send + 'static,
     Timestamp: ToFromSlice + Ord + Copy + Send + 'static,
 {
+    pub async fn query_all(
+        &mut self,
+        series: &str,
+    ) -> Result<Vec<(Timestamp, Payload)>, fjall::Error> {
+        let ks = self.keyspace.clone();
+        let series = series.to_owned();
+        spawn_blocking(move || {
+            let partition = ks.open_partition(&series, PartitionCreateOptions::default())?;
+            let messages = partition
+                .iter()
+                .map(|res| res.map(Self::decode))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(messages)
+        })
+        .await
+        .unwrap()
+    }
+
     pub async fn drain_older_than(
         &mut self,
         timestamp: Timestamp,
