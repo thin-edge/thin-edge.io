@@ -1,5 +1,7 @@
 use anyhow::Context;
-use tedge_gen_mapper::pipeline::{DateTime, Message};
+use tedge_flows::flow::DateTime;
+use tedge_flows::flow::Message;
+use tedge_flows::MeaDB;
 
 const DB_PATH: &str = "/etc/tedge/tedge-gen.db";
 
@@ -11,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
     let series_name = args.nth(1).unwrap_or("latest-data-points".to_string());
     println!("Reading series name: {series_name}");
 
-    let mut db = tedge_gen_mapper::MeaDB::open(DB_PATH)
+    let mut db = MeaDB::open(DB_PATH)
         .await
         .with_context(|| format!("Failed to open DB at path={DB_PATH}"))?;
 
