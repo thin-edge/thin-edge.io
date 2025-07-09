@@ -208,13 +208,14 @@ impl KeyKind {
         cryptoki_config: CryptokiConfig,
         private_key_label: String,
         public_key_pem: String,
+        sigalg: SigAlg,
     ) -> Result<Self, CertificateError> {
         let public_key = pem::parse(public_key_pem).unwrap();
         let public_key_raw = public_key.into_contents();
         trace!("pubkey raw: {public_key_raw:x?}");
 
         // TODO: implement other algs
-        let algorithm = &rcgen::PKCS_RSA_SHA256;
+        let algorithm = sigalg.into();
 
         // construct a URI that uses private key we just created to sign
         let mut cryptoki_config = cryptoki_config;
@@ -224,7 +225,7 @@ impl KeyKind {
         };
         let private_key_uri = match uri {
             Some(uri) if uri.contains("object=") => {
-                let mut uri: String = uri
+                let uri: String = uri
                     .strip_prefix("pkcs11:")
                     .unwrap_or("")
                     .split(';')
@@ -244,6 +245,23 @@ impl KeyKind {
             public_key_raw,
             algorithm,
         }))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SigAlg {
+    PkcsRsaSha256,
+    PkcsEcdsaP256Sha256,
+    PkcsEcdsaP384Sha384,
+}
+
+impl From<SigAlg> for &'static rcgen::SignatureAlgorithm {
+    fn from(value: SigAlg) -> Self {
+        match value {
+            SigAlg::PkcsRsaSha256 => &rcgen::PKCS_RSA_SHA256,
+            SigAlg::PkcsEcdsaP256Sha256 => &rcgen::PKCS_ECDSA_P256_SHA256,
+            SigAlg::PkcsEcdsaP384Sha384 => &rcgen::PKCS_ECDSA_P384_SHA384,
+        }
     }
 }
 

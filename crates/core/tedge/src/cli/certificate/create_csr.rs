@@ -44,6 +44,8 @@ pub enum Key {
         // TODO: move it where it makes sense
         privkey_label: Option<String>,
         pubkey_pem: Option<String>,
+        // TODO: hack to pass sigalg
+        sigalg: Option<certificate::SigAlg>,
     },
 }
 
@@ -76,6 +78,7 @@ impl CreateCsrCmd {
                 config,
                 privkey_label,
                 pubkey_pem,
+                sigalg,
             } => {
                 let current_cert = self.current_cert.clone();
                 match current_cert {
@@ -86,6 +89,7 @@ impl CreateCsrCmd {
                         config.clone(),
                         privkey_label.clone().unwrap(),
                         pubkey_pem.as_ref().unwrap().clone(),
+                        sigalg.expect("sigalg should be set when generating a new key"),
                     )?,
                 }
             }
