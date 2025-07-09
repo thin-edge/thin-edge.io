@@ -25,12 +25,19 @@ certificate = { workspace = true }
 clap = { workspace = true }
 clap_complete = { version = "4.5.42", features = ["unstable-dynamic"] }
 doku = { workspace = true }
+elliptic-curve = { version = "0.13.8", features = [
+    "arithmetic",
+    "sec1",
+    "std",
+] }
 flate2 = { workspace = true }
 humantime = { workspace = true }
 hyper = { workspace = true, default-features = false }
 mime_guess = { workspace = true }
 mqtt_channel = { workspace = true }
 nix = { workspace = true }
+p256 = "0.13.2"
+p384 = "0.13.1"
 pad = { workspace = true }
 pem.workspace = true
 rasn = { workspace = true }

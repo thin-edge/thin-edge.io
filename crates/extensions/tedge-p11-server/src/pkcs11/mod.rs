@@ -307,7 +307,10 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<
             );
             (
                 Mechanism::RsaPkcsKeyPairGen,
-                vec![Attribute::ModulusBits(u64::from(bits).into())],
+                vec![Attribute::ModulusBits(
+                    // u64 or u32 depending on the platform
+                    std::os::raw::c_ulong::from(bits).into(),
+                )],
                 vec![],
             )
         }
@@ -366,48 +369,85 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<
         .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template)
         .context("Failed to generate keypair")?;
 
-    let priv_attrs = session.get_attributes(priv_handle, &[AttributeType::PublicKeyInfo])?;
-    trace!(?priv_attrs);
+    let pubkey_der = match params.key {
+        KeyTypeParams::Rsa { .. } => {
+            let priv_attrs =
+                session.get_attributes(priv_handle, &[AttributeType::PublicKeyInfo])?;
+            trace!(?priv_attrs);
 
-    // return the public key as PEM
-    let attrs = session.get_attributes(
-        pub_handle,
-        &[
-            AttributeType::PublicKeyInfo,
-            AttributeType::Modulus,
-            AttributeType::PublicExponent,
-        ],
-    )?;
-    trace!(?attrs);
-    let mut attrs = attrs.into_iter();
+            // return the public key as PEM
+            let attrs = session.get_attributes(
+                pub_handle,
+                &[
+                    AttributeType::PublicKeyInfo,
+                    AttributeType::Modulus,
+                    AttributeType::PublicExponent,
+                ],
+            )?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
 
-    let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
+            let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
 
-    if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
-        if !pubkey_der.is_empty() {
-            return Ok(pubkey_der);
+            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+                if !pubkey_der.is_empty() {
+                    return Ok(pubkey_der);
+                }
+            }
+
+            debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+
+            let Attribute::Modulus(modulus) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No modulus");
+            };
+            let modulus = rsa::BigUint::from_bytes_be(&modulus);
+
+            let Attribute::PublicExponent(exponent) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No public exponent");
+            };
+            let exponent = rsa::BigUint::from_bytes_be(&exponent);
+
+            let pubkey = rsa::RsaPublicKey::new(modulus, exponent)
+                .context("Failed to construct RSA pubkey from components")?;
+
+            pubkey
+                .to_pkcs1_der()
+                .context("Failed to serialize pubkey as DER")?
+                .into_vec()
         }
-    }
 
-    debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+        KeyTypeParams::Ec { .. } => {
+            let priv_attrs =
+                session.get_attributes(priv_handle, &[AttributeType::PublicKeyInfo])?;
+            trace!(?priv_attrs);
 
-    let Attribute::Modulus(modulus) = attrs.next().context("Not modulus")? else {
-        anyhow::bail!("No modulus");
+            // return the public key as PEM
+            let attrs = session.get_attributes(
+                pub_handle,
+                &[AttributeType::PublicKeyInfo, AttributeType::EcPoint],
+            )?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
+
+            let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
+
+            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+                if !pubkey_der.is_empty() {
+                    return Ok(pubkey_der);
+                }
+            }
+
+            debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+
+            // Elliptic-Curve-Point-to-Octet-String from SEC 1: Elliptic Curve Cryptography (Version 2.0) section 2.3.3 (page 10)
+            let ec_point = attrs.next().context("Failed to get pubkey EcPoint")?;
+            let Attribute::EcPoint(ec_point) = ec_point else {
+                anyhow::bail!("No ec point");
+            };
+            trace!(?ec_point);
+            ec_point
+        }
     };
-    let modulus = rsa::BigUint::from_bytes_be(&modulus);
-
-    let Attribute::PublicExponent(exponent) = attrs.next().context("Not modulus")? else {
-        anyhow::bail!("No public exponent");
-    };
-    let exponent = rsa::BigUint::from_bytes_be(&exponent);
-
-    let pubkey = rsa::RsaPublicKey::new(modulus, exponent)
-        .context("Failed to construct RSA pubkey from compoennts")?;
-
-    let pubkey_der = pubkey
-        .to_pkcs1_der()
-        .context("Failed to serialize pubkey as DER")?
-        .into_vec();
 
     Ok(pubkey_der)
 }
