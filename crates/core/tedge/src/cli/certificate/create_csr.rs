@@ -4,7 +4,6 @@ use crate::log::MaybeFancy;
 use crate::override_public_key;
 use crate::persist_new_private_key;
 use crate::reuse_private_key;
-use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::CryptokiConfig;
 use certificate::CsrTemplate;
@@ -44,6 +43,8 @@ pub enum Key {
         // TODO: move it where it makes sense
         privkey_label: Option<String>,
         pubkey_pem: Option<String>,
+        // TODO: hack to pass sigalg
+        sigalg: Option<certificate::SignatureAlgorithm>,
     },
 }
 
@@ -76,6 +77,7 @@ impl CreateCsrCmd {
                 config,
                 privkey_label,
                 pubkey_pem,
+                sigalg,
             } => {
                 let current_cert = self.current_cert.clone();
                 match current_cert {
@@ -86,6 +88,7 @@ impl CreateCsrCmd {
                         config.clone(),
                         privkey_label.clone().unwrap(),
                         pubkey_pem.as_ref().unwrap().clone(),
+                        sigalg.expect("sigalg should be set when generating a new key"),
                     )?,
                 }
             }

@@ -2,12 +2,10 @@ mod download;
 mod renew;
 mod upload;
 
-use crate::cli::certificate::create_csr::CreateCsrCmd;
 use crate::override_public_key;
 use crate::read_cert_to_string;
 use crate::CertError;
 use camino::Utf8PathBuf;
-use certificate::CsrTemplate;
 pub use download::DownloadCertCmd;
 pub use renew::RenewCertCmd;
 pub use upload::UploadCertCmd;

@@ -201,13 +201,11 @@ impl KeyKind {
         cryptoki_config: CryptokiConfig,
         private_key_label: String,
         public_key_pem: String,
+        algorithm: SignatureAlgorithm,
     ) -> Result<Self, CertificateError> {
         let public_key = pem::parse(public_key_pem).unwrap();
         let public_key_raw = public_key.into_contents();
         trace!("pubkey raw: {public_key_raw:x?}");
-
-        // TODO: implement other algs
-        let algorithm = SignatureAlgorithm::RsaPkcs1Sha256;
 
         // construct a URI that uses private key we just created to sign
         let mut cryptoki_config = cryptoki_config;
@@ -290,7 +288,7 @@ impl rcgen::SigningKey for RemoteKeyPair {
 
 /// Signature algorithms that can be used for generating a CSR
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SignatureAlgorithm {
+pub enum SignatureAlgorithm {
     RsaPkcs1Sha256,
     EcdsaP256Sha256,
     EcdsaP384Sha384,
