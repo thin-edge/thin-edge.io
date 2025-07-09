@@ -1,6 +1,8 @@
+use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
 use clap::ValueEnum;
+use elliptic_curve::sec1::{EncodedPoint, FromEncodedPoint};
 use tedge_config::TEdgeConfig;
 use tedge_p11_server::pkcs11::{CreateKeyParams, KeyTypeParams};
 use tedge_p11_server::CryptokiConfig;
@@ -23,7 +25,7 @@ pub struct CreateKeyCmd {
     pub csr_path: Utf8PathBuf,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum KeyType {
     Rsa,
     Ec,
@@ -51,10 +53,51 @@ impl Command for CreateKeyCmd {
         };
 
         // generate a keypair
-        // TODO: don't assume it's RSA
+        // should probably verify the keys before using them
         let pubkey_der = pkcs11client.create_key(None, params)?;
-        let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
-        let pubkey_pem = pem::encode(&pubkey_pem);
+        let pubkey_pem = match self.r#type {
+            KeyType::Rsa => {
+                let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+                pem::encode(&pubkey_pem)
+            }
+            KeyType::Ec => {
+                // convert ECPoint to ECPublicKey
+                // DER encoding of ECPoint: RFC5480 section 2.2
+                println!("{pubkey_der:?} ({})", pubkey_der.len());
+                // we have a DER OCTET STRING here so first 2 bytes are DER tag + length
+                let pubkey_pem = match self.curve {
+                    256 => {
+                        let ec_point = EncodedPoint::<p256::NistP256>::from_bytes(&pubkey_der[2..])
+                            .context("Failed to parse EC point")?;
+                        let pubkey =
+                            elliptic_curve::PublicKey::<p256::NistP256>::from_encoded_point(
+                                &ec_point,
+                            )
+                            .into_option()
+                            .context("Failed to create EC pubkey from EncodedPoint")?;
+                        let der = pubkey.to_sec1_bytes();
+                        let pubkey_pem = pem::Pem::new("PUBLIC KEY", der);
+                        pubkey_pem
+                    }
+                    384 => {
+                        let ec_point = EncodedPoint::<p384::NistP384>::from_bytes(&pubkey_der[2..])
+                            .context("Failed to parse EC point")?;
+                        let pubkey =
+                            elliptic_curve::PublicKey::<p384::NistP384>::from_encoded_point(
+                                &ec_point,
+                            )
+                            .into_option()
+                            .context("Failed to create EC pubkey from EncodedPoint")?;
+                        let der = pubkey.to_sec1_bytes();
+                        let pubkey_pem = pem::Pem::new("PUBLIC KEY", der);
+                        pubkey_pem
+                    }
+                    _ => return Err(anyhow::anyhow!("aaaa").into()),
+                };
+
+                pem::encode(&pubkey_pem)
+            }
+        };
 
         eprintln!("New keypair was successfully created.");
 
@@ -69,11 +112,23 @@ impl Command for CreateKeyCmd {
         )
         .await?;
 
+        let sigalg = match (self.r#type, self.curve) {
+            (KeyType::Rsa, _) => certificate::SigAlg::PkcsRsaSha256,
+            (KeyType::Ec, 256) => certificate::SigAlg::PkcsEcdsaP256Sha256,
+            (KeyType::Ec, 384) => certificate::SigAlg::PkcsEcdsaP384Sha384,
+            _ => {
+                return Err(
+                    anyhow::anyhow!("invalid arguments: bad keytype/arg combination").into(),
+                )
+            }
+        };
+
         let cryptoki_config = config.device.cryptoki_config(None).unwrap().unwrap();
         let key = super::create_csr::Key::Cryptoki {
             config: cryptoki_config,
             privkey_label: Some(self.label.clone()),
             pubkey_pem: Some(pubkey_pem.clone()),
+            sigalg: Some(sigalg),
         };
         let csr_path = config
             .device_csr_path(None::<&Cloud>)

@@ -145,8 +145,8 @@ Can create a private key on the PKCS11 token and download new cert from c8y
     Create private key and download cert from c8y    label=rsa-4096    type=rsa    bits=4096    p11tool_keytype=RSA-4096
     # TODO: support EC keys
     # TODO: make EC curve type appear in p11tool
-    # Create private key and download cert from c8y    label=ec-256    type=ec    curve=256
-    # Create private key and download cert from c8y    label=ec-384    type=ec    curve=384
+    Create private key and download cert from c8y    label=ec-256    type=ec    curve=256
+    Create private key and download cert from c8y    label=ec-384    type=ec    curve=384
     # ECDSA P521 not supported by rcgen
 
     [Teardown]    Set tedge-p11-server Uri    value=

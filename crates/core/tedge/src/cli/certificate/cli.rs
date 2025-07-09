@@ -220,6 +220,7 @@ impl BuildCommand for TEdgeCertCli {
                         config,
                         privkey_label: None,
                         pubkey_pem: None,
+                        sigalg: None,
                     })
                     .unwrap_or(Key::Local(
                         config.device_key_path(cloud.as_ref())?.to_owned(),
@@ -356,6 +357,7 @@ impl BuildCommand for TEdgeCertCli {
                         config,
                         privkey_label: None,
                         pubkey_pem: None,
+                        sigalg: None,
                     })
                     .unwrap_or(Key::Local(
                         config
@@ -448,6 +450,7 @@ impl BuildCommand for TEdgeCertCli {
                             config,
                             privkey_label: None,
                             pubkey_pem: None,
+                            sigalg: None,
                         })
                         .unwrap_or(Key::Local(
                             config.device_key_path(cloud.as_ref())?.to_owned(),
