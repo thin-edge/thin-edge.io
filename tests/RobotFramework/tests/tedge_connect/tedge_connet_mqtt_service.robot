@@ -45,7 +45,7 @@ Connect to Cumulocity MQTT Service endpoint builtin bridge
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge config set c8y.tenant_id t37070943
     Execute Command    tedge config set c8y.mqtt_service.enabled true
-    Execute Command    tedge config set c8y.mqtt_service.topics 'sub/topic,demo/topic'
+    Execute Command    tedge config set c8y.mqtt_service.topics demo/topic
     Execute Command    tedge connect c8y
 
     # TODO: Subscribing to test/topic from another client

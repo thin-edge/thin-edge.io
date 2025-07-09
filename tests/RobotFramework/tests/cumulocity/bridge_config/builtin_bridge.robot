@@ -10,7 +10,7 @@ Test Teardown       Get Logs
 *** Test Cases ***
 Connection test
     [Documentation]    Repeatedly test the cloud connection
-    FOR    ${attempt}    IN RANGE    0    1    1
+    FOR    ${attempt}    IN RANGE    0    10    1
         ${output}=    Execute Command    tedge connect c8y --test    timeout=10
         Should Not Contain    ${output}    connection check failed
     END
