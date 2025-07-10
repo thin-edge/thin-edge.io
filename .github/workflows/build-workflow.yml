@@ -74,8 +74,13 @@ jobs:
       - name: cargo install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      - name: Create dir for temporary files
+        run: sudo mkdir /mnt/test-tmp && sudo chmod 777 /mnt/test-tmp
+
       - name: cargo llvm-cov
         run: cargo llvm-cov nextest --no-fail-fast --locked --all-features --all-targets --codecov --output-path codecov.json
+        env:
+          TEMP_DIR_ROOT: /mnt/test-tmp
 
       # https://github.com/rust-lang/cargo/issues/6669
       - name: cargo test --doc

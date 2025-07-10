@@ -21,7 +21,11 @@ pub struct TempTedgeFile {
 
 impl Default for TempTedgeDir {
     fn default() -> Self {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = if let Ok(dir) = std::env::var("TEMP_DIR_ROOT") {
+            TempDir::new_in(dir).unwrap()
+        } else {
+            TempDir::new().unwrap()
+        };
         let current_file_path = Utf8Path::from_path(temp_dir.path()).unwrap().to_owned();
         TempTedgeDir {
             temp_dir: Arc::new(temp_dir),
