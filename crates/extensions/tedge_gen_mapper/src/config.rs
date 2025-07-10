@@ -52,7 +52,7 @@ impl PipelineConfig {
         let stage = StageConfig {
             filter: FilterSpec::JavaScript(filter),
             config: None,
-            tick_every_seconds: 1,
+            tick_every_seconds: 0,
             meta_topics: vec![],
         };
         Self {
@@ -73,6 +73,7 @@ impl PipelineConfig {
             let mut stage = stage.compile(config_dir, i, &source).await?;
             js_runtime.load_filter(&mut stage.filter).await?;
             stage.check(&source);
+            stage.fix();
             stages.push(stage);
         }
         Ok(Pipeline {

@@ -133,6 +133,14 @@ impl Stage {
             warn!(target: "MAPPING", "Filter with no 'tick' function: {}; but configured with 'tick_every_seconds' in {pipeline}", filter.path.display());
         }
     }
+
+    pub(crate) fn fix(&mut self) {
+        let filter = &mut self.filter;
+        if !filter.no_js_tick && filter.tick_every_seconds == 0 {
+            // 0 as a default is not appropriate for a filter with a tick handler
+            filter.tick_every_seconds = 1;
+        }
+    }
 }
 
 impl DateTime {
