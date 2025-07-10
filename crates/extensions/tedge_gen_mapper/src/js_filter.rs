@@ -20,8 +20,14 @@ pub struct JsFilter {
     pub tick_every_seconds: u64,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct JsonValue(serde_json::Value);
+
+impl Default for JsonValue {
+    fn default() -> Self {
+        JsonValue(serde_json::Value::Object(Default::default()))
+    }
+}
 
 impl JsFilter {
     pub fn new(pipeline: PathBuf, index: usize, path: PathBuf) -> Self {

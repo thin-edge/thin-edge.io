@@ -19,10 +19,10 @@ export function process (timestamp, message, config) {
     State.total += 1
     State.batch[0] += 1
     if (State.open) {
-        let back_to_normal = config?.back_to_normal || 100
+        let back_to_normal = config.back_to_normal || 100
         if (State.total < back_to_normal) {
             State.open = false
-            if (config?.message_on_back_to_normal) {
+            if (config.message_on_back_to_normal) {
                 return [config?.message_on_back_to_normal, message]
             } else {
                 return [message]
@@ -31,13 +31,13 @@ export function process (timestamp, message, config) {
             return []
         }
     } else {
-        let too_many = config?.too_many || 1000
+        let too_many = config.too_many || 1000
         if (State.total < too_many) {
             return [message]
         } else {
             State.open = true
-            if (config?.message_on_too_many) {
-                return [config?.message_on_too_many]
+            if (config.message_on_too_many) {
+                return [config.message_on_too_many]
             } else {
                 return []
             }
@@ -47,15 +47,15 @@ export function process (timestamp, message, config) {
 
 
 export function tick(timestamp, config) {
-    let max_batch_count = config?.tick_count || 10
+    let max_batch_count = config.tick_count || 10
     let new_batch_count = State.batch.unshift(0)
     if (new_batch_count > max_batch_count) {
         State.total -= State.batch.pop()
     }
 
-    if (config?.stats_topic) {
+    if (config.stats_topic) {
         return [{
-            topic: config?.stats_topic,
+            topic: config.stats_topic,
             payload: `{"circuit-breaker-open": ${State.open}, "total": ${State.total}, "batch": ${State.batch}}`
         }]
     } else {
