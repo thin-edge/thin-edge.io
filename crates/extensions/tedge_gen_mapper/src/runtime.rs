@@ -116,11 +116,7 @@ impl MessageProcessor {
         for pipeline in self.pipelines.values_mut() {
             for stage in &mut pipeline.stages {
                 if stage.filter.path() == path {
-                    match self
-                        .js_runtime
-                        .load_file(stage.filter.module_name(), &path)
-                        .await
-                    {
+                    match self.js_runtime.load_filter(&mut stage.filter).await {
                         Ok(()) => {
                             info!(target: "gen-mapper", "Reloaded filter {path}");
                         }

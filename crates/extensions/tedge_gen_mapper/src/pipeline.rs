@@ -1,12 +1,14 @@
 use crate::js_filter::JsFilter;
 use crate::js_runtime::JsRuntime;
 use crate::LoadError;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use time::OffsetDateTime;
+use tracing::warn;
 
 /// A chain of transformation of MQTT messages
 pub struct Pipeline {
@@ -115,6 +117,21 @@ impl Pipeline {
             messages = transformed_messages;
         }
         Ok(messages)
+    }
+}
+
+impl Stage {
+    pub(crate) fn check(&self, pipeline: &Utf8Path) {
+        let filter = &self.filter;
+        if filter.no_js_process {
+            warn!(target: "MAPPING", "Filter with no 'process' function: {}", filter.path.display());
+        }
+        if filter.no_js_update_config && !self.config_topics.is_empty() {
+            warn!(target: "MAPPING", "Filter with no 'config_update' function: {}; but configured with 'config_topics' in {pipeline}", filter.path.display());
+        }
+        if filter.no_js_tick && filter.tick_every_seconds != 0 {
+            warn!(target: "MAPPING", "Filter with no 'tick' function: {}; but configured with 'tick_every_seconds' in {pipeline}", filter.path.display());
+        }
     }
 }
 
