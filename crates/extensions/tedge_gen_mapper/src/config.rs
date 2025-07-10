@@ -70,11 +70,9 @@ impl PipelineConfig {
         let input_topics = topic_filters(&self.input_topics)?;
         let mut stages = vec![];
         for (i, stage) in self.stages.into_iter().enumerate() {
-            let stage = stage.compile(config_dir, i, &source).await?;
-            let filter = &stage.filter;
-            js_runtime
-                .load_file(filter.module_name(), filter.path())
-                .await?;
+            let mut stage = stage.compile(config_dir, i, &source).await?;
+            js_runtime.load_filter(&mut stage.filter).await?;
+            stage.check(&source);
             stages.push(stage);
         }
         Ok(Pipeline {

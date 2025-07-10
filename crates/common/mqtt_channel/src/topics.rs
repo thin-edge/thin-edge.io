@@ -116,6 +116,10 @@ impl TopicFilter {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.patterns.is_empty()
+    }
+
     /// Check if the given topic matches this filter pattern.
     pub fn accept_topic_name(&self, topic: &str) -> bool {
         self.patterns
