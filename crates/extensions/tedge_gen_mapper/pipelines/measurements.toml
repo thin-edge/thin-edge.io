@@ -2,6 +2,5 @@ input_topics = ["te/+/+/+/+/m/+"]
 
 stages = [
     { filter = "add_timestamp.js" },
-    { filter = "drop_stragglers.js", config = { max_delay = 60 } },
     { filter = "te_to_c8y.js", meta_topics = ["te/+/+/+/+/m/+/meta"] }
 ]
