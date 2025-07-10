@@ -1,3 +1,4 @@
+use crate::js_filter::JsFilter;
 use crate::js_filter::JsonValue;
 use crate::LoadError;
 use anyhow::anyhow;
@@ -23,11 +24,24 @@ impl JsRuntime {
         Ok(JsRuntime { runtime, worker })
     }
 
+    pub async fn load_filter(&mut self, filter: &mut JsFilter) -> Result<(), LoadError> {
+        let exports = self.load_file(filter.module_name(), filter.path()).await?;
+        for export in exports {
+            match export {
+                "process" => filter.no_js_process = false,
+                "update_config" => filter.no_js_update_config = false,
+                "tick" => filter.no_js_tick = false,
+                _ => (),
+            }
+        }
+        Ok(())
+    }
+
     pub async fn load_file(
         &mut self,
         module_name: String,
         path: impl AsRef<Path>,
-    ) -> Result<(), LoadError> {
+    ) -> Result<Vec<&'static str>, LoadError> {
         let path = path.as_ref();
         let source = tokio::fs::read_to_string(path).await?;
         self.load_js(module_name, source).await
@@ -37,13 +51,15 @@ impl JsRuntime {
         &mut self,
         name: String,
         source: impl Into<Vec<u8>>,
-    ) -> Result<(), LoadError> {
+    ) -> Result<Vec<&'static str>, LoadError> {
         let (sender, receiver) = oneshot::channel();
         let source = source.into();
+        let imports = vec!["process", "update_config", "tick"];
         self.worker
             .send(JsRequest::LoadModule {
                 name,
                 source,
+                imports,
                 sender,
             })
             .await
@@ -87,7 +103,8 @@ enum JsRequest {
     LoadModule {
         name: String,
         source: Vec<u8>,
-        sender: oneshot::Sender<Result<(), LoadError>>,
+        imports: Vec<&'static str>,
+        sender: oneshot::Sender<Result<Vec<&'static str>, LoadError>>,
     },
     CallFunction {
         module: String,
@@ -118,8 +135,8 @@ impl JsWorker {
             let mut modules = JsModules::new();
             while let Some(request) = self.requests.recv().await {
                 match request {
-                    JsRequest::LoadModule{name, source, sender} => {
-                        let result = modules.load_module(ctx.clone(), name, source).await;
+                    JsRequest::LoadModule{name, source, sender, imports} => {
+                        let result = modules.load_module(ctx.clone(), name, source, imports).await;
                         let _ = sender.send(result);
                     }
                     JsRequest::CallFunction{module, function, args, sender} => {
@@ -149,13 +166,24 @@ impl<'js> JsModules<'js> {
         ctx: Ctx<'js>,
         name: String,
         source: Vec<u8>,
-    ) -> Result<(), LoadError> {
+        imports: Vec<&'static str>,
+    ) -> Result<Vec<&'static str>, LoadError> {
         debug!(target: "MAPPING", "compile({name})");
         let module = Module::declare(ctx, name.clone(), source)?;
         let (module, p) = module.eval()?;
         let () = p.finish()?;
+
+        let mut exports = vec![];
+        for import in imports {
+            if let Ok(Some(v)) = module.get(import) {
+                if rquickjs::Function::from_value(v).is_ok() {
+                    exports.push(import);
+                }
+            }
+        }
+
         self.modules.insert(name, module);
-        Ok(())
+        Ok(exports)
     }
 
     async fn call_function(
@@ -178,7 +206,10 @@ impl<'js> JsModules<'js> {
                 module_name: module_name.clone(),
                 function: function.clone(),
             })?;
-        let f = rquickjs::Function::from_value(f)?;
+        let f = rquickjs::Function::from_value(f).map_err(|_| LoadError::UnknownFunction {
+            module_name: module_name.clone(),
+            function: function.clone(),
+        })?;
 
         let r = match &args[..] {
             [] => f.call(()),

@@ -18,6 +18,9 @@ pub struct JsFilter {
     pub path: PathBuf,
     pub config: JsonValue,
     pub tick_every_seconds: u64,
+    pub no_js_process: bool,
+    pub no_js_update_config: bool,
+    pub no_js_tick: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -37,6 +40,9 @@ impl JsFilter {
             path,
             config: JsonValue::default(),
             tick_every_seconds: 0,
+            no_js_process: true,
+            no_js_update_config: true,
+            no_js_tick: true,
         }
     }
 
@@ -81,6 +87,10 @@ impl JsFilter {
         message: &Message,
     ) -> Result<Vec<Message>, FilterError> {
         debug!(target: "MAPPING", "{}: process({timestamp:?}, {message:?})", self.module_name());
+        if self.no_js_process {
+            return Ok(vec![message.clone()]);
+        }
+
         let input = vec![
             timestamp.clone().into(),
             message.clone().into(),
@@ -105,6 +115,10 @@ impl JsFilter {
         message: &Message,
     ) -> Result<(), FilterError> {
         debug!(target: "MAPPING", "{}: update_config({message:?})", self.module_name());
+        if self.no_js_update_config {
+            return Ok(());
+        }
+
         let input = vec![message.clone().into(), self.config.clone()];
         let config = js
             .call_function(&self.module_name(), "update_config", input)
@@ -126,6 +140,9 @@ impl JsFilter {
         js: &JsRuntime,
         timestamp: &DateTime,
     ) -> Result<Vec<Message>, FilterError> {
+        if self.no_js_tick {
+            return Ok(vec![]);
+        }
         if !timestamp.tick_now(self.tick_every_seconds) {
             return Ok(vec![]);
         }
@@ -308,7 +325,8 @@ mod tests {
     async fn error_filter() {
         let script = r#"export function process(t,msg) { throw new Error("Cannot process that message"); };"#;
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        let filter = JsFilter::new("err.toml".into(), 1, "err.js".into());
+        let mut filter = JsFilter::new("err.toml".into(), 1, "err.js".into());
+        filter.no_js_process = false;
         runtime.load_js(filter.module_name(), script).await.unwrap();
 
         let input = Message::new("te/main/device///m/", "hello world");
@@ -344,7 +362,8 @@ export function process (timestamp, message, config) {
 }
         "#;
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        let filter = JsFilter::new("collectd.toml".into(), 1, "collectd.js".into());
+        let mut filter = JsFilter::new("collectd.toml".into(), 1, "collectd.js".into());
+        filter.no_js_process = false;
         runtime.load_js(filter.module_name(), script).await.unwrap();
 
         let input = Message::new(
