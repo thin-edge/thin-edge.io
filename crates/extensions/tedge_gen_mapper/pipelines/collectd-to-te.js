@@ -8,7 +8,7 @@ export function process(_timestamp, message, config) {
     let value = data[1]
 
     return [{
-        topic: config?.topic || "te/device/main///m/collectd",
+        topic: config.topic || "te/device/main///m/collectd",
         payload: `{"time": ${time}, "${group}": {"${measurement}": ${value}}}`
     }]
 }

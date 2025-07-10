@@ -12,8 +12,8 @@ export function process (timestamp, message, config) {
     }
 
     let time = timestamp.seconds + (timestamp.nanoseconds / 1e9)
-    let max = time + (config?.max_advance || 1);
-    let min = time - (config?.max_delay || 10);
+    let max = time + (config.max_advance || 1);
+    let min = time - (config.max_delay || 10);
 
     if (min <= msg_timestamp && msg_timestamp <= max) {
         return [message]
