@@ -25,6 +25,7 @@ mod disconnect;
 mod http;
 mod init;
 pub mod log;
+mod mapping;
 mod mqtt;
 mod reconnect;
 mod refresh_bridges;
@@ -138,6 +139,10 @@ pub enum TEdgeOpt {
     #[clap(subcommand)]
     Http(http::TEdgeHttpCli),
 
+    /// Monitor and test mapping rules
+    #[clap(subcommand)]
+    Mapping(mapping::TEdgeMappingCli),
+
     /// Run thin-edge services and plugins
     Run(ComponentOpt),
 
@@ -208,6 +213,7 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Mqtt(opt) => opt.build_command(config),
             TEdgeOpt::Http(opt) => opt.build_command(config),
             TEdgeOpt::Reconnect(opt) => opt.build_command(config),
+            TEdgeOpt::Mapping(opt) => opt.build_command(config),
             TEdgeOpt::Run(_) => {
                 // This method has to be kept in sync with tedge::redirect_if_multicall()
                 panic!("tedge mapper|agent|write commands are launched as multicall")
