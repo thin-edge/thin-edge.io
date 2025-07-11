@@ -325,7 +325,8 @@ mod tests {
     async fn error_filter() {
         let script = r#"export function process(t,msg) { throw new Error("Cannot process that message"); };"#;
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        let filter = JsFilter::new("err.toml".into(), 1, "err.js".into());
+        let mut filter = JsFilter::new("err.toml".into(), 1, "err.js".into());
+        filter.no_js_process = false;
         runtime.load_js(filter.module_name(), script).await.unwrap();
 
         let input = Message::new("te/main/device///m/", "hello world");
@@ -361,7 +362,8 @@ export function process (timestamp, message, config) {
 }
         "#;
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        let filter = JsFilter::new("collectd.toml".into(), 1, "collectd.js".into());
+        let mut filter = JsFilter::new("collectd.toml".into(), 1, "collectd.js".into());
+        filter.no_js_process = false;
         runtime.load_js(filter.module_name(), script).await.unwrap();
 
         let input = Message::new(
