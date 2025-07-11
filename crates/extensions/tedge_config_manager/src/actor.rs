@@ -2,6 +2,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use log::debug;
 use log::error;
 use log::info;
 use serde_json::json;
@@ -33,7 +34,9 @@ use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::atomic::MaybePermissions;
 use tedge_write::CopyOptions;
+use tedge_write::CreateDirsOptions;
 
+use crate::FileEntry;
 use crate::TedgeWriteStatus;
 
 use super::config::PluginConfig;
@@ -355,11 +358,57 @@ impl ConfigManagerWorker {
         let from_path = Utf8Path::from_path(&from)
             .with_context(|| format!("path is not utf-8: '{}'", from.to_string_lossy()))?;
 
+        let file_entry = self
+            .plugin_config
+            .get_file_entry_from_type(&request.config_type)?;
+        let to = Utf8PathBuf::from(&file_entry.path);
+
+        if let Some(parent) = to.parent() {
+            if !parent.exists() {
+                self.create_parent_dirs(parent, file_entry)?;
+            }
+        }
+
         let deployed_to_path = self
-            .deploy_config_file(from_path, &request.config_type)
+            .deploy_config_file(from_path, file_entry)
             .context("failed to deploy configuration file")?;
 
         Ok(deployed_to_path)
+    }
+
+    /// Creates the parent directories of the target file if they are missing,
+    /// and applies the permissions and ownership that are specified.
+    /// First, if `use_tedge_write` is enabled, it tries to use tedge-write to create the missing parent directories.
+    /// If it's disabled or creation with elevated privileges fails, fall back to the current user.
+    fn create_parent_dirs(&self, parent: &Utf8Path, file_entry: &FileEntry) -> anyhow::Result<()> {
+        if let TedgeWriteStatus::Enabled { sudo } = self.config.use_tedge_write.clone() {
+            debug!("Creating the missing parent directories with elevation at '{parent}'");
+            let result = CreateDirsOptions {
+                dir_path: parent,
+                sudo,
+                mode: file_entry.parent_permissions.mode,
+                user: file_entry.parent_permissions.user.as_deref(),
+                group: file_entry.parent_permissions.group.as_deref(),
+            }
+            .create();
+
+            match result {
+                Ok(()) => return Ok(()),
+                Err(err) => {
+                    info!("Failed to create the missing parent directories with elevation at '{parent}' with error: {err}. \
+            Falling back to the current user to create the directories.");
+                }
+            }
+        }
+
+        debug!("Creating the missing parent directories without elevation at '{parent}'");
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create parent directories. Path: '{parent}'"))?;
+
+        file_entry.parent_permissions.clone().apply_sync(parent.as_std_path())
+            .with_context(|| format!("failed to change permissions or mode of the parent directory. Path: '{parent}'"))?;
+
+        Ok(())
     }
 
     /// Deploys the new version of the configuration file and returns the path under which it was
@@ -377,35 +426,10 @@ impl ConfigManagerWorker {
     fn deploy_config_file(
         &self,
         from: &Utf8Path,
-        config_type: &str,
+        file_entry: &FileEntry,
     ) -> anyhow::Result<Utf8PathBuf> {
-        let file_entry = self.plugin_config.get_file_entry_from_type(config_type)?;
-
         let to = Utf8PathBuf::from(&file_entry.path);
-
-        let permissions = MaybePermissions {
-            uid: file_entry
-                .file_permissions
-                .user
-                .as_ref()
-                .map(|u| {
-                    uzers::get_user_by_name(&u).with_context(|| format!("no such user: '{u}'"))
-                })
-                .transpose()?
-                .map(|u| u.uid()),
-
-            gid: file_entry
-                .file_permissions
-                .group
-                .as_ref()
-                .map(|g| {
-                    uzers::get_group_by_name(&g).with_context(|| format!("no such group: '{g}'"))
-                })
-                .transpose()?
-                .map(|g| g.gid()),
-
-            mode: file_entry.file_permissions.mode,
-        };
+        let permissions = MaybePermissions::try_from(&file_entry.file_permissions)?;
 
         let src = std::fs::File::open(from)
             .with_context(|| format!("failed to open source temporary file '{from}'"))?;

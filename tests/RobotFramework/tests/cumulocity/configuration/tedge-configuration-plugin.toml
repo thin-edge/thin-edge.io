@@ -4,4 +4,5 @@ files = [
     { path = '/etc/config1.json', type = 'CONFIG1', user = 'tedge', group = 'tedge', mode = 0o640 },
     { path = '/etc/binary-config1.tar.gz', type = 'CONFIG1_BINARY', user = 'tedge', group = 'tedge', mode = 0o640 },
     { path = '/etc/config-root.json', type = 'CONFIG-ROOT', user = 'root', group = 'root', mode = 0o600 },
+    { path = '/etc/containers/certs.d/example/ca.crt', type = 'harbor-certificate', user = 'tedge', group = 'tedge', mode = 0o640, parent_user = 'root', parent_group = 'root', parent_mode = 0o700 },
 ]
