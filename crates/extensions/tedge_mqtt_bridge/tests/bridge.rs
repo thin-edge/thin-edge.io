@@ -47,7 +47,7 @@ async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig
         .try_into()
         .unwrap();
     MqttBridgeActorBuilder::new(
-        &tedge_mqtt_config(local_port).await,
+        &tedge_mqtt_config(local_port),
         service_name,
         &health_topic,
         rules,
@@ -656,7 +656,7 @@ async fn next_received_message(event_loop: &mut EventLoop) -> anyhow::Result<Pub
     }
 }
 
-async fn tedge_mqtt_config(mqtt_port: u16) -> TEdgeConfig {
+fn tedge_mqtt_config(mqtt_port: u16) -> TEdgeConfig {
     TEdgeConfig::load_toml_str(&format!(
         "
     mqtt.client.port = {mqtt_port}
