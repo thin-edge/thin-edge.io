@@ -4,6 +4,7 @@ mod js_filter;
 mod js_runtime;
 pub mod pipeline;
 mod runtime;
+mod stats;
 
 use crate::actor::GenMapper;
 pub use crate::runtime::MessageProcessor;
