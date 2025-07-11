@@ -6,6 +6,8 @@ use super::show::ShowCertCmd;
 use crate::certificate_is_self_signed;
 use crate::cli::certificate::c8y;
 use crate::cli::certificate::create_csr::Key;
+use crate::cli::certificate::create_key::CreateKeyCmd;
+use crate::cli::certificate::create_key::KeyType;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
@@ -46,6 +48,28 @@ pub enum TEdgeCertCli {
         /// Path where a Certificate signing request will be stored
         #[clap(long = "output-path", global = true, value_hint = ValueHint::FilePath)]
         output_path: Option<Utf8PathBuf>,
+
+        #[clap(subcommand)]
+        cloud: Option<CloudArg>,
+    },
+
+    /// Create a new keypair
+    CreateKey {
+        #[arg(long)]
+        label: String,
+
+        #[arg(long)]
+        r#type: KeyType,
+
+        #[arg(long, default_value = "2048")]
+        bits: u16,
+
+        #[arg(long, default_value = "256")]
+        curve: u16,
+
+        /// The device identifier to be used as the common name for the certificate
+        #[clap(long = "device-id", global = true)]
+        id: Option<String>,
 
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
@@ -192,7 +216,12 @@ impl BuildCommand for TEdgeCertCli {
                     .transpose()?;
                 let cryptoki = config.device.cryptoki_config(cloud_config)?;
                 let key = cryptoki
-                    .map(super::create_csr::Key::Cryptoki)
+                    .map(|config| super::create_csr::Key::Cryptoki {
+                        config,
+                        privkey_label: None,
+                        pubkey_pem: None,
+                        sigalg: None,
+                    })
                     .unwrap_or(Key::Local(
                         config.device_key_path(cloud.as_ref())?.to_owned(),
                     ));
@@ -220,6 +249,29 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
+            TEdgeCertCli::CreateKey {
+                bits,
+                label,
+                r#type,
+                curve,
+
+                id,
+                cloud,
+            } => {
+                let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
+
+                CreateKeyCmd {
+                    bits,
+                    label,
+                    r#type,
+                    curve,
+
+                    device_id: get_device_id(id, config, &cloud)?,
+                    csr_template,
+                    csr_path: config.device_csr_path(cloud.as_ref())?.to_owned(),
+                }
+                .into_boxed()
+            }
             TEdgeCertCli::Show {
                 cloud,
                 cert_path,
@@ -301,7 +353,12 @@ impl BuildCommand for TEdgeCertCli {
 
                 let cryptoki = config.device.cryptoki_config(Some(c8y_config))?;
                 let key = cryptoki
-                    .map(super::create_csr::Key::Cryptoki)
+                    .map(|config| super::create_csr::Key::Cryptoki {
+                        config,
+                        privkey_label: None,
+                        pubkey_pem: None,
+                        sigalg: None,
+                    })
                     .unwrap_or(Key::Local(
                         config
                             .device_key_path(Some(tedge_config::tedge_toml::Cloud::C8y(
@@ -389,7 +446,12 @@ impl BuildCommand for TEdgeCertCli {
                         .transpose()?;
                     let cryptoki = config.device.cryptoki_config(cloud_config)?;
                     let key = cryptoki
-                        .map(super::create_csr::Key::Cryptoki)
+                        .map(|config| super::create_csr::Key::Cryptoki {
+                            config,
+                            privkey_label: None,
+                            pubkey_pem: None,
+                            sigalg: None,
+                        })
                         .unwrap_or(Key::Local(
                             config.device_key_path(cloud.as_ref())?.to_owned(),
                         ));

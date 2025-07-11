@@ -15,6 +15,7 @@ use tracing::warn;
 
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::CreateKeyRequest;
 use crate::service::SignRequest;
 use crate::service::SignResponse;
 
@@ -89,6 +90,8 @@ pub enum Frame1 {
     SignRequest(SignRequest),
     ChooseSchemeResponse(ChooseSchemeResponse),
     SignResponse(SignResponse),
+    CreateKeyRequest(CreateKeyRequest),
+    CreateKeyResponse(Vec<u8>),
 }
 
 /// An error that can be returned to the client by the server.

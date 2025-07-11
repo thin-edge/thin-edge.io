@@ -17,6 +17,8 @@ anyhow = { workspace = true }
 asn1-rs = { workspace = true }
 base64 = { workspace = true }
 camino = { workspace = true }
+elliptic-curve = "0.13.8"
+pem.workspace = true
 rcgen = { workspace = true }
 reqwest = { workspace = true, optional = true, features = [
     "rustls-tls-native-roots",
