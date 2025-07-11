@@ -1,20 +1,28 @@
 *** Settings ***
-Documentation       Test thin-edge.io MQTT client authentication using a Hardware Security Module (HSM).
-...
-...                 To do this, we install SoftHSM2 which allows us to create software-backed PKCS#11 (cryptoki)
-...                 cryptographic tokens that will be read by thin-edge. In real production environments a dedicated
-...                 hardware device would be used.
+Documentation       This test suite runs the tests with tedge-p11-server pinned to version 1.5.2 to ensure that new
+...                 versions of thin-edge remain backwards compatible with tedge-p11-server's binary communication protocol. The
+...                 scope of this test is limited to tedge-p11-server 1.5.2 feature set and will generally not be expanded.
 
-# it would be good to explain here why we use the tedge-p11-server exclusively and not the module mode
 Resource            pkcs11_common.resource
 
 Suite Setup         Custom Setup
 Suite Teardown      Get Suite Logs
 
-Test Tags           adapter:docker    theme:cryptoki
+Test Tags           adapter:docker    theme:cryptoki    compatibility
+
+
+*** Variables ***
+# in this version there were no changes to the binary protocol but # support of EC keys using P384 and P521 were added,
+# so we use it to not to have to change the tests to remove these keys
+# TODO: will be changed to 1.5.2 once it's released
+${TEDGE_P11_SERVER_VERSION}     1.5.2~215+gc3c7b24
 
 
 *** Test Cases ***
+# the test cases are basically copy-pasted from private_key_storage.robot, as the purpose of this suite is to run the
+# exact same tests with a slightly different setup. It would be easiest if we could import the test cases themselves
+# from another test suite, but this isn't possible. So we extract reusable keywords into a resource file, but test cases
+# remain duplicated.
 Use Private Key in SoftHSM2 using tedge-p11-server
     Tedge Reconnect Should Succeed
 
@@ -218,6 +226,17 @@ Warn the user if tedge.toml cannot be parsed
 Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    ${DEVICE_SN}
+
+    # use tedge-p11-server 1.5.2 to ensure first version of the wire protocol is working
+
+    # tedge-p11-server was introduced in 1.5.1, but 1.5.2 didn't change the protocol and introduced support for P384 and
+    # P521 EC curves so to test that as well we'll use 1.5.2
+
+    # this doesn't install anything but adds cloudsmith repo to apt
+    Execute Command    curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' | sudo -E bash
+    Execute Command    cmd=apt-get install -y --allow-downgrades tedge-p11-server=${TEDGE_P11_SERVER_VERSION}
+    ${stdout}=    Execute Command    tedge-p11-server -V    strip=True
+    Should Be Equal    ${stdout}    tedge-p11-server ${TEDGE_P11_SERVER_VERSION}
 
     # Allow the tedge user to access softhsm
     Execute Command    sudo usermod -a -G softhsm tedge
