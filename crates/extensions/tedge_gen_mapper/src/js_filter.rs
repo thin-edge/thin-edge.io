@@ -72,6 +72,10 @@ impl JsFilter {
         &self.path
     }
 
+    pub fn source(&self) -> String {
+        format!("{}", self.path.display())
+    }
+
     /// Process a message returning zero, one or more messages
     ///
     /// The "process" function of the JS module is passed 3 arguments
