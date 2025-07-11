@@ -1,5 +1,6 @@
 use crate::js_filter::JsFilter;
 use crate::js_runtime::JsRuntime;
+use crate::stats::Counter;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -76,6 +77,7 @@ impl Pipeline {
     pub async fn process(
         &mut self,
         js_runtime: &JsRuntime,
+        stats: &mut Counter,
         timestamp: &DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FilterError> {
@@ -84,38 +86,66 @@ impl Pipeline {
             return Ok(vec![]);
         }
 
+        let stated_at = stats.pipeline_process_start(self.source.as_str());
         let mut messages = vec![message.clone()];
         for stage in self.stages.iter() {
+            let js = stage.filter.source();
             let mut transformed_messages = vec![];
             for message in messages.iter() {
+                let filter_started_at = stats.filter_start(&js, "process");
                 let filter_output = stage.filter.process(js_runtime, timestamp, message).await;
+                match &filter_output {
+                    Ok(messages) => {
+                        stats.filter_done(&js, "process", filter_started_at, messages.len())
+                    }
+                    Err(_) => stats.filter_failed(&js, "process"),
+                }
                 transformed_messages.extend(filter_output?);
             }
             messages = transformed_messages;
         }
+
+        stats.pipeline_process_done(self.source.as_str(), stated_at, messages.len());
         Ok(messages)
     }
 
     pub async fn tick(
         &mut self,
         js_runtime: &JsRuntime,
+        stats: &mut Counter,
         timestamp: &DateTime,
     ) -> Result<Vec<Message>, FilterError> {
+        let stated_at = stats.pipeline_tick_start(self.source.as_str());
         let mut messages = vec![];
         for stage in self.stages.iter() {
+            let js = stage.filter.source();
             // Process first the messages triggered upstream by the tick
             let mut transformed_messages = vec![];
             for message in messages.iter() {
+                let filter_started_at = stats.filter_start(&js, "process");
                 let filter_output = stage.filter.process(js_runtime, timestamp, message).await;
+                match &filter_output {
+                    Ok(messages) => {
+                        stats.filter_done(&js, "process", filter_started_at, messages.len())
+                    }
+                    Err(_) => stats.filter_failed(&js, "process"),
+                }
                 transformed_messages.extend(filter_output?);
             }
 
             // Only then process the tick
-            transformed_messages.extend(stage.filter.tick(js_runtime, timestamp).await?);
+            let filter_started_at = stats.filter_start(&js, "tick");
+            let tick_output = stage.filter.tick(js_runtime, timestamp).await;
+            match &tick_output {
+                Ok(messages) => stats.filter_done(&js, "tick", filter_started_at, messages.len()),
+                Err(_) => stats.filter_failed(&js, "tick"),
+            }
+            transformed_messages.extend(tick_output?);
 
             // Iterate with all the messages collected at this stage
             messages = transformed_messages;
         }
+        stats.pipeline_tick_done(self.source.as_str(), stated_at, messages.len());
         Ok(messages)
     }
 }

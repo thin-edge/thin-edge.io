@@ -133,6 +133,7 @@ impl GenMapper {
         let timestamp = DateTime::now();
         if timestamp.seconds % 300 == 0 {
             self.processor.dump_memory_stats().await;
+            self.processor.dump_processing_stats().await;
         }
         for (pipeline_id, pipeline_messages) in self.processor.tick(&timestamp).await {
             match pipeline_messages {

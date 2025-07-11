@@ -4,6 +4,7 @@ use crate::pipeline::DateTime;
 use crate::pipeline::FilterError;
 use crate::pipeline::Message;
 use crate::pipeline::Pipeline;
+use crate::stats::Counter;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -21,6 +22,7 @@ pub struct MessageProcessor {
     pub config_dir: PathBuf,
     pub pipelines: HashMap<String, Pipeline>,
     pub(super) js_runtime: JsRuntime,
+    pub stats: Counter,
 }
 
 impl MessageProcessor {
@@ -34,11 +36,13 @@ impl MessageProcessor {
         let mut pipeline_specs = PipelineSpecs::default();
         pipeline_specs.load(&config_dir).await;
         let pipelines = pipeline_specs.compile(&mut js_runtime, &config_dir).await;
+        let stats = Counter::default();
 
         Ok(MessageProcessor {
             config_dir,
             pipelines,
             js_runtime,
+            stats,
         })
     }
 
@@ -52,10 +56,13 @@ impl MessageProcessor {
         let mut pipeline_specs = PipelineSpecs::default();
         pipeline_specs.load_single_pipeline(&pipeline).await;
         let pipelines = pipeline_specs.compile(&mut js_runtime, &config_dir).await;
+        let stats = Counter::default();
+
         Ok(MessageProcessor {
             config_dir,
             pipelines,
             js_runtime,
+            stats,
         })
     }
 
@@ -68,10 +75,13 @@ impl MessageProcessor {
         let mut pipeline_specs = PipelineSpecs::default();
         pipeline_specs.load_single_filter(&filter).await;
         let pipelines = pipeline_specs.compile(&mut js_runtime, &config_dir).await;
+        let stats = Counter::default();
+
         Ok(MessageProcessor {
             config_dir,
             pipelines,
             js_runtime,
+            stats,
         })
     }
 
@@ -88,11 +98,20 @@ impl MessageProcessor {
         timestamp: &DateTime,
         message: &Message,
     ) -> Vec<(String, Result<Vec<Message>, FilterError>)> {
+        let started_at = self.stats.runtime_process_start();
+
         let mut out_messages = vec![];
         for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
-            let pipeline_output = pipeline.process(&self.js_runtime, timestamp, message).await;
+            let pipeline_output = pipeline
+                .process(&self.js_runtime, &mut self.stats, timestamp, message)
+                .await;
+            if pipeline_output.is_err() {
+                self.stats.pipeline_process_failed(pipeline_id);
+            }
             out_messages.push((pipeline_id.clone(), pipeline_output));
         }
+
+        self.stats.runtime_process_done(started_at);
         out_messages
     }
 
@@ -102,10 +121,19 @@ impl MessageProcessor {
     ) -> Vec<(String, Result<Vec<Message>, FilterError>)> {
         let mut out_messages = vec![];
         for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
-            let pipeline_output = pipeline.tick(&self.js_runtime, timestamp).await;
+            let pipeline_output = pipeline
+                .tick(&self.js_runtime, &mut self.stats, timestamp)
+                .await;
+            if pipeline_output.is_err() {
+                self.stats.pipeline_tick_failed(pipeline_id);
+            }
             out_messages.push((pipeline_id.clone(), pipeline_output));
         }
         out_messages
+    }
+
+    pub async fn dump_processing_stats(&self) {
+        self.stats.dump_processing_stats();
     }
 
     pub async fn dump_memory_stats(&self) {
