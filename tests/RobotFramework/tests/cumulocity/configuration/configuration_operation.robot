@@ -79,6 +79,8 @@ Set Configuration Should Create Parent Directories
     ThinEdgeIO.Set Device Context    ${PARENT_SN}
     ${contents}=    Execute Command    cat /etc/containers/certs.d/example/ca.crt    strip=${True}
     Should Be Equal    ${contents}    DUMMY CONTENTS
+    ${mode}=    Execute Command    stat -c '%a' /etc/containers/certs.d/example    strip=${True}
+    Should Be Equal    ${mode}    700
 
 Set configuration with broken url
     [Template]    Set Configuration from URL
