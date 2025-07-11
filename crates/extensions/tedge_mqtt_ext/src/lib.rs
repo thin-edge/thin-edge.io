@@ -16,6 +16,8 @@ use mqtt_channel::SubscriberOps;
 pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
 use std::convert::Infallible;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
@@ -36,7 +38,7 @@ use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
 use trie::MqtTrie;
-use trie::SubscriptionDiff;
+pub use trie::SubscriptionDiff;
 
 pub type MqttConfig = mqtt_channel::Config;
 
@@ -62,6 +64,12 @@ struct InputCombiner {
 pub enum PublishOrSubscribe {
     Publish(MqttMessage),
     Subscribe(SubscriptionRequest),
+}
+
+impl PublishOrSubscribe {
+    pub fn subscribe(client_id: ClientId, diff: SubscriptionDiff) -> Self {
+        PublishOrSubscribe::Subscribe(SubscriptionRequest { diff, client_id })
+    }
 }
 
 impl InputCombiner {
@@ -158,6 +166,54 @@ impl AsMut<MqttConfig> for MqttActorBuilder {
 impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
     fn connect_sink(&mut self, topics: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
         self.connect_id_sink(topics, peer);
+    }
+}
+
+impl MessageSource<MqttMessage, DynSubscriptions> for MqttActorBuilder {
+    fn connect_sink(
+        &mut self,
+        subscriptions: DynSubscriptions,
+        peer: &impl MessageSink<MqttMessage>,
+    ) {
+        let client_id = self.connect_id_sink(subscriptions.init_topics(), peer);
+        subscriptions.set_client_id(client_id);
+    }
+}
+
+#[derive(Clone)]
+pub struct DynSubscriptions {
+    inner: Arc<Mutex<DynSubscriptionsInner>>,
+}
+pub struct DynSubscriptionsInner {
+    init_topics: TopicFilter,
+    client_id: Option<ClientId>,
+}
+
+impl DynSubscriptions {
+    pub fn new(init_topics: TopicFilter) -> Self {
+        let inner = DynSubscriptionsInner {
+            init_topics,
+            client_id: None,
+        };
+        DynSubscriptions {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
+
+    fn set_client_id(&self, client_id: ClientId) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.client_id = Some(client_id);
+    }
+
+    fn init_topics(&self) -> TopicFilter {
+        self.inner.lock().unwrap().init_topics.clone()
+    }
+
+    /// Return the client id
+    ///
+    /// Panic if not properly registered as a sink of the MqttActorBuilder
+    pub fn client_id(&self) -> ClientId {
+        self.inner.lock().unwrap().client_id.unwrap()
     }
 }
 
