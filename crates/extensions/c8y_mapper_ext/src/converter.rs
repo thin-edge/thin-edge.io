@@ -188,6 +188,7 @@ pub struct CumulocityConverter {
     pub command_id: IdGenerator,
     // Keep active command IDs to avoid creation of multiple commands for an operation
     pub active_commands: HashMap<CmdId, Option<Instant>>,
+    pub recently_completed_commands: HashMap<CmdId, Instant>,
     active_commands_last_cleared: Instant,
 
     supported_operations: SupportedOperations,
@@ -280,6 +281,7 @@ impl CumulocityConverter {
             entity_cache,
             command_id,
             active_commands: HashMap::new(),
+            recently_completed_commands: HashMap::new(),
             active_commands_last_cleared: Instant::now(),
             operation_handler,
         })
@@ -621,7 +623,7 @@ impl CumulocityConverter {
             let device_xid = operation.external_source.external_id;
             let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
 
-            if self.active_commands.contains_key(&cmd_id) {
+            if self.command_already_exists(&cmd_id) {
                 info!("{cmd_id} is already addressed");
                 return Ok(vec![]);
             }
@@ -740,7 +742,7 @@ impl CumulocityConverter {
         let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
         let device_xid = operation.external_source.external_id;
 
-        if self.active_commands.contains_key(&cmd_id) {
+        if self.command_already_exists(&cmd_id) {
             info!("{cmd_id} is already addressed");
             return Ok(vec![]);
         }
@@ -1188,6 +1190,11 @@ impl CumulocityConverter {
     fn can_send_over_mqtt(&self, message: &MqttMessage) -> bool {
         message.payload_bytes().len() < self.size_threshold.0
     }
+
+    fn command_already_exists(&self, cmd_id: &str) -> bool {
+        self.active_commands.contains_key(cmd_id)
+            || self.recently_completed_commands.contains_key(cmd_id)
+    }
 }
 
 #[derive(Error, Debug)]
@@ -1285,6 +1292,8 @@ impl CumulocityConverter {
             Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
                 self.active_commands.remove(cmd_id);
+                self.recently_completed_commands
+                    .insert(cmd_id.to_owned(), Instant::now());
                 Ok(vec![])
             }
 
@@ -1370,17 +1379,27 @@ impl CumulocityConverter {
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         if self.active_commands_last_cleared.elapsed() > Duration::from_secs(3600) {
-            let mut to_remove = vec![];
+            let mut to_remove_active = vec![];
             for (id, time) in &self.active_commands {
                 if let Some(time) = time {
                     // Expire tasks after 12 hours
                     if time.elapsed() > Duration::from_secs(3600 * 12) {
-                        to_remove.push(id.to_owned());
+                        to_remove_active.push(id.to_owned());
                     }
                 }
             }
-            for id in to_remove {
+            let mut to_remove_completed = vec![];
+            for (id, time) in &self.recently_completed_commands {
+                // Remove completed tasks after 1 hour
+                if time.elapsed() > Duration::from_secs(3600) {
+                    to_remove_completed.push(id.to_owned());
+                }
+            }
+            for id in to_remove_active {
                 self.active_commands.remove(&id);
+            }
+            for id in to_remove_completed {
+                self.recently_completed_commands.remove(&id);
             }
             self.active_commands_last_cleared = Instant::now();
         }
@@ -2564,6 +2583,37 @@ pub(crate) mod tests {
                 retain: true,
             },]
         );
+        assert_eq!(converter.try_convert(&operation).await.unwrap(), vec![]);
+    }
+
+    #[tokio::test]
+    async fn operations_are_deduplicated_after_completion() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+
+        let operation = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
+            {"id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
+        ).to_string());
+        assert_eq!(
+            converter.try_convert(&operation).await.unwrap(),
+            vec![MqttMessage {
+                topic: Topic {
+                    name: "te/device/main///cmd/restart/c8y-mapper-16574089".into(),
+                },
+                payload: json!({"status":"init"}).to_string().into(),
+                qos: QoS::AtLeastOnce,
+                retain: true,
+            },]
+        );
+        let local_completion = MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/restart/c8y-mapper-16574089"),
+            "",
+        );
+        assert_eq!(
+            converter.try_convert(&local_completion).await.unwrap(),
+            vec![]
+        );
+
         assert_eq!(converter.try_convert(&operation).await.unwrap(), vec![]);
     }
 
