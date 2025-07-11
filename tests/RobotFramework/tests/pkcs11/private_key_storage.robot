@@ -266,6 +266,18 @@ Connect to C8y using new keypair
 Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    ${DEVICE_SN}
+
+    # use tedge-p11-server 1.5.2 to ensure first version of the wire protocol is working
+
+    # tedge-p11-server was introduced in 1.5.1, but 1.5.2 didn't change the protocol and introduced support for P384 and
+    # P521 EC curves so to test that as well we'll use 1.5.2
+
+    # this doesn't install anything but adds cloudsmith repo to apt
+    Execute Command    wget -O - https://thin-edge.io/install.sh | sh -s    exp_exit_code=!0
+    Execute Command    cmd=apt-get install -y --allow-downgrades tedge-p11-server=1.5.2~215+gc3c7b24
+    ${stdout}=    Execute Command    tedge-p11-server -V    strip=True
+    Should Be Equal    ${stdout}    tedge-p11-server 1.5.2~215+gc3c7b24
+
     # Allow the tedge user to access softhsm
     Execute Command    sudo usermod -a -G softhsm tedge
     Transfer To Device    ${CURDIR}/data/init_softhsm.sh    /usr/bin/
