@@ -1,20 +1,25 @@
 *** Settings ***
-Documentation       Test thin-edge.io MQTT client authentication using a Hardware Security Module (HSM).
-...
-...                 To do this, we install SoftHSM2 which allows us to create software-backed PKCS#11 (cryptoki)
-...                 cryptographic tokens that will be read by thin-edge. In real production environments a dedicated
-...                 hardware device would be used.
+Documentation       This test suite runs the tests with tedge-p11-server pinned to a fixed version to ensure that new
+...                 versions of thin-edge remain backwards compatible with tedge-p11-server's binary communication protocol. The
+...                 scope of this test is limited to tedge-p11-server's initial feature set and will generally not be expanded.
 
-# it would be good to explain here why we use the tedge-p11-server exclusively and not the module mode
 Resource            pkcs11_common.resource
 
 Suite Setup         Custom Setup
 Suite Teardown      Get Suite Logs
 
-Test Tags           adapter:docker    theme:cryptoki
+Test Tags           adapter:docker    theme:cryptoki    compatibility
+
+
+*** Variables ***
+${TEDGE_P11_SERVER_VERSION}     1.5.1
 
 
 *** Test Cases ***
+# the test cases are basically copy-pasted from private_key_storage.robot, as the purpose of this suite is to run the
+# exact same tests with a slightly different setup. It would be easiest if we could import the test cases themselves
+# from another test suite, but this isn't possible. So we extract reusable keywords into a resource file, but test cases
+# remain duplicated.
 Use Private Key in SoftHSM2 using tedge-p11-server
     Tedge Reconnect Should Succeed
 
@@ -90,63 +95,6 @@ Connects to C8y supporting all TLS13 ECDSA signature algorithms
     [Setup]    Set tedge-p11-server Uri    value=${EMPTY}
     [Template]    Connect to C8y using new keypair
     type=ecdsa    curve=secp256r1
-    type=ecdsa    curve=secp384r1
-    type=ecdsa    curve=secp521r1
-
-Can use PKCS11 key to renew the public certificate
-    [Documentation]    Test that `tedge cert renew c8y` works with all supported keys. We do renew 2 times to see if we
-    ...    can renew both a self-signed certificate and a certificate signed by C8y CA.
-    [Setup]    Set tedge-p11-server Uri    value=${EMPTY}
-
-    Connect to C8y using new keypair    type=ecdsa    curve=secp256r1
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-
-    Connect to C8y using new keypair    type=ecdsa    curve=secp384r1
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-
-    # renewal isn't supported for P521 because rcgen doesn't support it
-    # https://github.com/rustls/rcgen/issues/60
-
-    # Connect to C8y using new keypair    type=ecdsa    curve=secp521r1
-    # Execute Command    tedge cert renew c8y
-    # Tedge Reconnect Should Succeed
-    # Execute Command    tedge cert renew c8y
-    # Tedge Reconnect Should Succeed
-
-    Connect to C8y using new keypair    type=rsa    bits=2048
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-
-    Connect to C8y using new keypair    type=rsa    bits=3072
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-
-    Connect to C8y using new keypair    type=rsa    bits=4096
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-
-    Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
-    Command Should Fail With
-    ...    tedge cert renew c8y
-    ...    error=PEM error: Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
-
-    Execute Command    systemctl start tedge-p11-server.socket
-    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
-    Command Should Fail With
-    ...    tedge cert renew c8y
-    ...    error=PEM error: protocol error: bad response, expected sign, received: Error(ProtocolError("PKCS #11 service failed: Failed to find a signing key: Failed to find a private key"))
 
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
@@ -218,6 +166,12 @@ Warn the user if tedge.toml cannot be parsed
 Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    ${DEVICE_SN}
+
+    # this doesn't install anything but adds cloudsmith repo to apt
+    Execute Command    curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' | sudo -E bash
+    Execute Command    cmd=apt-get install -y --allow-downgrades tedge-p11-server=${TEDGE_P11_SERVER_VERSION}
+    ${stdout}=    Execute Command    tedge-p11-server -V    strip=True
+    Should Be Equal    ${stdout}    tedge-p11-server ${TEDGE_P11_SERVER_VERSION}
 
     # Allow the tedge user to access softhsm
     Execute Command    sudo usermod -a -G softhsm tedge
