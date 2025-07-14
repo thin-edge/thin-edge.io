@@ -35,27 +35,8 @@ impl CopyOptions<'_> {
     ///
     /// Stdin and Stdout are UTF-8.
     pub fn copy(self) -> anyhow::Result<()> {
-        let mut command = self.command()?;
-
-        let output = command.output();
-
-        let program = command.get_program().to_string_lossy();
-        let output = output.with_context(|| format!("failed to start process '{program}'"))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stderr = stderr.trim();
-            let err = match output.status.code() {
-                Some(exit_code) => anyhow!(
-                    "process '{program}' returned non-zero exit code ({exit_code}); stderr=\"{stderr}\""
-                ),
-                None => anyhow!("process '{program}' was terminated; stderr=\"{stderr}\""),
-            };
-
-            return Err(err);
-        }
-
-        Ok(())
+        let command = self.command()?;
+        execute(command)
     }
 
     fn command(&self) -> anyhow::Result<Command> {
@@ -81,6 +62,80 @@ impl CopyOptions<'_> {
 
         Ok(command)
     }
+}
+
+/// Options for creating directories using a `tedge-write` process.
+#[derive(Debug, PartialEq)]
+pub struct CreateDirsOptions<'a> {
+    /// Destination directory path
+    pub dir_path: &'a Utf8Path,
+
+    /// User's sudo preference, received from TedgeConfig
+    pub sudo: SudoCommandBuilder,
+
+    /// Permission mode for the immediate directory, in octal form.
+    pub mode: Option<u32>,
+
+    /// User which will become the new owner of the immediate directory.
+    pub user: Option<&'a str>,
+
+    /// Group which will become the new owner of the immediate directory.
+    pub group: Option<&'a str>,
+}
+
+impl CreateDirsOptions<'_> {
+    /// Creates the directories by spawning new tedge-write process.
+    ///
+    /// Stdout are UTF-8.
+    pub fn create(self) -> anyhow::Result<()> {
+        let command = self.command()?;
+        execute(command)
+    }
+
+    fn command(&self) -> anyhow::Result<Command> {
+        // if tedge-write is in PATH of tedge process, use it, if not, defer PATH lookup to sudo
+        let tedge_write_binary =
+            which::which_global(TEDGE_WRITE_BINARY).unwrap_or(TEDGE_WRITE_BINARY.into());
+
+        let mut command = self.sudo.command(tedge_write_binary);
+
+        command.arg(self.dir_path);
+        command.arg("--create-dirs-only");
+
+        if let Some(mode) = self.mode {
+            command.arg("--parent-mode").arg(format!("{mode:o}"));
+        }
+        if let Some(user) = self.user {
+            command.arg("--parent-user").arg(user);
+        }
+        if let Some(group) = self.group {
+            command.arg("--parent-group").arg(group);
+        }
+
+        Ok(command)
+    }
+}
+
+fn execute(mut command: Command) -> anyhow::Result<()> {
+    let output = command.output();
+
+    let program = command.get_program().to_string_lossy();
+    let output = output.with_context(|| format!("failed to start process '{program}'"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = stderr.trim();
+        let err = match output.status.code() {
+            Some(exit_code) => anyhow!(
+                    "process '{program}' returned non-zero exit code ({exit_code}); stderr=\"{stderr}\""
+                ),
+            None => anyhow!("process '{program}' was terminated; stderr=\"{stderr}\""),
+        };
+
+        return Err(err);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
