@@ -299,10 +299,11 @@ impl TrieService {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg(feature = "test-helpers")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClientId(pub usize);
 #[cfg(not(feature = "test-helpers"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClientId(usize);
 
 type MatchRequest = String;
