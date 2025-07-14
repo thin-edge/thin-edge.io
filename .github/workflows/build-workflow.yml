@@ -44,6 +44,10 @@ jobs:
           sudo rm -rf /opt/ghc
           sudo rm -rf "/usr/local/share/boost"
           sudo rm -rf /opt/hostedtoolcache
+          # Make sure /mnt has plenty of empty space,
+          # but ignore the error we encounter on /mnt/swapfile
+          # since we can't delete that
+          sudo rm -rf /mnt/* || true
 
       - name: Check disk space after freeing
         run: df -BM
