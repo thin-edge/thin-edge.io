@@ -13,7 +13,7 @@ use tracing::warn;
 
 pub trait SigningService {
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse>;
-    fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse>;
+    fn sign(&self, request: SignRequest2) -> anyhow::Result<SignResponse>;
     /// Generate a new keypair, saving the private key on the token and returning the public key as BER.
     fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<Vec<u8>>;
 }
@@ -66,7 +66,7 @@ impl SigningService for TedgeP11Service {
     }
 
     #[instrument(skip_all)]
-    fn sign(&self, request: SignRequest) -> anyhow::Result<SignResponse> {
+    fn sign(&self, request: SignRequest2) -> anyhow::Result<SignResponse> {
         trace!(?request);
         let uri = request.uri;
         let signer = self
@@ -102,8 +102,14 @@ pub struct ChooseSchemeResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignRequest {
     pub to_sign: Vec<u8>,
-    pub sigscheme: SigScheme,
     pub uri: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignRequest2 {
+    pub to_sign: Vec<u8>,
+    pub uri: Option<String>,
+    pub sigscheme: Option<SigScheme>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

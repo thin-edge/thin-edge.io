@@ -17,6 +17,7 @@ use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
 use crate::service::SignRequest;
+use crate::service::SignRequest2;
 use crate::service::SignResponse;
 
 pub struct Connection {
@@ -92,6 +93,7 @@ pub enum Frame1 {
     SignResponse(SignResponse),
     CreateKeyRequest(CreateKeyRequest),
     CreateKeyResponse(Vec<u8>),
+    SignRequest2(SignRequest2),
 }
 
 /// An error that can be returned to the client by the server.

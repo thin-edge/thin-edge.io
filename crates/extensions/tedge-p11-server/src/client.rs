@@ -10,6 +10,7 @@ use tracing::trace;
 use crate::pkcs11::CreateKeyParams;
 use crate::pkcs11::SigScheme;
 use crate::service::CreateKeyRequest;
+use crate::service::SignRequest2;
 
 use super::connection::Frame1;
 use super::service::ChooseSchemeRequest;
@@ -99,15 +100,31 @@ impl TedgeP11Client {
         Ok(response.algorithm.0)
     }
 
-    pub fn sign(
-        &self,
-        message: &[u8],
-        sigscheme: SigScheme,
-        uri: Option<String>,
-    ) -> anyhow::Result<Vec<u8>> {
+    pub fn sign(&self, message: &[u8], uri: Option<String>) -> anyhow::Result<Vec<u8>> {
         let request = Frame1::SignRequest(SignRequest {
             to_sign: message.to_vec(),
-            sigscheme,
+            uri,
+        });
+        let response = self.do_request(request)?;
+
+        let Frame1::SignResponse(response) = response else {
+            bail!("protocol error: bad response, expected sign, received: {response:?}");
+        };
+
+        debug!("Sign complete");
+
+        Ok(response.0)
+    }
+
+    pub fn sign2(
+        &self,
+        message: &[u8],
+        uri: Option<String>,
+        sigscheme: SigScheme,
+    ) -> anyhow::Result<Vec<u8>> {
+        let request = Frame1::SignRequest2(SignRequest2 {
+            to_sign: message.to_vec(),
+            sigscheme: Some(sigscheme),
             uri,
         });
         let response = self.do_request(request)?;

@@ -1,5 +1,4 @@
 use anyhow::Context;
-use asn1_rs::nom::HexDisplay;
 use camino::Utf8Path;
 use device_id::DeviceIdError;
 use rcgen::CertificateParams;
@@ -200,6 +199,7 @@ impl KeyKind {
             cryptoki_config,
             public_key_raw,
             algorithm,
+            use_new_sign: true,
         }))
     }
 
@@ -244,6 +244,7 @@ impl KeyKind {
             cryptoki_config,
             public_key_raw,
             algorithm,
+            use_new_sign: false,
         }))
     }
 }
@@ -287,6 +288,7 @@ pub struct RemoteKeyPair {
     cryptoki_config: CryptokiConfig,
     public_key_raw: Vec<u8>,
     algorithm: &'static rcgen::SignatureAlgorithm,
+    use_new_sign: bool,
 }
 
 impl rcgen::PublicKeyData for RemoteKeyPair {
@@ -307,9 +309,15 @@ impl rcgen::SigningKey for RemoteKeyPair {
         trace!(?self.cryptoki_config, msg = %String::from_utf8_lossy(msg), "sign");
         let signer = tedge_p11_server::signing_key(self.cryptoki_config.clone())
             .map_err(|e| rcgen::Error::PemError(e.to_string()))?;
-        signer
-            .sign(msg, to_sigscheme(self.algorithm))
-            .map_err(|e| rcgen::Error::PemError(e.to_string()))
+        if self.use_new_sign {
+            signer
+                .sign2(msg, to_sigscheme(self.algorithm))
+                .map_err(|e| rcgen::Error::PemError(e.to_string()))
+        } else {
+            signer
+                .sign(msg)
+                .map_err(|e| rcgen::Error::PemError(e.to_string()))
+        }
     }
 }
 

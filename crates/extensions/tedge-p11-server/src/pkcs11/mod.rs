@@ -231,7 +231,9 @@ impl Cryptoki {
 
         let key = keys.next().context("Failed to find a private key")?;
         if keys.len() > 0 {
-            warn!("Multiple keys were found. If the wrong one was chosen, please use a URI that uniquely identifies a key.")
+            warn!(
+                "Multiple keys were found. If the wrong one was chosen, please use a URI that uniquely identifies a key."
+            )
         }
 
         Ok(key)
@@ -439,9 +441,14 @@ pub struct Pkcs11Signer {
 }
 
 impl Pkcs11Signer {
-    pub fn sign(&self, message: &[u8], sigscheme: SigScheme) -> Result<Vec<u8>, anyhow::Error> {
+    pub fn sign(
+        &self,
+        message: &[u8],
+        sigscheme: Option<SigScheme>,
+    ) -> Result<Vec<u8>, anyhow::Error> {
         let session = self.session.session.lock().unwrap();
 
+        let sigscheme = sigscheme.unwrap_or(self.sigscheme);
         let mechanism = sigscheme.into();
         let (mechanism, digest_mechanism) = match mechanism {
             Mechanism::EcdsaSha256 => (Mechanism::Ecdsa, Some(Mechanism::Sha256)),
@@ -585,7 +592,8 @@ impl SigningKey for Pkcs11Signer {
 
 impl Signer for Pkcs11Signer {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
-        Self::sign(self, message, self.sigscheme).map_err(|e| rustls::Error::General(e.to_string()))
+        Self::sign(self, message, Some(self.sigscheme))
+            .map_err(|e| rustls::Error::General(e.to_string()))
     }
 
     fn scheme(&self) -> SignatureScheme {
