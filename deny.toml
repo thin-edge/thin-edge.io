@@ -74,6 +74,8 @@ ignore = [
     { id = "RUSTSEC-2024-0320", reason = "crate: yaml-rust. Only used for tests but rumqttd needs updating to remove this dependency" },
     { id = "RUSTSEC-2025-0012", reason = "crate: backoff. Needs refactoring to remove dependency" },
     { id = "RUSTSEC-2024-0436", reason = "crate: paste. Used by cryptoki dependency" },
+    { id = "RUSTSEC-2023-0071", reason = "crate: rsa. No patch available, not using affected API, added rules to clippy to forbid using these APIs" },
+
     #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
     #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
     #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
