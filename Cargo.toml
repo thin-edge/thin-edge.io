@@ -159,7 +159,7 @@ quote = "1"
 rand = "0.8"
 rasn = "0.18" # Not using the latest version which requires rust 1.85
 rasn-cms = "0.18" # Not using the latest version which requires rust 1.85
-rcgen = { version = "0.12", features = ["pem", "zeroize"] }
+rcgen = { version = "0.14", features = ["pem", "zeroize"] }
 regex = "1.4"
 reqwest = { version = "0.12", default-features = false }
 ron = "0.8"

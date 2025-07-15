@@ -1,7 +1,6 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use device_id::DeviceIdError;
-use rcgen::Certificate;
 use rcgen::CertificateParams;
 use rcgen::KeyPair;
 use sha1::Digest;
@@ -224,17 +223,17 @@ pub struct RemoteKeyPair {
     algorithm: &'static rcgen::SignatureAlgorithm,
 }
 
-impl RemoteKeyPair {
-    pub fn to_key_pair(&self) -> Result<KeyPair, CertificateError> {
-        Ok(KeyPair::from_remote(Box::new(self.clone()))?)
-    }
-}
-
-impl rcgen::RemoteKeyPair for RemoteKeyPair {
-    fn public_key(&self) -> &[u8] {
+impl rcgen::PublicKeyData for RemoteKeyPair {
+    fn der_bytes(&self) -> &[u8] {
         &self.public_key_raw
     }
 
+    fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
+        self.algorithm
+    }
+}
+
+impl rcgen::SigningKey for RemoteKeyPair {
     fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, rcgen::Error> {
         // the error here is not PEM-related, but we need to return a foreign error type, and there
         // are no other better variants that could let us return context, so we'll have to use this
@@ -245,14 +244,43 @@ impl rcgen::RemoteKeyPair for RemoteKeyPair {
             .sign(msg)
             .map_err(|e| rcgen::Error::PemError(e.to_string()))
     }
-
-    fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
-        self.algorithm
-    }
 }
 
 pub struct KeyCertPair {
-    certificate: Zeroizing<rcgen::Certificate>,
+    certificate: rcgen::Certificate,
+    // in rcgen 0.14 params are necessary to generate the CSR
+    params: rcgen::CertificateParams,
+    signing_key: SigningKeyWrapper,
+}
+
+enum SigningKeyWrapper {
+    Local(Zeroizing<rcgen::KeyPair>),
+    Remote(RemoteKeyPair),
+}
+
+impl rcgen::PublicKeyData for SigningKeyWrapper {
+    fn der_bytes(&self) -> &[u8] {
+        match self {
+            Self::Local(k) => k.der_bytes(),
+            Self::Remote(k) => k.der_bytes(),
+        }
+    }
+
+    fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
+        match self {
+            Self::Local(k) => k.algorithm(),
+            Self::Remote(k) => k.algorithm(),
+        }
+    }
+}
+
+impl rcgen::SigningKey for SigningKeyWrapper {
+    fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, rcgen::Error> {
+        match self {
+            Self::Local(k) => k.sign(msg),
+            Self::Remote(k) => k.sign(msg),
+        }
+    }
 }
 
 impl KeyCertPair {
@@ -263,11 +291,13 @@ impl KeyCertPair {
     ) -> Result<KeyCertPair, CertificateError> {
         let today = OffsetDateTime::now_utc();
         let not_before = today - Duration::days(1); // Ensure the certificate is valid today
-        let params =
+        let (params, signing_key) =
             Self::create_selfsigned_certificate_parameters(config, id, key_kind, not_before)?;
 
         Ok(KeyCertPair {
-            certificate: Zeroizing::new(Certificate::from_params(params)?),
+            certificate: params.self_signed(&signing_key)?,
+            signing_key,
+            params,
         })
     }
 
@@ -278,11 +308,14 @@ impl KeyCertPair {
     ) -> Result<KeyCertPair, CertificateError> {
         // Create Certificate without `not_before` and `not_after` fields
         // as rcgen library will not parse it for certificate signing request
-        let params = Self::create_csr_parameters(config, id, key_kind)?;
+        let (params, signing_key) = Self::create_csr_parameters(config, id, key_kind)?;
+        let issuer = rcgen::Issuer::from_params(&params, &signing_key);
         Ok(KeyCertPair {
-            certificate: Zeroizing::new(
-                Certificate::from_params(params).context("Failed to create CSR")?,
-            ),
+            certificate: params
+                .signed_by(&signing_key, &issuer)
+                .context("Failed to create CSR")?,
+            signing_key,
+            params,
         })
     }
 
@@ -291,8 +324,8 @@ impl KeyCertPair {
         id: &str,
         key_kind: &KeyKind,
         not_before: OffsetDateTime,
-    ) -> Result<CertificateParams, CertificateError> {
-        let mut params = Self::create_csr_parameters(config, id, key_kind)?;
+    ) -> Result<(CertificateParams, SigningKeyWrapper), CertificateError> {
+        let (mut params, signing_key) = Self::create_csr_parameters(config, id, key_kind)?;
 
         let not_after = not_before + Duration::days(config.validity_period_days.into());
         params.not_before = not_before;
@@ -301,14 +334,14 @@ impl KeyCertPair {
         // IsCa::SelfSignedOnly is rejected by C8Y with "422 Unprocessable Entity"
         params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
 
-        Ok(params)
+        Ok((params, signing_key))
     }
 
     fn create_csr_parameters(
         config: &CsrTemplate,
         id: &str,
         key_kind: &KeyKind,
-    ) -> Result<CertificateParams, CertificateError> {
+    ) -> Result<(CertificateParams, SigningKeyWrapper), CertificateError> {
         KeyCertPair::check_identifier(id, config.max_cn_size)?;
         let mut distinguished_name = rcgen::DistinguishedName::new();
         distinguished_name.push(rcgen::DnType::CommonName, id);
@@ -321,38 +354,38 @@ impl KeyCertPair {
         let mut params = CertificateParams::default();
         params.distinguished_name = distinguished_name;
 
-        match key_kind {
+        let signing_key: SigningKeyWrapper = match key_kind {
             KeyKind::New => {
                 // ECDSA signing using the P-256 curves and SHA-256 hashing as per RFC 5758
-                params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+                SigningKeyWrapper::Local(Zeroizing::new(KeyPair::generate_for(
+                    &rcgen::PKCS_ECDSA_P256_SHA256,
+                )?))
             }
             KeyKind::Reuse { keypair_pem } => {
                 // Use the same signing algorithm as the existing key
                 // Failing to do so leads to an error telling the algorithm is not compatible
-                let key_pair = KeyPair::from_pem(keypair_pem)?;
-                params.alg = key_pair.algorithm();
-                params.key_pair = Some(key_pair);
+                SigningKeyWrapper::Local(Zeroizing::new(KeyPair::from_pem(keypair_pem)?))
             }
-            KeyKind::ReuseRemote(key_pair) => {
-                let key_pair = key_pair.to_key_pair()?;
-                params.alg = key_pair.algorithm();
-                params.key_pair = Some(key_pair)
-            }
-        }
+            KeyKind::ReuseRemote(remote) => SigningKeyWrapper::Remote(remote.clone()),
+        };
 
-        Ok(params)
+        Ok((params, signing_key))
     }
 
     pub fn certificate_pem_string(&self) -> Result<String, CertificateError> {
-        Ok(self.certificate.serialize_pem()?)
+        Ok(self.certificate.pem())
     }
 
     pub fn private_key_pem_string(&self) -> Result<Zeroizing<String>, CertificateError> {
-        Ok(Zeroizing::new(self.certificate.serialize_private_key_pem()))
+        if let SigningKeyWrapper::Local(keypair) = &self.signing_key {
+            Ok(Zeroizing::new(keypair.serialize_pem()))
+        } else {
+            Err(anyhow::anyhow!("Can't serialize private key PEM for remote private key").into())
+        }
     }
 
     pub fn certificate_signing_request_string(&self) -> Result<String, CertificateError> {
-        Ok(self.certificate.serialize_request_pem()?)
+        Ok(self.params.serialize_request(&self.signing_key)?.pem()?)
     }
 
     fn check_identifier(id: &str, max_cn_size: usize) -> Result<(), CertificateError> {
@@ -555,7 +588,7 @@ mod tests {
         let id = "some-id";
         let birthdate = datetime!(2021-03-31 16:39:57 +01:00);
 
-        let params = KeyCertPair::create_selfsigned_certificate_parameters(
+        let (params, signing_key) = KeyCertPair::create_selfsigned_certificate_parameters(
             &config,
             id,
             &KeyKind::New,
@@ -564,9 +597,11 @@ mod tests {
         .expect("Fail to get a certificate parameters");
 
         let keypair = KeyCertPair {
-            certificate: Zeroizing::new(
-                Certificate::from_params(params).expect("Fail to create a certificate"),
-            ),
+            certificate: params
+                .self_signed(&signing_key)
+                .expect("Fail to create a certificate"),
+            params,
+            signing_key,
         };
 
         // Check the not_before date
@@ -587,7 +622,7 @@ mod tests {
         let id = "some-id";
         let birthdate = datetime!(2021-03-31 16:39:57 +01:00);
 
-        let params = KeyCertPair::create_selfsigned_certificate_parameters(
+        let (params, signing_key) = KeyCertPair::create_selfsigned_certificate_parameters(
             &config,
             id,
             &KeyKind::New,
@@ -596,9 +631,11 @@ mod tests {
         .expect("Fail to get a certificate parameters");
 
         let keypair = KeyCertPair {
-            certificate: Zeroizing::new(
-                Certificate::from_params(params).expect("Fail to create a certificate"),
-            ),
+            certificate: params
+                .self_signed(&signing_key)
+                .expect("Fail to create a certificate"),
+            params,
+            signing_key,
         };
 
         // Check the not_after date
@@ -613,13 +650,16 @@ mod tests {
         let config = CsrTemplate::default();
         let id = "some-id";
 
-        let params = KeyCertPair::create_csr_parameters(&config, id, &KeyKind::New)
+        let (params, signing_key) = KeyCertPair::create_csr_parameters(&config, id, &KeyKind::New)
             .expect("Fail to get a certificate parameters");
 
+        let issuer = rcgen::Issuer::from_params(&params, &signing_key);
         let keypair = KeyCertPair {
-            certificate: Zeroizing::new(
-                Certificate::from_params(params).expect("Fail to create a certificate"),
-            ),
+            certificate: params
+                .signed_by(&signing_key, &issuer)
+                .expect("Fail to create a certificate"),
+            params,
+            signing_key,
         };
 
         // Check the subject

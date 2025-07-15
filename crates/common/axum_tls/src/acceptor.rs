@@ -175,9 +175,7 @@ mod tests {
         let permitted_certificate =
             rcgen::generate_simple_self_signed(vec!["not-my-client".into()]).unwrap();
         let mut roots = RootCertStore::empty();
-        roots
-            .add(permitted_certificate.serialize_der().unwrap().into())
-            .unwrap();
+        roots.add(permitted_certificate.cert.der().clone()).unwrap();
         let server = Server::with_trusted_roots(roots);
         let client = Client::builder()
             .add_root_certificate(server.certificate.clone())
@@ -198,9 +196,7 @@ mod tests {
         let permitted_certificate =
             rcgen::generate_simple_self_signed(vec!["not-my-client".into()]).unwrap();
         let mut roots = RootCertStore::empty();
-        roots
-            .add(permitted_certificate.serialize_der().unwrap().into())
-            .unwrap();
+        roots.add(permitted_certificate.cert.der().clone()).unwrap();
         let server = Server::with_trusted_roots(roots);
         let client = Client::builder()
             .add_root_certificate(server.certificate.clone())
@@ -223,9 +219,8 @@ mod tests {
         let client_cert = rcgen::generate_simple_self_signed(["my-client".into()]).unwrap();
         let identity = identity_from(&client_cert);
         let mut cert_store = RootCertStore::empty();
-        cert_store.add_parsable_certificates([CertificateDer::from(
-            client_cert.serialize_der().unwrap(),
-        )]);
+        cert_store
+            .add_parsable_certificates([CertificateDer::from(client_cert.cert.der().as_ref())]);
 
         let server = Server::with_trusted_roots(cert_store);
         let client = Client::builder()
@@ -253,9 +248,9 @@ mod tests {
         identity_from(&client_cert)
     }
 
-    fn identity_from(cert: &rcgen::Certificate) -> Identity {
-        let mut pem = cert.serialize_private_key_pem().into_bytes();
-        pem.append(&mut cert.serialize_pem().unwrap().into_bytes());
+    fn identity_from(cert: &rcgen::CertifiedKey<rcgen::KeyPair>) -> Identity {
+        let mut pem = cert.signing_key.serialize_pem().into_bytes();
+        pem.append(&mut cert.cert.pem().into_bytes());
         Identity::from_pem(&pem).unwrap()
     }
 
@@ -293,9 +288,9 @@ mod tests {
                 port += 1;
             };
             let certificate = rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap();
-            let certificate_der = CertificateDer::from(certificate.serialize_der().unwrap());
+            let certificate_der = certificate.cert.der().clone();
             let private_key_der =
-                PrivateKeyDer::from_pem_slice(certificate.serialize_private_key_pem().as_bytes())
+                PrivateKeyDer::from_pem_slice(certificate.signing_key.serialize_pem().as_bytes())
                     .unwrap();
             let certificate = reqwest::Certificate::from_der(&certificate_der).unwrap();
             let config = ssl_config(vec![certificate_der], private_key_der, trusted_roots).unwrap();

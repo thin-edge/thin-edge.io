@@ -466,7 +466,6 @@ mod tests {
     use axum::Router;
     use hyper::header::AUTHORIZATION;
     use rustls::pki_types::pem::PemObject;
-    use rustls::pki_types::CertificateDer;
     use rustls::pki_types::PrivateKeyDer;
     use rustls::RootCertStore;
     use std::io::Write;
@@ -970,8 +969,8 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let server_cert = rcgen::generate_simple_self_signed(["localhost".into()]).unwrap();
-        let cert = CertificateDer::from(server_cert.serialize_der().unwrap());
-        let key = PrivateKeyDer::from_pem_slice(server_cert.serialize_private_key_pem().as_bytes())
+        let cert = server_cert.cert.der().clone();
+        let key = PrivateKeyDer::from_pem_slice(server_cert.signing_key.serialize_pem().as_bytes())
             .unwrap();
         let mut accepted_certs = RootCertStore::empty();
         accepted_certs.add(cert.clone()).unwrap();
