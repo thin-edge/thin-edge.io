@@ -4,7 +4,6 @@ use crate::log::MaybeFancy;
 use crate::override_public_key;
 use crate::persist_new_private_key;
 use crate::reuse_private_key;
-use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::CryptokiConfig;
 use certificate::CsrTemplate;

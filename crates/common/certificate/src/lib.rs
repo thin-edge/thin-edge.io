@@ -223,6 +223,7 @@ impl KeyKind {
             CryptokiConfig::Direct(CryptokiConfigDirect { ref mut uri, .. }) => uri,
             CryptokiConfig::SocketService { ref mut uri, .. } => uri,
         };
+        // TODO: cleanup manual URI parsing
         let private_key_uri = match uri {
             Some(uri) if uri.contains("object=") => {
                 let uri: String = uri
