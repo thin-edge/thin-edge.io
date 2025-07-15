@@ -1,8 +1,8 @@
 mod actor;
 mod config;
+pub mod flow;
 mod js_filter;
 mod js_runtime;
-pub mod pipeline;
 mod runtime;
 mod stats;
 

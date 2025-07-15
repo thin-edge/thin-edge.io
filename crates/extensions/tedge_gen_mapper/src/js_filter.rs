@@ -1,8 +1,8 @@
+use crate::flow;
+use crate::flow::DateTime;
+use crate::flow::FilterError;
+use crate::flow::Message;
 use crate::js_runtime::JsRuntime;
-use crate::pipeline;
-use crate::pipeline::DateTime;
-use crate::pipeline::FilterError;
-use crate::pipeline::Message;
 use anyhow::Context;
 use rquickjs::Ctx;
 use rquickjs::FromJs;
@@ -33,8 +33,8 @@ impl Default for JsonValue {
 }
 
 impl JsFilter {
-    pub fn new(pipeline: PathBuf, index: usize, path: PathBuf) -> Self {
-        let module_name = format!("{}|{}|{}", pipeline.display(), index, path.display());
+    pub fn new(flow: PathBuf, index: usize, path: PathBuf) -> Self {
+        let module_name = format!("{}|{}|{}", flow.display(), index, path.display());
         JsFilter {
             module_name,
             path,
@@ -81,7 +81,7 @@ impl JsFilter {
     /// The "process" function of the JS module is passed 3 arguments
     /// - the current timestamp
     /// - the message to be transformed
-    /// - the filter config (as configured for the pipeline stage, possibly updated by update_config messages)
+    /// - the filter config (as configured for the flow step, possibly updated by update_config messages)
     ///
     /// The returned value is expected to be an array of messages.
     pub async fn process(
@@ -102,7 +102,7 @@ impl JsFilter {
         ];
         js.call_function(&self.module_name(), "process", input)
             .await
-            .map_err(pipeline::error_from_js)?
+            .map_err(flow::error_from_js)?
             .try_into()
     }
 
@@ -127,7 +127,7 @@ impl JsFilter {
         let config = js
             .call_function(&self.module_name(), "update_config", input)
             .await
-            .map_err(pipeline::error_from_js)?;
+            .map_err(flow::error_from_js)?;
         self.config = config;
         Ok(())
     }
@@ -154,7 +154,7 @@ impl JsFilter {
         let input = vec![timestamp.clone().into(), self.config.clone()];
         js.call_function(&self.module_name(), "tick", input)
             .await
-            .map_err(pipeline::error_from_js)?
+            .map_err(flow::error_from_js)?
             .try_into()
     }
 }

@@ -13,7 +13,7 @@ INPUT: [test/device/main///e/] "some event"
 INPUT: [test/device/child1///e/] "some event"
 INPUT: [test/device/child2///e/] "some event"
 
-# Since we have two pipelines using the same javascript filter, one expect two output messages
+# Since we have two flows using the same javascript transformation, one expect two output messages
 # A first one for all the measurements, another one for all the events
 OUTPUT: [test/count/m] {"test/device/main///m/":4,"test/device/child1///m/":3,"test/device/child2///m/":2}
 OUTPUT: [test/count/e] {"test/device/main///e/":2,"test/device/child2///e/":2,"test/device/child1///e/":1}

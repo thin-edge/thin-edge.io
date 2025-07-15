@@ -8,37 +8,37 @@ use anyhow::Context;
 use anyhow::Error;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_gen_mapper::pipeline::Message;
+use tedge_gen_mapper::flow::Message;
 use tedge_gen_mapper::MessageProcessor;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeMappingCli {
-    /// List pipelines and filters
+    /// List flows and filters
     List {
-        /// Path to pipeline and filter specs
+        /// Path to flow and filter specs
         ///
         /// Default to /etc/tedge/gen-mapper
         #[clap(long)]
         mapping_dir: Option<PathBuf>,
 
-        /// List pipelines processing messages published on this topic
+        /// List flows processing messages published on this topic
         ///
-        /// If none is provided, lists all the pipelines
+        /// If none is provided, lists all the flows
         #[clap(long)]
         topic: Option<String>,
     },
 
     /// Process message samples
     Test {
-        /// Path to pipeline and filter specs
+        /// Path to flow and filter specs
         ///
         /// Default to /etc/tedge/gen-mapper
         #[clap(long)]
         mapping_dir: Option<PathBuf>,
 
-        /// Path to the javascript filter or TOML pipeline definition
+        /// Path to the javascript filter or TOML flow definition
         ///
-        /// If none is provided, applies all the matching pipelines
+        /// If none is provided, applies all the matching flows
         #[clap(long)]
         filter: Option<PathBuf>,
 
@@ -98,15 +98,10 @@ impl TEdgeMappingCli {
         config.root_dir().join("gen-mapper").into()
     }
 
-    pub async fn load_pipelines(mapping_dir: &PathBuf) -> Result<MessageProcessor, Error> {
+    pub async fn load_flows(mapping_dir: &PathBuf) -> Result<MessageProcessor, Error> {
         MessageProcessor::try_new(mapping_dir)
             .await
-            .with_context(|| {
-                format!(
-                    "loading pipelines and filters from {}",
-                    mapping_dir.display()
-                )
-            })
+            .with_context(|| format!("loading flows and filters from {}", mapping_dir.display()))
     }
 
     pub async fn load_filter(
@@ -114,9 +109,9 @@ impl TEdgeMappingCli {
         path: &PathBuf,
     ) -> Result<MessageProcessor, Error> {
         if let Some("toml") = path.extension().and_then(|s| s.to_str()) {
-            MessageProcessor::try_new_single_pipeline(mapping_dir, path)
+            MessageProcessor::try_new_single_flow(mapping_dir, path)
                 .await
-                .with_context(|| format!("loading pipeline {pipeline}", pipeline = path.display()))
+                .with_context(|| format!("loading flow {flow}", flow = path.display()))
         } else {
             MessageProcessor::try_new_single_filter(mapping_dir, path)
                 .await

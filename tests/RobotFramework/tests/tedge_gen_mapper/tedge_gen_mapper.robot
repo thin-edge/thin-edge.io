@@ -79,5 +79,5 @@ Custom Setup
 
 Copy Configuration Files
     Execute Command    mkdir /etc/tedge/gen-mapper/
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/pipelines/*    /etc/tedge/gen-mapper/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*    /etc/tedge/gen-mapper/
 

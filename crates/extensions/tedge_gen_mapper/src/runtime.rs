@@ -1,9 +1,9 @@
-use crate::config::PipelineConfig;
+use crate::config::FlowConfig;
+use crate::flow::DateTime;
+use crate::flow::FilterError;
+use crate::flow::Flow;
+use crate::flow::Message;
 use crate::js_runtime::JsRuntime;
-use crate::pipeline::DateTime;
-use crate::pipeline::FilterError;
-use crate::pipeline::Message;
-use crate::pipeline::Pipeline;
 use crate::stats::Counter;
 use crate::LoadError;
 use camino::Utf8Path;
@@ -20,47 +20,47 @@ use tracing::warn;
 
 pub struct MessageProcessor {
     pub config_dir: PathBuf,
-    pub pipelines: HashMap<String, Pipeline>,
+    pub flows: HashMap<String, Flow>,
     pub(super) js_runtime: JsRuntime,
     pub stats: Counter,
 }
 
 impl MessageProcessor {
-    pub fn pipeline_id(path: impl AsRef<Path>) -> String {
+    pub fn flow_id(path: impl AsRef<Path>) -> String {
         format!("{}", path.as_ref().display())
     }
 
     pub async fn try_new(config_dir: impl AsRef<Path>) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref().to_owned();
         let mut js_runtime = JsRuntime::try_new().await?;
-        let mut pipeline_specs = PipelineSpecs::default();
-        pipeline_specs.load(&config_dir).await;
-        let pipelines = pipeline_specs.compile(&mut js_runtime, &config_dir).await;
+        let mut flow_specs = FlowSpecs::default();
+        flow_specs.load(&config_dir).await;
+        let flows = flow_specs.compile(&mut js_runtime, &config_dir).await;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
             config_dir,
-            pipelines,
+            flows,
             js_runtime,
             stats,
         })
     }
 
-    pub async fn try_new_single_pipeline(
+    pub async fn try_new_single_flow(
         config_dir: impl AsRef<Path>,
-        pipeline: impl AsRef<Path>,
+        flow: impl AsRef<Path>,
     ) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref().to_owned();
-        let pipeline = pipeline.as_ref().to_owned();
+        let flow = flow.as_ref().to_owned();
         let mut js_runtime = JsRuntime::try_new().await?;
-        let mut pipeline_specs = PipelineSpecs::default();
-        pipeline_specs.load_single_pipeline(&pipeline).await;
-        let pipelines = pipeline_specs.compile(&mut js_runtime, &config_dir).await;
+        let mut flow_specs = FlowSpecs::default();
+        flow_specs.load_single_flow(&flow).await;
+        let flows = flow_specs.compile(&mut js_runtime, &config_dir).await;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
             config_dir,
-            pipelines,
+            flows,
             js_runtime,
             stats,
         })
@@ -72,14 +72,14 @@ impl MessageProcessor {
     ) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref().to_owned();
         let mut js_runtime = JsRuntime::try_new().await?;
-        let mut pipeline_specs = PipelineSpecs::default();
-        pipeline_specs.load_single_filter(&filter).await;
-        let pipelines = pipeline_specs.compile(&mut js_runtime, &config_dir).await;
+        let mut flow_specs = FlowSpecs::default();
+        flow_specs.load_single_filter(&filter).await;
+        let flows = flow_specs.compile(&mut js_runtime, &config_dir).await;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
             config_dir,
-            pipelines,
+            flows,
             js_runtime,
             stats,
         })
@@ -87,8 +87,8 @@ impl MessageProcessor {
 
     pub fn subscriptions(&self) -> TopicFilter {
         let mut topics = TopicFilter::empty();
-        for pipeline in self.pipelines.values() {
-            topics.add_all(pipeline.topics())
+        for flow in self.flows.values() {
+            topics.add_all(flow.topics())
         }
         topics
     }
@@ -101,14 +101,14 @@ impl MessageProcessor {
         let started_at = self.stats.runtime_process_start();
 
         let mut out_messages = vec![];
-        for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
-            let pipeline_output = pipeline
+        for (flow_id, flow) in self.flows.iter_mut() {
+            let flow_output = flow
                 .process(&self.js_runtime, &mut self.stats, timestamp, message)
                 .await;
-            if pipeline_output.is_err() {
-                self.stats.pipeline_process_failed(pipeline_id);
+            if flow_output.is_err() {
+                self.stats.flow_process_failed(flow_id);
             }
-            out_messages.push((pipeline_id.clone(), pipeline_output));
+            out_messages.push((flow_id.clone(), flow_output));
         }
 
         self.stats.runtime_process_done(started_at);
@@ -120,14 +120,14 @@ impl MessageProcessor {
         timestamp: &DateTime,
     ) -> Vec<(String, Result<Vec<Message>, FilterError>)> {
         let mut out_messages = vec![];
-        for (pipeline_id, pipeline) in self.pipelines.iter_mut() {
-            let pipeline_output = pipeline
+        for (flow_id, flow) in self.flows.iter_mut() {
+            let flow_output = flow
                 .tick(&self.js_runtime, &mut self.stats, timestamp)
                 .await;
-            if pipeline_output.is_err() {
-                self.stats.pipeline_tick_failed(pipeline_id);
+            if flow_output.is_err() {
+                self.stats.flow_tick_failed(flow_id);
             }
-            out_messages.push((pipeline_id.clone(), pipeline_output));
+            out_messages.push((flow_id.clone(), flow_output));
         }
         out_messages
     }
@@ -141,8 +141,8 @@ impl MessageProcessor {
     }
 
     pub async fn reload_filter(&mut self, path: Utf8PathBuf) {
-        for pipeline in self.pipelines.values_mut() {
-            for stage in &mut pipeline.stages {
+        for flow in self.flows.values_mut() {
+            for stage in &mut flow.stages {
                 if stage.filter.path() == path {
                     match self.js_runtime.load_filter(&mut stage.filter).await {
                         Ok(()) => {
@@ -159,25 +159,25 @@ impl MessageProcessor {
     }
 
     pub async fn remove_filter(&mut self, path: Utf8PathBuf) {
-        for (pipeline_id, pipeline) in self.pipelines.iter() {
-            for stage in pipeline.stages.iter() {
+        for (flow_id, flow) in self.flows.iter() {
+            for stage in flow.stages.iter() {
                 if stage.filter.path() == path {
-                    warn!(target: "gen-mapper", "Removing a filter used by {pipeline_id}: {path}");
+                    warn!(target: "gen-mapper", "Removing a filter used by {flow_id}: {path}");
                     return;
                 }
             }
         }
     }
 
-    pub async fn load_pipeline(&mut self, pipeline_id: String, path: Utf8PathBuf) -> bool {
+    pub async fn load_flow(&mut self, flow_id: String, path: Utf8PathBuf) -> bool {
         let Ok(source) = tokio::fs::read_to_string(&path).await else {
-            self.remove_pipeline(path).await;
+            self.remove_flow(path).await;
             return false;
         };
-        let config: PipelineConfig = match toml::from_str(&source) {
+        let config: FlowConfig = match toml::from_str(&source) {
             Ok(config) => config,
             Err(e) => {
-                error!(target: "gen-mapper", "Failed to parse toml for pipeline {path}: {e}");
+                error!(target: "gen-mapper", "Failed to parse toml for flow {path}: {e}");
                 return false;
             }
         };
@@ -185,48 +185,44 @@ impl MessageProcessor {
             .compile(&mut self.js_runtime, &self.config_dir, path.clone())
             .await
         {
-            Ok(pipeline) => {
-                self.pipelines.insert(pipeline_id, pipeline);
+            Ok(flow) => {
+                self.flows.insert(flow_id, flow);
                 true
             }
             Err(e) => {
-                error!(target: "gen-mapper", "Failed to compile pipeline {path}: {e}");
+                error!(target: "gen-mapper", "Failed to compile flow {path}: {e}");
                 false
             }
         }
     }
 
-    pub async fn add_pipeline(&mut self, path: Utf8PathBuf) {
-        let pipeline_id = Self::pipeline_id(&path);
-        if !self.pipelines.contains_key(&pipeline_id)
-            && self.load_pipeline(pipeline_id, path.clone()).await
-        {
-            info!(target: "gen-mapper", "Loaded new pipeline {path}");
+    pub async fn add_flow(&mut self, path: Utf8PathBuf) {
+        let flow_id = Self::flow_id(&path);
+        if !self.flows.contains_key(&flow_id) && self.load_flow(flow_id, path.clone()).await {
+            info!(target: "gen-mapper", "Loaded new flow {path}");
         }
     }
 
-    pub async fn reload_pipeline(&mut self, path: Utf8PathBuf) {
-        let pipeline_id = Self::pipeline_id(&path);
-        if self.pipelines.contains_key(&pipeline_id)
-            && self.load_pipeline(pipeline_id, path.clone()).await
-        {
-            info!(target: "gen-mapper", "Reloaded updated pipeline {path}");
+    pub async fn reload_flow(&mut self, path: Utf8PathBuf) {
+        let flow_id = Self::flow_id(&path);
+        if self.flows.contains_key(&flow_id) && self.load_flow(flow_id, path.clone()).await {
+            info!(target: "gen-mapper", "Reloaded updated flow {path}");
         }
     }
 
-    pub async fn remove_pipeline(&mut self, path: Utf8PathBuf) {
-        let pipeline_id = Self::pipeline_id(&path);
-        self.pipelines.remove(&pipeline_id);
-        info!(target: "gen-mapper", "Removed deleted pipeline {path}");
+    pub async fn remove_flow(&mut self, path: Utf8PathBuf) {
+        let flow_id = Self::flow_id(&path);
+        self.flows.remove(&flow_id);
+        info!(target: "gen-mapper", "Removed deleted flow {path}");
     }
 }
 
 #[derive(Default)]
-struct PipelineSpecs {
-    pipeline_specs: HashMap<String, (Utf8PathBuf, PipelineConfig)>,
+struct FlowSpecs {
+    flow_specs: HashMap<String, (Utf8PathBuf, FlowConfig)>,
 }
 
-impl PipelineSpecs {
+impl FlowSpecs {
     pub async fn load(&mut self, config_dir: &PathBuf) {
         let Ok(mut entries) = read_dir(config_dir).await.map_err(|err|
             error!(target: "MAPPING", "Failed to read filters from {}: {err}", config_dir.display())
@@ -242,9 +238,9 @@ impl PipelineSpecs {
             if let Ok(file_type) = entry.file_type().await {
                 if file_type.is_file() {
                     if let Some("toml") = path.extension() {
-                        info!(target: "MAPPING", "Loading pipeline: {path}");
-                        if let Err(err) = self.load_pipeline(path).await {
-                            error!(target: "MAPPING", "Failed to load pipeline: {err}");
+                        info!(target: "MAPPING", "Loading flow: {path}");
+                        if let Err(err) = self.load_flow(path).await {
+                            error!(target: "MAPPING", "Failed to load flow: {err}");
                         }
                     }
                 }
@@ -252,13 +248,13 @@ impl PipelineSpecs {
         }
     }
 
-    pub async fn load_single_pipeline(&mut self, pipeline: &Path) {
-        let Some(path) = Utf8Path::from_path(pipeline).map(|p| p.to_path_buf()) else {
-            error!(target: "MAPPING", "Skipping non UTF8 path: {}", pipeline.display());
+    pub async fn load_single_flow(&mut self, flow: &Path) {
+        let Some(path) = Utf8Path::from_path(flow).map(|p| p.to_path_buf()) else {
+            error!(target: "MAPPING", "Skipping non UTF8 path: {}", flow.display());
             return;
         };
-        if let Err(err) = self.load_pipeline(&path).await {
-            error!(target: "MAPPING", "Failed to load pipeline {path}: {err}");
+        if let Err(err) = self.load_flow(&path).await {
+            error!(target: "MAPPING", "Failed to load flow {path}: {err}");
         }
     }
 
@@ -268,19 +264,17 @@ impl PipelineSpecs {
             error!(target: "MAPPING", "Skipping non UTF8 path: {}", filter.display());
             return;
         };
-        let pipeline_id = MessageProcessor::pipeline_id(&path);
-        let pipeline = PipelineConfig::from_filter(path.to_owned());
-        self.pipeline_specs
-            .insert(pipeline_id, (path.to_owned(), pipeline));
+        let flow_id = MessageProcessor::flow_id(&path);
+        let flow = FlowConfig::from_filter(path.to_owned());
+        self.flow_specs.insert(flow_id, (path.to_owned(), flow));
     }
 
-    async fn load_pipeline(&mut self, file: impl AsRef<Utf8Path>) -> Result<(), LoadError> {
+    async fn load_flow(&mut self, file: impl AsRef<Utf8Path>) -> Result<(), LoadError> {
         let path = file.as_ref();
-        let pipeline_id = MessageProcessor::pipeline_id(path);
+        let flow_id = MessageProcessor::flow_id(path);
         let specs = read_to_string(path).await?;
-        let pipeline: PipelineConfig = toml::from_str(&specs)?;
-        self.pipeline_specs
-            .insert(pipeline_id, (path.to_owned(), pipeline));
+        let flow: FlowConfig = toml::from_str(&specs)?;
+        self.flow_specs.insert(flow_id, (path.to_owned(), flow));
 
         Ok(())
     }
@@ -289,18 +283,18 @@ impl PipelineSpecs {
         mut self,
         js_runtime: &mut JsRuntime,
         config_dir: &Path,
-    ) -> HashMap<String, Pipeline> {
-        let mut pipelines = HashMap::new();
-        for (name, (source, specs)) in self.pipeline_specs.drain() {
+    ) -> HashMap<String, Flow> {
+        let mut flows = HashMap::new();
+        for (name, (source, specs)) in self.flow_specs.drain() {
             match specs.compile(js_runtime, config_dir, source).await {
-                Ok(pipeline) => {
-                    let _ = pipelines.insert(name, pipeline);
+                Ok(flow) => {
+                    let _ = flows.insert(name, flow);
                 }
                 Err(err) => {
-                    error!(target: "MAPPING", "Failed to compile pipeline {name}: {err}")
+                    error!(target: "MAPPING", "Failed to compile flow {name}: {err}")
                 }
             }
         }
-        pipelines
+        flows
     }
 }

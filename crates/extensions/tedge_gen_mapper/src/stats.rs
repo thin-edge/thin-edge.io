@@ -11,7 +11,7 @@ pub struct Counter {
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub enum Dimension {
     Runtime,
-    Pipeline(String),
+    Flow(String),
     Process(String),
     Tick(String),
     Update(String),
@@ -50,52 +50,43 @@ impl Counter {
         );
     }
 
-    pub fn pipeline_process_start(&mut self, pipeline_id: &str) -> Instant {
-        self.add(
-            Dimension::Pipeline(pipeline_id.to_owned()),
-            Sample::MessageIn,
-        );
+    pub fn flow_process_start(&mut self, flow_id: &str) -> Instant {
+        self.add(Dimension::Flow(flow_id.to_owned()), Sample::MessageIn);
         Instant::now()
     }
 
-    pub fn pipeline_process_done(&mut self, pipeline_id: &str, started_at: Instant, count: usize) {
+    pub fn flow_process_done(&mut self, flow_id: &str, started_at: Instant, count: usize) {
         self.add(Dimension::Runtime, Sample::MessageOut(count));
         self.add(
-            Dimension::Pipeline(pipeline_id.to_owned()),
+            Dimension::Flow(flow_id.to_owned()),
             Sample::MessageOut(count),
         );
         self.add(
-            Dimension::Pipeline(pipeline_id.to_owned()),
+            Dimension::Flow(flow_id.to_owned()),
             Sample::ProcessingTime(started_at.elapsed()),
         );
     }
 
-    pub fn pipeline_process_failed(&mut self, pipeline_id: &str) {
+    pub fn flow_process_failed(&mut self, flow_id: &str) {
         self.add(Dimension::Runtime, Sample::ErrorRaised);
-        self.add(
-            Dimension::Pipeline(pipeline_id.to_owned()),
-            Sample::ErrorRaised,
-        );
+        self.add(Dimension::Flow(flow_id.to_owned()), Sample::ErrorRaised);
     }
 
-    pub fn pipeline_tick_start(&mut self, _pipeline_id: &str) -> Instant {
+    pub fn flow_tick_start(&mut self, _flow_id: &str) -> Instant {
         Instant::now()
     }
 
-    pub fn pipeline_tick_done(&mut self, pipeline_id: &str, _started_at: Instant, count: usize) {
+    pub fn flow_tick_done(&mut self, flow_id: &str, _started_at: Instant, count: usize) {
         self.add(Dimension::Runtime, Sample::MessageOut(count));
         self.add(
-            Dimension::Pipeline(pipeline_id.to_owned()),
+            Dimension::Flow(flow_id.to_owned()),
             Sample::MessageOut(count),
         );
     }
 
-    pub fn pipeline_tick_failed(&mut self, pipeline_id: &str) {
+    pub fn flow_tick_failed(&mut self, flow_id: &str) {
         self.add(Dimension::Runtime, Sample::ErrorRaised);
-        self.add(
-            Dimension::Pipeline(pipeline_id.to_owned()),
-            Sample::ErrorRaised,
-        );
+        self.add(Dimension::Flow(flow_id.to_owned()), Sample::ErrorRaised);
     }
 
     pub fn filter_start(&mut self, js: &str, f: &str) -> Instant {
@@ -183,7 +174,7 @@ impl Display for Dimension {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Dimension::Runtime => write!(f, "runtime"),
-            Dimension::Pipeline(toml) => write!(f, "pipeline {toml}"),
+            Dimension::Flow(toml) => write!(f, "flow {toml}"),
             Dimension::Process(js) => write!(f, "process filter {js}"),
             Dimension::Tick(js) => write!(f, "tick filter {js}"),
             Dimension::Update(js) => write!(f, "update_config filter {js}"),
