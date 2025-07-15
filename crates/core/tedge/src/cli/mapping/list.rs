@@ -14,7 +14,10 @@ pub struct ListCommand {
 #[async_trait::async_trait]
 impl Command for ListCommand {
     fn description(&self) -> String {
-        format!("list flows and filters in {:}", self.mapping_dir.display())
+        format!(
+            "list flows and flow steps in {:}",
+            self.mapping_dir.display()
+        )
     }
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
@@ -37,8 +40,8 @@ impl Command for ListCommand {
 impl ListCommand {
     fn display((flow_id, flow): (&String, &Flow)) {
         println!("{flow_id}");
-        for stage in flow.stages.iter() {
-            println!("\t{}", stage.filter.path.display());
+        for step in flow.steps.iter() {
+            println!("\t{}", step.filter.path.display());
         }
     }
 }

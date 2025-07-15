@@ -142,9 +142,9 @@ impl MessageProcessor {
 
     pub async fn reload_filter(&mut self, path: Utf8PathBuf) {
         for flow in self.flows.values_mut() {
-            for stage in &mut flow.stages {
-                if stage.filter.path() == path {
-                    match self.js_runtime.load_filter(&mut stage.filter).await {
+            for step in &mut flow.steps {
+                if step.filter.path() == path {
+                    match self.js_runtime.load_filter(&mut step.filter).await {
                         Ok(()) => {
                             info!(target: "gen-mapper", "Reloaded filter {path}");
                         }
@@ -160,8 +160,8 @@ impl MessageProcessor {
 
     pub async fn remove_filter(&mut self, path: Utf8PathBuf) {
         for (flow_id, flow) in self.flows.iter() {
-            for stage in flow.stages.iter() {
-                if stage.filter.path() == path {
+            for step in flow.steps.iter() {
+                if step.filter.path() == path {
                     warn!(target: "gen-mapper", "Removing a filter used by {flow_id}: {path}");
                     return;
                 }

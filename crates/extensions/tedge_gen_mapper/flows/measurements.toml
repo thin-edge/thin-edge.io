@@ -1,6 +1,6 @@
 input_topics = ["te/+/+/+/+/m/+"]
 
-stages = [
+steps = [
     { filter = "add_timestamp.js" },
     { filter = "te_to_c8y.js", meta_topics = ["te/+/+/+/+/m/+/meta"] }
 ]
