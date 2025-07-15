@@ -41,7 +41,7 @@ impl Actor for GenMapper {
                 message = self.messages.recv() => {
                     match message {
                         Some(InputMessage::MqttMessage(message)) => match Message::try_from(message) {
-                            Ok(message) => self.filter(message).await?,
+                            Ok(message) => self.process(message).await?,
                             Err(err) => {
                                 error!(target: "gen-mapper", "Cannot process message: {err}");
                             }
@@ -51,7 +51,7 @@ impl Actor for GenMapper {
                                 continue;
                             };
                             if matches!(path.extension(), Some("js" | "ts")) {
-                                self.processor.reload_filter(path).await;
+                                self.processor.reload_script(path).await;
                             } else if path.extension() == Some("toml") {
                                 self.processor.reload_flow(path).await;
                                 self.send_updated_subscriptions().await?;
@@ -71,7 +71,7 @@ impl Actor for GenMapper {
                                 continue;
                             };
                             if matches!(path.extension(), Some("js" | "ts")) {
-                                self.processor.remove_filter(path).await;
+                                self.processor.remove_script(path).await;
                             } else if path.extension() == Some("toml") {
                                 self.processor.remove_flow(path).await;
                                 self.send_updated_subscriptions().await?;
@@ -102,7 +102,7 @@ impl GenMapper {
         diff
     }
 
-    async fn filter(&mut self, message: Message) -> Result<(), RuntimeError> {
+    async fn process(&mut self, message: Message) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
         for (flow_id, flow_messages) in self.processor.process(&timestamp, &message).await {
             match flow_messages {

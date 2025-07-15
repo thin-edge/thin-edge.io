@@ -89,21 +89,21 @@ impl Counter {
         self.add(Dimension::Flow(flow_id.to_owned()), Sample::ErrorRaised);
     }
 
-    pub fn filter_start(&mut self, js: &str, f: &str) -> Instant {
+    pub fn flow_step_start(&mut self, js: &str, f: &str) -> Instant {
         if let Some(dim) = Dimension::function_call(js, f) {
             self.add(dim, Sample::MessageIn);
         }
         Instant::now()
     }
 
-    pub fn filter_done(&mut self, js: &str, f: &str, started_at: Instant, count: usize) {
+    pub fn flow_step_done(&mut self, js: &str, f: &str, started_at: Instant, count: usize) {
         if let Some(dim) = Dimension::function_call(js, f) {
             self.add(dim.clone(), Sample::MessageOut(count));
             self.add(dim, Sample::ProcessingTime(started_at.elapsed()));
         }
     }
 
-    pub fn filter_failed(&mut self, js: &str, f: &str) {
+    pub fn flow_step_failed(&mut self, js: &str, f: &str) {
         if let Some(dim) = Dimension::function_call(js, f) {
             self.add(dim.clone(), Sample::ErrorRaised);
         }
@@ -175,9 +175,9 @@ impl Display for Dimension {
         match self {
             Dimension::Runtime => write!(f, "runtime"),
             Dimension::Flow(toml) => write!(f, "flow {toml}"),
-            Dimension::Process(js) => write!(f, "process filter {js}"),
-            Dimension::Tick(js) => write!(f, "tick filter {js}"),
-            Dimension::Update(js) => write!(f, "update_config filter {js}"),
+            Dimension::Process(js) => write!(f, "process step {js}"),
+            Dimension::Tick(js) => write!(f, "tick step {js}"),
+            Dimension::Update(js) => write!(f, "update_config step {js}"),
         }
     }
 }

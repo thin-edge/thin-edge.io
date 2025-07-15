@@ -1,5 +1,5 @@
-use crate::js_filter::JsFilter;
 use crate::js_runtime::JsRuntime;
+use crate::js_script::JsScript;
 use crate::stats::Counter;
 use crate::LoadError;
 use camino::Utf8Path;
@@ -24,7 +24,7 @@ pub struct Flow {
 
 /// A message transformation step
 pub struct FlowStep {
-    pub filter: JsFilter,
+    pub script: JsScript,
     pub config_topics: TopicFilter,
 }
 
@@ -41,7 +41,7 @@ pub struct Message {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum FilterError {
+pub enum FlowError {
     #[error("Input message cannot be processed: {0}")]
     UnsupportedMessage(String),
 
@@ -65,10 +65,10 @@ impl Flow {
         &mut self,
         js_runtime: &JsRuntime,
         message: &Message,
-    ) -> Result<(), FilterError> {
+    ) -> Result<(), FlowError> {
         for step in self.steps.iter_mut() {
             if step.config_topics.accept_topic_name(&message.topic) {
-                step.filter.update_config(js_runtime, message).await?
+                step.script.update_config(js_runtime, message).await?
             }
         }
         Ok(())
@@ -80,7 +80,7 @@ impl Flow {
         stats: &mut Counter,
         timestamp: &DateTime,
         message: &Message,
-    ) -> Result<Vec<Message>, FilterError> {
+    ) -> Result<Vec<Message>, FlowError> {
         self.update_config(js_runtime, message).await?;
         if !self.input_topics.accept_topic_name(&message.topic) {
             return Ok(vec![]);
@@ -89,18 +89,18 @@ impl Flow {
         let stated_at = stats.flow_process_start(self.source.as_str());
         let mut messages = vec![message.clone()];
         for step in self.steps.iter() {
-            let js = step.filter.source();
+            let js = step.script.source();
             let mut transformed_messages = vec![];
             for message in messages.iter() {
-                let filter_started_at = stats.filter_start(&js, "process");
-                let filter_output = step.filter.process(js_runtime, timestamp, message).await;
-                match &filter_output {
+                let step_started_at = stats.flow_step_start(&js, "process");
+                let step_output = step.script.process(js_runtime, timestamp, message).await;
+                match &step_output {
                     Ok(messages) => {
-                        stats.filter_done(&js, "process", filter_started_at, messages.len())
+                        stats.flow_step_done(&js, "process", step_started_at, messages.len())
                     }
-                    Err(_) => stats.filter_failed(&js, "process"),
+                    Err(_) => stats.flow_step_failed(&js, "process"),
                 }
-                transformed_messages.extend(filter_output?);
+                transformed_messages.extend(step_output?);
             }
             messages = transformed_messages;
         }
@@ -114,31 +114,31 @@ impl Flow {
         js_runtime: &JsRuntime,
         stats: &mut Counter,
         timestamp: &DateTime,
-    ) -> Result<Vec<Message>, FilterError> {
+    ) -> Result<Vec<Message>, FlowError> {
         let stated_at = stats.flow_tick_start(self.source.as_str());
         let mut messages = vec![];
         for step in self.steps.iter() {
-            let js = step.filter.source();
+            let js = step.script.source();
             // Process first the messages triggered upstream by the tick
             let mut transformed_messages = vec![];
             for message in messages.iter() {
-                let filter_started_at = stats.filter_start(&js, "process");
-                let filter_output = step.filter.process(js_runtime, timestamp, message).await;
-                match &filter_output {
+                let step_started_at = stats.flow_step_start(&js, "process");
+                let step_output = step.script.process(js_runtime, timestamp, message).await;
+                match &step_output {
                     Ok(messages) => {
-                        stats.filter_done(&js, "process", filter_started_at, messages.len())
+                        stats.flow_step_done(&js, "process", step_started_at, messages.len())
                     }
-                    Err(_) => stats.filter_failed(&js, "process"),
+                    Err(_) => stats.flow_step_failed(&js, "process"),
                 }
-                transformed_messages.extend(filter_output?);
+                transformed_messages.extend(step_output?);
             }
 
             // Only then process the tick
-            let filter_started_at = stats.filter_start(&js, "tick");
-            let tick_output = step.filter.tick(js_runtime, timestamp).await;
+            let step_started_at = stats.flow_step_start(&js, "tick");
+            let tick_output = step.script.tick(js_runtime, timestamp).await;
             match &tick_output {
-                Ok(messages) => stats.filter_done(&js, "tick", filter_started_at, messages.len()),
-                Err(_) => stats.filter_failed(&js, "tick"),
+                Ok(messages) => stats.flow_step_done(&js, "tick", step_started_at, messages.len()),
+                Err(_) => stats.flow_step_failed(&js, "tick"),
             }
             transformed_messages.extend(tick_output?);
 
@@ -152,23 +152,23 @@ impl Flow {
 
 impl FlowStep {
     pub(crate) fn check(&self, flow: &Utf8Path) {
-        let filter = &self.filter;
-        if filter.no_js_process {
-            warn!(target: "MAPPING", "Filter with no 'process' function: {}", filter.path.display());
+        let script = &self.script;
+        if script.no_js_process {
+            warn!(target: "MAPPING", "Flow script with no 'process' function: {}", script.path.display());
         }
-        if filter.no_js_update_config && !self.config_topics.is_empty() {
-            warn!(target: "MAPPING", "Filter with no 'config_update' function: {}; but configured with 'config_topics' in {flow}", filter.path.display());
+        if script.no_js_update_config && !self.config_topics.is_empty() {
+            warn!(target: "MAPPING", "Flow script with no 'config_update' function: {}; but configured with 'config_topics' in {flow}", script.path.display());
         }
-        if filter.no_js_tick && filter.tick_every_seconds != 0 {
-            warn!(target: "MAPPING", "Filter with no 'tick' function: {}; but configured with 'tick_every_seconds' in {flow}", filter.path.display());
+        if script.no_js_tick && script.tick_every_seconds != 0 {
+            warn!(target: "MAPPING", "Flow script with no 'tick' function: {}; but configured with 'tick_every_seconds' in {flow}", script.path.display());
         }
     }
 
     pub(crate) fn fix(&mut self) {
-        let filter = &mut self.filter;
-        if !filter.no_js_tick && filter.tick_every_seconds == 0 {
-            // 0 as a default is not appropriate for a filter with a tick handler
-            filter.tick_every_seconds = 1;
+        let script = &mut self.script;
+        if !script.no_js_tick && script.tick_every_seconds == 0 {
+            // 0 as a default is not appropriate for a script with a tick handler
+            script.tick_every_seconds = 1;
         }
     }
 }
@@ -188,11 +188,11 @@ impl DateTime {
 }
 
 impl TryFrom<OffsetDateTime> for DateTime {
-    type Error = FilterError;
+    type Error = FlowError;
 
     fn try_from(value: OffsetDateTime) -> Result<Self, Self::Error> {
         let seconds = u64::try_from(value.unix_timestamp()).map_err(|err| {
-            FilterError::UnsupportedMessage(format!("failed to convert timestamp: {}", err))
+            FlowError::UnsupportedMessage(format!("failed to convert timestamp: {}", err))
         })?;
 
         Ok(DateTime {
@@ -217,29 +217,29 @@ impl Message {
 }
 
 impl TryFrom<MqttMessage> for Message {
-    type Error = FilterError;
+    type Error = FlowError;
 
     fn try_from(message: MqttMessage) -> Result<Self, Self::Error> {
         let topic = message.topic.to_string();
         let payload = message
             .payload_str()
-            .map_err(|_| FilterError::UnsupportedMessage("Not an UTF8 payload".to_string()))?
+            .map_err(|_| FlowError::UnsupportedMessage("Not an UTF8 payload".to_string()))?
             .to_string();
         Ok(Message { topic, payload })
     }
 }
 
 impl TryFrom<Message> for MqttMessage {
-    type Error = FilterError;
+    type Error = FlowError;
 
     fn try_from(message: Message) -> Result<Self, Self::Error> {
         let topic = message.topic.as_str().try_into().map_err(|_| {
-            FilterError::UnsupportedMessage(format!("invalid topic {}", message.topic))
+            FlowError::UnsupportedMessage(format!("invalid topic {}", message.topic))
         })?;
         Ok(MqttMessage::new(&topic, message.payload))
     }
 }
 
-pub fn error_from_js(err: LoadError) -> FilterError {
-    FilterError::IncorrectSetting(format!("{err:#}"))
+pub fn error_from_js(err: LoadError) -> FlowError {
+    FlowError::IncorrectSetting(format!("{err:#}"))
 }

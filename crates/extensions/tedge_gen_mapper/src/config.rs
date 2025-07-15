@@ -1,7 +1,7 @@
 use crate::flow::Flow;
 use crate::flow::FlowStep;
-use crate::js_filter::JsFilter;
 use crate::js_runtime::JsRuntime;
+use crate::js_script::JsScript;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -19,7 +19,7 @@ pub struct FlowConfig {
 
 #[derive(Deserialize)]
 pub struct StepConfig {
-    filter: FilterSpec,
+    script: ScriptSpec,
 
     #[serde(default)]
     config: Option<Value>,
@@ -33,7 +33,7 @@ pub struct StepConfig {
 
 #[derive(Deserialize)]
 #[serde(untagged)]
-pub enum FilterSpec {
+pub enum ScriptSpec {
     JavaScript(Utf8PathBuf),
 }
 
@@ -47,10 +47,10 @@ pub enum ConfigError {
 }
 
 impl FlowConfig {
-    pub fn from_filter(filter: Utf8PathBuf) -> Self {
+    pub fn from_step(script: Utf8PathBuf) -> Self {
         let input_topic = "#".to_string();
         let step = StepConfig {
-            filter: FilterSpec::JavaScript(filter),
+            script: ScriptSpec::JavaScript(script),
             config: None,
             tick_every_seconds: 0,
             meta_topics: vec![],
@@ -71,7 +71,7 @@ impl FlowConfig {
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
             let mut step = step.compile(config_dir, i, &source).await?;
-            js_runtime.load_filter(&mut step.filter).await?;
+            js_runtime.load_script(&mut step.script).await?;
             step.check(&source);
             step.fix();
             steps.push(step);
@@ -91,17 +91,17 @@ impl StepConfig {
         index: usize,
         flow: &Utf8Path,
     ) -> Result<FlowStep, ConfigError> {
-        let path = match self.filter {
-            FilterSpec::JavaScript(path) if path.is_absolute() => path.into(),
-            FilterSpec::JavaScript(path) if path.starts_with(config_dir) => path.into(),
-            FilterSpec::JavaScript(path) => config_dir.join(path),
+        let path = match self.script {
+            ScriptSpec::JavaScript(path) if path.is_absolute() => path.into(),
+            ScriptSpec::JavaScript(path) if path.starts_with(config_dir) => path.into(),
+            ScriptSpec::JavaScript(path) => config_dir.join(path),
         };
-        let filter = JsFilter::new(flow.to_owned().into(), index, path)
+        let script = JsScript::new(flow.to_owned().into(), index, path)
             .with_config(self.config)
             .with_tick_every_seconds(self.tick_every_seconds);
         let config_topics = topic_filters(&self.meta_topics)?;
         Ok(FlowStep {
-            filter,
+            script,
             config_topics,
         })
     }

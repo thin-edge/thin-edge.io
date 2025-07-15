@@ -41,7 +41,7 @@ impl ListCommand {
     fn display((flow_id, flow): (&String, &Flow)) {
         println!("{flow_id}");
         for step in flow.steps.iter() {
-            println!("\t{}", step.filter.path.display());
+            println!("\t{}", step.script.path.display());
         }
     }
 }

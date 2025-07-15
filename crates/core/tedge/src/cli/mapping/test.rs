@@ -12,7 +12,7 @@ use tokio::io::Stdin;
 
 pub struct TestCommand {
     pub mapping_dir: PathBuf,
-    pub filter: Option<PathBuf>,
+    pub flow: Option<PathBuf>,
     pub message: Option<Message>,
     pub final_tick: bool,
 }
@@ -21,15 +21,15 @@ pub struct TestCommand {
 impl Command for TestCommand {
     fn description(&self) -> String {
         format!(
-            "process message samples using flows and filters in {:}",
+            "process message samples using flows and steps in {:}",
             self.mapping_dir.display()
         )
     }
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
-        let mut processor = match &self.filter {
+        let mut processor = match &self.flow {
             None => TEdgeMappingCli::load_flows(&self.mapping_dir).await?,
-            Some(filter) => TEdgeMappingCli::load_filter(&self.mapping_dir, filter).await?,
+            Some(flow) => TEdgeMappingCli::load_file(&self.mapping_dir, flow).await?,
         };
         if let Some(message) = &self.message {
             let timestamp = DateTime::now();
@@ -74,7 +74,7 @@ impl TestCommand {
     }
 }
 
-fn print(messages: Result<Vec<Message>, FilterError>) {
+fn print(messages: Result<Vec<Message>, FlowError>) {
     match messages {
         Ok(messages) => {
             for message in messages {

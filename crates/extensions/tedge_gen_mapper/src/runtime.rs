@@ -1,7 +1,7 @@
 use crate::config::FlowConfig;
 use crate::flow::DateTime;
-use crate::flow::FilterError;
 use crate::flow::Flow;
+use crate::flow::FlowError;
 use crate::flow::Message;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
@@ -66,14 +66,14 @@ impl MessageProcessor {
         })
     }
 
-    pub async fn try_new_single_filter(
+    pub async fn try_new_single_step_flow(
         config_dir: impl AsRef<Path>,
-        filter: impl AsRef<Path>,
+        script: impl AsRef<Path>,
     ) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref().to_owned();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut flow_specs = FlowSpecs::default();
-        flow_specs.load_single_filter(&filter).await;
+        flow_specs.load_single_script(&script).await;
         let flows = flow_specs.compile(&mut js_runtime, &config_dir).await;
         let stats = Counter::default();
 
@@ -97,7 +97,7 @@ impl MessageProcessor {
         &mut self,
         timestamp: &DateTime,
         message: &Message,
-    ) -> Vec<(String, Result<Vec<Message>, FilterError>)> {
+    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let started_at = self.stats.runtime_process_start();
 
         let mut out_messages = vec![];
@@ -118,7 +118,7 @@ impl MessageProcessor {
     pub async fn tick(
         &mut self,
         timestamp: &DateTime,
-    ) -> Vec<(String, Result<Vec<Message>, FilterError>)> {
+    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let mut out_messages = vec![];
         for (flow_id, flow) in self.flows.iter_mut() {
             let flow_output = flow
@@ -140,16 +140,16 @@ impl MessageProcessor {
         self.js_runtime.dump_memory_stats().await;
     }
 
-    pub async fn reload_filter(&mut self, path: Utf8PathBuf) {
+    pub async fn reload_script(&mut self, path: Utf8PathBuf) {
         for flow in self.flows.values_mut() {
             for step in &mut flow.steps {
-                if step.filter.path() == path {
-                    match self.js_runtime.load_filter(&mut step.filter).await {
+                if step.script.path() == path {
+                    match self.js_runtime.load_script(&mut step.script).await {
                         Ok(()) => {
-                            info!(target: "gen-mapper", "Reloaded filter {path}");
+                            info!(target: "gen-mapper", "Reloaded flow script {path}");
                         }
                         Err(e) => {
-                            error!(target: "gen-mapper", "Failed to reload filter {path}: {e}");
+                            error!(target: "gen-mapper", "Failed to reload flow script {path}: {e}");
                             return;
                         }
                     }
@@ -158,11 +158,11 @@ impl MessageProcessor {
         }
     }
 
-    pub async fn remove_filter(&mut self, path: Utf8PathBuf) {
+    pub async fn remove_script(&mut self, path: Utf8PathBuf) {
         for (flow_id, flow) in self.flows.iter() {
             for step in flow.steps.iter() {
-                if step.filter.path() == path {
-                    warn!(target: "gen-mapper", "Removing a filter used by {flow_id}: {path}");
+                if step.script.path() == path {
+                    warn!(target: "gen-mapper", "Removing a script used by a flow {flow_id}: {path}");
                     return;
                 }
             }
@@ -225,7 +225,7 @@ struct FlowSpecs {
 impl FlowSpecs {
     pub async fn load(&mut self, config_dir: &PathBuf) {
         let Ok(mut entries) = read_dir(config_dir).await.map_err(|err|
-            error!(target: "MAPPING", "Failed to read filters from {}: {err}", config_dir.display())
+            error!(target: "MAPPING", "Failed to read flows from {}: {err}", config_dir.display())
         ) else {
             return;
         };
@@ -258,14 +258,14 @@ impl FlowSpecs {
         }
     }
 
-    pub async fn load_single_filter(&mut self, filter: impl AsRef<Path>) {
-        let filter = filter.as_ref();
-        let Some(path) = Utf8Path::from_path(filter).map(|p| p.to_path_buf()) else {
-            error!(target: "MAPPING", "Skipping non UTF8 path: {}", filter.display());
+    pub async fn load_single_script(&mut self, script: impl AsRef<Path>) {
+        let script = script.as_ref();
+        let Some(path) = Utf8Path::from_path(script).map(|p| p.to_path_buf()) else {
+            error!(target: "MAPPING", "Skipping non UTF8 path: {}", script.display());
             return;
         };
         let flow_id = MessageProcessor::flow_id(&path);
-        let flow = FlowConfig::from_filter(path.to_owned());
+        let flow = FlowConfig::from_step(path.to_owned());
         self.flow_specs.insert(flow_id, (path.to_owned(), flow));
     }
 

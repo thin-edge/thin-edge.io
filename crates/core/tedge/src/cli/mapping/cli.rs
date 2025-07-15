@@ -13,9 +13,9 @@ use tedge_gen_mapper::MessageProcessor;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeMappingCli {
-    /// List flows and filters
+    /// List flows and steps
     List {
-        /// Path to flow and filter specs
+        /// Path to the directory of flows and steps
         ///
         /// Default to /etc/tedge/gen-mapper
         #[clap(long)]
@@ -30,17 +30,17 @@ pub enum TEdgeMappingCli {
 
     /// Process message samples
     Test {
-        /// Path to flow and filter specs
+        /// Path to the directory of flows and steps
         ///
         /// Default to /etc/tedge/gen-mapper
         #[clap(long)]
         mapping_dir: Option<PathBuf>,
 
-        /// Path to the javascript filter or TOML flow definition
+        /// Path to the flow step script or TOML flow definition
         ///
         /// If none is provided, applies all the matching flows
         #[clap(long)]
-        filter: Option<PathBuf>,
+        flow: Option<PathBuf>,
 
         /// Send a tick after all the message samples
         #[clap(long = "final-tick")]
@@ -69,7 +69,7 @@ impl BuildCommand for TEdgeMappingCli {
 
             TEdgeMappingCli::Test {
                 mapping_dir,
-                filter,
+                flow,
                 final_tick,
                 topic,
                 payload,
@@ -83,7 +83,7 @@ impl BuildCommand for TEdgeMappingCli {
                 };
                 Ok(TestCommand {
                     mapping_dir,
-                    filter,
+                    flow,
                     message,
                     final_tick,
                 }
@@ -101,10 +101,10 @@ impl TEdgeMappingCli {
     pub async fn load_flows(mapping_dir: &PathBuf) -> Result<MessageProcessor, Error> {
         MessageProcessor::try_new(mapping_dir)
             .await
-            .with_context(|| format!("loading flows and filters from {}", mapping_dir.display()))
+            .with_context(|| format!("loading flows and steps from {}", mapping_dir.display()))
     }
 
-    pub async fn load_filter(
+    pub async fn load_file(
         mapping_dir: &PathBuf,
         path: &PathBuf,
     ) -> Result<MessageProcessor, Error> {
@@ -113,9 +113,9 @@ impl TEdgeMappingCli {
                 .await
                 .with_context(|| format!("loading flow {flow}", flow = path.display()))
         } else {
-            MessageProcessor::try_new_single_filter(mapping_dir, path)
+            MessageProcessor::try_new_single_step_flow(mapping_dir, path)
                 .await
-                .with_context(|| format!("loading filter {filter}", filter = path.display()))
+                .with_context(|| format!("loading flow script {script}", script = path.display()))
         }
     }
 }

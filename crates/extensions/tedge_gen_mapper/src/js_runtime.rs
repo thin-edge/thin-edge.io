@@ -1,5 +1,5 @@
-use crate::js_filter::JsFilter;
-use crate::js_filter::JsonValue;
+use crate::js_script::JsScript;
+use crate::js_script::JsonValue;
 use crate::LoadError;
 use anyhow::anyhow;
 use rquickjs::module::Evaluated;
@@ -24,13 +24,13 @@ impl JsRuntime {
         Ok(JsRuntime { runtime, worker })
     }
 
-    pub async fn load_filter(&mut self, filter: &mut JsFilter) -> Result<(), LoadError> {
-        let exports = self.load_file(filter.module_name(), filter.path()).await?;
+    pub async fn load_script(&mut self, script: &mut JsScript) -> Result<(), LoadError> {
+        let exports = self.load_file(script.module_name(), script.path()).await?;
         for export in exports {
             match export {
-                "process" => filter.no_js_process = false,
-                "update_config" => filter.no_js_update_config = false,
-                "tick" => filter.no_js_tick = false,
+                "process" => script.no_js_process = false,
+                "update_config" => script.no_js_update_config = false,
+                "tick" => script.no_js_tick = false,
                 _ => (),
             }
         }
@@ -237,7 +237,7 @@ impl<'js> JsModules<'js> {
 }
 
 mod console {
-    use crate::js_filter::JsonValue;
+    use crate::js_script::JsonValue;
     use rquickjs::class::Trace;
     use rquickjs::function::Rest;
     use rquickjs::Ctx;
