@@ -12,7 +12,7 @@ use time::OffsetDateTime;
 use tracing::warn;
 
 /// A chain of transformation of MQTT messages
-pub struct Pipeline {
+pub struct Flow {
     /// The source topics
     pub input_topics: TopicFilter,
 
@@ -52,7 +52,7 @@ pub enum FilterError {
     Anyhow(#[from] anyhow::Error),
 }
 
-impl Pipeline {
+impl Flow {
     pub fn topics(&self) -> TopicFilter {
         let mut topics = self.input_topics.clone();
         for stage in self.stages.iter() {
@@ -86,7 +86,7 @@ impl Pipeline {
             return Ok(vec![]);
         }
 
-        let stated_at = stats.pipeline_process_start(self.source.as_str());
+        let stated_at = stats.flow_process_start(self.source.as_str());
         let mut messages = vec![message.clone()];
         for stage in self.stages.iter() {
             let js = stage.filter.source();
@@ -105,7 +105,7 @@ impl Pipeline {
             messages = transformed_messages;
         }
 
-        stats.pipeline_process_done(self.source.as_str(), stated_at, messages.len());
+        stats.flow_process_done(self.source.as_str(), stated_at, messages.len());
         Ok(messages)
     }
 
@@ -115,7 +115,7 @@ impl Pipeline {
         stats: &mut Counter,
         timestamp: &DateTime,
     ) -> Result<Vec<Message>, FilterError> {
-        let stated_at = stats.pipeline_tick_start(self.source.as_str());
+        let stated_at = stats.flow_tick_start(self.source.as_str());
         let mut messages = vec![];
         for stage in self.stages.iter() {
             let js = stage.filter.source();
@@ -145,22 +145,22 @@ impl Pipeline {
             // Iterate with all the messages collected at this stage
             messages = transformed_messages;
         }
-        stats.pipeline_tick_done(self.source.as_str(), stated_at, messages.len());
+        stats.flow_tick_done(self.source.as_str(), stated_at, messages.len());
         Ok(messages)
     }
 }
 
 impl Stage {
-    pub(crate) fn check(&self, pipeline: &Utf8Path) {
+    pub(crate) fn check(&self, flow: &Utf8Path) {
         let filter = &self.filter;
         if filter.no_js_process {
             warn!(target: "MAPPING", "Filter with no 'process' function: {}", filter.path.display());
         }
         if filter.no_js_update_config && !self.config_topics.is_empty() {
-            warn!(target: "MAPPING", "Filter with no 'config_update' function: {}; but configured with 'config_topics' in {pipeline}", filter.path.display());
+            warn!(target: "MAPPING", "Filter with no 'config_update' function: {}; but configured with 'config_topics' in {flow}", filter.path.display());
         }
         if filter.no_js_tick && filter.tick_every_seconds != 0 {
-            warn!(target: "MAPPING", "Filter with no 'tick' function: {}; but configured with 'tick_every_seconds' in {pipeline}", filter.path.display());
+            warn!(target: "MAPPING", "Filter with no 'tick' function: {}; but configured with 'tick_every_seconds' in {flow}", filter.path.display());
         }
     }
 

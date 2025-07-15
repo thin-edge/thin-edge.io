@@ -1,4 +1,4 @@
-# This pipeline is on purpose looping: the messages are published to the same topic
+# This flow is on purpose looping: the messages are published to the same topic
 input_topics = ["loopback/#"]
 
 stages = [

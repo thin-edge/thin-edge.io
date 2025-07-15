@@ -1,7 +1,7 @@
+use crate::flow::Flow;
+use crate::flow::Stage;
 use crate::js_filter::JsFilter;
 use crate::js_runtime::JsRuntime;
-use crate::pipeline::Pipeline;
-use crate::pipeline::Stage;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -12,7 +12,7 @@ use std::path::Path;
 use tedge_mqtt_ext::TopicFilter;
 
 #[derive(Deserialize)]
-pub struct PipelineConfig {
+pub struct FlowConfig {
     input_topics: Vec<String>,
     stages: Vec<StageConfig>,
 }
@@ -46,7 +46,7 @@ pub enum ConfigError {
     LoadError(#[from] LoadError),
 }
 
-impl PipelineConfig {
+impl FlowConfig {
     pub fn from_filter(filter: Utf8PathBuf) -> Self {
         let input_topic = "#".to_string();
         let stage = StageConfig {
@@ -66,7 +66,7 @@ impl PipelineConfig {
         js_runtime: &mut JsRuntime,
         config_dir: &Path,
         source: Utf8PathBuf,
-    ) -> Result<Pipeline, ConfigError> {
+    ) -> Result<Flow, ConfigError> {
         let input_topics = topic_filters(&self.input_topics)?;
         let mut stages = vec![];
         for (i, stage) in self.stages.into_iter().enumerate() {
@@ -76,7 +76,7 @@ impl PipelineConfig {
             stage.fix();
             stages.push(stage);
         }
-        Ok(Pipeline {
+        Ok(Flow {
             input_topics,
             stages,
             source,
@@ -89,14 +89,14 @@ impl StageConfig {
         self,
         config_dir: &Path,
         index: usize,
-        pipeline: &Utf8Path,
+        flow: &Utf8Path,
     ) -> Result<Stage, ConfigError> {
         let path = match self.filter {
             FilterSpec::JavaScript(path) if path.is_absolute() => path.into(),
             FilterSpec::JavaScript(path) if path.starts_with(config_dir) => path.into(),
             FilterSpec::JavaScript(path) => config_dir.join(path),
         };
-        let filter = JsFilter::new(pipeline.to_owned().into(), index, path)
+        let filter = JsFilter::new(flow.to_owned().into(), index, path)
             .with_config(self.config)
             .with_tick_every_seconds(self.tick_every_seconds);
         let config_topics = topic_filters(&self.meta_topics)?;

@@ -1,5 +1,5 @@
-use crate::pipeline::DateTime;
-use crate::pipeline::Message;
+use crate::flow::DateTime;
+use crate::flow::Message;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
 use crate::OutputMessage;
@@ -53,7 +53,7 @@ impl Actor for GenMapper {
                             if matches!(path.extension(), Some("js" | "ts")) {
                                 self.processor.reload_filter(path).await;
                             } else if path.extension() == Some("toml") {
-                                self.processor.reload_pipeline(path).await;
+                                self.processor.reload_flow(path).await;
                                 self.send_updated_subscriptions().await?;
                             }
                         },
@@ -62,7 +62,7 @@ impl Actor for GenMapper {
                                 continue;
                             };
                             if matches!(path.extension(), Some("toml")) {
-                                self.processor.add_pipeline(path).await;
+                                self.processor.add_flow(path).await;
                                 self.send_updated_subscriptions().await?;
                             }
                         },
@@ -73,7 +73,7 @@ impl Actor for GenMapper {
                             if matches!(path.extension(), Some("js" | "ts")) {
                                 self.processor.remove_filter(path).await;
                             } else if path.extension() == Some("toml") {
-                                self.processor.remove_pipeline(path).await;
+                                self.processor.remove_flow(path).await;
                                 self.send_updated_subscriptions().await?;
                             }
                         },
@@ -104,8 +104,8 @@ impl GenMapper {
 
     async fn filter(&mut self, message: Message) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
-        for (pipeline_id, pipeline_messages) in self.processor.process(&timestamp, &message).await {
-            match pipeline_messages {
+        for (flow_id, flow_messages) in self.processor.process(&timestamp, &message).await {
+            match flow_messages {
                 Ok(messages) => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
@@ -115,13 +115,13 @@ impl GenMapper {
                                     .await?
                             }
                             Err(err) => {
-                                error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
+                                error!(target: "gen-mapper", "{flow_id}: cannot send transformed message: {err}")
                             }
                         }
                     }
                 }
                 Err(err) => {
-                    error!(target: "gen-mapper", "{pipeline_id}: {err}");
+                    error!(target: "gen-mapper", "{flow_id}: {err}");
                 }
             }
         }
@@ -135,8 +135,8 @@ impl GenMapper {
             self.processor.dump_memory_stats().await;
             self.processor.dump_processing_stats().await;
         }
-        for (pipeline_id, pipeline_messages) in self.processor.tick(&timestamp).await {
-            match pipeline_messages {
+        for (flow_id, flow_messages) in self.processor.tick(&timestamp).await {
+            match flow_messages {
                 Ok(messages) => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
@@ -146,13 +146,13 @@ impl GenMapper {
                                     .await?
                             }
                             Err(err) => {
-                                error!(target: "gen-mapper", "{pipeline_id}: cannot send transformed message: {err}")
+                                error!(target: "gen-mapper", "{flow_id}: cannot send transformed message: {err}")
                             }
                         }
                     }
                 }
                 Err(err) => {
-                    error!(target: "gen-mapper", "{pipeline_id}: {err}");
+                    error!(target: "gen-mapper", "{flow_id}: {err}");
                 }
             }
         }

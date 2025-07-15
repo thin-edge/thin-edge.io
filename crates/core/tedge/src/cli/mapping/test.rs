@@ -4,7 +4,7 @@ use crate::log::MaybeFancy;
 use anyhow::Error;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_gen_mapper::pipeline::*;
+use tedge_gen_mapper::flow::*;
 use tedge_gen_mapper::MessageProcessor;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
@@ -21,14 +21,14 @@ pub struct TestCommand {
 impl Command for TestCommand {
     fn description(&self) -> String {
         format!(
-            "process message samples using pipelines and filters in {:}",
+            "process message samples using flows and filters in {:}",
             self.mapping_dir.display()
         )
     }
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
         let mut processor = match &self.filter {
-            None => TEdgeMappingCli::load_pipelines(&self.mapping_dir).await?,
+            None => TEdgeMappingCli::load_flows(&self.mapping_dir).await?,
             Some(filter) => TEdgeMappingCli::load_filter(&self.mapping_dir, filter).await?,
         };
         if let Some(message) = &self.message {
