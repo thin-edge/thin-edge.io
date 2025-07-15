@@ -446,7 +446,7 @@ define_tedge_config! {
 
             /// MQTT service endpoint for the Cumulocity tenant, with optional port.
             #[tedge_config(example = "mqtt.your-tenant.cumulocity.com:9883")]
-            #[tedge_config(default(from_optional_key = "c8y.url"))]
+            #[tedge_config(default(from_optional_key = "c8y.mqtt"))]
             url: HostPort<MQTT_SVC_TLS_PORT>,
 
             /// The topic prefix that will be used for the Cumulocity MQTT service endpoint connection.
@@ -1143,6 +1143,12 @@ fn c8y_topic_prefix() -> TopicPrefix {
 
 fn c8y_mqtt_service_topic_prefix() -> TopicPrefix {
     TopicPrefix::try_new("c8y-mqtt").unwrap()
+}
+
+impl From<HostPort<MQTT_TLS_PORT>> for HostPort<MQTT_SVC_TLS_PORT> {
+    fn from(value: HostPort<MQTT_TLS_PORT>) -> Self {
+        HostPort::try_from(value.host().to_string()).expect("Source hostname must have been valid")
+    }
 }
 
 fn az_topic_prefix() -> TopicPrefix {
