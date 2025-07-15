@@ -50,7 +50,7 @@ Units are configured using topic metadata
 
 Computing average over a time window
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/gen-mapper/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge mapping test --final-tick --filter /etc/tedge/gen-mapper/average.js
+    ...    cat /etc/tedge/gen-mapper/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge mapping test --final-tick --flow /etc/tedge/gen-mapper/average.js
     ...    strip=True
     ${expected_msg}    Execute Command
     ...    cat /etc/tedge/gen-mapper/average.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '

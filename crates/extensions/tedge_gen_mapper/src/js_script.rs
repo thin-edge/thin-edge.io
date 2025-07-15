@@ -1,6 +1,6 @@
 use crate::flow;
 use crate::flow::DateTime;
-use crate::flow::FilterError;
+use crate::flow::FlowError;
 use crate::flow::Message;
 use crate::js_runtime::JsRuntime;
 use anyhow::Context;
@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use tracing::debug;
 
 #[derive(Clone)]
-pub struct JsFilter {
+pub struct JsScript {
     pub module_name: String,
     pub path: PathBuf,
     pub config: JsonValue,
@@ -32,10 +32,10 @@ impl Default for JsonValue {
     }
 }
 
-impl JsFilter {
+impl JsScript {
     pub fn new(flow: PathBuf, index: usize, path: PathBuf) -> Self {
         let module_name = format!("{}|{}|{}", flow.display(), index, path.display());
-        JsFilter {
+        JsScript {
             module_name,
             path,
             config: JsonValue::default(),
@@ -81,7 +81,7 @@ impl JsFilter {
     /// The "process" function of the JS module is passed 3 arguments
     /// - the current timestamp
     /// - the message to be transformed
-    /// - the filter config (as configured for the flow step, possibly updated by update_config messages)
+    /// - the flow step config (as configured for the flow step, possibly updated by update_config messages)
     ///
     /// The returned value is expected to be an array of messages.
     pub async fn process(
@@ -89,7 +89,7 @@ impl JsFilter {
         js: &JsRuntime,
         timestamp: &DateTime,
         message: &Message,
-    ) -> Result<Vec<Message>, FilterError> {
+    ) -> Result<Vec<Message>, FlowError> {
         debug!(target: "MAPPING", "{}: process({timestamp:?}, {message:?})", self.module_name());
         if self.no_js_process {
             return Ok(vec![message.clone()]);
@@ -106,18 +106,18 @@ impl JsFilter {
             .try_into()
     }
 
-    /// Update the filter config using a metadata message
+    /// Update the flow step config using a metadata message
     ///
     /// The "update_config" function of the JS module is passed 2 arguments
     /// - the message
-    /// - the current filter config
+    /// - the current flow step config
     ///
-    /// The value returned by this function is used as the updated filter config
+    /// The value returned by this function is used as the updated flow step config
     pub async fn update_config(
         &mut self,
         js: &JsRuntime,
         message: &Message,
-    ) -> Result<(), FilterError> {
+    ) -> Result<(), FlowError> {
         debug!(target: "MAPPING", "{}: update_config({message:?})", self.module_name());
         if self.no_js_update_config {
             return Ok(());
@@ -136,14 +136,14 @@ impl JsFilter {
     ///
     /// The "tick" function is passed 2 arguments
     /// - the current timestamp
-    /// - the current filter config
+    /// - the current flow step config
     ///
     /// Return zero, one or more messages
     pub async fn tick(
         &self,
         js: &JsRuntime,
         timestamp: &DateTime,
-    ) -> Result<Vec<Message>, FilterError> {
+    ) -> Result<Vec<Message>, FlowError> {
         if self.no_js_tick {
             return Ok(vec![]);
         }
@@ -172,7 +172,7 @@ impl From<DateTime> for JsonValue {
 }
 
 impl TryFrom<serde_json::Value> for Message {
-    type Error = FilterError;
+    type Error = FlowError;
 
     fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
         let message = serde_json::from_value(value)
@@ -182,7 +182,7 @@ impl TryFrom<serde_json::Value> for Message {
 }
 
 impl TryFrom<JsonValue> for Message {
-    type Error = FilterError;
+    type Error = FlowError;
 
     fn try_from(value: JsonValue) -> Result<Self, Self::Error> {
         Message::try_from(value.0)
@@ -190,7 +190,7 @@ impl TryFrom<JsonValue> for Message {
 }
 
 impl TryFrom<JsonValue> for Vec<Message> {
-    type Error = FilterError;
+    type Error = FlowError;
 
     fn try_from(value: JsonValue) -> Result<Self, Self::Error> {
         match value.0 {
@@ -198,7 +198,9 @@ impl TryFrom<JsonValue> for Vec<Message> {
             serde_json::Value::Object(map) => {
                 Message::try_from(serde_json::Value::Object(map)).map(|message| vec![message])
             }
-            _ => Err(anyhow::anyhow!("Filters are expected to return an array of messages").into()),
+            _ => Err(
+                anyhow::anyhow!("Flow scripts are expected to return an array of messages").into(),
+            ),
         }
     }
 }
@@ -308,16 +310,16 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn identity_filter() {
-        let script = "export function process(t,msg) { return [msg]; };";
+    async fn identity_script() {
+        let js = "export function process(t,msg) { return [msg]; };";
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        let filter = JsFilter::new("id.toml".into(), 1, "id.js".into());
-        runtime.load_js(filter.module_name(), script).await.unwrap();
+        let script = JsScript::new("id.toml".into(), 1, "id.js".into());
+        runtime.load_js(script.module_name(), js).await.unwrap();
 
         let input = Message::new("te/main/device///m/", "hello world");
         let output = input.clone();
         assert_eq!(
-            filter
+            script
                 .process(&runtime, &DateTime::now(), &input)
                 .await
                 .unwrap(),
@@ -326,15 +328,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn error_filter() {
-        let script = r#"export function process(t,msg) { throw new Error("Cannot process that message"); };"#;
+    async fn error_script() {
+        let js = r#"export function process(t,msg) { throw new Error("Cannot process that message"); };"#;
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        let mut filter = JsFilter::new("err.toml".into(), 1, "err.js".into());
-        filter.no_js_process = false;
-        runtime.load_js(filter.module_name(), script).await.unwrap();
+        let mut script = JsScript::new("err.toml".into(), 1, "err.js".into());
+        script.no_js_process = false;
+        runtime.load_js(script.module_name(), js).await.unwrap();
 
         let input = Message::new("te/main/device///m/", "hello world");
-        let error = filter
+        let error = script
             .process(&runtime, &DateTime::now(), &input)
             .await
             .unwrap_err();
@@ -343,8 +345,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn collectd_filter() {
-        let script = r#"
+    async fn collectd_script() {
+        let js = r#"
 export function process (timestamp, message, config) {
     let groups = message.topic.split( '/')
     let data = message.payload.split(':')
@@ -366,9 +368,9 @@ export function process (timestamp, message, config) {
 }
         "#;
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        let mut filter = JsFilter::new("collectd.toml".into(), 1, "collectd.js".into());
-        filter.no_js_process = false;
-        runtime.load_js(filter.module_name(), script).await.unwrap();
+        let mut script = JsScript::new("collectd.toml".into(), 1, "collectd.js".into());
+        script.no_js_process = false;
+        runtime.load_js(script.module_name(), js).await.unwrap();
 
         let input = Message::new(
             "collectd/h/memory/percent-used",
@@ -379,7 +381,7 @@ export function process (timestamp, message, config) {
             r#"{"time": 1748440192.104, "memory": {"percent-used": 19.9289468288182}}"#,
         );
         assert_eq!(
-            filter
+            script
                 .process(&runtime, &DateTime::now(), &input)
                 .await
                 .unwrap(),

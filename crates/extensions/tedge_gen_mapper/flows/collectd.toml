@@ -1,6 +1,6 @@
 input_topics = ["collectd/+/+/+"]
 
 steps = [
-    { filter = "collectd-to-te.js" },
-    { filter = "average.js", tick_every_seconds = 10 }
+    { script = "collectd-to-te.js" },
+    { script = "average.js", tick_every_seconds = 10 }
 ]
