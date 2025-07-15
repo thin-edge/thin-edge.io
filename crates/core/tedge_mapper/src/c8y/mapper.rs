@@ -408,7 +408,7 @@ fn mqtt_service_bridge_config(
     let local_prefix = format!("{}/", c8y_config.mqtt_service.topic_prefix.as_str());
 
     for topic in cloud_topics {
-        tc.forward_from_remote(topic, local_prefix.clone(), "")?;
+        tc.forward_bidirectionally(topic, local_prefix.clone(), "")?;
     }
 
     // Templates
