@@ -53,7 +53,10 @@ pub enum TEdgeCertCli {
         cloud: Option<CloudArg>,
     },
 
-    /// Create a new keypair
+    /// Create a new keypair using a PKCS11 token.
+    ///
+    /// Generates a keypair on the PKCS11 token, saves the private key on the token, and generates a
+    /// CSR using the newly generated keypair.
     CreateKey {
         #[arg(long)]
         label: String,

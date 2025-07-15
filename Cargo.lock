@@ -1011,7 +1011,6 @@ dependencies = [
  "assert_matches",
  "base64 0.22.1",
  "camino",
- "elliptic-curve",
  "pem",
  "rcgen",
  "reqwest",
@@ -3122,15 +3121,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "oid-registry"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12f40cff3dde1b6087cc5d5f5d4d65712f34016a03ed60e9c08dcc392736b5b7"
-dependencies = [
- "asn1-rs 0.7.0",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4900,7 +4890,6 @@ dependencies = [
  "camino",
  "clap",
  "cryptoki",
- "oid-registry 0.8.1",
  "percent-encoding",
  "postcard",
  "rand 0.9.1",
