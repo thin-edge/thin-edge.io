@@ -1,5 +1,5 @@
 use crate::flow::Flow;
-use crate::flow::Stage;
+use crate::flow::FlowStep;
 use crate::js_filter::JsFilter;
 use crate::js_runtime::JsRuntime;
 use crate::LoadError;
@@ -14,11 +14,11 @@ use tedge_mqtt_ext::TopicFilter;
 #[derive(Deserialize)]
 pub struct FlowConfig {
     input_topics: Vec<String>,
-    stages: Vec<StageConfig>,
+    steps: Vec<StepConfig>,
 }
 
 #[derive(Deserialize)]
-pub struct StageConfig {
+pub struct StepConfig {
     filter: FilterSpec,
 
     #[serde(default)]
@@ -49,7 +49,7 @@ pub enum ConfigError {
 impl FlowConfig {
     pub fn from_filter(filter: Utf8PathBuf) -> Self {
         let input_topic = "#".to_string();
-        let stage = StageConfig {
+        let step = StepConfig {
             filter: FilterSpec::JavaScript(filter),
             config: None,
             tick_every_seconds: 0,
@@ -57,7 +57,7 @@ impl FlowConfig {
         };
         Self {
             input_topics: vec![input_topic],
-            stages: vec![stage],
+            steps: vec![step],
         }
     }
 
@@ -68,29 +68,29 @@ impl FlowConfig {
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
         let input_topics = topic_filters(&self.input_topics)?;
-        let mut stages = vec![];
-        for (i, stage) in self.stages.into_iter().enumerate() {
-            let mut stage = stage.compile(config_dir, i, &source).await?;
-            js_runtime.load_filter(&mut stage.filter).await?;
-            stage.check(&source);
-            stage.fix();
-            stages.push(stage);
+        let mut steps = vec![];
+        for (i, step) in self.steps.into_iter().enumerate() {
+            let mut step = step.compile(config_dir, i, &source).await?;
+            js_runtime.load_filter(&mut step.filter).await?;
+            step.check(&source);
+            step.fix();
+            steps.push(step);
         }
         Ok(Flow {
             input_topics,
-            stages,
+            steps,
             source,
         })
     }
 }
 
-impl StageConfig {
+impl StepConfig {
     pub async fn compile(
         self,
         config_dir: &Path,
         index: usize,
         flow: &Utf8Path,
-    ) -> Result<Stage, ConfigError> {
+    ) -> Result<FlowStep, ConfigError> {
         let path = match self.filter {
             FilterSpec::JavaScript(path) if path.is_absolute() => path.into(),
             FilterSpec::JavaScript(path) if path.starts_with(config_dir) => path.into(),
@@ -100,7 +100,7 @@ impl StageConfig {
             .with_config(self.config)
             .with_tick_every_seconds(self.tick_every_seconds);
         let config_topics = topic_filters(&self.meta_topics)?;
-        Ok(Stage {
+        Ok(FlowStep {
             filter,
             config_topics,
         })

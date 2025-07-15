@@ -16,14 +16,14 @@ pub struct Flow {
     /// The source topics
     pub input_topics: TopicFilter,
 
-    /// Transformation stages to apply in order to the messages
-    pub stages: Vec<Stage>,
+    /// Transformation steps to apply in order to the messages
+    pub steps: Vec<FlowStep>,
 
     pub source: Utf8PathBuf,
 }
 
-/// A message transformation stage
-pub struct Stage {
+/// A message transformation step
+pub struct FlowStep {
     pub filter: JsFilter,
     pub config_topics: TopicFilter,
 }
@@ -55,8 +55,8 @@ pub enum FilterError {
 impl Flow {
     pub fn topics(&self) -> TopicFilter {
         let mut topics = self.input_topics.clone();
-        for stage in self.stages.iter() {
-            topics.add_all(stage.config_topics.clone())
+        for step in self.steps.iter() {
+            topics.add_all(step.config_topics.clone())
         }
         topics
     }
@@ -66,9 +66,9 @@ impl Flow {
         js_runtime: &JsRuntime,
         message: &Message,
     ) -> Result<(), FilterError> {
-        for stage in self.stages.iter_mut() {
-            if stage.config_topics.accept_topic_name(&message.topic) {
-                stage.filter.update_config(js_runtime, message).await?
+        for step in self.steps.iter_mut() {
+            if step.config_topics.accept_topic_name(&message.topic) {
+                step.filter.update_config(js_runtime, message).await?
             }
         }
         Ok(())
@@ -88,12 +88,12 @@ impl Flow {
 
         let stated_at = stats.flow_process_start(self.source.as_str());
         let mut messages = vec![message.clone()];
-        for stage in self.stages.iter() {
-            let js = stage.filter.source();
+        for step in self.steps.iter() {
+            let js = step.filter.source();
             let mut transformed_messages = vec![];
             for message in messages.iter() {
                 let filter_started_at = stats.filter_start(&js, "process");
-                let filter_output = stage.filter.process(js_runtime, timestamp, message).await;
+                let filter_output = step.filter.process(js_runtime, timestamp, message).await;
                 match &filter_output {
                     Ok(messages) => {
                         stats.filter_done(&js, "process", filter_started_at, messages.len())
@@ -117,13 +117,13 @@ impl Flow {
     ) -> Result<Vec<Message>, FilterError> {
         let stated_at = stats.flow_tick_start(self.source.as_str());
         let mut messages = vec![];
-        for stage in self.stages.iter() {
-            let js = stage.filter.source();
+        for step in self.steps.iter() {
+            let js = step.filter.source();
             // Process first the messages triggered upstream by the tick
             let mut transformed_messages = vec![];
             for message in messages.iter() {
                 let filter_started_at = stats.filter_start(&js, "process");
-                let filter_output = stage.filter.process(js_runtime, timestamp, message).await;
+                let filter_output = step.filter.process(js_runtime, timestamp, message).await;
                 match &filter_output {
                     Ok(messages) => {
                         stats.filter_done(&js, "process", filter_started_at, messages.len())
@@ -135,14 +135,14 @@ impl Flow {
 
             // Only then process the tick
             let filter_started_at = stats.filter_start(&js, "tick");
-            let tick_output = stage.filter.tick(js_runtime, timestamp).await;
+            let tick_output = step.filter.tick(js_runtime, timestamp).await;
             match &tick_output {
                 Ok(messages) => stats.filter_done(&js, "tick", filter_started_at, messages.len()),
                 Err(_) => stats.filter_failed(&js, "tick"),
             }
             transformed_messages.extend(tick_output?);
 
-            // Iterate with all the messages collected at this stage
+            // Iterate with all the messages collected at this step
             messages = transformed_messages;
         }
         stats.flow_tick_done(self.source.as_str(), stated_at, messages.len());
@@ -150,7 +150,7 @@ impl Flow {
     }
 }
 
-impl Stage {
+impl FlowStep {
     pub(crate) fn check(&self, flow: &Utf8Path) {
         let filter = &self.filter;
         if filter.no_js_process {

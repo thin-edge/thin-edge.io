@@ -48,14 +48,14 @@ which is used to drive all MQTT message transformations.
 - A filter is defined by a Javascript file with `.js` extension.
 - The definition of flows must provide a list of MQTT topics to subscribe to.
   - The flow will be feed with all the messages received on these topics.
-- A flow definition also provides a list of stages.
-  - Each stage is built from a javascript and is possibly given a config (arbitrary json that will be passed to the script)
-  - Each stage can also subscribe to a list of MQTT topics (which messages will be passed to the script to update its config)
+- A flow definition provides a list of steps.
+  - Each step is built from a javascript and is possibly given a config (arbitrary json that will be passed to the script)
+  - Each step can also subscribe to a list of MQTT topics (which messages will be passed to the script to update its config)
 
 ```toml
 input_topics = ["te/+/+/+/+/m/+"]
 
-stages = [
+steps = [
     { filter = "add_timestamp.js" },
     { filter = "drop_stragglers.js", config = { max_delay = 60 } },
     { filter = "te_to_c8y.js", meta_topics = ["te/+/+/+/+/m/+/meta"] }
