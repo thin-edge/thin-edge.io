@@ -24,10 +24,13 @@ use cryptoki::object::KeyType;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use rsa::pkcs1::EncodeRsaPublicKey;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
 use rustls::SignatureScheme;
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::debug;
 use tracing::trace;
 use tracing::warn;
@@ -92,23 +95,7 @@ impl Cryptoki {
         })
     }
 
-    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
-        let mut config_uri = self
-            .config
-            .uri
-            .as_deref()
-            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        let request_uri = uri
-            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        config_uri.append_attributes(request_uri);
-        let uri_attributes = config_uri;
-
+    fn open_session(&self, uri_attributes: &uri::Pkcs11Uri) -> anyhow::Result<Session> {
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
 
@@ -139,10 +126,18 @@ impl Cryptoki {
         let token_info = self.context.get_token_info(slot)?;
         debug!(?slot_info, ?token_info, "Selected slot");
 
-        let session = self.context.open_ro_session(slot)?;
+        // let session = self.context.open_ro_session(slot)?;
+        let session = self.context.open_rw_session(slot)?;
         session.login(UserType::User, Some(&self.config.pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
+
+        Ok(session)
+    }
+
+    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
 
         // get the signing key
         let key = Self::find_key_by_attributes(&uri_attributes, &session)?;
@@ -197,6 +192,20 @@ impl Cryptoki {
         Ok(key)
     }
 
+    pub fn create_key(
+        &self,
+        uri: Option<&str>,
+        params: CreateKeyParams,
+    ) -> anyhow::Result<Vec<u8>> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
+
+        let pubkey_der =
+            create_key(&session, params).context("Failed to create a new private key")?;
+
+        Ok(pubkey_der)
+    }
+
     fn find_key_by_attributes(
         uri: &uri::Pkcs11Uri,
         session: &Session,
@@ -222,11 +231,201 @@ impl Cryptoki {
 
         let key = keys.next().context("Failed to find a private key")?;
         if keys.len() > 0 {
-            warn!("Multiple keys were found. If the wrong one was chosen, please use a URI that uniquely identifies a key.")
+            warn!(
+                "Multiple keys were found. If the wrong one was chosen, please use a URI that uniquely identifies a key."
+            )
         }
 
         Ok(key)
     }
+
+    fn request_uri<'a>(
+        &'a self,
+        request_uri: Option<&'a str>,
+    ) -> anyhow::Result<uri::Pkcs11Uri<'a>> {
+        let mut config_uri = self
+            .config
+            .uri
+            .as_deref()
+            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        let request_uri = request_uri
+            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        config_uri.append_attributes(request_uri);
+        Ok(config_uri)
+    }
+}
+
+fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<u8>> {
+    let (mechanism, attrs_pub, attrs_priv) = match params.key {
+        KeyTypeParams::Rsa { bits } => {
+            anyhow::ensure!(
+                bits == 2048 || bits == 3072 || bits == 4096,
+                "Invalid bits value: only 2048/3072/4096 key sizes are valid"
+            );
+            (
+                Mechanism::RsaPkcsKeyPairGen,
+                vec![Attribute::ModulusBits(
+                    // u64 or u32 depending on the platform
+                    std::os::raw::c_ulong::from(bits).into(),
+                )],
+                vec![],
+            )
+        }
+        KeyTypeParams::Ec { curve } => {
+            // serialize chosen curve to CKA_EC_PARAMS choice structure
+            // https://docs.oasis-open.org/pkcs11/pkcs11-curr/v3.0/os/pkcs11-curr-v3.0-os.html#_Toc30061181
+            let oid = match curve {
+                256 => SECP256R1_OID,
+                384 => SECP384R1_OID,
+                521 => SECP521R1_OID,
+                _ => anyhow::bail!("Invalid EC curve value: only 256/384/521 valid"),
+            };
+            let components: Vec<u64> = oid.split('.').map(|c| c.parse().unwrap()).collect();
+            let curve_oid = asn1_rs::Oid::from(&components)
+                .unwrap()
+                .to_der_vec()
+                .unwrap();
+            trace!("{curve_oid:x?}");
+            (
+                Mechanism::EccKeyPairGen,
+                vec![Attribute::EcParams(curve_oid)],
+                vec![],
+            )
+        }
+    };
+
+    let mut id_pub = vec![0u8; 20];
+    rand::fill(&mut id_pub[..]);
+
+    let mut id_priv = vec![0u8; 20];
+    rand::fill(&mut id_priv[..]);
+
+    let mut pub_key_template = attrs_pub;
+    pub_key_template.extend_from_slice(&[
+        Attribute::Token(false),
+        Attribute::Private(false),
+        Attribute::Verify(true),
+        Attribute::Encrypt(true),
+        Attribute::Id(id_pub),
+    ]);
+
+    let mut priv_key_template = attrs_priv;
+    priv_key_template.extend_from_slice(&[
+        Attribute::Token(true),
+        Attribute::Private(true),
+        Attribute::Sensitive(true),
+        Attribute::Extractable(false),
+        Attribute::Sign(true),
+        Attribute::Decrypt(true),
+        Attribute::Label(params.label.into()),
+        Attribute::Id(id_priv),
+    ]);
+
+    trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
+    let (pub_handle, priv_handle) = session
+        .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template)
+        .context("Failed to generate keypair")?;
+
+    let pubkey_der = match params.key {
+        KeyTypeParams::Rsa { .. } => {
+            let priv_attrs =
+                session.get_attributes(priv_handle, &[AttributeType::PublicKeyInfo])?;
+            trace!(?priv_attrs);
+
+            // return the public key as PEM
+            let attrs = session.get_attributes(
+                pub_handle,
+                &[
+                    AttributeType::PublicKeyInfo,
+                    AttributeType::Modulus,
+                    AttributeType::PublicExponent,
+                ],
+            )?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
+
+            let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
+
+            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+                if !pubkey_der.is_empty() {
+                    return Ok(pubkey_der);
+                }
+            }
+
+            debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+
+            let Attribute::Modulus(modulus) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No modulus");
+            };
+            let modulus = rsa::BigUint::from_bytes_be(&modulus);
+
+            let Attribute::PublicExponent(exponent) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No public exponent");
+            };
+            let exponent = rsa::BigUint::from_bytes_be(&exponent);
+
+            let pubkey = rsa::RsaPublicKey::new(modulus, exponent)
+                .context("Failed to construct RSA pubkey from components")?;
+
+            pubkey
+                .to_pkcs1_der()
+                .context("Failed to serialize pubkey as DER")?
+                .into_vec()
+        }
+
+        KeyTypeParams::Ec { .. } => {
+            let priv_attrs =
+                session.get_attributes(priv_handle, &[AttributeType::PublicKeyInfo])?;
+            trace!(?priv_attrs);
+
+            // return the public key as PEM
+            let attrs = session.get_attributes(
+                pub_handle,
+                &[AttributeType::PublicKeyInfo, AttributeType::EcPoint],
+            )?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
+
+            let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
+
+            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+                if !pubkey_der.is_empty() {
+                    return Ok(pubkey_der);
+                }
+            }
+
+            debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+
+            // Elliptic-Curve-Point-to-Octet-String from SEC 1: Elliptic Curve Cryptography (Version 2.0) section 2.3.3 (page 10)
+            let ec_point = attrs.next().context("Failed to get pubkey EcPoint")?;
+            let Attribute::EcPoint(ec_point) = ec_point else {
+                anyhow::bail!("No ec point");
+            };
+            trace!(?ec_point);
+            ec_point
+        }
+    };
+
+    Ok(pubkey_der)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateKeyParams {
+    pub key: KeyTypeParams,
+    pub token: Option<String>,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KeyTypeParams {
+    Rsa { bits: u16 },
+    Ec { curve: u16 },
 }
 
 #[derive(Debug, Clone)]
@@ -238,22 +437,26 @@ pub struct Pkcs11Session {
 pub struct Pkcs11Signer {
     session: Pkcs11Session,
     key: ObjectHandle,
-    sigscheme: SigScheme,
+    pub sigscheme: SigScheme,
 }
 
 impl Pkcs11Signer {
-    pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+    pub fn sign(
+        &self,
+        message: &[u8],
+        sigscheme: Option<SigScheme>,
+    ) -> Result<Vec<u8>, anyhow::Error> {
         let session = self.session.session.lock().unwrap();
 
-        let mechanism = self.sigscheme.into();
+        let sigscheme = sigscheme.unwrap_or(self.sigscheme);
+        let mechanism = sigscheme.into();
         let (mechanism, digest_mechanism) = match mechanism {
             Mechanism::EcdsaSha256 => (Mechanism::Ecdsa, Some(Mechanism::Sha256)),
             Mechanism::EcdsaSha384 => (Mechanism::Ecdsa, Some(Mechanism::Sha384)),
             Mechanism::EcdsaSha512 => (Mechanism::Ecdsa, Some(Mechanism::Sha512)),
-            Mechanism::Sha1RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha1)),
-            Mechanism::Sha256RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha256)),
-            Mechanism::Sha384RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha384)),
-            Mechanism::Sha512RsaPkcs => (Mechanism::RsaPkcs, Some(Mechanism::Sha512)),
+            Mechanism::Sha256RsaPkcs => (Mechanism::Sha256RsaPkcs, None),
+            Mechanism::Sha384RsaPkcs => (Mechanism::Sha384RsaPkcs, None),
+            Mechanism::Sha512RsaPkcs => (Mechanism::Sha512RsaPkcs, None),
             Mechanism::Sha256RsaPkcsPss(p) => (Mechanism::Sha256RsaPkcsPss(p), None),
             Mechanism::Sha384RsaPkcsPss(p) => (Mechanism::Sha384RsaPkcsPss(p), None),
             Mechanism::Sha512RsaPkcsPss(p) => (Mechanism::Sha512RsaPkcsPss(p), None),
@@ -306,12 +509,13 @@ impl Pkcs11Signer {
 }
 
 /// Currently supported signature schemes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SigScheme {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SigScheme {
     EcdsaNistp256Sha256,
     EcdsaNistp384Sha384,
     EcdsaNistp521Sha512,
     RsaPssSha256,
+    RsaPkcs1Sha256,
 }
 
 impl From<SigScheme> for rustls::SignatureScheme {
@@ -321,6 +525,7 @@ impl From<SigScheme> for rustls::SignatureScheme {
             SigScheme::EcdsaNistp384Sha384 => Self::ECDSA_NISTP384_SHA384,
             SigScheme::EcdsaNistp521Sha512 => Self::ECDSA_NISTP521_SHA512,
             SigScheme::RsaPssSha256 => Self::RSA_PSS_SHA256,
+            SigScheme::RsaPkcs1Sha256 => Self::RSA_PKCS1_SHA256,
         }
     }
 }
@@ -331,7 +536,20 @@ impl From<SigScheme> for rustls::SignatureAlgorithm {
             SigScheme::EcdsaNistp256Sha256
             | SigScheme::EcdsaNistp384Sha384
             | SigScheme::EcdsaNistp521Sha512 => Self::ECDSA,
-            SigScheme::RsaPssSha256 => Self::RSA,
+            SigScheme::RsaPssSha256 | SigScheme::RsaPkcs1Sha256 => Self::RSA,
+        }
+    }
+}
+
+impl From<rustls::SignatureScheme> for SigScheme {
+    fn from(value: rustls::SignatureScheme) -> Self {
+        match value {
+            rustls::SignatureScheme::ECDSA_NISTP256_SHA256 => SigScheme::EcdsaNistp256Sha256,
+            rustls::SignatureScheme::ECDSA_NISTP384_SHA384 => SigScheme::EcdsaNistp384Sha384,
+            rustls::SignatureScheme::ECDSA_NISTP521_SHA512 => SigScheme::EcdsaNistp521Sha512,
+            rustls::SignatureScheme::RSA_PSS_SHA256 => SigScheme::RsaPssSha256,
+            rustls::SignatureScheme::RSA_PKCS1_SHA256 => SigScheme::RsaPkcs1Sha256,
+            _ => todo!(),
         }
     }
 }
@@ -342,6 +560,7 @@ impl From<SigScheme> for Mechanism<'_> {
             SigScheme::EcdsaNistp256Sha256 => Self::EcdsaSha256,
             SigScheme::EcdsaNistp384Sha384 => Self::EcdsaSha384,
             SigScheme::EcdsaNistp521Sha512 => Self::EcdsaSha512,
+            SigScheme::RsaPkcs1Sha256 => Self::Sha256RsaPkcs,
             SigScheme::RsaPssSha256 => Mechanism::Sha256RsaPkcsPss(PkcsPssParams {
                 hash_alg: MechanismType::SHA256,
                 mgf: PkcsMgfType::MGF1_SHA256,
@@ -373,7 +592,8 @@ impl SigningKey for Pkcs11Signer {
 
 impl Signer for Pkcs11Signer {
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, rustls::Error> {
-        Self::sign(self, message).map_err(|e| rustls::Error::General(e.to_string()))
+        Self::sign(self, message, Some(self.sigscheme))
+            .map_err(|e| rustls::Error::General(e.to_string()))
     }
 
     fn scheme(&self) -> SignatureScheme {
