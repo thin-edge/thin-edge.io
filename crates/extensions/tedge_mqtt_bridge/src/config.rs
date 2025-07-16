@@ -245,18 +245,18 @@ mod tests {
             std::fs::create_dir(&certs_dir).unwrap();
             std::fs::write(
                 certs_dir.join("tedge-certificate.pem"),
-                device_cert.serialize_pem().unwrap(),
+                device_cert.cert.pem(),
             )
             .unwrap();
             std::fs::write(
                 certs_dir.join("tedge-private-key.pem"),
-                device_cert.serialize_private_key_pem(),
+                device_cert.signing_key.serialize_pem(),
             )
             .unwrap();
 
             let root_cert_path = ttd.path().join("cloud-certs/c8y.pem");
             std::fs::create_dir(root_cert_path.parent().unwrap()).unwrap();
-            std::fs::write(&root_cert_path, c8y_cert.serialize_pem().unwrap()).unwrap();
+            std::fs::write(&root_cert_path, c8y_cert.cert.pem()).unwrap();
             let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
             let c8y_config = tedge_config.c8y.try_get::<str>(None).unwrap();
 

@@ -49,8 +49,8 @@ use yansi::Paint;
 /// use tedge_config::{OptionalConfig, TEdgeConfig};
 ///
 /// let cert = rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap();
-/// let cert_pem = cert.serialize_pem().unwrap();
-/// let key_pem = cert.serialize_private_key_pem();
+/// let cert_pem = cert.cert.pem();
+/// let key_pem = cert.signing_key.serialize_pem();
 ///
 /// let config = load_ssl_config(
 ///     OptionalConfig::present(InjectedValue(cert_pem), "http.cert_path"),
@@ -147,7 +147,7 @@ pub trait TrustStoreLoader {
 /// use axum_tls::config::InjectedValue;
 /// use axum_tls::load_cert;
 /// let cert = rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap();
-/// let pem_data = cert.serialize_pem().unwrap();
+/// let pem_data = cert.cert.pem();
 ///
 /// let loaded_chain = load_cert(&InjectedValue(pem_data)).unwrap();
 ///

@@ -1196,8 +1196,8 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             cert_path.push("test.crt");
             let mut key_path = ttd.utf8_path().to_owned();
             key_path.push("test.key");
-            std::fs::write(&cert_path, cert.serialize_pem().unwrap()).unwrap();
-            std::fs::write(&key_path, cert.serialize_private_key_pem()).unwrap();
+            std::fs::write(&cert_path, cert.cert.pem()).unwrap();
+            std::fs::write(&key_path, cert.signing_key.serialize_pem()).unwrap();
             let config = TEdgeConfig::load_toml_str_with_root_dir(
                 ttd.path(),
                 &format!(
@@ -1223,8 +1223,8 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let mut key_path = ttd.utf8_path().to_owned();
             key_path.push("test.key");
             let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
-            std::fs::write(&cert_path, cert.serialize_pem().unwrap()).unwrap();
-            std::fs::write(&key_path, cert.serialize_private_key_pem()).unwrap();
+            std::fs::write(&cert_path, cert.cert.pem()).unwrap();
+            std::fs::write(&key_path, cert.signing_key.serialize_pem()).unwrap();
             let config = TEdgeConfig::load_toml_str_with_root_dir(
                 ttd.path(),
                 &format!(

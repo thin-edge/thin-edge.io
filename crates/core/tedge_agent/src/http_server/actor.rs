@@ -204,10 +204,11 @@ mod tests {
             .context("generating server certificate")?;
         let client_cert = rcgen::generate_simple_self_signed(["a-client".into()])
             .context("generating client certificate")?;
-        let server = TestFileTransferService::new_https(server_cert, Some(&client_cert)).await?;
+        let server =
+            TestFileTransferService::new_https(server_cert, Some(&client_cert.cert)).await?;
         let test_url = server.url_for("test-file");
 
-        let client = server.client_with_certificate(&client_cert)?;
+        let client = server.client_with_certificate(client_cert)?;
         let upload_response = client.put(&test_url).body("file").send().await.unwrap();
         assert_eq!(upload_response.status(), hyper::StatusCode::CREATED);
 
@@ -220,7 +221,8 @@ mod tests {
             .context("generating server certificate")?;
         let client_cert = rcgen::generate_simple_self_signed(["a-client".into()])
             .context("generating client certificate")?;
-        let server = TestFileTransferService::new_https(server_cert, Some(&client_cert)).await?;
+        let server =
+            TestFileTransferService::new_https(server_cert, Some(&client_cert.cert)).await?;
 
         let client = server.anonymous_client()?;
         let test_url = server.url_for("test/file");
@@ -278,9 +280,9 @@ mod tests {
         }
     }
 
-    impl TestFileTransferService<rcgen::Certificate> {
+    impl TestFileTransferService<rcgen::CertifiedKey<rcgen::KeyPair>> {
         async fn new_https(
-            server_cert: rcgen::Certificate,
+            server_cert: rcgen::CertifiedKey<rcgen::KeyPair>,
             trusted_root: Option<&rcgen::Certificate>,
         ) -> anyhow::Result<Self> {
             let temp_dir = TempTedgeDir::new();
@@ -305,11 +307,11 @@ mod tests {
         /// An client with a client certificate that trusts the associated server certificate
         fn client_with_certificate(
             &self,
-            cert: &rcgen::Certificate,
+            cert: rcgen::CertifiedKey<rcgen::KeyPair>,
         ) -> anyhow::Result<reqwest::Client> {
             let mut pem = Vec::new();
-            pem.extend(cert.serialize_private_key_pem().as_bytes());
-            pem.extend(cert.serialize_pem().unwrap().as_bytes());
+            pem.extend(cert.signing_key.serialize_pem().as_bytes());
+            pem.extend(cert.cert.pem().as_bytes());
             let id = Identity::from_pem(&pem).unwrap();
 
             self.client_builder()?
@@ -327,13 +329,8 @@ mod tests {
 
         #[allow(clippy::disallowed_types, clippy::disallowed_methods)]
         fn client_builder(&self) -> anyhow::Result<reqwest::ClientBuilder> {
-            let reqwest_certificate = Certificate::from_der(
-                &self
-                    .server_cert
-                    .serialize_der()
-                    .context("serializing server certificate as der")?,
-            )
-            .context("building reqwest client")?;
+            let reqwest_certificate = Certificate::from_der(self.server_cert.cert.der())
+                .context("building reqwest client")?;
 
             Ok(reqwest::Client::builder().add_root_certificate(reqwest_certificate))
         }
@@ -387,17 +384,15 @@ mod tests {
 
     fn https_config(
         ttd: &TempTedgeDir,
-        server_cert: &rcgen::Certificate,
+        server_cert: &rcgen::CertifiedKey<rcgen::KeyPair>,
         trusted_root_cert: Option<&rcgen::Certificate>,
     ) -> anyhow::Result<TestConfig> {
-        let cert = server_cert
-            .serialize_pem()
-            .context("serializing server certificate as pem")?;
-        let key = server_cert.serialize_private_key_pem();
+        let cert = server_cert.cert.pem();
+        let key = server_cert.signing_key.serialize_pem();
 
         let root_certs = if let Some(trusted_root) = trusted_root_cert {
             let mut store = RootCertStore::empty();
-            store.add_parsable_certificates([trusted_root.serialize_der().unwrap().into()]);
+            store.add_parsable_certificates([trusted_root.der().clone()]);
             Some(store)
         } else {
             None

@@ -901,7 +901,7 @@ mod tests {
         let _ = env_logger::try_init();
 
         let certificate = rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap();
-        let cert_der = certificate.serialize_der().unwrap();
+        let cert_der = certificate.cert.der().clone();
 
         let mut server = mockito::Server::new_async().await;
         let _mock = server
@@ -1142,7 +1142,7 @@ mod tests {
     fn start_server_with_certificate(
         target_host: &mockito::Server,
         tokens: Vec<impl Into<Cow<'static, str>>>,
-        certificate: rcgen::Certificate,
+        certificate: rcgen::CertifiedKey<rcgen::KeyPair>,
         ca_dir: Option<Utf8PathBuf>,
     ) -> u16 {
         let url = target_host.url();
@@ -1154,7 +1154,7 @@ mod tests {
     fn start_proxy_to_url(
         target_host: &str,
         tokens: Vec<impl Into<Cow<'static, str>>>,
-        certificate: rcgen::Certificate,
+        certificate: rcgen::CertifiedKey<rcgen::KeyPair>,
         ca_dir: Option<Utf8PathBuf>,
     ) -> u16 {
         let jwt_retriever = IterJwtRetriever::new(tokens).shared();
@@ -1170,8 +1170,8 @@ mod tests {
                 .as_ref()
                 .map(|dir| axum_tls::read_trust_store(dir).unwrap());
             let config = axum_tls::ssl_config(
-                vec![certificate.serialize_der().unwrap().into()],
-                PrivateKeyDer::from_pem_slice(certificate.serialize_private_key_pem().as_bytes())
+                vec![certificate.cert.der().clone()],
+                PrivateKeyDer::from_pem_slice(certificate.signing_key.serialize_pem().as_bytes())
                     .unwrap(),
                 trust_store,
             )
