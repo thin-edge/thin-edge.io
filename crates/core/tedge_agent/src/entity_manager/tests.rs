@@ -143,6 +143,7 @@ async fn delete_entity_clears_retained_data() {
         "te/device/child0///twin/+",
         "te/device/child0///cmd/+/+",
         "te/device/child0///cmd/+",
+        "te/device/child0///status/health",
     ];
     let mut topic_filter = TopicFilter::empty();
     for topic in expected_topics {
@@ -155,24 +156,18 @@ async fn delete_entity_clears_retained_data() {
     // Assert that all retained messages for the entity are cleared,
     // excluding the non-retained `temp` measurement and `temp_change` event
     mqtt_box
-        .assert_received([
-            MqttRequest::Publish(MqttMessage::from(("te/device/child0//", "")).with_retain()),
-            MqttRequest::Publish(
+        .assert_received_unordered(
+            [
                 MqttMessage::from(("te/device/child0///twin/x", "")).with_retain(),
-            ),
-            MqttRequest::Publish(
                 MqttMessage::from(("te/device/child0///twin/y", "")).with_retain(),
-            ),
-            MqttRequest::Publish(
                 MqttMessage::from(("te/device/child0///a/high_temp", "")).with_retain(),
-            ),
-            MqttRequest::Publish(
                 MqttMessage::from(("te/device/child0///cmd/restart", "")).with_retain(),
-            ),
-            MqttRequest::Publish(
                 MqttMessage::from(("te/device/child0///cmd/restart/123", "")).with_retain(),
-            ),
-        ])
+                MqttMessage::from(("te/device/child0///status/health", "")).with_retain(),
+                MqttMessage::from(("te/device/child0//", "")).with_retain(),
+            ]
+            .map(MqttRequest::Publish),
+        )
         .await;
 }
 
@@ -217,6 +212,7 @@ async fn delete_entity_tree_clears_entities_bottom_up() {
         "te/device/child0///twin/+",
         "te/device/child0///cmd/+/+",
         "te/device/child0///cmd/+",
+        "te/device/child0///status/health",
         "te/device/child00///m/+/meta",
         "te/device/child00///e/+/meta",
         "te/device/child00///a/+/meta",
@@ -224,6 +220,7 @@ async fn delete_entity_tree_clears_entities_bottom_up() {
         "te/device/child00///twin/+",
         "te/device/child00///cmd/+/+",
         "te/device/child00///cmd/+",
+        "te/device/child00///status/health",
         "te/device/child000///m/+/meta",
         "te/device/child000///e/+/meta",
         "te/device/child000///a/+/meta",
@@ -231,6 +228,7 @@ async fn delete_entity_tree_clears_entities_bottom_up() {
         "te/device/child000///twin/+",
         "te/device/child000///cmd/+/+",
         "te/device/child000///cmd/+",
+        "te/device/child000///status/health",
         "te/device/child000/service/service0/m/+/meta",
         "te/device/child000/service/service0/e/+/meta",
         "te/device/child000/service/service0/a/+/meta",
@@ -238,6 +236,7 @@ async fn delete_entity_tree_clears_entities_bottom_up() {
         "te/device/child000/service/service0/twin/+",
         "te/device/child000/service/service0/cmd/+/+",
         "te/device/child000/service/service0/cmd/+",
+        "te/device/child000/service/service0/status/health",
     ];
     let mut topic_filter = TopicFilter::empty();
     for topic in expected_topics {
@@ -260,7 +259,7 @@ async fn delete_entity_tree_clears_entities_bottom_up() {
 
 #[tokio::test]
 async fn clear_entity_twin_data() {
-    let (mut entity_store, _mqtt_box, _mqtt_sender) = entity::server("device-under-test");
+    let (mut entity_store, _mqtt_box) = entity::server("device-under-test");
 
     entity_store
         .process_mqtt_message(MqttMessage::from(("te/device/main///twin/x", "9")).with_retain())
