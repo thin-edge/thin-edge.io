@@ -15,6 +15,7 @@ use mqtt_channel::SubscriberOps;
 pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
 use std::convert::Infallible;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 use tedge_actors::fan_in_message_type;
@@ -51,6 +52,14 @@ pub struct MqttActorBuilder {
     trie: TrieService,
     current_id: usize,
     subscription_diff: SubscriptionDiff,
+    dynamic_connect_sender: mpsc::Sender<(
+        TrieInsertRequest,
+        Box<dyn CloneSender<MqttMessage> + 'static>,
+    )>,
+    dynamic_connect_receiver: mpsc::Receiver<(
+        TrieInsertRequest,
+        Box<dyn CloneSender<MqttMessage> + 'static>,
+    )>,
 }
 
 impl MqttRequest {
@@ -173,6 +182,32 @@ impl From<MqttMessage> for MqttRequest {
     }
 }
 
+#[derive(Clone)]
+pub struct DynamicMqttClientHandle {
+    current_id: Arc<tokio::sync::Mutex<usize>>,
+    tx: mpsc::Sender<(
+        TrieInsertRequest,
+        Box<dyn CloneSender<MqttMessage> + 'static>,
+    )>,
+}
+
+impl DynamicMqttClientHandle {
+    pub async fn connect_sink_dynamic(
+        &mut self,
+        topics: TopicFilter,
+        peer: &impl MessageSink<MqttMessage>,
+    ) -> ClientId {
+        let mut current_id = self.current_id.lock().await;
+        let client_id = ClientId(*current_id);
+        self.tx
+            .send((TrieInsertRequest { client_id, topics }, peer.get_sender()))
+            .await
+            .unwrap();
+        *current_id += 1;
+        client_id
+    }
+}
+
 impl InputCombiner {
     pub fn close_input(&mut self) {
         self.request_receiver.close();
@@ -212,6 +247,7 @@ impl MqttActorBuilder {
     pub fn new(config: mqtt_channel::Config) -> Self {
         let (request_sender, request_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
+        let (dynamic_connect_sender, dynamic_connect_receiver) = mpsc::channel(10);
         let trie = TrieService::new(MqtTrie::default());
         let input_receiver = InputCombiner {
             signal_receiver,
@@ -227,6 +263,8 @@ impl MqttActorBuilder {
             trie,
             subscription_diff: SubscriptionDiff::empty(),
             current_id: 0,
+            dynamic_connect_sender,
+            dynamic_connect_receiver,
         }
     }
 
@@ -249,6 +287,11 @@ impl MqttActorBuilder {
             self.input_receiver,
             self.subscriber_addresses,
             self.trie.builder(),
+            DynamicMqttClientHandle {
+                current_id: Arc::new(tokio::sync::Mutex::new(self.current_id)),
+                tx: self.dynamic_connect_sender,
+            },
+            self.dynamic_connect_receiver,
         )
     }
 }
@@ -320,6 +363,11 @@ pub struct ClientId(pub usize);
 pub struct ClientId(usize);
 
 type MatchRequest = String;
+
+struct TrieInsertRequest {
+    client_id: ClientId,
+    topics: TopicFilter,
+}
 
 fan_in_message_type!(TrieRequest[SubscriptionRequest, MatchRequest]: Clone, Debug);
 
@@ -401,13 +449,24 @@ pub struct ToPeers {
 }
 
 impl FromPeers {
+    async fn try_recv(
+        &mut self,
+        rx_to_peers: &mut mpsc::UnboundedReceiver<MqttRequest>,
+    ) -> Result<Option<MqttRequest>, RuntimeRequest> {
+        tokio::select! {
+            msg = self.input_receiver.try_recv() => msg,
+            msg = rx_to_peers.next() => Ok(msg),
+        }
+    }
+
     async fn relay_messages_to(
         &mut self,
         outgoing_mqtt: &mut mpsc::UnboundedSender<MqttMessage>,
         tx_to_peers: &mut mpsc::UnboundedSender<(ClientId, MqttMessage)>,
         client: impl SubscriberOps + Clone + Send + 'static,
+        rx_to_peers: &mut mpsc::UnboundedReceiver<MqttRequest>,
     ) -> Result<(), RuntimeError> {
-        while let Ok(Some(message)) = self.try_recv().await {
+        while let Ok(Some(message)) = self.try_recv(rx_to_peers).await {
             match message {
                 MqttRequest::Publish(message) => {
                     tracing::debug!(target: "MQTT pub", "{message}");
@@ -523,6 +582,11 @@ impl ToPeers {
         mut self,
         incoming_mqtt: &mut mpsc::UnboundedReceiver<MqttMessage>,
         rx_from_peers: &mut mpsc::UnboundedReceiver<(ClientId, MqttMessage)>,
+        dynamic_connection_request: &mut mpsc::Receiver<(
+            TrieInsertRequest,
+            Box<dyn CloneSender<MqttMessage> + 'static>,
+        )>,
+        tx_from_peers: &mut mpsc::UnboundedSender<MqttRequest>,
     ) -> Result<(), RuntimeError> {
         loop {
             tokio::select! {
@@ -535,6 +599,20 @@ impl ToPeers {
                     let Some((client, message)) = message else { break };
                     tracing::debug!(target: "MQTT recv", "{message}");
                     self.sender_by_id(client).send(message.clone()).await?;
+                }
+                Some((insert_req, sender)) = dynamic_connection_request.next() => {
+                    self.peer_senders.push(sender);
+                    SinkExt::send(
+                        tx_from_peers,
+                        MqttRequest::Subscribe(SubscriptionRequest {
+                            diff: SubscriptionDiff {
+                                subscribe: insert_req.topics.patterns().iter().cloned().collect(),
+                                unsubscribe: <_>::default(),
+                            },
+                            client_id: insert_req.client_id,
+                        }),
+                    )
+                    .await?;
                 }
             };
         }
@@ -580,6 +658,11 @@ pub struct MqttActor {
     from_peers: FromPeers,
     to_peers: ToPeers,
     trie_service: ServerActorBuilder<TrieService, Sequential>,
+    dynamic_client_handle: DynamicMqttClientHandle,
+    dynamic_connect_receiver: mpsc::Receiver<(
+        TrieInsertRequest,
+        Box<dyn CloneSender<MqttMessage> + 'static>,
+    )>,
 }
 
 impl MqttActor {
@@ -589,6 +672,11 @@ impl MqttActor {
         input_receiver: InputCombiner,
         peer_senders: Vec<DynSender<MqttMessage>>,
         mut trie_service: ServerActorBuilder<TrieService, Sequential>,
+        dynamic_client_handle: DynamicMqttClientHandle,
+        dynamic_connect_receiver: mpsc::Receiver<(
+            TrieInsertRequest,
+            Box<dyn CloneSender<MqttMessage> + 'static>,
+        )>,
     ) -> Self {
         MqttActor {
             mqtt_config,
@@ -602,7 +690,13 @@ impl MqttActor {
                 subscriptions: ClientMessageBox::new(&mut trie_service),
             },
             trie_service,
+            dynamic_client_handle,
+            dynamic_connect_receiver,
         }
+    }
+
+    pub fn dynamic_client_handle(&self) -> DynamicMqttClientHandle {
+        self.dynamic_client_handle.clone()
     }
 }
 
@@ -623,6 +717,7 @@ impl Actor for MqttActor {
             }
         };
         let (mut to_peer, mut from_peer) = mpsc::unbounded();
+        let (mut to_from_peer, mut from_to_peer) = mpsc::unbounded();
 
         tokio::spawn(async move { self.trie_service.run().await });
 
@@ -631,9 +726,14 @@ impl Actor for MqttActor {
                 &mut mqtt_client.published,
                 &mut to_peer,
                 mqtt_client.subscriptions,
+                &mut from_to_peer,
             ),
-            self.to_peers
-                .relay_messages_from(&mut mqtt_client.received, &mut from_peer),
+            self.to_peers.relay_messages_from(
+                &mut mqtt_client.received,
+                &mut from_peer,
+                &mut self.dynamic_connect_receiver,
+                &mut to_from_peer,
+            ),
         )
         .await
     }
@@ -762,6 +862,124 @@ mod unit_tests {
         actor.close().await;
     }
 
+    #[tokio::test]
+    async fn publishes_messages_to_dynamically_subscribed_clients() {
+        let mut actor = MqttActorTest::new(&[]);
+
+        let client_id = actor
+            .connect_dynamic(TopicFilter::new_unchecked("b/c"))
+            .await;
+
+        actor
+            .subscribe_client
+            .assert_subscribed_to(["b/c".into()])
+            .await;
+
+        actor.receive("b/c", "test message").await;
+
+        assert_eq!(
+            actor.next_message_for(client_id).await,
+            MqttMessage::new(&Topic::new("b/c").unwrap(), "test message")
+        );
+
+        actor.close().await;
+    }
+
+    #[tokio::test]
+    async fn copes_with_dynamic_connection_handle_closing() {
+        // This shouldn't ever happen in practice, but the initial
+        // implementation went into a hard loop if the channel closed, so if
+        // this situation were to arise, it would have been catastrophic
+        let mut actor = MqttActorTest::new(&[]);
+
+        let client_id = actor
+            .connect_dynamic(TopicFilter::new_unchecked("b/c"))
+            .await;
+
+        // As explained above, this shouldn't possible with the public API,
+        // hence digging into the `DynamicMqttClientHandle` itself
+        actor.dyn_connect.tx.close_channel();
+
+        actor
+            .subscribe_client
+            .assert_subscribed_to(["b/c".into()])
+            .await;
+
+        actor.receive("b/c", "test message").await;
+
+        assert_eq!(
+            actor.next_message_for(client_id).await,
+            MqttMessage::new(&Topic::new("b/c").unwrap(), "test message")
+        );
+
+        actor.close().await;
+    }
+
+    #[tokio::test]
+    async fn publishes_messages_only_to_subscribed_dynamic_client() {
+        let mut actor = MqttActorTest::new(&[]);
+
+        let client_id = actor
+            .connect_dynamic(TopicFilter::new_unchecked("a/b"))
+            .await;
+        let client_id_2 = actor
+            .connect_dynamic(TopicFilter::new_unchecked("b/c"))
+            .await;
+
+        actor
+            .subscribe_client
+            .assert_subscribed_to(["a/b".into()])
+            .await;
+        actor
+            .subscribe_client
+            .assert_subscribed_to(["b/c".into()])
+            .await;
+
+        actor.receive("b/c", "test message").await;
+
+        assert_eq!(
+            actor.next_message_for(client_id_2).await,
+            MqttMessage::new(&Topic::new("b/c").unwrap(), "test message")
+        );
+        assert!(actor
+            .sent_to_clients
+            .get_mut(&client_id)
+            .unwrap()
+            .try_next()
+            .is_err());
+
+        actor.close().await;
+    }
+
+    #[tokio::test]
+    async fn publishes_messages_separately_to_dynamic_and_non_dynamic_clients() {
+        let mut actor = MqttActorTest::new(&[("a/b", 0)]);
+
+        let static_id = 0;
+        let dynamic_id = actor
+            .connect_dynamic(TopicFilter::new_unchecked("b/c"))
+            .await;
+
+        actor
+            .subscribe_client
+            .assert_subscribed_to(["b/c".into()])
+            .await;
+
+        actor.receive("a/b", "test message").await;
+        actor.receive("b/c", "test message").await;
+
+        assert_eq!(
+            actor.next_message_for(static_id).await,
+            MqttMessage::new(&Topic::new("a/b").unwrap(), "test message")
+        );
+        assert_eq!(
+            actor.next_message_for(dynamic_id).await,
+            MqttMessage::new(&Topic::new("b/c").unwrap(), "test message")
+        );
+
+        actor.close().await;
+    }
+
     struct MqttActorTest {
         subscribe_client: MockSubscriberOps,
         req_tx: mpsc::Sender<MqttRequest>,
@@ -771,6 +989,7 @@ mod unit_tests {
         from_peers: Option<tokio::task::JoinHandle<Result<(), RuntimeError>>>,
         to_peers: Option<tokio::task::JoinHandle<Result<(), RuntimeError>>>,
         waited: bool,
+        dyn_connect: DynamicMqttClientHandle,
     }
 
     impl Drop for MqttActorTest {
@@ -815,17 +1034,25 @@ mod unit_tests {
             tokio::spawn(async move { ts.build().run().await });
 
             let (mut tx, mut rx) = mpsc::unbounded();
+            let (mut tx2, mut rx2) = mpsc::unbounded();
+            let (dyn_connect_tx, mut dyn_connect_rx) = mpsc::channel(10);
+
             let subscribe_client = MockSubscriberOps::default();
             let from_peers = {
                 let client = subscribe_client.clone();
                 tokio::spawn(async move {
-                    fp.relay_messages_to(&mut outgoing_mqtt, &mut tx, client)
+                    fp.relay_messages_to(&mut outgoing_mqtt, &mut tx, client, &mut rx2)
                         .await
                 })
             };
             let to_peers = tokio::spawn(async move {
-                tp.relay_messages_from(&mut incoming_messages, &mut rx)
-                    .await
+                tp.relay_messages_from(
+                    &mut incoming_messages,
+                    &mut rx,
+                    &mut dyn_connect_rx,
+                    &mut tx2,
+                )
+                .await
             });
 
             Self {
@@ -837,7 +1064,31 @@ mod unit_tests {
                 from_peers: Some(from_peers),
                 to_peers: Some(to_peers),
                 waited: false,
+                dyn_connect: DynamicMqttClientHandle {
+                    current_id: Arc::new(tokio::sync::Mutex::new(
+                        max_client_id.map_or(0, |&max| max + 1),
+                    )),
+                    tx: dyn_connect_tx,
+                },
             }
+        }
+
+        pub async fn connect_dynamic(&mut self, topics: TopicFilter) -> usize {
+            struct ChannelSink(mpsc::Sender<MqttMessage>);
+
+            impl MessageSink<MqttMessage> for ChannelSink {
+                fn get_sender(&self) -> DynSender<MqttMessage> {
+                    Box::new(self.0.clone())
+                }
+            }
+
+            let (tx, rx) = mpsc::channel(10);
+            let dyn_client_id = self
+                .dyn_connect
+                .connect_sink_dynamic(topics, &ChannelSink(tx))
+                .await;
+            self.sent_to_clients.insert(dyn_client_id.0, rx);
+            dyn_client_id.0
         }
 
         /// Closes the channels associated with this actor and waits for both
