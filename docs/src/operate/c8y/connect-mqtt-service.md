@@ -15,7 +15,7 @@ import BrowserWindow from '@site/src/components/BrowserWindow';
 
 You can customize the documentation and commands shown on this page by providing relevant settings which will be reflected in the instructions. It makes it even easier to explore and use %%te%%.
 
-<UserContextForm settings="DEVICE_ID,C8Y_URL,C8Y_TENANT_ID,C8Y_USERNAME,C8Y_PASSWORD" />
+<UserContextForm settings="DEVICE_ID,C8Y_URL,C8Y_TENANT_ID,C8Y_USER,C8Y_PASSWORD" />
 
 The user context will be persisted in your web browser's local storage.
 :::
@@ -93,7 +93,7 @@ and subscribe to the desired topic:
 <UserContext>
 
 ```sh
-mosquitto_sub -d -v -h $C8Y_URL -p 2883 -i test-client-123 -u $C8Y_TENANT_ID/$C8Y_USERNAME -P $C8Y_PASSWORD -t sub/topic
+mosquitto_sub -d -v -h $C8Y_URL -p 2883 -i test-client-123 -u $C8Y_TENANT_ID/$C8Y_USER -P $C8Y_PASSWORD -t sub/topic
 ```
 
 </UserContext>
