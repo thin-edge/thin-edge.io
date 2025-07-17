@@ -50,7 +50,10 @@ the ones used to connect to the core MQTT endpoint.
    :::note
    Though you're setting the `c8y.url` config, the `c8y.mqtt_service.url` config is used under-the-hood for the connection,
    as this config is derived from the `c8y.mqtt` config, which is further derived from `c8y.url`, by default.
-   If the MQTT service host is different from the one specified in `c8y.url` or `c8y.mqtt`, set `c8y.mqtt_service.url` explicitly.
+   For example, when `c8y.url` is `example.cumulocity.com`, `c8y.mqtt` would be `example.cumulocity.com:8883`
+   and `c8y.mqtt_service.url` would be `example.cumulocity.com:9883`.
+   If the MQTT service url is different from the one that would be derived from `c8y.url` or `c8y.mqtt`,
+   set`c8y.mqtt_service.url` explicitly.
    :::
 
 1. If you're using device certificates to connect to Cumulocity, set the tenant id (skip this when using username/password):
