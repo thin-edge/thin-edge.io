@@ -47,6 +47,12 @@ the ones used to connect to the core MQTT endpoint.
    
    </UserContext>
 
+   :::note
+   Though you're setting the `c8y.url` config, the `c8y.mqtt_service.url` config is used under-the-hood for the connection,
+   as this config is derived from the `c8y.mqtt` config, which is further derived from `c8y.url`, by default.
+   If the MQTT service host is different from the one specified in `c8y.url` or `c8y.mqtt`, set `c8y.mqtt_service.url` explicitly.
+   :::
+
 1. If you're using device certificates to connect to Cumulocity, set the tenant id (skip this when using username/password):
 
    <UserContext>
@@ -93,7 +99,7 @@ and subscribe to the desired topic:
 <UserContext>
 
 ```sh
-mosquitto_sub -d -v -h $C8Y_URL -p 2883 -i test-client-123 -u $C8Y_TENANT_ID/$C8Y_USER -P $C8Y_PASSWORD -t sub/topic
+mosquitto_sub -d -v -h $C8Y_URL -p 2883 -i test-client-123 -u $C8Y_TENANT_ID/$C8Y_USER -P $C8Y_PASSWORD -t test/topic
 ```
 
 </UserContext>
