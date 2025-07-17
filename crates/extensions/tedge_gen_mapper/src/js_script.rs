@@ -198,6 +198,7 @@ impl TryFrom<JsonValue> for Vec<Message> {
             serde_json::Value::Object(map) => {
                 Message::try_from(serde_json::Value::Object(map)).map(|message| vec![message])
             }
+            serde_json::Value::Null => Ok(vec![]),
             _ => Err(
                 anyhow::anyhow!("Flow scripts are expected to return an array of messages").into(),
             ),
@@ -312,9 +313,7 @@ mod tests {
     #[tokio::test]
     async fn identity_script() {
         let js = "export function process(t,msg) { return [msg]; };";
-        let mut runtime = JsRuntime::try_new().await.unwrap();
-        let script = JsScript::new("id.toml".into(), 1, "id.js".into());
-        runtime.load_js(script.module_name(), js).await.unwrap();
+        let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         let output = input.clone();
@@ -328,12 +327,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn identity_script_no_array() {
+        let js = "export function process(t,msg) { return msg; };";
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("te/main/device///m/", "hello world");
+        let output = input.clone();
+        assert_eq!(
+            script
+                .process(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn script_returning_null() {
+        let js = "export function process(t,msg) { return null; };";
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("te/main/device///m/", "hello world");
+        assert_eq!(
+            script
+                .process(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![]
+        );
+    }
+
+    #[tokio::test]
+    async fn script_returning_nothing() {
+        let js = "export function process(t,msg) { return; };";
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("te/main/device///m/", "hello world");
+        assert_eq!(
+            script
+                .process(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![]
+        );
+    }
+
+    #[tokio::test]
     async fn error_script() {
         let js = r#"export function process(t,msg) { throw new Error("Cannot process that message"); };"#;
-        let mut runtime = JsRuntime::try_new().await.unwrap();
-        let mut script = JsScript::new("err.toml".into(), 1, "err.js".into());
-        script.no_js_process = false;
-        runtime.load_js(script.module_name(), js).await.unwrap();
+        let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         let error = script
@@ -367,10 +409,7 @@ export function process (timestamp, message, config) {
     }]
 }
         "#;
-        let mut runtime = JsRuntime::try_new().await.unwrap();
-        let mut script = JsScript::new("collectd.toml".into(), 1, "collectd.js".into());
-        script.no_js_process = false;
-        runtime.load_js(script.module_name(), js).await.unwrap();
+        let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new(
             "collectd/h/memory/percent-used",
@@ -387,5 +426,13 @@ export function process (timestamp, message, config) {
                 .unwrap(),
             vec![output]
         );
+    }
+
+    async fn runtime_with(js: &str) -> (JsRuntime, JsScript) {
+        let mut runtime = JsRuntime::try_new().await.unwrap();
+        let mut script = JsScript::new("toml".into(), 1, "js".into());
+        runtime.load_js(script.module_name(), js).await.unwrap();
+        script.no_js_process = false;
+        (runtime, script)
     }
 }
