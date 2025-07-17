@@ -220,7 +220,7 @@ impl<'js> IntoJs<'js> for &JsonValue {
     }
 }
 
-impl<'a, 'js> IntoJs<'js> for JsonValueRef<'a> {
+impl<'js> IntoJs<'js> for JsonValueRef<'_> {
     fn into_js(self, ctx: &Ctx<'js>) -> rquickjs::Result<Value<'js>> {
         match self.0 {
             serde_json::Value::Null => Ok(Value::new_null(ctx.clone())),
@@ -426,6 +426,53 @@ export function process (timestamp, message, config) {
                 .unwrap(),
             vec![output]
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "FIXME: scripts must be cancelled if running too long"]
+    async fn while_loop() {
+        let js = r#"export function process(t,msg) { while(true); };"#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("topic", "payload");
+        let error = script
+            .process(&runtime, &DateTime::now(), &input)
+            .await
+            .unwrap_err();
+        eprintln!("{:?}", error);
+        assert!(error
+            .to_string()
+            .contains("Maximum processing time exceeded"));
+    }
+
+    #[tokio::test]
+    async fn memory_eager_loop() {
+        let js = r#"export function process(t,msg) { var s = "foo"; while(true) { s += s; }; };"#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("topic", "payload");
+        let error = script
+            .process(&runtime, &DateTime::now(), &input)
+            .await
+            .unwrap_err();
+        eprintln!("{:?}", error);
+        assert!(error.to_string().contains("out of memory"));
+    }
+
+    #[tokio::test]
+    async fn stack_eager_loop() {
+        let js = r#"export function process(t,msg) { return process(t,msg); };"#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("topic", "payload");
+        let error = script
+            .process(&runtime, &DateTime::now(), &input)
+            .await
+            .unwrap_err();
+        eprintln!("{:?}", error);
+        assert!(error
+            .to_string()
+            .contains("Maximum call stack size exceeded"));
     }
 
     async fn runtime_with(js: &str) -> (JsRuntime, JsScript) {
