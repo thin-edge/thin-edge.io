@@ -780,7 +780,12 @@ pub(crate) fn bridge_health_topic(
     prefix: &TopicPrefix,
     tedge_config: &TEdgeConfig,
 ) -> Result<Topic, TopicIdError> {
-    let bridge_name = format!("tedge-mapper-bridge-{prefix}");
+    let bridge_name = if tedge_config.mqtt.bridge.built_in {
+        format!("tedge-mapper-bridge-{prefix}")
+    } else {
+        format!("mosquitto-{prefix}-bridge")
+    };
+
     let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
     let device_topic_id = tedge_config.mqtt.device_topic_id.parse::<EntityTopicId>()?;
     Ok(service_health_topic(
@@ -791,9 +796,19 @@ pub(crate) fn bridge_health_topic(
 }
 
 #[cfg(any(feature = "aws", feature = "c8y"))]
-pub(crate) fn is_bridge_health_up_message(message: &rumqttc::Publish, health_topic: &str) -> bool {
+pub(crate) fn is_bridge_health_up_message(
+    message: &rumqttc::Publish,
+    health_topic: &str,
+    built_in_bridge: bool,
+) -> bool {
     message.topic == health_topic
-        && std::str::from_utf8(&message.payload).is_ok_and(|msg| msg.contains("\"up\""))
+        && std::str::from_utf8(&message.payload).is_ok_and(|msg| {
+            if built_in_bridge {
+                msg.contains("\"up\"")
+            } else {
+                msg.contains("1")
+            }
+        })
 }
 
 impl ConnectCommand {
@@ -1144,21 +1159,21 @@ mod tests {
         fn health_message_up_is_detected_successfully() {
             let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
             let message = test_message(health_topic, "up");
-            assert!(is_bridge_health_up_message(&message, health_topic))
+            assert!(is_bridge_health_up_message(&message, health_topic, true))
         }
 
         #[test]
         fn message_on_wrong_topic_is_ignored() {
             let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
             let message = test_message("a/different/topic", "up");
-            assert!(!is_bridge_health_up_message(&message, health_topic))
+            assert!(!is_bridge_health_up_message(&message, health_topic, true))
         }
 
         #[test]
         fn health_message_down_is_ignored() {
             let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
             let message = test_message(health_topic, "down");
-            assert!(!is_bridge_health_up_message(&message, health_topic))
+            assert!(!is_bridge_health_up_message(&message, health_topic, true))
         }
 
         fn test_message(topic: &str, status: &str) -> rumqttc::Publish {
