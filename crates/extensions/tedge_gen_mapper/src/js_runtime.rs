@@ -38,9 +38,9 @@ impl JsRuntime {
         let exports = self.load_file(script.module_name(), script.path()).await?;
         for export in exports {
             match export {
-                "process" => script.no_js_process = false,
-                "update_config" => script.no_js_update_config = false,
-                "tick" => script.no_js_tick = false,
+                "onMessage" => script.no_js_on_message_fun = false,
+                "onConfigUpdate" => script.no_js_on_config_update_fun = false,
+                "onInterval" => script.no_js_on_interval_fun = false,
                 _ => (),
             }
         }
@@ -64,7 +64,7 @@ impl JsRuntime {
     ) -> Result<Vec<&'static str>, LoadError> {
         let (sender, receiver) = oneshot::channel();
         let source = source.into();
-        let imports = vec!["process", "update_config", "tick"];
+        let imports = vec!["onMessage", "onConfigUpdate", "onInterval"];
         self.send(
             receiver,
             JsRequest::LoadModule {

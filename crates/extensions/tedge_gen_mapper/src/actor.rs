@@ -36,12 +36,12 @@ impl Actor for GenMapper {
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    self.tick().await?;
+                    self.on_interval().await?;
                 }
                 message = self.messages.recv() => {
                     match message {
                         Some(InputMessage::MqttMessage(message)) => match Message::try_from(message) {
-                            Ok(message) => self.process(message).await?,
+                            Ok(message) => self.on_message(message).await?,
                             Err(err) => {
                                 error!(target: "gen-mapper", "Cannot process message: {err}");
                             }
@@ -102,9 +102,9 @@ impl GenMapper {
         diff
     }
 
-    async fn process(&mut self, message: Message) -> Result<(), RuntimeError> {
+    async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
-        for (flow_id, flow_messages) in self.processor.process(&timestamp, &message).await {
+        for (flow_id, flow_messages) in self.processor.on_message(&timestamp, &message).await {
             match flow_messages {
                 Ok(messages) => {
                     for message in messages {
@@ -129,13 +129,13 @@ impl GenMapper {
         Ok(())
     }
 
-    async fn tick(&mut self) -> Result<(), RuntimeError> {
+    async fn on_interval(&mut self) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
         if timestamp.seconds % 300 == 0 {
             self.processor.dump_memory_stats().await;
             self.processor.dump_processing_stats().await;
         }
-        for (flow_id, flow_messages) in self.processor.tick(&timestamp).await {
+        for (flow_id, flow_messages) in self.processor.on_interval(&timestamp).await {
             match flow_messages {
                 Ok(messages) => {
                     for message in messages {

@@ -15,7 +15,7 @@ class State {
 }
 
 
-export function process (timestamp, message, config) {
+export function onMessage (timestamp, message, config) {
     State.total += 1
     State.batch[0] += 1
     if (State.open) {
@@ -46,7 +46,7 @@ export function process (timestamp, message, config) {
 }
 
 
-export function tick(timestamp, config) {
+export function onInterval(timestamp, config) {
     let max_batch_count = config.tick_count || 10
     let new_batch_count = State.batch.unshift(0)
     if (new_batch_count > max_batch_count) {

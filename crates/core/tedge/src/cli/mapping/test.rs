@@ -57,7 +57,7 @@ impl TestCommand {
         timestamp: &DateTime,
     ) {
         processor
-            .process(timestamp, message)
+            .on_message(timestamp, message)
             .await
             .into_iter()
             .map(|(_, v)| v)
@@ -66,7 +66,7 @@ impl TestCommand {
 
     async fn tick(&self, processor: &mut MessageProcessor, timestamp: &DateTime) {
         processor
-            .tick(timestamp)
+            .on_interval(timestamp)
             .await
             .into_iter()
             .map(|(_, v)| v)

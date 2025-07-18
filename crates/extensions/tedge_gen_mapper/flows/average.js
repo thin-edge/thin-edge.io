@@ -7,7 +7,7 @@ class State {
     static agg_for_topic = {}
 }
 
-export function process (timestamp, message) {
+export function onMessage (timestamp, message) {
     let topic = message.topic
     let payload = JSON.parse(message.payload)
     let agg_payload = State.agg_for_topic[topic]
@@ -74,7 +74,7 @@ export function process (timestamp, message) {
     return []
 }
 
-export function tick() {
+export function onInterval() {
     let messages = []
 
     for (let [topic, agg] of Object.entries(State.agg_for_topic)) {

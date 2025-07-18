@@ -12,9 +12,9 @@ pub struct Counter {
 pub enum Dimension {
     Runtime,
     Flow(String),
-    Process(String),
-    Tick(String),
-    Update(String),
+    OnMessage(String),
+    OnInterval(String),
+    OnConfigUpdate(String),
 }
 
 pub enum Sample {
@@ -38,24 +38,24 @@ pub struct DurationStats {
 }
 
 impl Counter {
-    pub fn runtime_process_start(&mut self) -> Instant {
+    pub fn runtime_on_message_start(&mut self) -> Instant {
         self.add(Dimension::Runtime, Sample::MessageIn);
         Instant::now()
     }
 
-    pub fn runtime_process_done(&mut self, started_at: Instant) {
+    pub fn runtime_on_message_done(&mut self, started_at: Instant) {
         self.add(
             Dimension::Runtime,
             Sample::ProcessingTime(started_at.elapsed()),
         );
     }
 
-    pub fn flow_process_start(&mut self, flow_id: &str) -> Instant {
+    pub fn flow_on_message_start(&mut self, flow_id: &str) -> Instant {
         self.add(Dimension::Flow(flow_id.to_owned()), Sample::MessageIn);
         Instant::now()
     }
 
-    pub fn flow_process_done(&mut self, flow_id: &str, started_at: Instant, count: usize) {
+    pub fn flow_on_message_done(&mut self, flow_id: &str, started_at: Instant, count: usize) {
         self.add(Dimension::Runtime, Sample::MessageOut(count));
         self.add(
             Dimension::Flow(flow_id.to_owned()),
@@ -67,16 +67,16 @@ impl Counter {
         );
     }
 
-    pub fn flow_process_failed(&mut self, flow_id: &str) {
+    pub fn flow_on_message_failed(&mut self, flow_id: &str) {
         self.add(Dimension::Runtime, Sample::ErrorRaised);
         self.add(Dimension::Flow(flow_id.to_owned()), Sample::ErrorRaised);
     }
 
-    pub fn flow_tick_start(&mut self, _flow_id: &str) -> Instant {
+    pub fn flow_on_interval_start(&mut self, _flow_id: &str) -> Instant {
         Instant::now()
     }
 
-    pub fn flow_tick_done(&mut self, flow_id: &str, _started_at: Instant, count: usize) {
+    pub fn flow_on_interval_done(&mut self, flow_id: &str, _started_at: Instant, count: usize) {
         self.add(Dimension::Runtime, Sample::MessageOut(count));
         self.add(
             Dimension::Flow(flow_id.to_owned()),
@@ -84,7 +84,7 @@ impl Counter {
         );
     }
 
-    pub fn flow_tick_failed(&mut self, flow_id: &str) {
+    pub fn flow_on_interval_failed(&mut self, flow_id: &str) {
         self.add(Dimension::Runtime, Sample::ErrorRaised);
         self.add(Dimension::Flow(flow_id.to_owned()), Sample::ErrorRaised);
     }
@@ -175,9 +175,9 @@ impl Display for Dimension {
         match self {
             Dimension::Runtime => write!(f, "runtime"),
             Dimension::Flow(toml) => write!(f, "flow {toml}"),
-            Dimension::Process(js) => write!(f, "process step {js}"),
-            Dimension::Tick(js) => write!(f, "tick step {js}"),
-            Dimension::Update(js) => write!(f, "update_config step {js}"),
+            Dimension::OnMessage(js) => write!(f, "onMessage step {js}"),
+            Dimension::OnInterval(js) => write!(f, "onInterval step {js}"),
+            Dimension::OnConfigUpdate(js) => write!(f, "onConfigUpdate step {js}"),
         }
     }
 }
@@ -185,9 +185,9 @@ impl Display for Dimension {
 impl Dimension {
     pub fn function_call(js: &str, f: &str) -> Option<Dimension> {
         match f {
-            "process" => Some(Dimension::Process(js.to_owned())),
-            "tick" => Some(Dimension::Tick(js.to_owned())),
-            "update_config" => Some(Dimension::Update(js.to_owned())),
+            "onMessage" => Some(Dimension::OnMessage(js.to_owned())),
+            "onInterval" => Some(Dimension::OnInterval(js.to_owned())),
+            "onConfigUpdate" => Some(Dimension::OnConfigUpdate(js.to_owned())),
             _ => None,
         }
     }

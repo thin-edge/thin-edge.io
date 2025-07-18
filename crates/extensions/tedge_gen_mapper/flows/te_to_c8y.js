@@ -42,7 +42,7 @@
 ///     }
 /// }
 /// ```
-export function process(t, message, config) {
+export function onMessage(t, message, config) {
   let topic_parts = message.topic.split( '/')
   let type = topic_parts[6] || "ThinEdgeMeasurement"
   let payload = JSON.parse(message.payload)
@@ -104,7 +104,7 @@ export function process(t, message, config) {
 /// [te/device/main///m/example] { "temperature": { "unit": 23 }}
 /// ```
 ///
-/// will be merged by the process function into:
+/// will be merged by the onMessage function into:
 /// ```
 /// [c8y/measurement/measurements/create] {
 ///   "type": "example",
@@ -116,7 +116,7 @@ export function process(t, message, config) {
 ///   }
 /// }
 /// ```
-export function update_config(message, config) {
+export function onConfigUpdate(message, config) {
   let type = message.topic
   let metadata = JSON.parse(message.payload)
 

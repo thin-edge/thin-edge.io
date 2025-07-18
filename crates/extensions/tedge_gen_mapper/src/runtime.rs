@@ -93,39 +93,39 @@ impl MessageProcessor {
         topics
     }
 
-    pub async fn process(
+    pub async fn on_message(
         &mut self,
         timestamp: &DateTime,
         message: &Message,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
-        let started_at = self.stats.runtime_process_start();
+        let started_at = self.stats.runtime_on_message_start();
 
         let mut out_messages = vec![];
         for (flow_id, flow) in self.flows.iter_mut() {
             let flow_output = flow
-                .process(&self.js_runtime, &mut self.stats, timestamp, message)
+                .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
                 .await;
             if flow_output.is_err() {
-                self.stats.flow_process_failed(flow_id);
+                self.stats.flow_on_message_failed(flow_id);
             }
             out_messages.push((flow_id.clone(), flow_output));
         }
 
-        self.stats.runtime_process_done(started_at);
+        self.stats.runtime_on_message_done(started_at);
         out_messages
     }
 
-    pub async fn tick(
+    pub async fn on_interval(
         &mut self,
         timestamp: &DateTime,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let mut out_messages = vec![];
         for (flow_id, flow) in self.flows.iter_mut() {
             let flow_output = flow
-                .tick(&self.js_runtime, &mut self.stats, timestamp)
+                .on_interval(&self.js_runtime, &mut self.stats, timestamp)
                 .await;
             if flow_output.is_err() {
-                self.stats.flow_tick_failed(flow_id);
+                self.stats.flow_on_interval_failed(flow_id);
             }
             out_messages.push((flow_id.clone(), flow_output));
         }

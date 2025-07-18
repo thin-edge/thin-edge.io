@@ -2,12 +2,12 @@ class State {
     static batch = []
 }
 
-export function process (timestamp, message) {
+export function onMessage (timestamp, message) {
     State.batch.push(message)
     return []
 }
 
-export function tick() {
+export function onInterval() {
     let batch = State.batch
     State.batch = []
     return batch
