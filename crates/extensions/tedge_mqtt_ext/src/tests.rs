@@ -253,7 +253,9 @@ async fn dynamic_subscriptions() {
 #[tokio::test]
 async fn dynamic_subscribers_receive_retain_messages() {
     let broker = mqtt_tests::test_mqtt_broker();
-    let mqtt_config = MqttConfig::default().with_port(broker.port);
+    let mqtt_config = MqttConfig::default()
+        .with_port(broker.port)
+        .with_session_name("test");
     let mut mqtt = MqttActorBuilder::new(mqtt_config);
 
     broker
@@ -316,7 +318,9 @@ async fn dynamic_subscribers_receive_retain_messages() {
 #[tokio::test]
 async fn dynamic_subscribers_receive_retain_messages_when_upgrading_topic() {
     let broker = mqtt_tests::test_mqtt_broker();
-    let mqtt_config = MqttConfig::default().with_port(broker.port);
+    let mqtt_config = MqttConfig::default()
+        .with_port(broker.port)
+        .with_session_name("test");
     let mut mqtt = MqttActorBuilder::new(mqtt_config);
 
     broker

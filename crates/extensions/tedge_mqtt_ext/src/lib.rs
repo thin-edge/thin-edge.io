@@ -256,7 +256,11 @@ impl MqttActorBuilder {
             tracing::info!(target: "MQTT sub", "{pattern}");
         }
 
-        let mqtt_config = self.mqtt_config.clone().with_subscriptions(topic_filter);
+        let mqtt_config = self
+            .mqtt_config
+            .clone()
+            .with_no_session()
+            .with_subscriptions(topic_filter);
         MqttActor::new(
             mqtt_config,
             self.mqtt_config,
