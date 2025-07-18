@@ -18,9 +18,9 @@ pub struct JsScript {
     pub path: PathBuf,
     pub config: JsonValue,
     pub tick_every_seconds: u64,
-    pub no_js_process: bool,
-    pub no_js_update_config: bool,
-    pub no_js_tick: bool,
+    pub no_js_on_message_fun: bool,
+    pub no_js_on_config_update_fun: bool,
+    pub no_js_on_interval_fun: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -40,9 +40,9 @@ impl JsScript {
             path,
             config: JsonValue::default(),
             tick_every_seconds: 0,
-            no_js_process: true,
-            no_js_update_config: true,
-            no_js_tick: true,
+            no_js_on_message_fun: true,
+            no_js_on_config_update_fun: true,
+            no_js_on_interval_fun: true,
         }
     }
 
@@ -76,22 +76,22 @@ impl JsScript {
         format!("{}", self.path.display())
     }
 
-    /// Process a message returning zero, one or more messages
+    /// Transform an input message into zero, one or more output messages
     ///
-    /// The "process" function of the JS module is passed 3 arguments
+    /// The "onMessage" function of the JS module is passed 3 arguments
     /// - the current timestamp
     /// - the message to be transformed
-    /// - the flow step config (as configured for the flow step, possibly updated by update_config messages)
+    /// - the flow step config (as configured for the flow step, possibly updated by onConfigUpdate messages)
     ///
     /// The returned value is expected to be an array of messages.
-    pub async fn process(
+    pub async fn on_message(
         &self,
         js: &JsRuntime,
         timestamp: &DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
-        debug!(target: "MAPPING", "{}: process({timestamp:?}, {message:?})", self.module_name());
-        if self.no_js_process {
+        debug!(target: "MAPPING", "{}: onMessage({timestamp:?}, {message:?})", self.module_name());
+        if self.no_js_on_message_fun {
             return Ok(vec![message.clone()]);
         }
 
@@ -100,7 +100,7 @@ impl JsScript {
             message.clone().into(),
             self.config.clone(),
         ];
-        js.call_function(&self.module_name(), "process", input)
+        js.call_function(&self.module_name(), "onMessage", input)
             .await
             .map_err(flow::error_from_js)?
             .try_into()
@@ -108,51 +108,51 @@ impl JsScript {
 
     /// Update the flow step config using a metadata message
     ///
-    /// The "update_config" function of the JS module is passed 2 arguments
+    /// The "onConfigUpdate" function of the JS module is passed 2 arguments
     /// - the message
     /// - the current flow step config
     ///
     /// The value returned by this function is used as the updated flow step config
-    pub async fn update_config(
+    pub async fn on_config_update(
         &mut self,
         js: &JsRuntime,
         message: &Message,
     ) -> Result<(), FlowError> {
-        debug!(target: "MAPPING", "{}: update_config({message:?})", self.module_name());
-        if self.no_js_update_config {
+        debug!(target: "MAPPING", "{}: onConfigUpdate({message:?})", self.module_name());
+        if self.no_js_on_config_update_fun {
             return Ok(());
         }
 
         let input = vec![message.clone().into(), self.config.clone()];
         let config = js
-            .call_function(&self.module_name(), "update_config", input)
+            .call_function(&self.module_name(), "onConfigUpdate", input)
             .await
             .map_err(flow::error_from_js)?;
         self.config = config;
         Ok(())
     }
 
-    /// Trigger the tick function of the JS module
+    /// Trigger the onInterval function of the JS module
     ///
-    /// The "tick" function is passed 2 arguments
+    /// The "onInterval" function is passed 2 arguments
     /// - the current timestamp
     /// - the current flow step config
     ///
     /// Return zero, one or more messages
-    pub async fn tick(
+    pub async fn on_interval(
         &self,
         js: &JsRuntime,
         timestamp: &DateTime,
     ) -> Result<Vec<Message>, FlowError> {
-        if self.no_js_tick {
+        if self.no_js_on_interval_fun {
             return Ok(vec![]);
         }
         if !timestamp.tick_now(self.tick_every_seconds) {
             return Ok(vec![]);
         }
-        debug!(target: "MAPPING", "{}: tick({timestamp:?})", self.module_name());
+        debug!(target: "MAPPING", "{}: onInterval({timestamp:?})", self.module_name());
         let input = vec![timestamp.clone().into(), self.config.clone()];
-        js.call_function(&self.module_name(), "tick", input)
+        js.call_function(&self.module_name(), "onInterval", input)
             .await
             .map_err(flow::error_from_js)?
             .try_into()
@@ -312,14 +312,14 @@ mod tests {
 
     #[tokio::test]
     async fn identity_script() {
-        let js = "export function process(t,msg) { return [msg]; };";
+        let js = "export function onMessage(t,msg) { return [msg]; };";
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         let output = input.clone();
         assert_eq!(
             script
-                .process(&runtime, &DateTime::now(), &input)
+                .on_message(&runtime, &DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![output]
@@ -328,14 +328,14 @@ mod tests {
 
     #[tokio::test]
     async fn identity_script_no_array() {
-        let js = "export function process(t,msg) { return msg; };";
+        let js = "export function onMessage(t,msg) { return msg; };";
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         let output = input.clone();
         assert_eq!(
             script
-                .process(&runtime, &DateTime::now(), &input)
+                .on_message(&runtime, &DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![output]
@@ -344,13 +344,13 @@ mod tests {
 
     #[tokio::test]
     async fn script_returning_null() {
-        let js = "export function process(t,msg) { return null; };";
+        let js = "export function onMessage(t,msg) { return null; };";
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         assert_eq!(
             script
-                .process(&runtime, &DateTime::now(), &input)
+                .on_message(&runtime, &DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![]
@@ -359,13 +359,13 @@ mod tests {
 
     #[tokio::test]
     async fn script_returning_nothing() {
-        let js = "export function process(t,msg) { return; };";
+        let js = "export function onMessage(t,msg) { return; };";
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         assert_eq!(
             script
-                .process(&runtime, &DateTime::now(), &input)
+                .on_message(&runtime, &DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![]
@@ -374,12 +374,12 @@ mod tests {
 
     #[tokio::test]
     async fn error_script() {
-        let js = r#"export function process(t,msg) { throw new Error("Cannot process that message"); };"#;
+        let js = r#"export function onMessage(t,msg) { throw new Error("Cannot process that message"); };"#;
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         let error = script
-            .process(&runtime, &DateTime::now(), &input)
+            .on_message(&runtime, &DateTime::now(), &input)
             .await
             .unwrap_err();
         eprintln!("{:?}", error);
@@ -389,7 +389,7 @@ mod tests {
     #[tokio::test]
     async fn collectd_script() {
         let js = r#"
-export function process (timestamp, message, config) {
+export function onMessage(timestamp, message, config) {
     let groups = message.topic.split( '/')
     let data = message.payload.split(':')
 
@@ -421,7 +421,7 @@ export function process (timestamp, message, config) {
         );
         assert_eq!(
             script
-                .process(&runtime, &DateTime::now(), &input)
+                .on_message(&runtime, &DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![output]
@@ -431,12 +431,12 @@ export function process (timestamp, message, config) {
     #[tokio::test]
     #[ignore = "FIXME: scripts must be cancelled if running too long"]
     async fn while_loop() {
-        let js = r#"export function process(t,msg) { while(true); };"#;
+        let js = r#"export function onMessage(t,msg) { while(true); };"#;
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("topic", "payload");
         let error = script
-            .process(&runtime, &DateTime::now(), &input)
+            .on_message(&runtime, &DateTime::now(), &input)
             .await
             .unwrap_err();
         eprintln!("{:?}", error);
@@ -447,12 +447,12 @@ export function process (timestamp, message, config) {
 
     #[tokio::test]
     async fn memory_eager_loop() {
-        let js = r#"export function process(t,msg) { var s = "foo"; while(true) { s += s; }; };"#;
+        let js = r#"export function onMessage(t,msg) { var s = "foo"; while(true) { s += s; }; };"#;
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("topic", "payload");
         let error = script
-            .process(&runtime, &DateTime::now(), &input)
+            .on_message(&runtime, &DateTime::now(), &input)
             .await
             .unwrap_err();
         eprintln!("{:?}", error);
@@ -461,12 +461,12 @@ export function process (timestamp, message, config) {
 
     #[tokio::test]
     async fn stack_eager_loop() {
-        let js = r#"export function process(t,msg) { return process(t,msg); };"#;
+        let js = r#"export function onMessage(t,msg) { return onMessage(t,msg); };"#;
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("topic", "payload");
         let error = script
-            .process(&runtime, &DateTime::now(), &input)
+            .on_message(&runtime, &DateTime::now(), &input)
             .await
             .unwrap_err();
         eprintln!("{:?}", error);
@@ -479,7 +479,7 @@ export function process (timestamp, message, config) {
         let mut runtime = JsRuntime::try_new().await.unwrap();
         let mut script = JsScript::new("toml".into(), 1, "js".into());
         runtime.load_js(script.module_name(), js).await.unwrap();
-        script.no_js_process = false;
+        script.no_js_on_message_fun = false;
         (runtime, script)
     }
 }

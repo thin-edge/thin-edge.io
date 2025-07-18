@@ -1,4 +1,4 @@
-export function process(_timestamp, message, config) {
+export function onMessage(_timestamp, message, config) {
     let groups = message.topic.split('/')
     let data = message.payload.split(':')
 

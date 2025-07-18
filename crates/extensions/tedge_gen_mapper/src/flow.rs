@@ -68,7 +68,7 @@ impl Flow {
     ) -> Result<(), FlowError> {
         for step in self.steps.iter_mut() {
             if step.config_topics.accept_topic_name(&message.topic) {
-                step.script.update_config(js_runtime, message).await?
+                step.script.on_config_update(js_runtime, message).await?
             }
         }
         Ok(())
@@ -93,7 +93,7 @@ impl Flow {
             let mut transformed_messages = vec![];
             for message in messages.iter() {
                 let step_started_at = stats.flow_step_start(&js, "process");
-                let step_output = step.script.process(js_runtime, timestamp, message).await;
+                let step_output = step.script.on_message(js_runtime, timestamp, message).await;
                 match &step_output {
                     Ok(messages) => {
                         stats.flow_step_done(&js, "process", step_started_at, messages.len())
@@ -123,7 +123,7 @@ impl Flow {
             let mut transformed_messages = vec![];
             for message in messages.iter() {
                 let step_started_at = stats.flow_step_start(&js, "process");
-                let step_output = step.script.process(js_runtime, timestamp, message).await;
+                let step_output = step.script.on_message(js_runtime, timestamp, message).await;
                 match &step_output {
                     Ok(messages) => {
                         stats.flow_step_done(&js, "process", step_started_at, messages.len())
@@ -135,7 +135,7 @@ impl Flow {
 
             // Only then process the tick
             let step_started_at = stats.flow_step_start(&js, "tick");
-            let tick_output = step.script.tick(js_runtime, timestamp).await;
+            let tick_output = step.script.on_interval(js_runtime, timestamp).await;
             match &tick_output {
                 Ok(messages) => stats.flow_step_done(&js, "tick", step_started_at, messages.len()),
                 Err(_) => stats.flow_step_failed(&js, "tick"),
@@ -153,20 +153,20 @@ impl Flow {
 impl FlowStep {
     pub(crate) fn check(&self, flow: &Utf8Path) {
         let script = &self.script;
-        if script.no_js_process {
+        if script.no_js_on_message_fun {
             warn!(target: "MAPPING", "Flow script with no 'process' function: {}", script.path.display());
         }
-        if script.no_js_update_config && !self.config_topics.is_empty() {
+        if script.no_js_on_config_update_fun && !self.config_topics.is_empty() {
             warn!(target: "MAPPING", "Flow script with no 'config_update' function: {}; but configured with 'config_topics' in {flow}", script.path.display());
         }
-        if script.no_js_tick && script.tick_every_seconds != 0 {
+        if script.no_js_on_interval_fun && script.tick_every_seconds != 0 {
             warn!(target: "MAPPING", "Flow script with no 'tick' function: {}; but configured with 'tick_every_seconds' in {flow}", script.path.display());
         }
     }
 
     pub(crate) fn fix(&mut self) {
         let script = &mut self.script;
-        if !script.no_js_tick && script.tick_every_seconds == 0 {
+        if !script.no_js_on_interval_fun && script.tick_every_seconds == 0 {
             // 0 as a default is not appropriate for a script with a tick handler
             script.tick_every_seconds = 1;
         }

@@ -15,7 +15,7 @@ class State {
 }
 
 
-export function process (timestamp, message, config) {
+export function onMessage (timestamp, message, config) {
     State.total += 1
     State.batch[0] += 1
     if (State.open) {

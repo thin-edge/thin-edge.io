@@ -1,5 +1,5 @@
 // Reject any message that is too old, too new or with no timestamp
-export function process (timestamp, message, config) {
+export function onMessage (timestamp, message, config) {
     let payload = JSON.parse(message.payload)
     let msg_time = payload.time
     if (!msg_time) {

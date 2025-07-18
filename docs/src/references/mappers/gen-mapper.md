@@ -55,8 +55,8 @@ which rule how to consume, transform and produce MQTT messages.
 
 A transformation *scripts* is a JavaScript or TypeScript module that exports:
 
-- at least a function `on_message`, aimed to transform one input message into zero, one or more output messages
-- possibly a function `on_interval`, called at regular intervals to produce aggregated messages.
+- at least a function `onMessage`, aimed to transform one input message into zero, one or more output messages
+- possibly a function `onInterval`, called at regular intervals to produce aggregated messages.
 
 
 
@@ -85,8 +85,8 @@ steps = [
 
 ## POC API
 
-- A flow script has to export at least one `process` function.
-  - `process(t: Timestamp, msg: Message, config: Json) -> Vec<Message>` 
+- A flow script has to export at least one `onMessage` function.
+  - `onMessage(t: Timestamp, msg: Message, config: Json) -> Vec<Message>` 
   - This function is called for each message to be transformed
   - The arguments passed to the function are:
     - The current time as `{ seconds: u64, nanoseconds: u32 }` 
@@ -94,16 +94,16 @@ steps = [
     - The config as read from the flow config or updated by the script
   - The function is expected to return zero, one or many transformed messages `[{ topic: string, payload: string }]`
   - An exception can be thrown if the input message cannot be transformed.
-- A flow script can also export an `update_config` function
+- A flow script can also export an `onConfigUpdate` function
   - This function is called on each message received on the `meta_topics` as defined in the config.
   - The arguments are:
     - The message to be interpreted as a config update `{ topic: string, payload: string }`
     - The current config
    - The returned value (an arbitrary JSON value) is then used as the new config for the flow script.
-- A flow script can also export a `tick` function
+- A flow script can also export a `onInterval` function
   - This function is called at a regular pace with the current time and config.
   - The flow script can then return zero, one or many transformed messages
-  - By sharing an internal state between the `process` and `tick` functions,
+  - By sharing an internal state between the `onMessage` and `onInterval` functions,
     the flow script can implement aggregations over a time window.
-    When messages are received they are pushed by the `process` function into that state
-    and the final outcome is extracted by the `tick` function at the end of the time window.
+    When messages are received they are pushed by the `onMessage` function into that state
+    and the final outcome is extracted by the `onInterval` function at the end of the time window.
