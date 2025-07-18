@@ -1,0 +1,6 @@
+input_topics = ["collectd/+/+/+"]
+
+steps = [
+    { script = "collectd-to-te.js" },
+    { script = "average.js", tick_every_seconds = 10 }
+]
