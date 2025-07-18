@@ -1004,7 +1004,7 @@ mod tests {
             let subs_guard = broker.subscriptions.lock().await;
             assert!(subs_guard
                 .get(&topic_filter.path)
-                .map_or(true, |senders| senders.is_empty())); // Should be empty or removed
+                .is_none_or(|senders| senders.is_empty())); // Should be empty or removed
         }
 
         // Broker publishes a message to "test/topic"
