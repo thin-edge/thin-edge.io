@@ -771,7 +771,7 @@ impl EntityTree {
                 if filters
                     .parent
                     .as_ref()
-                    .map_or(true, |parent| parent == topic_id)
+                    .is_none_or(|parent| parent == topic_id)
                 {
                     topic_ids.extend(child_topics);
                 }
