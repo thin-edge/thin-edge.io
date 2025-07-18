@@ -122,7 +122,7 @@ jobs:
           - x86_64-apple-darwin
 
         rust_channel:
-          - "1.78"
+          - "1.85"
 
         include:
           - target: aarch64-unknown-linux-musl
