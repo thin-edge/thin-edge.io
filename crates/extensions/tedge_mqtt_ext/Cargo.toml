@@ -12,9 +12,10 @@ repository = { workspace = true }
 [features]
 # No features on by default
 default = []
-test-helpers = ["dep:assert-json-diff"]
+test-helpers = ["dep:assert-json-diff", "dep:anyhow"]
 
 [dependencies]
+anyhow = { workspace = true, optional = true }
 assert-json-diff = { workspace = true, optional = true }
 async-trait = { workspace = true }
 mqtt_channel = { workspace = true }

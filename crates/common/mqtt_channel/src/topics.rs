@@ -191,6 +191,10 @@ impl TopicFilter {
             None
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.patterns.is_empty()
+    }
 }
 
 impl TryInto<Topic> for &str {

@@ -259,7 +259,6 @@ where
         }
     }
 
-    #[allow(clippy::needless_collect)] // To avoid issues with Send constraints
     async fn assert_received<Samples>(&mut self, expected: Samples)
     where
         Samples: IntoIterator + Send,

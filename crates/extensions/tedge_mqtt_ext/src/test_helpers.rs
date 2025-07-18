@@ -8,7 +8,8 @@ pub async fn assert_received_contains_str<'a, M, I>(
     messages: &mut dyn MessageReceiver<M>,
     expected: I,
 ) where
-    M: Into<MqttMessage>,
+    M: TryInto<MqttMessage>,
+    M::Error: std::fmt::Debug,
     I: IntoIterator<Item = (&'a str, &'a str)>,
 {
     for expected_msg in expected.into_iter() {
@@ -19,7 +20,7 @@ pub async fn assert_received_contains_str<'a, M, I>(
             expected_msg
         );
         let message = message.unwrap();
-        assert_message_contains_str(&message.into(), expected_msg);
+        assert_message_contains_str(&message.try_into().unwrap(), expected_msg);
     }
 }
 
