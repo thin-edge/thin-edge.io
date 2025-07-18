@@ -1,6 +1,7 @@
-export function onMessage (timestamp, message) {
+export function onMessage (message) {
   let payload = JSON.parse(message.payload)
   if (!payload.time) {
+    let timestamp = message.timestamp
     payload.time = timestamp.seconds + (timestamp.nanoseconds / 1e9)
   }
 

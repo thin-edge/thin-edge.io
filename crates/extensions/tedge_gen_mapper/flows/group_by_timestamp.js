@@ -2,7 +2,7 @@ class State {
     static batch = []
 }
 
-export function onMessage (timestamp, message) {
+export function onMessage (message) {
     State.batch.push(message)
     return []
 }

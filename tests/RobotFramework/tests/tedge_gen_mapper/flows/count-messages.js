@@ -2,7 +2,7 @@ class State {
     static count_per_topic = {}
 }
 
-export function onMessage (timestamp, message) {
+export function onMessage (message) {
     let topic = message.topic
     let count = State.count_per_topic[topic] || 0
     State.count_per_topic[topic] = count + 1

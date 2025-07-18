@@ -86,11 +86,10 @@ steps = [
 ## POC API
 
 - A flow script has to export at least one `onMessage` function.
-  - `onMessage(t: Timestamp, msg: Message, config: Json) -> Vec<Message>` 
+  - `onMessage(msg: Message, config: Json) -> Vec<Message>` 
   - This function is called for each message to be transformed
   - The arguments passed to the function are:
-    - The current time as `{ seconds: u64, nanoseconds: u32 }` 
-    - The message `{ topic: string, payload: string }`
+    - The message `{ topic: string, payload: string, timestamp: { seconds: u64, nanoseconds: u32 } }`
     - The config as read from the flow config or updated by the script
   - The function is expected to return zero, one or many transformed messages `[{ topic: string, payload: string }]`
   - An exception can be thrown if the input message cannot be transformed.

@@ -7,7 +7,7 @@ class State {
     static agg_for_topic = {}
 }
 
-export function onMessage (timestamp, message) {
+export function onMessage (message) {
     let topic = message.topic
     let payload = JSON.parse(message.payload)
     let agg_payload = State.agg_for_topic[topic]

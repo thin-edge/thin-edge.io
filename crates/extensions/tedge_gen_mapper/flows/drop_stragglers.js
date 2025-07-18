@@ -1,5 +1,5 @@
 // Reject any message that is too old, too new or with no timestamp
-export function onMessage (timestamp, message, config) {
+export function onMessage (message, config) {
     let payload = JSON.parse(message.payload)
     let msg_time = payload.time
     if (!msg_time) {
@@ -11,6 +11,7 @@ export function onMessage (timestamp, message, config) {
         msg_timestamp = Date.parse(msg_time) / 1e3
     }
 
+    let timestamp = message.timestamp
     let time = timestamp.seconds + (timestamp.nanoseconds / 1e9)
     let max = time + (config.max_advance || 1);
     let min = time - (config.max_delay || 10);
