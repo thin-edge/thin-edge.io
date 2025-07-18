@@ -38,6 +38,7 @@ pub struct DateTime {
 pub struct Message {
     pub topic: String,
     pub payload: String,
+    pub timestamp: Option<DateTime>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -210,11 +211,16 @@ impl Message {
         Message {
             topic: topic.to_string(),
             payload: payload.to_string(),
+            timestamp: Some(DateTime::now()),
         }
     }
 
     pub fn json(&self) -> Value {
-        json!({"topic": self.topic, "payload": self.payload})
+        if let Some(timestamp) = &self.timestamp {
+            json!({"topic": self.topic, "payload": self.payload, "timestamp": timestamp.json()})
+        } else {
+            json!({"topic": self.topic, "payload": self.payload, "timestamp": null})
+        }
     }
 }
 
@@ -227,7 +233,11 @@ impl TryFrom<MqttMessage> for Message {
             .payload_str()
             .map_err(|_| FlowError::UnsupportedMessage("Not an UTF8 payload".to_string()))?
             .to_string();
-        Ok(Message { topic, payload })
+        Ok(Message {
+            topic,
+            payload,
+            timestamp: None,
+        })
     }
 }
 

@@ -102,7 +102,11 @@ fn parse(line: String) -> Result<Option<Message>, Error> {
     let topic = line[1..closing_bracket].to_string();
     let payload = line[closing_bracket + 1..].to_string();
 
-    Ok(Some(Message { topic, payload }))
+    Ok(Some(Message {
+        topic,
+        payload,
+        timestamp: None,
+    }))
 }
 
 async fn next_line(input: &mut BufReader<Stdin>) -> Option<String> {

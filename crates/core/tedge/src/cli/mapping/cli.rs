@@ -76,7 +76,11 @@ impl BuildCommand for TEdgeMappingCli {
             } => {
                 let mapping_dir = mapping_dir.unwrap_or_else(|| Self::default_mapping_dir(config));
                 let message = match (topic, payload) {
-                    (Some(topic), Some(payload)) => Some(Message { topic, payload }),
+                    (Some(topic), Some(payload)) => Some(Message {
+                        topic,
+                        payload,
+                        timestamp: None,
+                    }),
                     (Some(_), None) => Err(anyhow!("Missing sample payload"))?,
                     (None, Some(_)) => Err(anyhow!("Missing sample topic"))?,
                     (None, None) => None,

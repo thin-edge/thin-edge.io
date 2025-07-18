@@ -95,11 +95,11 @@ impl JsScript {
             return Ok(vec![message.clone()]);
         }
 
-        let input = vec![
-            timestamp.clone().into(),
-            message.clone().into(),
-            self.config.clone(),
-        ];
+        let mut message = message.clone();
+        if message.timestamp.is_none() {
+            message.timestamp = Some(timestamp.clone());
+        }
+        let input = vec![message.into(), self.config.clone()];
         js.call_function(&self.module_name(), "onMessage", input)
             .await
             .map_err(flow::error_from_js)?
@@ -312,7 +312,7 @@ mod tests {
 
     #[tokio::test]
     async fn identity_script() {
-        let js = "export function onMessage(t,msg) { return [msg]; };";
+        let js = "export function onMessage(msg) { return [msg]; };";
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
@@ -328,7 +328,7 @@ mod tests {
 
     #[tokio::test]
     async fn identity_script_no_array() {
-        let js = "export function onMessage(t,msg) { return msg; };";
+        let js = "export function onMessage(msg) { return msg; };";
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
@@ -344,7 +344,7 @@ mod tests {
 
     #[tokio::test]
     async fn script_returning_null() {
-        let js = "export function onMessage(t,msg) { return null; };";
+        let js = "export function onMessage(msg) { return null; };";
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
@@ -359,7 +359,7 @@ mod tests {
 
     #[tokio::test]
     async fn script_returning_nothing() {
-        let js = "export function onMessage(t,msg) { return; };";
+        let js = "export function onMessage(msg) { return; };";
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
@@ -374,7 +374,7 @@ mod tests {
 
     #[tokio::test]
     async fn error_script() {
-        let js = r#"export function onMessage(t,msg) { throw new Error("Cannot process that message"); };"#;
+        let js = r#"export function onMessage(msg) { throw new Error("Cannot process that message"); };"#;
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
@@ -389,7 +389,7 @@ mod tests {
     #[tokio::test]
     async fn collectd_script() {
         let js = r#"
-export function onMessage(timestamp, message, config) {
+export function onMessage(message, config) {
     let groups = message.topic.split( '/')
     let data = message.payload.split(':')
 
@@ -415,10 +415,11 @@ export function onMessage(timestamp, message, config) {
             "collectd/h/memory/percent-used",
             "1748440192.104:19.9289468288182",
         );
-        let output = Message::new(
+        let mut output = Message::new(
             "te/device/main///m/collectd",
             r#"{"time": 1748440192.104, "memory": {"percent-used": 19.9289468288182}}"#,
         );
+        output.timestamp = None;
         assert_eq!(
             script
                 .on_message(&runtime, &DateTime::now(), &input)
@@ -431,7 +432,7 @@ export function onMessage(timestamp, message, config) {
     #[tokio::test]
     #[ignore = "FIXME: scripts must be cancelled if running too long"]
     async fn while_loop() {
-        let js = r#"export function onMessage(t,msg) { while(true); };"#;
+        let js = r#"export function onMessage(msg) { while(true); };"#;
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("topic", "payload");
@@ -447,7 +448,7 @@ export function onMessage(timestamp, message, config) {
 
     #[tokio::test]
     async fn memory_eager_loop() {
-        let js = r#"export function onMessage(t,msg) { var s = "foo"; while(true) { s += s; }; };"#;
+        let js = r#"export function onMessage(msg) { var s = "foo"; while(true) { s += s; }; };"#;
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("topic", "payload");
@@ -461,7 +462,7 @@ export function onMessage(timestamp, message, config) {
 
     #[tokio::test]
     async fn stack_eager_loop() {
-        let js = r#"export function onMessage(t,msg) { return onMessage(t,msg); };"#;
+        let js = r#"export function onMessage(msg) { return onMessage(msg); };"#;
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("topic", "payload");
