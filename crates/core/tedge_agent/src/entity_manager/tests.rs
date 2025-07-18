@@ -852,10 +852,7 @@ mod model {
             new_entity: EntityTopicId,
             parent: Option<EntityTopicId>,
         ) -> HashSet<EntityTopicId> {
-            if parent
-                .as_ref()
-                .map_or(true, |p| self.registered.contains(p))
-            {
+            if parent.as_ref().is_none_or(|p| self.registered.contains(p)) {
                 self.registered.insert(new_entity.clone());
                 let new_entities = HashSet::from([new_entity]);
                 self.cascade_registration(new_entities)
