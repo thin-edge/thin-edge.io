@@ -337,6 +337,29 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<
         }
     };
 
+    // XXX: remove objects with the same label
+    // The problem is that we want to use the new key after we create it, but there can be other objects with the same
+    // label so referring just by label becomes ambiguous.
+    // What we currently do when creating e.g. certificate files when there is another file with that name, the old one
+    // is deleted, so we can replicate this behaviour here
+    // But this likely isn't the best way to do things in PKCS11 - if a key has unique ID we can refer to it by the id
+    // even if the label is not unique, but the problem is in setting that id - a user can set the label of the key in
+    // tedge config and then create a key with that label, but with the id, it's generated on the server side so we'd
+    // have to either automatically set it in tedge-config (surprising) or return the URI and tell the user to set it
+    // (tedious, especially if generating multiple keys).
+    let overlapping_objects =
+        session.find_objects(&[Attribute::Label(params.label.as_bytes().to_vec())])?;
+    if !overlapping_objects.is_empty() {
+        warn!(
+            "Removing objects with label='{}', same as newly created key",
+            params.label
+        );
+        for object in overlapping_objects {
+            session.destroy_object(object)?;
+        }
+    }
+
+    // generate unique ids
     let mut id_pub = vec![0u8; 20];
     rand::fill(&mut id_pub[..]);
 
