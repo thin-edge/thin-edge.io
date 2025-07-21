@@ -146,10 +146,10 @@ impl MessageProcessor {
                 if step.script.path() == path {
                     match self.js_runtime.load_script(&mut step.script).await {
                         Ok(()) => {
-                            info!(target: "gen-mapper", "Reloaded flow script {path}");
+                            info!(target: "flows", "Reloaded flow script {path}");
                         }
                         Err(e) => {
-                            error!(target: "gen-mapper", "Failed to reload flow script {path}: {e}");
+                            error!(target: "flows", "Failed to reload flow script {path}: {e}");
                             return;
                         }
                     }
@@ -162,7 +162,7 @@ impl MessageProcessor {
         for (flow_id, flow) in self.flows.iter() {
             for step in flow.steps.iter() {
                 if step.script.path() == path {
-                    warn!(target: "gen-mapper", "Removing a script used by a flow {flow_id}: {path}");
+                    warn!(target: "flows", "Removing a script used by a flow {flow_id}: {path}");
                     return;
                 }
             }
@@ -177,7 +177,7 @@ impl MessageProcessor {
         let config: FlowConfig = match toml::from_str(&source) {
             Ok(config) => config,
             Err(e) => {
-                error!(target: "gen-mapper", "Failed to parse toml for flow {path}: {e}");
+                error!(target: "flows", "Failed to parse toml for flow {path}: {e}");
                 return false;
             }
         };
@@ -190,7 +190,7 @@ impl MessageProcessor {
                 true
             }
             Err(e) => {
-                error!(target: "gen-mapper", "Failed to compile flow {path}: {e}");
+                error!(target: "flows", "Failed to compile flow {path}: {e}");
                 false
             }
         }
@@ -199,21 +199,21 @@ impl MessageProcessor {
     pub async fn add_flow(&mut self, path: Utf8PathBuf) {
         let flow_id = Self::flow_id(&path);
         if !self.flows.contains_key(&flow_id) && self.load_flow(flow_id, path.clone()).await {
-            info!(target: "gen-mapper", "Loaded new flow {path}");
+            info!(target: "flows", "Loaded new flow {path}");
         }
     }
 
     pub async fn reload_flow(&mut self, path: Utf8PathBuf) {
         let flow_id = Self::flow_id(&path);
         if self.flows.contains_key(&flow_id) && self.load_flow(flow_id, path.clone()).await {
-            info!(target: "gen-mapper", "Reloaded updated flow {path}");
+            info!(target: "flows", "Reloaded updated flow {path}");
         }
     }
 
     pub async fn remove_flow(&mut self, path: Utf8PathBuf) {
         let flow_id = Self::flow_id(&path);
         self.flows.remove(&flow_id);
-        info!(target: "gen-mapper", "Removed deleted flow {path}");
+        info!(target: "flows", "Removed deleted flow {path}");
     }
 }
 
@@ -225,22 +225,22 @@ struct FlowSpecs {
 impl FlowSpecs {
     pub async fn load(&mut self, config_dir: &PathBuf) {
         let Ok(mut entries) = read_dir(config_dir).await.map_err(|err|
-            error!(target: "MAPPING", "Failed to read flows from {}: {err}", config_dir.display())
+            error!(target: "flows", "Failed to read flows from {}: {err}", config_dir.display())
         ) else {
             return;
         };
 
         while let Ok(Some(entry)) = entries.next_entry().await {
             let Some(path) = Utf8Path::from_path(&entry.path()).map(|p| p.to_path_buf()) else {
-                error!(target: "MAPPING", "Skipping non UTF8 path: {}", entry.path().display());
+                error!(target: "flows", "Skipping non UTF8 path: {}", entry.path().display());
                 continue;
             };
             if let Ok(file_type) = entry.file_type().await {
                 if file_type.is_file() {
                     if let Some("toml") = path.extension() {
-                        info!(target: "MAPPING", "Loading flow: {path}");
+                        info!(target: "flows", "Loading flow: {path}");
                         if let Err(err) = self.load_flow(path).await {
-                            error!(target: "MAPPING", "Failed to load flow: {err}");
+                            error!(target: "flows", "Failed to load flow: {err}");
                         }
                     }
                 }
@@ -250,18 +250,18 @@ impl FlowSpecs {
 
     pub async fn load_single_flow(&mut self, flow: &Path) {
         let Some(path) = Utf8Path::from_path(flow).map(|p| p.to_path_buf()) else {
-            error!(target: "MAPPING", "Skipping non UTF8 path: {}", flow.display());
+            error!(target: "flows", "Skipping non UTF8 path: {}", flow.display());
             return;
         };
         if let Err(err) = self.load_flow(&path).await {
-            error!(target: "MAPPING", "Failed to load flow {path}: {err}");
+            error!(target: "flows", "Failed to load flow {path}: {err}");
         }
     }
 
     pub async fn load_single_script(&mut self, script: impl AsRef<Path>) {
         let script = script.as_ref();
         let Some(path) = Utf8Path::from_path(script).map(|p| p.to_path_buf()) else {
-            error!(target: "MAPPING", "Skipping non UTF8 path: {}", script.display());
+            error!(target: "flows", "Skipping non UTF8 path: {}", script.display());
             return;
         };
         let flow_id = MessageProcessor::flow_id(&path);
@@ -291,7 +291,7 @@ impl FlowSpecs {
                     let _ = flows.insert(name, flow);
                 }
                 Err(err) => {
-                    error!(target: "MAPPING", "Failed to compile flow {name}: {err}")
+                    error!(target: "flows", "Failed to compile flow {name}: {err}")
                 }
             }
         }

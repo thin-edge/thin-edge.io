@@ -4,7 +4,7 @@ Library             ThinEdgeIO
 Test Setup          Custom Setup
 Test Teardown       Get Logs
 
-Test Tags           theme:tedge_mapper
+Test Tags           theme:tedge_flows
 
 *** Test Cases ***
 Add missing timestamps

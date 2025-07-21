@@ -18,16 +18,16 @@ use tokio::time::interval;
 use tokio::time::Duration;
 use tracing::error;
 
-pub struct GenMapper {
+pub struct FlowsMapper {
     pub(super) messages: SimpleMessageBox<InputMessage, OutputMessage>,
     pub(super) subscriptions: TopicFilter,
     pub(super) processor: MessageProcessor,
 }
 
 #[async_trait]
-impl Actor for GenMapper {
+impl Actor for FlowsMapper {
     fn name(&self) -> &str {
-        "GenMapper"
+        "FlowsMapper"
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
@@ -43,7 +43,7 @@ impl Actor for GenMapper {
                         Some(InputMessage::MqttMessage(message)) => match Message::try_from(message) {
                             Ok(message) => self.on_message(message).await?,
                             Err(err) => {
-                                error!(target: "gen-mapper", "Cannot process message: {err}");
+                                error!(target: "flows", "Cannot process message: {err}");
                             }
                         },
                         Some(InputMessage::FsWatchEvent(FsWatchEvent::Modified(path))) => {
@@ -86,7 +86,7 @@ impl Actor for GenMapper {
     }
 }
 
-impl GenMapper {
+impl FlowsMapper {
     async fn send_updated_subscriptions(&mut self) -> Result<(), RuntimeError> {
         let diff = self.update_subscriptions();
         self.messages
@@ -115,13 +115,13 @@ impl GenMapper {
                                     .await?
                             }
                             Err(err) => {
-                                error!(target: "gen-mapper", "{flow_id}: cannot send transformed message: {err}")
+                                error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
                             }
                         }
                     }
                 }
                 Err(err) => {
-                    error!(target: "gen-mapper", "{flow_id}: {err}");
+                    error!(target: "flows", "{flow_id}: {err}");
                 }
             }
         }
@@ -146,13 +146,13 @@ impl GenMapper {
                                     .await?
                             }
                             Err(err) => {
-                                error!(target: "gen-mapper", "{flow_id}: cannot send transformed message: {err}")
+                                error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
                             }
                         }
                     }
                 }
                 Err(err) => {
-                    error!(target: "gen-mapper", "{flow_id}: {err}");
+                    error!(target: "flows", "{flow_id}: {err}");
                 }
             }
         }

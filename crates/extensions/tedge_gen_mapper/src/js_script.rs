@@ -90,7 +90,7 @@ impl JsScript {
         timestamp: &DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
-        debug!(target: "MAPPING", "{}: onMessage({timestamp:?}, {message:?})", self.module_name());
+        debug!(target: "flows", "{}: onMessage({timestamp:?}, {message:?})", self.module_name());
         if self.no_js_on_message_fun {
             return Ok(vec![message.clone()]);
         }
@@ -118,7 +118,7 @@ impl JsScript {
         js: &JsRuntime,
         message: &Message,
     ) -> Result<(), FlowError> {
-        debug!(target: "MAPPING", "{}: onConfigUpdate({message:?})", self.module_name());
+        debug!(target: "flows", "{}: onConfigUpdate({message:?})", self.module_name());
         if self.no_js_on_config_update_fun {
             return Ok(());
         }
@@ -150,7 +150,7 @@ impl JsScript {
         if !timestamp.tick_now(self.tick_every_seconds) {
             return Ok(vec![]);
         }
-        debug!(target: "MAPPING", "{}: onInterval({timestamp:?})", self.module_name());
+        debug!(target: "flows", "{}: onInterval({timestamp:?})", self.module_name());
         let input = vec![timestamp.clone().into(), self.config.clone()];
         js.call_function(&self.module_name(), "onInterval", input)
             .await

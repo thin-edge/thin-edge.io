@@ -6,7 +6,7 @@ mod js_script;
 mod runtime;
 mod stats;
 
-use crate::actor::GenMapper;
+use crate::actor::FlowsMapper;
 pub use crate::runtime::MessageProcessor;
 use std::convert::Infallible;
 use std::path::Path;
@@ -31,15 +31,15 @@ use tracing::error;
 fan_in_message_type!(InputMessage[MqttMessage, FsWatchEvent]: Clone, Debug, Eq, PartialEq);
 fan_in_message_type!(OutputMessage[MqttMessage, SubscriptionDiff]: Clone, Debug, Eq, PartialEq);
 
-pub struct GenMapperBuilder {
+pub struct FlowsMapperBuilder {
     message_box: SimpleMessageBoxBuilder<InputMessage, OutputMessage>,
     processor: MessageProcessor,
 }
 
-impl GenMapperBuilder {
+impl FlowsMapperBuilder {
     pub async fn try_new(config_dir: impl AsRef<Path>) -> Result<Self, LoadError> {
         let processor = MessageProcessor::try_new(config_dir).await?;
-        Ok(GenMapperBuilder {
+        Ok(FlowsMapperBuilder {
             message_box: SimpleMessageBoxBuilder::new("GenMapper", 16),
             processor,
         })
@@ -77,22 +77,22 @@ impl GenMapperBuilder {
     }
 }
 
-impl RuntimeRequestSink for GenMapperBuilder {
+impl RuntimeRequestSink for FlowsMapperBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.message_box.get_signal_sender()
     }
 }
 
-impl Builder<GenMapper> for GenMapperBuilder {
+impl Builder<FlowsMapper> for FlowsMapperBuilder {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<GenMapper, Self::Error> {
+    fn try_build(self) -> Result<FlowsMapper, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> GenMapper {
+    fn build(self) -> FlowsMapper {
         let subscriptions = self.topics().clone();
-        GenMapper {
+        FlowsMapper {
             messages: self.message_box.build(),
             subscriptions,
             processor: self.processor,

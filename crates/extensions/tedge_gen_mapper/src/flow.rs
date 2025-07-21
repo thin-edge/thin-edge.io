@@ -157,13 +157,13 @@ impl FlowStep {
     pub(crate) fn check(&self, flow: &Utf8Path) {
         let script = &self.script;
         if script.no_js_on_message_fun {
-            warn!(target: "MAPPING", "Flow script with no 'onMessage' function: {}", script.path.display());
+            warn!(target: "flows", "Flow script with no 'onMessage' function: {}", script.path.display());
         }
         if script.no_js_on_config_update_fun && !self.config_topics.is_empty() {
-            warn!(target: "MAPPING", "Flow script with no 'onConfigUpdate' function: {}; but configured with 'config_topics' in {flow}", script.path.display());
+            warn!(target: "flows", "Flow script with no 'onConfigUpdate' function: {}; but configured with 'config_topics' in {flow}", script.path.display());
         }
         if script.no_js_on_interval_fun && script.tick_every_seconds != 0 {
-            warn!(target: "MAPPING", "Flow script with no 'onInterval' function: {}; but configured with 'tick_every_seconds' in {flow}", script.path.display());
+            warn!(target: "flows", "Flow script with no 'onInterval' function: {}; but configured with 'tick_every_seconds' in {flow}", script.path.display());
         }
     }
 

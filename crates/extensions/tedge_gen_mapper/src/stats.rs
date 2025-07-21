@@ -114,7 +114,7 @@ impl Counter {
     }
 
     pub fn dump_processing_stats(&self) {
-        tracing::info!(target: "gen-mapper", "Processing statistics:");
+        tracing::info!(target: "flows", "Processing statistics:");
         for (dim, stats) in &self.from_start {
             stats.dump_statistics(dim)
         }
@@ -141,13 +141,13 @@ impl Stats {
     }
 
     pub fn dump_statistics(&self, dim: &Dimension) {
-        tracing::info!(target: "gen-mapper", "    - {dim}");
-        tracing::info!(target: "gen-mapper", "         - input count: {}", self.messages_in);
-        tracing::info!(target: "gen-mapper", "         - output count: {}", self.messages_out);
-        tracing::info!(target: "gen-mapper", "         - error count: {}", self.error_raised);
+        tracing::info!(target: "flows", "    - {dim}");
+        tracing::info!(target: "flows", "         - input count: {}", self.messages_in);
+        tracing::info!(target: "flows", "         - output count: {}", self.messages_out);
+        tracing::info!(target: "flows", "         - error count: {}", self.error_raised);
         if let Some(duration_stats) = &self.processing_time {
-            tracing::info!(target: "gen-mapper", "         - min processing time: {:?}", duration_stats.min);
-            tracing::info!(target: "gen-mapper", "         - max processing time: {:?}", duration_stats.max);
+            tracing::info!(target: "flows", "         - min processing time: {:?}", duration_stats.min);
+            tracing::info!(target: "flows", "         - max processing time: {:?}", duration_stats.max);
         }
     }
 }

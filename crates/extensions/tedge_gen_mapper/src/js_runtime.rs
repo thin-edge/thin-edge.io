@@ -98,14 +98,14 @@ impl JsRuntime {
 
     pub async fn dump_memory_stats(&self) {
         let usage = self.runtime.memory_usage().await;
-        tracing::info!(target: "gen-mapper", "Memory usage:");
-        tracing::info!(target: "gen-mapper", "  - malloc size: {}", usage.malloc_size);
-        tracing::info!(target: "gen-mapper", "  - used memory size: {}", usage.memory_used_size);
-        tracing::info!(target: "gen-mapper", "  - function count: {}", usage.js_func_count);
-        tracing::info!(target: "gen-mapper", "  - object count: {}", usage.obj_count);
-        tracing::info!(target: "gen-mapper", "  - array count: {}", usage.array_count);
-        tracing::info!(target: "gen-mapper", "  - string count: {}", usage.str_count);
-        tracing::info!(target: "gen-mapper", "  - atom count: {}", usage.atom_count);
+        tracing::info!(target: "flows", "Memory usage:");
+        tracing::info!(target: "flows", "  - malloc size: {}", usage.malloc_size);
+        tracing::info!(target: "flows", "  - used memory size: {}", usage.memory_used_size);
+        tracing::info!(target: "flows", "  - function count: {}", usage.js_func_count);
+        tracing::info!(target: "flows", "  - object count: {}", usage.obj_count);
+        tracing::info!(target: "flows", "  - array count: {}", usage.array_count);
+        tracing::info!(target: "flows", "  - string count: {}", usage.str_count);
+        tracing::info!(target: "flows", "  - atom count: {}", usage.atom_count);
     }
 
     async fn send<Response>(
@@ -200,7 +200,7 @@ impl<'js> JsModules<'js> {
         source: Vec<u8>,
         imports: Vec<&'static str>,
     ) -> Result<Vec<&'static str>, LoadError> {
-        debug!(target: "MAPPING", "compile({name})");
+        debug!(target: "flows", "compile({name})");
         let module = Module::declare(ctx, name.clone(), source)?;
         let (module, p) = module.eval()?;
         let () = p.finish()?;
@@ -225,7 +225,7 @@ impl<'js> JsModules<'js> {
         function: String,
         args: Vec<JsonValue>,
     ) -> Result<JsonValue, LoadError> {
-        debug!(target: "MAPPING", "link({module_name}.{function})");
+        debug!(target: "flows", "link({module_name}.{function})");
         let module = self
             .modules
             .get(&module_name)
@@ -255,14 +255,14 @@ impl<'js> JsModules<'js> {
             _ => return Err(anyhow::anyhow!("Too many args").into()),
         };
 
-        debug!(target: "MAPPING", "execute({module_name}.{function}) => {r:?}");
+        debug!(target: "flows", "execute({module_name}.{function}) => {r:?}");
         r.map_err(|err| {
             if let Some(ex) = ctx.catch().as_exception() {
                 let err = anyhow::anyhow!("{ex}");
                 err.context("JS raised exception").into()
             } else {
                 let err = CaughtError::from_error(&ctx, err);
-                debug!(target: "MAPPING", "execute({module_name}.{function}) => {err:?}");
+                debug!(target: "flows", "execute({module_name}.{function}) => {err:?}");
                 let err = anyhow::anyhow!("{err}");
                 err.context("JS runtime exception").into()
             }
