@@ -10,7 +10,6 @@ use std::path::PathBuf;
 use tedge_p11_server::CryptokiConfig;
 use time::Duration;
 use time::OffsetDateTime;
-use x509_parser::oid_registry;
 use x509_parser::public_key::PublicKey;
 pub use zeroize::Zeroizing;
 #[cfg(feature = "reqwest")]
@@ -172,24 +171,19 @@ impl KeyKind {
             .public_key()
             .parsed()
             .context("Failed to read public key from the certificate")?;
-        let signature_algorithm = match public_key {
+        let algorithm = match public_key {
             PublicKey::EC(ec) => match ec.key_size() {
-                256 => oid_registry::OID_SIG_ECDSA_WITH_SHA256,
-                384 => oid_registry::OID_SIG_ECDSA_WITH_SHA384,
+                256 => SignatureAlgorithm::EcdsaP256Sha256,
+                384 => SignatureAlgorithm::EcdsaP384Sha384,
                 // P521 (size 528 reported by key_size() is not yet supported by rcgen)
                 // https://github.com/rustls/rcgen/issues/60
                 _ => {
                     return Err(anyhow::anyhow!("Unsupported public key. Only P256/P384/RSA2048/RSA3072/RSA4096 are supported for certificate renewal").into());
                 }
             },
-            PublicKey::RSA(_) => oid_registry::OID_PKCS1_SHA256WITHRSA,
+            PublicKey::RSA(_) => SignatureAlgorithm::RsaPkcs1Sha256,
             _ => return Err(anyhow::anyhow!("Unsupported public key. Only P256/P384/RSA2048/RSA3072/RSA4096 are supported for certificate renewal").into())
         };
-        let signature_algorithm: Vec<u64> = signature_algorithm
-            .iter()
-            .map(|i| i.collect())
-            .unwrap_or_default();
-        let algorithm = rcgen::SignatureAlgorithm::from_oid(&signature_algorithm)?;
 
         Ok(Self::ReuseRemote(RemoteKeyPair {
             cryptoki_config,
@@ -220,7 +214,7 @@ impl KeyKind {
 pub struct RemoteKeyPair {
     cryptoki_config: CryptokiConfig,
     public_key_raw: Vec<u8>,
-    algorithm: &'static rcgen::SignatureAlgorithm,
+    algorithm: SignatureAlgorithm,
 }
 
 impl rcgen::PublicKeyData for RemoteKeyPair {
@@ -229,7 +223,7 @@ impl rcgen::PublicKeyData for RemoteKeyPair {
     }
 
     fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
-        self.algorithm
+        self.algorithm.into()
     }
 }
 
@@ -241,8 +235,36 @@ impl rcgen::SigningKey for RemoteKeyPair {
         let signer = tedge_p11_server::signing_key(self.cryptoki_config.clone())
             .map_err(|e| rcgen::Error::PemError(e.to_string()))?;
         signer
-            .sign(msg)
+            .sign2(msg, self.algorithm.into())
             .map_err(|e| rcgen::Error::PemError(e.to_string()))
+    }
+}
+
+/// Signature algorithms that can be used for generating a CSR
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SignatureAlgorithm {
+    RsaPkcs1Sha256,
+    EcdsaP256Sha256,
+    EcdsaP384Sha384,
+}
+
+impl From<SignatureAlgorithm> for &rcgen::SignatureAlgorithm {
+    fn from(value: SignatureAlgorithm) -> Self {
+        match value {
+            SignatureAlgorithm::RsaPkcs1Sha256 => &rcgen::PKCS_RSA_SHA256,
+            SignatureAlgorithm::EcdsaP256Sha256 => &rcgen::PKCS_ECDSA_P256_SHA256,
+            SignatureAlgorithm::EcdsaP384Sha384 => &rcgen::PKCS_ECDSA_P384_SHA384,
+        }
+    }
+}
+
+impl From<SignatureAlgorithm> for tedge_p11_server::pkcs11::SigScheme {
+    fn from(value: SignatureAlgorithm) -> Self {
+        match value {
+            SignatureAlgorithm::RsaPkcs1Sha256 => Self::RsaPkcs1Sha256,
+            SignatureAlgorithm::EcdsaP256Sha256 => Self::EcdsaNistp256Sha256,
+            SignatureAlgorithm::EcdsaP384Sha384 => Self::EcdsaNistp384Sha384,
+        }
     }
 }
 

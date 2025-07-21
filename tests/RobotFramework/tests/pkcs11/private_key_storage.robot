@@ -98,44 +98,15 @@ Can use PKCS11 key to renew the public certificate
     ...    can renew both a self-signed certificate and a certificate signed by C8y CA.
     [Setup]    Set tedge-p11-server Uri    value=${EMPTY}
 
-    Connect to C8y using new keypair    type=ecdsa    curve=secp256r1
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
+    Test tedge cert renew    type=ecdsa    curve=secp256r1
+    Test tedge cert renew    type=ecdsa    curve=secp384r1
 
-    Connect to C8y using new keypair    type=ecdsa    curve=secp384r1
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-
-    # renewal isn't supported for P521 because rcgen doesn't support it
+    # renewal isn't supported for secp521r1 because rcgen doesn't support it
     # https://github.com/rustls/rcgen/issues/60
 
-    # Connect to C8y using new keypair    type=ecdsa    curve=secp521r1
-    # Execute Command    tedge cert renew c8y
-    # Tedge Reconnect Should Succeed
-    # Execute Command    tedge cert renew c8y
-    # Tedge Reconnect Should Succeed
-
-    Connect to C8y using new keypair    type=rsa    bits=2048
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-
-    Connect to C8y using new keypair    type=rsa    bits=3072
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-
-    Connect to C8y using new keypair    type=rsa    bits=4096
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
+    Test tedge cert renew    type=rsa    bits=2048
+    Test tedge cert renew    type=rsa    bits=3072
+    Test tedge cert renew    type=rsa    bits=4096
 
     Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
     Command Should Fail With
@@ -215,6 +186,29 @@ Warn the user if tedge.toml cannot be parsed
 
 
 *** Keywords ***
+Test tedge cert renew
+    [Arguments]    ${type}    ${bits}=${EMPTY}    ${curve}=${EMPTY}
+
+    Connect to C8y using new keypair    type=${type}    curve=${curve}    bits=${bits}
+
+    Execute Command    tedge cert renew c8y
+    ${stderr}=    Execute Command
+    ...    openssl req -text -noout -in /etc/tedge/device-certs/tedge.csr -verify
+    ...    stdout=False
+    ...    stderr=true
+    Should Contain    ${stderr}    Certificate request self-signature verify OK
+
+    Tedge Reconnect Should Succeed
+
+    Execute Command    tedge cert renew c8y
+    ${stderr}=    Execute Command
+    ...    openssl req -text -noout -in /etc/tedge/device-certs/tedge.csr -verify
+    ...    stdout=False
+    ...    stderr=true
+    Should Contain    ${stderr}    Certificate request self-signature verify OK
+
+    Tedge Reconnect Should Succeed
+
 Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    ${DEVICE_SN}

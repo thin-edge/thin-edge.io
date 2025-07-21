@@ -346,19 +346,6 @@ impl From<SigScheme> for rustls::SignatureAlgorithm {
     }
 }
 
-impl From<rustls::SignatureScheme> for SigScheme {
-    fn from(value: rustls::SignatureScheme) -> Self {
-        match value {
-            rustls::SignatureScheme::ECDSA_NISTP256_SHA256 => SigScheme::EcdsaNistp256Sha256,
-            rustls::SignatureScheme::ECDSA_NISTP384_SHA384 => SigScheme::EcdsaNistp384Sha384,
-            rustls::SignatureScheme::ECDSA_NISTP521_SHA512 => SigScheme::EcdsaNistp521Sha512,
-            rustls::SignatureScheme::RSA_PSS_SHA256 => SigScheme::RsaPssSha256,
-            rustls::SignatureScheme::RSA_PKCS1_SHA256 => SigScheme::RsaPkcs1Sha256,
-            _ => todo!(),
-        }
-    }
-}
-
 impl From<SigScheme> for Mechanism<'_> {
     fn from(value: SigScheme) -> Self {
         match value {
