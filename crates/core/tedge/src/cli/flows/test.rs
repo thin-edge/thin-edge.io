@@ -1,4 +1,4 @@
-use crate::cli::mapping::TEdgeMappingCli;
+use crate::cli::flows::TEdgeFlowsCli;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use anyhow::Error;
@@ -28,8 +28,8 @@ impl Command for TestCommand {
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
         let mut processor = match &self.flow {
-            None => TEdgeMappingCli::load_flows(&self.mapping_dir).await?,
-            Some(flow) => TEdgeMappingCli::load_file(&self.mapping_dir, flow).await?,
+            None => TEdgeFlowsCli::load_flows(&self.mapping_dir).await?,
+            Some(flow) => TEdgeFlowsCli::load_file(&self.mapping_dir, flow).await?,
         };
         if let Some(message) = &self.message {
             let timestamp = DateTime::now();

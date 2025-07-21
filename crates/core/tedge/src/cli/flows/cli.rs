@@ -1,5 +1,5 @@
-use crate::cli::mapping::list::ListCommand;
-use crate::cli::mapping::test::TestCommand;
+use crate::cli::flows::list::ListCommand;
+use crate::cli::flows::test::TestCommand;
 use crate::command::BuildCommand;
 use crate::command::Command;
 use crate::ConfigError;
@@ -12,7 +12,7 @@ use tedge_gen_mapper::flow::Message;
 use tedge_gen_mapper::MessageProcessor;
 
 #[derive(clap::Subcommand, Debug)]
-pub enum TEdgeMappingCli {
+pub enum TEdgeFlowsCli {
     /// List flows and steps
     List {
         /// Path to the directory of flows and steps
@@ -59,15 +59,15 @@ pub enum TEdgeMappingCli {
     },
 }
 
-impl BuildCommand for TEdgeMappingCli {
+impl BuildCommand for TEdgeFlowsCli {
     fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
-            TEdgeMappingCli::List { mapping_dir, topic } => {
+            TEdgeFlowsCli::List { mapping_dir, topic } => {
                 let mapping_dir = mapping_dir.unwrap_or_else(|| Self::default_mapping_dir(config));
                 Ok(ListCommand { mapping_dir, topic }.into_boxed())
             }
 
-            TEdgeMappingCli::Test {
+            TEdgeFlowsCli::Test {
                 mapping_dir,
                 flow,
                 final_tick,
@@ -97,7 +97,7 @@ impl BuildCommand for TEdgeMappingCli {
     }
 }
 
-impl TEdgeMappingCli {
+impl TEdgeFlowsCli {
     fn default_mapping_dir(config: &TEdgeConfig) -> PathBuf {
         config.root_dir().join("gen-mapper").into()
     }

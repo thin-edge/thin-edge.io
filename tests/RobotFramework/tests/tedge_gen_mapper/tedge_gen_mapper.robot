@@ -8,30 +8,30 @@ Test Tags           theme:tedge_mapper
 
 *** Test Cases ***
 Add missing timestamps
-    ${transformed_msg}    Execute Command    tedge mapping test te/device/main///m/ '{}'
+    ${transformed_msg}    Execute Command    tedge flows test te/device/main///m/ '{}'
     Should Contain    ${transformed_msg}    item=time
 
 Convert timestamps to ISO
-    ${transformed_msg}    Execute Command    tedge mapping test te/device/main///m/ '{"time": 1751023862.000}'
+    ${transformed_msg}    Execute Command    tedge flows test te/device/main///m/ '{"time": 1751023862.000}'
     Should Contain    ${transformed_msg}    item="time":"2025-06-27T11:31:02.000Z"
 
 Extract measurement type from topic
     ${transformed_msg}    Execute Command
-    ...    tedge mapping test te/device/main///m/environment '{"temperature": 258}'
+    ...    tedge flows test te/device/main///m/environment '{"temperature": 258}'
     Should Contain
     ...    ${transformed_msg}
     ...    item="type":"environment"
 
 Use default measurement type
     ${transformed_msg}    Execute Command
-    ...    tedge mapping test te/device/main///m/ '{"temperature": 258}'
+    ...    tedge flows test te/device/main///m/ '{"temperature": 258}'
     Should Contain
     ...    ${transformed_msg}
     ...    item="type":"ThinEdgeMeasurement"
 
 Translate complex tedge json to c8y json
     ${transformed_msg}    Execute Command
-    ...    tedge mapping test te/device/main///m/environment '{"time":"2025-06-27T08:11:05.301804125Z", "temperature": 258, "location": {"latitude": 32.54, "longitude": -117.67, "altitude": 98.6 }, "pressure": 98}'
+    ...    tedge flows test te/device/main///m/environment '{"time":"2025-06-27T08:11:05.301804125Z", "temperature": 258, "location": {"latitude": 32.54, "longitude": -117.67, "altitude": 98.6 }, "pressure": 98}'
     ...    strip=True
     Should Be Equal
     ...    ${transformed_msg}
@@ -39,7 +39,7 @@ Translate complex tedge json to c8y json
 
 Units are configured using topic metadata
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/gen-mapper/measurements.samples | awk '{ print $2 }' FS\='INPUT:' | tedge mapping test
+    ...    cat /etc/tedge/gen-mapper/measurements.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test
     ...    strip=True
     ${expected_msg}    Execute Command
     ...    cat /etc/tedge/gen-mapper/measurements.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
@@ -50,7 +50,7 @@ Units are configured using topic metadata
 
 Computing average over a time window
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/gen-mapper/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge mapping test --final-tick --flow /etc/tedge/gen-mapper/average.js
+    ...    cat /etc/tedge/gen-mapper/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-tick --flow /etc/tedge/gen-mapper/average.js
     ...    strip=True
     ${expected_msg}    Execute Command
     ...    cat /etc/tedge/gen-mapper/average.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
@@ -61,7 +61,7 @@ Computing average over a time window
 
 Each instance of a script must have its own static state
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/gen-mapper/count-messages.samples | awk '{ print $2 }' FS\='INPUT:' | tedge mapping test --final-tick | sort
+    ...    cat /etc/tedge/gen-mapper/count-messages.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-tick | sort
     ...    strip=True
     ${expected_msg}    Execute Command
     ...    cat /etc/tedge/gen-mapper/count-messages.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: ' | sort

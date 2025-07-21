@@ -1,4 +1,4 @@
-use crate::cli::mapping::TEdgeMappingCli;
+use crate::cli::flows::TEdgeFlowsCli;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use anyhow::Error;
@@ -21,7 +21,7 @@ impl Command for ListCommand {
     }
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
-        let processor = TEdgeMappingCli::load_flows(&self.mapping_dir).await?;
+        let processor = TEdgeFlowsCli::load_flows(&self.mapping_dir).await?;
 
         match &self.topic {
             Some(topic) => processor
