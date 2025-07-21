@@ -17,7 +17,7 @@ pub enum TEdgeFlowsCli {
     List {
         /// Path to the directory of flows and steps
         ///
-        /// Default to /etc/tedge/gen-mapper
+        /// Default to /etc/tedge/flows
         #[clap(long)]
         mapping_dir: Option<PathBuf>,
 
@@ -32,7 +32,7 @@ pub enum TEdgeFlowsCli {
     Test {
         /// Path to the directory of flows and steps
         ///
-        /// Default to /etc/tedge/gen-mapper
+        /// Default to /etc/tedge/flows
         #[clap(long)]
         mapping_dir: Option<PathBuf>,
 
@@ -99,7 +99,7 @@ impl BuildCommand for TEdgeFlowsCli {
 
 impl TEdgeFlowsCli {
     fn default_mapping_dir(config: &TEdgeConfig) -> PathBuf {
-        config.root_dir().join("gen-mapper").into()
+        config.root_dir().join("flows").into()
     }
 
     pub async fn load_flows(mapping_dir: &PathBuf) -> Result<MessageProcessor, Error> {

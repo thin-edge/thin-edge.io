@@ -6,6 +6,7 @@ Test Teardown       Get Logs
 
 Test Tags           theme:tedge_flows
 
+
 *** Test Cases ***
 Add missing timestamps
     ${transformed_msg}    Execute Command    tedge flows test te/device/main///m/ '{}'
@@ -39,45 +40,44 @@ Translate complex tedge json to c8y json
 
 Units are configured using topic metadata
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/gen-mapper/measurements.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test
+    ...    cat /etc/tedge/flows/measurements.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test
     ...    strip=True
     ${expected_msg}    Execute Command
-    ...    cat /etc/tedge/gen-mapper/measurements.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
+    ...    cat /etc/tedge/flows/measurements.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
     ...    strip=True
     Should Be Equal
-        ...    ${transformed_msg}
-        ...    ${expected_msg}
+    ...    ${transformed_msg}
+    ...    ${expected_msg}
 
 Computing average over a time window
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/gen-mapper/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-tick --flow /etc/tedge/gen-mapper/average.js
+    ...    cat /etc/tedge/flows/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-tick --flow /etc/tedge/flows/average.js
     ...    strip=True
     ${expected_msg}    Execute Command
-    ...    cat /etc/tedge/gen-mapper/average.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
+    ...    cat /etc/tedge/flows/average.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
     ...    strip=True
     Should Be Equal
-        ...    ${transformed_msg}
-        ...    ${expected_msg}
+    ...    ${transformed_msg}
+    ...    ${expected_msg}
 
 Each instance of a script must have its own static state
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/gen-mapper/count-messages.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-tick | sort
+    ...    cat /etc/tedge/flows/count-messages.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-tick | sort
     ...    strip=True
     ${expected_msg}    Execute Command
-    ...    cat /etc/tedge/gen-mapper/count-messages.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: ' | sort
+    ...    cat /etc/tedge/flows/count-messages.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: ' | sort
     ...    strip=True
     Should Be Equal
-        ...    ${transformed_msg}
-        ...    ${expected_msg}
+    ...    ${transformed_msg}
+    ...    ${expected_msg}
 
 
 *** Keywords ***
 Custom Setup
-    ${DEVICE_SN}=    Setup    connect=${False}
+    ${DEVICE_SN}    Setup    connect=${False}
     Set Suite Variable    $DEVICE_SN
     Copy Configuration Files
 
 Copy Configuration Files
-    Execute Command    mkdir /etc/tedge/gen-mapper/
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*    /etc/tedge/gen-mapper/
-
+    Execute Command    mkdir /etc/tedge/flows/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*    /etc/tedge/flows/

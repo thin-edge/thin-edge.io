@@ -63,7 +63,7 @@ A transformation *scripts* is a JavaScript or TypeScript module that exports:
 
 ## Flow configuration
 
-- The generic mapper loads flows and steps stored in `/etc/tedge/gen-mapper/`.
+- The generic mapper loads flows and steps stored in `/etc/tedge/flows/`.
 - A flow is defined by a TOML file with `.toml` extension.
 - A step is defined by a JavaScript file with `.js` extension.
   - This can also be a TypeScript module with a `.ts` extension.

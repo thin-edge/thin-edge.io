@@ -32,7 +32,7 @@ which is used to drive all MQTT message transformations.
 
 ## POC reference
 
-- The generic mapper loads flows and steps stored in `/etc/tedge/gen-mapper/`.
+- The generic mapper loads flows and steps stored in `/etc/tedge/flows/`.
 - A flow is defined by a TOML file with `.toml` extension.
 - A step is defined by a Javascript file with `.js` extension.
 - The definition of flows must provide a list of MQTT topics to subscribe to.

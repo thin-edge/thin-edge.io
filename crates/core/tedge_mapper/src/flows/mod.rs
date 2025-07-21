@@ -17,7 +17,7 @@ impl TEdgeComponent for GenMapper {
             start_basic_actors("tedge-flows", &tedge_config).await?;
 
         let mut fs_actor = FsWatchActorBuilder::new();
-        let mut gen_mapper = FlowsMapperBuilder::try_new(config_dir.join("gen-mapper")).await?;
+        let mut gen_mapper = FlowsMapperBuilder::try_new(config_dir.join("flows")).await?;
         gen_mapper.connect(&mut mqtt_actor);
         gen_mapper.connect_fs(&mut fs_actor);
 
