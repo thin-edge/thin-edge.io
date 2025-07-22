@@ -456,6 +456,21 @@ export async function onMessage(message, config) {
     }
 
     #[tokio::test]
+    async fn using_unknown_function() {
+        let js = r#"
+function transform(x) { return [x] }
+export function onMessage(message) {
+    return setTimeout(transform, 1000, message);
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("dummy", "content");
+        let err = script.on_message(&runtime, &DateTime::now(), &input).await;
+        assert!(format!("{:?}", err).contains("setTimeout is not defined"));
+    }
+
+    #[tokio::test]
     #[ignore = "FIXME: scripts must be cancelled if running too long"]
     async fn while_loop() {
         let js = r#"export function onMessage(msg) { while(true); };"#;
@@ -505,7 +520,9 @@ export async function onMessage(message, config) {
     async fn runtime_with(js: &str) -> (JsRuntime, JsScript) {
         let mut runtime = JsRuntime::try_new().await.unwrap();
         let mut script = JsScript::new("toml".into(), 1, "js".into());
-        runtime.load_js(script.module_name(), js).await.unwrap();
+        if let Err(err) = runtime.load_js(script.module_name(), js).await {
+            panic!("{:?}", err);
+        }
         script.no_js_on_message_fun = false;
         (runtime, script)
     }

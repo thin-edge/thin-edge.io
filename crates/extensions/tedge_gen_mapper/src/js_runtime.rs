@@ -201,9 +201,10 @@ impl<'js> JsModules<'js> {
         imports: Vec<&'static str>,
     ) -> Result<Vec<&'static str>, LoadError> {
         debug!(target: "flows", "compile({name})");
-        let module = Module::declare(ctx, name.clone(), source)?;
-        let (module, p) = module.eval()?;
-        let () = p.finish()?;
+        let module = Module::declare(ctx.clone(), name.clone(), source)
+            .map_err(|err| LoadError::from_js(&ctx, err))?;
+        let (module, p) = module.eval().map_err(|err| LoadError::from_js(&ctx, err))?;
+        let () = p.finish().map_err(|err| LoadError::from_js(&ctx, err))?;
 
         let mut exports = vec![];
         for import in imports {
@@ -256,17 +257,20 @@ impl<'js> JsModules<'js> {
         };
 
         debug!(target: "flows", "execute({module_name}.{function}) => {r:?}");
-        r.map_err(|err| {
-            if let Some(ex) = ctx.catch().as_exception() {
-                let err = anyhow::anyhow!("{ex}");
-                err.context("JS raised exception").into()
-            } else {
-                let err = CaughtError::from_error(&ctx, err);
-                debug!(target: "flows", "execute({module_name}.{function}) => {err:?}");
-                let err = anyhow::anyhow!("{err}");
-                err.context("JS runtime exception").into()
-            }
-        })
+        r.map_err(|err| LoadError::from_js(&ctx, err))
+    }
+}
+
+impl LoadError {
+    fn from_js(ctx: &Ctx<'_>, err: rquickjs::Error) -> Self {
+        if let Some(ex) = ctx.catch().as_exception() {
+            let err = anyhow::anyhow!("{ex}");
+            err.context("JS raised exception").into()
+        } else {
+            let err = CaughtError::from_error(ctx, err);
+            let err = anyhow::anyhow!("{err}");
+            err.context("JS runtime error").into()
+        }
     }
 }
 
