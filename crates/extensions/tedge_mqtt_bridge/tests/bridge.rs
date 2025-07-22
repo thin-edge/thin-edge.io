@@ -139,9 +139,7 @@ async fn bridge_forwards_large_messages() {
 
     let _poll_local = EventPoller::run_in_bg(ev_local);
 
-    let payload = std::iter::repeat(b'a')
-        .take(25 * 1024 * 1024)
-        .collect::<Vec<u8>>();
+    let payload = std::iter::repeat_n(b'a', 25 * 1024 * 1024).collect::<Vec<u8>>();
 
     local
         .publish("c8y/s/us", QoS::AtLeastOnce, false, payload.clone())

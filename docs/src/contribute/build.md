@@ -15,7 +15,7 @@ Whilst you should be able to build %%te%% on different Operating Systems and CPU
     * WSL 2 (Windows Subsystem for Linux)
     * macOS
 * git
-* Rust toolchain, the Minimum Supported Rust Version (MSRV) is 1.78
+* Rust toolchain, the Minimum Supported Rust Version (MSRV) is 1.85
 * [just](https://github.com/casey/just)
 
 A list of our test platforms can be found [here](../references/supported-platforms.md).
