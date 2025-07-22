@@ -471,7 +471,6 @@ export function onMessage(message) {
     }
 
     #[tokio::test]
-    #[ignore = "FIXME: scripts must be cancelled if running too long"]
     async fn while_loop() {
         let js = r#"export function onMessage(msg) { while(true); };"#;
         let (runtime, script) = runtime_with(js).await;
@@ -482,9 +481,7 @@ export function onMessage(message) {
             .await
             .unwrap_err();
         eprintln!("{:?}", error);
-        assert!(error
-            .to_string()
-            .contains("Maximum processing time exceeded"));
+        assert!(error.to_string().contains("interrupted"));
     }
 
     #[tokio::test]

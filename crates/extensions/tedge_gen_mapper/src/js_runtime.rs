@@ -8,6 +8,7 @@ use rquickjs::Ctx;
 use rquickjs::Module;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -19,11 +20,19 @@ pub struct JsRuntime {
     execution_timeout: Duration,
 }
 
+static TIME_CREDITS: AtomicUsize = AtomicUsize::new(1000);
+
 impl JsRuntime {
     pub async fn try_new() -> Result<Self, LoadError> {
         let runtime = rquickjs::AsyncRuntime::new()?;
         runtime.set_memory_limit(16 * 1024 * 1024).await;
         runtime.set_max_stack_size(256 * 1024).await;
+        runtime
+            .set_interrupt_handler(Some(Box::new(|| {
+                let credits = TIME_CREDITS.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                credits == 0
+            })))
+            .await;
         let context = rquickjs::AsyncContext::full(&runtime).await?;
         let worker = JsWorker::spawn(context).await;
         let execution_timeout = Duration::from_secs(5);
@@ -65,6 +74,7 @@ impl JsRuntime {
         let (sender, receiver) = oneshot::channel();
         let source = source.into();
         let imports = vec!["onMessage", "onConfigUpdate", "onInterval"];
+        TIME_CREDITS.store(100000, std::sync::atomic::Ordering::Relaxed);
         self.send(
             receiver,
             JsRequest::LoadModule {
@@ -84,6 +94,7 @@ impl JsRuntime {
         args: Vec<JsonValue>,
     ) -> Result<JsonValue, LoadError> {
         let (sender, receiver) = oneshot::channel();
+        TIME_CREDITS.store(1000, std::sync::atomic::Ordering::Relaxed);
         self.send(
             receiver,
             JsRequest::CallFunction {
