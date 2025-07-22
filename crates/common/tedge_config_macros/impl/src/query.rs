@@ -907,13 +907,12 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
     let key_str = segments
         .iter()
         .map(|segment| segment.name())
-        .interleave(std::iter::repeat(Cow::Borrowed(".")).take(segments.len() - 1))
+        .interleave(std::iter::repeat_n(Cow::Borrowed("."), segments.len() - 1))
         .collect::<String>();
     if count_multi > 0 {
-        let opt_strs =
-            std::iter::repeat::<syn::Type>(parse_quote!(Option<String>)).take(count_multi);
+        let opt_strs = std::iter::repeat_n::<syn::Type>(parse_quote!(Option<String>), count_multi);
         let enum_variant = parse_quote_spanned!(ident.span()=> #ident(#(#opt_strs),*));
-        let nones = std::iter::repeat::<syn::Path>(parse_quote!(None)).take(count_multi);
+        let nones = std::iter::repeat_n::<syn::Path>(parse_quote!(None), count_multi);
         let iter_field = parse_quote_spanned!(ident.span()=> #ident(#(#nones),*));
         let field_names = SequentialIdGenerator::default()
             .take(count_multi)
@@ -962,7 +961,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                             FieldOrGroup::Group(g) => g.ident.to_string(),
                             FieldOrGroup::Field(f) => f.ident().to_string(),
                         })
-                        .interleave(std::iter::repeat(".".to_owned()).take(segments.len() - 1))
+                        .interleave(std::iter::repeat_n(".".to_owned(), segments.len() - 1))
                         .collect::<String>();
                     (
                         parse_quote!(#ident(#(#options),*)),
