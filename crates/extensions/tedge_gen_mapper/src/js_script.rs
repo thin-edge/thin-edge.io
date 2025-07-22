@@ -267,6 +267,11 @@ impl<'js> FromJs<'js> for JsonValue {
 
 impl JsonValue {
     fn from_js_value(value: Value<'_>) -> rquickjs::Result<Self> {
+        if let Some(promise) = value.as_promise() {
+            // Beware checking the value is a promise must be done first
+            // as a promise can also be used as an object
+            return promise.finish();
+        }
         if let Some(b) = value.as_bool() {
             return Ok(JsonValue(serde_json::Value::Bool(b)));
         }
@@ -419,6 +424,27 @@ export function onMessage(message, config) {
             "te/device/main///m/collectd",
             r#"{"time": 1748440192.104, "memory": {"percent-used": 19.9289468288182}}"#,
         );
+        output.timestamp = None;
+        assert_eq!(
+            script
+                .on_message(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn promise_script() {
+        let js = r#"
+export async function onMessage(message, config) {
+    return [{topic:"foo/bar",payload:`{foo:"bar"}`}];
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("dummy", "content");
+        let mut output = Message::new("foo/bar", r#"{foo:"bar"}"#);
         output.timestamp = None;
         assert_eq!(
             script
