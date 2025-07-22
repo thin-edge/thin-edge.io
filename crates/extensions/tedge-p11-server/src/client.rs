@@ -7,6 +7,9 @@ use anyhow::Context;
 use tracing::debug;
 use tracing::trace;
 
+use crate::pkcs11::SigScheme;
+use crate::service::SignRequestWithSigScheme;
+
 use super::connection::Frame1;
 use super::service::ChooseSchemeRequest;
 use super::service::SignRequest;
@@ -53,17 +56,6 @@ impl TedgeP11Client {
         offered: &[rustls::SignatureScheme],
         uri: Option<String>,
     ) -> anyhow::Result<Option<rustls::SignatureScheme>> {
-        trace!("Connecting to socket...");
-        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
-            format!(
-                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
-                self.socket_path.display()
-            )
-        })?;
-        let mut connection = crate::connection::Connection::new(stream);
-
-        debug!("Connected to socket");
-
         let request = Frame1::ChooseSchemeRequest(ChooseSchemeRequest {
             offered: offered
                 .iter()
@@ -72,10 +64,7 @@ impl TedgeP11Client {
                 .collect::<Vec<_>>(),
             uri,
         });
-        trace!(?request);
-        connection.write_frame(&request)?;
-
-        let response = connection.read_frame()?;
+        let response = self.do_request(request)?;
 
         let Frame1::ChooseSchemeResponse(response) = response else {
             bail!("protocol error: bad response, expected chose scheme, received: {response:?}");
@@ -93,25 +82,12 @@ impl TedgeP11Client {
     // this function is called only on the server when handling ClientHello message, so
     // realistically it won't ever be called in our case
     pub fn algorithm(&self) -> anyhow::Result<rustls::SignatureAlgorithm> {
-        trace!("Connecting to socket...");
-        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
-            format!(
-                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
-                self.socket_path.display()
-            )
-        })?;
-        let mut connection = crate::connection::Connection::new(stream);
-
-        debug!("Connected to socket");
-
         // if passed empty set of schemes, service doesn't return a scheme but returns an algorithm
         let request = Frame1::ChooseSchemeRequest(ChooseSchemeRequest {
             offered: vec![],
             uri: None,
         });
-        connection.write_frame(&request)?;
-
-        let response = connection.read_frame()?;
+        let response = self.do_request(request)?;
 
         let Frame1::ChooseSchemeResponse(response) = response else {
             bail!("protocol error: bad response, expected chose scheme, received: {response:?}");
@@ -123,6 +99,44 @@ impl TedgeP11Client {
     }
 
     pub fn sign(&self, message: &[u8], uri: Option<String>) -> anyhow::Result<Vec<u8>> {
+        let request = Frame1::SignRequest(SignRequest {
+            to_sign: message.to_vec(),
+            uri,
+        });
+        let response = self.do_request(request)?;
+
+        let Frame1::SignResponse(response) = response else {
+            bail!("protocol error: bad response, expected sign, received: {response:?}");
+        };
+
+        debug!("Sign complete");
+
+        Ok(response.0)
+    }
+
+    pub fn sign2(
+        &self,
+        message: &[u8],
+        uri: Option<String>,
+        sigscheme: SigScheme,
+    ) -> anyhow::Result<Vec<u8>> {
+        let request = Frame1::SignRequestWithSigScheme(SignRequestWithSigScheme {
+            to_sign: message.to_vec(),
+            sigscheme: Some(sigscheme),
+            uri,
+        });
+        let response = self.do_request(request)?;
+
+        let Frame1::SignResponse(response) = response else {
+            bail!("protocol error: bad response, expected sign, received: {response:?}");
+        };
+
+        debug!("Sign complete");
+
+        Ok(response.0)
+    }
+
+    fn do_request(&self, request: Frame1) -> anyhow::Result<Frame1> {
         let stream = UnixStream::connect(&self.socket_path).with_context(|| {
             format!(
                 "Failed to connect to tedge-p11-server UNIX socket at '{}'",
@@ -132,21 +146,11 @@ impl TedgeP11Client {
         let mut connection = crate::connection::Connection::new(stream);
         debug!("Connected to socket");
 
-        let request = Frame1::SignRequest(SignRequest {
-            to_sign: message.to_vec(),
-            uri,
-        });
         trace!(?request);
         connection.write_frame(&request)?;
 
         let response = connection.read_frame()?;
 
-        let Frame1::SignResponse(response) = response else {
-            bail!("protocol error: bad response, expected sign, received: {response:?}");
-        };
-
-        debug!("Sign complete");
-
-        Ok(response.0)
+        Ok(response)
     }
 }

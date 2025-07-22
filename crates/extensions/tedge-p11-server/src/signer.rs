@@ -11,6 +11,7 @@ use crate::client::TedgeP11Client;
 use crate::pkcs11::Cryptoki;
 use crate::pkcs11::CryptokiConfigDirect;
 use crate::pkcs11::Pkcs11Signer;
+use crate::pkcs11::SigScheme;
 
 #[derive(Debug, Clone)]
 pub enum CryptokiConfig {
@@ -29,12 +30,20 @@ pub enum CryptokiConfig {
 pub trait TedgeP11Signer: SigningKey {
     /// Signs the message using the selected private key.
     fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>>;
+    /// Signs the message using the selected private key and signature scheme.
+    ///
+    /// Useful when a key can be used with multiple schemes, eg. RSA key using PKCS 1.5 or PSS.
+    fn sign2(&self, msg: &[u8], sigscheme: SigScheme) -> anyhow::Result<Vec<u8>>;
     fn to_rustls_signing_key(self: Arc<Self>) -> Arc<dyn rustls::sign::SigningKey>;
 }
 
 impl TedgeP11Signer for Pkcs11Signer {
     fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>> {
-        Pkcs11Signer::sign(self, msg)
+        Pkcs11Signer::sign(self, msg, None)
+    }
+
+    fn sign2(&self, msg: &[u8], sigscheme: SigScheme) -> anyhow::Result<Vec<u8>> {
+        Pkcs11Signer::sign(self, msg, Some(sigscheme))
     }
 
     fn to_rustls_signing_key(self: Arc<Self>) -> Arc<dyn rustls::sign::SigningKey> {
@@ -76,6 +85,12 @@ impl TedgeP11Signer for TedgeP11ClientSigningKey {
         self.client
             .sign(msg, self.uri.as_ref().map(|s| s.to_string()))
     }
+
+    fn sign2(&self, msg: &[u8], sigscheme: SigScheme) -> anyhow::Result<Vec<u8>> {
+        self.client
+            .sign2(msg, self.uri.as_ref().map(|s| s.to_string()), sigscheme)
+    }
+
     fn to_rustls_signing_key(self: Arc<Self>) -> Arc<dyn rustls::sign::SigningKey> {
         self
     }

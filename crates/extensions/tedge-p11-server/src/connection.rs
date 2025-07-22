@@ -16,6 +16,7 @@ use tracing::warn;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::SignRequest;
+use crate::service::SignRequestWithSigScheme;
 use crate::service::SignResponse;
 
 pub struct Connection {
@@ -89,6 +90,7 @@ pub enum Frame1 {
     SignRequest(SignRequest),
     ChooseSchemeResponse(ChooseSchemeResponse),
     SignResponse(SignResponse),
+    SignRequestWithSigScheme(SignRequestWithSigScheme),
 }
 
 /// An error that can be returned to the client by the server.
