@@ -203,16 +203,21 @@ build() {
     shift
     case "$build_tool" in
         zig|ziglang|cargo-zigbuild)
+            # make different tools build to different directories so they don't trash each other's cache
+            BUILD_SUBDIR=target/cargo-zigbuild
+            BUILD_DIR=${BUILD_DIR/target/$BUILD_SUBDIR}
             # shellcheck disable=SC2086
-            cargo-zigbuild $TOOLCHAIN zigbuild "$@"
+            cargo-zigbuild $TOOLCHAIN zigbuild --target-dir "$BUILD_SUBDIR" "$@"
             ;;
         clang)
+            BUILD_SUBDIR=target/clang
+            BUILD_DIR=${BUILD_DIR/target/$BUILD_SUBDIR}
             # shellcheck disable=SC2086
-            mk/cargo.sh $TOOLCHAIN build "$@"
+            mk/cargo.sh $TOOLCHAIN build --target-dir "$BUILD_SUBDIR" "$@"
             ;;
         native|*)
             # shellcheck disable=SC2086
-            cargo $TOOLCHAIN build "$@"
+            cargo $TOOLCHAIN build --target-dir "$BINARY_TARGET" "$@"
             ;;
     esac
 }
