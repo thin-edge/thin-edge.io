@@ -42,7 +42,7 @@ impl TedgeP11Server {
             let connection = Connection::new(stream);
 
             match self.process(connection) {
-                Ok(_) => info!("Incoming request successful"),
+                Ok(_) => {}
                 Err(e) => error!("Incoming request failed: {e:?}"),
             }
         }
@@ -50,6 +50,9 @@ impl TedgeP11Server {
 
     fn process(&self, mut connection: Connection) -> anyhow::Result<()> {
         let request = connection.read_frame().context("read")?;
+        // TODO: hack
+        let request_dbg = format!("{request:?}");
+        let (request_dbg, _) = request_dbg.split_once('(').unwrap();
 
         let response = match request {
             Frame1::Error(_)
@@ -121,6 +124,8 @@ impl TedgeP11Server {
         };
 
         connection.write_frame(&response).context("write")?;
+
+        info!(request = ?request_dbg, "Incoming request successful");
 
         Ok(())
     }
