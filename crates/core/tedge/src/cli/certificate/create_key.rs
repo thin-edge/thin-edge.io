@@ -8,7 +8,6 @@ use tedge_config::TEdgeConfig;
 use tedge_p11_server::pkcs11::CreateKeyParams;
 use tedge_p11_server::pkcs11::KeyTypeParams;
 
-use crate::cli::common::Cloud;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 
@@ -17,12 +16,9 @@ pub struct CreateKeyCmd {
     pub curve: u16,
     pub label: String,
     pub r#type: KeyType,
-
     /// The device identifier to be used as the common name for the certificate
     pub device_id: String,
-
     pub csr_template: CsrTemplate,
-
     pub csr_path: Utf8PathBuf,
 }
 
@@ -101,17 +97,7 @@ impl Command for CreateKeyCmd {
 
         eprintln!("New keypair was successfully created.");
 
-        // use returned private key to create a CSR
-
-        // isn't device_id the same as certificate_cn?
-        let common_name = crate::certificate_cn(
-            &config
-                .device_cert_path(None::<&Cloud>)
-                .unwrap()
-                .to_path_buf(),
-        )
-        .await?;
-
+        // use returned public key to create a CSR
         let sigalg = match (self.r#type, self.curve) {
             (KeyType::Rsa, _) => certificate::SignatureAlgorithm::RsaPkcs1Sha256,
             (KeyType::Ec, 256) => certificate::SignatureAlgorithm::EcdsaP256Sha256,
@@ -130,13 +116,15 @@ impl Command for CreateKeyCmd {
             pubkey_pem: Some(pubkey_pem.clone()),
             sigalg: Some(sigalg),
         };
-        let csr_path = config
-            .device_csr_path(None::<&Cloud>)
-            .unwrap()
-            .to_path_buf();
 
-        super::create_device_csr(common_name, key, None, csr_path, self.csr_template.clone())
-            .await?;
+        super::create_device_csr(
+            self.device_id.clone(),
+            key,
+            None,
+            self.csr_path.clone(),
+            self.csr_template.clone(),
+        )
+        .await?;
 
         eprintln!("Public key:\n{pubkey_pem}\n");
 
