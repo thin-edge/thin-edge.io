@@ -13,6 +13,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true, features = ["serde1"] }
 rquickjs = { workspace = true, default-features = false, features = [
+    "bindgen",
     "futures",
     "macro",
     "parallel",
