@@ -221,8 +221,10 @@ Warn the user if tedge.toml cannot be parsed
 *** Keywords ***
 Create private key and download cert from c8y
     [Arguments]    ${type}    ${label}    ${bits}=${EMPTY}    ${curve}=${EMPTY}    ${p11tool_keytype}=${EMPTY}
+    VAR    ${device_id}    ${label}
+
     # create the private key on token and write CSR to device.csr_path
-    VAR    ${command}=    tedge cert create-key --label ${label} --type ${type}
+    VAR    ${command}=    tedge cert create-key --label ${label} --type ${type} --device-id ${device_id}
     IF    $bits
         VAR    ${command}=    ${command} --bits ${bits}
     END
@@ -242,18 +244,22 @@ Create private key and download cert from c8y
     Should Contain    ${output}    Label: ${label}
 
     # check if valid CSR is created
-    ${stderr}=    Execute Command
+    ${stdout}    ${stderr}=    Execute Command
     ...    openssl req -text -noout -in /etc/tedge/device-certs/tedge.csr -verify
-    ...    stdout=False
-    ...    stderr=true
+    ...    stdout=True
+    ...    stderr=True
+    ...    strip=True
     Should Contain    ${stderr}    Certificate request self-signature verify OK
+
+    # check if provided device-id is used
+    Should Contain    ${stdout}    CN = ${device_id}
 
     # to use newly created private key, need to update device.key_uri
     Execute Command    cmd=tedge config set device.key_uri "pkcs11:object=${label}"
 
     # check we can download new cert from c8y and connect
     ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=True
-    Register Device With Cumulocity CA    ${csr_path}
+    Register Device With Cumulocity CA    ${csr_path}    ${device_id}
 
     Tedge Reconnect Should Succeed
 
