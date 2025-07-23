@@ -126,7 +126,6 @@ arm-unknown-linux-gnueabihf|armv7-unknown-linux-gnueabihf)
 i686-unknown-linux-gnu)
   use_clang=1
   install_packages \
-    gcc-multilib \
     libc6-dev-i386
   ;;
 i686-unknown-linux-musl|x86_64-unknown-linux-musl)
