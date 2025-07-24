@@ -175,8 +175,6 @@ pub struct CumulocityConverter {
     pub config: Arc<C8yMapperConfig>,
     pub(crate) mapper_config: MapperConfig,
     pub device_name: String,
-    pub(crate) device_topic_id: EntityTopicId,
-    pub(crate) device_type: String,
     alarm_converter: AlarmConverter,
     operation_logs: OperationLogs,
     mqtt_publisher: LoggingSender<MqttMessage>,
@@ -204,8 +202,6 @@ impl CumulocityConverter {
         downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
-        let device_topic_id = config.device_topic_id.clone();
-        let device_type = config.device_type.clone();
 
         let service_type = if config.service.ty.is_empty() {
             "service".to_owned()
@@ -269,8 +265,6 @@ impl CumulocityConverter {
             config: Arc::new(config),
             mapper_config,
             device_name: device_id,
-            device_topic_id,
-            device_type,
             alarm_converter,
             supported_operations: operation_manager,
             operation_logs,
@@ -1436,7 +1430,7 @@ impl CumulocityConverter {
     }
 
     fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut messages = self.base_inventory_twin_data()?;
+        let mut messages = self.base_inventory_data()?;
 
         self.supported_operations
             .load_all(&self.config.device_id, &self.config.bridge_config)?;
@@ -3275,7 +3269,7 @@ pub(crate) mod tests {
         let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
 
         // main device command
-        let main_device = converter.device_topic_id.clone();
+        let main_device = EntityTopicId::default_main_device();
 
         let operation_topic = converter.mqtt_schema.topic_for(
             &main_device,
@@ -3379,7 +3373,6 @@ pub(crate) mod tests {
 
         let device_id = "test-device".into();
         let device_topic_id = EntityTopicId::default_main_device();
-        let device_type = "test-device-type".into();
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
         let c8y_host = "test.c8y.io".to_owned();
         let tedge_http_host = "127.0.0.1".into();
@@ -3405,7 +3398,6 @@ pub(crate) mod tests {
             tmp_dir.utf8_path().into(),
             device_id,
             device_topic_id,
-            device_type,
             tedge_config.service.clone(),
             c8y_host.clone(),
             c8y_host,

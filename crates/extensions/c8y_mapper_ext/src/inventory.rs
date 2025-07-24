@@ -4,58 +4,23 @@ use crate::error::ConversionError;
 use crate::fragments::C8yAgentFragment;
 use serde_json::json;
 use serde_json::Value as JsonValue;
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
 use tedge_api::entity::EntityType;
 use tedge_api::entity_store::EntityTwinMessage;
-use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
-use tracing::info;
 
-const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
 const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "inventory/managedObjects/update";
 
 impl CumulocityConverter {
-    /// Creates the inventory twin messages with fragments from inventory.json file
-    pub(crate) fn base_inventory_twin_data(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut messages = vec![];
-        let inventory_file_path = self
-            .config
-            .config_dir
-            .join(INVENTORY_FRAGMENTS_FILE_LOCATION);
-        let inventory_base = Self::get_inventory_fragments(inventory_file_path.as_std_path())?;
+    /// Creates the inventory update messages with fragments from inventory.json file
+    pub(crate) fn base_inventory_data(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
+        let agent_fragment = C8yAgentFragment::new()?;
+        let json_fragment = agent_fragment.to_json()?;
+        let message = self.inventory_update_message(&self.config.device_topic_id, json_fragment)?;
 
-        if let JsonValue::Object(mut map) = inventory_base {
-            map.entry("name").or_insert(json!(self.device_name));
-            map.entry("type").or_insert(json!(self.device_type));
-
-            for (key, value) in map {
-                let mapped_message = self.entity_twin_data_message(
-                    &self.device_topic_id,
-                    key.clone(),
-                    value.clone(),
-                );
-                messages.push(mapped_message);
-            }
-        }
-
-        Ok(messages)
-    }
-
-    /// Create an entity twin data message with the provided fragment
-    fn entity_twin_data_message(
-        &self,
-        entity: &EntityTopicId,
-        fragment_key: String,
-        fragment_value: JsonValue,
-    ) -> MqttMessage {
-        let twin_channel = Channel::EntityTwinData { fragment_key };
-        let topic = self.mqtt_schema.topic_for(entity, &twin_channel);
-        MqttMessage::new(&topic, fragment_value.to_string()).with_retain()
+        Ok(vec![message])
     }
 
     /// Convert a twin metadata message into Cumulocity inventory update messages.
@@ -131,46 +96,6 @@ impl CumulocityConverter {
             &inventory_update_topic,
             fragment_value.to_string(),
         ))
-    }
-
-    /// Return the contents of inventory.json file as a `JsonValue`
-    fn get_inventory_fragments(inventory_file_path: &Path) -> Result<JsonValue, ConversionError> {
-        let agent_fragment = C8yAgentFragment::new()?;
-        let json_fragment = agent_fragment.to_json()?;
-
-        match Self::read_json_from_file(inventory_file_path) {
-            Ok(mut json) => {
-                json.as_object_mut()
-                    .ok_or(ConversionError::FromOptionError)?
-                    .insert(
-                        "c8y_Agent".to_string(),
-                        json_fragment
-                            .get("c8y_Agent")
-                            .ok_or(ConversionError::FromOptionError)?
-                            .to_owned(),
-                    );
-                Ok(json)
-            }
-            Err(ConversionError::FromStdIo(_)) => {
-                info!("Could not read inventory fragments from file {inventory_file_path:?}");
-                Ok(json_fragment)
-            }
-            Err(ConversionError::FromSerdeJson(e)) => {
-                info!("Could not parse the {inventory_file_path:?} file due to: {e}");
-                Ok(json_fragment)
-            }
-            Err(_) => Ok(json_fragment),
-        }
-    }
-
-    /// reads a json file to serde_json::Value
-    fn read_json_from_file(file_path: &Path) -> Result<serde_json::Value, ConversionError> {
-        let mut file = File::open(Path::new(file_path))?;
-        let mut data = String::new();
-        file.read_to_string(&mut data)?;
-        let json: serde_json::Value = serde_json::from_str(&data)?;
-        info!("Read the fragments from {file_path:?} file");
-        Ok(json)
     }
 
     /// Returns the JSON over MQTT inventory update topic
