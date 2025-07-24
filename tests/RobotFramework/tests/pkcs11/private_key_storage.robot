@@ -145,9 +145,16 @@ Can create a private key on the PKCS11 token and download new cert from c8y
     ...    bits=4096
     ...    p11tool_keytype=RSA-4096
 
-    # TODO: make EC curve type appear in p11tool
-    Create private key and download cert from c8y    label=ec-256    type=ec    curve=256
-    Create private key and download cert from c8y    label=ec-384    type=ec    curve=384
+    Create private key and download cert from c8y
+    ...    label=ec-256
+    ...    type=ec
+    ...    curve=256
+    ...    p11tool_keytype=EC/ECDSA-SECP256R1
+    Create private key and download cert from c8y
+    ...    label=ec-384
+    ...    type=ec
+    ...    curve=384
+    ...    p11tool_keytype=EC/ECDSA-SECP384R1
     # ECDSA P521 not supported by rcgen
 
     [Teardown]    Set tedge-p11-server Uri    value=
@@ -221,7 +228,7 @@ Warn the user if tedge.toml cannot be parsed
 *** Keywords ***
 Create private key and download cert from c8y
     [Arguments]    ${type}    ${label}    ${bits}=${EMPTY}    ${curve}=${EMPTY}    ${p11tool_keytype}=${EMPTY}
-    VAR    ${device_id}    ${label}
+    VAR    ${device_id}=    ${label}
 
     # create the private key on token and write CSR to device.csr_path
     VAR    ${command}=    tedge cert create-key --label ${label} --type ${type} --device-id ${device_id}
