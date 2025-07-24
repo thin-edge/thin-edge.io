@@ -615,3 +615,28 @@ async fn connections_from_cloned_configs_are_independent() -> Result<(), anyhow:
 
     Ok(())
 }
+
+#[tokio::test]
+async fn connection_can_be_closed_after_last_will_published() -> Result<(), anyhow::Error> {
+    // This test arose from an issue with dynamic subscriptions where
+    // subscriptions were shared between different MQTT channel instances
+    let broker = mqtt_tests::test_mqtt_broker();
+    let last_will_topic = uniquify!("last/will");
+
+    let mqtt_config = Config::default()
+        .with_port(broker.port)
+        .with_last_will_message(MqttMessage {
+            topic: Topic::new_unchecked(last_will_topic),
+            payload: "test".to_owned().into(),
+            qos: QoS::AtLeastOnce,
+            retain: true,
+        });
+
+    let con = Connection::new(&mqtt_config).await?;
+
+    timeout(Duration::from_secs(1), con.close())
+        .await
+        .expect("Connection did not close");
+
+    Ok(())
+}
