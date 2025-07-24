@@ -4716,6 +4716,7 @@ version = "1.6.1"
 dependencies = [
  "anstyle",
  "anyhow",
+ "asn1-rs 0.7.0",
  "assert_cmd",
  "assert_matches",
  "async-trait",

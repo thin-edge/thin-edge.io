@@ -1,4 +1,5 @@
 use anyhow::Context;
+use asn1_rs::FromDer;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
 use clap::ValueEnum;
@@ -59,11 +60,12 @@ impl Command for CreateKeyCmd {
             KeyType::Ec => {
                 // convert ECPoint to ECPublicKey
                 // DER encoding of ECPoint: RFC5480 section 2.2
-                println!("{pubkey_der:?} ({})", pubkey_der.len());
                 // we have a DER OCTET STRING here so first 2 bytes are DER tag + length
+                // TODO: we shouldn't have to do it here
                 let pubkey_pem = match self.curve {
                     256 => {
-                        let ec_point = EncodedPoint::<p256::NistP256>::from_bytes(&pubkey_der[2..])
+                        let (_, ec_point) = asn1_rs::OctetString::from_der(&pubkey_der).unwrap();
+                        let ec_point = EncodedPoint::<p256::NistP256>::from_bytes(&ec_point)
                             .context("Failed to parse EC point")?;
                         let pubkey =
                             elliptic_curve::PublicKey::<p256::NistP256>::from_encoded_point(
@@ -76,7 +78,8 @@ impl Command for CreateKeyCmd {
                         pem::Pem::new("PUBLIC KEY", der)
                     }
                     384 => {
-                        let ec_point = EncodedPoint::<p384::NistP384>::from_bytes(&pubkey_der[2..])
+                        let (_, ec_point) = asn1_rs::OctetString::from_der(&pubkey_der).unwrap();
+                        let ec_point = EncodedPoint::<p384::NistP384>::from_bytes(&ec_point)
                             .context("Failed to parse EC point")?;
                         let pubkey =
                             elliptic_curve::PublicKey::<p384::NistP384>::from_encoded_point(
