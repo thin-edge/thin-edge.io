@@ -14,7 +14,7 @@ use tracing::warn;
 /// A chain of transformation of MQTT messages
 pub struct Flow {
     /// The source topics
-    pub input_topics: TopicFilter,
+    pub input: FlowInput,
 
     /// Transformation steps to apply in order to the messages
     pub steps: Vec<FlowStep>,
@@ -26,6 +26,10 @@ pub struct Flow {
 pub struct FlowStep {
     pub script: JsScript,
     pub config_topics: TopicFilter,
+}
+
+pub enum FlowInput {
+    MQTT { topics: TopicFilter },
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -55,7 +59,7 @@ pub enum FlowError {
 
 impl Flow {
     pub fn topics(&self) -> TopicFilter {
-        let mut topics = self.input_topics.clone();
+        let mut topics = self.input.topics().clone();
         for step in self.steps.iter() {
             topics.add_all(step.config_topics.clone())
         }
@@ -83,7 +87,7 @@ impl Flow {
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         self.on_config_update(js_runtime, message).await?;
-        if !self.input_topics.accept_topic_name(&message.topic) {
+        if !self.input.topics().accept_topic_name(&message.topic) {
             return Ok(vec![]);
         }
 
@@ -172,6 +176,14 @@ impl FlowStep {
         if !script.no_js_on_interval_fun && script.tick_every_seconds == 0 {
             // 0 as a default is not appropriate for a script with a tick handler
             script.tick_every_seconds = 1;
+        }
+    }
+}
+
+impl FlowInput {
+    pub fn topics(&self) -> &TopicFilter {
+        match self {
+            FlowInput::MQTT { topics } => topics,
         }
     }
 }

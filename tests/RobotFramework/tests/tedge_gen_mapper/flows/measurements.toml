@@ -1,4 +1,4 @@
-input_topics = ["te/+/+/+/+/m/+"]
+input.mqtt.topics = ["te/+/+/+/+/m/+"]
 
 steps = [
     { script = "add_timestamp.js" },

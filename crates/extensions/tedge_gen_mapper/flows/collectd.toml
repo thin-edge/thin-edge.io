@@ -1,4 +1,4 @@
-input_topics = ["collectd/+/+/+"]
+input.mqtt.topics = ["collectd/+/+/+"]
 
 steps = [
     { script = "collectd-to-te.js" },

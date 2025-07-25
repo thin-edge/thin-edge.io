@@ -42,7 +42,7 @@ which is used to drive all MQTT message transformations.
   - Each step can also subscribe to a list of MQTT topics (which messages will be passed to the script to update its config)
 
 ```toml
-input_topics = ["te/+/+/+/+/m/+"]
+input.mqtt.topics = ["te/+/+/+/+/m/+"]
 
 steps = [
     { script = "add_timestamp.js" },

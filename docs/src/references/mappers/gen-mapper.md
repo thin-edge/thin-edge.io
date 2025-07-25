@@ -103,7 +103,7 @@ These values are configured by the flow and can be dynamically updated on recept
   - Each step can also subscribe to a list of MQTT topics (which messages will be passed to the script to update its config)
 
 ```toml
-input_topics = ["te/+/+/+/+/m/+"]
+input.mqtt.topics = ["te/+/+/+/+/m/+"]
 
 steps = [
     { script = "add_timestamp.js" },

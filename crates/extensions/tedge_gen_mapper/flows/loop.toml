@@ -1,5 +1,5 @@
 # This flow is on purpose looping: the messages are published to the same topic
-input_topics = ["loopback/#"]
+input.mqtt.topics = ["loopback/#"]
 
 steps = [
     { script = "add_timestamp.js" },

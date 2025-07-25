@@ -1,4 +1,5 @@
 use crate::flow::Flow;
+use crate::flow::FlowInput;
 use crate::flow::FlowStep;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
@@ -13,7 +14,7 @@ use tedge_mqtt_ext::TopicFilter;
 
 #[derive(Deserialize)]
 pub struct FlowConfig {
-    input_topics: Vec<String>,
+    input: InputConfig,
     steps: Vec<StepConfig>,
 }
 
@@ -37,6 +38,12 @@ pub enum ScriptSpec {
     JavaScript(Utf8PathBuf),
 }
 
+#[derive(Deserialize)]
+pub enum InputConfig {
+    #[serde(rename = "mqtt")]
+    Mqtt { topics: Vec<String> },
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
     #[error("Not a valid MQTT topic filter: {0}")]
@@ -56,7 +63,9 @@ impl FlowConfig {
             meta_topics: vec![],
         };
         Self {
-            input_topics: vec![input_topic],
+            input: InputConfig::Mqtt {
+                topics: vec![input_topic],
+            },
             steps: vec![step],
         }
     }
@@ -67,7 +76,7 @@ impl FlowConfig {
         config_dir: &Path,
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
-        let input_topics = topic_filters(&self.input_topics)?;
+        let input = self.input.try_into()?;
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
             let mut step = step.compile(config_dir, i, &source).await?;
@@ -77,7 +86,7 @@ impl FlowConfig {
             steps.push(step);
         }
         Ok(Flow {
-            input_topics,
+            input,
             steps,
             source,
         })
@@ -99,7 +108,7 @@ impl StepConfig {
         let script = JsScript::new(flow.to_owned().into(), index, path)
             .with_config(self.config)
             .with_tick_every_seconds(self.tick_every_seconds);
-        let config_topics = topic_filters(&self.meta_topics)?;
+        let config_topics = topic_filters(self.meta_topics)?;
         Ok(FlowStep {
             script,
             config_topics,
@@ -107,7 +116,18 @@ impl StepConfig {
     }
 }
 
-fn topic_filters(patterns: &Vec<String>) -> Result<TopicFilter, ConfigError> {
+impl TryFrom<InputConfig> for FlowInput {
+    type Error = ConfigError;
+
+    fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
+        match input {
+            InputConfig::Mqtt { topics } => Ok(FlowInput::MQTT {
+                topics: topic_filters(topics)?,
+            }),
+        }
+    }
+}
+fn topic_filters(patterns: Vec<String>) -> Result<TopicFilter, ConfigError> {
     let mut topics = TopicFilter::empty();
     for pattern in patterns {
         topics
