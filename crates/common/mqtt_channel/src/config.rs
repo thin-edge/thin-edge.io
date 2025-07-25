@@ -250,6 +250,15 @@ impl Config {
         }
     }
 
+    /// Clears the last will message
+    pub fn with_no_last_will_or_initial_message(self) -> Self {
+        Self {
+            last_will_message: None,
+            initial_message: None,
+            ..self
+        }
+    }
+
     /// Set the initial message
     pub fn with_initial_message(
         self,

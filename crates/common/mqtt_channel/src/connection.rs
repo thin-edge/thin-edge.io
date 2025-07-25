@@ -454,9 +454,13 @@ impl Connection {
         // one has first to explicitly send the last will message.
         if let Some(last_will) = last_will {
             let payload = Vec::from(last_will.payload_bytes());
-            let _ = mqtt_client
+            if mqtt_client
                 .publish(last_will.topic, last_will.qos, last_will.retain, payload)
-                .await;
+                .await
+                .is_ok()
+            {
+                pub_count.fetch_add(1, Ordering::SeqCst);
+            }
         }
 
         // At this point, `_disconnect_permit` is dropped

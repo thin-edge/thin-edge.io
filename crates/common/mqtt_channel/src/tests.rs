@@ -3,6 +3,7 @@ use futures::SinkExt;
 use futures::StreamExt;
 use std::convert::TryInto;
 use std::time::Duration;
+use tokio::time::timeout;
 
 const TIMEOUT: Duration = Duration::from_millis(1000);
 
@@ -567,4 +568,75 @@ async fn assert_payload_received(con: &mut Connection, payload: &'static str) {
         MaybeMessage::Next(msg) => assert_eq!(msg.payload.as_str().unwrap(), payload),
         not_msg => panic!("Expected message to be received, got {not_msg:?}"),
     }
+}
+
+#[tokio::test]
+async fn connections_from_cloned_configs_are_independent() -> Result<(), anyhow::Error> {
+    // This test arose from an issue with dynamic subscriptions where
+    // subscriptions were shared between different MQTT channel instances
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mqtt_config = Config::default().with_port(broker.port);
+    let mqtt_config_cloned = mqtt_config.clone();
+
+    let topic = uniquify!("a/test/topic");
+    let other_topic = uniquify!("different/test/topic");
+    let mqtt_config = mqtt_config.with_subscriptions(TopicFilter::new_unchecked(topic));
+    let mqtt_config_cloned =
+        mqtt_config_cloned.with_subscriptions(TopicFilter::new_unchecked(other_topic));
+
+    let mut con = Connection::new(&mqtt_config).await?;
+    let mut other_con = Connection::new(&mqtt_config_cloned).await?;
+
+    // Any messages published on that topic ...
+    broker.publish(topic, "original topic message").await?;
+    broker.publish(other_topic, "other topic message").await?;
+
+    // ... must be received by the client
+    assert_eq!(
+        MaybeMessage::Next(message(topic, "original topic message")),
+        next_message(&mut con.received).await
+    );
+    assert_eq!(
+        MaybeMessage::Next(message(other_topic, "other topic message")),
+        next_message(&mut other_con.received).await
+    );
+
+    assert!(
+        timeout(Duration::from_millis(200), next_message(&mut con.received))
+            .await
+            .is_err()
+    );
+    assert!(timeout(
+        Duration::from_millis(200),
+        next_message(&mut other_con.received)
+    )
+    .await
+    .is_err());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn connection_can_be_closed_after_last_will_published() -> Result<(), anyhow::Error> {
+    // This test arose from an issue with dynamic subscriptions where
+    // subscriptions were shared between different MQTT channel instances
+    let broker = mqtt_tests::test_mqtt_broker();
+    let last_will_topic = uniquify!("last/will");
+
+    let mqtt_config = Config::default()
+        .with_port(broker.port)
+        .with_last_will_message(MqttMessage {
+            topic: Topic::new_unchecked(last_will_topic),
+            payload: "test".to_owned().into(),
+            qos: QoS::AtLeastOnce,
+            retain: true,
+        });
+
+    let con = Connection::new(&mqtt_config).await?;
+
+    timeout(Duration::from_secs(1), con.close())
+        .await
+        .expect("Connection did not close");
+
+    Ok(())
 }

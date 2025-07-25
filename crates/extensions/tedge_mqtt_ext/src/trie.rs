@@ -193,7 +193,7 @@ impl SubscriptionDiff {
 /// "a/+" does not compare to "a/b/c"
 /// "a/+/c" does not compare to "a/b/+"
 /// "a/b" does not compare to "c/d"
-struct RankTopicFilter<'a>(&'a str);
+pub(crate) struct RankTopicFilter<'a>(pub &'a str);
 
 impl PartialOrd for RankTopicFilter<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
