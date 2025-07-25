@@ -1,10 +1,6 @@
-use anyhow::Context;
-use asn1_rs::FromDer;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
 use clap::ValueEnum;
-use elliptic_curve::sec1::EncodedPoint;
-use elliptic_curve::sec1::FromEncodedPoint;
 use tedge_config::TEdgeConfig;
 use tedge_p11_server::pkcs11::CreateKeyParams;
 use tedge_p11_server::pkcs11::KeyTypeParams;
@@ -51,52 +47,7 @@ impl Command for CreateKeyCmd {
 
         // generate a keypair
         // should probably verify the keys before using them
-        let pubkey_der = pkcs11client.create_key(None, params)?;
-        let pubkey_pem = match self.r#type {
-            KeyType::Rsa => {
-                let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
-                pem::encode(&pubkey_pem)
-            }
-            KeyType::Ec => {
-                // convert ECPoint to ECPublicKey
-                // DER encoding of ECPoint: RFC5480 section 2.2
-                // we have a DER OCTET STRING here so first 2 bytes are DER tag + length
-                // TODO: we shouldn't have to do it here
-                let pubkey_pem = match self.curve {
-                    256 => {
-                        let (_, ec_point) = asn1_rs::OctetString::from_der(&pubkey_der).unwrap();
-                        let ec_point = EncodedPoint::<p256::NistP256>::from_bytes(&ec_point)
-                            .context("Failed to parse EC point")?;
-                        let pubkey =
-                            elliptic_curve::PublicKey::<p256::NistP256>::from_encoded_point(
-                                &ec_point,
-                            )
-                            .into_option()
-                            .context("Failed to create EC pubkey from EncodedPoint")?;
-                        let der = pubkey.to_sec1_bytes();
-
-                        pem::Pem::new("PUBLIC KEY", der)
-                    }
-                    384 => {
-                        let (_, ec_point) = asn1_rs::OctetString::from_der(&pubkey_der).unwrap();
-                        let ec_point = EncodedPoint::<p384::NistP384>::from_bytes(&ec_point)
-                            .context("Failed to parse EC point")?;
-                        let pubkey =
-                            elliptic_curve::PublicKey::<p384::NistP384>::from_encoded_point(
-                                &ec_point,
-                            )
-                            .into_option()
-                            .context("Failed to create EC pubkey from EncodedPoint")?;
-                        let der = pubkey.to_sec1_bytes();
-
-                        pem::Pem::new("PUBLIC KEY", der)
-                    }
-                    _ => return Err(anyhow::anyhow!("aaaa").into()),
-                };
-
-                pem::encode(&pubkey_pem)
-            }
-        };
+        let pubkey_pem = pkcs11client.create_key(None, params)?;
 
         eprintln!("New keypair was successfully created.");
 

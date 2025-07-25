@@ -168,7 +168,7 @@ mod tests {
             &self,
             _uri: Option<&str>,
             _params: CreateKeyParams,
-        ) -> anyhow::Result<Vec<u8>> {
+        ) -> anyhow::Result<String> {
             todo!()
         }
     }

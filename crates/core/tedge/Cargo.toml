@@ -26,11 +26,6 @@ certificate = { workspace = true }
 clap = { workspace = true }
 clap_complete = { version = "4.5.42", features = ["unstable-dynamic"] }
 doku = { workspace = true }
-elliptic-curve = { version = "0.13.8", features = [
-    "arithmetic",
-    "sec1",
-    "std",
-] }
 flate2 = { workspace = true }
 humantime = { workspace = true }
 hyper = { workspace = true, default-features = false }

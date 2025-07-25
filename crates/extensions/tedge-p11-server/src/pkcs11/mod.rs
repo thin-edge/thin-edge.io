@@ -161,7 +161,7 @@ impl TedgeP11Service for Cryptoki {
         Ok(SignResponse(signature))
     }
 
-    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<Vec<u8>> {
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String> {
         self.create_key(uri, params)
     }
 }
@@ -287,18 +287,14 @@ impl Cryptoki {
         Ok(key)
     }
 
-    pub fn create_key(
-        &self,
-        uri: Option<&str>,
-        params: CreateKeyParams,
-    ) -> anyhow::Result<Vec<u8>> {
+    pub fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String> {
         let uri_attributes = self.request_uri(uri)?;
         let session = self.open_session(&uri_attributes)?;
 
-        let pubkey_der =
+        let pubkey_pem =
             create_key(&session, params).context("Failed to create a new private key")?;
 
-        Ok(pubkey_der)
+        Ok(pubkey_pem)
     }
 
     fn find_key_by_attributes(
@@ -356,7 +352,7 @@ impl Cryptoki {
     }
 }
 
-fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<u8>> {
+fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<String> {
     let (mechanism, attrs_pub, attrs_priv) = match params.key {
         KeyTypeParams::Rsa { bits } => {
             anyhow::ensure!(
@@ -378,8 +374,7 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<
             let oid = match curve {
                 256 => SECP256R1_OID,
                 384 => SECP384R1_OID,
-                521 => SECP521R1_OID,
-                _ => anyhow::bail!("Invalid EC curve value: only 256/384/521 valid"),
+                _ => anyhow::bail!("Invalid EC curve value: only 256/384 valid"),
             };
             let components: Vec<u64> = oid.split('.').map(|c| c.parse().unwrap()).collect();
             let curve_oid = asn1_rs::Oid::from(&components)
@@ -470,7 +465,10 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<
 
             if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
                 if !pubkey_der.is_empty() {
-                    return Ok(pubkey_der);
+                    // TODO: test
+                    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+                    let pubkey_pem = pem::encode(&pubkey_pem);
+                    return Ok(pubkey_pem);
                 }
             }
 
@@ -518,7 +516,10 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<
 
             if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
                 if !pubkey_der.is_empty() {
-                    return Ok(pubkey_der);
+                    // TODO: test
+                    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+                    let pubkey_pem = pem::encode(&pubkey_pem);
+                    return Ok(pubkey_pem);
                 }
             }
 
@@ -534,7 +535,51 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Vec<
         }
     };
 
-    Ok(pubkey_der)
+    let pubkey_pem = match params.key {
+        KeyTypeParams::Rsa { .. } => {
+            let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+            pem::encode(&pubkey_pem)
+        }
+        KeyTypeParams::Ec { curve } => {
+            // convert ECPoint to ECPublicKey
+            // DER encoding of ECPoint: RFC5480 section 2.2
+            match curve {
+                256 => ec::point_to_pem::<p256::NistP256>(pubkey_der)?,
+                384 => ec::point_to_pem::<p384::NistP384>(pubkey_der)?,
+                _ => return Err(anyhow::anyhow!("aaaa")),
+            }
+        }
+    };
+
+    Ok(pubkey_pem)
+}
+
+mod ec {
+    use super::*;
+    use elliptic_curve::point::PointCompression;
+    use elliptic_curve::sec1::EncodedPoint;
+    use elliptic_curve::sec1::FromEncodedPoint;
+    use elliptic_curve::sec1::ModulusSize;
+    use elliptic_curve::sec1::ToEncodedPoint;
+    use elliptic_curve::Curve;
+    use elliptic_curve::CurveArithmetic;
+
+    pub fn point_to_pem<C>(point_der: Vec<u8>) -> anyhow::Result<String>
+    where
+        C: Curve + CurveArithmetic + PointCompression,
+        <C as Curve>::FieldBytesSize: ModulusSize,
+        <C as CurveArithmetic>::AffinePoint: FromEncodedPoint<C> + ToEncodedPoint<C>,
+    {
+        let (_, ec_point) = asn1_rs::OctetString::from_der(&point_der).unwrap();
+        let ec_point =
+            EncodedPoint::<C>::from_bytes(&ec_point).context("Failed to parse EC point")?;
+        let pubkey = elliptic_curve::PublicKey::<C>::from_encoded_point(&ec_point)
+            .into_option()
+            .context("Failed to create EC pubkey from EncodedPoint")?;
+        let der = pubkey.to_sec1_bytes();
+        let pubkey_pem = pem::Pem::new("PUBLIC KEY", der);
+        Ok(pem::encode(&pubkey_pem))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
