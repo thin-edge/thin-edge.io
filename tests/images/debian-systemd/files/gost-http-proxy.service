@@ -5,6 +5,7 @@ After=syslog.target network-online.target
 [Service]
 User=gost
 ExecStart=/usr/bin/gost -L http://127.0.0.1:8080
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :8080 | grep -q "^LISTEN.*:8080"; do sleep 1; done'
 Restart=on-failure
 
 [Install]
