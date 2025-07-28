@@ -10,7 +10,7 @@ env:
 jobs:
   block-fixup:
     name: Block fixup commits
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
@@ -23,7 +23,7 @@ jobs:
   # JOB to run change detection
   changes:
     name: Filter changes
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: ${{ github.event_name != 'merge_group' }}
     # Set job outputs to values from filter step
     outputs:
@@ -54,7 +54,7 @@ jobs:
   #
   check-lockfile-uptodate:
     name: Check whether Cargo.lock is up to date
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
@@ -99,7 +99,7 @@ jobs:
 
   dependency-sort:
     name: Sort dependencies
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
@@ -119,7 +119,7 @@ jobs:
   format:
     # Check formatting of both Rust and Robotframework code
     name: Run format checks
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: changes
     if: ${{ github.event_name == 'pull_request' }}
 
@@ -156,7 +156,7 @@ jobs:
 
   cargo-clippy:
     name: Run cargo clippy
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       RUSTFLAGS: -D warnings
     needs: changes
@@ -182,7 +182,7 @@ jobs:
 
   cargo-audit:
     name: Run cargo audit
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
@@ -193,13 +193,16 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: cargo install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
       - name: Cargo audit
         run: cargo audit
 
   # Check: licenses (only use approved list of licenses), unmaintained repos, yanked versions
   cargo-deny:
     name: Run cargo-deny
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
@@ -220,7 +223,7 @@ jobs:
   # Only run check if the project still compiles on MSRV, test are run on stable
   check-msrv:
     name: Run cargo check on MSRV
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 

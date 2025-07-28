@@ -33,7 +33,7 @@ env:
 jobs:
   cargo-test:
     name: Run cargo test
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check disk space before setting up
         run: df -BM
@@ -127,36 +127,36 @@ jobs:
         include:
           - target: aarch64-unknown-linux-musl
             build_with: auto
-            host_os: ubuntu-22.04
+            host_os: ubuntu-24.04
             cargo_options: --no-run
           
           - target: armv7-unknown-linux-musleabihf
             build_with: auto
-            host_os: ubuntu-22.04
+            host_os: ubuntu-24.04
             cargo_options: --no-run
 
           - target: arm-unknown-linux-musleabihf
             build_with: auto
-            host_os: ubuntu-22.04
+            host_os: ubuntu-24.04
             cargo_options: --no-run
 
           - target: arm-unknown-linux-musleabi
             build_with: auto
-            host_os: ubuntu-22.04
+            host_os: ubuntu-24.04
             cargo_options: --no-run
 
           - target: armv5te-unknown-linux-musleabi
             build_with: clang
-            host_os: ubuntu-22.04
+            host_os: ubuntu-24.04
             cargo_options: --no-run
 
           - target: x86_64-unknown-linux-musl
             build_with: auto
-            host_os: ubuntu-22.04
+            host_os: ubuntu-24.04
 
           - target: i686-unknown-linux-musl
             build_with: auto
-            host_os: ubuntu-22.04
+            host_os: ubuntu-24.04
             cargo_options: --no-run
 
           # Note: riscv64gc-unknown-linux-musl is meant to be supported from 1.82
@@ -164,7 +164,7 @@ jobs:
           # So stick to gnu build only
           - target: riscv64gc-unknown-linux-gnu
             build_with: auto
-            host_os: ubuntu-22.04
+            host_os: ubuntu-24.04
             cargo_options: --no-run
 
           - target: aarch64-apple-darwin
@@ -235,7 +235,7 @@ jobs:
       # For security reasons, all pull requests need to be approved first before granting access to secrets
       # So the environment should be set to have a reviewer/s inspect it before approving it
       name: ${{ github.event_name == 'pull_request_target' && 'Test Pull Request' || 'Test Auto'  }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Wait for approval
         run: echo "Approved"
@@ -247,7 +247,7 @@ jobs:
     needs: [approve, check-build]
     environment:
       name: Test Auto
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         job:
@@ -326,7 +326,7 @@ jobs:
       github.event_name != 'pull_request_target' &&
       (needs.check-build.result == 'success') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [check-build, test, cargo-test]
     strategy:
       fail-fast: false
@@ -381,7 +381,7 @@ jobs:
       github.event_name != 'pull_request_target' &&
       (needs.check-build.result == 'success') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [check-build, test, cargo-test]
     env:
       BUILDX_NO_DEFAULT_ATTESTATIONS: 1
@@ -454,7 +454,7 @@ jobs:
       always() &&
       github.event_name != 'pull_request_target' &&
       needs.publish.result == 'success'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [publish]
     steps:
       - name: Checkout
