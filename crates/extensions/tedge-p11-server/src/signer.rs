@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use camino::Utf8PathBuf;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use tracing::error;
@@ -9,18 +8,9 @@ use tracing::instrument;
 
 use crate::client::TedgeP11Client;
 use crate::pkcs11::Cryptoki;
-use crate::pkcs11::CryptokiConfigDirect;
 use crate::pkcs11::Pkcs11Signer;
 use crate::pkcs11::SigScheme;
-
-#[derive(Debug, Clone)]
-pub enum CryptokiConfig {
-    Direct(CryptokiConfigDirect),
-    SocketService {
-        socket_path: Utf8PathBuf,
-        uri: Option<Arc<str>>,
-    },
-}
+use crate::CryptokiConfig;
 
 /// A signer using a private key object located on the PKCS11 token.
 ///
@@ -30,10 +20,12 @@ pub enum CryptokiConfig {
 pub trait TedgeP11Signer: SigningKey {
     /// Signs the message using the selected private key.
     fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>>;
+
     /// Signs the message using the selected private key and signature scheme.
     ///
     /// Useful when a key can be used with multiple schemes, eg. RSA key using PKCS 1.5 or PSS.
     fn sign2(&self, msg: &[u8], sigscheme: SigScheme) -> anyhow::Result<Vec<u8>>;
+
     fn to_rustls_signing_key(self: Arc<Self>) -> Arc<dyn rustls::sign::SigningKey>;
 }
 
@@ -110,7 +102,7 @@ impl SigningKey for TedgeP11ClientSigningKey {
                 return None;
             }
         };
-        let scheme = response?;
+        let scheme = response.scheme?.0;
 
         Some(Box::new(TedgeP11ClientSigner {
             client: self.client.clone(),

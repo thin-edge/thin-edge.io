@@ -8,16 +8,18 @@ use super::connection::Connection;
 use crate::connection::Frame1;
 use crate::connection::ProtocolError;
 use crate::service::SignRequestWithSigScheme;
-use crate::service::SigningService;
+use crate::service::TedgeP11Service;
 
+/// Relays requests made by [`TedgeP11Client`](super::TedgeP11Client) to the inner PKCS #11 service and returns
+/// responses.
 pub struct TedgeP11Server {
-    service: Box<dyn SigningService + Send + Sync>,
+    service: Box<dyn TedgeP11Service>,
 }
 
 impl TedgeP11Server {
     pub fn new<S>(service: S) -> anyhow::Result<Self>
     where
-        S: SigningService + Send + Sync + 'static,
+        S: TedgeP11Service + 'static,
     {
         Ok(Self {
             service: Box::new(service),
@@ -125,7 +127,7 @@ mod tests {
 
     struct TestSigningService;
 
-    impl SigningService for TestSigningService {
+    impl TedgeP11Service for TestSigningService {
         fn choose_scheme(
             &self,
             _request: ChooseSchemeRequest,
@@ -158,7 +160,7 @@ mod tests {
         tokio::task::spawn_blocking(move || {
             let client = TedgeP11Client::with_ready_check(socket_path.into());
             assert_eq!(
-                client.choose_scheme(&[], None).unwrap().unwrap(),
+                client.choose_scheme(&[], None).unwrap().scheme.unwrap(),
                 SCHEME.into()
             );
             assert_eq!(&client.sign2(&[], None, SCHEME).unwrap(), &SIGNATURE[..]);

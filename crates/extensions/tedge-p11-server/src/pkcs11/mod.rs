@@ -40,6 +40,13 @@ use std::sync::Mutex;
 
 pub use cryptoki::types::AuthPin;
 
+use crate::service;
+use crate::service::ChooseSchemeRequest;
+use crate::service::ChooseSchemeResponse;
+use crate::service::SignRequestWithSigScheme;
+use crate::service::SignResponse;
+use crate::service::TedgeP11Service;
+
 mod uri;
 
 // oIDs for curves defined here: https://datatracker.ietf.org/doc/html/rfc5480#section-2.1.1.1
@@ -65,10 +72,31 @@ impl Debug for CryptokiConfigDirect {
     }
 }
 
+/// A [`TedgeP11Service`] implementation that uses the loaded cryptoki library to perform PKCS #11 operations.
 #[derive(Debug, Clone)]
 pub struct Cryptoki {
     context: Pkcs11,
     config: CryptokiConfigDirect,
+}
+
+impl TedgeP11Service for Cryptoki {
+    fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse> {
+        let signing_key = self.signing_key(request.uri.as_deref())?;
+        let offered: Vec<_> = request.offered.into_iter().map(|s| s.0).collect();
+        let signer = signing_key
+            .choose_scheme(&offered[..])
+            .context("failed to choose scheme")?;
+        Ok(ChooseSchemeResponse {
+            scheme: Some(service::SignatureScheme(signer.scheme())),
+            algorithm: service::SignatureAlgorithm(signing_key.algorithm()),
+        })
+    }
+
+    fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse> {
+        let signing_key = self.signing_key(request.uri.as_deref())?;
+        let signature = signing_key.sign(&request.to_sign, request.sigscheme)?;
+        Ok(SignResponse(signature))
+    }
 }
 
 impl Cryptoki {
@@ -332,6 +360,12 @@ impl From<SigScheme> for rustls::SignatureScheme {
             SigScheme::RsaPssSha256 => Self::RSA_PSS_SHA256,
             SigScheme::RsaPkcs1Sha256 => Self::RSA_PKCS1_SHA256,
         }
+    }
+}
+
+impl From<SigScheme> for crate::service::SignatureScheme {
+    fn from(value: SigScheme) -> Self {
+        Self(rustls::SignatureScheme::from(value))
     }
 }
 
