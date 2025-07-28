@@ -4,11 +4,13 @@ use clap::ValueEnum;
 use tedge_config::TEdgeConfig;
 use tedge_p11_server::pkcs11::CreateKeyParams;
 use tedge_p11_server::pkcs11::KeyTypeParams;
+use tedge_p11_server::CryptokiConfig;
 
 use crate::command::Command;
 use crate::log::MaybeFancy;
 
 pub struct CreateKeyCmd {
+    pub cryptoki_config: CryptokiConfig,
     pub bits: u16,
     pub curve: u16,
     pub label: String,
@@ -31,10 +33,7 @@ impl Command for CreateKeyCmd {
         "Generate a keypair.".into()
     }
 
-    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let socket_path = &config.device.cryptoki.socket_path;
-        let pkcs11client =
-            tedge_p11_server::TedgeP11Client::with_ready_check(socket_path.as_std_path().into());
+    async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         let key = match self.r#type {
             KeyType::Rsa => KeyTypeParams::Rsa { bits: self.bits },
             KeyType::Ec => KeyTypeParams::Ec { curve: self.curve },
@@ -47,7 +46,8 @@ impl Command for CreateKeyCmd {
 
         // generate a keypair
         // should probably verify the keys before using them
-        let pubkey_pem = pkcs11client.create_key(None, params)?;
+        let cryptoki = tedge_p11_server::tedge_p11_service(self.cryptoki_config.clone())?;
+        let pubkey_pem = cryptoki.create_key(None, params)?;
 
         eprintln!("New keypair was successfully created.");
 
@@ -63,9 +63,8 @@ impl Command for CreateKeyCmd {
             }
         };
 
-        let cryptoki_config = config.device.cryptoki_config(None).unwrap().unwrap();
         let key = super::create_csr::Key::Cryptoki {
-            config: cryptoki_config,
+            config: self.cryptoki_config.clone(),
             privkey_label: Some(self.label.clone()),
             pubkey_pem: Some(pubkey_pem.clone()),
             sigalg: Some(sigalg),
