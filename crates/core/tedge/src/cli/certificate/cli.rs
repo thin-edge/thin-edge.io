@@ -15,6 +15,7 @@ use crate::command::Command;
 use crate::CertificateShift;
 use crate::ConfigError;
 use anyhow::anyhow;
+use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
@@ -262,8 +263,18 @@ impl BuildCommand for TEdgeCertCli {
                 cloud,
             } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
+                let cloud_config = cloud
+                    .as_ref()
+                    .map(|c| config.as_cloud_config((c).into()))
+                    .transpose()?;
+                let cryptoki_config = config
+                    .device
+                    .cryptoki_config(cloud_config)?
+                    .context("Cryptoki config is not enabled")?;
 
                 CreateKeyCmd {
+                    cryptoki_config,
+
                     bits,
                     label,
                     r#type,
