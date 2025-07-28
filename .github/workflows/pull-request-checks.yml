@@ -193,6 +193,9 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: cargo install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
       - name: Cargo audit
         run: cargo audit
 
