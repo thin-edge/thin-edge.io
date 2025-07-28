@@ -10,17 +10,22 @@ use tracing::instrument;
 use tracing::trace;
 use tracing::warn;
 
-pub trait SigningService {
+/// The main PKCS #11 trait, allowing callers to perform operations on the PKCS #11 token.
+pub trait TedgeP11Service: Send + Sync {
+    /// Given a set of proposed signature schemes, returns a signature scheme that can be used by the private key object
+    /// on the token (denoted by uri) for signing.
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse>;
+
+    /// Signs the message using the private key object on the token (denoted by uri).
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse>;
 }
 
 #[derive(Debug)]
-pub struct TedgeP11Service {
+pub struct TedgeP11 {
     cryptoki: Cryptoki,
 }
 
-impl TedgeP11Service {
+impl TedgeP11 {
     // TODO(marcel): would be nice to check if there are any keys upon starting the server and warn the user if there is not
     pub fn new(config: CryptokiConfigDirect) -> anyhow::Result<Self> {
         let cryptoki = Cryptoki::new(config).context("Failed to load cryptoki library")?;
@@ -34,7 +39,7 @@ impl TedgeP11Service {
     }
 }
 
-impl SigningService for TedgeP11Service {
+impl TedgeP11Service for TedgeP11 {
     #[instrument(skip_all)]
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse> {
         trace!(?request);
@@ -106,7 +111,7 @@ pub struct SignRequestWithSigScheme {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignResponse(pub Vec<u8>);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SignatureScheme(pub rustls::SignatureScheme);
 
 impl Serialize for SignatureScheme {
@@ -128,7 +133,7 @@ impl<'de> Deserialize<'de> for SignatureScheme {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SignatureAlgorithm(pub rustls::SignatureAlgorithm);
 
 impl Serialize for SignatureAlgorithm {
