@@ -41,9 +41,25 @@ jobs:
       - name: Reclaim some disk space
         run: |
           sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
           sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf /opt/hostedtoolcache
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf /opt/hostedtoolcache/
+          sudo rm -rf /usr/local/graalvm/
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /usr/local/lib/node_modules
+          sudo docker image prune --all --force
+          
+          APT_PARAMS='sudo apt -y -qq -o=Dpkg::Use-Pty=0'
+          $APT_PARAMS remove '^dotnet-.*' '^php.*' '^mongodb-.*' '^llvm-.*' '^mysql-.*' azure-cli 'google-*' google-chrome-stable firefox powershell mono-devel
+          $APT_PARAMS autoremove --purge
+          $APT_PARAMS autoclean
+          $APT_PARAMS clean
+
           # Make sure /mnt has plenty of empty space,
           # but ignore the error we encounter on /mnt/swapfile
           # since we can't delete that
