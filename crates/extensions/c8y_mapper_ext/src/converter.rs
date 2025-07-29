@@ -641,9 +641,7 @@ impl CumulocityConverter {
                 )
                 .await;
             let result = self.handle_c8y_operation_result(&result, Some(operation.op_id.clone()));
-            if !result.is_empty() {
-                self.active_commands.insert(cmd_id, Some(Instant::now()));
-            }
+            self.active_commands.insert(cmd_id, Some(Instant::now()));
             output.extend(result);
         }
 
@@ -758,9 +756,7 @@ impl CumulocityConverter {
             .await;
 
         let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
-        if !output.is_empty() {
-            self.active_commands.insert(cmd_id, Some(Instant::now()));
-        }
+        self.active_commands.insert(cmd_id, Some(Instant::now()));
 
         Ok(output)
     }
