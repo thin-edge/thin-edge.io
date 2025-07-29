@@ -4,9 +4,9 @@ tags: [Extend, Build]
 sidebar_position: 3
 ---
 
-This guide walks you through building a custom image using [Rugix](https://github.com/silitics/rugix). Rugix is an open source tool to build images with support for robust Over-the-Air (OTA) updates. Currently it only supports Raspberry Pi devices, however in the future more device types may be considered.
+This guide walks you through building a custom image using [Rugix Bakery](https://github.com/silitics/rugix). Rugix is an open-source tool suite to build reliable embedded Linux devices with efficient and secure over-the-air (OTA) update capabilities.
 
-Rugix is beginner friendly compared to The Yocto Project, and has much shorter build times since it works by extending the official Raspberry Pi images with custom recipes which either install or configure components in the image, rather than rebuilding everything from scratch. Building an image with custom recipes only takes about 10 mins compared with the > 4 hours using The Yocto Project.
+Rugix Bakery is beginner friendly compared to The Yocto Project, and has much shorter build times since it relies on proven binary distributions such as Debian and Alpine, rather than rebuilding everything from scratch. Building an image with custom recipes only takes about 10 mins compared with the > 4 hours using The Yocto Project.
 
 The instructions on this page can be used to build images for the following devices:
 
@@ -23,14 +23,14 @@ Please check out the [official Rugix documentation](https://oss.silitics.com/rug
 
 ## Setting up your build system
 
-Building images using Rugix is considerably faster and easier when compared to The Yocto Project, so it makes it a great tool for beginners.
+Building images using Rugix Bakery is considerably faster and easier when compared to The Yocto Project, so it makes it a great tool for beginners.
 
 The following tools are required to build an image:
 
 * Docker Engine
 
 :::tip
-Images can be built using Rugix using a CI Workflow. An example for a Github Workflow is included in the template project.
+Images can be built using Rugix Bakery using a CI Workflow. An example for a Github Workflow is included in the template project.
 :::
 
 ## Building your image
@@ -159,7 +159,7 @@ Images can be built in MacOS or Linux environments (including WSL 2), however if
 :::info
 If you want more control over the process you can use the command, and select one of the images as defined in the [rugix-bakery.toml](https://github.com/thin-edge/tedge-rugix-image/blob/main/rugix-bakery.toml)
 
-For more information about Rugix repositories, layers and overall concepts please read the [official Rugix documentation](https://oss.silitics.com/rugix/docs/getting-started).
+For more information about Rugix Bakery repositories, layers and overall concepts please read the [official Rugix documentation](https://oss.silitics.com/rugix/docs/getting-started).
 :::
 
 For subsequent Over-the-Air (OTA) updates, you will have to build a bundle for the update (not the system image). Building an update bundle is very similar to building the system image, it just requires using the `build-bundle` task instead. B
