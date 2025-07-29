@@ -3,6 +3,8 @@ use futures::channel::mpsc;
 use futures::StreamExt as _;
 use serde_json::Map;
 use serde_json::Value;
+use std::fs::File;
+use std::path::PathBuf;
 use tedge_actors::LoggingSender;
 use tedge_actors::MappingSender;
 use tedge_actors::MessageSink;
@@ -26,6 +28,8 @@ use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::error;
 
+const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
+
 #[derive(Debug)]
 pub enum EntityStoreRequest {
     Get(EntityTopicId),
@@ -34,6 +38,7 @@ pub enum EntityStoreRequest {
     Delete(EntityTopicId),
     List(ListFilters),
     MqttMessage(MqttMessage),
+    InitComplete,
     GetTwinFragment(EntityTopicId, String),
     SetTwinFragment(EntityTwinMessage),
     GetTwinFragments(EntityTopicId),
@@ -55,19 +60,33 @@ pub enum EntityStoreResponse {
 }
 
 pub struct EntityStoreServer {
+    config: EntityStoreServerConfig,
     entity_store: EntityStore,
-    mqtt_schema: MqttSchema,
     mqtt_publisher: LoggingSender<MqttMessage>,
-    entity_auto_register: bool,
     retain_requests: LoggingSender<(mpsc::UnboundedSender<MqttMessage>, TopicFilter)>,
+}
+
+pub struct EntityStoreServerConfig {
+    pub config_dir: PathBuf,
+    pub mqtt_schema: MqttSchema,
+    pub entity_auto_register: bool,
+}
+
+impl EntityStoreServerConfig {
+    pub fn new(config_dir: PathBuf, mqtt_schema: MqttSchema, entity_auto_register: bool) -> Self {
+        Self {
+            config_dir,
+            mqtt_schema,
+            entity_auto_register,
+        }
+    }
 }
 
 impl EntityStoreServer {
     pub fn new<M>(
+        config: EntityStoreServerConfig,
         entity_store: EntityStore,
-        mqtt_schema: MqttSchema,
         mqtt_actor: &mut M,
-        entity_auto_register: bool,
     ) -> Self
     where
         M: MessageSink<MqttRequest>,
@@ -83,10 +102,9 @@ impl EntityStoreServer {
         );
 
         Self {
+            config,
             entity_store,
-            mqtt_schema,
             mqtt_publisher,
-            entity_auto_register,
             retain_requests,
         }
     }
@@ -155,13 +173,48 @@ impl Server for EntityStoreServer {
                 self.process_mqtt_message(mqtt_message).await;
                 EntityStoreResponse::Ok
             }
+            EntityStoreRequest::InitComplete => {
+                if let Err(err) = self.init_complete().await {
+                    error!("Failed to process inventory.json file: {err}");
+                }
+                EntityStoreResponse::Ok
+            }
         }
     }
 }
 
 impl EntityStoreServer {
+    async fn init_complete(&mut self) -> Result<(), entity_store::Error> {
+        let inventory_file_path = self
+            .config
+            .config_dir
+            .join(INVENTORY_FRAGMENTS_FILE_LOCATION);
+        let file = File::open(inventory_file_path)?;
+        let inventory_json: Value = serde_json::from_reader(file)?;
+        let main_device = self.entity_store.main_device().clone();
+        if let Value::Object(map) = inventory_json {
+            for (key, value) in map {
+                if self
+                    .entity_store
+                    .get_twin_fragment(&main_device, &key)
+                    .is_none()
+                {
+                    self.publish_twin_data(&main_device, key.clone(), value.clone())
+                        .await;
+                }
+            }
+        } else {
+            error!(
+                "Invalid inventory.json format: expected a JSON object, found {:?}",
+                inventory_json
+            );
+        }
+
+        Ok(())
+    }
+
     pub(crate) async fn process_mqtt_message(&mut self, message: MqttMessage) {
-        if let Ok((topic_id, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) {
+        if let Ok((topic_id, channel)) = self.config.mqtt_schema.entity_channel_of(&message.topic) {
             if let Channel::EntityMetadata = channel {
                 self.process_entity_registration(topic_id, message.payload_bytes())
                     .await;
@@ -218,13 +271,15 @@ impl EntityStoreServer {
     ) -> Result<(), entity_store::Error> {
         // if the target entity is unregistered, try to register it first using auto-registration
         if self.entity_store.get(&topic_id).is_none()
-            && self.entity_auto_register
+            && self.config.entity_auto_register
             && topic_id.matches_default_topic_scheme()
             && !message.payload().is_empty()
         {
             let entities = self.entity_store.auto_register_entity(&topic_id)?;
             for entity in entities {
-                let message = entity.to_mqtt_message(&self.mqtt_schema).with_retain();
+                let message = entity
+                    .to_mqtt_message(&self.config.mqtt_schema)
+                    .with_retain();
                 self.publish_message(message).await;
             }
         }
@@ -268,7 +323,7 @@ impl EntityStoreServer {
         fragment_value: Value,
     ) {
         let twin_channel = Channel::EntityTwinData { fragment_key };
-        let topic = self.mqtt_schema.topic_for(topic_id, &twin_channel);
+        let topic = self.config.mqtt_schema.topic_for(topic_id, &twin_channel);
         let payload = if fragment_value.is_null() {
             "".to_string()
         } else {
@@ -306,7 +361,7 @@ impl EntityStoreServer {
         let registered = self.entity_store.update(entity.clone())?;
 
         if !registered.is_empty() {
-            let message = entity.to_mqtt_message(&self.mqtt_schema);
+            let message = entity.to_mqtt_message(&self.config.mqtt_schema);
             self.publish_message(message).await;
         }
         Ok(registered)
@@ -319,7 +374,7 @@ impl EntityStoreServer {
     ) -> Result<&EntityMetadata, entity_store::Error> {
         let entity = self.entity_store.update_entity(topic_id, update_message)?;
         let entity_reg_msg: EntityRegistrationMessage = entity.into();
-        let entity_msg = entity_reg_msg.to_mqtt_message(&self.mqtt_schema);
+        let entity_msg = entity_reg_msg.to_mqtt_message(&self.config.mqtt_schema);
 
         self.publish_message(entity_msg).await;
 
@@ -345,6 +400,7 @@ impl EntityStoreServer {
                 ChannelFilter::Health,
             ] {
                 let topic = self
+                    .config
                     .mqtt_schema
                     .topics(EntityFilter::Entity(&entity.topic_id), channel_filter);
                 topics.add_all(topic);
@@ -364,6 +420,7 @@ impl EntityStoreServer {
         // Clear the entity metadata of all deleted entities bottom up
         for entity in deleted.iter().rev() {
             let topic = self
+                .config
                 .mqtt_schema
                 .topic_for(&entity.topic_id, &Channel::EntityMetadata);
             let clear_entity_msg = MqttMessage::new(&topic, "").with_retain();
@@ -392,7 +449,7 @@ impl EntityStoreServer {
         // Clear all old twin messages
         for fragment_key in fragments_to_clear.into_iter() {
             let twin_message = EntityTwinMessage::new(topic_id.clone(), fragment_key, Value::Null);
-            let message = twin_message.to_mqtt_message(&self.mqtt_schema);
+            let message = twin_message.to_mqtt_message(&self.config.mqtt_schema);
             self.publish_message(message).await;
         }
 
@@ -405,7 +462,7 @@ impl EntityStoreServer {
             let twin_message =
                 EntityTwinMessage::new(topic_id.clone(), fragment_key, fragment_value);
 
-            let message = twin_message.to_mqtt_message(&self.mqtt_schema);
+            let message = twin_message.to_mqtt_message(&self.config.mqtt_schema);
             self.publish_message(message).await;
         }
 

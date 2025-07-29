@@ -40,7 +40,9 @@ Test Tags           theme:troubleshooting    theme:cli    theme:plugins
         File Size Is Not Zero    ${log_name}
     END
     Log Should Contain    tedge-mqtt-sub.log    [te/device/main///cmd/restart] {}
-    Log Should Contain    tedge-mqtt-sub-retained-only.log    [te/device/main///twin/type] "thin-edge.io"
+    Log Should Contain
+    ...    tedge-mqtt-sub-retained-only.log
+    ...    [te/device/main/service/tedge-agent] {"@parent":"device/main//","@type":"service","name":"tedge-agent","type":"service"}
 
 04_workflow
     File Size Is Not Zero    output.log

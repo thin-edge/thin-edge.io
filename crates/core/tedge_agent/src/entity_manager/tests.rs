@@ -17,15 +17,80 @@ use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_test_utils::fs::TempTedgeDir;
 
 #[tokio::test]
 async fn new_entity_store() {
-    let (mut entity_store, _mqtt_input, _mqtt_output) = entity::server("device-under-test");
+    let handle = entity::server("device-under-test");
+    let mut entity_store = handle.entity_store;
 
     assert_eq!(
         entity::get(&mut entity_store, "device/main//").await,
         Some(EntityMetadata::main_device(None))
     )
+}
+
+#[tokio::test]
+async fn process_inventory_json_content_on_init() {
+    let handle = entity::server("device-under-test");
+    let (mut entity_store, mut mqtt_box, tmp_dir) =
+        (handle.entity_store, handle.mqtt_output, handle.tmp_dir);
+
+    let inventory_json = json!({
+        "boolean_key": true,
+        "numeric_key": 10,
+        "string_key": "value"
+    });
+    create_inventory_json_file_with_content(&tmp_dir, &inventory_json.to_string());
+
+    entity::init_complete_signal(&mut entity_store)
+        .await
+        .unwrap();
+    mqtt_box
+        .assert_received([
+            MqttMessage::from(("te/device/main///twin/boolean_key", "true")).with_retain(),
+            MqttMessage::from(("te/device/main///twin/numeric_key", "10")).with_retain(),
+            MqttMessage::from(("te/device/main///twin/string_key", "\"value\"")).with_retain(),
+        ])
+        .await;
+}
+
+#[tokio::test]
+async fn inventory_json_value_ignored_if_twin_data_present() {
+    let handle = entity::server("device-under-test");
+    let (mut entity_store, mut mqtt_box, tmp_dir) =
+        (handle.entity_store, handle.mqtt_output, handle.tmp_dir);
+
+    let inventory_json = json!({
+        "x": 1,
+        "y": 2,
+        "z": 3,
+    });
+    create_inventory_json_file_with_content(&tmp_dir, &inventory_json.to_string());
+
+    entity::set_twin_fragments(
+        &mut entity_store,
+        "device/main//",
+        json!({"y": 20}).as_object().unwrap().clone(),
+    )
+    .await
+    .unwrap();
+    mqtt_box.skip(1).await; // Skip the above twin update
+
+    entity::init_complete_signal(&mut entity_store)
+        .await
+        .unwrap();
+    mqtt_box
+        .assert_received([
+            MqttMessage::from(("te/device/main///twin/x", "1")).with_retain(),
+            MqttMessage::from(("te/device/main///twin/z", "3")).with_retain(),
+        ])
+        .await;
+}
+
+fn create_inventory_json_file_with_content(ttd: &TempTedgeDir, content: &str) {
+    let file = ttd.dir("device").file("inventory.json");
+    file.with_raw_content(content);
 }
 
 #[tokio::test]
@@ -66,7 +131,9 @@ async fn removing_a_child_using_mqtt() {
 
 #[tokio::test]
 async fn twin_fragment_updates_published_to_mqtt() {
-    let (mut entity_store, _mqtt_input, mut mqtt_box) = entity::server("device-under-test");
+    let handle = entity::server("device-under-test");
+    let (mut entity_store, mut mqtt_box) = (handle.entity_store, handle.mqtt_output);
+
     entity::set_twin_fragments(
         &mut entity_store,
         "device/main//",
@@ -84,7 +151,10 @@ async fn twin_fragment_updates_published_to_mqtt() {
 
 #[tokio::test]
 async fn delete_entity_clears_retained_data() {
-    let (mut entity_store, mut mqtt_input, mut mqtt_output) = entity::server("device-under-test");
+    let handle = entity::server("device-under-test");
+    let (mut entity_store, mut mqtt_input, mut mqtt_output) =
+        (handle.entity_store, handle.mqtt_input, handle.mqtt_output);
+
     entity::create_entity(
         &mut entity_store,
         "device/child0//",
@@ -151,7 +221,9 @@ async fn delete_entity_clears_retained_data() {
 
 #[tokio::test]
 async fn delete_entity_tree_clears_entities_bottom_up() {
-    let (mut entity_store, _mqtt_input, mut mqtt_box) = entity::server("device-under-test");
+    let handle = entity::server("device-under-test");
+    let (mut entity_store, mut mqtt_box) = (handle.entity_store, handle.mqtt_output);
+
     for entity in [
         ("device/child0//", EntityType::ChildDevice, None),
         ("device/child1//", EntityType::ChildDevice, None),
@@ -194,7 +266,8 @@ async fn delete_entity_tree_clears_entities_bottom_up() {
 
 #[tokio::test]
 async fn clear_entity_twin_data() {
-    let (mut entity_store, _mqtt_input, _mqtt_output) = entity::server("device-under-test");
+    let handle = entity::server("device-under-test");
+    let mut entity_store = handle.entity_store;
 
     entity_store
         .process_mqtt_message(MqttMessage::from(("te/device/main///twin/x", "9")).with_retain())
@@ -226,7 +299,8 @@ proptest! {
 }
 
 async fn check_registrations(registrations: Commands) {
-    let (mut entity_store, _mqtt_input, _mqtt_output) = entity::server("device-under-test");
+    let handle = entity::server("device-under-test");
+    let mut entity_store = handle.entity_store;
     let mut state = model::State::new();
 
     for Command { protocol, action } in registrations.0 {
@@ -273,7 +347,8 @@ proptest! {
 }
 
 async fn check_registrations_from_user_pov(registrations: Commands) {
-    let (mut entity_store, _mqtt_input, _mqtt_output) = entity::server("device-under-test");
+    let handle = entity::server("device-under-test");
+    let mut entity_store = handle.entity_store;
 
     // Trigger all operations over HTTP to avoid pending entities (which are not visible to the user)
     for action in registrations.0.into_iter().map(|c| c.action) {
@@ -321,12 +396,14 @@ mod entity {
     use crate::entity_manager::server::EntityStoreRequest;
     use crate::entity_manager::server::EntityStoreResponse;
     use crate::entity_manager::server::EntityStoreServer;
+    use crate::entity_manager::server::EntityStoreServerConfig;
     use futures::SinkExt;
     use serde_json::Map;
     use serde_json::Value;
     use std::str::FromStr;
     use std::sync::Mutex;
     use tedge_actors::Builder;
+    use tedge_actors::DynSender;
     use tedge_actors::MappingSender;
     use tedge_actors::MessageSink;
     use tedge_actors::MessageSource;
@@ -343,7 +420,7 @@ mod entity {
     use tedge_mqtt_ext::DynSubscriptions;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::MqttRequest;
-    use tempfile::TempDir;
+    use tedge_test_utils::fs::TempTedgeDir;
 
     pub async fn get(
         entity_store: &mut EntityStoreServer,
@@ -409,17 +486,22 @@ mod entity {
         anyhow::bail!("Unexpected response");
     }
 
-    pub fn server(
-        device_id: &str,
-    ) -> (
-        EntityStoreServer,
-        tedge_actors::DynSender<MqttRequest>,
-        SimpleMessageBox<MqttRequest, MqttMessage>,
-    ) {
+    pub async fn init_complete_signal(
+        entity_store: &mut EntityStoreServer,
+    ) -> Result<(), anyhow::Error> {
+        if let EntityStoreResponse::Ok = entity_store.handle(EntityStoreRequest::InitComplete).await
+        {
+            return Ok(());
+        };
+        anyhow::bail!("Unexpected response");
+    }
+
+    pub fn server(device_id: &str) -> TestHandle {
         let mqtt_schema = MqttSchema::default();
         let main_device = EntityRegistrationMessage::main_device(Some(device_id.to_string()));
         let telemetry_cache_size = 0;
-        let log_dir = TempDir::new().unwrap();
+        let tmp_dir = TempTedgeDir::default();
+        let log_dir = tmp_dir.path();
         let clean_start = true;
         let entity_auto_register = true;
         let entity_store = EntityStore::with_main_device(
@@ -431,21 +513,35 @@ mod entity {
         )
         .unwrap();
 
+        let config = EntityStoreServerConfig::new(
+            tmp_dir.path().to_path_buf(),
+            mqtt_schema.clone(),
+            entity_auto_register,
+        );
+
         let mqtt_actor = SimpleMessageBoxBuilder::new("MQTT", 64);
         let mut actor_builder = TestMqttActorBuilder {
             messages: mqtt_actor,
             sender: <_>::default(),
         };
-        let server = EntityStoreServer::new(
-            entity_store,
-            mqtt_schema,
-            &mut actor_builder,
-            entity_auto_register,
-        );
+        let server = EntityStoreServer::new(config, entity_store, &mut actor_builder);
 
         let mqtt_input = actor_builder.get_sender();
         let mqtt_output = actor_builder.messages.build();
-        (server, mqtt_input, mqtt_output)
+
+        TestHandle {
+            tmp_dir,
+            entity_store: server,
+            mqtt_input,
+            mqtt_output,
+        }
+    }
+
+    pub(crate) struct TestHandle {
+        pub tmp_dir: TempTedgeDir,
+        pub entity_store: EntityStoreServer,
+        pub mqtt_input: DynSender<MqttRequest>,
+        pub mqtt_output: SimpleMessageBox<MqttRequest, MqttMessage>,
     }
 
     struct TestMqttActorBuilder {

@@ -41,7 +41,6 @@ const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 pub struct C8yMapperConfig {
     pub device_id: String,
     pub device_topic_id: EntityTopicId,
-    pub device_type: String,
     pub service: TEdgeConfigReaderService,
     pub c8y_host: String,
     pub c8y_mqtt: String,
@@ -84,7 +83,6 @@ impl C8yMapperConfig {
 
         device_id: String,
         device_topic_id: EntityTopicId,
-        device_type: String,
         service: TEdgeConfigReaderService,
         c8y_host: String,
         c8y_mqtt: String,
@@ -124,7 +122,6 @@ impl C8yMapperConfig {
             data_dir,
             device_id,
             device_topic_id,
-            device_type,
             service,
             c8y_host,
             c8y_mqtt,
@@ -170,7 +167,6 @@ impl C8yMapperConfig {
 
         let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
         let device_id = c8y_config.device.id()?.to_string();
-        let device_type = tedge_config.device.ty.clone();
         let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
         let service = tedge_config.service.clone();
         let c8y_host = c8y_config.http.or_config_not_set()?.to_string();
@@ -241,7 +237,6 @@ impl C8yMapperConfig {
             tmp_dir,
             device_id,
             device_topic_id,
-            device_type,
             service,
             c8y_host,
             c8y_mqtt,

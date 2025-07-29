@@ -83,11 +83,11 @@ An example `inventory.json` looks something like this:
 }
 ```
 
-To see the changes you need to restart the tedge-mapper.
+To see the changes you need to restart the tedge-agent.
 If you're using systemctl you can do: 
 
 ```sh
-sudo systemctl restart tedge-mapper-c8y
+sudo systemctl restart tedge-agent
 ```
 
 In the Cumulocity UI this will looks something like this:
@@ -100,6 +100,23 @@ In the Cumulocity UI this will looks something like this:
     />
 </p>
 
+The `tedge-agent` publishes fragments in this file to their corresponding twin topics as retained messages.
+For example, the above `inventory.json` file is processed as follows:
+
+```sh te2mqtt
+tedge mqtt pub --retained te/device/main///twin/c8y_Hardware '{
+  "model": "BCM2708",
+  "revision": "000e",
+  "serialNumber": "00000000e2f5ad4d"
+}'
+```
+
+Since these entries are persistent retained messages, when entries are removed from the `inventory.json` file,
+the corresponding twin entries must also be cleared explicitly from the broker as follows:
+
+```sh te2mqtt
+tedge mqtt pub --retained  te/device/main///twin/c8y_Hardware ''
+```
 
 For information on which fragments Cumulocity supports please see the
 [Cumulocity API docs](https://cumulocity.com/docs/device-integration/fragment-library/).
