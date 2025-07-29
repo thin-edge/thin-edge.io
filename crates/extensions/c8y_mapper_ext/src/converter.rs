@@ -20,7 +20,6 @@ use crate::supported_operations::operation::ResultFormat;
 use crate::supported_operations::Operations;
 use crate::supported_operations::OperationsError;
 use crate::supported_operations::SupportedOperations;
-use anyhow::anyhow;
 use anyhow::Context;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlOperation;
@@ -773,11 +772,11 @@ impl CumulocityConverter {
         extras: &HashMap<String, Value>,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let handlers = self.get_operation_handlers(
-            device_xid.as_str(),
+        let handlers = self.supported_operations.get_operation_handlers(
+            &device_xid,
             &message.topic.name,
             &self.config.bridge_config.c8y_prefix,
-        )?;
+        );
 
         if handlers.is_empty() {
             info!("No matched custom operation handler is found for the subscribed custom operation topics. The operation '{operation_id}' (ID) is ignored.");
@@ -803,27 +802,6 @@ impl CumulocityConverter {
 
         // MQTT messages are sent during the operation execution
         Ok(vec![])
-    }
-
-    fn get_operation_handlers(
-        &self,
-        device_xid: &str,
-        topic: &str,
-        prefix: &TopicPrefix,
-    ) -> Result<Vec<(String, Operation)>, CumulocityMapperError> {
-        let entity_xid = device_xid.into();
-        let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
-
-        match target.metadata.r#type {
-            EntityType::MainDevice | EntityType::ChildDevice => Ok(self
-                .supported_operations
-                .get_operation_handlers(device_xid, topic, prefix)),
-
-            EntityType::Service => {
-                warn!("operation for services are currently unsupported");
-                Ok(Vec::new())
-            }
-        }
     }
 
     async fn execute_custom_operation(
@@ -1303,7 +1281,6 @@ impl CumulocityConverter {
                     warn!(topic = ?message.topic.name, "Ignoring command metadata clearing message: clearing capabilities is not currently supported");
                     return Ok(vec![]);
                 }
-                self.validate_operation_supported(operation, &source)?;
                 match operation {
                     OperationType::Restart => self.register_restart_operation(&source).await,
                     OperationType::SoftwareList => {
@@ -1355,22 +1332,6 @@ impl CumulocityConverter {
             Channel::Health => self.process_health_status_message(&source, message).await,
 
             _ => Ok(vec![]),
-        }
-    }
-
-    fn validate_operation_supported(
-        &self,
-        op_type: &OperationType,
-        topic_id: &EntityTopicId,
-    ) -> Result<(), ConversionError> {
-        let target = self.entity_cache.try_get(topic_id)?;
-
-        match target.metadata.r#type {
-            EntityType::MainDevice => Ok(()),
-            EntityType::ChildDevice => Ok(()),
-            EntityType::Service => Err(ConversionError::UnexpectedError(anyhow!(
-                "{op_type} operation for services are currently unsupported"
-            ))),
         }
     }
 
@@ -1507,24 +1468,14 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let device = self.entity_cache.try_get(target)?;
 
-        if let EntityType::Service = device.metadata.r#type {
-            error!(
-                %target,
-                "{c8y_operation_name} operation for services are currently unsupported"
-            );
-            return Err(ConversionError::UnexpectedError(anyhow!(
-                "{c8y_operation_name} operation for services are currently unsupported"
-            )));
-        }
-
         self.supported_operations
             .add_operation(device.external_id.as_ref(), c8y_operation_name)
             .await?;
 
         let need_cloud_update = match device.metadata.r#type {
-            // for devices other than the main device, dynamic update of supported operations via file events is
+            // for devices other than the main device and services, dynamic update of supported operations via file events is
             // disabled, so we have to additionally load new operations from the c8y operations for that device
-            EntityType::ChildDevice => self
+            EntityType::ChildDevice | EntityType::Service => self
                 .supported_operations
                 .load_all(device.external_id.as_ref(), &self.config.bridge_config)?,
 
@@ -1535,8 +1486,6 @@ impl CumulocityConverter {
                 c8y_operation_name,
                 &self.config.bridge_config,
             )?,
-
-            EntityType::Service => unreachable!("error returned earlier"),
         };
 
         if need_cloud_update {
@@ -2988,95 +2937,6 @@ pub(crate) mod tests {
         assert_eq!(smartrest_fields.next().unwrap(), "up");
     }
 
-    #[test_case("restart")]
-    #[test_case("software_list")]
-    #[test_case("software_update")]
-    #[test_case("log_upload")]
-    #[test_case("config_snapshot")]
-    #[test_case("config_update")]
-    #[test_case("device_profile")]
-    #[test_case("custom_op")]
-    #[tokio::test]
-    async fn operations_not_supported_for_services(op_type: &str) {
-        let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
-
-        // Register main device service
-        let _ = converter
-            .process_entity_metadata_message(&MqttMessage::new(
-                &Topic::new_unchecked("te/device/main/service/dummy"),
-                json!({
-                    "@type":"service",
-                })
-                .to_string(),
-            ))
-            .await
-            .unwrap();
-        // Register immediate child device
-        let _ = converter
-            .process_entity_metadata_message(&MqttMessage::new(
-                &Topic::new_unchecked("te/device/immediate_child//"),
-                json!({
-                    "@type":"child-device",
-                })
-                .to_string(),
-            ))
-            .await
-            .unwrap();
-        // Register immediate child device service
-        let _ = converter
-            .process_entity_metadata_message(&MqttMessage::new(
-                &Topic::new_unchecked("te/device/immediate_child/service/dummy"),
-                json!({
-                    "@type":"service",
-                })
-                .to_string(),
-            ))
-            .await
-            .unwrap();
-        // Register nested child device
-        let _ = converter
-            .process_entity_metadata_message(&MqttMessage::new(
-                &Topic::new_unchecked("te/device/nested_child//"),
-                json!({
-                    "@type":"child-device",
-                    "@parent":"device/immediate_child//",
-                })
-                .to_string(),
-            ))
-            .await
-            .unwrap();
-        // Register nested child device service
-        let _ = converter
-            .process_entity_metadata_message(&MqttMessage::new(
-                &Topic::new_unchecked("te/device/nested_child/service/dummy"),
-                json!({
-                    "@type":"service",
-                })
-                .to_string(),
-            ))
-            .await
-            .unwrap();
-
-        for device_id in ["main", "immediate_child", "nested_child"] {
-            let messages = converter
-                .convert(&MqttMessage::new(
-                    &Topic::new_unchecked(&format!(
-                        "te/device/{device_id}/service/dummy/cmd/{op_type}"
-                    )),
-                    "[]",
-                ))
-                .await;
-            assert_messages_matching(
-                &messages,
-                [(
-                    "te/errors",
-                    "operation for services are currently unsupported".into(),
-                )],
-            );
-        }
-    }
-
     #[tokio::test]
     async fn early_messages_cached_and_processed_only_after_registration() {
         let tmp_dir = TempTedgeDir::new();
@@ -3348,12 +3208,7 @@ pub(crate) mod tests {
         let operation_msg = MqttMessage::new(&operation_topic, "{}");
 
         let msgs = converter.convert(&operation_msg).await;
-
-        assert_messages_matching(&msgs, [(
-                "te/errors",
-                "Failed to convert a message on topic 'te/device/main/service/service0/cmd/my_operation': \
-                Unexpected error: my_operation operation for services are currently unsupported".into()
-            )]);
+        assert_messages_matching(&msgs, [("c8y/s/us/service0", "114,c8y_Operation".into())]);
     }
 
     fn registered_entities_into_mqtt_messages(
