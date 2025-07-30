@@ -1,14 +1,6 @@
-use crate::pkcs11::Cryptoki;
-use crate::pkcs11::CryptokiConfigDirect;
 use crate::pkcs11::SigScheme;
-
-use anyhow::Context;
-use rustls::sign::SigningKey;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing::instrument;
-use tracing::trace;
-use tracing::warn;
 
 /// The main PKCS #11 trait, allowing callers to perform operations on the PKCS #11 token.
 pub trait TedgeP11Service: Send + Sync {
@@ -18,69 +10,6 @@ pub trait TedgeP11Service: Send + Sync {
 
     /// Signs the message using the private key object on the token (denoted by uri).
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse>;
-}
-
-#[derive(Debug)]
-pub struct TedgeP11 {
-    cryptoki: Cryptoki,
-}
-
-impl TedgeP11 {
-    // TODO(marcel): would be nice to check if there are any keys upon starting the server and warn the user if there is not
-    pub fn new(config: CryptokiConfigDirect) -> anyhow::Result<Self> {
-        let cryptoki = Cryptoki::new(config).context("Failed to load cryptoki library")?;
-
-        // try to find a key on startup to see if requests succeed if nothing changes
-        if cryptoki.signing_key(None).is_err() {
-            warn!("No signing key found");
-        }
-
-        Ok(Self { cryptoki })
-    }
-}
-
-impl TedgeP11Service for TedgeP11 {
-    #[instrument(skip_all)]
-    fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse> {
-        trace!(?request);
-        let offered = request.offered.into_iter().map(|s| s.0).collect::<Vec<_>>();
-        let uri = request.uri;
-
-        let signing_key = self
-            .cryptoki
-            .signing_key(uri.as_deref())
-            .context("Failed to find a signing key")?;
-
-        let signer = signing_key.choose_scheme(&offered);
-        let algorithm = SignatureAlgorithm(signing_key.algorithm());
-
-        let Some(signer) = signer else {
-            return Ok(ChooseSchemeResponse {
-                scheme: None,
-                algorithm,
-            });
-        };
-
-        Ok(ChooseSchemeResponse {
-            scheme: Some(SignatureScheme(signer.scheme())),
-            algorithm,
-        })
-    }
-
-    #[instrument(skip_all)]
-    fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse> {
-        trace!(?request);
-        let uri = request.uri;
-        let signer = self
-            .cryptoki
-            .signing_key(uri.as_deref())
-            .context("Failed to find a signing key")?;
-
-        let signature = signer
-            .sign(&request.to_sign, request.sigscheme)
-            .context("Failed to sign using PKCS #11")?;
-        Ok(SignResponse(signature))
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

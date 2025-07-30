@@ -81,7 +81,9 @@ pub struct Cryptoki {
 
 impl TedgeP11Service for Cryptoki {
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse> {
-        let signing_key = self.signing_key(request.uri.as_deref())?;
+        let signing_key = self
+            .signing_key(request.uri.as_deref())
+            .context("Failed to find a signing key")?;
         let offered: Vec<_> = request.offered.into_iter().map(|s| s.0).collect();
         let signer = signing_key
             .choose_scheme(&offered[..])
@@ -93,7 +95,9 @@ impl TedgeP11Service for Cryptoki {
     }
 
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse> {
-        let signing_key = self.signing_key(request.uri.as_deref())?;
+        let signing_key = self
+            .signing_key(request.uri.as_deref())
+            .context("Failed to find a signing key")?;
         let signature = signing_key.sign(&request.to_sign, request.sigscheme)?;
         Ok(SignResponse(signature))
     }
