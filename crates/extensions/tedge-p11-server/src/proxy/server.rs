@@ -5,8 +5,8 @@ use tracing::error;
 use tracing::info;
 
 use super::connection::Connection;
-use crate::connection::Frame1;
-use crate::connection::ProtocolError;
+use super::connection::Frame1;
+use super::connection::ProtocolError;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::TedgeP11Service;
 
@@ -113,14 +113,14 @@ impl TedgeP11Server {
 
 #[cfg(test)]
 mod tests {
-    use crate::client::TedgeP11Client;
+    use super::*;
+
+    use super::super::client::TedgeP11Client;
     use crate::pkcs11;
     use crate::service::*;
     use std::io::Read;
     use std::os::unix::net::UnixStream;
     use std::time::Duration;
-
-    use super::*;
 
     const SCHEME: pkcs11::SigScheme = pkcs11::SigScheme::EcdsaNistp256Sha256;
     const SIGNATURE: [u8; 2] = [0x21, 0x37];
