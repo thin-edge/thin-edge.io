@@ -7,11 +7,12 @@ use anyhow::Context;
 use tracing::debug;
 use tracing::trace;
 
+use super::connection::Connection;
 use super::connection::Frame1;
-use super::service::ChooseSchemeRequest;
-use super::service::SignRequest;
 use crate::pkcs11::SigScheme;
+use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::TedgeP11Service;
 
@@ -89,7 +90,7 @@ impl TedgeP11Client {
             offered: offered
                 .iter()
                 .copied()
-                .map(super::service::SignatureScheme)
+                .map(crate::service::SignatureScheme)
                 .collect::<Vec<_>>(),
             uri,
         });
@@ -168,7 +169,7 @@ impl TedgeP11Client {
                 self.socket_path.display()
             )
         })?;
-        let mut connection = crate::connection::Connection::new(stream);
+        let mut connection = Connection::new(stream);
         debug!("Connected to socket");
 
         trace!(?request);

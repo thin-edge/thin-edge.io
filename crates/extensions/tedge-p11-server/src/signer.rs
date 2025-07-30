@@ -6,10 +6,10 @@ use rustls::sign::SigningKey;
 use tracing::error;
 use tracing::instrument;
 
-use crate::client::TedgeP11Client;
 use crate::pkcs11::Cryptoki;
 use crate::pkcs11::Pkcs11Signer;
 use crate::pkcs11::SigScheme;
+use crate::proxy::client::TedgeP11Client;
 use crate::CryptokiConfig;
 
 /// A signer using a private key object located on the PKCS11 token.
