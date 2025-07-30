@@ -20,7 +20,6 @@ use clap::command;
 use clap::Parser;
 use cryptoki::types::AuthPin;
 use serde::Deserialize;
-use tedge_p11_server::service::TedgeP11;
 use tedge_p11_server::CryptokiConfigDirect;
 use tedge_p11_server::TedgeP11Server;
 use tokio::signal::unix::SignalKind;
@@ -282,7 +281,8 @@ async fn main() -> anyhow::Result<()> {
     info!(listener = ?listener.local_addr().as_ref().ok().and_then(|s| s.as_pathname()), "Server listening");
     listener.set_nonblocking(true)?;
     let listener = tokio::net::UnixListener::from_std(listener)?;
-    let service = TedgeP11::new(cryptoki_config).context("Failed to create the signing service")?;
+    let service = tedge_p11_server::pkcs11::Cryptoki::new(cryptoki_config)
+        .context("Failed to create the signing service")?;
     let server = TedgeP11Server::new(service)?;
     tokio::spawn(async move { server.serve(listener).await });
 
