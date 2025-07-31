@@ -11,7 +11,8 @@ pub trait TedgeP11Service: Send + Sync {
 
     /// Signs the message using the private key object on the token (denoted by uri).
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse>;
-    /// Generate a new keypair, saving the private key on the token and returning the public key as BER.
+
+    /// Generate a new keypair, saving the private key on the token and returning the public key as PEM.
     fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String>;
 }
 
