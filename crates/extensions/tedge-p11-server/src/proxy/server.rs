@@ -5,19 +5,21 @@ use tracing::error;
 use tracing::info;
 
 use super::connection::Connection;
-use crate::connection::Frame1;
-use crate::connection::ProtocolError;
+use super::connection::Frame1;
+use super::connection::ProtocolError;
 use crate::service::SignRequestWithSigScheme;
-use crate::service::SigningService;
+use crate::service::TedgeP11Service;
 
+/// Relays requests made by [`TedgeP11Client`](super::TedgeP11Client) to the inner PKCS #11 service and returns
+/// responses.
 pub struct TedgeP11Server {
-    service: Box<dyn SigningService + Send + Sync>,
+    service: Box<dyn TedgeP11Service>,
 }
 
 impl TedgeP11Server {
     pub fn new<S>(service: S) -> anyhow::Result<Self>
     where
-        S: SigningService + Send + Sync + 'static,
+        S: TedgeP11Service + Send + Sync + 'static,
     {
         Ok(Self {
             service: Box::new(service),
@@ -40,7 +42,7 @@ impl TedgeP11Server {
             let connection = Connection::new(stream);
 
             match self.process(connection) {
-                Ok(_) => info!("Incoming request successful"),
+                Ok(_) => {}
                 Err(e) => error!("Incoming request failed: {e:?}"),
             }
         }
@@ -48,11 +50,15 @@ impl TedgeP11Server {
 
     fn process(&self, mut connection: Connection) -> anyhow::Result<()> {
         let request = connection.read_frame().context("read")?;
+        // TODO: hack
+        let request_dbg = format!("{request:?}");
+        let (request_dbg, _) = request_dbg.split_once('(').unwrap();
 
         let response = match request {
             Frame1::Error(_)
             | Frame1::ChooseSchemeResponse { .. }
-            | Frame1::SignResponse { .. } => {
+            | Frame1::SignResponse { .. }
+            | Frame1::CreateKeyResponse { .. } => {
                 let error = ProtocolError("invalid request".to_string());
                 let _ = connection.write_frame(&Frame1::Error(error));
                 anyhow::bail!("protocol error: invalid request")
@@ -101,9 +107,26 @@ impl TedgeP11Server {
                     }
                 }
             }
+            Frame1::CreateKeyRequest(request) => {
+                let response = self
+                    .service
+                    .create_key(request.uri.as_deref(), request.params);
+                match response {
+                    Ok(pubkey_der) => Frame1::CreateKeyResponse(pubkey_der),
+                    Err(err) => {
+                        let response = Frame1::Error(ProtocolError(format!(
+                            "PKCS #11 service failed: {err:#}"
+                        )));
+                        connection.write_frame(&response)?;
+                        anyhow::bail!(err);
+                    }
+                }
+            }
         };
 
         connection.write_frame(&response).context("write")?;
+
+        info!(request = ?request_dbg, "Incoming request successful");
 
         Ok(())
     }
@@ -111,21 +134,22 @@ impl TedgeP11Server {
 
 #[cfg(test)]
 mod tests {
-    use crate::client::TedgeP11Client;
+    use super::*;
+
+    use super::super::client::TedgeP11Client;
     use crate::pkcs11;
+    use crate::pkcs11::CreateKeyParams;
     use crate::service::*;
     use std::io::Read;
     use std::os::unix::net::UnixStream;
     use std::time::Duration;
-
-    use super::*;
 
     const SCHEME: pkcs11::SigScheme = pkcs11::SigScheme::EcdsaNistp256Sha256;
     const SIGNATURE: [u8; 2] = [0x21, 0x37];
 
     struct TestSigningService;
 
-    impl SigningService for TestSigningService {
+    impl TedgeP11Service for TestSigningService {
         fn choose_scheme(
             &self,
             _request: ChooseSchemeRequest,
@@ -138,6 +162,14 @@ mod tests {
 
         fn sign(&self, _request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse> {
             Ok(SignResponse(SIGNATURE.to_vec()))
+        }
+
+        fn create_key(
+            &self,
+            _uri: Option<&str>,
+            _params: CreateKeyParams,
+        ) -> anyhow::Result<String> {
+            todo!()
         }
     }
 
@@ -158,7 +190,7 @@ mod tests {
         tokio::task::spawn_blocking(move || {
             let client = TedgeP11Client::with_ready_check(socket_path.into());
             assert_eq!(
-                client.choose_scheme(&[], None).unwrap().unwrap(),
+                client._choose_scheme(&[], None).unwrap().scheme.unwrap(),
                 SCHEME.into()
             );
             assert_eq!(&client.sign2(&[], None, SCHEME).unwrap(), &SIGNATURE[..]);

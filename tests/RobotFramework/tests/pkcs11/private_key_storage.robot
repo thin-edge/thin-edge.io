@@ -117,7 +117,47 @@ Can use PKCS11 key to renew the public certificate
     Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
     Command Should Fail With
     ...    tedge cert renew c8y
-    ...    error=PEM error: protocol error: bad response, expected sign, received: Error(ProtocolError("PKCS #11 service failed: Failed to find a signing key: Failed to find a private key"))
+    ...    error=PKCS #11 service failed: Failed to find a signing key: Failed to find a private key"
+    Execute Command    cmd=tedge config unset c8y.device.key_uri
+
+Can create a private key on the PKCS11 token and download new cert from c8y
+    Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token --pin=123456 --so-pin=123456
+
+    ${output}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=create-key-token"
+    ...    exp_exit_code=!0
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Be Equal    ${output}    No matching objects found
+
+    Set tedge-p11-server Uri    value=pkcs11:token=create-key-token
+
+    Create private key and download cert from c8y    label=rsa-2048    type=rsa    p11tool_keytype=RSA-2048
+    Create private key and download cert from c8y
+    ...    label=rsa-3072
+    ...    type=rsa
+    ...    bits=3072
+    ...    p11tool_keytype=RSA-3072
+    Create private key and download cert from c8y
+    ...    label=rsa-4096
+    ...    type=rsa
+    ...    bits=4096
+    ...    p11tool_keytype=RSA-4096
+
+    Create private key and download cert from c8y
+    ...    label=ec-256
+    ...    type=ec
+    ...    curve=256
+    ...    p11tool_keytype=EC/ECDSA-SECP256R1
+    Create private key and download cert from c8y
+    ...    label=ec-384
+    ...    type=ec
+    ...    curve=384
+    ...    p11tool_keytype=EC/ECDSA-SECP384R1
+    # ECDSA P521 not supported by rcgen
+
+    [Teardown]    Set tedge-p11-server Uri    value=
 
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
@@ -186,6 +226,50 @@ Warn the user if tedge.toml cannot be parsed
 
 
 *** Keywords ***
+Create private key and download cert from c8y
+    [Arguments]    ${type}    ${label}    ${bits}=${EMPTY}    ${curve}=${EMPTY}    ${p11tool_keytype}=${EMPTY}
+    VAR    ${device_id}=    ${label}
+
+    # create the private key on token and write CSR to device.csr_path
+    VAR    ${command}=    tedge cert create-key --label ${label} --type ${type} --device-id ${device_id}
+    IF    $bits
+        VAR    ${command}=    ${command} --bits ${bits}
+    END
+    IF    $curve
+        VAR    ${command}=    ${command} --curve ${curve}
+    END
+    Execute Command    ${command}
+
+    # check if key is created
+    ${output}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=create-key-token"
+    IF    $p11tool_keytype
+        Should Contain    ${output}    Type: Private key (${p11tool_keytype})
+    ELSE
+        Should Contain    ${output}    Type: Private key
+    END
+    Should Contain    ${output}    Label: ${label}
+
+    # check if valid CSR is created
+    ${stdout}    ${stderr}=    Execute Command
+    ...    openssl req -text -noout -in /etc/tedge/device-certs/tedge.csr -verify
+    ...    stdout=True
+    ...    stderr=True
+    ...    strip=True
+    Should Contain    ${stderr}    Certificate request self-signature verify OK
+
+    # check if provided device-id is used
+    Should Contain    ${stdout}    CN = ${device_id}
+
+    # to use newly created private key, need to update device.key_uri
+    Execute Command    cmd=tedge config set device.key_uri "pkcs11:object=${label}"
+
+    # check we can download new cert from c8y and connect
+    ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=True
+    Register Device With Cumulocity CA    ${csr_path}    ${device_id}
+
+    Tedge Reconnect Should Succeed
+
 Test tedge cert renew
     [Arguments]    ${type}    ${bits}=${EMPTY}    ${curve}=${EMPTY}
 
