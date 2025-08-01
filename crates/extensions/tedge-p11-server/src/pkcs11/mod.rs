@@ -374,7 +374,7 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Stri
             let oid = match curve {
                 256 => SECP256R1_OID,
                 384 => SECP384R1_OID,
-                _ => anyhow::bail!("Invalid EC curve value: only 256/384 valid"),
+                _ => anyhow::bail!("Invalid EC curve value: only P256/P384 valid"),
             };
             let components: Vec<u64> = oid.split('.').map(|c| c.parse().unwrap()).collect();
             let curve_oid = asn1_rs::Oid::from(&components)
@@ -546,7 +546,7 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Stri
             match curve {
                 256 => ec::point_to_pem::<p256::NistP256>(pubkey_der)?,
                 384 => ec::point_to_pem::<p384::NistP384>(pubkey_der)?,
-                _ => return Err(anyhow::anyhow!("aaaa")),
+                _ => anyhow::bail!("Invalid EC curve value: only P256/P384 valid"),
             }
         }
     };
