@@ -39,7 +39,7 @@ use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
 use trie::MqtTrie;
 use trie::RankTopicFilter;
-use trie::SubscriptionDiff;
+pub use trie::SubscriptionDiff;
 
 pub type MqttConfig = mqtt_channel::Config;
 

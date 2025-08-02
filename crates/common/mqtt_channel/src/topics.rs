@@ -117,10 +117,15 @@ impl TopicFilter {
     }
 
     /// Check if the given topic matches this filter pattern.
-    pub fn accept_topic(&self, topic: &Topic) -> bool {
+    pub fn accept_topic_name(&self, topic: &str) -> bool {
         self.patterns
             .iter()
-            .any(|pattern| rumqttc::matches(&topic.name, pattern))
+            .any(|pattern| rumqttc::matches(topic, pattern))
+    }
+
+    /// Check if the given topic matches this filter pattern.
+    pub fn accept_topic(&self, topic: &Topic) -> bool {
+        self.accept_topic_name(&topic.name)
     }
 
     /// Check if the given message matches this filter pattern.
