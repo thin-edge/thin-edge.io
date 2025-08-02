@@ -2,6 +2,7 @@
 use crate::bridge::aws::BridgeConfigAwsParams;
 #[cfg(feature = "azure")]
 use crate::bridge::azure::BridgeConfigAzureParams;
+use crate::bridge::c8y::BridgeConfigC8yMqttServiceParams;
 #[cfg(feature = "c8y")]
 use crate::bridge::c8y::BridgeConfigC8yParams;
 use crate::bridge::BridgeConfig;
@@ -746,6 +747,10 @@ pub fn bridge_config(
                     }
                 };
 
+            if c8y_config.mqtt_service.enabled && remote_password.is_none() {
+                // If the MQTT service connection is enabled and cert based auth is used, then tenant_id must be set
+                c8y_config.tenant_id.or_config_not_set()?;
+            }
             let params = BridgeConfigC8yParams {
                 mqtt_host: c8y_config.mqtt.or_config_not_set()?.clone(),
                 config_file: cloud.bridge_config_filename(),
@@ -775,7 +780,12 @@ pub(crate) fn bridge_health_topic(
     prefix: &TopicPrefix,
     tedge_config: &TEdgeConfig,
 ) -> Result<Topic, TopicIdError> {
-    let bridge_name = format!("tedge-mapper-bridge-{prefix}");
+    let bridge_name = if tedge_config.mqtt.bridge.built_in {
+        format!("tedge-mapper-bridge-{prefix}")
+    } else {
+        format!("mosquitto-{prefix}-bridge")
+    };
+
     let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
     let device_topic_id = tedge_config.mqtt.device_topic_id.parse::<EntityTopicId>()?;
     Ok(service_health_topic(
@@ -786,9 +796,19 @@ pub(crate) fn bridge_health_topic(
 }
 
 #[cfg(any(feature = "aws", feature = "c8y"))]
-pub(crate) fn is_bridge_health_up_message(message: &rumqttc::Publish, health_topic: &str) -> bool {
+pub(crate) fn is_bridge_health_up_message(
+    message: &rumqttc::Publish,
+    health_topic: &str,
+    built_in_bridge: bool,
+) -> bool {
     message.topic == health_topic
-        && std::str::from_utf8(&message.payload).is_ok_and(|msg| msg.contains("\"up\""))
+        && std::str::from_utf8(&message.payload).is_ok_and(|msg| {
+            if built_in_bridge {
+                msg.contains("\"up\"")
+            } else {
+                msg.contains("1")
+            }
+        })
 }
 
 impl ConnectCommand {
@@ -841,10 +861,24 @@ impl ConnectCommand {
         }
 
         if bridge_config.bridge_location == BridgeLocation::Mosquitto {
-            if let Err(err) = write_bridge_config_to_file(tedge_config, bridge_config).await {
-                // We want to preserve previous errors and therefore discard result of this function.
-                let _ = clean_up(tedge_config, bridge_config);
-                return Err(err.into());
+            let spinner = Spinner::start("Creating mosquitto bridge");
+            let res = write_mosquitto_bridge_config_file(tedge_config, bridge_config).await;
+            spinner.finish(res)?;
+
+            if let Cloud::C8y(profile_name) = &self.cloud {
+                let c8y_config = tedge_config.c8y.try_get(profile_name.as_deref())?;
+                if c8y_config.mqtt_service.enabled {
+                    let config_params = BridgeConfigC8yMqttServiceParams::try_from((
+                        tedge_config,
+                        profile_name.as_deref(),
+                    ))?;
+                    let mqtt_svc_bridge_config = BridgeConfig::from(config_params);
+                    let spinner = Spinner::start("Creating mosquitto bridge to MQTT service");
+                    let res =
+                        write_mosquitto_bridge_config_file(tedge_config, &mqtt_svc_bridge_config)
+                            .await;
+                    spinner.finish(res)?;
+                }
             }
         } else {
             use_built_in_bridge(tedge_config, bridge_config).await?;
@@ -1040,6 +1074,19 @@ async fn write_generic_mosquitto_config_to_file(
     Ok(())
 }
 
+async fn write_mosquitto_bridge_config_file(
+    tedge_config: &TEdgeConfig,
+    bridge_config: &BridgeConfig,
+) -> Result<(), ConnectError> {
+    if let Err(err) = write_bridge_config_to_file(tedge_config, bridge_config).await {
+        // We want to preserve previous errors and therefore discard result of this function.
+        let _ = clean_up(tedge_config, bridge_config);
+        return Err(err);
+    }
+
+    Ok(())
+}
+
 async fn write_bridge_config_to_file(
     config: &TEdgeConfig,
     bridge_config: &BridgeConfig,
@@ -1112,21 +1159,21 @@ mod tests {
         fn health_message_up_is_detected_successfully() {
             let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
             let message = test_message(health_topic, "up");
-            assert!(is_bridge_health_up_message(&message, health_topic))
+            assert!(is_bridge_health_up_message(&message, health_topic, true))
         }
 
         #[test]
         fn message_on_wrong_topic_is_ignored() {
             let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
             let message = test_message("a/different/topic", "up");
-            assert!(!is_bridge_health_up_message(&message, health_topic))
+            assert!(!is_bridge_health_up_message(&message, health_topic, true))
         }
 
         #[test]
         fn health_message_down_is_ignored() {
             let health_topic = "te/device/main/service/tedge-mapper-bridge-c8y/status/health";
             let message = test_message(health_topic, "down");
-            assert!(!is_bridge_health_up_message(&message, health_topic))
+            assert!(!is_bridge_health_up_message(&message, health_topic, true))
         }
 
         fn test_message(topic: &str, status: &str) -> rumqttc::Publish {
