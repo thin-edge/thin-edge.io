@@ -37,6 +37,10 @@ sudo tedge config set device.type edge_gateway
 
 Additional fragments can be added to the device by either publishing to a give MQTT topic, or via a file based method. Each section describes what data and when to use it.
 
+:::tip
+In order to display your custom fragments in Cumulocity's Device Management UI, you have to add them to the "Device Data" Widget of your Device's Info Page. See the [Device Details Info](https://cumulocity.com/docs/device-management-application/viewing-device-details/#info) for reference.
+:::
+
 ### MQTT Dynamic Fragments {#dynamic-fragments}
 
 %%te%% offers an MQTT topic which can be used to publish data to custom fragments for a device, child devices or services.
