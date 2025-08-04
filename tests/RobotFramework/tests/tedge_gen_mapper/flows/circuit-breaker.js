@@ -1,9 +1,9 @@
 // A flow step that let messages go through, unless too many messages are received within a given period
 //
 // This flow step is configured by the following settings:
-// - tick_every_seconds: the frequency at which the sliding window is moved
+// - interval: the frequency at which the sliding window is moved
 // - tick_count: size of the time windows
-// - too_many: how many messages is too many (received during the last tick_count*tick_every_seconds seconds)
+// - too_many: how many messages is too many (received during the last `tick_count * interval` seconds)
 // - back_to_normal: how many messages is okay to reactivate the flow step if bellow
 // - message_on_too_many: message sent when the upper threshold is crossed
 // - message_on_back_to_normal: message sent when the lower threshold is crossed

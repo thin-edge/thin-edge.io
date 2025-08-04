@@ -166,16 +166,16 @@ impl FlowStep {
         if script.no_js_on_config_update_fun && !self.config_topics.is_empty() {
             warn!(target: "flows", "Flow script with no 'onConfigUpdate' function: {}; but configured with 'config_topics' in {flow}", script.path.display());
         }
-        if script.no_js_on_interval_fun && script.tick_every_seconds != 0 {
-            warn!(target: "flows", "Flow script with no 'onInterval' function: {}; but configured with 'tick_every_seconds' in {flow}", script.path.display());
+        if script.no_js_on_interval_fun && script.interval_secs != 0 {
+            warn!(target: "flows", "Flow script with no 'onInterval' function: {}; but configured with an 'interval' in {flow}", script.path.display());
         }
     }
 
     pub(crate) fn fix(&mut self) {
         let script = &mut self.script;
-        if !script.no_js_on_interval_fun && script.tick_every_seconds == 0 {
-            // 0 as a default is not appropriate for a script with a tick handler
-            script.tick_every_seconds = 1;
+        if !script.no_js_on_interval_fun && script.interval_secs == 0 {
+            // 0 as a default is not appropriate for a script with an onInterval handler
+            script.interval_secs = 1;
         }
     }
 }

@@ -10,6 +10,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::fmt::Debug;
 use std::path::Path;
+use std::time::Duration;
 use tedge_mqtt_ext::TopicFilter;
 
 #[derive(Deserialize)]
@@ -26,7 +27,8 @@ pub struct StepConfig {
     config: Option<Value>,
 
     #[serde(default)]
-    tick_every_seconds: u64,
+    #[serde(deserialize_with = "parse_human_duration")]
+    interval: Duration,
 
     #[serde(default)]
     meta_topics: Vec<String>,
@@ -59,7 +61,7 @@ impl FlowConfig {
         let step = StepConfig {
             script: ScriptSpec::JavaScript(script),
             config: None,
-            tick_every_seconds: 0,
+            interval: Duration::default(),
             meta_topics: vec![],
         };
         Self {
@@ -107,7 +109,7 @@ impl StepConfig {
         };
         let script = JsScript::new(flow.to_owned().into(), index, path)
             .with_config(self.config)
-            .with_tick_every_seconds(self.tick_every_seconds);
+            .with_interval_secs(self.interval.as_secs());
         let config_topics = topic_filters(self.meta_topics)?;
         Ok(FlowStep {
             script,
@@ -135,4 +137,12 @@ fn topic_filters(patterns: Vec<String>) -> Result<TopicFilter, ConfigError> {
             .map_err(|_| ConfigError::IncorrectTopicFilter(pattern.clone()))?;
     }
     Ok(topics)
+}
+
+pub fn parse_human_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    humantime::parse_duration(&value).map_err(|_| serde::de::Error::custom("Invalid duration"))
 }

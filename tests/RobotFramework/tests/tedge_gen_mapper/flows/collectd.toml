@@ -2,5 +2,5 @@ input.mqtt.topics = ["collectd/+/+/+"]
 
 steps = [
     { script = "collectd-to-te.js" },
-    { script = "average.js", tick_every_seconds = 10 }
+    { script = "average.js", interval = "10s" }
 ]

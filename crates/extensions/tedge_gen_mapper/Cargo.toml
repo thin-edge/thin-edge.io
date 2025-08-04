@@ -12,6 +12,7 @@ repository.workspace = true
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true, features = ["serde1"] }
+humantime = { workspace = true }
 rquickjs = { workspace = true, default-features = false, features = [
     # disable bindgen and rely on pre-generated bindings due to problems
     # generating the bindings at build time with clang

@@ -17,7 +17,7 @@ pub struct JsScript {
     pub module_name: String,
     pub path: PathBuf,
     pub config: JsonValue,
-    pub tick_every_seconds: u64,
+    pub interval_secs: u64,
     pub no_js_on_message_fun: bool,
     pub no_js_on_config_update_fun: bool,
     pub no_js_on_interval_fun: bool,
@@ -39,7 +39,7 @@ impl JsScript {
             module_name,
             path,
             config: JsonValue::default(),
-            tick_every_seconds: 0,
+            interval_secs: 0,
             no_js_on_message_fun: true,
             no_js_on_config_update_fun: true,
             no_js_on_interval_fun: true,
@@ -61,9 +61,9 @@ impl JsScript {
         }
     }
 
-    pub fn with_tick_every_seconds(self, tick_every_seconds: u64) -> Self {
+    pub fn with_interval_secs(self, interval_secs: u64) -> Self {
         Self {
-            tick_every_seconds,
+            interval_secs,
             ..self
         }
     }
@@ -147,7 +147,7 @@ impl JsScript {
         if self.no_js_on_interval_fun {
             return Ok(vec![]);
         }
-        if !timestamp.tick_now(self.tick_every_seconds) {
+        if !timestamp.tick_now(self.interval_secs) {
             return Ok(vec![]);
         }
         debug!(target: "flows", "{}: onInterval({timestamp:?})", self.module_name());
