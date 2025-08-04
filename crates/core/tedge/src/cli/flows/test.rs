@@ -11,7 +11,7 @@ use tokio::io::BufReader;
 use tokio::io::Stdin;
 
 pub struct TestCommand {
-    pub mapping_dir: PathBuf,
+    pub flows_dir: PathBuf,
     pub flow: Option<PathBuf>,
     pub message: Option<Message>,
     pub final_on_interval: bool,
@@ -22,14 +22,14 @@ impl Command for TestCommand {
     fn description(&self) -> String {
         format!(
             "process message samples using flows and steps in {:}",
-            self.mapping_dir.display()
+            self.flows_dir.display()
         )
     }
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
         let mut processor = match &self.flow {
-            None => TEdgeFlowsCli::load_flows(&self.mapping_dir).await?,
-            Some(flow) => TEdgeFlowsCli::load_file(&self.mapping_dir, flow).await?,
+            None => TEdgeFlowsCli::load_flows(&self.flows_dir).await?,
+            Some(flow) => TEdgeFlowsCli::load_file(&self.flows_dir, flow).await?,
         };
         if let Some(message) = &self.message {
             let timestamp = DateTime::now();

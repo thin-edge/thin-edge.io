@@ -19,7 +19,7 @@ pub enum TEdgeFlowsCli {
         ///
         /// Default to /etc/tedge/flows
         #[clap(long)]
-        mapping_dir: Option<PathBuf>,
+        flows_dir: Option<PathBuf>,
 
         /// List flows processing messages published on this topic
         ///
@@ -34,7 +34,7 @@ pub enum TEdgeFlowsCli {
         ///
         /// Default to /etc/tedge/flows
         #[clap(long)]
-        mapping_dir: Option<PathBuf>,
+        flows_dir: Option<PathBuf>,
 
         /// Path to the flow step script or TOML flow definition
         ///
@@ -62,19 +62,19 @@ pub enum TEdgeFlowsCli {
 impl BuildCommand for TEdgeFlowsCli {
     fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
-            TEdgeFlowsCli::List { mapping_dir, topic } => {
-                let mapping_dir = mapping_dir.unwrap_or_else(|| Self::default_mapping_dir(config));
-                Ok(ListCommand { mapping_dir, topic }.into_boxed())
+            TEdgeFlowsCli::List { flows_dir, topic } => {
+                let flows_dir = flows_dir.unwrap_or_else(|| Self::default_flows_dir(config));
+                Ok(ListCommand { flows_dir, topic }.into_boxed())
             }
 
             TEdgeFlowsCli::Test {
-                mapping_dir,
+                flows_dir,
                 flow,
                 final_on_interval,
                 topic,
                 payload,
             } => {
-                let mapping_dir = mapping_dir.unwrap_or_else(|| Self::default_mapping_dir(config));
+                let flows_dir = flows_dir.unwrap_or_else(|| Self::default_flows_dir(config));
                 let message = match (topic, payload) {
                     (Some(topic), Some(payload)) => Some(Message {
                         topic,
@@ -86,7 +86,7 @@ impl BuildCommand for TEdgeFlowsCli {
                     (None, None) => None,
                 };
                 Ok(TestCommand {
-                    mapping_dir,
+                    flows_dir,
                     flow,
                     message,
                     final_on_interval,
@@ -98,26 +98,23 @@ impl BuildCommand for TEdgeFlowsCli {
 }
 
 impl TEdgeFlowsCli {
-    fn default_mapping_dir(config: &TEdgeConfig) -> PathBuf {
+    fn default_flows_dir(config: &TEdgeConfig) -> PathBuf {
         config.root_dir().join("flows").into()
     }
 
-    pub async fn load_flows(mapping_dir: &PathBuf) -> Result<MessageProcessor, Error> {
-        MessageProcessor::try_new(mapping_dir)
+    pub async fn load_flows(flows_dir: &PathBuf) -> Result<MessageProcessor, Error> {
+        MessageProcessor::try_new(flows_dir)
             .await
-            .with_context(|| format!("loading flows and steps from {}", mapping_dir.display()))
+            .with_context(|| format!("loading flows and steps from {}", flows_dir.display()))
     }
 
-    pub async fn load_file(
-        mapping_dir: &PathBuf,
-        path: &PathBuf,
-    ) -> Result<MessageProcessor, Error> {
+    pub async fn load_file(flows_dir: &PathBuf, path: &PathBuf) -> Result<MessageProcessor, Error> {
         if let Some("toml") = path.extension().and_then(|s| s.to_str()) {
-            MessageProcessor::try_new_single_flow(mapping_dir, path)
+            MessageProcessor::try_new_single_flow(flows_dir, path)
                 .await
                 .with_context(|| format!("loading flow {flow}", flow = path.display()))
         } else {
-            MessageProcessor::try_new_single_step_flow(mapping_dir, path)
+            MessageProcessor::try_new_single_step_flow(flows_dir, path)
                 .await
                 .with_context(|| format!("loading flow script {script}", script = path.display()))
         }

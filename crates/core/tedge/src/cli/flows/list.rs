@@ -7,21 +7,18 @@ use tedge_config::TEdgeConfig;
 use tedge_gen_mapper::flow::Flow;
 
 pub struct ListCommand {
-    pub mapping_dir: PathBuf,
+    pub flows_dir: PathBuf,
     pub topic: Option<String>,
 }
 
 #[async_trait::async_trait]
 impl Command for ListCommand {
     fn description(&self) -> String {
-        format!(
-            "list flows and flow steps in {:}",
-            self.mapping_dir.display()
-        )
+        format!("list flows and flow steps in {:}", self.flows_dir.display())
     }
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
-        let processor = TEdgeFlowsCli::load_flows(&self.mapping_dir).await?;
+        let processor = TEdgeFlowsCli::load_flows(&self.flows_dir).await?;
 
         match &self.topic {
             Some(topic) => processor
