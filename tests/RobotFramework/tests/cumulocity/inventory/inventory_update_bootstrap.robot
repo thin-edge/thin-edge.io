@@ -28,6 +28,7 @@ Main device name and type not updated on mapper and agent restart
     Execute Command
     ...    cmd=printf '{"name":"Super Advanced Device","type":"advancedV2"}\n' > /etc/tedge/device/inventory.json
     Restart Service    tedge-agent
+    Service Health Status Should Be Up    tedge-agent
     Execute Command    tedge reconnect c8y
     Sleep    3s
     Device Should Have Fragment Values    name\="Super Advanced Device"
@@ -40,6 +41,7 @@ Main device name and type not updated on mapper and agent restart
     Device Should Have Fragment Values    name\="RaspberryPi 0001"
     Device Should Have Fragment Values    type\="RaspberryPi5"
     Restart Service    tedge-agent
+    Service Health Status Should Be Up    tedge-agent
     Execute Command    tedge reconnect c8y
     Sleep    3s
     Device Should Have Fragment Values    name\="RaspberryPi 0001"
