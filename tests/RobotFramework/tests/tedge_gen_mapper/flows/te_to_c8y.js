@@ -104,7 +104,7 @@ export function onMessage(message, config) {
 /// [te/device/main///m/example] { "temperature": { "unit": 23 }}
 /// ```
 ///
-/// will be merged by the process function into:
+/// will be merged by the onMessage function into:
 /// ```
 /// [c8y/measurement/measurements/create] {
 ///   "type": "example",
