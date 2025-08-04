@@ -51,7 +51,7 @@ Units are configured using topic metadata
 
 Computing average over a time window
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/flows/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-tick --flow /etc/tedge/flows/average.js
+    ...    cat /etc/tedge/flows/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval --flow /etc/tedge/flows/average.js
     ...    strip=True
     ${expected_msg}    Execute Command
     ...    cat /etc/tedge/flows/average.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
@@ -62,7 +62,7 @@ Computing average over a time window
 
 Each instance of a script must have its own static state
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/flows/count-messages.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-tick | sort
+    ...    cat /etc/tedge/flows/count-messages.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval | sort
     ...    strip=True
     ${expected_msg}    Execute Command
     ...    cat /etc/tedge/flows/count-messages.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: ' | sort

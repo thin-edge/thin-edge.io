@@ -42,9 +42,9 @@ pub enum TEdgeFlowsCli {
         #[clap(long)]
         flow: Option<PathBuf>,
 
-        /// Send a tick after all the message samples
-        #[clap(long = "final-tick")]
-        final_tick: bool,
+        /// Trigger onInterval after all the message samples
+        #[clap(long = "final-on-interval")]
+        final_on_interval: bool,
 
         /// Topic of the message sample
         ///
@@ -70,7 +70,7 @@ impl BuildCommand for TEdgeFlowsCli {
             TEdgeFlowsCli::Test {
                 mapping_dir,
                 flow,
-                final_tick,
+                final_on_interval,
                 topic,
                 payload,
             } => {
@@ -89,7 +89,7 @@ impl BuildCommand for TEdgeFlowsCli {
                     mapping_dir,
                     flow,
                     message,
-                    final_tick,
+                    final_on_interval,
                 }
                 .into_boxed())
             }

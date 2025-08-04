@@ -14,7 +14,7 @@ pub struct TestCommand {
     pub mapping_dir: PathBuf,
     pub flow: Option<PathBuf>,
     pub message: Option<Message>,
-    pub final_tick: bool,
+    pub final_on_interval: bool,
 }
 
 #[async_trait::async_trait]
@@ -41,7 +41,7 @@ impl Command for TestCommand {
                 self.process(&mut processor, &message, &timestamp).await;
             }
         }
-        if self.final_tick {
+        if self.final_on_interval {
             let timestamp = DateTime::now();
             self.tick(&mut processor, &timestamp).await;
         }
