@@ -22,6 +22,7 @@ pub mod config;
 mod connect;
 mod diag;
 mod disconnect;
+#[cfg(feature = "tedge-flows")]
 mod flows;
 mod http;
 mod init;
@@ -140,6 +141,7 @@ pub enum TEdgeOpt {
     Http(http::TEdgeHttpCli),
 
     /// Monitor and test flows
+    #[cfg(feature = "tedge-flows")]
     #[clap(subcommand)]
     Flows(flows::TEdgeFlowsCli),
 
@@ -213,6 +215,7 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Mqtt(opt) => opt.build_command(config),
             TEdgeOpt::Http(opt) => opt.build_command(config),
             TEdgeOpt::Reconnect(opt) => opt.build_command(config),
+            #[cfg(feature = "tedge-flows")]
             TEdgeOpt::Flows(opt) => opt.build_command(config),
             TEdgeOpt::Run(_) => {
                 // This method has to be kept in sync with tedge::redirect_if_multicall()
