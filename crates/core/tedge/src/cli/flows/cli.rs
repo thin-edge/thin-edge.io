@@ -8,8 +8,8 @@ use anyhow::Context;
 use anyhow::Error;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_gen_mapper::flow::Message;
-use tedge_gen_mapper::MessageProcessor;
+use tedge_flows::flow::Message;
+use tedge_flows::MessageProcessor;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeFlowsCli {

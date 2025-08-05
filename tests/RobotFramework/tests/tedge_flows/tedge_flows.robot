@@ -1,8 +1,8 @@
 *** Settings ***
 Library             ThinEdgeIO
 
-Test Setup          Custom Setup
-Test Teardown       Get Logs
+Suite Setup          Custom Setup
+Suite Teardown       Get Logs
 
 Test Tags           theme:tedge_flows
 

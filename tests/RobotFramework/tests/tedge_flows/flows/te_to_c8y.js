@@ -101,7 +101,7 @@ export function onMessage(message, config) {
 ///
 /// and:
 /// ```
-/// [te/device/main///m/example] { "temperature": { "unit": 23 }}
+/// [te/device/main///m/example] { "temperature": 23 }
 /// ```
 ///
 /// will be merged by the onMessage function into:

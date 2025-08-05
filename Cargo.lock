@@ -4636,7 +4636,7 @@ dependencies = [
  "tedge-write",
  "tedge_api",
  "tedge_config",
- "tedge_gen_mapper",
+ "tedge_flows",
  "tedge_test_utils",
  "tedge_utils",
  "tempfile",
@@ -4745,7 +4745,7 @@ dependencies = [
  "tedge_config",
  "tedge_downloader_ext",
  "tedge_file_system_ext",
- "tedge_gen_mapper",
+ "tedge_flows",
  "tedge_health_ext",
  "tedge_http_ext",
  "tedge_mqtt_bridge",
@@ -4996,7 +4996,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tedge_gen_mapper"
+name = "tedge_flows"
 version = "1.6.1"
 dependencies = [
  "anyhow",

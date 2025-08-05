@@ -54,7 +54,7 @@ tedge-watchdog = { workspace = true }
 tedge-write = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
-tedge_gen_mapper = { workspace = true }
+tedge_flows = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }

@@ -55,7 +55,7 @@ tedge_config_macros-impl = { path = "crates/common/tedge_config_macros/impl" }
 tedge_config_manager = { path = "crates/extensions/tedge_config_manager" }
 tedge_downloader_ext = { path = "crates/extensions/tedge_downloader_ext" }
 tedge_file_system_ext = { path = "crates/extensions/tedge_file_system_ext" }
-tedge_gen_mapper = { path = "crates/extensions/tedge_gen_mapper" }
+tedge_flows = { path = "crates/extensions/tedge_flows" }
 tedge_health_ext = { path = "crates/extensions/tedge_health_ext" }
 tedge_http_ext = { path = "crates/extensions/tedge_http_ext" }
 tedge_log_manager = { path = "crates/extensions/tedge_log_manager" }

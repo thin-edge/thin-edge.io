@@ -1,5 +1,5 @@
 [package]
-name = "tedge_gen_mapper"
+name = "tedge_flows"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

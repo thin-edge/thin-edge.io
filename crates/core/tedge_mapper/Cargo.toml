@@ -28,7 +28,7 @@ tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 tedge_downloader_ext = { workspace = true }
 tedge_file_system_ext = { workspace = true }
-tedge_gen_mapper = { workspace = true }
+tedge_flows = { workspace = true }
 tedge_health_ext = { workspace = true }
 tedge_http_ext = { workspace = true }
 tedge_mqtt_bridge = { workspace = true }

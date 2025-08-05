@@ -4,7 +4,7 @@ use crate::log::MaybeFancy;
 use anyhow::Error;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_gen_mapper::flow::Flow;
+use tedge_flows::flow::Flow;
 
 pub struct ListCommand {
     pub flows_dir: PathBuf,
@@ -14,7 +14,7 @@ pub struct ListCommand {
 #[async_trait::async_trait]
 impl Command for ListCommand {
     fn description(&self) -> String {
-        format!("list flows and flow steps in {:}", self.flows_dir.display())
+        format!("list flows and flow steps in {}", self.flows_dir.display())
     }
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
