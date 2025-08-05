@@ -146,14 +146,14 @@ Can create a private key on the PKCS11 token and download new cert from c8y
     ...    p11tool_keytype=RSA-4096
 
     Create private key and download cert from c8y
-    ...    label=ec-256
+    ...    label=ec-p256
     ...    type=ec
-    ...    curve=256
+    ...    curve=p256
     ...    p11tool_keytype=EC/ECDSA-SECP256R1
     Create private key and download cert from c8y
-    ...    label=ec-384
+    ...    label=ec-p384
     ...    type=ec
-    ...    curve=384
+    ...    curve=p384
     ...    p11tool_keytype=EC/ECDSA-SECP384R1
     # ECDSA P521 not supported by rcgen
 

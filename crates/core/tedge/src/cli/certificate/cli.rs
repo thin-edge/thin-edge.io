@@ -7,7 +7,9 @@ use crate::certificate_is_self_signed;
 use crate::cli::certificate::c8y;
 use crate::cli::certificate::create_csr::Key;
 use crate::cli::certificate::create_key::CreateKeyCmd;
+use crate::cli::certificate::create_key::EcCurve;
 use crate::cli::certificate::create_key::KeyType;
+use crate::cli::certificate::create_key::RsaBits;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
@@ -65,11 +67,11 @@ pub enum TEdgeCertCli {
         #[arg(long)]
         r#type: KeyType,
 
-        #[arg(long, default_value = "2048")]
-        bits: u16,
+        #[arg(long, default_value = "2048", group = "key_params")]
+        bits: RsaBits,
 
-        #[arg(long, default_value = "256")]
-        curve: u16,
+        #[arg(long, default_value = "p256", group = "key_params")]
+        curve: EcCurve,
 
         /// The device identifier to be used as the common name for the certificate
         #[clap(long = "device-id", global = true)]

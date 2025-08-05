@@ -11,8 +11,8 @@ use crate::log::MaybeFancy;
 
 pub struct CreateKeyCmd {
     pub cryptoki_config: CryptokiConfig,
-    pub bits: u16,
-    pub curve: u16,
+    pub bits: RsaBits,
+    pub curve: EcCurve,
     pub label: String,
     pub r#type: KeyType,
     /// The device identifier to be used as the common name for the certificate
@@ -27,6 +27,41 @@ pub enum KeyType {
     Ec,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum RsaBits {
+    #[value(name = "2048")]
+    Bits2048,
+    #[value(name = "3072")]
+    Bits3072,
+    #[value(name = "4096")]
+    Bits4096,
+}
+
+impl From<RsaBits> for u16 {
+    fn from(value: RsaBits) -> Self {
+        match value {
+            RsaBits::Bits2048 => 2048,
+            RsaBits::Bits3072 => 3072,
+            RsaBits::Bits4096 => 4096,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum EcCurve {
+    P256,
+    P384,
+}
+
+impl From<EcCurve> for u16 {
+    fn from(value: EcCurve) -> Self {
+        match value {
+            EcCurve::P256 => 256,
+            EcCurve::P384 => 384,
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl Command for CreateKeyCmd {
     fn description(&self) -> String {
@@ -35,8 +70,12 @@ impl Command for CreateKeyCmd {
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         let key = match self.r#type {
-            KeyType::Rsa => KeyTypeParams::Rsa { bits: self.bits },
-            KeyType::Ec => KeyTypeParams::Ec { curve: self.curve },
+            KeyType::Rsa => KeyTypeParams::Rsa {
+                bits: self.bits.into(),
+            },
+            KeyType::Ec => KeyTypeParams::Ec {
+                curve: self.curve.into(),
+            },
         };
         let params = CreateKeyParams {
             key,
@@ -54,13 +93,8 @@ impl Command for CreateKeyCmd {
         // use returned public key to create a CSR
         let sigalg = match (self.r#type, self.curve) {
             (KeyType::Rsa, _) => certificate::SignatureAlgorithm::RsaPkcs1Sha256,
-            (KeyType::Ec, 256) => certificate::SignatureAlgorithm::EcdsaP256Sha256,
-            (KeyType::Ec, 384) => certificate::SignatureAlgorithm::EcdsaP384Sha384,
-            _ => {
-                return Err(
-                    anyhow::anyhow!("invalid arguments: bad keytype/arg combination").into(),
-                )
-            }
+            (KeyType::Ec, EcCurve::P256) => certificate::SignatureAlgorithm::EcdsaP256Sha256,
+            (KeyType::Ec, EcCurve::P384) => certificate::SignatureAlgorithm::EcdsaP384Sha384,
         };
 
         let key = super::create_csr::Key::Cryptoki {
