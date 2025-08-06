@@ -17,8 +17,6 @@ Base inventory data
 
     # Initial inventory.json data
     Execute Command
-    ...    cmd=mkdir /etc/tedge/device
-    Execute Command
     ...    cmd=printf '{"name":"Advanced Child Device","type":"advancedV1"}\n' > /etc/tedge/device/inventory.json
 
     Restart Service    tedge-agent

@@ -12,6 +12,7 @@ use tedge_actors::SimpleMessageBox;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_utils::file::create_directory_with_defaults;
 use tracing::error;
 
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
@@ -29,6 +30,15 @@ impl Actor for TwinManagerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        // Create directory for device inventory.json
+        create_directory_with_defaults(self.config.config_dir.join("device"))
+            .await
+            .map_err(|err| {
+                RuntimeError::ActorError(
+                    format!("Failed to create device inventory directory: {}", err).into(),
+                )
+            })?;
+
         let mut inventory_map = self.load_inventory_json()?;
         while let Ok(Some(message)) =
             tokio::time::timeout(std::time::Duration::from_secs(3), self.messages.recv()).await

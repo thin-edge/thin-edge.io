@@ -431,8 +431,6 @@ impl C8yMapperBuilder {
     pub async fn init(config: &C8yMapperConfig) -> Result<(), FileError> {
         // Create c8y operations directory
         create_directory_with_defaults(config.ops_dir.as_std_path()).await?;
-        // Create directory for device custom fragments
-        create_directory_with_defaults(config.config_dir.join("device")).await?;
         // Create directory for persistent entity store
         create_directory_with_defaults(config.state_dir.as_std_path()).await?;
         Ok(())
