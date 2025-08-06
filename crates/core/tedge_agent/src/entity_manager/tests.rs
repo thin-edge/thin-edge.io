@@ -17,7 +17,6 @@ use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_test_utils::fs::TempTedgeDir;
 
 #[tokio::test]
 async fn new_entity_store() {
@@ -28,69 +27,6 @@ async fn new_entity_store() {
         entity::get(&mut entity_store, "device/main//").await,
         Some(EntityMetadata::main_device(None))
     )
-}
-
-#[tokio::test]
-async fn process_inventory_json_content_on_init() {
-    let handle = entity::server("device-under-test");
-    let (mut entity_store, mut mqtt_box, tmp_dir) =
-        (handle.entity_store, handle.mqtt_output, handle.tmp_dir);
-
-    let inventory_json = json!({
-        "boolean_key": true,
-        "numeric_key": 10,
-        "string_key": "value"
-    });
-    create_inventory_json_file_with_content(&tmp_dir, &inventory_json.to_string());
-
-    entity::init_complete_signal(&mut entity_store)
-        .await
-        .unwrap();
-    mqtt_box
-        .assert_received([
-            MqttMessage::from(("te/device/main///twin/boolean_key", "true")).with_retain(),
-            MqttMessage::from(("te/device/main///twin/numeric_key", "10")).with_retain(),
-            MqttMessage::from(("te/device/main///twin/string_key", "\"value\"")).with_retain(),
-        ])
-        .await;
-}
-
-#[tokio::test]
-async fn inventory_json_value_ignored_if_twin_data_present() {
-    let handle = entity::server("device-under-test");
-    let (mut entity_store, mut mqtt_box, tmp_dir) =
-        (handle.entity_store, handle.mqtt_output, handle.tmp_dir);
-
-    let inventory_json = json!({
-        "x": 1,
-        "y": 2,
-        "z": 3,
-    });
-    create_inventory_json_file_with_content(&tmp_dir, &inventory_json.to_string());
-
-    entity::set_twin_fragments(
-        &mut entity_store,
-        "device/main//",
-        json!({"y": 20}).as_object().unwrap().clone(),
-    )
-    .await
-    .unwrap();
-    mqtt_box.skip(1).await; // Skip the above twin update
-
-    entity::init_complete_signal(&mut entity_store)
-        .await
-        .unwrap();
-    mqtt_box
-        .assert_received([
-            MqttMessage::from(("te/device/main///twin/x", "1")).with_retain(),
-            MqttMessage::from(("te/device/main///twin/z", "3")).with_retain(),
-        ])
-        .await;
-}
-
-fn create_inventory_json_file_with_content(ttd: &TempTedgeDir, content: &str) {
-    let file = ttd.dir("device").file("inventory.json");
-    file.with_raw_content(content);
 }
 
 #[tokio::test]
@@ -486,16 +422,6 @@ mod entity {
         anyhow::bail!("Unexpected response");
     }
 
-    pub async fn init_complete_signal(
-        entity_store: &mut EntityStoreServer,
-    ) -> Result<(), anyhow::Error> {
-        if let EntityStoreResponse::Ok = entity_store.handle(EntityStoreRequest::InitComplete).await
-        {
-            return Ok(());
-        };
-        anyhow::bail!("Unexpected response");
-    }
-
     pub fn server(device_id: &str) -> TestHandle {
         let mqtt_schema = MqttSchema::default();
         let main_device = EntityRegistrationMessage::main_device(Some(device_id.to_string()));
@@ -513,11 +439,7 @@ mod entity {
         )
         .unwrap();
 
-        let config = EntityStoreServerConfig::new(
-            tmp_dir.path().to_path_buf(),
-            mqtt_schema.clone(),
-            entity_auto_register,
-        );
+        let config = EntityStoreServerConfig::new(mqtt_schema.clone(), entity_auto_register);
 
         let mqtt_actor = SimpleMessageBoxBuilder::new("MQTT", 64);
         let mut actor_builder = TestMqttActorBuilder {
@@ -530,7 +452,6 @@ mod entity {
         let mqtt_output = actor_builder.messages.build();
 
         TestHandle {
-            tmp_dir,
             entity_store: server,
             mqtt_input,
             mqtt_output,
@@ -538,7 +459,6 @@ mod entity {
     }
 
     pub(crate) struct TestHandle {
-        pub tmp_dir: TempTedgeDir,
         pub entity_store: EntityStoreServer,
         pub mqtt_input: DynSender<MqttRequest>,
         pub mqtt_output: SimpleMessageBox<MqttRequest, MqttMessage>,
