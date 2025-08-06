@@ -28,6 +28,7 @@ mod restart_manager;
 mod software_manager;
 mod state_repository;
 mod tedge_to_te_converter;
+mod twin_manager;
 
 #[derive(Debug, Clone, clap::Parser)]
 #[clap(

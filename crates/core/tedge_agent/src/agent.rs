@@ -15,6 +15,8 @@ use crate::software_manager::config::SoftwareManagerConfig;
 use crate::state_repository::state::agent_default_state_dir;
 use crate::state_repository::state::agent_state_dir;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
+use crate::twin_manager::builder::TwinManagerActorBuilder;
+use crate::twin_manager::builder::TwinManagerConfig;
 use crate::AgentOpt;
 use crate::Capabilities;
 use anyhow::Context;
@@ -28,7 +30,6 @@ use reqwest::Identity;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 use tedge_actors::Concurrent;
 use tedge_actors::ConvertingActor;
 use tedge_actors::ConvertingActorBuilder;
@@ -65,7 +66,6 @@ use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
 use tedge_utils::file::create_directory_with_defaults;
-use tracing::error;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
@@ -302,6 +302,15 @@ impl Agent {
             device_topic_id: DeviceTopicId::new(device_topic_id.clone()),
         };
         let mqtt_schema = MqttSchema::with_root(self.config.mqtt_topic_root.to_string());
+
+        let twin_manager_config = TwinManagerConfig::new(
+            self.config.config_dir.clone().into_std_path_buf(),
+            mqtt_schema.clone(),
+            device_topic_id.clone(),
+        );
+        let twin_manager_builder =
+            TwinManagerActorBuilder::new(twin_manager_config, &mut mqtt_actor_builder);
+
         let health_actor = HealthMonitorBuilder::from_service_topic_id(
             service,
             &mut mqtt_actor_builder,
@@ -387,11 +396,8 @@ impl Agent {
                 state_dir,
                 clean_start,
             )?;
-            let entity_store_server_config = EntityStoreServerConfig::new(
-                self.config.config_dir.into_std_path_buf(),
-                mqtt_schema.clone(),
-                self.config.entity_auto_register,
-            );
+            let entity_store_server_config =
+                EntityStoreServerConfig::new(mqtt_schema.clone(), self.config.entity_auto_register);
             let entity_store_server = EntityStoreServer::new(
                 entity_store_server_config,
                 entity_store,
@@ -409,24 +415,6 @@ impl Agent {
                     })
                 },
             );
-            let mut init_sender = entity_store_actor_builder.get_sender();
-            tokio::spawn(async move {
-                // Allow the entity store to complete its initialization
-                // after giving it some time to process all the retained metadata messages on startup
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                if let Err(err) = init_sender
-                    .send(RequestEnvelope {
-                        request: EntityStoreRequest::InitComplete,
-                        reply_to: Box::new(NullSender),
-                    })
-                    .await
-                {
-                    error!(
-                        "Failed to send init complete message to entity store: {}",
-                        err
-                    );
-                }
-            });
 
             let file_transfer_server_builder = HttpServerBuilder::try_bind(
                 self.config.http_config,
@@ -453,6 +441,7 @@ impl Agent {
         runtime.spawn(signal_actor_builder).await?;
         runtime.spawn(mqtt_actor_builder).await?;
         runtime.spawn(fs_watch_actor_builder).await?;
+        runtime.spawn(twin_manager_builder).await?;
         runtime.spawn(downloader_actor_builder).await?;
         runtime.spawn(uploader_actor_builder).await?;
         if let Some(config_actor_builder) = config_actor_builder {
