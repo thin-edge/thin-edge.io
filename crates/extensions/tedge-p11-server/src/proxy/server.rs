@@ -5,19 +5,21 @@ use tracing::error;
 use tracing::info;
 
 use super::connection::Connection;
-use crate::connection::Frame1;
-use crate::connection::ProtocolError;
+use super::connection::Frame1;
+use super::connection::ProtocolError;
 use crate::service::SignRequestWithSigScheme;
-use crate::service::SigningService;
+use crate::service::TedgeP11Service;
 
+/// Relays requests made by [`TedgeP11Client`](super::TedgeP11Client) to the inner PKCS #11 service and returns
+/// responses.
 pub struct TedgeP11Server {
-    service: Box<dyn SigningService + Send + Sync>,
+    service: Box<dyn TedgeP11Service>,
 }
 
 impl TedgeP11Server {
     pub fn new<S>(service: S) -> anyhow::Result<Self>
     where
-        S: SigningService + Send + Sync + 'static,
+        S: TedgeP11Service + 'static,
     {
         Ok(Self {
             service: Box::new(service),
@@ -111,21 +113,21 @@ impl TedgeP11Server {
 
 #[cfg(test)]
 mod tests {
-    use crate::client::TedgeP11Client;
+    use super::*;
+
+    use super::super::client::TedgeP11Client;
     use crate::pkcs11;
     use crate::service::*;
     use std::io::Read;
     use std::os::unix::net::UnixStream;
     use std::time::Duration;
 
-    use super::*;
-
     const SCHEME: pkcs11::SigScheme = pkcs11::SigScheme::EcdsaNistp256Sha256;
     const SIGNATURE: [u8; 2] = [0x21, 0x37];
 
     struct TestSigningService;
 
-    impl SigningService for TestSigningService {
+    impl TedgeP11Service for TestSigningService {
         fn choose_scheme(
             &self,
             _request: ChooseSchemeRequest,
@@ -158,7 +160,7 @@ mod tests {
         tokio::task::spawn_blocking(move || {
             let client = TedgeP11Client::with_ready_check(socket_path.into());
             assert_eq!(
-                client.choose_scheme(&[], None).unwrap().unwrap(),
+                client.choose_scheme(&[], None).unwrap().scheme.unwrap(),
                 SCHEME.into()
             );
             assert_eq!(&client.sign2(&[], None, SCHEME).unwrap(), &SIGNATURE[..]);

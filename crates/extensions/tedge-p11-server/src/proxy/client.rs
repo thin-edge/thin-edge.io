@@ -7,16 +7,43 @@ use anyhow::Context;
 use tracing::debug;
 use tracing::trace;
 
-use crate::pkcs11::SigScheme;
-use crate::service::SignRequestWithSigScheme;
-
+use super::connection::Connection;
 use super::connection::Frame1;
-use super::service::ChooseSchemeRequest;
-use super::service::SignRequest;
+use crate::pkcs11::SigScheme;
+use crate::service::ChooseSchemeRequest;
+use crate::service::ChooseSchemeResponse;
+use crate::service::SignRequest;
+use crate::service::SignRequestWithSigScheme;
+use crate::service::TedgeP11Service;
 
+/// A [`TedgeP11Service`] implementation that proxies requests to the [`TedgeP11Server`](super::TedgeP11Server) that
+/// does the operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TedgeP11Client {
-    socket_path: Arc<Path>,
+    pub(crate) socket_path: Arc<Path>,
+    pub(crate) uri: Option<Arc<str>>,
+}
+
+impl TedgeP11Service for TedgeP11Client {
+    fn choose_scheme(
+        &self,
+        request: ChooseSchemeRequest,
+    ) -> anyhow::Result<crate::service::ChooseSchemeResponse> {
+        let offered: Vec<_> = request.offered.iter().map(|s| s.0).collect();
+        self.choose_scheme(&offered, request.uri)
+    }
+
+    fn sign(
+        &self,
+        request: SignRequestWithSigScheme,
+    ) -> anyhow::Result<crate::service::SignResponse> {
+        let response = match request.sigscheme {
+            Some(sigscheme) => self.sign2(&request.to_sign, request.uri, sigscheme)?,
+            None => self.sign(&request.to_sign, request.uri)?,
+        };
+
+        Ok(crate::service::SignResponse(response))
+    }
 }
 
 impl TedgeP11Client {
@@ -43,7 +70,10 @@ impl TedgeP11Client {
     ///
     /// [unexp-eof]: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
     pub fn with_ready_check(socket_path: Arc<Path>) -> Self {
-        let client = Self { socket_path };
+        let client = Self {
+            socket_path,
+            uri: None,
+        };
 
         // make any request to make sure the service is online and it will respond
         let _ = client.choose_scheme(&[], None);
@@ -55,12 +85,12 @@ impl TedgeP11Client {
         &self,
         offered: &[rustls::SignatureScheme],
         uri: Option<String>,
-    ) -> anyhow::Result<Option<rustls::SignatureScheme>> {
+    ) -> anyhow::Result<ChooseSchemeResponse> {
         let request = Frame1::ChooseSchemeRequest(ChooseSchemeRequest {
             offered: offered
                 .iter()
                 .copied()
-                .map(super::service::SignatureScheme)
+                .map(crate::service::SignatureScheme)
                 .collect::<Vec<_>>(),
             uri,
         });
@@ -72,11 +102,7 @@ impl TedgeP11Client {
 
         debug!("Choose scheme complete");
 
-        let Some(scheme) = response.scheme else {
-            return Ok(None);
-        };
-
-        Ok(Some(scheme.0))
+        Ok(response)
     }
 
     // this function is called only on the server when handling ClientHello message, so
@@ -143,7 +169,7 @@ impl TedgeP11Client {
                 self.socket_path.display()
             )
         })?;
-        let mut connection = crate::connection::Connection::new(stream);
+        let mut connection = Connection::new(stream);
         debug!("Connected to socket");
 
         trace!(?request);
