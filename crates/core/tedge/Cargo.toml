@@ -32,8 +32,6 @@ hyper = { workspace = true, default-features = false }
 mime_guess = { workspace = true }
 mqtt_channel = { workspace = true }
 nix = { workspace = true }
-p256 = "0.13.2"
-p384 = "0.13.1"
 pad = { workspace = true }
 pem.workspace = true
 rasn = { workspace = true }

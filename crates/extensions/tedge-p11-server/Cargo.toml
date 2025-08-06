@@ -16,9 +16,6 @@ camino.features = ["serde1"]
 camino.workspace = true
 clap.workspace = true
 cryptoki.workspace = true
-elliptic-curve = { version = "0.13.8", features = ["sec1"] }
-p256 = "0.13.2"
-p384 = "0.13.1"
 pem.workspace = true
 percent-encoding.workspace = true
 postcard.workspace = true

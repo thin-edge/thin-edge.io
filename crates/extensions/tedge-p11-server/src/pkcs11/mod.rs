@@ -540,46 +540,16 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Stri
             let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
             pem::encode(&pubkey_pem)
         }
-        KeyTypeParams::Ec { curve } => {
+        KeyTypeParams::Ec { .. } => {
             // convert ECPoint to ECPublicKey
             // DER encoding of ECPoint: RFC5480 section 2.2
-            match curve {
-                256 => ec::point_to_pem::<p256::NistP256>(pubkey_der)?,
-                384 => ec::point_to_pem::<p384::NistP384>(pubkey_der)?,
-                _ => anyhow::bail!("Invalid EC curve value: only P256/P384 valid"),
-            }
+            let (_, ec_point) = asn1_rs::OctetString::from_der(&pubkey_der).unwrap();
+            let pubkey_pem = pem::Pem::new("PUBLIC KEY", ec_point.into_cow());
+            pem::encode(&pubkey_pem)
         }
     };
 
     Ok(pubkey_pem)
-}
-
-mod ec {
-    use super::*;
-    use elliptic_curve::point::PointCompression;
-    use elliptic_curve::sec1::EncodedPoint;
-    use elliptic_curve::sec1::FromEncodedPoint;
-    use elliptic_curve::sec1::ModulusSize;
-    use elliptic_curve::sec1::ToEncodedPoint;
-    use elliptic_curve::Curve;
-    use elliptic_curve::CurveArithmetic;
-
-    pub fn point_to_pem<C>(point_der: Vec<u8>) -> anyhow::Result<String>
-    where
-        C: Curve + CurveArithmetic + PointCompression,
-        <C as Curve>::FieldBytesSize: ModulusSize,
-        <C as CurveArithmetic>::AffinePoint: FromEncodedPoint<C> + ToEncodedPoint<C>,
-    {
-        let (_, ec_point) = asn1_rs::OctetString::from_der(&point_der).unwrap();
-        let ec_point =
-            EncodedPoint::<C>::from_bytes(&ec_point).context("Failed to parse EC point")?;
-        let pubkey = elliptic_curve::PublicKey::<C>::from_encoded_point(&ec_point)
-            .into_option()
-            .context("Failed to create EC pubkey from EncodedPoint")?;
-        let der = pubkey.to_sec1_bytes();
-        let pubkey_pem = pem::Pem::new("PUBLIC KEY", der);
-        Ok(pem::encode(&pubkey_pem))
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
