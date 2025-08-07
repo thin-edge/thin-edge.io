@@ -44,6 +44,10 @@ impl TedgeP11Service for TedgeP11Client {
 
         Ok(crate::service::SignResponse(response))
     }
+
+    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
+        self.get_public_key_pem(uri.map(ToString::to_string))
+    }
 }
 
 impl TedgeP11Client {
@@ -160,6 +164,19 @@ impl TedgeP11Client {
         debug!("Sign complete");
 
         Ok(response.0)
+    }
+
+    pub fn get_public_key_pem(&self, uri: Option<String>) -> anyhow::Result<String> {
+        let request = Frame1::GetPublicKeyPemRequest(uri);
+        let response = self.do_request(request)?;
+
+        let Frame1::GetPublicKeyPemResponse(pubkey_pem) = response else {
+            bail!("protocol error: bad response, expected create_key, received: {response:?}");
+        };
+
+        debug!("Sign complete");
+
+        Ok(pubkey_pem)
     }
 
     fn do_request(&self, request: Frame1) -> anyhow::Result<Frame1> {

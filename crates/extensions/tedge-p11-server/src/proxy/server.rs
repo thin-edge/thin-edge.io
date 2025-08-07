@@ -54,7 +54,8 @@ impl TedgeP11Server {
         let response = match request {
             Frame1::Error(_)
             | Frame1::ChooseSchemeResponse { .. }
-            | Frame1::SignResponse { .. } => {
+            | Frame1::SignResponse { .. }
+            | Frame1::GetPublicKeyPemResponse(_) => {
                 let error = ProtocolError("invalid request".to_string());
                 let _ = connection.write_frame(&Frame1::Error(error));
                 anyhow::bail!("protocol error: invalid request")
@@ -103,6 +104,20 @@ impl TedgeP11Server {
                     }
                 }
             }
+
+            Frame1::GetPublicKeyPemRequest(uri) => {
+                let response = self.service.get_public_key_pem(uri.as_deref());
+                match response {
+                    Ok(pubkey_pem) => Frame1::GetPublicKeyPemResponse(pubkey_pem),
+                    Err(err) => {
+                        let response = Frame1::Error(ProtocolError(format!(
+                            "PKCS #11 service failed: {err:#}"
+                        )));
+                        connection.write_frame(&response)?;
+                        anyhow::bail!(err);
+                    }
+                }
+            }
         };
 
         connection.write_frame(&response).context("write")?;
@@ -140,6 +155,10 @@ mod tests {
 
         fn sign(&self, _request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse> {
             Ok(SignResponse(SIGNATURE.to_vec()))
+        }
+
+        fn get_public_key_pem(&self, _uri: Option<&str>) -> anyhow::Result<String> {
+            todo!()
         }
     }
 

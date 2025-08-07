@@ -10,6 +10,15 @@ pub trait TedgeP11Service: Send + Sync {
 
     /// Signs the message using the private key object on the token (denoted by uri).
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse>;
+
+    /// Returns the public key in PEM format.
+    ///
+    /// Function will return public key PEM if `uri` identifies either a public key, or a private key with a matching
+    /// key being present on the token.
+    ///
+    /// Note: in some cases PKCS 11 RSA private key objects may also contain the public exponent attribute, allowing us
+    /// to derive the public key from the private key object.
+    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -91,6 +91,8 @@ pub enum Frame1 {
     ChooseSchemeResponse(ChooseSchemeResponse),
     SignResponse(SignResponse),
     SignRequestWithSigScheme(SignRequestWithSigScheme),
+    GetPublicKeyPemRequest(Option<String>),
+    GetPublicKeyPemResponse(String),
 }
 
 /// An error that can be returned to the client by the server.
