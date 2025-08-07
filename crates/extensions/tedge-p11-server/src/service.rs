@@ -14,6 +14,12 @@ pub trait TedgeP11Service: Send + Sync {
 
     /// Generate a new keypair, saving the private key on the token and returning the public key as PEM.
     fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String>;
+
+    /// Returns the public key in PEM format.
+    ///
+    /// Function will return public key PEM if `uri` identifies either a public key, or a private key, as in RSA and EC
+    /// cryptosystems we can derive public key from the private key.
+    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

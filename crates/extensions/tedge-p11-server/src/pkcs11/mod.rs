@@ -164,6 +164,10 @@ impl TedgeP11Service for Cryptoki {
     fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String> {
         self.create_key(uri, params)
     }
+
+    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
+        self.get_public_key_pem(uri)
+    }
 }
 
 impl Cryptoki {
@@ -295,6 +299,16 @@ impl Cryptoki {
             create_key(&session, params).context("Failed to create a new private key")?;
 
         Ok(pubkey_pem)
+    }
+
+    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
+
+        let key =
+            Self::find_key_by_attributes(&uri_attributes, &session).context("object not found")?;
+
+        export_public_key_pem(&session, key)
     }
 
     fn find_key_by_attributes(
@@ -530,24 +544,113 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Stri
             let Attribute::EcPoint(ec_point) = ec_point else {
                 anyhow::bail!("No ec point");
             };
+            let (_, ec_point) =
+                asn1_rs::OctetString::from_der(&ec_point).context("Invalid EcPoint")?;
             trace!(?ec_point);
-            ec_point
+            ec_point.into_cow().to_vec()
         }
     };
 
-    let pubkey_pem = match params.key {
-        KeyTypeParams::Rsa { .. } => {
-            let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
-            pem::encode(&pubkey_pem)
-        }
-        KeyTypeParams::Ec { .. } => {
-            // convert ECPoint to ECPublicKey
-            // DER encoding of ECPoint: RFC5480 section 2.2
-            let (_, ec_point) = asn1_rs::OctetString::from_der(&pubkey_der).unwrap();
-            let pubkey_pem = pem::Pem::new("PUBLIC KEY", ec_point.into_cow());
-            pem::encode(&pubkey_pem)
-        }
+    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+    let pubkey_pem = pem::encode(&pubkey_pem);
+
+    Ok(pubkey_pem)
+}
+
+/// Given a handle to a private or a public key object, export public key in PEM format.
+fn export_public_key_pem(session: &Session, key: ObjectHandle) -> anyhow::Result<String> {
+    let keytype = session
+        .get_attributes(key, &[AttributeType::KeyType])?
+        .into_iter()
+        .next()
+        .context("object is not a key")?;
+    let Attribute::KeyType(keytype) = keytype else {
+        // really all the instances where pkcs11 gives us different attribute than the one we asked for are the same error: invalid behaviour of pkcs11 library or the token
+        anyhow::bail!("No keytype");
     };
+
+    let pubkey_der = match keytype {
+        KeyType::RSA => {
+            let attrs = session.get_attributes(key, &[AttributeType::PublicKeyInfo])?;
+            trace!(?attrs);
+
+            // return the public key as PEM
+            let attrs = session.get_attributes(
+                key,
+                &[
+                    AttributeType::PublicKeyInfo,
+                    AttributeType::Modulus,
+                    AttributeType::PublicExponent,
+                ],
+            )?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
+
+            let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
+
+            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+                if !pubkey_der.is_empty() {
+                    // TODO: test
+                    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+                    let pubkey_pem = pem::encode(&pubkey_pem);
+                    return Ok(pubkey_pem);
+                }
+            }
+
+            debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+
+            let Attribute::Modulus(modulus) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No modulus");
+            };
+            let modulus = rsa::BigUint::from_bytes_be(&modulus);
+
+            let Attribute::PublicExponent(exponent) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No public exponent");
+            };
+            let exponent = rsa::BigUint::from_bytes_be(&exponent);
+
+            let pubkey = rsa::RsaPublicKey::new(modulus, exponent)
+                .context("Failed to construct RSA pubkey from components")?;
+
+            pubkey
+                .to_pkcs1_der()
+                .context("Failed to serialize pubkey as DER")?
+                .into_vec()
+        }
+        KeyType::EC => {
+            // return the public key as PEM
+            let attrs = session
+                .get_attributes(key, &[AttributeType::PublicKeyInfo, AttributeType::EcPoint])?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
+
+            let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
+
+            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+                if !pubkey_der.is_empty() {
+                    // TODO: test
+                    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+                    let pubkey_pem = pem::encode(&pubkey_pem);
+                    return Ok(pubkey_pem);
+                }
+            }
+
+            debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+
+            // Elliptic-Curve-Point-to-Octet-String from SEC 1: Elliptic Curve Cryptography (Version 2.0) section 2.3.3 (page 10)
+            let ec_point = attrs.next().context("Failed to get pubkey EcPoint")?;
+            let Attribute::EcPoint(ec_point) = ec_point else {
+                anyhow::bail!("No ec point");
+            };
+            let (_, ec_point) =
+                asn1_rs::OctetString::from_der(&ec_point).context("Invalid EcPoint")?;
+            trace!(?ec_point);
+            ec_point.into_cow().to_vec()
+        }
+        _ => anyhow::bail!("unsupported keytype"),
+    };
+    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+    let pubkey_pem = pem::encode(&pubkey_pem);
 
     Ok(pubkey_pem)
 }
