@@ -212,7 +212,7 @@ impl OperationHandler {
     /// The MQTT client should subscribe to topics with this filter to receive MQTT messages that it
     /// should then pass to the [`Self::handle`] method. Depending on the tedge configuration, some
     /// operations may be disabled and therefore absent in the filter.
-    pub fn topic_filter(capabilities: &Capabilities) -> Vec<(EntityFilter, ChannelFilter)> {
+    pub fn topic_filter(capabilities: &Capabilities) -> Vec<(EntityFilter<'_>, ChannelFilter)> {
         use tedge_api::mqtt_topics::ChannelFilter::Command;
         use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
         use tedge_api::mqtt_topics::EntityFilter::AnyEntity;

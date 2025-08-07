@@ -166,9 +166,9 @@ impl WorkflowSupervisor {
                 self.commands.insert(updated_state.clone())?;
                 Ok(Some(updated_state))
             } else {
-                return Err(WorkflowExecutionError::DeprecatedOperation {
+                Err(WorkflowExecutionError::DeprecatedOperation {
                     operation: operation.to_string(),
-                });
+                })
             }
         } else {
             // Ignore command updates published over MQTT

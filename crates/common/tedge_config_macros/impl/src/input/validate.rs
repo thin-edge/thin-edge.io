@@ -102,7 +102,7 @@ pub enum FieldOrGroup {
 }
 
 impl FieldOrGroup {
-    pub fn name(&self) -> Cow<str> {
+    pub fn name(&self) -> Cow<'_, str> {
         let rename = match self {
             Self::Group(group) => group.rename.as_ref().map(|s| s.as_str()),
             Self::Multi(group) => group.rename.as_ref().map(|s| s.as_str()),
@@ -309,7 +309,7 @@ impl ConfigurableField {
         }
     }
 
-    pub fn name(&self) -> Cow<str> {
+    pub fn name(&self) -> Cow<'_, str> {
         self.rename()
             .map_or_else(|| Cow::Owned(self.ident().to_string()), Cow::Borrowed)
     }

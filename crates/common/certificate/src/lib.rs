@@ -118,7 +118,7 @@ impl PemCertificate {
 
     fn extract_certificate(
         pem: &x509_parser::pem::Pem,
-    ) -> Result<x509_parser::certificate::X509Certificate, CertificateError> {
+    ) -> Result<x509_parser::certificate::X509Certificate<'_>, CertificateError> {
         let x509 = pem.parse_x509().map_err(|err| {
             // The x509 error is wrapped into a `nom::Err`
             // and cannot be extracted without pattern matching on that type
