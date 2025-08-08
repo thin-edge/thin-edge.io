@@ -144,7 +144,7 @@ impl BridgeRule {
 
 impl BridgeConfig {
     pub fn new() -> Self {
-        Self::default()
+        Default::default()
     }
 
     pub fn forward_from_local(
@@ -214,6 +214,7 @@ impl BridgeConfig {
             local_to_remote,
             remote_to_local,
             bidirectional_topics,
+            ..
         } = self;
 
         let (bidir_local_topics, bidir_remote_topics) = bidirectional_topics.into_iter().unzip();

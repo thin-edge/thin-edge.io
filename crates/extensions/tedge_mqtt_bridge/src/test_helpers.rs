@@ -137,7 +137,7 @@ impl MqttAck for BlockingSubscribeClient {
 
 #[async_trait::async_trait]
 impl MqttClient for BlockingSubscribeClient {
-    async fn subscribe_many(&self, _: Vec<SubscribeFilter>) -> Result<(), ClientError> {
+    async fn subscribe(&self, _: SubscribeFilter) -> Result<(), ClientError> {
         pending().await
     }
 
@@ -178,8 +178,8 @@ impl MqttAck for ActionLogger {
 }
 #[async_trait::async_trait]
 impl MqttClient for ActionLogger {
-    async fn subscribe_many(&self, topics: Vec<SubscribeFilter>) -> Result<(), ClientError> {
-        self.log(Action::SubscribeMany(topics));
+    async fn subscribe(&self, topic: SubscribeFilter) -> Result<(), ClientError> {
+        self.log(Action::SubscribeMany(vec![topic]));
         Ok(())
     }
 
@@ -322,7 +322,7 @@ impl MqttAck for ChannelClient {
 
 #[async_trait::async_trait]
 impl MqttClient for ChannelClient {
-    async fn subscribe_many(&self, _: Vec<SubscribeFilter>) -> Result<(), ClientError> {
+    async fn subscribe(&self, _: SubscribeFilter) -> Result<(), ClientError> {
         Ok(())
     }
 
