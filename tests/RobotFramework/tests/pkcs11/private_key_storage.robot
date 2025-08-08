@@ -111,13 +111,14 @@ Can use PKCS11 key to renew the public certificate
     Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
     Command Should Fail With
     ...    tedge cert renew c8y
-    ...    error=PEM error: Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
+    ...    error=Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
 
     Execute Command    systemctl start tedge-p11-server.socket
+
     Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
     Command Should Fail With
     ...    tedge cert renew c8y
-    ...    error=PKCS #11 service failed: Failed to find a signing key: Failed to find a private key"
+    ...    error=PKCS #11 service failed: Failed to find a key
     Execute Command    cmd=tedge config unset c8y.device.key_uri
 
 Can create a private key on the PKCS11 token and download new cert from c8y
@@ -250,6 +251,12 @@ Create private key and download cert from c8y
     END
     Should Contain    ${output}    Label: ${label}
 
+    # to use newly created private key, need to update device.key_uri
+    Execute Command    cmd=tedge config set device.key_uri "pkcs11:object=${label}"
+
+    # Create CSR
+    Execute Command    cmd=tedge cert create-csr --device-id ${device_id}
+
     # check if valid CSR is created
     ${stdout}    ${stderr}=    Execute Command
     ...    openssl req -text -noout -in /etc/tedge/device-certs/tedge.csr -verify
@@ -260,9 +267,6 @@ Create private key and download cert from c8y
 
     # check if provided device-id is used
     Should Contain    ${stdout}    CN = ${device_id}
-
-    # to use newly created private key, need to update device.key_uri
-    Execute Command    cmd=tedge config set device.key_uri "pkcs11:object=${label}"
 
     # check we can download new cert from c8y and connect
     ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=True

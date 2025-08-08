@@ -90,28 +90,28 @@ impl Command for CreateKeyCmd {
 
         eprintln!("New keypair was successfully created.");
 
-        // use returned public key to create a CSR
-        let sigalg = match (self.r#type, self.curve) {
-            (KeyType::Rsa, _) => certificate::SignatureAlgorithm::RsaPkcs1Sha256,
-            (KeyType::Ec, EcCurve::P256) => certificate::SignatureAlgorithm::EcdsaP256Sha256,
-            (KeyType::Ec, EcCurve::P384) => certificate::SignatureAlgorithm::EcdsaP384Sha384,
-        };
+        // // use returned public key to create a CSR
+        // let sigalg = match (self.r#type, self.curve) {
+        //     (KeyType::Rsa, _) => certificate::SignatureAlgorithm::RsaPkcs1Sha256,
+        //     (KeyType::Ec, EcCurve::P256) => certificate::SignatureAlgorithm::EcdsaP256Sha256,
+        //     (KeyType::Ec, EcCurve::P384) => certificate::SignatureAlgorithm::EcdsaP384Sha384,
+        // };
 
-        let key = super::create_csr::Key::Cryptoki {
-            config: self.cryptoki_config.clone(),
-            privkey_label: Some(self.label.clone()),
-            pubkey_pem: Some(pubkey_pem.clone()),
-            sigalg: Some(sigalg),
-        };
+        // let key = super::create_csr::Key::Cryptoki {
+        //     config: self.cryptoki_config.clone(),
+        //     privkey_label: Some(self.label.clone()),
+        //     pubkey_pem: Some(pubkey_pem.clone()),
+        //     sigalg: Some(sigalg),
+        // };
 
-        super::create_device_csr(
-            self.device_id.clone(),
-            key,
-            None,
-            self.csr_path.clone(),
-            self.csr_template.clone(),
-        )
-        .await?;
+        // super::create_device_csr(
+        //     self.device_id.clone(),
+        //     key,
+        //     None,
+        //     self.csr_path.clone(),
+        //     self.csr_template.clone(),
+        // )
+        // .await?;
 
         eprintln!("Public key:\n{pubkey_pem}\n");
 

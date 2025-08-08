@@ -78,20 +78,7 @@ impl CreateCsrCmd {
                 privkey_label,
                 pubkey_pem,
                 sigalg,
-            } => {
-                let current_cert = self.current_cert.clone();
-                match current_cert {
-                    Some(current_cert) => {
-                        KeyKind::from_cryptoki_and_existing_cert(config.clone(), &current_cert)?
-                    }
-                    None => KeyKind::from_cryptoki_and_public_key_pem(
-                        config.clone(),
-                        privkey_label.clone().unwrap(),
-                        pubkey_pem.as_ref().unwrap().clone(),
-                        sigalg.expect("sigalg should be set when generating a new key"),
-                    )?,
-                }
-            }
+            } => KeyKind::from_cryptoki_and_public_key_pem(config.clone())?,
         };
         debug!(?previous_key);
 
