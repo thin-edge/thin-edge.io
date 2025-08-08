@@ -21,6 +21,7 @@ use cryptoki::mechanism::MechanismType;
 use cryptoki::object::Attribute;
 use cryptoki::object::AttributeType;
 use cryptoki::object::KeyType;
+use cryptoki::object::ObjectClass;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
@@ -175,7 +176,8 @@ impl Cryptoki {
         let session = self.open_session(&uri_attributes)?;
 
         // get the signing key
-        let key = Self::find_key_by_attributes(&uri_attributes, &session)?;
+        let key =
+            Self::find_key_by_attributes(&uri_attributes, &session, ObjectClass::PRIVATE_KEY)?;
         let key_type = session
             .get_attributes(key, &[AttributeType::KeyType])?
             .into_iter()
@@ -214,12 +216,14 @@ impl Cryptoki {
                     session,
                     key,
                     sigscheme,
+                    secondary_schemes: Vec::new(),
                 }
             }
             KeyType::RSA => Pkcs11Signer {
                 session,
                 key,
                 sigscheme: SigScheme::RsaPssSha256,
+                secondary_schemes: vec![SigScheme::RsaPkcs1Sha256],
             },
             _ => anyhow::bail!("unsupported key type"),
         };
@@ -231,8 +235,7 @@ impl Cryptoki {
         let uri_attributes = self.request_uri(uri)?;
         let session = self.open_session(&uri_attributes)?;
 
-        let key =
-            Self::find_key_by_attributes(&uri_attributes, &session).context("object not found")?;
+        let key = Self::find_key_by_attributes(&uri_attributes, &session, ObjectClass::PUBLIC_KEY)?;
 
         export_public_key_pem(&session, key)
     }
@@ -240,12 +243,9 @@ impl Cryptoki {
     fn find_key_by_attributes(
         uri: &uri::Pkcs11Uri,
         session: &Session,
+        class: ObjectClass,
     ) -> anyhow::Result<ObjectHandle> {
-        let mut key_template = vec![
-            Attribute::Token(true),
-            Attribute::Private(true),
-            Attribute::Sign(true),
-        ];
+        let mut key_template = vec![Attribute::Token(true), Attribute::Class(class)];
         if let Some(object) = &uri.object {
             key_template.push(Attribute::Label(object.as_bytes().to_vec()));
         }
@@ -253,14 +253,14 @@ impl Cryptoki {
             key_template.push(Attribute::Id(id.clone()));
         }
 
-        trace!(?key_template, "Finding a key");
+        trace!(?key_template, ?uri.object, "Finding a key");
 
         let mut keys = session
             .find_objects(&key_template)
             .context("Failed to find private key objects")?
             .into_iter();
 
-        let key = keys.next().context("Failed to find a private key")?;
+        let key = keys.next().context("Failed to find a key")?;
         if keys.len() > 0 {
             warn!(
                 "Multiple keys were found. If the wrong one was chosen, please use a URI that uniquely identifies a key."
@@ -364,6 +364,7 @@ pub struct Pkcs11Signer {
     session: Pkcs11Session,
     key: ObjectHandle,
     pub sigscheme: SigScheme,
+    pub secondary_schemes: Vec<SigScheme>,
 }
 
 impl Pkcs11Signer {
@@ -498,10 +499,20 @@ impl SigningKey for Pkcs11Signer {
         let key_scheme = self.sigscheme.into();
         if offered.contains(&key_scheme) {
             debug!("Matching scheme: {key_scheme:?}");
-            Some(Box::new(self.clone()))
-        } else {
-            None
+            return Some(Box::new(self.clone()));
         }
+
+        for scheme in &self.secondary_schemes {
+            let key_scheme = (*scheme).into();
+            if offered.contains(&key_scheme) {
+                debug!("Matching scheme: {key_scheme:?}");
+                let mut signer = self.clone();
+                signer.sigscheme = *scheme;
+                return Some(Box::new(signer));
+            }
+        }
+
+        None
     }
 
     fn algorithm(&self) -> SignatureAlgorithm {

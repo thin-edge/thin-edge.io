@@ -29,24 +29,35 @@ impl TedgeP11Service for TedgeP11Client {
         &self,
         request: ChooseSchemeRequest,
     ) -> anyhow::Result<crate::service::ChooseSchemeResponse> {
+        let uri = request
+            .uri
+            .as_deref()
+            .or(self.uri.as_deref())
+            .map(ToString::to_string);
         let offered: Vec<_> = request.offered.iter().map(|s| s.0).collect();
-        self.choose_scheme(&offered, request.uri)
+        self.choose_scheme(&offered, uri)
     }
 
     fn sign(
         &self,
         request: SignRequestWithSigScheme,
     ) -> anyhow::Result<crate::service::SignResponse> {
+        let uri = request
+            .uri
+            .as_deref()
+            .or(self.uri.as_deref())
+            .map(ToString::to_string);
         let response = match request.sigscheme {
-            Some(sigscheme) => self.sign2(&request.to_sign, request.uri, sigscheme)?,
-            None => self.sign(&request.to_sign, request.uri)?,
+            Some(sigscheme) => self.sign2(&request.to_sign, uri, sigscheme)?,
+            None => self.sign(&request.to_sign, uri)?,
         };
 
         Ok(crate::service::SignResponse(response))
     }
 
     fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
-        self.get_public_key_pem(uri.map(ToString::to_string))
+        let uri = uri.or(self.uri.as_deref()).map(ToString::to_string);
+        self.get_public_key_pem(uri)
     }
 }
 

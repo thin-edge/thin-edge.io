@@ -4,7 +4,6 @@ use crate::log::MaybeFancy;
 use crate::override_public_key;
 use crate::persist_new_private_key;
 use crate::reuse_private_key;
-use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::CryptokiConfig;
 use certificate::CsrTemplate;
@@ -21,9 +20,6 @@ pub struct CreateCsrCmd {
 
     /// The path where the device private key will be stored
     pub key: Key,
-
-    /// Path to current certificate
-    pub current_cert: Option<Utf8PathBuf>,
 
     /// The path where the device CSR will be stored
     pub csr_path: Utf8PathBuf,
@@ -67,13 +63,7 @@ impl CreateCsrCmd {
                 .await
                 .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?,
 
-            Key::Cryptoki(cryptoki) => {
-                let current_cert = self
-                    .current_cert
-                    .clone()
-                    .context("Need an existing cert when using an HSM")?;
-                KeyKind::from_cryptoki_and_existing_cert(cryptoki.clone(), &current_cert)?
-            }
+            Key::Cryptoki(config) => KeyKind::from_cryptoki(config.clone())?,
         };
         debug!(?previous_key);
 
@@ -117,7 +107,6 @@ mod tests {
         let cmd = CreateCsrCmd {
             id: id.to_string(),
             key: Key::Local(key_path.clone()),
-            current_cert: None,
             csr_path: csr_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),
@@ -161,7 +150,6 @@ mod tests {
         let cmd = CreateCsrCmd {
             id: id.to_string(),
             key: Key::Local(key_path.clone()),
-            current_cert: None,
             csr_path: csr_path.clone(),
             user: "mosquitto".to_string(),
             group: "mosquitto".to_string(),

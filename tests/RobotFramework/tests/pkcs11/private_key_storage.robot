@@ -111,13 +111,34 @@ Can use PKCS11 key to renew the public certificate
     Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
     Command Should Fail With
     ...    tedge cert renew c8y
-    ...    error=PEM error: Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
+    ...    error=Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
 
     Execute Command    systemctl start tedge-p11-server.socket
+
     Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
     Command Should Fail With
     ...    tedge cert renew c8y
-    ...    error=PEM error: protocol error: bad response, expected sign, received: Error(ProtocolError("PKCS #11 service failed: Failed to find a signing key: Failed to find a private key"))
+    ...    error=PKCS #11 service failed: Failed to find a key
+    Execute Command    cmd=tedge config unset c8y.device.key_uri
+
+Can use tedge cert download c8y to download a certificate
+    [Documentation]    Download a certificate using CSR generated with PKCS11 without a prior certificate.
+    # this new keypair doesn't have an associated certificate
+    Set up new PKCS11 keypair    type=ecdsa
+
+    ${credentials}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN}
+    Execute Command
+    ...    cmd=tedge cert download c8y --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --retry-every 5s --max-timeout 60s
+
+    Tedge Reconnect Should Succeed
+
+Can renew the certificate using different keypair
+    [Documentation]    Starting with an initial trusted certificate, replace the keypair and renew the certificate.
+    Connect to C8y using new keypair    type=ecdsa
+    Set up new PKCS11 keypair    type=ecdsa
+    Execute Command    tedge cert renew c8y
+    ${stdout}=    Tedge Reconnect Should Succeed
+    Should Contain    ${stdout}    The new certificate is now the active certificate
 
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml

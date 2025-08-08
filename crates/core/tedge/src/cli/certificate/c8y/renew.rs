@@ -84,7 +84,6 @@ impl RenewCertCmd {
             create_device_csr(
                 common_name,
                 self.key.clone(),
-                Some(self.cert_path.clone()),
                 self.csr_path.clone(),
                 self.csr_template.clone(),
             )
