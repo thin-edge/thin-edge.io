@@ -41,7 +41,6 @@ To establish a bridge connection to the mqtt service endpoint, the following inf
     * device cert path
     * device key path
     * server root ca path
-    * username: `<tenant_id>`
 * bridge topics: `<bridge_topic_prefix>/#`
 
 The following are the solution approaches that were considered.
@@ -82,11 +81,6 @@ To connect to the mqtt service, it must be enabled before `tedge connect c8y` is
 tedge config set c8y.mqtt_service.enabled "true"
 ```
 
-:::note
-The tenant id which must be passed in the username is retrieved using the `https://<c8y.url>/tenant/currentTenant` REST API.
-An alternative is to take this as an additional `c8y.tenant_id` configuration.
-:::
-
 #### Connection
 
 The command to connect to C8Y remains the same:
@@ -121,7 +115,6 @@ As an independent cloud endpoint, the following config values must be provided:
 
 ```sh
 tedge config set remote.url example.cumulocity.com:9883
-tedge config set remote.username t123456
 tedge config set remote.bridge.topic_prefix c8y-mqtt
 ```
 

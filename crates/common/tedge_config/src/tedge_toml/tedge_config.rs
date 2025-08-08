@@ -227,10 +227,6 @@ define_tedge_config! {
         #[tedge_config(reader(private))]
         url: ConnectUrl,
 
-        /// Cumulocity tenant ID
-        #[tedge_config(example = "t12345678")]
-        tenant_id: String,
-
         /// The path where Cumulocity root certificate(s) are stored
         #[tedge_config(note = "The value can be a directory path as well as the path of the certificate file.")]
         #[tedge_config(example = "/etc/tedge/c8y-trusted-root-certificates.pem", default(function = "default_root_cert_path"))]
@@ -440,7 +436,7 @@ define_tedge_config! {
         },
 
         mqtt_service: {
-            /// Wheather to connect to the MQTT service endpoint or not
+            /// Whether to connect to the MQTT service endpoint or not
             #[tedge_config(example = "true", default(value = false))]
             enabled: bool,
 

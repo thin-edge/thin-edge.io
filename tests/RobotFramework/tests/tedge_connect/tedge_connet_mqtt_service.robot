@@ -10,14 +10,15 @@ Test Teardown       Get Logs
 *** Test Cases ***
 Connect to Cumulocity MQTT Service endpoint
     ${DEVICE_SN}=    Setup    connect=${False}
-    Execute Command    tedge config set c8y.tenant_id ${C8Y_CONFIG.tenant}
     Execute Command    tedge config set c8y.mqtt_service.enabled true
     Execute Command    tedge config set c8y.mqtt_service.topics 'sub/topic,demo/topic'
     Execute Command    tedge connect c8y
 
-    # TODO: Subscribing to test/topic from another client
+    External Identity Should Exist    ${DEVICE_SN}:device:main:service:mosquitto-c8y-mqtt-bridge    show_info=False
+    Device Should Have Fragment Values    status\=up
+
     Execute Command    tedge mqtt pub c8y-mqtt/test/topic '"hello"'
-    # TODO: Validate message received on test/topic on the other client
+    # TODO: Validate message received on test/topic on C8Y
 
     Sleep    1s
 
@@ -43,13 +44,14 @@ Connect to Cumulocity MQTT Service endpoint basic auth
 Connect to Cumulocity MQTT Service endpoint builtin bridge
     ${DEVICE_SN}=    Setup    connect=${False}
     Execute Command    tedge config set mqtt.bridge.built_in true
-    Execute Command    tedge config set c8y.tenant_id ${C8Y_CONFIG.tenant}
     Execute Command    tedge config set c8y.mqtt_service.enabled true
     Execute Command    tedge config set c8y.mqtt_service.topics demo/topic
     Execute Command    tedge connect c8y
 
-    # TODO: Subscribing to test/topic from another client
+    External Identity Should Exist    ${DEVICE_SN}:device:main:service:tedge-mapper-bridge-c8y-mqtt    show_info=False
+    Device Should Have Fragment Values    status\=up
+
     Execute Command    tedge mqtt pub c8y-mqtt/test/topic '"hello"'
-    # TODO: Validate message received on test/topic on the other client
+    # TODO: Validate message received on test/topic on C8Y
 
     Sleep    1s

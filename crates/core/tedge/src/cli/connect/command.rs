@@ -747,10 +747,6 @@ pub fn bridge_config(
                     }
                 };
 
-            if c8y_config.mqtt_service.enabled && remote_password.is_none() {
-                // If the MQTT service connection is enabled and cert based auth is used, then tenant_id must be set
-                c8y_config.tenant_id.or_config_not_set()?;
-            }
             let params = BridgeConfigC8yParams {
                 mqtt_host: c8y_config.mqtt.or_config_not_set()?.clone(),
                 config_file: cloud.bridge_config_filename(),

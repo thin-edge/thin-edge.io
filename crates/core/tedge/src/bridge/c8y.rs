@@ -209,7 +209,6 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
 pub struct BridgeConfigC8yMqttServiceParams {
     pub mqtt_host: HostPort<MQTT_SVC_TLS_PORT>,
     pub config_file: Cow<'static, str>,
-    pub tenant_id: Option<String>,
     pub remote_clientid: String,
     pub remote_username: Option<String>,
     pub remote_password: Option<String>,
@@ -253,16 +252,9 @@ impl TryFrom<(&TEdgeConfig, Option<&ProfileName>)> for BridgeConfigC8yMqttServic
             "c8y-mqtt-svc-bridge.conf".to_string()
         };
 
-        let tenant_id = if remote_password.is_some() {
-            None
-        } else {
-            Some(c8y_config.tenant_id.or_config_not_set()?.clone())
-        };
-
         let params = BridgeConfigC8yMqttServiceParams {
             mqtt_host: c8y_config.mqtt_service.url.or_config_not_set()?.clone(),
             config_file: config_file.into(),
-            tenant_id,
             bridge_root_cert_path: c8y_config.root_cert_path.clone().into(),
             remote_clientid: c8y_config.device.id()?.clone(),
             remote_username,
@@ -288,8 +280,7 @@ impl From<BridgeConfigC8yMqttServiceParams> for BridgeConfig {
             mqtt_host,
             config_file,
             bridge_root_cert_path,
-            tenant_id,
-            mut remote_username,
+            remote_username,
             remote_password,
             remote_clientid,
             bridge_certfile,
@@ -323,11 +314,6 @@ impl From<BridgeConfigC8yMqttServiceParams> for BridgeConfig {
         } else {
             AuthType::Certificate
         };
-
-        // When cert based auth is used, provide the tenant id as the username
-        if auth_type == AuthType::Certificate {
-            remote_username = tenant_id;
-        }
 
         let (include_local_clean_session, mosquitto_version) = match include_local_clean_session {
             AutoFlag::True => (true, None),
@@ -631,7 +617,6 @@ mod tests {
         let params = BridgeConfigC8yMqttServiceParams {
             mqtt_host: HostPort::<MQTT_SVC_TLS_PORT>::try_from("test.test.io").unwrap(),
             config_file: "c8y-mqtt-svc-bridge.conf".into(),
-            tenant_id: Some("t12345678".into()),
             remote_clientid: "alpha".into(),
             remote_username: None,
             remote_password: None,
@@ -654,7 +639,7 @@ mod tests {
             config_file: "c8y-mqtt-svc-bridge.conf".into(),
             connection: "edge_to_c8y_mqtt_service".into(),
             address: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io:9883")?,
-            remote_username: Some("t12345678".into()),
+            remote_username: None,
             remote_password: None,
             remote_clientid: "alpha".into(),
             local_clientid: "CumulocityMqttService".into(),
@@ -695,7 +680,6 @@ mod tests {
         let params = BridgeConfigC8yMqttServiceParams {
             mqtt_host: HostPort::<MQTT_SVC_TLS_PORT>::try_from("test.test.io")?,
             config_file: "c8y-mqtt-svc-bridge.conf".into(),
-            tenant_id: None,
             remote_clientid: "alpha".into(),
             remote_username: Some("octocat".into()),
             remote_password: Some("abcd1234".into()),
