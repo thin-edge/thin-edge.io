@@ -429,10 +429,6 @@ fn mqtt_service_bridge_config(
             .mqtt_client_config_rustls(c8y_config)
             .context("Failed to create MQTT TLS config")?;
         cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
-
-        // When cert based auth is used, provide the tenant id as the username
-        let username = c8y_config.tenant_id.or_config_not_set()?;
-        cloud_config.set_credentials(username, "");
     } else {
         // TODO(marcel): integrate credentials auth into MqttAuthConfig?
         let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;

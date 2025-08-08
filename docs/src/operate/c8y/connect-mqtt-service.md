@@ -15,7 +15,7 @@ import BrowserWindow from '@site/src/components/BrowserWindow';
 
 You can customize the documentation and commands shown on this page by providing relevant settings which will be reflected in the instructions. It makes it even easier to explore and use %%te%%.
 
-<UserContextForm settings="DEVICE_ID,C8Y_URL,C8Y_TENANT_ID,C8Y_USER" />
+<UserContextForm settings="DEVICE_ID,C8Y_URL" />
 
 The user context will be persisted in your web browser's local storage.
 :::
@@ -69,20 +69,6 @@ the ones used to connect to the Cumulocity Core MQTT endpoint.
    set`c8y.mqtt_service.url` explicitly.
    :::
 
-1. If you're using device certificates to connect to Cumulocity, set the tenant id (skip this when using username/password)
-
-   <UserContext>
-   
-   ```sh
-   sudo tedge config set c8y.tenant_id $C8Y_TENANT_ID
-   ```
-   
-   </UserContext>
-
-   :::note
-   In the future, the need to set the Tenant ID of the Cumulocity instance will be removed.
-   :::
-
 1. Enable connection to MQTT service endpoint
 
    ```sh
@@ -95,14 +81,25 @@ the ones used to connect to the Cumulocity Core MQTT endpoint.
    sudo tedge config set c8y.mqtt_service.topics demo/topic
    ```
 
-### Configure the cloud to trust the device certificate
+1. Make Cumulocity trust the device certificate as described [here](./connect.md#making-the-cloud-trust-the-device),
+   if not already done.
 
-Follow the steps [here](./connect.md#making-the-cloud-trust-the-device) to make Cumulocity trust the device certificate.
+1. Connect the device
 
-### Connect the device
+   ```sh
+   sudo tedge connect c8y
+   ```
 
-The device is connected to MQTT service endpoint along with the core MQTT connection to Cumulocity.
+   This step establishes the bridge connection to both the core endpoint as well as the mqtt service endpoints simultaneously.
 
-```sh
-sudo tedge connect c8y
-```
+1. Once connected, all messages published to `c8y-mqtt/#` topics are forwarded to the MQTT service endpoint.
+
+   ```sh
+   tedge mqtt pub c8y-mqtt/test/topic '{ "hello": "world" }'
+   ```
+
+   The receipt of the published message can be validated on Cumulocity.
+
+   :::note
+   The bridge topic prefix `c8y-mqtt` can be changed using the tedge configuration: `c8y.mqtt_service.topic_prefix`.
+   :::
