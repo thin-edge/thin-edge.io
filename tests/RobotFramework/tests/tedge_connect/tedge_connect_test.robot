@@ -104,7 +104,7 @@ tedge reconnect rejects any new invalid certificate
     # The connection should be successful, despite the new certificate being invalid
     ${output}=    Execute Command    sudo tedge reconnect c8y    exp_exit_code=3    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Validating new certificate
-    Should Contain    ${output}    Connection error while creating device
+    Should Contain    ${output}    Error validating the new certificate
     Should Contain    ${output}    attempt 2 of 3
     Should Contain    ${output}    attempt 3 of 3
     ${output}=    Execute Command    sudo tedge connect c8y --test    stdout=${False}    stderr=${True}

@@ -1,0 +1,16 @@
+INPUT: [test/average] {"temperature": 20}
+INPUT: [test/average] {"humidity": 50}
+INPUT: [test/average] {"temperature": 25, "location": {"altitude": 100.0 }}
+INPUT: [test/average] {"temperature": 30, "location": {"latitude": 45.0 }}
+INPUT: [test/average] {"temperature": 25}
+INPUT: [test/average] {"humidity": 70, "location": {"altitude": 120.0 }}
+INPUT: [test/average] {"temperature": 20}
+INPUT: [test/average/another_topic] {"temperature": 2}
+INPUT: [test/average/another_topic] {"temperature": 3}
+INPUT: [test/average/another_topic] {"temperature": 5}
+INPUT: [test/average/another_topic] {"temperature": 6}
+INPUT: [test/average/another_topic] {"temperature": 4}
+
+
+OUTPUT: [test/average] {"temperature":24,"humidity":60,"location":{"altitude":110,"latitude":45}}
+OUTPUT: [test/average/another_topic] {"temperature":4}

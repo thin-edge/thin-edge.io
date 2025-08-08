@@ -502,6 +502,7 @@ mod tests {
         }
 
         #[derive(Debug, thiserror::Error)]
+        #[allow(unused)]
         enum ReadError {
             #[error(transparent)]
             ConfigNotSet(#[from] ConfigNotSet),

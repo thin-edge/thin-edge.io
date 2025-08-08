@@ -1,4 +1,4 @@
-Invalid JSON: Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): "2013-06-22 3am": a character literal was not valid at line 2 column 27: `",
+Invalid JSON: Invalid ISO8601 timestamp (expected YYYY-MM-DDThh:mm:ss.sss.±hh:mm): "2013-06-22 3am": the 'hour' component could not be parsed at line 2 column 27: `",
   "pressure": 220
 }
 `

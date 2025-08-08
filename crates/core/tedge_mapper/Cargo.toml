@@ -28,6 +28,7 @@ tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 tedge_downloader_ext = { workspace = true }
 tedge_file_system_ext = { workspace = true }
+tedge_flows = { workspace = true, optional = true }
 tedge_health_ext = { workspace = true }
 tedge_http_ext = { workspace = true }
 tedge_mqtt_bridge = { workspace = true }
@@ -39,10 +40,11 @@ tracing = { workspace = true }
 yansi = { workspace = true }
 
 [features]
-default = ["aws", "azure", "c8y"]
+default = ["aws", "azure", "c8y", "tedge-flows"]
 aws = ["dep:aws_mapper_ext"]
 azure = ["dep:az_mapper_ext"]
 c8y = ["dep:c8y_mapper_ext", "dep:c8y_api", "dep:c8y_auth_proxy"]
+tedge-flows = ["dep:tedge_flows"]
 integration-test = []
 
 [lints]

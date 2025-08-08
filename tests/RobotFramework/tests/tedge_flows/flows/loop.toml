@@ -1,0 +1,12 @@
+# This flow is on purpose looping: the messages are published to the same topic
+input.mqtt.topics = ["loopback/#"]
+
+[[steps]]
+script = "add_timestamp.js"
+
+[[steps]]
+script = "circuit-breaker.js"
+interval = "1s"
+config.too_many = 10000
+config.message_on_too_many = { topic = "te/device/main///a/too-many-messages", payload = "too many messages" }
+config.message_on_back_to_normal = { topic = "te/device/main///a/too-many-messages", payload = "back to normal" }

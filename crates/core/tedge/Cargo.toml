@@ -54,6 +54,7 @@ tedge-watchdog = { workspace = true }
 tedge-write = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
+tedge_flows = { workspace = true, optional = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
@@ -83,11 +84,13 @@ x509-parser = { workspace = true }
 
 
 [features]
-default = ["aws", "azure", "c8y"]
+default = ["aws", "azure", "c8y", "tedge-flows"]
 aws = ["tedge-mapper/aws"]
 azure = ["tedge-mapper/azure"]
 c8y = ["tedge-mapper/c8y"]
+tedge-flows = ["dep:tedge_flows", "tedge-mapper/tedge-flows"]
 integration-test = []
+
 
 [lints]
 workspace = true

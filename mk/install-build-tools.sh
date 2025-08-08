@@ -37,6 +37,21 @@ function install_packages {
   fi
 }
 
+download_musl_toolchain() {
+  # Download and extract musl sysroot for aarch64 from GitHub release
+  musl_target="$1"
+  MUSL_SYSROOT_DIR="${HOME}/.musl-cross/${musl_target}"
+  MUSL_TARBALL="${musl_target}.tar.xz"
+  MUSL_URL="https://github.com/cross-tools/musl-cross/releases/download/20250520/${MUSL_TARBALL}"
+  if [ ! -d "${MUSL_SYSROOT_DIR}" ]; then
+    echo "Downloading musl sysroot for ${musl_target} from ${MUSL_URL} ..." >&2
+    mkdir -p "${HOME}/.musl-cross"
+    curl -L -o "/tmp/${MUSL_TARBALL}" "${MUSL_URL}"
+    tar -xJf "/tmp/${MUSL_TARBALL}" -C "${HOME}/.musl-cross"
+    rm -f "/tmp/${MUSL_TARBALL}"
+  fi
+}
+
 use_clang=
 case ${target-} in
 *android*)
@@ -70,19 +85,46 @@ case ${target-} in
   ;;
 esac
 
+install_packages_on_amd64() {
+  case "$(uname -m)" in
+    *amd64*|*x86_64*)
+      install_packages "$@"
+      ;;
+  esac
+}
+
+
 case ${target-} in
 aarch64-unknown-linux-gnu)
   # Clang is needed for code coverage.
   use_clang=1
   install_packages \
+    gcc-multilib \
     qemu-user \
     gcc-aarch64-linux-gnu \
-    libc6-dev-arm64-cross
+    libc6-arm64-cross \
+    libc6-dev-arm64-cross \
+    crossbuild-essential-arm64
   ;;
-aarch64-unknown-linux-musl|armv7-unknown-linux-musleabihf)
+aarch64-unknown-linux-musl)
   use_clang=1
   install_packages \
-    qemu-user
+    qemu-user \
+    gcc-aarch64-linux-gnu \
+    libc6-arm64-cross \
+    libc6-dev-arm64-cross \
+    crossbuild-essential-arm64
+
+  download_musl_toolchain "aarch64-unknown-linux-musl"
+  ;;
+armv7-unknown-linux-musleabihf)
+  use_clang=1
+  install_packages \
+    qemu-user \
+    gcc-arm-linux-gnueabihf \
+    libc6-dev-armhf-cross
+  
+  download_musl_toolchain "armv7-unknown-linux-musleabihf"
   ;;
 armv5te-unknown-linux-gnueabi)
   install_packages \
@@ -96,6 +138,7 @@ armv5te-unknown-linux-musleabi)
     qemu-user \
     gcc-arm-linux-gnueabi \
     libc6-dev-armel-cross
+  download_musl_toolchain "arm-unknown-linux-musleabi"
   ;;
 arm-unknown-linux-musleabi)
   use_clang=1
@@ -103,6 +146,7 @@ arm-unknown-linux-musleabi)
     qemu-user \
     gcc-arm-linux-gnueabi \
     libc6-dev-armel-cross
+  download_musl_toolchain "arm-unknown-linux-musleabi"
   ;;
 arm-unknown-linux-musleabihf)
   use_clang=1
@@ -110,6 +154,7 @@ arm-unknown-linux-musleabihf)
     qemu-user \
     gcc-arm-linux-gnueabihf \
     libc6-dev-armhf-cross
+  download_musl_toolchain "arm-unknown-linux-musleabihf"
   ;;
 arm-unknown-linux-gnueabi)
   install_packages \
@@ -125,12 +170,18 @@ arm-unknown-linux-gnueabihf|armv7-unknown-linux-gnueabihf)
   ;;
 i686-unknown-linux-gnu)
   use_clang=1
-  install_packages \
-    gcc-multilib \
+  install_packages_on_amd64 \
     libc6-dev-i386
   ;;
-i686-unknown-linux-musl|x86_64-unknown-linux-musl)
+i686-unknown-linux-musl)
   use_clang=1
+  install_packages_on_amd64 \
+    libc6-dev-i386
+  download_musl_toolchain "i686-unknown-linux-musl"
+  ;;
+x86_64-unknown-linux-musl)
+  use_clang=1
+  download_musl_toolchain "x86_64-unknown-linux-musl"
   ;;
 loongarch64-unknown-linux-gnu)
   use_clang=1
@@ -180,12 +231,20 @@ powerpc64le-unknown-linux-gnu)
     libc6-dev-ppc64el-cross \
     qemu-user
   ;;
-riscv64gc-unknown-linux-gnu|riscv64gc-unknown-linux-musl)
+riscv64gc-unknown-linux-gnu)
   use_clang=1
   install_packages \
     gcc-riscv64-linux-gnu \
     libc6-dev-riscv64-cross \
     qemu-user
+  ;;
+riscv64gc-unknown-linux-musl)
+  use_clang=1
+  install_packages \
+    gcc-riscv64-linux-gnu \
+    libc6-dev-riscv64-cross \
+    qemu-user
+  download_musl_toolchain "riscv64-unknown-linux-musl"
   ;;
 s390x-unknown-linux-gnu)
   # Clang is needed for code coverage.
@@ -219,7 +278,7 @@ case "${OSTYPE-}" in
 linux*)
   if [ -n "$use_clang" ]; then
     ubuntu_codename=$(lsb_release --codename --short)
-    llvm_version=18
+    llvm_version=20
     sudo apt-key add mk/llvm-snapshot.gpg.key
     sudo add-apt-repository "deb http://apt.llvm.org/$ubuntu_codename/ llvm-toolchain-$ubuntu_codename-$llvm_version main"
     sudo apt-get update

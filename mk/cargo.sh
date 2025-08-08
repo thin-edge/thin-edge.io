@@ -57,7 +57,7 @@ for arg in "$@"; do
 done
 
 # See comments in install-build-tools.sh.
-llvm_version=18
+llvm_version=20
 
 use_clang=
 case $target in
@@ -69,6 +69,7 @@ case $target in
   aarch64-unknown-linux-gnu)
     use_clang=1
     export CFLAGS_aarch64_unknown_linux_gnu="--sysroot=/usr/aarch64-linux-gnu"
+    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=/usr/aarch64-linux-gnu"
     export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
     export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER="$qemu_aarch64"
     ;;
@@ -76,6 +77,9 @@ case $target in
     use_clang=1
     export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER="$qemu_aarch64"
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/aarch64-unknown-linux-musl/aarch64-unknown-linux-musl/sysroot"
+    export CFLAGS_aarch64_unknown_linux_musl="--sysroot=$MUSL_SYSROOT_DIR"
+    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR"
     ;;
   arm-unknown-linux-gnueabi)
     export CC_arm_unknown_linux_gnueabi=arm-linux-gnueabi-gcc
@@ -87,6 +91,11 @@ case $target in
     use_clang=1
     export CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABI_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABI_RUNNER="$qemu_arm_gnueabi"
+    # TODO: target does not support atomics so it is disabled however the code needs to be checked if this will causes problems
+    # as it will no longer be thread safe
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabi/arm-unknown-linux-musleabi/sysroot"
+    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
+    export CFLAGS_arm_unknown_linux_musleabi="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
     ;;
   armv5te-unknown-linux-gnueabi)
     export CC_armv5te_unknown_linux_gnueabi=arm-linux-gnueabi-gcc
@@ -98,11 +107,21 @@ case $target in
     use_clang=1
     export CARGO_TARGET_ARMV5TE_UNKNOWN_LINUX_MUSLEABI_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_ARMV5TE_UNKNOWN_LINUX_MUSLEABI_RUNNER="$qemu_arm_gnueabi"
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabi/arm-unknown-linux-musleabi/sysroot"
+    # TODO: target does not support atomics so it is disabled however the code needs to be checked if this will causes problems
+    # as it will no longer be thread safe
+    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
+    export CFLAGS_armv5te_unknown_linux_musleabi="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
     ;;
   arm-unknown-linux-musleabihf)
     use_clang=1
     export CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABIHF_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABIHF_RUNNER="$qemu_arm_gnueabihf"
+    # TODO: target does not support atomics so it is disabled however the code needs to be checked if this will causes problems
+    # as it will no longer be thread safe
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabihf/arm-unknown-linux-musleabihf/sysroot"
+    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
+    export CFLAGS_arm_unknown_linux_musleabihf="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
     ;;
   arm-unknown-linux-gnueabihf)
     # XXX: clang cannot build the sha256 and x25519 assembly.
@@ -126,6 +145,9 @@ case $target in
     use_clang=1
     export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_RUNNER="$qemu_arm_gnueabihf"
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/armv7-unknown-linux-musleabihf/armv7-unknown-linux-musleabihf/sysroot"
+    export CFLAGS_armv7_unknown_linux_musleabihf="--sysroot=$MUSL_SYSROOT_DIR"
+    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR"
     ;;
   i686-unknown-linux-gnu)
     use_clang=1
@@ -134,6 +156,9 @@ case $target in
   i686-unknown-linux-musl)
     use_clang=1
     export CARGO_TARGET_I686_UNKNOWN_LINUX_MUSL_RUSTFLAGS="$rustflags_self_contained"
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/i686-unknown-linux-musl/i686-unknown-linux-musl/sysroot"
+    export CFLAGS_i686_unknown_linux_musl="--sysroot=$MUSL_SYSROOT_DIR"
+    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR"
     ;;
   i686-linux-android)
     export CC_i686_linux_android=$android_tools/i686-linux-android24-clang
@@ -191,6 +216,9 @@ case $target in
     use_clang=1
     export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_RUNNER="$qemu_riscv64"
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/riscv64-unknown-linux-musl/riscv64-unknown-linux-musl/sysroot"
+    export CFLAGS_riscv64gc_unknown_linux_musl="--sysroot=$MUSL_SYSROOT_DIR"
+    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR"
     ;;
   s390x-unknown-linux-gnu)
     use_clang=1
@@ -209,6 +237,9 @@ case $target in
     else
       export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="$rustflags_self_contained"
     fi
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/x86_64-unknown-linux-musl/x86_64-unknown-linux-musl/sysroot"
+    export CFLAGS_x86_64_unknown_linux_musl="--sysroot=$MUSL_SYSROOT_DIR"
+    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR"
     ;;
   x86_64-linux-android)
     export CC_x86_64_linux_android=$android_tools/x86_64-linux-android24-clang

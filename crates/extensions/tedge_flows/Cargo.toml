@@ -1,0 +1,36 @@
+[package]
+name = "tedge_flows"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+camino = { workspace = true, features = ["serde1"] }
+humantime = { workspace = true }
+rquickjs = { git = "https://github.com/thin-edge/rquickjs", rev = "4ed04ac9af3de453dd41ff09fdd1837c7ceb1f1c", default-features = false, features = [
+    # disable bindgen and rely on pre-generated bindings due to problems
+    # generating the bindings at build time with clang
+    #"bindgen",
+    "futures",
+    "macro",
+    "parallel",
+] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tedge_actors = { workspace = true }
+tedge_file_system_ext = { workspace = true }
+tedge_mqtt_ext = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true, features = ["fs", "macros", "time", "sync"] }
+toml = { workspace = true, features = ["parse"] }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,5 @@
+input.mqtt.topics = ["test/+/+/+/+/e/+"]
+
+steps = [
+    { script = "count-messages.js", config = { topic = "test/count/e" }, interval = "1s" },
+]

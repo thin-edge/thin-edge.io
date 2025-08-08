@@ -47,21 +47,15 @@ impl From<FromTomlOrCli> for TemplatesSet {
     }
 }
 
-impl TryFrom<Vec<String>> for TemplatesSet {
-    type Error = Infallible;
-
-    fn try_from(value: Vec<String>) -> Result<Self, Self::Error> {
-        Ok(TemplatesSet(value))
+impl From<Vec<String>> for TemplatesSet {
+    fn from(value: Vec<String>) -> Self {
+        TemplatesSet(value)
     }
 }
 
-impl TryFrom<Vec<&str>> for TemplatesSet {
-    type Error = Infallible;
-
-    fn try_from(value: Vec<&str>) -> Result<Self, Self::Error> {
-        Ok(TemplatesSet(
-            value.into_iter().map(|s| s.into()).collect::<Vec<String>>(),
-        ))
+impl From<Vec<&str>> for TemplatesSet {
+    fn from(value: Vec<&str>) -> Self {
+        TemplatesSet(value.into_iter().map(|s| s.into()).collect::<Vec<String>>())
     }
 }
 

@@ -461,10 +461,16 @@ EOF
         -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=client1" \
         -new
 
+    cat > client-v3.ext << EOF
+basicConstraints=CA:FALSE
+extendedKeyUsage = clientAuth
+EOF
+
     openssl x509 -req \
         -in client.csr \
         -CA ca.crt \
         -CAkey ca.key \
+        -extfile client-v3.ext \
         -CAcreateserial \
         -out client.crt \
         -days 365
