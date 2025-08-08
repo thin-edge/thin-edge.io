@@ -15,7 +15,7 @@ import BrowserWindow from '@site/src/components/BrowserWindow';
 
 You can customize the documentation and commands shown on this page by providing relevant settings which will be reflected in the instructions. It makes it even easier to explore and use %%te%%.
 
-<UserContextForm settings="DEVICE_ID,C8Y_URL,C8Y_TENANT_ID,C8Y_USER" />
+<UserContextForm settings="DEVICE_ID,C8Y_URL" />
 
 The user context will be persisted in your web browser's local storage.
 :::
@@ -67,20 +67,6 @@ the ones used to connect to the Cumulocity Core MQTT endpoint.
 
    If the MQTT service url is different from the one that would be derived from `c8y.url` or `c8y.mqtt`,
    set`c8y.mqtt_service.url` explicitly.
-   :::
-
-1. If you're using device certificates to connect to Cumulocity, set the tenant id (skip this when using username/password)
-
-   <UserContext>
-   
-   ```sh
-   sudo tedge config set c8y.tenant_id $C8Y_TENANT_ID
-   ```
-   
-   </UserContext>
-
-   :::note
-   In the future, the need to set the Tenant ID of the Cumulocity instance will be removed.
    :::
 
 1. Enable connection to MQTT service endpoint
