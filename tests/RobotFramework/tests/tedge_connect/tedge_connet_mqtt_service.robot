@@ -10,7 +10,6 @@ Test Teardown       Get Logs
 *** Test Cases ***
 Connect to Cumulocity MQTT Service endpoint
     ${DEVICE_SN}=    Setup    connect=${False}
-    Execute Command    tedge config set c8y.tenant_id ${C8Y_CONFIG.tenant}
     Execute Command    tedge config set c8y.mqtt_service.enabled true
     Execute Command    tedge config set c8y.mqtt_service.topics 'sub/topic,demo/topic'
     Execute Command    tedge connect c8y
@@ -43,7 +42,6 @@ Connect to Cumulocity MQTT Service endpoint basic auth
 Connect to Cumulocity MQTT Service endpoint builtin bridge
     ${DEVICE_SN}=    Setup    connect=${False}
     Execute Command    tedge config set mqtt.bridge.built_in true
-    Execute Command    tedge config set c8y.tenant_id ${C8Y_CONFIG.tenant}
     Execute Command    tedge config set c8y.mqtt_service.enabled true
     Execute Command    tedge config set c8y.mqtt_service.topics demo/topic
     Execute Command    tedge connect c8y

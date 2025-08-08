@@ -95,14 +95,25 @@ the ones used to connect to the Cumulocity Core MQTT endpoint.
    sudo tedge config set c8y.mqtt_service.topics demo/topic
    ```
 
-### Configure the cloud to trust the device certificate
+1. Make Cumulocity trust the device certificate as described [here](./connect.md#making-the-cloud-trust-the-device),
+   if not already done.
 
-Follow the steps [here](./connect.md#making-the-cloud-trust-the-device) to make Cumulocity trust the device certificate.
+1. Connect the device
 
-### Connect the device
+   ```sh
+   sudo tedge connect c8y
+   ```
 
-The device is connected to MQTT service endpoint along with the core MQTT connection to Cumulocity.
+   This step establishes the bridge connection to both the core endpoint as well as the mqtt service endpoints simultaneously.
 
-```sh
-sudo tedge connect c8y
-```
+1. Once connected, all messages published to `c8y-mqtt/#` topics are forwarded to the MQTT service endpoint.
+
+   ```sh
+   tedge mqtt pub c8y-mqtt/test/topic '{ "hello": "world" }'
+   ```
+
+   The receipt of the published message can be validated on Cumulocity.
+
+   :::note
+   The bridge topic prefix `c8y-mqtt` can be changed using the tedge configuration: `c8y.mqtt_service.topic_prefix`.
+   :::

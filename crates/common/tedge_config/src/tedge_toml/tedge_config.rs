@@ -440,7 +440,7 @@ define_tedge_config! {
         },
 
         mqtt_service: {
-            /// Wheather to connect to the MQTT service endpoint or not
+            /// Whether to connect to the MQTT service endpoint or not
             #[tedge_config(example = "true", default(value = false))]
             enabled: bool,
 
