@@ -1,3 +1,4 @@
+use crate::pkcs11::CreateKeyParams;
 use crate::pkcs11::SigScheme;
 use serde::Deserialize;
 use serde::Serialize;
@@ -10,6 +11,15 @@ pub trait TedgeP11Service: Send + Sync {
 
     /// Signs the message using the private key object on the token (denoted by uri).
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse>;
+
+    /// Generate a new keypair, saving the private key on the token and returning the public key as PEM.
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String>;
+
+    /// Returns the public key in PEM format.
+    ///
+    /// Function will return public key PEM if `uri` identifies either a public key, or a private key, as in RSA and EC
+    /// cryptosystems we can derive public key from the private key.
+    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,7 +50,13 @@ pub struct SignRequestWithSigScheme {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignResponse(pub Vec<u8>);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateKeyRequest {
+    pub uri: Option<String>,
+    pub params: CreateKeyParams,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureScheme(pub rustls::SignatureScheme);
 
 impl Serialize for SignatureScheme {

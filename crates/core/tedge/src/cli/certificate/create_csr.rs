@@ -4,7 +4,6 @@ use crate::log::MaybeFancy;
 use crate::override_public_key;
 use crate::persist_new_private_key;
 use crate::reuse_private_key;
-use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::CryptokiConfig;
 use certificate::CsrTemplate;
@@ -39,7 +38,14 @@ pub struct CreateCsrCmd {
 #[derive(Debug, Clone)]
 pub enum Key {
     Local(Utf8PathBuf),
-    Cryptoki(CryptokiConfig),
+    Cryptoki {
+        config: CryptokiConfig,
+        // TODO: move it where it makes sense
+        privkey_label: Option<String>,
+        pubkey_pem: Option<String>,
+        // TODO: hack to pass sigalg
+        sigalg: Option<certificate::SignatureAlgorithm>,
+    },
 }
 
 #[async_trait::async_trait]
@@ -67,13 +73,12 @@ impl CreateCsrCmd {
                 .await
                 .map_err(|e| CertError::IoError(e).key_context(key_path.clone()))?,
 
-            Key::Cryptoki(cryptoki) => {
-                let current_cert = self
-                    .current_cert
-                    .clone()
-                    .context("Need an existing cert when using an HSM")?;
-                KeyKind::from_cryptoki_and_existing_cert(cryptoki.clone(), &current_cert)?
-            }
+            Key::Cryptoki {
+                config,
+                privkey_label,
+                pubkey_pem,
+                sigalg,
+            } => KeyKind::from_cryptoki_and_public_key_pem(config.clone())?,
         };
         debug!(?previous_key);
 

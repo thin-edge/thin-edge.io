@@ -9,9 +9,11 @@ use tracing::trace;
 
 use super::connection::Connection;
 use super::connection::Frame1;
+use crate::pkcs11::CreateKeyParams;
 use crate::pkcs11::SigScheme;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::CreateKeyRequest;
 use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::TedgeP11Service;
@@ -29,20 +31,40 @@ impl TedgeP11Service for TedgeP11Client {
         &self,
         request: ChooseSchemeRequest,
     ) -> anyhow::Result<crate::service::ChooseSchemeResponse> {
+        let uri = request
+            .uri
+            .as_deref()
+            .or(self.uri.as_deref())
+            .map(ToString::to_string);
         let offered: Vec<_> = request.offered.iter().map(|s| s.0).collect();
-        self.choose_scheme(&offered, request.uri)
+        self.choose_scheme(&offered, uri)
     }
 
     fn sign(
         &self,
         request: SignRequestWithSigScheme,
     ) -> anyhow::Result<crate::service::SignResponse> {
+        let uri = request
+            .uri
+            .as_deref()
+            .or(self.uri.as_deref())
+            .map(ToString::to_string);
         let response = match request.sigscheme {
-            Some(sigscheme) => self.sign2(&request.to_sign, request.uri, sigscheme)?,
-            None => self.sign(&request.to_sign, request.uri)?,
+            Some(sigscheme) => self.sign2(&request.to_sign, uri, sigscheme)?,
+            None => self.sign(&request.to_sign, uri)?,
         };
 
         Ok(crate::service::SignResponse(response))
+    }
+
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String> {
+        let uri = uri.or(self.uri.as_deref()).map(ToString::to_string);
+        self.create_key(uri, params)
+    }
+
+    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
+        let uri = uri.or(self.uri.as_deref()).map(ToString::to_string);
+        self.get_public_key_pem(uri)
     }
 }
 
@@ -160,6 +182,36 @@ impl TedgeP11Client {
         debug!("Sign complete");
 
         Ok(response.0)
+    }
+
+    pub fn create_key(
+        &self,
+        uri: Option<String>,
+        params: CreateKeyParams,
+    ) -> anyhow::Result<String> {
+        let request = Frame1::CreateKeyRequest(CreateKeyRequest { uri, params });
+        let response = self.do_request(request)?;
+
+        let Frame1::CreateKeyResponse(pubkey_pem) = response else {
+            bail!("protocol error: bad response, expected create_key, received: {response:?}");
+        };
+
+        debug!("Sign complete");
+
+        Ok(pubkey_pem)
+    }
+
+    pub fn get_public_key_pem(&self, uri: Option<String>) -> anyhow::Result<String> {
+        let request = Frame1::GetPublicKeyPemRequest(uri);
+        let response = self.do_request(request)?;
+
+        let Frame1::GetPublicKeyPemResponse(pubkey_pem) = response else {
+            bail!("protocol error: bad response, expected create_key, received: {response:?}");
+        };
+
+        debug!("Sign complete");
+
+        Ok(pubkey_pem)
     }
 
     fn do_request(&self, request: Frame1) -> anyhow::Result<Frame1> {

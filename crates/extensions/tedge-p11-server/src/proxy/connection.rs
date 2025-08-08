@@ -15,6 +15,7 @@ use tracing::warn;
 
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::CreateKeyRequest;
 use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::SignResponse;
@@ -91,6 +92,10 @@ pub enum Frame1 {
     ChooseSchemeResponse(ChooseSchemeResponse),
     SignResponse(SignResponse),
     SignRequestWithSigScheme(SignRequestWithSigScheme),
+    CreateKeyRequest(CreateKeyRequest),
+    CreateKeyResponse(String),
+    GetPublicKeyPemRequest(Option<String>),
+    GetPublicKeyPemResponse(String),
 }
 
 /// An error that can be returned to the client by the server.

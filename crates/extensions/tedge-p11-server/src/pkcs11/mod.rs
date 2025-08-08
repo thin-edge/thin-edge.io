@@ -1,8 +1,66 @@
-//! rustls connector for PKCS#11 devices.
+//! rustls connector for PKCS#11 tokens.
+//!
+//! # `p11tool` quirks
+//!
+//! As `p11tool` was used during development to inspect and manipulate PKCS #11 token and may be used by users for the
+//! same purpose, below is a description of some `p11tool` quirks and why some information it should display is missing.
+//!
+//! These quirks were observed with p11tool 3.8.9.
+//!
+//! ## Listing full algorithm types of private keys
+//!
+//! When displaying objects on the token, like this:
+//!
+//! ```sh
+//! $ p11tool --login --set-pin=123456 --list-all "pkcs11:token=create-key-token"
+//! Object 0:
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%6A%6C%5A%EA%8C%04%91%5C%67%77%AA%E2%B1%67%C7%C0%56%4E%97%01;object=p11tool-ec256;type=public
+//!     Type: Public key (EC/ECDSA-SECP256R1)
+//!     Label: p11tool-ec256
+//!     Flags: CKA_WRAP/UNWRAP;
+//!     ID: 6a:6c:5a:ea:8c:04:91:5c:67:77:aa:e2:b1:67:c7:c0:56:4e:97:01
+//!
+//! Object 1:
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%43%2F%58%39%E5%33%30%B2%F9%E0%99%6E%FD%92%32%03%98%E7%72%7A;object=ec521;type=private
+//!     Type: Private key (EC/ECDSA)
+//!     Label: ec521
+//!     Flags: CKA_WRAP/UNWRAP; CKA_PRIVATE; CKA_NEVER_EXTRACTABLE; CKA_SENSITIVE;
+//!     ID: 43:2f:58:39:e5:33:30:b2:f9:e0:99:6e:fd:92:32:03:98:e7:72:7a
+//!
+//! Object 2:
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%BB%DD%35%F4%26%51%C8%E2%ED%E9%1E%21%4E%59%29%5F%C1%75%FB%21;object=rsa3072;type=private
+//!     Type: Private key (RSA-3072)
+//!     Label: rsa3072
+//!     Flags: CKA_WRAP/UNWRAP; CKA_PRIVATE; CKA_NEVER_EXTRACTABLE; CKA_SENSITIVE;
+//!     ID: bb:dd:35:f4:26:51:c8:e2:ed:e9:1e:21:4e:59:29:5f:c1:75:fb:21
+//!
+//! Object 3:
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%6A%6C%5A%EA%8C%04%91%5C%67%77%AA%E2%B1%67%C7%C0%56%4E%97%01;object=p11tool-ec256;type=private
+//!     Type: Private key (EC/ECDSA-SECP256R1)
+//!     Label: p11tool-ec256
+//!     Flags: CKA_WRAP/UNWRAP; CKA_PRIVATE; CKA_NEVER_EXTRACTABLE; CKA_SENSITIVE;
+//!     ID: 6a:6c:5a:ea:8c:04:91:5c:67:77:aa:e2:b1:67:c7:c0:56:4e:97:01
+//!
+//! Object 4:
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%EC%60%3C%DF%10%E7%54%7D%EE%27%EE%B9%99%8A%D6%B1%45%C3%73%B8;type=public
+//!     Type: Public key (EC/ECDSA-SECP521R1)
+//!     Label:
+//!     Flags: CKA_WRAP/UNWRAP;
+//!     ID: ec:60:3c:df:10:e7:54:7d:ee:27:ee:b9:99:8a:d6:b1:45:c3:73:b8
+//! ```
+//!
+//! Things to note are:
+//! - for full key algorithm type (EC/ECDSA-SECP256R1) to be displayed next to private keys
+//!     - distinct keys/keypairs need to have unique ids (otherwise it gets confused and can display incorrect keytype)
+//!     - for EC keys
+//!         - there needs to be both private and public key objects (curve is read from pubkey object)
+//!         - pubkey object needs to have the same ID as the privkey object
+//!     - for RSA keys
+//!         - only private key object itself needs to be present
 //!
 //! Reference:
 //! - thin-edge: docs/src/references/hsm-support.md
-//! - PKCS#11: https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html
+//! - PKCS#11: <https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html>
 
 use anyhow::Context;
 use asn1_rs::BigInt;
@@ -21,9 +79,11 @@ use cryptoki::mechanism::MechanismType;
 use cryptoki::object::Attribute;
 use cryptoki::object::AttributeType;
 use cryptoki::object::KeyType;
+use cryptoki::object::ObjectClass;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use rsa::pkcs1::EncodeRsaPublicKey;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
@@ -101,6 +161,14 @@ impl TedgeP11Service for Cryptoki {
         let signature = signing_key.sign(&request.to_sign, request.sigscheme)?;
         Ok(SignResponse(signature))
     }
+
+    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String> {
+        self.create_key(uri, params)
+    }
+
+    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
+        self.get_public_key_pem(uri)
+    }
 }
 
 impl Cryptoki {
@@ -126,23 +194,7 @@ impl Cryptoki {
         })
     }
 
-    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
-        let mut config_uri = self
-            .config
-            .uri
-            .as_deref()
-            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        let request_uri = uri
-            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        config_uri.append_attributes(request_uri);
-        let uri_attributes = config_uri;
-
+    fn open_session(&self, uri_attributes: &uri::Pkcs11Uri) -> anyhow::Result<Session> {
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
 
@@ -173,13 +225,23 @@ impl Cryptoki {
         let token_info = self.context.get_token_info(slot)?;
         debug!(?slot_info, ?token_info, "Selected slot");
 
-        let session = self.context.open_ro_session(slot)?;
+        // TODO: open ro sessions for requests other than creating the key
+        // let session = self.context.open_ro_session(slot)?;
+        let session = self.context.open_rw_session(slot)?;
         session.login(UserType::User, Some(&self.config.pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
 
+        Ok(session)
+    }
+
+    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
+
         // get the signing key
-        let key = Self::find_key_by_attributes(&uri_attributes, &session)?;
+        let key =
+            Self::find_key_by_attributes(&uri_attributes, &session, ObjectClass::PRIVATE_KEY)?;
         let key_type = session
             .get_attributes(key, &[AttributeType::KeyType])?
             .into_iter()
@@ -218,12 +280,14 @@ impl Cryptoki {
                     session,
                     key,
                     sigscheme,
+                    secondary_schemes: Vec::new(),
                 }
             }
             KeyType::RSA => Pkcs11Signer {
                 session,
                 key,
                 sigscheme: SigScheme::RsaPssSha256,
+                secondary_schemes: vec![SigScheme::RsaPkcs1Sha256],
             },
             _ => anyhow::bail!("unsupported key type"),
         };
@@ -231,14 +295,34 @@ impl Cryptoki {
         Ok(key)
     }
 
+    pub fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
+
+        let pubkey_pem =
+            create_key(&session, params).context("Failed to create a new private key")?;
+
+        Ok(pubkey_pem)
+    }
+
+    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
+
+        let key = Self::find_key_by_attributes(&uri_attributes, &session, ObjectClass::PUBLIC_KEY)?;
+
+        export_public_key_pem(&session, key)
+    }
+
     fn find_key_by_attributes(
         uri: &uri::Pkcs11Uri,
         session: &Session,
+        class: ObjectClass,
     ) -> anyhow::Result<ObjectHandle> {
         let mut key_template = vec![
             Attribute::Token(true),
-            Attribute::Private(true),
-            Attribute::Sign(true),
+            // Attribute::Sign(true),
+            Attribute::Class(class),
         ];
         if let Some(object) = &uri.object {
             key_template.push(Attribute::Label(object.as_bytes().to_vec()));
@@ -247,14 +331,14 @@ impl Cryptoki {
             key_template.push(Attribute::Id(id.clone()));
         }
 
-        trace!(?key_template, "Finding a key");
+        trace!(?key_template, ?uri.object, "Finding a key");
 
         let mut keys = session
             .find_objects(&key_template)
             .context("Failed to find private key objects")?
             .into_iter();
 
-        let key = keys.next().context("Failed to find a private key")?;
+        let key = keys.next().context("Failed to find a key")?;
         if keys.len() > 0 {
             warn!(
                 "Multiple keys were found. If the wrong one was chosen, please use a URI that uniquely identifies a key."
@@ -263,6 +347,331 @@ impl Cryptoki {
 
         Ok(key)
     }
+
+    fn request_uri<'a>(
+        &'a self,
+        request_uri: Option<&'a str>,
+    ) -> anyhow::Result<uri::Pkcs11Uri<'a>> {
+        let mut config_uri = self
+            .config
+            .uri
+            .as_deref()
+            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        let request_uri = request_uri
+            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        config_uri.append_attributes(request_uri);
+        Ok(config_uri)
+    }
+}
+
+fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<String> {
+    let (mechanism, attrs_pub, attrs_priv) = match params.key {
+        KeyTypeParams::Rsa { bits } => {
+            anyhow::ensure!(
+                bits == 2048 || bits == 3072 || bits == 4096,
+                "Invalid bits value: only 2048/3072/4096 key sizes are valid"
+            );
+            (
+                Mechanism::RsaPkcsKeyPairGen,
+                vec![Attribute::ModulusBits(
+                    // u64 or u32 depending on the platform
+                    std::os::raw::c_ulong::from(bits).into(),
+                )],
+                vec![],
+            )
+        }
+        KeyTypeParams::Ec { curve } => {
+            // serialize chosen curve to CKA_EC_PARAMS choice structure
+            // https://docs.oasis-open.org/pkcs11/pkcs11-curr/v3.0/os/pkcs11-curr-v3.0-os.html#_Toc30061181
+            let oid = match curve {
+                256 => SECP256R1_OID,
+                384 => SECP384R1_OID,
+                _ => anyhow::bail!("Invalid EC curve value: only P256/P384 valid"),
+            };
+            let components: Vec<u64> = oid.split('.').map(|c| c.parse().unwrap()).collect();
+            let curve_oid = asn1_rs::Oid::from(&components)
+                .unwrap()
+                .to_der_vec()
+                .unwrap();
+            trace!("{curve_oid:x?}");
+            (
+                Mechanism::EccKeyPairGen,
+                vec![Attribute::EcParams(curve_oid)],
+                vec![],
+            )
+        }
+    };
+
+    // XXX: remove objects with the same label
+    // The problem is that we want to use the new key after we create it, but there can be other objects with the same
+    // label so referring just by label becomes ambiguous.
+    // What we currently do when creating e.g. certificate files when there is another file with that name, the old one
+    // is deleted, so we can replicate this behaviour here
+    // But this likely isn't the best way to do things in PKCS11 - if a key has unique ID we can refer to it by the id
+    // even if the label is not unique, but the problem is in setting that id - a user can set the label of the key in
+    // tedge config and then create a key with that label, but with the id, it's generated on the server side so we'd
+    // have to either automatically set it in tedge-config (surprising) or return the URI and tell the user to set it
+    // (tedious, especially if generating multiple keys).
+    let overlapping_objects =
+        session.find_objects(&[Attribute::Label(params.label.as_bytes().to_vec())])?;
+    if !overlapping_objects.is_empty() {
+        warn!(
+            "Removing objects with label='{}', same as newly created key",
+            params.label
+        );
+        for object in overlapping_objects {
+            session.destroy_object(object)?;
+        }
+    }
+
+    // generate unique ids
+    let mut id = vec![0u8; 20];
+    rand::fill(&mut id[..]);
+
+    let mut pub_key_template = attrs_pub;
+    pub_key_template.extend_from_slice(&[
+        Attribute::Token(true),
+        Attribute::Private(false),
+        Attribute::Verify(true),
+        Attribute::Encrypt(true),
+        Attribute::Label(params.label.clone().into()),
+        Attribute::Id(id.clone()),
+    ]);
+
+    let mut priv_key_template = attrs_priv;
+    priv_key_template.extend_from_slice(&[
+        Attribute::Token(true),
+        Attribute::Private(true),
+        Attribute::Sensitive(true),
+        Attribute::Extractable(false),
+        Attribute::Sign(true),
+        Attribute::Decrypt(true),
+        Attribute::Label(params.label.into()),
+        Attribute::Id(id),
+    ]);
+
+    trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
+    let (pub_handle, priv_handle) = session
+        .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template)
+        .context("Failed to generate keypair")?;
+
+    let pubkey_der = match params.key {
+        KeyTypeParams::Rsa { .. } => {
+            let priv_attrs =
+                session.get_attributes(priv_handle, &[AttributeType::PublicKeyInfo])?;
+            trace!(?priv_attrs);
+
+            // return the public key as PEM
+            let attrs = session.get_attributes(
+                pub_handle,
+                &[
+                    AttributeType::PublicKeyInfo,
+                    AttributeType::Modulus,
+                    AttributeType::PublicExponent,
+                ],
+            )?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
+
+            let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
+
+            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+                if !pubkey_der.is_empty() {
+                    // TODO: test
+                    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+                    let pubkey_pem = pem::encode(&pubkey_pem);
+                    return Ok(pubkey_pem);
+                }
+            }
+
+            debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+
+            let Attribute::Modulus(modulus) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No modulus");
+            };
+            let modulus = rsa::BigUint::from_bytes_be(&modulus);
+
+            let Attribute::PublicExponent(exponent) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No public exponent");
+            };
+            let exponent = rsa::BigUint::from_bytes_be(&exponent);
+
+            let pubkey = rsa::RsaPublicKey::new(modulus, exponent)
+                .context("Failed to construct RSA pubkey from components")?;
+
+            pubkey
+                .to_pkcs1_der()
+                .context("Failed to serialize pubkey as DER")?
+                .into_vec()
+        }
+
+        KeyTypeParams::Ec { .. } => {
+            let priv_attrs = session.get_attributes(
+                priv_handle,
+                &[
+                    AttributeType::PublicKeyInfo,
+                    AttributeType::Class,
+                    AttributeType::EcParams,
+                ],
+            )?;
+            trace!(?priv_attrs);
+
+            // return the public key as PEM
+            let attrs = session.get_attributes(
+                pub_handle,
+                &[AttributeType::PublicKeyInfo, AttributeType::EcPoint],
+            )?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
+
+            let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
+
+            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+                if !pubkey_der.is_empty() {
+                    // TODO: test
+                    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+                    let pubkey_pem = pem::encode(&pubkey_pem);
+                    return Ok(pubkey_pem);
+                }
+            }
+
+            debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+
+            // Elliptic-Curve-Point-to-Octet-String from SEC 1: Elliptic Curve Cryptography (Version 2.0) section 2.3.3 (page 10)
+            let ec_point = attrs.next().context("Failed to get pubkey EcPoint")?;
+            let Attribute::EcPoint(ec_point) = ec_point else {
+                anyhow::bail!("No ec point");
+            };
+            let (_, ec_point) =
+                asn1_rs::OctetString::from_der(&ec_point).context("Invalid EcPoint")?;
+            trace!(?ec_point);
+            ec_point.into_cow().to_vec()
+        }
+    };
+
+    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+    let pubkey_pem = pem::encode(&pubkey_pem);
+
+    Ok(pubkey_pem)
+}
+
+/// Given a handle to a private or a public key object, export public key in PEM format.
+fn export_public_key_pem(session: &Session, key: ObjectHandle) -> anyhow::Result<String> {
+    let keytype = session
+        .get_attributes(key, &[AttributeType::KeyType])?
+        .into_iter()
+        .next()
+        .context("object is not a key")?;
+    let Attribute::KeyType(keytype) = keytype else {
+        // really all the instances where pkcs11 gives us different attribute than the one we asked for are the same error: invalid behaviour of pkcs11 library or the token
+        anyhow::bail!("No keytype");
+    };
+
+    let pubkey_der = match keytype {
+        KeyType::RSA => {
+            let attrs = session.get_attributes(key, &[AttributeType::PublicKeyInfo])?;
+            trace!(?attrs);
+
+            // return the public key as PEM
+            let attrs = session.get_attributes(
+                key,
+                &[
+                    AttributeType::PublicKeyInfo,
+                    AttributeType::Modulus,
+                    AttributeType::PublicExponent,
+                ],
+            )?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
+
+            let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
+
+            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+                if !pubkey_der.is_empty() {
+                    // TODO: test
+                    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+                    let pubkey_pem = pem::encode(&pubkey_pem);
+                    return Ok(pubkey_pem);
+                }
+            }
+
+            debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+
+            let Attribute::Modulus(modulus) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No modulus");
+            };
+            let modulus = rsa::BigUint::from_bytes_be(&modulus);
+
+            let Attribute::PublicExponent(exponent) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No public exponent");
+            };
+            let exponent = rsa::BigUint::from_bytes_be(&exponent);
+
+            let pubkey = rsa::RsaPublicKey::new(modulus, exponent)
+                .context("Failed to construct RSA pubkey from components")?;
+
+            pubkey
+                .to_pkcs1_der()
+                .context("Failed to serialize pubkey as DER")?
+                .into_vec()
+        }
+        KeyType::EC => {
+            // return the public key as PEM
+            let attrs = session
+                .get_attributes(key, &[AttributeType::PublicKeyInfo, AttributeType::EcPoint])?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
+
+            let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
+
+            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+                if !pubkey_der.is_empty() {
+                    // TODO: test
+                    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+                    let pubkey_pem = pem::encode(&pubkey_pem);
+                    return Ok(pubkey_pem);
+                }
+            }
+
+            debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
+            let attrs = session.get_attributes(key, &[AttributeType::EcPoint])?;
+            let mut attrs = attrs.into_iter();
+
+            // Elliptic-Curve-Point-to-Octet-String from SEC 1: Elliptic Curve Cryptography (Version 2.0) section 2.3.3 (page 10)
+            let ec_point = attrs.next().context("Failed to get pubkey EcPoint")?;
+            let Attribute::EcPoint(ec_point) = ec_point else {
+                anyhow::bail!("No ec point");
+            };
+            let (_, ec_point) =
+                asn1_rs::OctetString::from_der(&ec_point).context("Invalid EcPoint")?;
+            trace!(?ec_point);
+            ec_point.into_cow().to_vec()
+        }
+        _ => anyhow::bail!("unsupported keytype"),
+    };
+    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+    let pubkey_pem = pem::encode(&pubkey_pem);
+
+    Ok(pubkey_pem)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateKeyParams {
+    pub key: KeyTypeParams,
+    pub token: Option<String>,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KeyTypeParams {
+    Rsa { bits: u16 },
+    Ec { curve: u16 },
 }
 
 #[derive(Debug, Clone)]
@@ -275,6 +684,7 @@ pub struct Pkcs11Signer {
     session: Pkcs11Session,
     key: ObjectHandle,
     pub sigscheme: SigScheme,
+    pub secondary_schemes: Vec<SigScheme>,
 }
 
 impl Pkcs11Signer {
@@ -409,10 +819,20 @@ impl SigningKey for Pkcs11Signer {
         let key_scheme = self.sigscheme.into();
         if offered.contains(&key_scheme) {
             debug!("Matching scheme: {key_scheme:?}");
-            Some(Box::new(self.clone()))
-        } else {
-            None
+            return Some(Box::new(self.clone()));
         }
+
+        for scheme in &self.secondary_schemes {
+            let key_scheme = (*scheme).into();
+            if offered.contains(&key_scheme) {
+                debug!("Matching scheme: {key_scheme:?}");
+                let mut signer = self.clone();
+                signer.sigscheme = *scheme;
+                return Some(Box::new(signer));
+            }
+        }
+
+        None
     }
 
     fn algorithm(&self) -> SignatureAlgorithm {

@@ -12,6 +12,7 @@ use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::AuthPin;
 use certificate::CertificateError;
 use tedge_config_macros::all_or_nothing;
+use tracing::trace;
 
 use super::CloudConfig;
 use super::TEdgeConfigReaderDevice;
@@ -226,6 +227,7 @@ impl TEdgeConfigReaderDevice {
         let uri = cloud
             .and_then(|c| c.key_uri().or(self.key_uri.or_none().cloned()))
             .or(self.key_uri.or_none().cloned());
+        trace!(?uri);
         match cryptoki.mode {
             Cryptoki::Off => Ok(None),
             Cryptoki::Module => Ok(Some(CryptokiConfig::Direct(CryptokiConfigDirect {

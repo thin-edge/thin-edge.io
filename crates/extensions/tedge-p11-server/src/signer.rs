@@ -5,6 +5,7 @@ use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use tracing::error;
 use tracing::instrument;
+use tracing::trace;
 
 use crate::pkcs11::Cryptoki;
 use crate::pkcs11::Pkcs11Signer;
@@ -74,11 +75,13 @@ pub struct TedgeP11ClientSigningKey {
 
 impl TedgeP11Signer for TedgeP11ClientSigningKey {
     fn sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>> {
+        trace!(?self.uri);
         self.client
             .sign(msg, self.uri.as_ref().map(|s| s.to_string()))
     }
 
     fn sign2(&self, msg: &[u8], sigscheme: SigScheme) -> anyhow::Result<Vec<u8>> {
+        trace!(?self.uri);
         self.client
             .sign2(msg, self.uri.as_ref().map(|s| s.to_string()), sigscheme)
     }
