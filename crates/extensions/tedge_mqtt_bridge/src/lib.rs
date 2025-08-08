@@ -122,6 +122,8 @@ impl MqttBridgeActorBuilder {
             .map(|t| SubscribeFilter::new(t.to_owned(), QoS::AtLeastOnce))
             .collect();
 
+        let remote_subscribe_once = rules.remote_subscribe_once;
+
         let [cloud_target, local_target] =
             bidirectional_channel(cloud_client.clone(), local_client.clone(), in_flight.into());
         let [(convert_local, bidir_local), (convert_cloud, bidir_cloud)] =
@@ -138,6 +140,7 @@ impl MqttBridgeActorBuilder {
             tx_status.clone(),
             "local",
             local_topics,
+            true,
             reconnect_policy.clone(),
         ));
         tokio::spawn(half_bridge(
@@ -149,6 +152,7 @@ impl MqttBridgeActorBuilder {
             tx_status.clone(),
             "cloud",
             cloud_topics,
+            remote_subscribe_once,
             reconnect_policy,
         ));
 
@@ -436,6 +440,7 @@ async fn half_bridge(
     tx_health: mpsc::Sender<(&'static str, Status)>,
     name: &'static str,
     topics: Vec<SubscribeFilter>,
+    subscribe_once: bool,
     reconnect_policy: TEdgeConfigReaderMqttBridgeReconnectPolicy,
 ) {
     let mut backoff = CustomBackoff::new(
@@ -485,7 +490,15 @@ async fn half_bridge(
                 let topics = topics.clone();
                 // We have to subscribe to this asynchronously (i.e. in a task) since we might at
                 // this point have filled our cloud event loop with outgoing messages
-                tokio::spawn(async move { recv_client.subscribe_many(topics).await.unwrap() });
+                tokio::spawn(async move {
+                    if subscribe_once {
+                        recv_client.subscribe_many(topics).await.unwrap()
+                    } else {
+                        for topic in topics {
+                            recv_client.subscribe(topic).await.unwrap()
+                        }
+                    }
+                });
             }
 
             // Forward messages from event loop to target
@@ -567,6 +580,7 @@ impl MqttEvents for EventLoop {
 }
 #[async_trait::async_trait]
 trait MqttClient: MqttAck + Clone + Send + Sync {
+    async fn subscribe(&self, topic: SubscribeFilter) -> Result<(), ClientError>;
     async fn subscribe_many(&self, topics: Vec<SubscribeFilter>) -> Result<(), ClientError>;
     async fn publish(
         &self,
@@ -579,9 +593,14 @@ trait MqttClient: MqttAck + Clone + Send + Sync {
 
 #[async_trait::async_trait]
 impl MqttClient for AsyncClient {
+    async fn subscribe(&self, topic: SubscribeFilter) -> Result<(), ClientError> {
+        AsyncClient::subscribe(self, topic.path, topic.qos).await
+    }
+
     async fn subscribe_many(&self, topics: Vec<SubscribeFilter>) -> Result<(), ClientError> {
         AsyncClient::subscribe_many(self, topics).await
     }
+
     async fn publish(
         &self,
         topic: String,
@@ -1378,6 +1397,7 @@ mod tests {
                     tx_health.clone(),
                     "local",
                     self.subscription_topics.clone(),
+                    true,
                     TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
                 ));
                 let cloud_task = tokio::spawn(half_bridge(
@@ -1389,6 +1409,7 @@ mod tests {
                     tx_health,
                     "cloud",
                     self.subscription_topics,
+                    true,
                     TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
                 ));
 

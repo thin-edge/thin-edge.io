@@ -40,6 +40,7 @@ pub struct BridgeConfig {
     local_to_remote: Vec<BridgeRule>,
     remote_to_local: Vec<BridgeRule>,
     bidirectional_topics: Vec<(Cow<'static, str>, Cow<'static, str>)>,
+    pub(crate) remote_subscribe_once: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -144,7 +145,10 @@ impl BridgeRule {
 
 impl BridgeConfig {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            remote_subscribe_once: true,
+            ..Default::default()
+        }
     }
 
     pub fn forward_from_local(
@@ -214,6 +218,7 @@ impl BridgeConfig {
             local_to_remote,
             remote_to_local,
             bidirectional_topics,
+            ..
         } = self;
 
         let (bidir_local_topics, bidir_remote_topics) = bidirectional_topics.into_iter().unzip();
