@@ -6,7 +6,7 @@ Library             ThinEdgeIO
 Test Setup          Custom Setup
 Test Teardown       Get Logs
 
-Test Tags           theme:c8y    theme:telemetry
+Test Tags           theme:c8y
 
 
 *** Test Cases ***

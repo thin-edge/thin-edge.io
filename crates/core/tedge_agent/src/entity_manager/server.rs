@@ -3,8 +3,6 @@ use futures::channel::mpsc;
 use futures::StreamExt as _;
 use serde_json::Map;
 use serde_json::Value;
-use std::fs::File;
-use std::path::PathBuf;
 use tedge_actors::LoggingSender;
 use tedge_actors::MappingSender;
 use tedge_actors::MessageSink;
@@ -28,8 +26,6 @@ use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::error;
 
-const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
-
 #[derive(Debug)]
 pub enum EntityStoreRequest {
     Get(EntityTopicId),
@@ -38,7 +34,6 @@ pub enum EntityStoreRequest {
     Delete(EntityTopicId),
     List(ListFilters),
     MqttMessage(MqttMessage),
-    InitComplete,
     GetTwinFragment(EntityTopicId, String),
     SetTwinFragment(EntityTwinMessage),
     GetTwinFragments(EntityTopicId),
@@ -67,15 +62,13 @@ pub struct EntityStoreServer {
 }
 
 pub struct EntityStoreServerConfig {
-    pub config_dir: PathBuf,
     pub mqtt_schema: MqttSchema,
     pub entity_auto_register: bool,
 }
 
 impl EntityStoreServerConfig {
-    pub fn new(config_dir: PathBuf, mqtt_schema: MqttSchema, entity_auto_register: bool) -> Self {
+    pub fn new(mqtt_schema: MqttSchema, entity_auto_register: bool) -> Self {
         Self {
-            config_dir,
             mqtt_schema,
             entity_auto_register,
         }
@@ -173,46 +166,11 @@ impl Server for EntityStoreServer {
                 self.process_mqtt_message(mqtt_message).await;
                 EntityStoreResponse::Ok
             }
-            EntityStoreRequest::InitComplete => {
-                if let Err(err) = self.init_complete().await {
-                    error!("Failed to process inventory.json file: {err}");
-                }
-                EntityStoreResponse::Ok
-            }
         }
     }
 }
 
 impl EntityStoreServer {
-    async fn init_complete(&mut self) -> Result<(), entity_store::Error> {
-        let inventory_file_path = self
-            .config
-            .config_dir
-            .join(INVENTORY_FRAGMENTS_FILE_LOCATION);
-        let file = File::open(inventory_file_path)?;
-        let inventory_json: Value = serde_json::from_reader(file)?;
-        let main_device = self.entity_store.main_device().clone();
-        if let Value::Object(map) = inventory_json {
-            for (key, value) in map {
-                if self
-                    .entity_store
-                    .get_twin_fragment(&main_device, &key)
-                    .is_none()
-                {
-                    self.publish_twin_data(&main_device, key.clone(), value.clone())
-                        .await;
-                }
-            }
-        } else {
-            error!(
-                "Invalid inventory.json format: expected a JSON object, found {:?}",
-                inventory_json
-            );
-        }
-
-        Ok(())
-    }
-
     pub(crate) async fn process_mqtt_message(&mut self, message: MqttMessage) {
         if let Ok((topic_id, channel)) = self.config.mqtt_schema.entity_channel_of(&message.topic) {
             if let Channel::EntityMetadata = channel {
