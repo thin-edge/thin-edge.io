@@ -190,6 +190,9 @@ Test tedge cert renew
     [Arguments]    ${type}    ${bits}=${EMPTY}    ${curve}=${EMPTY}
 
     Connect to C8y using new keypair    type=${type}    curve=${curve}    bits=${bits}
+    # We could alternatively use Cumulocity CA to start with a signed cert, but for testing certificate renewal, we want
+    # to test both renewing a self-signed cert and a cert issued by C8y CA. When we start with self-signed cert, after
+    # the first renewal we get a cert signed by CA, so we test all scenarios by just doing renew 2 times.
 
     Execute Command    tedge cert renew c8y
     ${stderr}=    Execute Command

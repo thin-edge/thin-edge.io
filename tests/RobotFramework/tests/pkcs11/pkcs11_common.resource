@@ -26,10 +26,8 @@ Connect to C8y using new keypair
 
     IF    '${type}' == 'ecdsa'
         VAR    ${object_name}=    ${type}-${curve}
-        VAR    ${p11tool_args}=    --curve=${curve}
     ELSE IF    '${type}' == 'rsa'
         VAR    ${object_name}=    ${type}-${bits}
-        VAR    ${p11tool_args}=    --bits=${bits}
     ELSE
         Fail    Wrong key type provided.
     END
@@ -38,21 +36,55 @@ Connect to C8y using new keypair
     ${identifier}=    String.Generate Random String
     VAR    ${object_name}=    ${object_name}-${identifier}
 
-    VAR    ${cert_path}=    /etc/tedge/device-certs/${object_name}.csr
+    Set up new PKCS11 keypair    ${type}    ${curve}    ${bits}    ${object_name}
+
+    VAR    ${cert_path}=    /etc/tedge/device-certs/${object_name}.pem
     Execute Command    cmd=tedge config set device.cert_path ${cert_path}
 
     Execute Command
-    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ${type} ${p11tool_args} --label ${object_name} "pkcs11:token=tedge"
-    Execute Command
     ...    cmd=GNUTLS_PIN=123456 certtool --generate-self-signed --template "${CERT_TEMPLATE}" --outfile "${cert_path}" --load-privkey "pkcs11:token=tedge;object=${object_name}"
-
-    Execute Command    cmd=tedge config set device.key_uri "pkcs11:token=tedge;object=${object_name}"
 
     Execute Command
     ...    cmd=sudo env C8Y_USER="${C8Y_CONFIG.username}" C8Y_PASSWORD="${C8Y_CONFIG.password}" tedge cert upload c8y
     ThinEdgeIO.Register Certificate For Cleanup
 
     Tedge Reconnect Should Succeed
+
+Set up new PKCS11 keypair
+    [Documentation]    Creates a new keypair on the PKCS11 token, configures thin-edge to use the new key and returns the URI of the new keypair.
+    [Arguments]    ${type}    # ecdsa or rsa
+    ...    ${curve}=secp256r1    # if type == ECDSA, curve of the key - one of {secp256r1, secp384r1, secp521r1}
+    ...    ${bits}=4096    # if type == RSA, length in bits of the RSA key - one of {1024, 2048, 3072, 4096}
+    ...    ${object_name}=${EMPTY}    # label of the private and public keys
+
+    IF    '${type}' == 'ecdsa'
+        VAR    ${p11tool_args}=    --curve=${curve}
+    ELSE IF    '${type}' == 'rsa'
+        VAR    ${p11tool_args}=    --bits=${bits}
+    ELSE
+        Fail    Wrong key type provided.
+    END
+
+    IF    "${object_name}" == "${EMPTY}"
+        IF    '${type}' == 'ecdsa'
+            VAR    ${object_name}=    ${type}-${curve}
+        ELSE IF    '${type}' == 'rsa'
+            VAR    ${object_name}=    ${type}-${bits}
+        ELSE
+            Fail    Wrong key type provided.
+        END
+        ${identifier}=    String.Generate Random String
+        VAR    ${object_name}=    ${object_name}-${identifier}
+    END
+
+    Execute Command
+    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ${type} ${p11tool_args} --label ${object_name} "pkcs11:token=tedge"
+
+    VAR    ${key_uri}    pkcs11:token=tedge;object=${object_name}
+    # warning: PKCS11 _uri variables contain ; so they need to be quoted!
+    Execute Command    cmd=tedge config set device.key_uri "${key_uri}"
+
+    RETURN    ${key_uri}
 
 Set tedge-p11-server Uri
     [Arguments]    ${value}
