@@ -1,3 +1,4 @@
+use crate::twin_manager::actor::TwinManagerActor;
 use std::convert::Infallible;
 use std::path::PathBuf;
 use tedge_actors::Builder;
@@ -14,8 +15,6 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
-
-use crate::twin_manager::actor::TwinManagerActor;
 
 pub struct TwinManagerConfig {
     pub config_dir: PathBuf,

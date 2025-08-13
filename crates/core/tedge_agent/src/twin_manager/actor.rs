@@ -13,7 +13,6 @@ use tedge_actors::SimpleMessageBox;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_utils::file::create_directory_with_defaults;
 use tokio::time::timeout;
 use tracing::error;
 
@@ -32,15 +31,6 @@ impl Actor for TwinManagerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        // Create directory for device inventory.json
-        create_directory_with_defaults(self.config.config_dir.join("device"))
-            .await
-            .map_err(|err| {
-                RuntimeError::ActorError(
-                    format!("Failed to create device inventory directory: {}", err).into(),
-                )
-            })?;
-
         let mut inventory_map = self.load_inventory_json()?;
         // Wait until the very fist message is received (at least the agent health status is guaranteed)
         if let Some(mut msg) = self.messages.recv().await {
@@ -66,6 +56,12 @@ impl Actor for TwinManagerActor {
         for (key, value) in inventory_map {
             self.publish_twin_data(&device_id, key.clone(), value.clone())
                 .await;
+        }
+
+        // This is to prevent the MQTT actor from crashing while trying to send a twin message to this actor later
+        // after this actor has finished and closed its message box, but the MQTT actor still holds the sender half of it.
+        while self.messages.recv().await.is_some() {
+            // Do nothing
         }
         Ok(())
     }

@@ -242,6 +242,8 @@ impl Agent {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
         create_directory_with_defaults(agent_default_state_dir(self.config.config_dir.clone()))
             .await?;
+        // Create directory for device inventory.json
+        create_directory_with_defaults(self.config.config_dir.join("device")).await?;
         create_directory_with_defaults(&self.config.agent_log_dir).await?;
         create_directory_with_defaults(&self.config.data_dir).await?;
         create_directory_with_defaults(&self.config.http_config.file_transfer_dir).await?;
