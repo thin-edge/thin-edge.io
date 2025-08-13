@@ -13,7 +13,7 @@ use thiserror::Error;
 /// Although this struct doesn't enforce any restrictions for the values,
 /// the consumers may impose restrictions on the accepted values.
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct EntityExternalId(String);
 

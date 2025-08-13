@@ -386,6 +386,13 @@ impl EntityCache {
     pub fn cache_early_data_message(&mut self, message: MqttMessage) {
         self.pending_entities.cache_early_data_message(message)
     }
+
+    pub fn get_all_external_ids(&self) -> Vec<EntityExternalId> {
+        let mut ids: Vec<EntityExternalId> =
+            self.external_id_map.keys().map(Clone::clone).collect();
+        ids.sort();
+        ids
+    }
 }
 
 #[cfg(test)]
