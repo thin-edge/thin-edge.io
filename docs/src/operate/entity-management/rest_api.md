@@ -23,7 +23,7 @@ The payload must contain at least the `@topic-id` and `@type` of the entity: whe
 :::note
 The topic id of the entity is not specified in the URL path, but in the payload itself,
 unlike the MQTT API where it is specified in the MQTT topic.
-:::note
+:::
 
 Other supported (optional) fields in the registration payload include:
 - `@parent`: Topic ID of the parent entity.
