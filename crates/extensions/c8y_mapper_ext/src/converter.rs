@@ -188,7 +188,7 @@ pub struct CumulocityConverter {
     pub recently_completed_commands: HashMap<CmdId, Instant>,
     active_commands_last_cleared: Instant,
 
-    supported_operations: SupportedOperations,
+    pub supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
 }
 
@@ -1319,6 +1319,8 @@ impl CumulocityConverter {
                 Ok(vec![])
             }
 
+            Channel::Signal { signal_type } => self.process_signal_message(&source, signal_type),
+
             Channel::Health => self.process_health_status_message(&source, message).await,
 
             _ => Ok(vec![]),
@@ -1393,13 +1395,9 @@ impl CumulocityConverter {
     fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut messages = self.base_inventory_data()?;
 
-        self.supported_operations
-            .load_all(&self.config.device_id, &self.config.bridge_config)?;
-        let supported_operations_message = self.supported_operations.create_supported_operations(
-            &self.config.device_id,
-            &self.config.bridge_config.c8y_prefix,
-        )?;
-
+        // supported operations for the main device
+        let supported_operations_message =
+            self.load_and_create_supported_operations_messages(&self.config.device_id.clone())?;
         let pending_operations_message =
             create_get_pending_operations_message(&self.config.bridge_config.c8y_prefix);
 
@@ -1408,6 +1406,19 @@ impl CumulocityConverter {
             pending_operations_message,
         ]);
         Ok(messages)
+    }
+
+    pub fn load_and_create_supported_operations_messages(
+        &mut self,
+        external_id: &str,
+    ) -> Result<MqttMessage, ConversionError> {
+        self.supported_operations
+            .load_all(external_id, &self.config.bridge_config)?;
+        let supported_operations_message = self
+            .supported_operations
+            .create_supported_operations(external_id, &self.config.bridge_config.c8y_prefix)?;
+
+        Ok(supported_operations_message)
     }
 
     pub fn sync_messages(&mut self) -> Vec<MqttMessage> {
