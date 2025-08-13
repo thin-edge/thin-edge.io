@@ -21,6 +21,7 @@ pub struct TwinManagerConfig {
     pub config_dir: PathBuf,
     pub mqtt_schema: MqttSchema,
     pub device_topic_id: EntityTopicId,
+    pub agent_topic_id: EntityTopicId,
 }
 
 impl TwinManagerConfig {
@@ -28,19 +29,30 @@ impl TwinManagerConfig {
         config_dir: PathBuf,
         mqtt_schema: MqttSchema,
         device_topic_id: EntityTopicId,
+        agent_topic_id: EntityTopicId,
     ) -> Self {
         Self {
             config_dir,
             mqtt_schema,
             device_topic_id,
+            agent_topic_id,
         }
     }
 
     pub fn subscriptions(&self) -> TopicFilter {
-        self.mqtt_schema.topics(
+        let mut topics = self.mqtt_schema.topics(
             EntityFilter::Entity(&self.device_topic_id),
             ChannelFilter::EntityTwinData,
-        )
+        );
+
+        // Subscribe to the agent health status just to ensure that at least one message is received by this actor,
+        // which will trigger the inventory data processing.
+        topics.add_all(self.mqtt_schema.topics(
+            EntityFilter::Entity(&self.agent_topic_id),
+            ChannelFilter::Health,
+        ));
+
+        topics
     }
 }
 

@@ -22,6 +22,13 @@ async fn process_inventory_json_content_on_init() {
     });
     let handle = setup(inventory_json);
     let mut mqtt_box = handle.mqtt_box;
+    mqtt_box
+        .send(
+            MqttMessage::from(("te/device/main/service/tedge-agent/status/health", "1"))
+                .with_retain(),
+        )
+        .await
+        .unwrap(); // Skip the above twin update
 
     mqtt_box
         .assert_received([
@@ -66,10 +73,14 @@ pub fn setup(inventory_json: Value) -> TestHandle {
     let config_dir = tmp_dir.path().to_path_buf();
     create_inventory_json_file_with_content(&tmp_dir, &inventory_json.to_string());
 
+    let main_device_id = EntityTopicId::default_main_device();
     let config = TwinManagerConfig::new(
         config_dir,
         mqtt_schema.clone(),
-        EntityTopicId::default_main_device(),
+        main_device_id.clone(),
+        main_device_id
+            .default_service_for_device("tedge-agent")
+            .unwrap(),
     );
 
     let mut mqtt_actor = SimpleMessageBoxBuilder::new("MQTT", 64);

@@ -298,7 +298,7 @@ impl Agent {
         let service_topic_id = device_topic_id.to_default_service_topic_id("tedge-agent")
             .with_context(|| format!("Device topic id {} currently needs default scheme, e.g: 'device/DEVICE_NAME//'", device_topic_id))?;
         let service = Service {
-            service_topic_id,
+            service_topic_id: service_topic_id.clone(),
             device_topic_id: DeviceTopicId::new(device_topic_id.clone()),
         };
         let mqtt_schema = MqttSchema::with_root(self.config.mqtt_topic_root.to_string());
@@ -307,6 +307,7 @@ impl Agent {
             self.config.config_dir.clone().into_std_path_buf(),
             mqtt_schema.clone(),
             device_topic_id.clone(),
+            service_topic_id.into(),
         );
         let twin_manager_builder =
             TwinManagerActorBuilder::new(twin_manager_config, &mut mqtt_actor_builder);

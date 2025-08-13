@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use serde_json::Map;
 use serde_json::Value;
 use std::fs::File;
+use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
@@ -13,6 +14,7 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_utils::file::create_directory_with_defaults;
+use tokio::time::timeout;
 use tracing::error;
 
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
@@ -40,16 +42,23 @@ impl Actor for TwinManagerActor {
             })?;
 
         let mut inventory_map = self.load_inventory_json()?;
-        while let Ok(Some(message)) =
-            tokio::time::timeout(std::time::Duration::from_secs(3), self.messages.recv()).await
-        {
-            if let Ok((_, Channel::EntityTwinData { fragment_key })) = self
-                .config
-                .mqtt_schema
-                .entity_channel_of(message.topic.as_ref())
-            {
-                // If a twin data message for a the same key is available, ignore the value in inventory json
-                inventory_map.remove(&fragment_key);
+        // Wait until the very fist message is received (at least the agent health status is guaranteed)
+        if let Some(mut msg) = self.messages.recv().await {
+            loop {
+                if let Ok((_, Channel::EntityTwinData { fragment_key })) = self
+                    .config
+                    .mqtt_schema
+                    .entity_channel_of(msg.topic.as_ref())
+                {
+                    // If a twin data message for the same key is available,
+                    // ignore the value in inventory JSON
+                    inventory_map.remove(&fragment_key);
+                }
+
+                msg = match timeout(Duration::from_secs(1), self.messages.recv()).await {
+                    Ok(Some(next)) => next,
+                    _ => break,
+                };
             }
         }
 
