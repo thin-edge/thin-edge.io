@@ -629,7 +629,7 @@ mod tests {
             profile_name: None,
             mqtt_schema: MqttSchema::with_root("te".into()),
             keepalive_interval: Duration::from_secs(45),
-            sub_topics: TemplatesSet::try_from(vec!["test/topic", "demo/topic"])?,
+            sub_topics: TemplatesSet::from(vec!["test/topic", "demo/topic"]),
         };
 
         let bridge = BridgeConfig::from(params);
@@ -692,7 +692,7 @@ mod tests {
             profile_name: None,
             mqtt_schema: MqttSchema::with_root("te".into()),
             keepalive_interval: Duration::from_secs(45),
-            sub_topics: TemplatesSet::try_from(vec!["test/topic", "demo/topic"])?,
+            sub_topics: TemplatesSet::from(vec!["test/topic", "demo/topic"]),
         };
 
         let bridge = BridgeConfig::from(params);
