@@ -79,5 +79,4 @@ Custom Setup
     Copy Configuration Files
 
 Copy Configuration Files
-    Execute Command    mkdir /etc/tedge/flows/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*    /etc/tedge/flows/
