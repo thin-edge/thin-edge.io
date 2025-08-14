@@ -41,6 +41,11 @@
                 {"name": "tedge-mapper-c8y.target", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
             ]
         },
+        "tedge-flows": {
+            "services": [
+                {"name": "tedge-flows", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
+            ]
+        },
         "tedge-p11-server": {
             "services": [
                 {"name": "tedge-p11-server.socket", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
