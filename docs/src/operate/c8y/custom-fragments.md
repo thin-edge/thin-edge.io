@@ -71,7 +71,12 @@ The example above will result in the following fragment being added to the devic
 
 ### File-based Static Fragments {#static-fragments}
 
-The file based approach is intended for static information, e.g. build date, or a custom image type assigned to the device. The values are only published on startup of the **tedge-mapper-c8y** service.
+The file based approach is intended for static information, e.g. build date, or a custom image type assigned to the device.
+The values are only published on startup of the **tedge-agent** service.
+
+:::note
+This feature is available on main device as well as child devices where `tedge-agent` is installed.
+:::
 
 If you wish to add more fragments to Cumulocity, you can do so by populating `/etc/tedge/device/inventory.json`.
 
@@ -87,7 +92,7 @@ An example `inventory.json` looks something like this:
 }
 ```
 
-To see the changes you need to restart the tedge-agent.
+To see the changes you need to restart the `tedge-agent`.
 If you're using systemctl you can do: 
 
 ```sh

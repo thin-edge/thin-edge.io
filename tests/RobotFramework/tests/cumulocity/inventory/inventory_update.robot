@@ -64,7 +64,7 @@ Custom Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist    ${DEVICE_SN}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/inventory.json    /etc/tedge/device/
-    ThinEdgeIO.Disconnect Then Connect Mapper    c8y
+    Restart Service    tedge-agent
 
 Validate inventory fragment updates via twin topics
     [Arguments]    ${device_xid}=${DEVICE_SN}    ${device_tid}=${device_xid}

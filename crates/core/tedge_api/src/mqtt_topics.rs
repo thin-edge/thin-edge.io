@@ -532,6 +532,12 @@ impl ServiceTopicId {
     }
 }
 
+impl From<ServiceTopicId> for EntityTopicId {
+    fn from(value: ServiceTopicId) -> Self {
+        value.0
+    }
+}
+
 impl From<EntityTopicId> for ServiceTopicId {
     fn from(value: EntityTopicId) -> Self {
         Self::new(value)
