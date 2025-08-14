@@ -21,9 +21,11 @@ use cryptoki::mechanism::MechanismType;
 use cryptoki::object::Attribute;
 use cryptoki::object::AttributeType;
 use cryptoki::object::KeyType;
+use cryptoki::object::ObjectClass;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use rsa::pkcs1::EncodeRsaPublicKey;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
 use rustls::SignatureAlgorithm;
@@ -101,6 +103,10 @@ impl TedgeP11Service for Cryptoki {
         let signature = signing_key.sign(&request.to_sign, request.sigscheme)?;
         Ok(SignResponse(signature))
     }
+
+    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
+        self.get_public_key_pem(uri)
+    }
 }
 
 impl Cryptoki {
@@ -126,23 +132,7 @@ impl Cryptoki {
         })
     }
 
-    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
-        let mut config_uri = self
-            .config
-            .uri
-            .as_deref()
-            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        let request_uri = uri
-            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        config_uri.append_attributes(request_uri);
-        let uri_attributes = config_uri;
-
+    fn open_session(&self, uri_attributes: &uri::Pkcs11Uri) -> anyhow::Result<Session> {
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
 
@@ -178,8 +168,16 @@ impl Cryptoki {
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
 
+        Ok(session)
+    }
+
+    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
+
         // get the signing key
-        let key = Self::find_key_by_attributes(&uri_attributes, &session)?;
+        let key =
+            Self::find_key_by_attributes(&uri_attributes, &session, ObjectClass::PRIVATE_KEY)?;
         let key_type = session
             .get_attributes(key, &[AttributeType::KeyType])?
             .into_iter()
@@ -218,12 +216,14 @@ impl Cryptoki {
                     session,
                     key,
                     sigscheme,
+                    secondary_schemes: Vec::new(),
                 }
             }
             KeyType::RSA => Pkcs11Signer {
                 session,
                 key,
                 sigscheme: SigScheme::RsaPssSha256,
+                secondary_schemes: vec![SigScheme::RsaPkcs1Sha256],
             },
             _ => anyhow::bail!("unsupported key type"),
         };
@@ -231,15 +231,21 @@ impl Cryptoki {
         Ok(key)
     }
 
+    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
+        let uri_attributes = self.request_uri(uri)?;
+        let session = self.open_session(&uri_attributes)?;
+
+        let key = Self::find_key_by_attributes(&uri_attributes, &session, ObjectClass::PUBLIC_KEY)?;
+
+        export_public_key_pem(&session, key)
+    }
+
     fn find_key_by_attributes(
         uri: &uri::Pkcs11Uri,
         session: &Session,
+        class: ObjectClass,
     ) -> anyhow::Result<ObjectHandle> {
-        let mut key_template = vec![
-            Attribute::Token(true),
-            Attribute::Private(true),
-            Attribute::Sign(true),
-        ];
+        let mut key_template = vec![Attribute::Token(true), Attribute::Class(class)];
         if let Some(object) = &uri.object {
             key_template.push(Attribute::Label(object.as_bytes().to_vec()));
         }
@@ -247,14 +253,14 @@ impl Cryptoki {
             key_template.push(Attribute::Id(id.clone()));
         }
 
-        trace!(?key_template, "Finding a key");
+        trace!(?key_template, ?uri.object, "Finding a key");
 
         let mut keys = session
             .find_objects(&key_template)
             .context("Failed to find private key objects")?
             .into_iter();
 
-        let key = keys.next().context("Failed to find a private key")?;
+        let key = keys.next().context("Failed to find a key")?;
         if keys.len() > 0 {
             warn!(
                 "Multiple keys were found. If the wrong one was chosen, please use a URI that uniquely identifies a key."
@@ -263,6 +269,89 @@ impl Cryptoki {
 
         Ok(key)
     }
+
+    fn request_uri<'a>(
+        &'a self,
+        request_uri: Option<&'a str>,
+    ) -> anyhow::Result<uri::Pkcs11Uri<'a>> {
+        let mut config_uri = self
+            .config
+            .uri
+            .as_deref()
+            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        let request_uri = request_uri
+            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        config_uri.append_attributes(request_uri);
+        Ok(config_uri)
+    }
+}
+
+/// Given a handle to a private or a public key object, export public key in PEM format.
+fn export_public_key_pem(session: &Session, key: ObjectHandle) -> anyhow::Result<String> {
+    let keytype = session
+        .get_attributes(key, &[AttributeType::KeyType])?
+        .into_iter()
+        .next()
+        .context("object is not a key")?;
+    let Attribute::KeyType(keytype) = keytype else {
+        // really all the instances where pkcs11 gives us different attribute than the one we asked for are the same error: invalid behaviour of pkcs11 library or the token
+        anyhow::bail!("No keytype");
+    };
+
+    let pubkey_der = match keytype {
+        KeyType::RSA => {
+            let attrs = session.get_attributes(
+                key,
+                &[AttributeType::Modulus, AttributeType::PublicExponent],
+            )?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
+
+            let Attribute::Modulus(modulus) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No modulus");
+            };
+            let modulus = rsa::BigUint::from_bytes_be(&modulus);
+
+            let Attribute::PublicExponent(exponent) = attrs.next().context("Not modulus")? else {
+                anyhow::bail!("No public exponent");
+            };
+            let exponent = rsa::BigUint::from_bytes_be(&exponent);
+
+            let pubkey = rsa::RsaPublicKey::new(modulus, exponent)
+                .context("Failed to construct RSA pubkey from components")?;
+
+            pubkey
+                .to_pkcs1_der()
+                .context("Failed to serialize pubkey as DER")?
+                .into_vec()
+        }
+
+        KeyType::EC => {
+            let attrs = session.get_attributes(key, &[AttributeType::EcPoint])?;
+            trace!(?attrs);
+            let mut attrs = attrs.into_iter();
+
+            // Elliptic-Curve-Point-to-Octet-String from SEC 1: Elliptic Curve Cryptography (Version 2.0) section 2.3.3 (page 10)
+            let ec_point = attrs.next().context("Failed to get pubkey EcPoint")?;
+            let Attribute::EcPoint(ec_point) = ec_point else {
+                anyhow::bail!("No ec point");
+            };
+            let (_, ec_point) =
+                asn1_rs::OctetString::from_der(&ec_point).context("Invalid EcPoint")?;
+            ec_point.into_cow().to_vec()
+        }
+        _ => anyhow::bail!("unsupported keytype"),
+    };
+    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+    let pubkey_pem = pem::encode(&pubkey_pem);
+
+    Ok(pubkey_pem)
 }
 
 #[derive(Debug, Clone)]
@@ -275,6 +364,7 @@ pub struct Pkcs11Signer {
     session: Pkcs11Session,
     key: ObjectHandle,
     pub sigscheme: SigScheme,
+    pub secondary_schemes: Vec<SigScheme>,
 }
 
 impl Pkcs11Signer {
@@ -409,10 +499,20 @@ impl SigningKey for Pkcs11Signer {
         let key_scheme = self.sigscheme.into();
         if offered.contains(&key_scheme) {
             debug!("Matching scheme: {key_scheme:?}");
-            Some(Box::new(self.clone()))
-        } else {
-            None
+            return Some(Box::new(self.clone()));
         }
+
+        for scheme in &self.secondary_schemes {
+            let key_scheme = (*scheme).into();
+            if offered.contains(&key_scheme) {
+                debug!("Matching scheme: {key_scheme:?}");
+                let mut signer = self.clone();
+                signer.sigscheme = *scheme;
+                return Some(Box::new(signer));
+            }
+        }
+
+        None
     }
 
     fn algorithm(&self) -> SignatureAlgorithm {

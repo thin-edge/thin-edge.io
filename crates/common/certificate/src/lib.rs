@@ -7,6 +7,7 @@ use sha1::Digest;
 use sha1::Sha1;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_p11_server::service::ChooseSchemeRequest;
 use tedge_p11_server::CryptokiConfig;
 use time::Duration;
 use time::OffsetDateTime;
@@ -183,6 +184,45 @@ impl KeyKind {
             },
             PublicKey::RSA(_) => SignatureAlgorithm::RsaPkcs1Sha256,
             _ => return Err(anyhow::anyhow!("Unsupported public key. Only P256/P384/RSA2048/RSA3072/RSA4096 are supported for certificate renewal").into())
+        };
+
+        Ok(Self::ReuseRemote(RemoteKeyPair {
+            cryptoki_config,
+            public_key_raw,
+            algorithm,
+        }))
+    }
+
+    pub fn from_cryptoki(cryptoki_config: CryptokiConfig) -> Result<Self, CertificateError> {
+        let cryptoki = tedge_p11_server::tedge_p11_service(cryptoki_config.clone())?;
+        let pubkey_pem = cryptoki.get_public_key_pem(None)?;
+        let public_key = pem::parse(&pubkey_pem).unwrap();
+        let public_key_raw = public_key.into_contents();
+
+        let signature_algorithm = cryptoki.choose_scheme(ChooseSchemeRequest {
+            offered: vec![
+                tedge_p11_server::service::SignatureScheme(
+                    rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
+                ),
+                tedge_p11_server::service::SignatureScheme(
+                    rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
+                ),
+                tedge_p11_server::service::SignatureScheme(
+                    rustls::SignatureScheme::RSA_PKCS1_SHA256,
+                ),
+            ],
+            uri: None,
+        })?;
+        let signature_algorithm = signature_algorithm
+            .scheme
+            .context("No supported scheme found")?
+            .0;
+
+        let algorithm = match signature_algorithm {
+            rustls::SignatureScheme::ECDSA_NISTP256_SHA256 => SignatureAlgorithm::EcdsaP256Sha256,
+            rustls::SignatureScheme::ECDSA_NISTP384_SHA384 => SignatureAlgorithm::EcdsaP384Sha384,
+            rustls::SignatureScheme::RSA_PKCS1_SHA256 => SignatureAlgorithm::RsaPkcs1Sha256,
+            _ => return Err(anyhow::anyhow!("Unsupported signature scheme").into()),
         };
 
         Ok(Self::ReuseRemote(RemoteKeyPair {

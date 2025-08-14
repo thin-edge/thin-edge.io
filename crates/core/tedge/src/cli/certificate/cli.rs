@@ -198,15 +198,9 @@ impl BuildCommand for TEdgeCertCli {
                     ));
                 debug!(?key);
 
-                let current_cert = config
-                    .device_cert_path(cloud.as_ref())
-                    .map(|c| c.to_owned())
-                    .ok();
-                debug!(?current_cert);
                 let cmd = CreateCsrCmd {
                     id: get_device_id(id, config, &cloud)?,
                     key,
-                    current_cert,
                     // Use output file instead of csr_path from tedge config if provided
                     csr_path: if let Some(output_path) = output_path {
                         output_path

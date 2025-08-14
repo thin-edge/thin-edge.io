@@ -1,9 +1,17 @@
 disallowed-types = [
     { path = "reqwest::ClientBuilder", reason = "Use `certificate::CloudRootCerts` type instead to take root_cert_path configurations into account" },
+    
+    # advisory resolved by forbidding these methods and types; see audit.toml
+    {path = "rsa::traits::Decryptor", reason="RUSTSEC-2023-0071"},
+    {path = "rsa::RsaPrivateKey", reason="RUSTSEC-2023-0071"},
+    {path = "rsa::pkcs1v15::DecryptingKey", reason="RUSTSEC-2023-0071"},
+    {path = "rsa::oaep::Oaep", reason="RUSTSEC-2023-0071"},
+    {path = "rsa::oaep::DecryptingKey", reason="RUSTSEC-2023-0071"},
 ]
 disallowed-methods = [
     { path = "reqwest::Client::builder", reason = "Use `certificate::CloudRootCerts` type instead to take root_cert_path configurations into account" },
     { path = "reqwest::Client::new", reason = "Use `certificate::CloudRootCerts` type instead to take root_cert_path configurations into account" },
     { path = "hyper_rustls::HttpsConnectorBuilder::with_native_roots", reason = "Use .with_tls_config(tedge_config.cloud_client_tls_config()) instead to use configured root certificate paths for the connected cloud" },
+    {path = "rsa::RsaPrivateKey::decrypt"},
 ]
 large-error-threshold = 256
