@@ -86,8 +86,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Without pinning the version, cargo-udeps fails with:
+      # error[E0275]: overflow evaluating the requirement `{async fn body of try_exists<&std::path::Path>()}: std::marker::Send`
+      # |
+      # = help: consider increasing the recursion limit by adding a `#![recursion_limit = "256"]` attribute to your crate (`c8y_mapper_ext`)
+      # (using the attribute doesn't help)
+      # TODO: unpin once the regression is removed from nightly
       - name: Install nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-08-01
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
