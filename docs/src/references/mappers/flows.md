@@ -2,7 +2,6 @@
 title: Extensible mapper and user-provided Flows
 tags: [Reference, Mappers, Cloud]
 sidebar_position: 2
-draft: true
 ---
 
 import ProposalBanner from '@site/src/components/ProposalBanner'
