@@ -504,7 +504,11 @@ async fn half_bridge(
                 let topics = topics.clone();
                 // We have to subscribe to this asynchronously (i.e. in a task) since we might at
                 // this point have filled our cloud event loop with outgoing messages
-                tokio::spawn(async move { recv_client.subscribe_many(topics).await.unwrap() });
+                tokio::spawn(async move {
+                    for topic in topics {
+                        recv_client.subscribe(topic).await.unwrap()
+                    }
+                });
 
                 session_present = Some(conn_ack.session_present);
 
@@ -605,7 +609,7 @@ impl MqttEvents for EventLoop {
 }
 #[async_trait::async_trait]
 trait MqttClient: MqttAck + Clone + Send + Sync {
-    async fn subscribe_many(&self, topics: Vec<SubscribeFilter>) -> Result<(), ClientError>;
+    async fn subscribe(&self, topic: SubscribeFilter) -> Result<(), ClientError>;
     async fn publish(
         &self,
         topic: String,
@@ -617,9 +621,10 @@ trait MqttClient: MqttAck + Clone + Send + Sync {
 
 #[async_trait::async_trait]
 impl MqttClient for AsyncClient {
-    async fn subscribe_many(&self, topics: Vec<SubscribeFilter>) -> Result<(), ClientError> {
-        AsyncClient::subscribe_many(self, topics).await
+    async fn subscribe(&self, topic: SubscribeFilter) -> Result<(), ClientError> {
+        AsyncClient::subscribe(self, topic.path, topic.qos).await
     }
+
     async fn publish(
         &self,
         topic: String,

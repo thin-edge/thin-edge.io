@@ -12,10 +12,14 @@ use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
+use mqtt_channel::Topic;
 use std::borrow::Cow;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::ProfileName;
+use tedge_config::tedge_toml::TEdgeConfigReaderC8y;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
@@ -25,6 +29,7 @@ use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::use_credentials;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
+use tedge_mqtt_bridge::MqttOptions;
 use tedge_mqtt_bridge::QoS;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
@@ -53,179 +58,12 @@ impl TEdgeComponent for CumulocityMapper {
         let c8y_mapper_config =
             C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, c8y_profile)?;
         if tedge_config.mqtt.bridge.built_in {
-            let smartrest_1_topics = c8y_config
-                .smartrest1
-                .templates
-                .0
-                .iter()
-                .map(|id| Cow::Owned(format!("s/dl/{id}")));
-
-            let smartrest_2_topics = c8y_config
-                .smartrest
-                .templates
-                .0
-                .iter()
-                .map(|id| Cow::Owned(format!("s/dc/{id}")));
-
-            let use_certificate = c8y_config
-                .auth_method
-                .is_certificate(&c8y_config.credentials_path);
-            let cloud_topics = [
-                ("s/dt", true),
-                ("s/ds", true),
-                ("s/dat", use_certificate),
-                ("s/e", true),
-                ("devicecontrol/notifications", true),
-                ("error", true),
-            ]
-            .into_iter()
-            .filter_map(|(topic, active)| {
-                if active {
-                    Some(Cow::Borrowed(topic))
-                } else {
-                    None
-                }
-            })
-            .chain(smartrest_1_topics)
-            .chain(smartrest_2_topics);
-
-            let mut tc = BridgeConfig::new();
-            let local_prefix = format!("{}/", c8y_config.bridge.topic_prefix.as_str());
-
-            for topic in cloud_topics {
-                tc.forward_from_remote(topic, local_prefix.clone(), "")?;
-            }
-
-            // Templates
-            tc.forward_from_local("s/ut/#", local_prefix.clone(), "")?;
-
-            // Static templates
-            tc.forward_from_local("s/us/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("t/us/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("q/us/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("c/us/#", local_prefix.clone(), "")?;
-
-            // SmartREST1
-            if !use_certificate {
-                tc.forward_from_local("s/ul/#", local_prefix.clone(), "")?;
-                tc.forward_from_local("t/ul/#", local_prefix.clone(), "")?;
-                tc.forward_from_local("q/ul/#", local_prefix.clone(), "")?;
-                tc.forward_from_local("c/ul/#", local_prefix.clone(), "")?;
-            }
-
-            // SmartREST2
-            tc.forward_from_local("s/uc/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("t/uc/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("q/uc/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("c/uc/#", local_prefix.clone(), "")?;
-
-            // c8y JSON
-            tc.forward_from_local(
-                "inventory/managedObjects/update/#",
-                local_prefix.clone(),
-                "",
+            let (tc, cloud_config) = core_mqtt_bridge_config(
+                &tedge_config,
+                c8y_config,
+                &c8y_mapper_config,
+                &c8y_mapper_name,
             )?;
-            tc.forward_from_local(
-                "measurement/measurements/create/#",
-                local_prefix.clone(),
-                "",
-            )?;
-            tc.forward_from_local(
-                "measurement/measurements/createBulk/#",
-                local_prefix.clone(),
-                "",
-            )?;
-            tc.forward_from_local("event/events/create/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("event/events/createBulk/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("alarm/alarms/create/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("alarm/alarms/createBulk/#", local_prefix.clone(), "")?;
-
-            // JWT token
-            if use_certificate {
-                tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
-            }
-
-            let c8y = c8y_config.mqtt.or_config_not_set()?;
-            let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
-                c8y_config.device.id()?,
-                c8y.host().to_string(),
-                c8y.port().into(),
-            );
-            // Cumulocity tells us not to not set clean session to false, so don't
-            // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
-            cloud_config.set_clean_session(true);
-
-            if use_certificate {
-                let tls_config = tedge_config
-                    .mqtt_client_config_rustls(c8y_config)
-                    .context("Failed to create MQTT TLS config")?;
-                cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
-            } else {
-                // TODO(marcel): integrate credentials auth into MqttAuthConfig?
-                let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
-                use_credentials(
-                    &mut cloud_config,
-                    &c8y_config.root_cert_path,
-                    username,
-                    password,
-                )?;
-            }
-
-            let main_device_xid: EntityExternalId = c8y_config.device.id()?.into();
-            let service_type = &tedge_config.service.ty;
-            let service_type = if service_type.is_empty() {
-                "service".to_string()
-            } else {
-                service_type.to_string()
-            };
-
-            // FIXME: this will not work if `mqtt.device_topic_id` is not in default scheme
-
-            // there is one mapper instance per cloud per thin-edge instance, perhaps we should use some
-            // predefined topic id instead of trying to derive it from current device?
-            let entity_topic_id: EntityTopicId = tedge_config
-                .mqtt
-                .device_topic_id
-                .clone()
-                .parse()
-                .context("Invalid device_topic_id")?;
-
-            let mapper_service_topic_id = entity_topic_id
-                .default_service_for_device(&c8y_mapper_name)
-                .context("Can't derive service name if device topic id not in default scheme")?;
-
-            let mapper_service_external_id = CumulocityConverter::map_to_c8y_external_id(
-                &mapper_service_topic_id,
-                &main_device_xid,
-            );
-
-            let last_will_message_mapper =
-                c8y_api::smartrest::inventory::service_creation_message_payload(
-                    mapper_service_external_id.as_ref(),
-                    &c8y_mapper_name,
-                    service_type.as_str(),
-                    "down",
-                )?
-                .into_inner();
-            let last_will_message_bridge =
-                c8y_api::smartrest::inventory::service_creation_message_payload(
-                    mapper_service_external_id.as_ref(),
-                    &c8y_mapper_config.bridge_service_name,
-                    service_type.as_str(),
-                    "down",
-                )?
-                .into_inner();
-
-            cloud_config.set_last_will(LastWill {
-                topic: "s/us".into(),
-                qos: QoS::AtLeastOnce,
-                message: format!("{last_will_message_bridge}\n{last_will_message_mapper}").into(),
-                retain: false,
-            });
-            cloud_config.set_keep_alive(c8y_config.bridge.keepalive_interval.duration());
-
-            configure_proxy(&tedge_config, &mut cloud_config)?;
-
             runtime
                 .spawn(
                     MqttBridgeActorBuilder::new(
@@ -238,6 +76,24 @@ impl TEdgeComponent for CumulocityMapper {
                     .await,
                 )
                 .await?;
+
+            if c8y_config.mqtt_service.enabled {
+                let (bridge_config, bridge_service_name, bridge_health_topic, cloud_config) =
+                    mqtt_service_bridge_config(&tedge_config, c8y_config)?;
+
+                runtime
+                    .spawn(
+                        MqttBridgeActorBuilder::new(
+                            &tedge_config,
+                            &bridge_service_name,
+                            &bridge_health_topic,
+                            bridge_config,
+                            cloud_config,
+                        )
+                        .await,
+                    )
+                    .await?;
+            }
         } else if tedge_config.proxy.address.or_none().is_some() {
             warn!("`proxy.address` is configured without the built-in bridge enabled. The bridge MQTT connection to the cloud will {} communicate via the configured proxy.", "not".bold())
         }
@@ -359,4 +215,245 @@ pub fn service_monitor_client_config(
         .with_session_name(format!("last_will_{prefix}_mapper"))
         .with_last_will_message(last_will_message);
     Ok(mqtt_config)
+}
+
+fn core_mqtt_bridge_config(
+    tedge_config: &TEdgeConfig,
+    c8y_config: &TEdgeConfigReaderC8y,
+    c8y_mapper_config: &C8yMapperConfig,
+    c8y_mapper_name: &str,
+) -> Result<(BridgeConfig, MqttOptions), anyhow::Error> {
+    let smartrest_1_topics = c8y_config
+        .smartrest1
+        .templates
+        .0
+        .iter()
+        .map(|id| Cow::Owned(format!("s/dl/{id}")));
+
+    let smartrest_2_topics = c8y_config
+        .smartrest
+        .templates
+        .0
+        .iter()
+        .map(|id| Cow::Owned(format!("s/dc/{id}")));
+
+    let use_certificate = c8y_config
+        .auth_method
+        .is_certificate(&c8y_config.credentials_path);
+    let cloud_topics = [
+        ("s/dt", true),
+        ("s/ds", true),
+        ("s/dat", use_certificate),
+        ("s/e", true),
+        ("devicecontrol/notifications", true),
+        ("error", true),
+    ]
+    .into_iter()
+    .filter_map(|(topic, active)| {
+        if active {
+            Some(Cow::Borrowed(topic))
+        } else {
+            None
+        }
+    })
+    .chain(smartrest_1_topics)
+    .chain(smartrest_2_topics);
+
+    let mut tc = BridgeConfig::new();
+    let local_prefix = format!("{}/", c8y_config.bridge.topic_prefix.as_str());
+
+    for topic in cloud_topics {
+        tc.forward_from_remote(topic, local_prefix.clone(), "")?;
+    }
+
+    // Templates
+    tc.forward_from_local("s/ut/#", local_prefix.clone(), "")?;
+
+    // Static templates
+    tc.forward_from_local("s/us/#", local_prefix.clone(), "")?;
+    tc.forward_from_local("t/us/#", local_prefix.clone(), "")?;
+    tc.forward_from_local("q/us/#", local_prefix.clone(), "")?;
+    tc.forward_from_local("c/us/#", local_prefix.clone(), "")?;
+
+    // SmartREST1
+    if !use_certificate {
+        tc.forward_from_local("s/ul/#", local_prefix.clone(), "")?;
+        tc.forward_from_local("t/ul/#", local_prefix.clone(), "")?;
+        tc.forward_from_local("q/ul/#", local_prefix.clone(), "")?;
+        tc.forward_from_local("c/ul/#", local_prefix.clone(), "")?;
+    }
+
+    // SmartREST2
+    tc.forward_from_local("s/uc/#", local_prefix.clone(), "")?;
+    tc.forward_from_local("t/uc/#", local_prefix.clone(), "")?;
+    tc.forward_from_local("q/uc/#", local_prefix.clone(), "")?;
+    tc.forward_from_local("c/uc/#", local_prefix.clone(), "")?;
+
+    // c8y JSON
+    tc.forward_from_local(
+        "inventory/managedObjects/update/#",
+        local_prefix.clone(),
+        "",
+    )?;
+    tc.forward_from_local(
+        "measurement/measurements/create/#",
+        local_prefix.clone(),
+        "",
+    )?;
+    tc.forward_from_local(
+        "measurement/measurements/createBulk/#",
+        local_prefix.clone(),
+        "",
+    )?;
+    tc.forward_from_local("event/events/create/#", local_prefix.clone(), "")?;
+    tc.forward_from_local("event/events/createBulk/#", local_prefix.clone(), "")?;
+    tc.forward_from_local("alarm/alarms/create/#", local_prefix.clone(), "")?;
+    tc.forward_from_local("alarm/alarms/createBulk/#", local_prefix.clone(), "")?;
+
+    // JWT token
+    if use_certificate {
+        tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
+    }
+
+    let c8y = c8y_config.mqtt.or_config_not_set()?;
+    let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
+        c8y_config.device.id()?,
+        c8y.host().to_string(),
+        c8y.port().into(),
+    );
+    // Cumulocity tells us not to not set clean session to false, so don't
+    // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
+    cloud_config.set_clean_session(true);
+
+    if use_certificate {
+        let tls_config = tedge_config
+            .mqtt_client_config_rustls(c8y_config)
+            .context("Failed to create MQTT TLS config")?;
+        cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
+    } else {
+        // TODO(marcel): integrate credentials auth into MqttAuthConfig?
+        let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
+        use_credentials(
+            &mut cloud_config,
+            &c8y_config.root_cert_path,
+            username,
+            password,
+        )?;
+    }
+
+    let main_device_xid: EntityExternalId = c8y_config.device.id()?.into();
+    let service_type = &tedge_config.service.ty;
+    let service_type = if service_type.is_empty() {
+        "service".to_string()
+    } else {
+        service_type.to_string()
+    };
+
+    // FIXME: this will not work if `mqtt.device_topic_id` is not in default scheme
+
+    // there is one mapper instance per cloud per thin-edge instance, perhaps we should use some
+    // predefined topic id instead of trying to derive it from current device?
+    let entity_topic_id: EntityTopicId = tedge_config
+        .mqtt
+        .device_topic_id
+        .clone()
+        .parse()
+        .context("Invalid device_topic_id")?;
+
+    let mapper_service_topic_id = entity_topic_id
+        .default_service_for_device(c8y_mapper_name)
+        .context("Can't derive service name if device topic id not in default scheme")?;
+
+    let mapper_service_external_id =
+        CumulocityConverter::map_to_c8y_external_id(&mapper_service_topic_id, &main_device_xid);
+
+    let last_will_message_mapper = c8y_api::smartrest::inventory::service_creation_message_payload(
+        mapper_service_external_id.as_ref(),
+        c8y_mapper_name,
+        service_type.as_str(),
+        "down",
+    )?
+    .into_inner();
+    let last_will_message_bridge = c8y_api::smartrest::inventory::service_creation_message_payload(
+        mapper_service_external_id.as_ref(),
+        &c8y_mapper_config.bridge_service_name,
+        service_type.as_str(),
+        "down",
+    )?
+    .into_inner();
+
+    cloud_config.set_last_will(LastWill {
+        topic: "s/us".into(),
+        qos: QoS::AtLeastOnce,
+        message: format!("{last_will_message_bridge}\n{last_will_message_mapper}").into(),
+        retain: false,
+    });
+    cloud_config.set_keep_alive(c8y_config.bridge.keepalive_interval.duration());
+
+    configure_proxy(tedge_config, &mut cloud_config)?;
+    Ok((tc, cloud_config))
+}
+
+fn mqtt_service_bridge_config(
+    tedge_config: &TEdgeConfig,
+    c8y_config: &TEdgeConfigReaderC8y,
+) -> Result<(BridgeConfig, String, Topic, MqttOptions), anyhow::Error> {
+    let use_certificate = c8y_config
+        .auth_method
+        .is_certificate(&c8y_config.credentials_path);
+    let sub_topics = c8y_config.mqtt_service.topics.clone();
+    let cloud_topics = sub_topics.0.into_iter().map(Cow::Owned);
+
+    let mut tc = BridgeConfig::new();
+    let local_prefix = format!("{}/", c8y_config.mqtt_service.topic_prefix.as_str());
+
+    for topic in cloud_topics {
+        tc.forward_bidirectionally(topic, local_prefix.clone(), "")?;
+    }
+
+    // Templates
+    tc.forward_from_local("#", local_prefix.clone(), "")?;
+
+    let c8y = c8y_config.mqtt_service.url.or_config_not_set()?;
+    let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
+        c8y_config.device.id()?,
+        c8y.host().to_string(),
+        c8y.port().into(),
+    );
+    // Cumulocity tells us not to not set clean session to false, so don't
+    // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
+    cloud_config.set_clean_session(true);
+
+    if use_certificate {
+        let tls_config = tedge_config
+            .mqtt_client_config_rustls(c8y_config)
+            .context("Failed to create MQTT TLS config")?;
+        cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
+    } else {
+        // TODO(marcel): integrate credentials auth into MqttAuthConfig?
+        let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
+        use_credentials(
+            &mut cloud_config,
+            &c8y_config.root_cert_path,
+            username,
+            password,
+        )?;
+    }
+
+    let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+    let bridge_service_name = format!(
+        "tedge-mapper-bridge-{}",
+        c8y_config.mqtt_service.topic_prefix.as_str()
+    );
+    let device_topic_id: EntityTopicId = tedge_config
+        .mqtt
+        .device_topic_id
+        .clone()
+        .parse()
+        .context("Invalid device_topic_id")?;
+
+    let bridge_health_topic =
+        service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
+
+    Ok((tc, bridge_service_name, bridge_health_topic, cloud_config))
 }
