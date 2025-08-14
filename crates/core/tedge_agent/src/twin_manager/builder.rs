@@ -1,6 +1,6 @@
 use crate::twin_manager::actor::TwinManagerActor;
+use camino::Utf8PathBuf;
 use std::convert::Infallible;
-use std::path::PathBuf;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingSender;
@@ -17,7 +17,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 
 pub struct TwinManagerConfig {
-    pub config_dir: PathBuf,
+    pub config_dir: Utf8PathBuf,
     pub mqtt_schema: MqttSchema,
     pub device_topic_id: EntityTopicId,
     pub agent_topic_id: EntityTopicId,
@@ -25,7 +25,7 @@ pub struct TwinManagerConfig {
 
 impl TwinManagerConfig {
     pub fn new(
-        config_dir: PathBuf,
+        config_dir: Utf8PathBuf,
         mqtt_schema: MqttSchema,
         device_topic_id: EntityTopicId,
         agent_topic_id: EntityTopicId,

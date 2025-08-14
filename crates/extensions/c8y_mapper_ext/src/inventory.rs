@@ -14,13 +14,13 @@ use tedge_mqtt_ext::Topic;
 const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "inventory/managedObjects/update";
 
 impl CumulocityConverter {
-    /// Creates the inventory update messages with fragments from inventory.json file
-    pub(crate) fn base_inventory_data(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
+    /// Creates the inventory update message with c8y_Agent fragment
+    pub(crate) fn c8y_agent_inventory_fragment(&mut self) -> Result<MqttMessage, ConversionError> {
         let agent_fragment = C8yAgentFragment::new()?;
         let json_fragment = agent_fragment.to_json()?;
         let message = self.inventory_update_message(&self.config.device_topic_id, json_fragment)?;
 
-        Ok(vec![message])
+        Ok(message)
     }
 
     /// Convert a twin metadata message into Cumulocity inventory update messages.

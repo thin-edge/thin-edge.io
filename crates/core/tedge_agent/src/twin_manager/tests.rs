@@ -70,7 +70,7 @@ pub(crate) struct TestHandle {
 pub fn setup(inventory_json: Value) -> TestHandle {
     let mqtt_schema = MqttSchema::default();
     let tmp_dir = TempTedgeDir::default();
-    let config_dir = tmp_dir.path().to_path_buf();
+    let config_dir = tmp_dir.utf8_path_buf();
     create_inventory_json_file_with_content(&tmp_dir, &inventory_json.to_string());
 
     let main_device_id = EntityTopicId::default_main_device();

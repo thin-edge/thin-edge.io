@@ -45,6 +45,8 @@ impl Actor for TwinManagerActor {
                     inventory_map.remove(&fragment_key);
                 }
 
+                // If no more messages are available for up to 1 second, that's taken as a cue that
+                // all existing twin messages have been delivered and break out of the loop
                 msg = match timeout(Duration::from_secs(1), self.messages.recv()).await {
                     Ok(Some(next)) => next,
                     _ => break,
@@ -52,10 +54,10 @@ impl Actor for TwinManagerActor {
             }
         }
 
+        // Publish any remaining twin data loaded from the inventory JSON file
         let device_id = self.config.device_topic_id.clone();
         for (key, value) in inventory_map {
-            self.publish_twin_data(&device_id, key.clone(), value.clone())
-                .await;
+            self.publish_twin_data(&device_id, key, value).await;
         }
 
         // This is to prevent the MQTT actor from crashing while trying to send a twin message to this actor later
@@ -85,25 +87,37 @@ impl TwinManagerActor {
             .config
             .config_dir
             .join(INVENTORY_FRAGMENTS_FILE_LOCATION);
-        let file = match File::open(inventory_file_path) {
+        let file = match File::open(&inventory_file_path) {
             Ok(file) => file,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                 return Ok(Map::new());
             }
             Err(err) => {
                 return Err(RuntimeError::ActorError(
-                    format!("Failed to open inventory file: {}", err).into(),
+                    format!(
+                        "Failed to open inventory file at {} with {}",
+                        inventory_file_path, err
+                    )
+                    .into(),
                 ));
             }
         };
         let inventory_json: Value = serde_json::from_reader(file).map_err(|err| {
             RuntimeError::ActorError(
-                format!("Failed to parse inventory file contents as JSON: {}", err).into(),
+                format!(
+                    "Failed to parse the contents of inventory file {} as JSON: {}",
+                    inventory_file_path, err
+                )
+                .into(),
             )
         })?;
         let Value::Object(twin_map) = inventory_json else {
             return Err(RuntimeError::ActorError(
-                "Invalid inventory.json format: expected a JSON object".into(),
+                format!(
+                    "Invalid inventory.json format: expected a JSON object in {}",
+                    inventory_file_path
+                )
+                .into(),
             ));
         };
         Ok(twin_map)

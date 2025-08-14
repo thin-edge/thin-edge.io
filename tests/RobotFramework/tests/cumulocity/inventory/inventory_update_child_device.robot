@@ -5,8 +5,8 @@ Library             String
 Library             Cumulocity
 Library             ThinEdgeIO
 
-Test Setup          Custom Setup
-Test Teardown       Custom Teardown
+Suite Setup         Custom Setup
+Suite Teardown      Custom Teardown
 
 Test Tags           theme:c8y
 

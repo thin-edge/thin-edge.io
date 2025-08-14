@@ -306,7 +306,7 @@ impl Agent {
         let mqtt_schema = MqttSchema::with_root(self.config.mqtt_topic_root.to_string());
 
         let twin_manager_config = TwinManagerConfig::new(
-            self.config.config_dir.clone().into_std_path_buf(),
+            self.config.config_dir.clone(),
             mqtt_schema.clone(),
             device_topic_id.clone(),
             service_topic_id.into(),
