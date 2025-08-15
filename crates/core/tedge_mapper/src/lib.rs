@@ -61,8 +61,9 @@ fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
         }),
         MapperName::Collectd => Box::new(CollectdMapper),
         #[cfg(feature = "c8y")]
-        MapperName::C8y { profile } => Box::new(CumulocityMapper {
+        MapperName::C8y { profile, no_cache } => Box::new(CumulocityMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
+            no_cache,
         }),
         #[cfg(feature = "tedge-flows")]
         MapperName::Flows => Box::new(GenMapper),
@@ -113,6 +114,10 @@ pub enum MapperName {
         /// The cloud profile to use
         #[clap(long)]
         profile: Option<ProfileName>,
+
+        /// Start the mapper without loading from cache
+        #[clap(long = "no-cache")]
+        no_cache: bool,
     },
     Collectd,
     #[cfg(feature = "tedge-flows")]
@@ -135,10 +140,11 @@ impl fmt::Display for MapperName {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-aws@{profile}"),
             #[cfg(feature = "c8y")]
-            MapperName::C8y { profile: None } => write!(f, "tedge-mapper-c8y"),
+            MapperName::C8y { profile: None, .. } => write!(f, "tedge-mapper-c8y"),
             #[cfg(feature = "c8y")]
             MapperName::C8y {
                 profile: Some(profile),
+                ..
             } => write!(f, "tedge-mapper-c8y@{profile}"),
             MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
             #[cfg(feature = "tedge-flows")]

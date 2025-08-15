@@ -35,6 +35,7 @@ use camino::Utf8PathBuf;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -48,6 +49,7 @@ type OperationName = String;
 type OperationNameRef = str;
 
 /// Used to hold and query supported operations for all devices.
+#[derive(Debug)]
 pub struct SupportedOperations {
     /// External ID of the main device.
     ///
@@ -224,6 +226,27 @@ impl SupportedOperations {
         };
 
         Ok(device_xid)
+    }
+
+    /// Get child device external IDs from subdirectory names.
+    pub fn get_child_xids(&self) -> Vec<ExternalId> {
+        let mut ids: Vec<ExternalId> = Vec::new();
+
+        if let Ok(entries) = fs::read_dir(self.base_ops_dir.as_ref()) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if entry_path.is_dir() {
+                    if let Some(dir_name) = entry_path.file_name() {
+                        if let Some(dir_name_str) = dir_name.to_str() {
+                            ids.push(dir_name_str.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        ids.sort();
+        ids
     }
 
     /// Returns a directory path for c8y operations for the given device.
@@ -454,6 +477,7 @@ mod tests {
 
     use operation::OnMessageExec;
     use std::str::FromStr;
+    use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
 
     #[test_case(
@@ -500,6 +524,25 @@ mod tests {
         assert_eq!(
             filter_default,
             vec![("c8y_Something".to_string(), operation1)]
+        );
+    }
+
+    #[test]
+    fn collect_child_device_xids_from_ops_dir() {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("test::device::child01").file("c8y_Restart");
+        ttd.dir("test::device::child02").file("c8y_Restart");
+
+        let supported_operations = SupportedOperations {
+            device_id: "test".to_string(),
+            base_ops_dir: Arc::from(ttd.utf8_path()),
+            operations_by_xid: HashMap::new(),
+        };
+
+        let mut children = supported_operations.get_child_xids();
+        assert_eq!(
+            children.sort(),
+            vec!["test::device::child01", "test::device::child02"].sort()
         );
     }
 }

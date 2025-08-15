@@ -71,6 +71,7 @@ pub struct C8yMapperConfig {
     pub tmp_dir: Arc<Utf8Path>,
 
     pub max_mqtt_payload_size: u32,
+    pub no_cache: bool,
 }
 
 impl C8yMapperConfig {
@@ -103,6 +104,7 @@ impl C8yMapperConfig {
         smartrest_use_operation_id: bool,
         smartrest_child_device_create_with_device_marker: bool,
         max_mqtt_payload_size: u32,
+        no_cache: bool,
     ) -> Self {
         let ops_dir = config_dir
             .join(SUPPORTED_OPERATIONS_DIRECTORY)
@@ -151,6 +153,7 @@ impl C8yMapperConfig {
             tmp_dir,
 
             max_mqtt_payload_size,
+            no_cache,
         }
     }
 
@@ -158,6 +161,7 @@ impl C8yMapperConfig {
         config_dir: impl AsRef<Utf8Path>,
         tedge_config: &TEdgeConfig,
         c8y_profile: Option<&str>,
+        no_cache: bool,
     ) -> Result<C8yMapperConfig, C8yMapperConfigBuildError> {
         let config_dir: Arc<Utf8Path> = config_dir.as_ref().into();
 
@@ -257,6 +261,7 @@ impl C8yMapperConfig {
             smartrest_use_operation_id,
             smartrest_child_device_create_with_device_marker,
             max_mqtt_payload_size,
+            no_cache,
         ))
     }
 

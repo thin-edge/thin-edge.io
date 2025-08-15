@@ -1393,13 +1393,9 @@ impl CumulocityConverter {
     fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut messages = self.base_inventory_data()?;
 
-        self.supported_operations
-            .load_all(&self.config.device_id, &self.config.bridge_config)?;
-        let supported_operations_message = self.supported_operations.create_supported_operations(
-            &self.config.device_id,
-            &self.config.bridge_config.c8y_prefix,
-        )?;
-
+        // supported operations for the main device
+        let supported_operations_message =
+            self.load_and_create_supported_operations_messages(&self.config.device_id.clone())?;
         let pending_operations_message =
             create_get_pending_operations_message(&self.config.bridge_config.c8y_prefix);
 
@@ -1407,7 +1403,31 @@ impl CumulocityConverter {
             supported_operations_message,
             pending_operations_message,
         ]);
+
+        if self.config.no_cache {
+            // supported operations for child devices
+            let mut child_supported_operations_messages: Vec<MqttMessage> = Vec::new();
+            for child_xid in self.supported_operations.get_child_xids() {
+                let message = self.load_and_create_supported_operations_messages(&child_xid)?;
+                child_supported_operations_messages.push(message);
+            }
+            messages.append(&mut child_supported_operations_messages);
+        }
+
         Ok(messages)
+    }
+
+    fn load_and_create_supported_operations_messages(
+        &mut self,
+        external_id: &str,
+    ) -> Result<MqttMessage, ConversionError> {
+        self.supported_operations
+            .load_all(external_id, &self.config.bridge_config)?;
+        let supported_operations_message = self
+            .supported_operations
+            .create_supported_operations(external_id, &self.config.bridge_config.c8y_prefix)?;
+
+        Ok(supported_operations_message)
     }
 
     pub fn sync_messages(&mut self) -> Vec<MqttMessage> {
@@ -3273,6 +3293,7 @@ pub(crate) mod tests {
             false,
             false,
             16184,
+            false,
         )
     }
 
