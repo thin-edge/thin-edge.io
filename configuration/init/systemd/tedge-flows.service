@@ -1,0 +1,14 @@
+[Unit]
+Description=thin-edge.io user-defined flows to transform and aggregate data
+After=syslog.target network.target mosquitto.service
+
+[Service]
+User=tedge
+ExecStartPre=+-/usr/bin/tedge init
+ExecStart=/usr/bin/tedge-mapper flows
+Restart=on-failure
+RestartPreventExitStatus=255
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

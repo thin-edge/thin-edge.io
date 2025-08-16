@@ -349,6 +349,7 @@ install_via_local_files() {
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge[_-]watchdog_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "c8y-remote-access-plugin*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge-p11-server*_$ARCH.deb"
+    find_then_install_deb "$INSTALL_SOURCEDIR" "tedge-flows*_$ARCH.deb"
 }
 
 stop_services() {
