@@ -2,7 +2,6 @@
 title: Extensible mapper and user-provided Flows
 tags: [Reference, Mappers, Cloud]
 sidebar_position: 2
-draft: true
 ---
 
 import ProposalBanner from '@site/src/components/ProposalBanner'
@@ -65,7 +64,7 @@ interface FlowStep {
     onMessage(message: Message, config: object): null | Message | Message[],
   
     // called at regular intervals to produce aggregated messages
-    onInterval(timestamp: Message, config: object): null | Message | Message[],
+    onInterval(timestamp: Timestamp, config: object): null | Message | Message[],
   
     // update the step config given a config update message
     onConfigUpdate(message: Message, config: object): object
