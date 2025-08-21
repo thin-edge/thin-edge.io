@@ -63,3 +63,7 @@ _CHANGELOG.md
 # 
 mutants.out*
 codecov.json
+
+# sbom
+*.cdx.xml
+*.cdx.json
