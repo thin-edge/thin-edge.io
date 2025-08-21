@@ -179,6 +179,11 @@ publish-linux-target TARGET=DEFAULT_TARGET *ARGS='':
 generate-changelog *ARGS:
     ./ci/changelog/changelog.sh {{ARGS}}
 
+# Generate Software Bill Of Materials (sbom)
+generate-sbom:
+    cargo install cargo-cyclonedx
+    cargo cyclonedx --describe binaries --all-features --all --no-build-deps --format json -v
+
 # Remove unused/unreferenced images
 clean-unused-images *ARGS:
     ./ci/admin/check_unused_images.sh --delete {{ARGS}}
