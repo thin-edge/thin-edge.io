@@ -57,3 +57,94 @@ like the pre-update or post-update actions, leaving the rest of the behavior unc
   but the table names with the type prefix (e.g: `[docker.include]` and `[docker.exclude]`) must be used in those as well.
 - When new software is installed, their corresponding `include/exclude` entries can be appended to the main plugin config itself,
   or created in an independent extension file.
+
+## Config management
+
+### Phase 1
+
+- Similar to log management, config plugins are defined under `/etc/tedge/config-plugins`.
+- Each plugin corresponds to their corresponding config types, unlike the log plugins where each plugin supports multiple types.
+- A config plugin needs to support the following sub-commands:
+  - `info`: Used to detect if this is a valid plugin if it exits with exit code 0.
+    The output must be the config type corresponding to this plugin.
+  - `get <type>`: Get the existing configuration for the given type
+  - `prepare <type>`: Perform any preparation steps like backing up existing config.
+    Any relevant data to be passed to `rollback` or `commit` commands later (path of the backup file)
+    must be printed to the console in json format:
+    `{"meta": "<some-metadata>"}`
+  - `set <type> [--url <new-config-url>] [--file <downloaded-file-path>]`: Update the existing config file
+  - `validate <type>`: Validate if the applied configuration is successful
+  - `rollback <type> --old-meta <json-output-from-prepare>`: Rollback the applied configuration if it failed in the `validate` phase.
+  - `commit <type> --old-meta <json-output-from-prepare>`: Perform any post-update steps if the `validate` phase succeeded like deleting the backed up configs.
+- File-based config types can still be defined in the existing `tedge-config-plugin.toml` file.
+  If a corresponding plugin script is not defined for the same type,
+  the existing behavior of just updating the file on the fie system is maintained,
+  without any `prepare`, `validate`, `commit` or `rollback` phases.
+- The `config-plugins` also has a `conf.d` sub-directory where extensions of the main config file can be created dynamically.
+  Each extension config can have entries as follows:
+  ```
+  [[files]]
+  type = "collectd"
+  path = "/etc/collectd/collectd.conf"
+
+  [[files]]
+  type = "nginx"
+  path = "/etc/nginx/nginx.conf"
+  ```
+- The supported config types are gathered from the main plugin config, its extension files
+  and the names of all the plugins defined under `/etc/tedge/config-plugins`.
+
+### Phase 2
+
+Instead of the `exeucting` phase of `config_update` workflow doing everything in that single step,
+break it down into multiple smaller stages that corresponds to each plugin command/phase as well as follows:
+
+```config_update.toml
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "builtin:config_update:executing"
+on_success = "download"
+
+[download]
+action = "builtin:config_update:executing"
+on_success = "prepare"
+
+[prepare]
+action = "builtin:config_update:prepare"
+on_success = "apply"
+
+[apply]
+action = "builtin:config_update:apply"
+on_success = "validate"
+
+[apply]
+action = "builtin:config_update:apply"
+on_success = "commit"
+on_error = "rollback"
+
+[apply]
+action = "builtin:config_update:apply"
+on_success = "successful"
+
+[rollback]
+action = "builtin:config_update:rollback"
+on_success = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+```
+
+This helps customers override a single stage like `download` to do it their way,
+while still reusing the rest of the functionality as-is.
