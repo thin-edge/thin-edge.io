@@ -60,11 +60,11 @@ Update main device inventory fragments via twin topics using built-in bridge
 
 *** Keywords ***
 Custom Setup
-    ${DEVICE_SN}=    Setup
+    ${DEVICE_SN}=    Setup    connect=${False}
     Set Suite Variable    $DEVICE_SN
-    Device Should Exist    ${DEVICE_SN}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/inventory.json    /etc/tedge/device/
-    ThinEdgeIO.Disconnect Then Connect Mapper    c8y
+    ThinEdgeIO.Connect Mapper    c8y
+    Device Should Exist    ${DEVICE_SN}
 
 Validate inventory fragment updates via twin topics
     [Arguments]    ${device_xid}=${DEVICE_SN}    ${device_tid}=${device_xid}
