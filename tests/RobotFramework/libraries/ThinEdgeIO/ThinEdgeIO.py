@@ -771,7 +771,7 @@ class ThinEdgeIO(DeviceLibrary):
 
             env_file (str, optional): dotenv file to pass to the adapter. Defaults to ".env".
             register (bool, optional): Register the device with Cumulocity. Defaults to True.
-            register_using (str, optional): Registration method. Defaults to "c8y-ca".
+            register_using (str, optional): Registration method. Supported values: [c8y-ca, self-signed]. Defaults to "c8y-ca".
             connect (bool, optional): Connect the mapper to Cumulocity. Defaults to True.
 
         Raises:

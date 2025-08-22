@@ -66,7 +66,11 @@ pub async fn check_device_status_aws(
                 if response.topic == aws_topic_sub_check_connection {
                     // We got a response
                     break;
-                } else if is_bridge_health_up_message(&response, &built_in_bridge_health) {
+                } else if is_bridge_health_up_message(
+                    &response,
+                    &built_in_bridge_health,
+                    tedge_config.mqtt.bridge.built_in,
+                ) {
                     // Built in bridge is now up, republish the message in case it was never received by the bridge
                     client
                         .publish(
