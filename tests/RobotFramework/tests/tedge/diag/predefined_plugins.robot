@@ -65,7 +65,11 @@ Test Tags           theme:troubleshooting    theme:cli    theme:plugins
     ${log_names}=    Create List
     ...    output.log
     ...    mosquitto.log
+    ...    mosquitto/mosquitto.conf
+    ...    mosquitto/conf.d/mosquitto.conf
     ...    mosquitto-journal.log
+    ...    tedge/mosquitto-conf/tedge-mosquitto.conf
+    ...    tedge/mosquitto-conf/c8y-bridge.conf
     FOR    ${log_name}    IN    @{log_names}
         File Size Is Not Zero    ${log_name}
     END
