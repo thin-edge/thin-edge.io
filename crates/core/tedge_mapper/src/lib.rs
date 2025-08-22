@@ -135,10 +135,11 @@ impl fmt::Display for MapperName {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-aws@{profile}"),
             #[cfg(feature = "c8y")]
-            MapperName::C8y { profile: None } => write!(f, "tedge-mapper-c8y"),
+            MapperName::C8y { profile: None, .. } => write!(f, "tedge-mapper-c8y"),
             #[cfg(feature = "c8y")]
             MapperName::C8y {
                 profile: Some(profile),
+                ..
             } => write!(f, "tedge-mapper-c8y@{profile}"),
             MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
             #[cfg(feature = "tedge-flows")]
