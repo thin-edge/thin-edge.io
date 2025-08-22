@@ -3,6 +3,7 @@ set -e
 
 OUTPUT_DIR=""
 COMMAND=""
+TEDGE_CONFIG_DIR=${TEDGE_CONFIG_DIR:-/etc/tedge}
 
 # Parse arguments
 while [ $# -gt 0 ]; do
@@ -39,12 +40,33 @@ mosquitto_log() {
     fi
 }
 
+mosquitto_config() {
+    if command -V tree >/dev/null >&2; then
+        tree /etc/mosquitto > "$OUTPUT_DIR/etc_mosquitto.tree.txt" ||:
+    fi
+
+    mkdir -p "$OUTPUT_DIR/mosquitto"
+    if [ -f /etc/mosquitto/mosquitto.conf ]; then
+        cp -aR /etc/mosquitto/mosquitto.conf "$OUTPUT_DIR/mosquitto" ||:
+    fi
+    if [ -d /etc/mosquitto/conf.d ]; then
+        cp -aR /etc/mosquitto/conf.d "$OUTPUT_DIR/mosquitto/" ||:
+    fi
+
+    mkdir -p "$OUTPUT_DIR/tedge"
+    cp -aR "$TEDGE_CONFIG_DIR/mosquitto-conf" "$OUTPUT_DIR/tedge/" ||:
+
+    # sanitize password fields
+    find "$OUTPUT_DIR" -name "*.conf" -exec sed -i 's/password\s*.*/password <redacted>/g' {} \; ||:
+}
+
 collect() {
     if command -V mosquitto > /dev/null 2>&1; then
         if command -V journalctl >/dev/null 2>&1; then
             mosquitto_journal
         fi
         mosquitto_log
+        mosquitto_config
     else
         echo "mosquitto not found" >&2
         # this plugin is not applicable when mosquitto doesn't exist
