@@ -33,7 +33,7 @@ mosquitto_journal() {
 }
 
 mosquitto_log() {
-    if [ -f /var/log/mosquitto/mosquitto.log ]; then 
+    if [ -f /var/log/mosquitto/mosquitto.log ]; then
         cp /var/log/mosquitto/mosquitto.log "$OUTPUT_DIR"/
     else
         echo "mosquitto.log not found" >&2
