@@ -247,6 +247,7 @@ The following is an overview of the channel categories which are available.
 | cmd      | Commands             |
 | twin     | Entity twin metadata |
 | status   | Service status       |
+| signal   | Signals              |
 
 
 ## Entity registration
@@ -673,6 +674,65 @@ tedge mqtt pub -r te/device/main///cmd/config_snapshot '{
 }'
 ```
 
+## Signals
+
+Signals are stateless, making them ideal for one-shot requests where the caller does not need any confirmation. However, it is up for the entity to define if and how the signal is processed.
+
+The topic scheme for signals can be visualized using the diagram below.
+
+<p align="center">
+
+```mermaid
+graph LR
+  te --/--- identifier --/--- signal
+  subgraph root
+    te
+  end
+
+  subgraph identifier
+    identifier2["&lt;identifier&gt;"]
+  end
+
+  subgraph signal
+    direction LR
+    signal_node["signal"] --/--- signal_type["&lt;signal_type&gt;"]
+  end
+```
+
+</p>
+
+Where the signal segments are describe as follows:
+
+| Segment             | Description                                                                                                                      |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| &lt;identifier&gt;  | The [identifier](#group-identifier) (e.g. device/service) associated with the signal.                                            |
+| &lt;signal_type&gt; | Signal type. Each signal can define its own payload schema to allow signals to have parameters related to the signal's function. |
+
+### Signal examples
+
+The following table details some example signal types which are supported by %%te%%.
+
+| Signal Type      | Example Topic                            |
+|------------------|------------------------------------------|
+| sync_operations  | `te/<identifier>/signal/sync_operations` |
+
+The signal would be interpreted differently based on the target entity.
+
+:::note
+The signal channel is currently in development.
+We plan to add support for more signal types in the future.
+:::
+
+### Examples: With default device/service topic semantics
+
+#### Signal to a service
+
+Signal to request the supported operations of the `tedge-mapper-c8y` service:
+
+```sh te2mqtt formats=v1
+tedge mqtt pub te/device/main/service/tedge-mapper-c8y/signal/sync_operations '{}'
+```
+
 ## Health check
 
 Services can publish their health status as follows:
@@ -706,4 +766,3 @@ tedge mqtt pub -r te/device/main/service/tedge-agent/status/health '{
   "status": "down"
 }'
 ```
-
