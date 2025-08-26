@@ -162,3 +162,17 @@ action = "cleanup"
 
 This helps customers override a single stage like `download` to do it their way,
 while still reusing the rest of the functionality as-is.
+
+### Unresolved problems
+
+1. When a new piece of software is installed on the device,
+   which mostly would have come with its own configurations and log files,
+   how to "notify tedge" so that it refreshes its
+   - updated software list
+   - supported config list
+   - updated logs list
+2. Even if a REST API or inotify API to refresh the agent is provided,
+   who would trigger this when a software is installed by various installation methods like:
+   - software packages by distros
+   - containers spawned by docker, podman, kubernetes etc
+   Do they all provide hook points to trigger additional actions when a new thing is installed?
