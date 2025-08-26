@@ -8,11 +8,9 @@ mod topics;
 use async_trait::async_trait;
 use bytes::Bytes;
 pub use rumqttc;
-use rumqttc::AsyncClient;
 use rumqttc::ClientError;
 use rumqttc::ConnectionError;
 use rumqttc::Event;
-use rumqttc::EventLoop;
 use rumqttc::Incoming;
 use rumqttc::LastWill;
 pub use rumqttc::MqttOptions;
@@ -41,13 +39,12 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tokio::sync::mpsc;
-use tracing::debug;
-use tracing::info;
 
 pub type MqttConfig = mqtt_channel::Config;
 
 use crate::health::BridgeHealth;
 use crate::health::BridgeHealthMonitor;
+use crate::mqtt_logging::LoggingAsyncClient;
 pub use mqtt_channel::DebugPayload;
 pub use mqtt_channel::MqttError;
 pub use mqtt_channel::MqttMessage;
@@ -62,6 +59,21 @@ use crate::topics::TopicConverter;
 pub use config::*;
 
 const MAX_PACKET_SIZE: usize = 268435455; // maximum allowed MQTT payload size
+
+macro_rules! log_event {
+    // Default case - log as info
+    ($prefix:ident, $fmt:literal $($args:tt)*) => {
+        log_event!(info: $prefix, $fmt $($args)*);
+    };
+
+    // If the (macro) user specifies a level, use that instead
+    ($level:ident: $prefix:ident, $fmt:literal $($args:tt)*) => {
+        ::tracing::$level!(target: "MQTT bridge", "[{}] {}", $prefix, format_args!($fmt $($args)*));
+    };
+}
+
+// We have to declare mqtt_logging after the macro as it depends on the macro
+mod mqtt_logging;
 
 pub struct MqttBridgeActorBuilder {}
 
@@ -111,8 +123,10 @@ impl MqttBridgeActorBuilder {
         // To prevent that, rumqttc inflight is set far bigger than the number of expected inflight messages.
         let in_flight: u16 = 100;
         cloud_config.set_inflight(in_flight * 5);
-        let (local_client, local_event_loop) = AsyncClient::new(local_config, in_flight.into());
-        let (cloud_client, cloud_event_loop) = AsyncClient::new(cloud_config, in_flight.into());
+        let (local_client, local_event_loop) =
+            LoggingAsyncClient::new(local_config, in_flight.into(), "local".into());
+        let (cloud_client, cloud_event_loop) =
+            LoggingAsyncClient::new(cloud_config, in_flight.into(), "cloud".into());
 
         let local_topics: Vec<_> = rules
             .local_subscriptions()
@@ -473,7 +487,10 @@ async fn half_bridge(
             Err(_) => {
                 let time = backoff.backoff();
                 if !time.is_zero() {
-                    info!("Waiting {time:?} until attempting reconnection to {name} broker");
+                    log_event!(
+                        name,
+                        "Waiting {time:?} until attempting reconnection to broker"
+                    );
                 }
                 tokio::time::sleep(time).await;
 
@@ -483,14 +500,14 @@ async fn half_bridge(
                 // the MQTT specification.
                 if session_present != Some(true) {
                     let msgs = recv_event_loop.take_pending();
-                    debug!("Extending pending with: {msgs:?}");
+                    log_event!(debug: name, "Extending pending with: {msgs:?}");
                     pending.extend(msgs);
                 }
                 continue;
             }
         };
-        debug!("Received notification ({name}) {notification:?}");
-        debug!("Bridge {name} connection: received={received} forwarded={forwarded} published={published} waiting={waiting} acknowledged={acknowledged} finalized={finalized}",
+        log_event!(trace: name, "Received notification: {notification:?}");
+        log_event!(debug: name, "stats: received={received} forwarded={forwarded} published={published} waiting={waiting} acknowledged={acknowledged} finalized={finalized}",
             forwarded = target.published(),
             waiting = forward_pkid_to_received_msg.len(),
             finalized = target.acknowledged(),
@@ -498,7 +515,7 @@ async fn half_bridge(
 
         match notification {
             Event::Incoming(Incoming::ConnAck(conn_ack)) => {
-                info!("Bridge {name} connection subscribing to {topics:?}");
+                log_event!(name, "Bridge connection subscribing to {topics:?}");
 
                 let recv_client = recv_client.clone();
                 let topics = topics.clone();
@@ -515,7 +532,7 @@ async fn half_bridge(
                 if !conn_ack.session_present {
                     // Republish any outstanding messages
                     let msgs = std::mem::take(&mut pending);
-                    debug!("Setting pending messages to {msgs:?}");
+                    log_event!(debug: name, "Setting pending messages to {msgs:?}");
                     recv_event_loop.set_pending(msgs);
                 }
             }
@@ -543,7 +560,7 @@ async fn half_bridge(
                     acknowledged += 1;
                     target.ack(msg);
                 } else {
-                    info!("Bridge {name} connection received ack for unknown pkid={ack_pkid}");
+                    log_event!(warn: name, "Received ack for unknown pkid={ack_pkid}");
                 }
             }
 
@@ -569,16 +586,16 @@ async fn half_bridge(
                         None => break,
                     }
                 } else {
-                    info!("Bridge {name} connection ignoring already known pkid={pkid}");
+                    log_event!(warn: name, "Ignoring already known pkid={pkid}");
                 }
             }
 
             Event::Outgoing(Outgoing::AwaitAck(pkid)) => {
-                info!("Bridge {name} connection still waiting ack for pkid={pkid}");
+                log_event!(info: name, "Still waiting ack for pkid={pkid}");
             }
 
             Event::Incoming(Incoming::Disconnect) => {
-                info!("Bridge {name} connection closed by peer");
+                log_event!(info: name, "Connection closed by peer");
             }
 
             _ => {}
@@ -594,20 +611,6 @@ trait MqttEvents: Send {
 }
 
 #[async_trait::async_trait]
-impl MqttEvents for EventLoop {
-    async fn poll(&mut self) -> Result<Event, ConnectionError> {
-        EventLoop::poll(self).await
-    }
-
-    fn take_pending(&mut self) -> VecDeque<Request> {
-        std::mem::take(&mut self.pending)
-    }
-
-    fn set_pending(&mut self, requests: Vec<Request>) {
-        self.pending = requests.into_iter().collect();
-    }
-}
-#[async_trait::async_trait]
 trait MqttClient: MqttAck + Clone + Send + Sync {
     async fn subscribe(&self, topic: SubscribeFilter) -> Result<(), ClientError>;
     async fn publish(
@@ -620,9 +623,9 @@ trait MqttClient: MqttAck + Clone + Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl MqttClient for AsyncClient {
+impl MqttClient for LoggingAsyncClient {
     async fn subscribe(&self, topic: SubscribeFilter) -> Result<(), ClientError> {
-        AsyncClient::subscribe(self, topic.path, topic.qos).await
+        LoggingAsyncClient::subscribe(self, topic.path, topic.qos).await
     }
 
     async fn publish(
@@ -632,7 +635,7 @@ impl MqttClient for AsyncClient {
         retain: bool,
         payload: Bytes,
     ) -> Result<(), ClientError> {
-        AsyncClient::publish(self, topic, qos, retain, payload).await
+        LoggingAsyncClient::publish(self, topic, qos, retain, payload).await
     }
 }
 
@@ -681,9 +684,9 @@ trait MqttAck {
 
 #[async_trait::async_trait]
 #[mutants::skip] // missed: replace <impl MqttAck for AsyncClient>::ack -> Result<(), ClientError> with Ok(())
-impl MqttAck for AsyncClient {
+impl MqttAck for LoggingAsyncClient {
     async fn ack(&self, publish: &Publish) -> Result<(), ClientError> {
-        AsyncClient::ack(self, publish).await
+        LoggingAsyncClient::ack(self, publish).await
     }
 }
 
