@@ -34,8 +34,9 @@ like the pre-update or post-update actions, leaving the rest of the behavior unc
   - `list`: list all the log types that it supports.
     Used to detect if this is a valid plugin if it exits with exit code 0.
     The output is used only when auto-discovery for log types is turned ON for this plugin.
-  - `get <type> [--from <timestamp>] [--to <timestamp>] [--filter <filter-text>]`:
-    Used to fetch the log for the given type within the provided log range
+  - `get <type> <temp-log-file-path> [--from <timestamp>] [--to <timestamp>] [--filter <filter-text>]`:
+    Used to fetch the log for the given type within the provided log range.
+    The log content must be written to the temporary file passed provided by the agent.
 - The plugin directory would also have a `conf.d` directory where each plugin can store their configuration in a toml file.
   These config files are used to turn type discovery on/off and to define inclusion/exclusion list when type discovery is turned on:
   ```docker.toml
@@ -43,18 +44,19 @@ like the pre-update or post-update actions, leaving the rest of the behavior unc
   auto_discover=true
 
   [docker.include]
-  container_name_regex = "nginx"
+  type_regex = "nginx"
 
-  [docker.include]
-  image_name_regex = ""
-  
   [docker.exclude]
-  container_name_regex = "kube-*"
-  ``` 
+  type_regex = "kube-*"
+  ```
+- The `auto_discover` and `include`/`exclude` configs are used by the `tedge-agent`
+  to process the supported types listed by that plugin.
+  Any plugin-specific settings can also be defined in these files, which are ignored by the agent,
+  but can be used by the plugin.
 - The main config file for a plugin must be named after the plugin itself (e,g: `docker.sh` -> `docker.toml`).
   Key configs like `auto_discover` can only be defined in this main file.
   The inclusion/exclusion list can be defined in extension files as well,
-  but the table names with the type prefix (e.g: `[docker.include]` and `[docker.exclude]`) must be used in those as well.
+  but the table names with the plugin name prefix (e.g: `[docker.include]` and `[docker.exclude]`) must be used in those as well.
 - When new software is installed, their corresponding `include/exclude` entries can be appended to the main plugin config itself,
   or created in an independent extension file.
 
@@ -63,11 +65,19 @@ like the pre-update or post-update actions, leaving the rest of the behavior unc
 ### Phase 1
 
 - Similar to log management, config plugins are defined under `/etc/tedge/config-plugins`.
+- Config plugins can used to perform any pre/post processing steps before/after a configuration file is updated by the agent.
 - Each plugin corresponds to their corresponding config types, unlike the log plugins where each plugin supports multiple types.
+  There would be distinct plugins for each supported config type.
+- The existing mechanism of defining the config file paths in the `tedge-configuration-plugin.toml` is retained with the agent.
+  It won't be moved to a `file` plugin serving multiple config types as proposed for the log management,
+  but each config file entry defined in the `toml` file can be supplemented with a plugin named after the same type.
 - A config plugin needs to support the following sub-commands:
   - `info`: Used to detect if this is a valid plugin if it exits with exit code 0.
     The output must be the config type corresponding to this plugin.
-  - `get <type>`: Get the existing configuration for the given type
+  - `get <type> <tmp-file-path>`: Get the existing configuration for the given type.
+    The config contents, if not already in a file, can be written to the `tmp-file-path` provided by the agent.
+    Print the config file path to stdout between `:::begin-tedge:::` and `:::end-tedge:::` blocks.
+    Either the original source config file path can be printed, or the `tmp-file-path` if the config contents were written to it.
   - `prepare <type>`: Perform any preparation steps like backing up existing config.
     Any relevant data to be passed to `rollback` or `commit` commands later (path of the backup file)
     must be printed to the console in json format:
@@ -77,9 +87,13 @@ like the pre-update or post-update actions, leaving the rest of the behavior unc
   - `rollback <type> --old-meta <json-output-from-prepare>`: Rollback the applied configuration if it failed in the `validate` phase.
   - `commit <type> --old-meta <json-output-from-prepare>`: Perform any post-update steps if the `validate` phase succeeded like deleting the backed up configs.
 - File-based config types can still be defined in the existing `tedge-config-plugin.toml` file.
-  If a corresponding plugin script is not defined for the same type,
+  But the pre/post processing logic of that configuration would be performed by the corresponding plugin for that type,
+  if one is defined.
+  If a plugin is not defined for the same type,
   the existing behavior of just updating the file on the fie system is maintained,
   without any `prepare`, `validate`, `commit` or `rollback` phases.
+- For non file based configurations, that can't be defined in the `tedge-configuration-plugin.toml`,
+  the plugin itself must declare its supported type with the `info` command.
 - The `config-plugins` also has a `conf.d` sub-directory where extensions of the main config file can be created dynamically.
   Each extension config can have entries as follows:
   ```
@@ -115,23 +129,23 @@ action = "builtin:config_update:executing"
 on_success = "download"
 
 [download]
-action = "builtin:config_update:executing"
+action = "builtin:download"
 on_success = "prepare"
 
 [prepare]
-action = "builtin:config_update:prepare"
+action = "builtin:backup_file"
 on_success = "apply"
 
 [apply]
-action = "builtin:config_update:apply"
+action = "builtin:set_file"
 on_success = "validate"
 
-[apply]
-action = "builtin:config_update:apply"
+[validate]
+action = "builtin:config_update:validate"
 on_success = "commit"
 on_error = "rollback"
 
-[apply]
+[commit]
 action = "builtin:config_update:apply"
 on_success = "successful"
 
