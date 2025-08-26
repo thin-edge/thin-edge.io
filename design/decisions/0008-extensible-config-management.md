@@ -43,11 +43,11 @@ like the pre-update or post-update actions, leaving the rest of the behavior unc
   [docker]
   auto_discover=true
 
-  [docker.include]
-  type_regex = "nginx"
+  [[docker.include]]
+  pattern = "nginx"
 
-  [docker.exclude]
-  type_regex = "kube-*"
+  [[docker.exclude]]
+  pattern = "kube-*"
   ```
 - The `auto_discover` and `include`/`exclude` configs are used by the `tedge-agent`
   to process the supported types listed by that plugin.
@@ -59,6 +59,22 @@ like the pre-update or post-update actions, leaving the rest of the behavior unc
   but the table names with the plugin name prefix (e.g: `[docker.include]` and `[docker.exclude]`) must be used in those as well.
 - When new software is installed, their corresponding `include/exclude` entries can be appended to the main plugin config itself,
   or created in an independent extension file.
+
+The agent uses the plugins as follows:
+
+- On startup, gather the supported types from all the plugins by running the `list` command on them.
+  Those failing to execute the `list` command are not qualified as valid plugins and ignored.
+- Whenever the `/etc/tedge/log-plugins` directory is updated (new plugin installed or existing one removed),
+  agent refreshes the supported types.
+  Simply touching this directory would also trigger a refresh.
+- When the supported types are published over mqtt, their source plugin information is also appended to that type
+  in the format <log_type>::<plugin_type>.
+  For example, if a `journals` plugin lists two different log types: `mosquitto` and `tedge-agent`,
+  both types would be reported as `mosquitto::journald` and `tedge-agent::journald`.
+- When a `log_upload` request is received for a type, call the `get` command of the corresponding plugin for that type
+  which can be derived from the `::` suffix of that type.
+  The `type` passed to the `get` command would not include the plugin suffix.
+  If there is no explicit suffix, it is delegated to the default file plugin.
 
 ## Config management
 
@@ -108,8 +124,9 @@ The agent uses the plugins as follows:
   in the format <config_type>::<plugin_type>.
   For example, if a `mosquitto` plugin lists two different config types: `mosquitto.conf` and `mosquitto.acl`,
   both types would be reported as `mosquitto.conf::mosquitto` and `mosquitto.acl::mosquitto`.
-- When a `config_snapshot` request is received for a type, call the `get` command of the correspinding plugin for that type
+- When a `config_snapshot` request is received for a type, call the `get` command of the corresponding plugin for that type
   which can be derived from the `::` suffix of that type.
+  The `type` passed to the `get` command would not include the plugin suffix.
   If there is no explicit suffix, it is delegated to the default file plugin.
 - When a `config_update` request is received for a type, the following actions are performed in sequence:
   - Call `get` command of the corresponding plugin and cache the target temporary file as a backup.
