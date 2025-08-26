@@ -65,48 +65,58 @@ like the pre-update or post-update actions, leaving the rest of the behavior unc
 ### Phase 1
 
 - Similar to log management, config plugins are defined under `/etc/tedge/config-plugins`.
-- Config plugins can used to perform any pre/post processing steps before/after a configuration file is updated by the agent.
-- Each plugin corresponds to their corresponding config types, unlike the log plugins where each plugin supports multiple types.
-  There would be distinct plugins for each supported config type.
-- The existing mechanism of defining the config file paths in the `tedge-configuration-plugin.toml` is retained with the agent.
-  It won't be moved to a `file` plugin serving multiple config types as proposed for the log management,
-  but each config file entry defined in the `toml` file can be supplemented with a plugin named after the same type.
+- Config plugins can be used to perform any pre/post processing steps before/after a configuration file is updated by the agent.
 - A config plugin needs to support the following sub-commands:
-  - `info`: Used to detect if this is a valid plugin if it exits with exit code 0.
-    The output must be the config type corresponding to this plugin.
-  - `get <type> <tmp-file-path>`: Get the existing configuration for the given type.
-    The config contents, if not already in a file, can be written to the `tmp-file-path` provided by the agent.
-    Print the config file path to stdout between `:::begin-tedge:::` and `:::end-tedge:::` blocks.
-    Either the original source config file path can be printed, or the `tmp-file-path` if the config contents were written to it.
-  - `prepare <type>`: Perform any preparation steps like backing up existing config.
-    Any relevant data to be passed to `rollback` or `commit` commands later (path of the backup file)
-    must be printed to the console in json format:
-    `{"meta": "<some-metadata>"}`
-  - `set <type> [--url <new-config-url>] [--file <downloaded-file-path>]`: Update the existing config file
-  - `validate <type>`: Validate if the applied configuration is successful
-  - `rollback <type> --old-meta <json-output-from-prepare>`: Rollback the applied configuration if it failed in the `validate` phase.
-  - `commit <type> --old-meta <json-output-from-prepare>`: Perform any post-update steps if the `validate` phase succeeded like deleting the backed up configs.
-- File-based config types can still be defined in the existing `tedge-config-plugin.toml` file.
-  But the pre/post processing logic of that configuration would be performed by the corresponding plugin for that type,
-  if one is defined.
-  If a plugin is not defined for the same type,
-  the existing behavior of just updating the file on the fie system is maintained,
-  without any `prepare`, `validate`, `commit` or `rollback` phases.
-- For non file based configurations, that can't be defined in the `tedge-configuration-plugin.toml`,
-  the plugin itself must declare its supported type with the `info` command.
-- The `config-plugins` also has a `conf.d` sub-directory where extensions of the main config file can be created dynamically.
-  Each extension config can have entries as follows:
+  - `list`: List all the config types supported by this plugin.
+    Used to detect if this is a valid plugin if it exits with exit code 0.
+    The types must be printed between `:::begin-tedge:::` and `:::end-tedge:::` marker lines,
+    with one type per line.
+  - `get <type> <tmp-target-file-path>`: Get the existing configuration for the given type.
+  - `set <type> [--url <new-config-url>] [--file <new-config-file-path>]`: Update the existing config file
+  - `finalize <type>`: Take any post-processing actions after the new config is applied
+- Existing file-based config management using `tedge-configuration-plugin.toml` is moved to a default `file` plugin.
+- The `tedge-configuration-plugin.toml` entries are provided an optional `exec` field to run any commands
+  after the config file update, as follows:
   ```
   [[files]]
   type = "collectd"
   path = "/etc/collectd/collectd.conf"
+  exec = "systemctl restart collectd"
 
   [[files]]
   type = "nginx"
   path = "/etc/nginx/nginx.conf"
+  exec = "systemctl reload nginx"
   ```
-- The supported config types are gathered from the main plugin config, its extension files
-  and the names of all the plugins defined under `/etc/tedge/config-plugins`.
+- The `file` plugin's is implemented as follows:
+  - `list`: list all the config types listed in `tedge-configuration-plugin.toml`.
+  - `get`: Copy the contents of the existing configuration to the temp target file argument passed to it.
+  - `set`: Replace the existing config file with new config file in the argument.
+  - `finalize`: Perform the command specified in the `exec` field.
+    No-op when no `exec` command is provided.
+- For non file based configurations, that can't be defined in the `tedge-configuration-plugin.toml`,
+  they must have dedicated plugins that declare their types in the `list` command.
+
+The agent uses the plugins as follows:
+
+- On startup, gather the supported types from all the plugins by running the `list` command on them.
+  Those failing to execute the `list` command are not qualified as valid plugins and ignored.
+- Whenever the `/etc/tedge/config-plugins` directory is updated (new plugin installed or existing one removed),
+  agent refreshes the supported types.
+  Simply touching this directory would also trigger a refresh.
+- When the supported types are published over mqtt, their source plugin information is also appended to that type
+  in the format <config_type>::<plugin_type>.
+  For example, if a `mosquitto` plugin lists two different config types: `mosquitto.conf` and `mosquitto.acl`,
+  both types would be reported as `mosquitto.conf::mosquitto` and `mosquitto.acl::mosquitto`.
+- When a `config_snapshot` request is received for a type, call the `get` command of the correspinding plugin for that type
+  which can be derived from the `::` suffix of that type.
+  If there is no explicit suffix, it is delegated to the default file plugin.
+- When a `config_update` request is received for a type, the following actions are performed in sequence:
+  - Call `get` command of the corresponding plugin and cache the target temporary file as a backup.
+  - Call `set` command of the corresponding plugin with the updated config path in the argument.
+  - Call `finalize` command of the plugin and complete the operation if successful.
+  - If `set` or `finalize` commands fail, call the `set` command again with the original config file backup as the target.
+  - Call `finalize` again if the previous `set` attempt to restore teh original configuration succeeded and fail the operation.
 
 ### Phase 2
 
@@ -176,3 +186,8 @@ while still reusing the rest of the functionality as-is.
    - software packages by distros
    - containers spawned by docker, podman, kubernetes etc
    Do they all provide hook points to trigger additional actions when a new thing is installed?
+
+Since the installation of a new software is most likely to add new configurations and log,
+the agent may do this all-in-one refresh implicitly whenever a `software_update` is performed.
+The external refresh APIs only need to be used when new software is added outside the purview of tedge,
+either manually by a device user, or an external software management system on the same device.
