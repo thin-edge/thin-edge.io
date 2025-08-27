@@ -80,7 +80,7 @@ Set up new PKCS11 keypair
     Execute Command
     ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ${type} ${p11tool_args} --label ${object_name} "pkcs11:token=tedge"
 
-    VAR    ${key_uri}    pkcs11:token=tedge;object=${object_name}
+    VAR    ${key_uri}=    pkcs11:token=tedge;object=${object_name}
     # warning: PKCS11 _uri variables contain ; so they need to be quoted!
     Execute Command    cmd=tedge config set device.key_uri "${key_uri}"
 
@@ -89,6 +89,10 @@ Set up new PKCS11 keypair
 Set tedge-p11-server Uri
     [Arguments]    ${value}
     Execute Command    tedge config set device.cryptoki.uri '${value}'
+    Restart Service    tedge-p11-server
+
+Unset tedge-p11-server Uri
+    Execute Command    tedge config unset device.cryptoki.uri
     Restart Service    tedge-p11-server
 
 Tedge Reconnect Should Succeed
@@ -105,10 +109,3 @@ Command Should Fail With
     ${stderr}=    Execute Command    ${command}    exp_exit_code=!0    stdout=false    stderr=true
     Should Contain    ${stderr}    ${error}
     RETURN    ${stderr}
-
-Register Device With Cumulocity CA
-    [Documentation]    Registers a new certificate with Cumulocity CA and places it under `c8y.device.cert_path`
-    [Arguments]    ${csr_path}
-    ${credentials}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN}
-    Execute Command
-    ...    cmd=tedge cert download c8y --csr-path "${csr_path}" --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --retry-every 5s --max-timeout 60s

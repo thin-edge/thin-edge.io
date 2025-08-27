@@ -34,7 +34,7 @@ Select Private key using tedge-p11-server URI
     ...    We set the URI on tedge-p11-server, which means that all connecting clients will use the selected key until
     ...    tedge-p11-server is restarted with a different URI.
 
-    Set tedge-p11-server Uri    value=
+    Unset tedge-p11-server Uri
     Tedge Reconnect Should Succeed
 
     # expect failure if we try to use a token that doesn't exist
@@ -60,8 +60,7 @@ Select Private key using tedge-p11-server URI
     # but when URI has correct label, we expect valid key to be used again
     Set tedge-p11-server Uri    value=pkcs11:token=tedge;object=tedge
     Tedge Reconnect Should Succeed
-
-    Set tedge-p11-server Uri    value=
+    [Teardown]    Unset tedge-p11-server Uri
 
 Select Private key using a request URI
     [Documentation]    Like above, we select the key using a URI, but this time we include it in a request, which means
@@ -82,7 +81,7 @@ Select Private key using a request URI
 
 Connects to C8y using an RSA key
     [Documentation]    Test that we can connect to C8y using an RSA private keys of all sizes.
-    [Setup]    Set tedge-p11-server Uri    value=${EMPTY}
+    [Setup]    Unset tedge-p11-server Uri
     [Template]    Connect to C8y using new keypair
     type=rsa    bits=4096
     type=rsa    bits=3072
@@ -92,7 +91,7 @@ Connects to C8y using an RSA key
 Connects to C8y supporting all TLS13 ECDSA signature algorithms
     [Documentation]    Check that we support all ECDSA sigschemes used in TLS1.3, i.e: ecdsa_secp256r1_sha256,
     ...    ecdsa_secp384r1_sha384, ecdsa_secp521r1_sha512.
-    [Setup]    Set tedge-p11-server Uri    value=${EMPTY}
+    [Setup]    Unset tedge-p11-server Uri
     [Template]    Connect to C8y using new keypair
     type=ecdsa    curve=secp256r1
 
@@ -189,6 +188,6 @@ Custom Setup
     Execute Command    tedge config set device.cryptoki.mode socket
 
     ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=${True}
-    Register Device With Cumulocity CA    ${csr_path}
+    Register Device With Cumulocity CA    ${DEVICE_SN}    csr_path=${csr_path}
 
-    Set tedge-p11-server Uri    value=
+    Unset tedge-p11-server Uri
