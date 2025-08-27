@@ -91,6 +91,10 @@ Set tedge-p11-server Uri
     Execute Command    tedge config set device.cryptoki.uri '${value}'
     Restart Service    tedge-p11-server
 
+Unset tedge-p11-server Uri
+    Execute Command    tedge config unset device.cryptoki.uri
+    Restart Service    tedge-p11-server
+
 Tedge Reconnect Should Succeed
     ${stderr}=    Execute Command    tedge reconnect c8y    stdout=false    stderr=true
     RETURN    ${stderr}
