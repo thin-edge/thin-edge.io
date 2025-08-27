@@ -16,6 +16,10 @@ while [ $# -gt 0 ]; do
         --self-signed)
             IS_SELF_SIGNED=1
             ;;
+        --label)
+            TOKEN_LABEL="$2"
+            shift
+            ;;
         --pin)
             GNUTLS_PIN="$2"
             shift
@@ -58,7 +62,7 @@ echo "Using token URI: $PKCS_URI" >&2
 KEY=$(get_key)
 if [ -z "$KEY" ]; then
     mkdir -p /etc/tedge/hsm
-    p11tool --login --generate-privkey ECDSA --curve=secp256r1  --label "tedge" --outfile /etc/tedge/hsm/tedge.pub "$PKCS_URI"
+    p11tool --login --generate-privkey ECDSA --curve=secp256r1 --label "$TOKEN_LABEL" --outfile "/etc/tedge/hsm/${TOKEN_LABEL}.pub" "$PKCS_URI"
     KEY=$(get_key)
 fi
 
