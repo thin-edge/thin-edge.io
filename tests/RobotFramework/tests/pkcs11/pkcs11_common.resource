@@ -80,7 +80,7 @@ Set up new PKCS11 keypair
     Execute Command
     ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ${type} ${p11tool_args} --label ${object_name} "pkcs11:token=tedge"
 
-    VAR    ${key_uri}    pkcs11:token=tedge;object=${object_name}
+    VAR    ${key_uri}=    pkcs11:token=tedge;object=${object_name}
     # warning: PKCS11 _uri variables contain ; so they need to be quoted!
     Execute Command    cmd=tedge config set device.key_uri "${key_uri}"
 
