@@ -200,6 +200,7 @@ class ThinEdgeIO(DeviceLibrary):
         name: Optional[str] = None,
         device_type: str = "thin-edge.io",
         device_name: Optional[str] = None,
+        csr_path: Optional[str] = None,
         **kwargs,
     ):
         """Register a device with Cumulocity using the Cumulocity Certificate Authority feature
@@ -216,8 +217,12 @@ class ThinEdgeIO(DeviceLibrary):
             device_type=device_type,
         )
 
+        cmd = f"""tedge config set c8y.url '{credentials.url}' && tedge cert download c8y --device-id '{external_id}' --one-time-password '{credentials.one_time_password}' --retry-every 5s --max-timeout 60s"""
+        if csr_path:
+            cmd += f" --csr-path '{csr_path}'"
+
         self.execute_command(
-            f"""tedge config set c8y.url '{credentials.url}' && tedge cert download c8y --device-id '{external_id}' --one-time-password '{credentials.one_time_password}' --retry-every 5s --max-timeout 60s""",
+            cmd,
             device_name=device_name,
         )
 

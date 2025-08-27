@@ -189,6 +189,6 @@ Custom Setup
     Execute Command    tedge config set device.cryptoki.mode socket
 
     ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=${True}
-    Register Device With Cumulocity CA    ${csr_path}
+    Register Device With Cumulocity CA    ${DEVICE_SN}    csr_path=${csr_path}
 
     Set tedge-p11-server Uri    value=

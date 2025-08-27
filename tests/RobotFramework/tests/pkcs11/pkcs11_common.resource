@@ -105,10 +105,3 @@ Command Should Fail With
     ${stderr}=    Execute Command    ${command}    exp_exit_code=!0    stdout=false    stderr=true
     Should Contain    ${stderr}    ${error}
     RETURN    ${stderr}
-
-Register Device With Cumulocity CA
-    [Documentation]    Registers a new certificate with Cumulocity CA and places it under `c8y.device.cert_path`
-    [Arguments]    ${csr_path}
-    ${credentials}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN}
-    Execute Command
-    ...    cmd=tedge cert download c8y --csr-path "${csr_path}" --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --retry-every 5s --max-timeout 60s
