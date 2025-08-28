@@ -61,6 +61,49 @@ Thin-edge devices support sending custom measurements
     ...    series=L1
     Log    ${measurements}
 
+Thin-edge devices sending metadata object along measurements
+    Execute Command
+    ...    tedge mqtt pub 'te/device/main///m/machine_energy_measurement' '{"robot_mech_energy":{"accumulated_energy": 0.1},"measurement_context":{"status": "nominal","cycle_id": "cycle-98765"}}'
+    ${measurements}=    Device Should Have Measurements
+    ...    minimum=1
+    ...    maximum=1
+    ...    type=machine_energy_measurement
+    ...    value=robot_mech_energy
+    ...    series=accumulated_energy
+    Should Be Equal    ${measurements[0]["measurement_context"]["status"]}    nominal
+    Should Be Equal    ${measurements[0]["measurement_context"]["cycle_id"]}    cycle-98765
+    Log    ${measurements}
+
+Thin-edge devices sending metadata values along measurements
+    Execute Command
+    ...    tedge mqtt pub 'te/device/main///m/machine_energy_measurement' '{"robot_mech_energy": 0.1,"prop1":"foo","prop2":false,"prop3":["foo", "bar"]}'
+    ${measurements}=    Device Should Have Measurements
+    ...    minimum=1
+    ...    maximum=1
+    ...    type=machine_energy_measurement
+    ...    value=robot_mech_energy
+    ...    series=robot_mech_energy
+    ...    fragment=prop1
+    Should Be Equal    ${measurements[0]["prop1"]}    foo
+    Should Be Equal    ${measurements[0]["prop2"]}    false
+    Should Be Equal    ${measurements[0]["prop3"][0]}    foo
+    Should Be Equal    ${measurements[0]["prop3"][1]}    bar
+    Log    ${measurements}
+
+Thin-edge devices sending measurements mixed with numeric metadata
+    Execute Command
+    ...    tedge mqtt pub 'te/device/main///m/machine_energy_measurement' '{"robot_mech_energy": 0.1,"props":{"version": 1.2,"machine_type": "value",}}'
+    ${measurements}=    Device Should Have Measurements
+    ...    minimum=1
+    ...    maximum=1
+    ...    type=machine_energy_measurement
+    ...    value=robot_mech_energy
+    ...    series=robot_mech_energy
+    ...    fragment=prop1
+    Should Be Equal As Numbers    ${measurements[0]["props"]["version"}    1.2
+    Should Be Equal    ${measurements[0]["props"]["machine_type"]}    value
+    Log    ${measurements}
+
 Thin-edge devices support sending custom events
     Execute Command
     ...    tedge mqtt pub te/device/main///e/myCustomType1 '{ "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
