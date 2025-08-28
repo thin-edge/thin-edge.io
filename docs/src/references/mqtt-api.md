@@ -247,6 +247,7 @@ The following is an overview of the channel categories which are available.
 | cmd      | Commands             |
 | twin     | Entity twin metadata |
 | status   | Service status       |
+| sig      | Signals              |
 
 
 ## Entity registration
@@ -580,7 +581,6 @@ The following table details some example command types which are supported by %%
 | firmware_update | `te/<identifier>/cmd/firmware_update/<cmd_id>` |
 | restart         | `te/<identifier>/cmd/restart/<cmd_id>`         |
 | log_upload      | `te/<identifier>/cmd/log_upload/<cmd_id>`      |
-| health          | `te/<identifier>/cmd/health/check`             |
 
 The command would be interpreted differently based on the target entity.
 For example, the `restart` could mean either a device restart or a service restart based on the target entity.
@@ -647,6 +647,66 @@ tedge mqtt pub -r te/device/main///cmd/config_snapshot '{
 }'
 ```
 
+## Signals
+
+Signals are stateless, making them ideal for one-shot requests.
+The topic scheme for signals can be visualized using the diagram below.
+
+<p align="center">
+
+```mermaid
+graph LR
+  te --/--- identifier --/--- cmd
+  subgraph root
+    te
+  end
+
+  subgraph identifier
+    identifier2["&lt;identifier&gt;"]
+  end
+
+  subgraph command
+    direction LR
+    sig --/--- signal_type["&lt;signal_type&gt;"] --/--- action["&lt;action&gt;"]
+  end
+
+```
+
+</p>
+
+Where the signal segments are describe as follows:
+
+| Segment             | Description                                                                                                                      |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| &lt;identifier&gt;  | The [identifier](#group-identifier) (e.g. device/service) associated with the signal.                                            |
+| &lt;signal_type&gt; | Signal type. Each signal can define its own payload schema to allow signals to have parameters related to the signal's function. |
+| &lt;action&gt;      | Action for the signal type. e.g. `check`                                                                                         |
+
+### Signal examples
+
+The following table details some example signal types which are supported by %%te%%.
+
+| Signal Type | Example Topic                           |
+|--------------|-----------------------------------------|
+| operations   | `te/<identifier>/sig/operations/check`  |
+
+The signal would be interpreted differently based on the target entity.
+
+:::note
+The signal channel is currently in development.
+We plan to add support for more signal types in the future, such as `software_list`, `config_type`, `log_type`, and `health`.
+:::
+
+### Examples: With default device/service topic semantics
+
+#### Signal to a service
+
+Command to request the supported operations of a service:
+
+```sh te2mqtt formats=v1
+tedge mqtt pub te/device/main/service/tedge-mapper-c8y/sig/operations/check '{}'
+```
+
 ## Health check
 
 Services can publish their health status as follows:
@@ -680,4 +740,3 @@ tedge mqtt pub -r te/device/main/service/tedge-agent/status/health '{
   "status": "down"
 }'
 ```
-

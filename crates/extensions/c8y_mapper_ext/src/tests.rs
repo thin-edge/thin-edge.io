@@ -88,6 +88,35 @@ async fn mapper_publishes_init_messages_on_startup() {
     .await;
 }
 
+#[ignore = "fix later"]
+#[tokio::test]
+async fn mapper_publishes_child_supported_operations_on_startup_with_flag() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .dir("test::device::child01")
+        .file("c8y_Restart");
+    ttd.dir("operations")
+        .dir("c8y")
+        .dir("test::device::child02")
+        .file("c8y_Restart");
+
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            ("c8y/s/us/test::device::child01", "114,c8y_Restart"),
+            ("c8y/s/us/test::device::child02", "114,c8y_Restart"),
+        ],
+    )
+    .await;
+}
+
 #[tokio::test]
 async fn child_device_registration_mapping() {
     let ttd = TempTedgeDir::new();
