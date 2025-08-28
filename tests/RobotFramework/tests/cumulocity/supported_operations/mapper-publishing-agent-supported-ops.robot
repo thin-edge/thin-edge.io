@@ -57,6 +57,17 @@ Agent gets the software list request once it comes up
     ...    message_contains=status
     ...    date_from=${timestamp}
 
+Re-publish supported operations by signal channel
+    Execute Command    tedge mqtt pub -r te/device/child01// '{"@type": "child-device"}'
+    Execute Command    tedge mqtt pub -r te/device/child01///cmd/restart '{}'
+    Execute Command    tedge mqtt pub -r te/device/child01/service/foo '{"@type": "service"}'
+    Execute Command    tedge mqtt pub -r te/device/child01/service/foo/cmd/restart '{}'
+
+    Execute Command    tedge mqtt pub te/device/main/service/tedge-mapper-c8y/signal/sync_operations '{}'
+    Should Have MQTT Messages    c8y/s/us    message_contains=114
+    Should Have MQTT Messages    c8y/s/us/${DEVICE_SN}:device:child01    message_contains=114
+    Should Have MQTT Messages    c8y/s/us/${DEVICE_SN}:device:child01:service:foo    message_contains=114
+
 
 *** Keywords ***
 Custom Setup
