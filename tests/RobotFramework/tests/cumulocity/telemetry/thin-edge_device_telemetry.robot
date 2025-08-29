@@ -74,7 +74,20 @@ Thin-edge devices sending metadata object along measurements
     Should Be Equal    ${measurements[0]["measurement_context"]["cycle_id"]}    cycle-98765
     Log    ${measurements}
 
-Thin-edge devices sending metadata values along measurements
+Thin-edge devices sending metadata strings along measurements
+    Execute Command
+    ...    tedge mqtt pub 'te/device/main///m/machine_energy_measurement' '{"robot_mech_energy": 0.1,"prop1":"foo","prop2":"bar"}'
+    ${measurements}=    Device Should Have Measurements
+    ...    minimum=1
+    ...    maximum=1
+    ...    type=machine_energy_measurement
+    ...    value=robot_mech_energy
+    ...    series=robot_mech_energy
+    Should Be Equal    ${measurements[0]["prop1"]}    foo
+    Should Be Equal    ${measurements[0]["prop2"]}    bar
+    Log    ${measurements}
+
+Thin-edge devices sending arbitrary metadata values along measurements
     Execute Command
     ...    tedge mqtt pub 'te/device/main///m/machine_energy_measurement' '{"robot_mech_energy": 0.1,"prop1":"foo","prop2":false,"prop3":["foo", "bar"]}'
     ${measurements}=    Device Should Have Measurements
@@ -83,26 +96,21 @@ Thin-edge devices sending metadata values along measurements
     ...    type=machine_energy_measurement
     ...    value=robot_mech_energy
     ...    series=robot_mech_energy
-    ...    fragment=prop1
     Should Be Equal    ${measurements[0]["prop1"]}    foo
     Should Be Equal    ${measurements[0]["prop2"]}    false
     Should Be Equal    ${measurements[0]["prop3"][0]}    foo
     Should Be Equal    ${measurements[0]["prop3"][1]}    bar
     Log    ${measurements}
 
-Thin-edge devices sending measurements mixed with numeric metadata
+Thin-edge devices rejecting measurements mixed with metadata
     Execute Command
     ...    tedge mqtt pub 'te/device/main///m/machine_energy_measurement' '{"robot_mech_energy": 0.1,"props":{"version": 1.2,"machine_type": "value",}}'
     ${measurements}=    Device Should Have Measurements
-    ...    minimum=1
-    ...    maximum=1
+    ...    minimum=0
+    ...    maximum=0
     ...    type=machine_energy_measurement
     ...    value=robot_mech_energy
     ...    series=robot_mech_energy
-    ...    fragment=prop1
-    Should Be Equal As Numbers    ${measurements[0]["props"]["version"}    1.2
-    Should Be Equal    ${measurements[0]["props"]["machine_type"]}    value
-    Log    ${measurements}
 
 Thin-edge devices support sending custom events
     Execute Command
