@@ -8,11 +8,18 @@ use time::OffsetDateTime;
 
 pub struct C8yJsonSerializer {
     json: JsonWriter,
-    is_within_group: bool,
+    within_group: Option<GroupType>,
     timestamp_present: bool,
     default_timestamp: OffsetDateTime,
     type_present: bool,
     default_type: String,
+}
+
+#[derive(Eq, PartialEq)]
+enum GroupType {
+    Unknown,
+    Measurement,
+    Metadata,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -35,6 +42,9 @@ pub enum MeasurementStreamError {
 
     #[error("Unexpected type within a group")]
     UnexpectedType,
+
+    #[error("Unexpected metadata type")]
+    UnexpectedMetadata,
 
     #[error("Unexpected end of data")]
     UnexpectedEndOfData,
@@ -81,7 +91,7 @@ impl C8yJsonSerializer {
 
         Self {
             json,
-            is_within_group: false,
+            within_group: None,
             timestamp_present: false,
             default_timestamp,
             type_present: false,
@@ -90,7 +100,7 @@ impl C8yJsonSerializer {
     }
 
     fn end(&mut self) -> Result<(), C8yJsonSerializationError> {
-        if self.is_within_group {
+        if self.within_group.is_some() {
             return Err(MeasurementStreamError::UnexpectedEndOfData.into());
         }
 
@@ -126,7 +136,7 @@ impl MeasurementVisitor for C8yJsonSerializer {
     type Error = C8yJsonSerializationError;
 
     fn visit_timestamp(&mut self, timestamp: OffsetDateTime) -> Result<(), Self::Error> {
-        if self.is_within_group {
+        if self.within_group.is_some() {
             return Err(MeasurementStreamError::UnexpectedTimestamp.into());
         }
 
@@ -143,11 +153,20 @@ impl MeasurementVisitor for C8yJsonSerializer {
     }
 
     fn visit_text_property(&mut self, name: &str, value: &str) -> Result<(), Self::Error> {
-        if self.is_within_group {
-            return Err(MeasurementStreamError::UnexpectedType.into());
+        match self.within_group {
+            None => (),
+            Some(GroupType::Unknown) => self.within_group = Some(GroupType::Metadata),
+            Some(GroupType::Metadata) => (),
+            Some(GroupType::Measurement) => {
+                return Err(MeasurementStreamError::UnexpectedType.into());
+            }
         }
+
         match name {
             "type" => {
+                if self.within_group.is_some() {
+                    return Err(MeasurementStreamError::UnexpectedType.into());
+                }
                 self.json.write_key("type")?;
                 self.json.write_str(value)?;
 
@@ -160,12 +179,24 @@ impl MeasurementVisitor for C8yJsonSerializer {
                 });
             }
 
-            _ => {}
+            metadata => {
+                self.json.write_key(metadata)?;
+                self.json.write_str(value)?;
+            }
         }
         Ok(())
     }
 
     fn visit_measurement(&mut self, key: &str, value: f64) -> Result<(), Self::Error> {
+        match self.within_group {
+            None => (),
+            Some(GroupType::Unknown) => self.within_group = Some(GroupType::Measurement),
+            Some(GroupType::Measurement) => (),
+            Some(GroupType::Metadata) => {
+                return Err(MeasurementStreamError::UnexpectedMetadata.into());
+            }
+        }
+
         match key {
             "type" => {
                 return Err(C8yJsonSerializationError::UnexpectedMeasurementName {
@@ -180,7 +211,7 @@ impl MeasurementVisitor for C8yJsonSerializer {
             _ => {
                 self.json.write_key(key)?;
 
-                if self.is_within_group {
+                if self.within_group.is_some() {
                     self.write_value_obj(value)?;
                 } else {
                     self.json.write_open_obj();
@@ -194,23 +225,23 @@ impl MeasurementVisitor for C8yJsonSerializer {
     }
 
     fn visit_start_group(&mut self, group: &str) -> Result<(), Self::Error> {
-        if self.is_within_group {
+        if self.within_group.is_some() {
             return Err(MeasurementStreamError::UnexpectedStartOfGroup.into());
         }
 
         self.json.write_key(group)?;
         self.json.write_open_obj();
-        self.is_within_group = true;
+        self.within_group = Some(GroupType::Unknown);
         Ok(())
     }
 
     fn visit_end_group(&mut self) -> Result<(), Self::Error> {
-        if !self.is_within_group {
+        if self.within_group.is_none() {
             return Err(MeasurementStreamError::UnexpectedEndOfGroup.into());
         }
 
         self.json.write_close_obj();
-        self.is_within_group = false;
+        self.within_group = None;
         Ok(())
     }
 }
