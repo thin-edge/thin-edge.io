@@ -79,6 +79,14 @@ impl MeasurementVisitor for ThinEdgeJsonBuilder {
     fn visit_text_property(&mut self, _name: &str, _value: &str) -> Result<(), Self::Error> {
         Ok(())
     }
+
+    fn visit_json_property(
+        &mut self,
+        _name: &str,
+        _value: serde_json::Value,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 #[derive(thiserror::Error, Debug)]

@@ -58,6 +58,13 @@ impl JsonWriter {
         }
     }
 
+    pub fn write_value(&mut self, s: &serde_json::Value) -> Result<(), JsonWriterError> {
+        self.maybe_separate();
+        serde_json::to_writer(&mut self.buffer, s)?;
+        self.needs_separator = true;
+        Ok(())
+    }
+
     pub fn write_open_obj(&mut self) {
         self.maybe_separate();
         self.buffer.push(b'{');

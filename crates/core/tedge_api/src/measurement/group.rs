@@ -190,6 +190,14 @@ impl MeasurementVisitor for MeasurementGrouper {
     fn visit_text_property(&mut self, _name: &str, _value: &str) -> Result<(), Self::Error> {
         Ok(())
     }
+
+    fn visit_json_property(
+        &mut self,
+        _name: &str,
+        _value: serde_json::Value,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -218,6 +226,7 @@ mod tests {
             fn visit_start_group(&mut self, group: &str) -> Result<(), TestError>;
             fn visit_end_group(&mut self) -> Result<(), TestError>;
             fn visit_text_property(&mut self, _name: &str, _value:&str)-> Result<(), TestError>;
+            fn visit_json_property(&mut self, _name: &str, _value: serde_json::Value) -> Result<(), TestError>;
         }
     }
 
