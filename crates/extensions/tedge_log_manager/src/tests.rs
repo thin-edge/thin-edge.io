@@ -3,10 +3,12 @@ use crate::LogManagerConfig;
 use crate::LogUploadRequest;
 use crate::LogUploadResult;
 use crate::Topic;
+use camino::Utf8Path;
 use filetime::set_file_mtime;
 use filetime::FileTime;
 use std::fs::read_to_string;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::test_helpers::FakeServerBoxBuilder;
@@ -97,8 +99,9 @@ async fn new_log_manager_builder(
     let config = LogManagerConfig {
         mqtt_schema: MqttSchema::default(),
         config_dir: temp_dir.to_path_buf(),
-        tmp_dir: temp_dir.to_path_buf(),
+        tmp_dir: Arc::from(Utf8Path::from_path(temp_dir).unwrap()),
         log_dir: temp_dir.to_path_buf().try_into().unwrap(),
+        plugins_dir: temp_dir.to_path_buf().join("sm-plugins"),
         plugin_config_dir: temp_dir.to_path_buf(),
         plugin_config_path: temp_dir.join("tedge-log-plugin.toml"),
         logtype_reload_topic: Topic::new_unchecked("te/device/main///cmd/log_upload"),

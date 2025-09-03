@@ -361,7 +361,7 @@ impl Agent {
         let log_actor_builder = if self.config.capabilities.log_upload {
             let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
                 config_dir: self.config.config_dir.clone().into(),
-                tmp_dir: self.config.tmp_dir.to_path_buf().into(),
+                tmp_dir: self.config.tmp_dir.clone(),
                 log_dir: self.config.log_dir,
                 mqtt_schema: mqtt_schema.clone(),
                 mqtt_device_topic_id: device_topic_id.clone(),
