@@ -5212,6 +5212,7 @@ dependencies = [
  "time",
  "tokio",
  "toml 0.8.22",
+ "tracing",
 ]
 
 [[package]]

@@ -34,20 +34,23 @@ like the pre-update or post-update actions, leaving the rest of the behavior unc
   - `list`: list all the log types that it supports.
     Used to detect if this is a valid plugin if it exits with exit code 0.
     The output is used only when auto-discovery for log types is turned ON for this plugin.
-  - `get <type> <temp-log-file-path> [--from <timestamp>] [--to <timestamp>] [--filter <filter-text>]`:
+  - `get <type> <temp-log-file-path> [--since <timestamp>] [--until <timestamp>] [--filter <filter-text>] [--tail <lines-from-end>]`:
     Used to fetch the log for the given type within the provided log range.
     The log content must be written to the temporary file passed provided by the agent.
 - The plugin directory would also have a `conf.d` directory where each plugin can store their configuration in a toml file.
   These config files are used to turn type discovery on/off and to define inclusion/exclusion list when type discovery is turned on:
-  ```docker.toml
-  [docker]
+  ```journald.toml
+  [plugins.journald]
   auto_discover=true
 
-  [[docker.include]]
+  [[plugins.journald.include]]
   pattern = "nginx"
 
-  [[docker.exclude]]
-  pattern = "kube-*"
+  [[plugins.journald.include]]
+  pattern = "tedge-*"
+
+  [[plugins.journald.exclude]]
+  pattern = "systemd-*"
   ```
 - The `auto_discover` and `include`/`exclude` configs are used by the `tedge-agent`
   to process the supported types listed by that plugin.

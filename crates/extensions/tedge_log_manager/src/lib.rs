@@ -2,10 +2,13 @@ mod actor;
 mod config;
 mod error;
 mod manager;
+mod plugin;
+mod plugin_manager;
 
 #[cfg(test)]
 mod tests;
 
+use crate::plugin_manager::ExternalPlugins;
 pub use actor::*;
 pub use config::*;
 use log::error;
@@ -187,11 +190,15 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
     fn try_build(self) -> Result<LogManagerActor, Self::Error> {
         let message_box = self.box_builder.build();
 
+        // TODO: Initialize external_plugins properly from /etc/tedge/log-plugins
+        let external_plugins = ExternalPlugins::new(self.config.config_dir.clone());
+
         Ok(LogManagerActor::new(
             self.config,
             self.plugin_config,
             message_box,
             self.upload_sender,
+            external_plugins,
         ))
     }
 }

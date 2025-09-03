@@ -10,6 +10,7 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true }
 easy_reader = { workspace = true }
@@ -30,9 +31,9 @@ thiserror = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["macros"] }
 toml = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
-anyhow = { workspace = true }
 filetime = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
