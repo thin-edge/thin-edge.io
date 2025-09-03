@@ -136,11 +136,11 @@ The agent uses the plugins as follows:
   - Call `set` command of the corresponding plugin with the updated config path in the argument.
   - Call `finalize` command of the plugin and complete the operation if successful.
   - If `set` or `finalize` commands fail, call the `set` command again with the original config file backup as the target.
-  - Call `finalize` again if the previous `set` attempt to restore teh original configuration succeeded and fail the operation.
+  - Call `finalize` again if the previous `set` attempt to restore the original configuration succeeded and fail the operation.
 
 ### Phase 2
 
-Instead of the `exeucting` phase of `config_update` workflow doing everything in that single step,
+Instead of the `executing` phase of `config_update` workflow doing everything in that single step,
 break it down into multiple smaller stages that corresponds to each plugin command/phase as well as follows:
 
 ```config_update.toml
