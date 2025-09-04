@@ -471,7 +471,7 @@ impl CumulocityConverter {
         if let Some(entity) = self.entity_cache.get(source) {
             // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
             let c8y_json_payload =
-                json::from_thin_edge_json(input.payload_str()?, entity, measurement_type)?;
+                json::from_thin_edge_json(input.payload_str()?, entity, measurement_type, None)?;
 
             if c8y_json_payload.len() < self.size_threshold.0 {
                 mqtt_messages.push(MqttMessage::new(
