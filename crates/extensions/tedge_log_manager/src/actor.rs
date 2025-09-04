@@ -6,7 +6,6 @@ use crate::plugin::Plugin;
 use crate::plugin_manager::ExternalPlugins;
 use crate::plugin_manager::Plugins;
 use async_trait::async_trait;
-use camino::Utf8Path;
 use log::debug;
 use log::error;
 use log::info;
@@ -72,14 +71,7 @@ impl Actor for LogManagerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        // TODO: Initialize external_plugins properly from /etc/tedge/log-plugins
-        self.external_plugins = ExternalPlugins::open(
-            &self.config.plugins_dir,
-            true,
-            self.config.config_dir.clone(),
-        )
-        .await
-        .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
+        self.external_plugins.load().await?;
 
         self.reload_supported_log_types().await?;
 
@@ -213,10 +205,7 @@ impl LogManagerActor {
                 )?
             };
 
-        let upload_request = UploadRequest::new(
-            &request_payload.tedge_url,
-            Utf8Path::from_path(log_path.as_path()).unwrap(),
-        );
+        let upload_request = UploadRequest::new(&request_payload.tedge_url, log_path.as_path());
 
         info!(
             "Awaiting upload of log type: {} to url: {}",
@@ -311,7 +300,7 @@ impl LogManagerActor {
 
         // Add external plugin log types with ::plugin_name suffix
         for plugin_type in self.external_plugins.get_all_plugin_types() {
-            warn!("Listing log type using plugin: {}", plugin_type);
+            warn!("Listing log types using plugin: {}", plugin_type);
             if let Some(plugin) = self.external_plugins.by_plugin_type(&plugin_type) {
                 match plugin.list(None).await {
                     Ok(log_types) => {

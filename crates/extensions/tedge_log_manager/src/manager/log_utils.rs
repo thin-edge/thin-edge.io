@@ -1,5 +1,7 @@
 use super::config::FileEntry;
 use super::error::LogRetrievalError;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use easy_reader::EasyReader;
 use glob::glob;
 use regex::Regex;
@@ -18,8 +20,8 @@ pub fn new_read_logs(
     date_from: OffsetDateTime,
     lines: usize,
     search_text: &Option<String>,
-    tmp_dir: &Path,
-) -> Result<PathBuf, LogRetrievalError> {
+    tmp_dir: &Utf8Path,
+) -> Result<Utf8PathBuf, LogRetrievalError> {
     //filter logs on type and date
     let logfiles_to_read = filter_logs(files, log_type, date_from)?;
 
@@ -396,7 +398,7 @@ mod tests {
             datetime!(1970-01-01 00:00:03 +00:00),
             7,
             &None,
-            tempdir.path(),
+            tempdir.utf8_path(),
         )
         .unwrap();
 

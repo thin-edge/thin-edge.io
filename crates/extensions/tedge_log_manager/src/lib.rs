@@ -190,8 +190,8 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
     fn try_build(self) -> Result<LogManagerActor, Self::Error> {
         let message_box = self.box_builder.build();
 
-        // TODO: Initialize external_plugins properly from /etc/tedge/log-plugins
-        let external_plugins = ExternalPlugins::new(self.config.config_dir.clone());
+        let external_plugins =
+            ExternalPlugins::new(&self.config.plugins_dir, true, self.config.tmp_dir.clone());
 
         Ok(LogManagerActor::new(
             self.config,

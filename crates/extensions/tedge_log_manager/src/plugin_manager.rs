@@ -1,16 +1,16 @@
 use crate::error::LogManagementError;
 use crate::plugin::ExternalPluginCommand;
 use crate::plugin::LIST;
+use camino::Utf8Path;
+use log::error;
+use log::info;
 use std::collections::BTreeMap;
 use std::fs;
-use std::io;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Arc;
 use tedge_config::SudoCommandBuilder;
-use tracing::error;
-use tracing::info;
-use tracing::warn;
 
 pub type PluginType = String;
 
@@ -29,7 +29,7 @@ pub struct ExternalPlugins {
     plugin_dir: PathBuf,
     plugin_map: BTreeMap<PluginType, ExternalPluginCommand>,
     sudo: SudoCommandBuilder,
-    config_dir: PathBuf,
+    tmp_dir: Arc<Utf8Path>,
 }
 
 impl Plugins for ExternalPlugins {
@@ -47,42 +47,17 @@ impl Plugins for ExternalPlugins {
 }
 
 impl ExternalPlugins {
-    pub fn new(config_dir: PathBuf) -> Self {
+    pub fn new(plugin_dir: impl Into<PathBuf>, sudo_enabled: bool, tmp_dir: Arc<Utf8Path>) -> Self {
         ExternalPlugins {
-            plugin_dir: config_dir.join("log-plugins"),
-            plugin_map: BTreeMap::new(),
-            sudo: SudoCommandBuilder::enabled(false),
-            config_dir,
-        }
-    }
-
-    pub async fn open(
-        plugin_dir: impl Into<PathBuf>,
-        sudo_enabled: bool,
-        config_dir: PathBuf,
-    ) -> Result<ExternalPlugins, LogManagementError> {
-        let mut plugins = ExternalPlugins {
             plugin_dir: plugin_dir.into(),
             plugin_map: BTreeMap::new(),
             sudo: SudoCommandBuilder::enabled(sudo_enabled),
-            config_dir,
-        };
-        if let Err(e) = plugins.load().await {
-            warn!(
-                "Reading the plugins directory ({:?}): failed with: {e:?}",
-                &plugins.plugin_dir
-            );
+            tmp_dir,
         }
-
-        Ok(plugins)
     }
 
-    pub async fn load(&mut self) -> anyhow::Result<()> {
+    pub async fn load(&mut self) -> Result<(), LogManagementError> {
         self.plugin_map.clear();
-
-        let config = tedge_config::TEdgeConfig::load(&self.config_dir)
-            .await
-            .map_err(|err| io::Error::other(format!("Failed to load tedge config: {}", err)))?;
 
         for maybe_entry in fs::read_dir(&self.plugin_dir)? {
             let entry = maybe_entry?;
@@ -135,7 +110,7 @@ impl ExternalPlugins {
                             plugin_name.to_string(),
                             path.clone(),
                             self.sudo.clone(),
-                            config.tmp.path.as_path().into(),
+                            self.tmp_dir.clone(),
                         );
                         self.plugin_map.insert(plugin_name.into(), plugin);
                     }

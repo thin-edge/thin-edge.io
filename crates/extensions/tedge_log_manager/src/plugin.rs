@@ -2,7 +2,6 @@ use crate::error::LogManagementError;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use log::warn;
-use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
 use std::sync::Arc;
@@ -21,7 +20,7 @@ pub trait Plugin {
     async fn get(
         &self,
         log_type: &str,
-        temp_file_path: &Path,
+        temp_file_path: &Utf8Path,
         since: Option<OffsetDateTime>,
         until: Option<OffsetDateTime>,
         filter_text: Option<&str>,
@@ -116,7 +115,7 @@ impl Plugin for ExternalPluginCommand {
     async fn get(
         &self,
         log_type: &str,
-        temp_file_path: &Path,
+        temp_file_path: &Utf8Path,
         since: Option<OffsetDateTime>,
         until: Option<OffsetDateTime>,
         filter_text: Option<&str>,
