@@ -15,14 +15,14 @@ Test Tags           theme:c8y    theme:log
 *** Test Cases ***
 Log operation journald plugin
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
-    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${operation}=    Cumulocity.Create Operation
     ...    description=Log file request
-    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"tedge-agent.service::journald","searchText":"","maximumLines":100}}
+    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"tedge-agent::journald","searchText":"","maximumLines":100}}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Log Operation Attachment File Contains
     ...    ${operation}
-    ...    expected_pattern=.*COMMAND=/etc/tedge/log-plugins/journald get tedge-agent.service.*
+    ...    expected_pattern=.*Starting tedge-agent.*
 
 
 *** Keywords ***

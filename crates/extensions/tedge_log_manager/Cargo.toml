@@ -31,7 +31,6 @@ thiserror = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["macros"] }
 toml = { workspace = true }
-tracing = { workspace = true }
 
 [dev-dependencies]
 filetime = { workspace = true }

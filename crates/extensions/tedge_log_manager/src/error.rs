@@ -20,7 +20,7 @@ pub enum LogManagementError {
     #[error(transparent)]
     FromLogRetrievalError(#[from] crate::manager::LogRetrievalError),
 
-    #[error("Plugin '{plugin_name}' error: {reason}")]
+    #[error("Log plugin '{plugin_name}' error: {reason}")]
     PluginError { plugin_name: String, reason: String },
 }
 
