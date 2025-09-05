@@ -97,7 +97,7 @@ set/unset c8y.topics
     ${unset}    Execute Command    tedge config list
     Should Contain
     ...    ${unset}
-    ...    c8y.topics=["te/+/+/+/+", "te/+/+/+/+/twin/+", "te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
+    ...    c8y.topics=["te/+/+/+/+", "te/+/+/+/+/twin/+", "te/+/+/+/+/m/+", "te/+/+/+/+/m/+/meta", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
 
 set/unset c8y.proxy.bind.address
     Execute Command    sudo tedge config set c8y.proxy.bind.address 127.1.1.1    # Changing c8y.proxy.bind.address

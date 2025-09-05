@@ -62,7 +62,7 @@ fn from_thin_edge_json_with_timestamp(
 #[derive(Default)]
 pub struct Units {
     units: HashMap<String, String>,
-    groups: HashMap<String, Units>,
+    group_units: HashMap<String, Units>,
 }
 
 impl Units {
@@ -72,13 +72,13 @@ impl Units {
     pub fn new() -> Units {
         Units {
             units: HashMap::new(),
-            groups: HashMap::new(),
+            group_units: HashMap::new(),
         }
     }
 
     /// True if no units are actually defined
     pub fn is_empty(&self) -> bool {
-        self.units.is_empty() && self.groups.is_empty()
+        self.units.is_empty() && self.group_units.is_empty()
     }
 
     /// Measurement units as defined by metadata published on a measurement topic
@@ -93,12 +93,11 @@ impl Units {
     }
 
     pub fn set_unit(&mut self, measurement: String, meta: serde_json::Value) {
-        if let serde_json::Value::String(unit) = meta {
-            // "Temperature": "°C"
-            self.units.insert(measurement, unit);
-        } else if let Some(unit) = meta.get("unit") {
+        if let Some(unit) = meta.get("unit") {
             // "Temperature": {"unit": "°C"},
-            self.set_unit(measurement, unit.clone());
+            if let serde_json::Value::String(unit_name) = unit {
+                self.units.insert(measurement, unit_name.to_owned());
+            }
         } else {
             // "Climate": { "Temperature": {"unit": "°C"}, "Humidity": {"unit": "%RH"} }
             let group = measurement;
@@ -109,7 +108,7 @@ impl Units {
     pub fn set_group_units(&mut self, group: String, meta: serde_json::Value) {
         let units = Units::from_metadata(meta);
         if !units.is_empty() {
-            self.groups.insert(group, units);
+            self.group_units.insert(group, units);
         }
     }
 
@@ -120,7 +119,7 @@ impl Units {
 
     /// Retrieve the units to be used for a measurement group, if any
     pub fn get_group_units(&self, group: &str) -> Option<&Units> {
-        self.groups.get(group)
+        self.group_units.get(group)
     }
 }
 
