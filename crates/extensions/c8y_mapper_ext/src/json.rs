@@ -107,9 +107,15 @@ impl Units {
 
     pub fn set_group_units(&mut self, group: String, meta: serde_json::Value) {
         let units = Units::from_metadata(meta);
-        if !units.is_empty() {
+        if units.is_empty() {
+            self.group_units.remove(&group);
+        } else {
             self.group_units.insert(group, units);
         }
+    }
+
+    pub fn unset_group_units(&mut self, group: String) {
+        self.group_units.remove(&group);
     }
 
     /// Retrieve the unit to be used for a measurement, if any

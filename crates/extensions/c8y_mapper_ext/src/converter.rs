@@ -1185,9 +1185,11 @@ impl CumulocityConverter {
         message: &MqttMessage,
     ) {
         if let Ok(payload) = message.payload_str() {
+            let group = format!("{source}/{measurement_type}");
             if let Ok(meta) = serde_json::from_str(payload) {
-                let group = format!("{source}/{measurement_type}");
                 self.units.set_group_units(group, meta)
+            } else if payload.is_empty() {
+                self.units.unset_group_units(group)
             }
         }
     }
