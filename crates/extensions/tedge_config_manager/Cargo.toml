@@ -27,6 +27,7 @@ tedge_uploader_ext = { workspace = true }
 tedge_utils = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
+time = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
 uzers = { workspace = true }
