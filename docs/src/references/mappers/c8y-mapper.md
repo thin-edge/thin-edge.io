@@ -378,6 +378,82 @@ c8y/measurement/measurements/create
 
 </div>
 
+### Measurement units
+
+The Cumulocity mapper uses the measurement meta topics to attach units to measurement values.
+
+The metadata for a measurement topic:
+
+```mermaid
+graph LR
+  te --/--- entity_id["&lt;entity id&gt;"] --/--- m --/--- measurement_type["&lt;measurement type&gt;"]
+```
+
+are to be published to the associated meta topic:
+
+```mermaid
+graph LR
+  te --/--- entity_id["&lt;entity id&gt;"] --/--- m --/--- measurement_type["&lt;measurement type&gt;"]  --/--- meta
+```
+
+The idea is to describe in a single metadata message all the units of the measurements published under the measurement topic.
+This message uses the same shape as the measurements and is published as retained on the meta topic of the measurement topic.
+
+```shell
+tedge mqtt pub -r 'te/device/main///m//meta' '{
+    "Climate":{
+        "Temperature": {"unit": "°C"},
+        "Humidity": {"unit": "%RH"}
+    },
+    "Acceleration":{
+        "X-Axis": {"unit": "m/s²"},
+        "Y-Axis": {"unit": "m/s²"},
+        "Z-Axis": {"unit": "m/s²"}
+    }
+}'
+```
+
+The measurements published to the topic for measurements of the same type:
+
+```shell
+tedge mqtt pub 'te/device/main///m/' '{
+    "Climate":{
+        "Temperature":23.4,
+        "Humidity":95.0
+    },
+    "Acceleration":{
+        "X-Axis":0.002,
+        "Y-Axis":0.015,
+        "Z-Axis":5.0
+    }
+}'
+```
+
+are then forwarded to C8Y with their units.
+
+```json
+{
+  "type": "ThinEdgeMeasurement",
+  "Climate": {
+    "Temperature": {"value":23.4,"unit":"°C"},
+    "Humidity":{"value":95,"unit":"%RH"}
+  },
+  "Acceleration": {
+    "X-Axis": {"value":0.002,"unit":"m/s²"},
+    "Y-Axis": {"value":0.015,"unit":"m/s²"},
+    "Z-Axis": {"value":5,"unit":"m/s²"}
+  },
+  "time":"2025-09-03T10:05:47.226Z"
+}
+```
+
+- A message received on `te/device/main///m/<type>` uses the units defined on `te/device/main///m/<type>/meta`, if any.
+- If the unit for a measurement is unknown, the measurement value is simply sent with no unit.
+- Other metadata such as the precision or the min and max values can be attached to a measurement.
+  However, these are ignored by the Cumulocity mapper.
+- `"Temperature"`, `"Climate": { "Temperature" }` and `"Engine": { "Temperature" }` can be given different units.
+- Units and all measurement metadata can be cleared by publishing an empty retained message on `te/device/main///m/<type>/meta`.
+
 ### Events
 
 <div class="code-indent-left">
