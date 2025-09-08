@@ -1,8 +1,8 @@
 use crate::certificate_cn;
-use crate::cli::certificate::c8y::create_device_csr;
 use crate::cli::certificate::c8y::read_csr_from_file;
 use crate::cli::certificate::c8y::store_device_cert;
 use crate::cli::certificate::create_csr::Key;
+use crate::cli::certificate::create_device_csr;
 use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::get_webpki_error_from_reqwest;

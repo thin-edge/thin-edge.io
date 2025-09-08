@@ -85,6 +85,14 @@ impl<'a> Pkcs11Uri<'a> {
     }
 }
 
+// TODO: refine the ascii set according to RFC 7512 percent encoding rules
+const PKCS11_ASCII_SET: &percent_encoding::AsciiSet =
+    &percent_encoding::NON_ALPHANUMERIC.remove(b'-');
+
+pub fn percent_encode(input: &str) -> String {
+    percent_encoding::utf8_percent_encode(input, PKCS11_ASCII_SET).to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
