@@ -266,8 +266,7 @@ impl ConfigManagerWorker {
                 let file_entry = self
                     .plugin_config
                     .get_file_entry_from_type(&request.config_type)?;
-                Utf8PathBuf::try_from(&file_entry.path)
-                    .expect("file_entry.path is not a valid UTF-8 path")
+                Utf8PathBuf::from(&file_entry.path)
             };
 
         let tedge_url = match &request.tedge_url {
