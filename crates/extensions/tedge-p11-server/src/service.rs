@@ -22,7 +22,11 @@ pub trait TedgeP11Service: Send + Sync {
     fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String>;
 
     /// Generate a new keypair, saving the private key on the token and returning the public key as PEM.
-    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String>;
+    fn create_key(
+        &self,
+        uri: Option<&str>,
+        params: CreateKeyParams,
+    ) -> anyhow::Result<CreateKeyResponse>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,6 +61,12 @@ pub struct SignResponse(pub Vec<u8>);
 pub struct CreateKeyRequest {
     pub uri: Option<String>,
     pub params: CreateKeyParams,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateKeyResponse {
+    pub pem: String,
+    pub uri: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

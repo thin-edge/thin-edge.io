@@ -83,6 +83,7 @@ use cryptoki::object::ObjectClass;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use cryptoki::slot::TokenInfo;
 use rsa::pkcs1::EncodeRsaPublicKey;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
@@ -103,6 +104,7 @@ pub use cryptoki::types::AuthPin;
 use crate::service;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::CreateKeyResponse;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::SignResponse;
 use crate::service::TedgeP11Service;
@@ -166,8 +168,13 @@ impl TedgeP11Service for Cryptoki {
         self.get_public_key_pem(uri)
     }
 
-    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String> {
-        self.create_key(uri, params)
+    fn create_key(
+        &self,
+        uri: Option<&str>,
+        params: CreateKeyParams,
+    ) -> anyhow::Result<CreateKeyResponse> {
+        let (pem, uri) = self.create_key(uri, params)?;
+        Ok(CreateKeyResponse { pem, uri })
     }
 }
 
@@ -194,7 +201,10 @@ impl Cryptoki {
         })
     }
 
-    fn open_session(&self, uri_attributes: &uri::Pkcs11Uri) -> anyhow::Result<Session> {
+    fn open_session(
+        &self,
+        uri_attributes: &uri::Pkcs11Uri,
+    ) -> anyhow::Result<(Session, TokenInfo)> {
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
 
@@ -232,12 +242,12 @@ impl Cryptoki {
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
 
-        Ok(session)
+        Ok((session, token_info))
     }
 
     pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
         let uri_attributes = self.request_uri(uri)?;
-        let session = self.open_session(&uri_attributes)?;
+        let (session, token_info) = self.open_session(&uri_attributes)?;
 
         // get the signing key
         let key =
@@ -297,21 +307,25 @@ impl Cryptoki {
 
     fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
         let uri_attributes = self.request_uri(uri)?;
-        let session = self.open_session(&uri_attributes)?;
+        let (session, token_info) = self.open_session(&uri_attributes)?;
 
         let key = Self::find_key_by_attributes(&uri_attributes, &session, ObjectClass::PUBLIC_KEY)?;
 
         export_public_key_pem(&session, key)
     }
 
-    pub fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String> {
+    pub fn create_key(
+        &self,
+        uri: Option<&str>,
+        params: CreateKeyParams,
+    ) -> anyhow::Result<(String, String)> {
         let uri_attributes = self.request_uri(uri)?;
-        let session = self.open_session(&uri_attributes)?;
+        let (session, token_info) = self.open_session(&uri_attributes)?;
 
-        let pubkey_pem =
-            create_key(&session, params).context("Failed to create a new private key")?;
+        let pubkey = create_key(&session, &token_info, params)
+            .context("Failed to create a new private key")?;
 
-        Ok(pubkey_pem)
+        Ok(pubkey)
     }
 
     fn find_key_by_attributes(
@@ -428,7 +442,12 @@ fn export_public_key_pem(session: &Session, key: ObjectHandle) -> anyhow::Result
     Ok(pubkey_pem)
 }
 
-fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<String> {
+// TODO: refactor to pass token_info in a cleaner way
+fn create_key(
+    session: &Session,
+    token_info: &TokenInfo,
+    params: CreateKeyParams,
+) -> anyhow::Result<(String, String)> {
     let (mechanism, attrs_pub, attrs_priv) = match params.key {
         KeyTypeParams::Rsa { bits } => {
             anyhow::ensure!(
@@ -510,8 +529,8 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Stri
         Attribute::Extractable(false),
         Attribute::Sign(true),
         Attribute::Decrypt(true),
-        Attribute::Label(params.label.into()),
-        Attribute::Id(id),
+        Attribute::Label(params.label.clone().into()),
+        Attribute::Id(id.clone()),
     ]);
 
     trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
@@ -539,14 +558,14 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Stri
 
             let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
 
-            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
-                if !pubkey_der.is_empty() {
-                    // TODO: test
-                    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
-                    let pubkey_pem = pem::encode(&pubkey_pem);
-                    return Ok(pubkey_pem);
-                }
-            }
+            // if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+            //     if !pubkey_der.is_empty() {
+            //         // TODO: test
+            //         let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+            //         let pubkey_pem = pem::encode(&pubkey_pem);
+            //         return Ok(pubkey_pem);
+            //     }
+            // }
 
             debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
 
@@ -590,14 +609,14 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Stri
 
             let public_key_info = attrs.next().context("Failed to get pubkey PublicKeyInfo")?;
 
-            if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
-                if !pubkey_der.is_empty() {
-                    // TODO: test
-                    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
-                    let pubkey_pem = pem::encode(&pubkey_pem);
-                    return Ok(pubkey_pem);
-                }
-            }
+            // if let Attribute::PublicKeyInfo(pubkey_der) = public_key_info {
+            //     if !pubkey_der.is_empty() {
+            //         // TODO: test
+            //         let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+            //         let pubkey_pem = pem::encode(&pubkey_pem);
+            //         return Ok(pubkey_pem);
+            //     }
+            // }
 
             debug!("Can't use PublicKeyInfo, reconstructing pubkey from components");
 
@@ -625,7 +644,29 @@ fn create_key(session: &Session, params: CreateKeyParams) -> anyhow::Result<Stri
         }
     };
 
-    Ok(pubkey_pem)
+    // generate the URI for the newly created key
+    // TODO: extract to a separate function
+    let mut key_uri = export_session_uri(token_info);
+
+    // id, object, type
+    key_uri.push(';');
+    key_uri.push_str("id=");
+    // from RFC section 2.3: Note that the value of the "id" attribute SHOULD NOT be encoded as UTF-8 because it can
+    // contain non-textual data, instead it SHOULD be entirely percent-encoded
+    for byte in &id {
+        key_uri.push_str(percent_encoding::percent_encode_byte(*byte));
+    }
+
+    key_uri.push(';');
+    key_uri.push_str("object=");
+    let label = uri::percent_encode(&params.label);
+    key_uri.push_str(&label);
+
+    // omit the "type" attribute since its not relevant when used as device.key_uri, which is intended use for this produced value
+
+    assert!(key_uri.starts_with("pkcs11:"));
+
+    Ok((pubkey_pem, key_uri))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -881,6 +922,36 @@ fn get_ec_mechanism(session: &Session, key: ObjectHandle) -> anyhow::Result<SigS
         SECP521R1_OID => Ok(SigScheme::EcdsaNistp521Sha512),
         _ => anyhow::bail!("Parsed oID({oid}) doesn't match any supported EC curve"),
     }
+}
+
+/// Generates PKCS11 URI of the selected token.
+///
+/// The generated URI attempts to be similar to URIs generated by gnutls. Notably, "slot-description", "slot-id", and
+/// "slot-manufacturer" attributes are missing from gnutls URIs, perhaps for portability (URI points to the same thing
+/// even if token is reinserted into a different slot).
+fn export_session_uri(token_info: &TokenInfo) -> String {
+    let mut uri = String::from("pkcs11:");
+
+    uri.push_str("model=");
+    let model = uri::percent_encode(token_info.model());
+    uri.push_str(&model);
+
+    uri.push_str(";");
+    uri.push_str("manufacturer=");
+    let manufacturer = uri::percent_encode(token_info.manufacturer_id());
+    uri.push_str(&manufacturer);
+
+    uri.push_str(";");
+    uri.push_str("serial=");
+    let serial = uri::percent_encode(token_info.serial_number());
+    uri.push_str(&serial);
+
+    uri.push_str(";");
+    uri.push_str("token=");
+    let token = uri::percent_encode(token_info.label());
+    uri.push_str(&token);
+
+    uri
 }
 
 #[cfg(test)]

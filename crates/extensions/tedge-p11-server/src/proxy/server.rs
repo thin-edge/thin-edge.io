@@ -186,7 +186,7 @@ mod tests {
             &self,
             _uri: Option<&str>,
             _params: CreateKeyParams,
-        ) -> anyhow::Result<String> {
+        ) -> anyhow::Result<CreateKeyResponse> {
             todo!()
         }
     }

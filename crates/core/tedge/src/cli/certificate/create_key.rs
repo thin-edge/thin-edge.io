@@ -80,10 +80,14 @@ impl Command for CreateKeyCmd {
         // generate a keypair
         // should probably verify the keys before using them
         let cryptoki = tedge_p11_server::tedge_p11_service(self.cryptoki_config.clone())?;
-        let pubkey_pem = cryptoki.create_key(None, params)?;
+        let key = cryptoki.create_key(None, params)?;
+        let pubkey_pem = key.pem;
 
         eprintln!("New keypair was successfully created.");
         eprintln!("Public key:\n{pubkey_pem}\n");
+
+        eprintln!("Insert this as a new value of device.id:");
+        eprintln!("{}", key.uri);
 
         Ok(())
     }

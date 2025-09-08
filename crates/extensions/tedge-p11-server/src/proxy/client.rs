@@ -62,7 +62,11 @@ impl TedgeP11Service for TedgeP11Client {
         self.get_public_key_pem(uri)
     }
 
-    fn create_key(&self, uri: Option<&str>, params: CreateKeyParams) -> anyhow::Result<String> {
+    fn create_key(
+        &self,
+        uri: Option<&str>,
+        params: CreateKeyParams,
+    ) -> anyhow::Result<crate::service::CreateKeyResponse> {
         self.create_key(uri.map(|s| s.into()), params)
     }
 }
@@ -198,15 +202,15 @@ impl TedgeP11Client {
         &self,
         uri: Option<String>,
         params: CreateKeyParams,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<crate::service::CreateKeyResponse> {
         let request = Frame1::CreateKeyRequest(CreateKeyRequest { uri, params });
         let response = self.do_request(request)?;
 
-        let Frame1::CreateKeyResponse(pubkey_pem) = response else {
+        let Frame1::CreateKeyResponse(pubkey) = response else {
             bail!("protocol error: bad response, expected create_key, received: {response:?}");
         };
 
-        Ok(pubkey_pem)
+        Ok(pubkey)
     }
 
     fn do_request(&self, request: Frame1) -> anyhow::Result<Frame1> {
