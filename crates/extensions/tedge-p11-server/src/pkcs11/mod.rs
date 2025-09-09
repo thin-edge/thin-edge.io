@@ -226,9 +226,7 @@ impl Cryptoki {
             anyhow::bail!("can't get key type");
         };
 
-        let session = Pkcs11Session {
-            session: Arc::new(Mutex::new(session)),
-        };
+        let session = Pkcs11Session { session };
 
         // we need to select a signature scheme to use with a key - each type of key can only have one signature scheme
         // ideally we'd simply get a cryptoki mechanism that corresponds to this sigscheme but it's not possible;
@@ -247,18 +245,18 @@ impl Cryptoki {
 
         let key = match keytype {
             KeyType::EC => {
-                let sigscheme = get_ec_mechanism(&session.session.lock().unwrap(), key)
+                let sigscheme = get_ec_mechanism(&session.session, key)
                     .unwrap_or(SigScheme::EcdsaNistp256Sha256);
 
                 Pkcs11Signer {
-                    session,
+                    session: Arc::new(Mutex::new(session)),
                     key,
                     sigscheme,
                     secondary_schemes: Vec::new(),
                 }
             }
             KeyType::RSA => Pkcs11Signer {
-                session,
+                session: Arc::new(Mutex::new(session)),
                 key,
                 sigscheme: SigScheme::RsaPssSha256,
                 secondary_schemes: vec![SigScheme::RsaPkcs1Sha256],
@@ -392,14 +390,14 @@ fn export_public_key_pem(session: &Session, key: ObjectHandle) -> anyhow::Result
     Ok(pubkey_pem)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Pkcs11Session {
-    pub session: Arc<Mutex<Session>>,
+    pub session: Session,
 }
 
 #[derive(Debug, Clone)]
 pub struct Pkcs11Signer {
-    session: Pkcs11Session,
+    session: Arc<Mutex<Pkcs11Session>>,
     key: ObjectHandle,
     pub sigscheme: SigScheme,
     pub secondary_schemes: Vec<SigScheme>,
@@ -411,7 +409,8 @@ impl Pkcs11Signer {
         message: &[u8],
         sigscheme: Option<SigScheme>,
     ) -> Result<Vec<u8>, anyhow::Error> {
-        let session = self.session.session.lock().unwrap();
+        let guard = self.session.lock().unwrap();
+        let session = &guard.session;
 
         let sigscheme = sigscheme.unwrap_or(self.sigscheme);
         let mechanism = sigscheme.into();
