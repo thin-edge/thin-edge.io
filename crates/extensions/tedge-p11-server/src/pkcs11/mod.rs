@@ -284,8 +284,7 @@ impl CryptokiSession<'_> {
         let session = &self.session;
 
         // get the signing key
-        let key =
-            Self::find_key_by_attributes(&self.uri_attributes, session, ObjectClass::PRIVATE_KEY)?;
+        let key = self.find_key_by_attributes(&self.uri_attributes, ObjectClass::PRIVATE_KEY)?;
         let key_type = session
             .get_attributes(key, &[AttributeType::KeyType])?
             .into_iter()
@@ -340,18 +339,14 @@ impl CryptokiSession<'_> {
     }
 
     fn get_public_key_pem(&self) -> anyhow::Result<String> {
-        let key = Self::find_key_by_attributes(
-            &self.uri_attributes,
-            &self.session,
-            ObjectClass::PUBLIC_KEY,
-        )?;
+        let key = self.find_key_by_attributes(&self.uri_attributes, ObjectClass::PUBLIC_KEY)?;
 
-        export_public_key_pem(&self.session, key)
+        self.export_public_key_pem(key)
     }
 
     fn find_key_by_attributes(
+        &self,
         uri: &uri::Pkcs11Uri,
-        session: &Session,
         class: ObjectClass,
     ) -> anyhow::Result<ObjectHandle> {
         let mut key_template = vec![Attribute::Token(true), Attribute::Class(class)];
@@ -364,7 +359,8 @@ impl CryptokiSession<'_> {
 
         trace!(?key_template, ?uri.object, "Finding a key");
 
-        let mut keys = session
+        let mut keys = self
+            .session
             .find_objects(&key_template)
             .context("Failed to find private key objects")?
             .into_iter();
@@ -378,68 +374,72 @@ impl CryptokiSession<'_> {
 
         Ok(key)
     }
-}
 
-/// Given a handle to a private or a public key object, export public key in PEM format.
-fn export_public_key_pem(session: &Session, key: ObjectHandle) -> anyhow::Result<String> {
-    let keytype = session
-        .get_attributes(key, &[AttributeType::KeyType])?
-        .into_iter()
-        .next()
-        .context("object is not a key")?;
-    let Attribute::KeyType(keytype) = keytype else {
-        // really all the instances where pkcs11 gives us different attribute than the one we asked for are the same error: invalid behaviour of pkcs11 library or the token
-        anyhow::bail!("No keytype");
-    };
+    /// Given a handle to a private or a public key object, export public key in PEM format.
+    fn export_public_key_pem(&self, key: ObjectHandle) -> anyhow::Result<String> {
+        let keytype = self
+            .session
+            .get_attributes(key, &[AttributeType::KeyType])?
+            .into_iter()
+            .next()
+            .context("object is not a key")?;
+        let Attribute::KeyType(keytype) = keytype else {
+            // really all the instances where pkcs11 gives us different attribute than the one we asked for are the same error: invalid behaviour of pkcs11 library or the token
+            anyhow::bail!("No keytype");
+        };
 
-    let pubkey_der = match keytype {
-        KeyType::RSA => {
-            let attrs = session.get_attributes(
-                key,
-                &[AttributeType::Modulus, AttributeType::PublicExponent],
-            )?;
-            trace!(?attrs);
-            let mut attrs = attrs.into_iter();
+        let pubkey_der = match keytype {
+            KeyType::RSA => {
+                let attrs = self.session.get_attributes(
+                    key,
+                    &[AttributeType::Modulus, AttributeType::PublicExponent],
+                )?;
+                trace!(?attrs);
+                let mut attrs = attrs.into_iter();
 
-            let Attribute::Modulus(modulus) = attrs.next().context("Not modulus")? else {
-                anyhow::bail!("No modulus");
-            };
-            let modulus = rsa::BigUint::from_bytes_be(&modulus);
+                let Attribute::Modulus(modulus) = attrs.next().context("Not modulus")? else {
+                    anyhow::bail!("No modulus");
+                };
+                let modulus = rsa::BigUint::from_bytes_be(&modulus);
 
-            let Attribute::PublicExponent(exponent) = attrs.next().context("Not modulus")? else {
-                anyhow::bail!("No public exponent");
-            };
-            let exponent = rsa::BigUint::from_bytes_be(&exponent);
+                let Attribute::PublicExponent(exponent) = attrs.next().context("Not modulus")?
+                else {
+                    anyhow::bail!("No public exponent");
+                };
+                let exponent = rsa::BigUint::from_bytes_be(&exponent);
 
-            let pubkey = rsa::RsaPublicKey::new(modulus, exponent)
-                .context("Failed to construct RSA pubkey from components")?;
+                let pubkey = rsa::RsaPublicKey::new(modulus, exponent)
+                    .context("Failed to construct RSA pubkey from components")?;
 
-            pubkey
-                .to_pkcs1_der()
-                .context("Failed to serialize pubkey as DER")?
-                .into_vec()
-        }
+                pubkey
+                    .to_pkcs1_der()
+                    .context("Failed to serialize pubkey as DER")?
+                    .into_vec()
+            }
 
-        KeyType::EC => {
-            let attrs = session.get_attributes(key, &[AttributeType::EcPoint])?;
-            trace!(?attrs);
-            let mut attrs = attrs.into_iter();
+            KeyType::EC => {
+                let attrs = self
+                    .session
+                    .get_attributes(key, &[AttributeType::EcPoint])?;
+                trace!(?attrs);
+                let mut attrs = attrs.into_iter();
 
-            // Elliptic-Curve-Point-to-Octet-String from SEC 1: Elliptic Curve Cryptography (Version 2.0) section 2.3.3 (page 10)
-            let ec_point = attrs.next().context("Failed to get pubkey EcPoint")?;
-            let Attribute::EcPoint(ec_point) = ec_point else {
-                anyhow::bail!("No ec point");
-            };
-            let (_, ec_point) =
-                asn1_rs::OctetString::from_der(&ec_point).context("Invalid EcPoint")?;
-            ec_point.into_cow().to_vec()
-        }
-        _ => anyhow::bail!("unsupported keytype"),
-    };
-    let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
-    let pubkey_pem = pem::encode(&pubkey_pem);
+                // Elliptic-Curve-Point-to-Octet-String from SEC 1: Elliptic Curve Cryptography (Version 2.0) section 2.3.3 (page 10)
+                let ec_point = attrs.next().context("Failed to get pubkey EcPoint")?;
+                let Attribute::EcPoint(ec_point) = ec_point else {
+                    anyhow::bail!("No ec point");
+                };
+                let (_, ec_point) =
+                    asn1_rs::OctetString::from_der(&ec_point).context("Invalid EcPoint")?;
+                ec_point.into_cow().to_vec()
+            }
+            _ => anyhow::bail!("unsupported keytype"),
+        };
+        let pubkey_pem = pem::Pem::new("PUBLIC KEY", pubkey_der);
+        let pubkey_pem = pem::encode(&pubkey_pem);
 
-    Ok(pubkey_pem)
+        Ok(pubkey_pem)
+    }
 }
 
 #[derive(Debug)]
