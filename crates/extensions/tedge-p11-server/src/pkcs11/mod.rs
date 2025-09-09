@@ -26,6 +26,7 @@ use cryptoki::object::ObjectClass;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use cryptoki::slot::TokenInfo;
 use rsa::pkcs1::EncodeRsaPublicKey;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
@@ -85,8 +86,11 @@ pub struct Cryptoki {
 
 impl TedgeP11Service for Cryptoki {
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse> {
-        let signing_key = self
-            .signing_key(request.uri.as_deref())
+        let session = self
+            .open_session_ro(request.uri.as_deref())
+            .context("Failed to find a signing key")?;
+        let signing_key = session
+            .signing_key()
             .context("Failed to find a signing key")?;
         let offered: Vec<_> = request.offered.into_iter().map(|s| s.0).collect();
         let signer = signing_key
@@ -99,15 +103,19 @@ impl TedgeP11Service for Cryptoki {
     }
 
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse> {
-        let signing_key = self
-            .signing_key(request.uri.as_deref())
+        let session = self
+            .open_session_ro(request.uri.as_deref())
+            .context("Failed to find a signing key")?;
+        let signing_key = session
+            .signing_key()
             .context("Failed to find a signing key")?;
         let signature = signing_key.sign(&request.to_sign, request.sigscheme)?;
         Ok(SignResponse(signature))
     }
 
     fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
-        self.get_public_key_pem(uri)
+        let session = self.open_session_ro(uri)?;
+        session.get_public_key_pem()
     }
 }
 
@@ -164,7 +172,26 @@ impl Cryptoki {
         Ok(client)
     }
 
-    fn open_session(&self, uri_attributes: &uri::Pkcs11Uri) -> anyhow::Result<Session> {
+    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
+        let session = self.open_session_ro(uri)?;
+        session.signing_key()
+    }
+
+    fn open_session_ro<'a>(&'a self, uri: Option<&'a str>) -> anyhow::Result<CryptokiSession<'a>> {
+        self.open_session(uri, CryptokiSessionType::ReadOnly)
+    }
+
+    fn open_session_rw<'a>(&'a self, uri: Option<&'a str>) -> anyhow::Result<CryptokiSession<'a>> {
+        self.open_session(uri, CryptokiSessionType::ReadWrite)
+    }
+
+    fn open_session<'a>(
+        &'a self,
+        uri: Option<&'a str>,
+        session_type: CryptokiSessionType,
+    ) -> anyhow::Result<CryptokiSession<'a>> {
+        let uri_attributes = self.request_uri(uri)?;
+
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
 
@@ -201,21 +228,64 @@ impl Cryptoki {
         let token_info = context.get_token_info(slot)?;
         debug!(?slot_info, ?token_info, "Selected slot");
 
-        let session = context.open_ro_session(slot)?;
+        let session = match session_type {
+            CryptokiSessionType::ReadOnly => context.open_ro_session(slot)?,
+            CryptokiSessionType::ReadWrite => context.open_rw_session(slot)?,
+        };
+
         session.login(UserType::User, Some(&self.config.pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
 
-        Ok(session)
+        Ok(CryptokiSession {
+            session,
+            token_info,
+            uri_attributes,
+        })
     }
 
-    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
-        let uri_attributes = self.request_uri(uri)?;
-        let session = self.open_session(&uri_attributes)?;
+    fn request_uri<'a>(
+        &'a self,
+        request_uri: Option<&'a str>,
+    ) -> anyhow::Result<uri::Pkcs11Uri<'a>> {
+        let mut config_uri = self
+            .config
+            .uri
+            .as_deref()
+            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        let request_uri = request_uri
+            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
+            .transpose()?
+            .unwrap_or_default();
+
+        config_uri.append_attributes(request_uri);
+        Ok(config_uri)
+    }
+}
+
+/// A cryptoki session opened with a token.
+struct CryptokiSession<'a> {
+    session: Session,
+    token_info: TokenInfo,
+    uri_attributes: uri::Pkcs11Uri<'a>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CryptokiSessionType {
+    ReadOnly,
+    ReadWrite,
+}
+
+impl CryptokiSession<'_> {
+    pub fn signing_key(self) -> anyhow::Result<Pkcs11Signer> {
+        let session = &self.session;
 
         // get the signing key
         let key =
-            Self::find_key_by_attributes(&uri_attributes, &session, ObjectClass::PRIVATE_KEY)?;
+            Self::find_key_by_attributes(&self.uri_attributes, session, ObjectClass::PRIVATE_KEY)?;
         let key_type = session
             .get_attributes(key, &[AttributeType::KeyType])?
             .into_iter()
@@ -226,7 +296,9 @@ impl Cryptoki {
             anyhow::bail!("can't get key type");
         };
 
-        let session = Pkcs11Session { session };
+        let session = Pkcs11Session {
+            session: self.session,
+        };
 
         // we need to select a signature scheme to use with a key - each type of key can only have one signature scheme
         // ideally we'd simply get a cryptoki mechanism that corresponds to this sigscheme but it's not possible;
@@ -267,13 +339,14 @@ impl Cryptoki {
         Ok(key)
     }
 
-    fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
-        let uri_attributes = self.request_uri(uri)?;
-        let session = self.open_session(&uri_attributes)?;
+    fn get_public_key_pem(&self) -> anyhow::Result<String> {
+        let key = Self::find_key_by_attributes(
+            &self.uri_attributes,
+            &self.session,
+            ObjectClass::PUBLIC_KEY,
+        )?;
 
-        let key = Self::find_key_by_attributes(&uri_attributes, &session, ObjectClass::PUBLIC_KEY)?;
-
-        export_public_key_pem(&session, key)
+        export_public_key_pem(&self.session, key)
     }
 
     fn find_key_by_attributes(
@@ -304,27 +377,6 @@ impl Cryptoki {
         }
 
         Ok(key)
-    }
-
-    fn request_uri<'a>(
-        &'a self,
-        request_uri: Option<&'a str>,
-    ) -> anyhow::Result<uri::Pkcs11Uri<'a>> {
-        let mut config_uri = self
-            .config
-            .uri
-            .as_deref()
-            .map(|u| uri::Pkcs11Uri::parse(u).context("Failed to parse config PKCS#11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        let request_uri = request_uri
-            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
-            .transpose()?
-            .unwrap_or_default();
-
-        config_uri.append_attributes(request_uri);
-        Ok(config_uri)
     }
 }
 
