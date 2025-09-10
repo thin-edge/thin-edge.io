@@ -162,6 +162,44 @@ and hence must not be used as measurement keys:
 | --- | --- |
 | time | Timestamp in ISO 8601 string format or as a unix timestamp (in seconds) |
 
+### Measurement properties
+
+A measurement can contain additional properties to contextualize the measurement.
+
+These properties are free-form and only have to be grouped under a `properties` sub-object.
+
+```sh te2mqtt formats=v1
+tedge mqtt pub te/device/main///m/example '{
+  "time": "2020-10-15T05:30:47+00:00",
+  "temperature": 25,
+
+  "properties": {
+    "sensor": "DS18B20",
+    "has_alarm": false,
+    "samples": [ 25.1, 25.0, 24.9],
+    "range": {
+       "min": "-55°C",
+       "max": "+125°C"
+    }
+  }
+}'
+```
+
+These additional properties are not interpreted by %%te%% as measurement values and are passed unchanged to the target cloud.
+For instance, the example is translated into the following when forwarded to Cumulocity:
+
+```json
+{
+  "time":"2020-10-15T05:30:47Z",
+  "temperature":{"temperature":{"value":25.0}},
+  "sensor":"DS18B20",
+  "has_alarm":false,
+  "samples":[25.1,25.0,24.9],
+  "range":{"min":"-55°C","max":"+125°C"},
+  "type":"example"
+}
+```
+
 ## Events
 
 *Events* are notifications that something happened on the device, its environment, the domain application or the software system.

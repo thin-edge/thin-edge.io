@@ -9,6 +9,7 @@ pub struct ThinEdgeJsonSerializer {
     is_within_group: bool,
     default_timestamp: Option<OffsetDateTime>,
     timestamp_present: bool,
+    properties: Option<serde_json::Value>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -59,6 +60,7 @@ impl ThinEdgeJsonSerializer {
             is_within_group: false,
             default_timestamp,
             timestamp_present: false,
+            properties: None,
         }
     }
 
@@ -71,6 +73,11 @@ impl ThinEdgeJsonSerializer {
             if let Some(default_timestamp) = self.default_timestamp {
                 self.visit_timestamp(default_timestamp)?;
             }
+        }
+
+        if let Some(properties) = &self.properties {
+            self.json.write_key("properties")?;
+            self.json.write_value(properties)?;
         }
 
         self.json.write_close_obj();
@@ -139,6 +146,15 @@ impl MeasurementVisitor for ThinEdgeJsonSerializer {
     }
 
     fn visit_text_property(&mut self, _name: &str, _value: &str) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn visit_json_property(
+        &mut self,
+        _name: &str,
+        value: serde_json::Value,
+    ) -> Result<(), Self::Error> {
+        self.properties = Some(value);
         Ok(())
     }
 }

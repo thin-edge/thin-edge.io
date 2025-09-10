@@ -98,6 +98,12 @@ where
                         .visit_timestamp(timestamp.into())
                         .map_err(de::Error::custom)?;
                 }
+                "properties" => {
+                    let properties = map.next_value()?;
+                    self.visitor
+                        .visit_json_property("properties", properties)
+                        .map_err(de::Error::custom)?;
+                }
                 _key => {
                     let parser = ThinEdgeValueParser {
                         depth: 0,

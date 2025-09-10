@@ -81,6 +81,10 @@ pub use serialize::*;
 ///    fn visit_text_property(&mut self, _name: &str, _value: &str) -> Result<(), Self::Error>{
 ///         Ok(())
 ///    }
+///
+///    fn visit_json_property(&mut self, _name: &str, _value: serde_json::Value) -> Result<(), Self::Error>{
+///         Ok(())
+///    }
 /// }
 /// ```
 pub trait MeasurementVisitor {
@@ -95,6 +99,13 @@ pub trait MeasurementVisitor {
 
     /// Add a text property, attached to the current group if any.
     fn visit_text_property(&mut self, _name: &str, _value: &str) -> Result<(), Self::Error>;
+
+    /// Add a free form property that is not a measurement nor a text.
+    fn visit_json_property(
+        &mut self,
+        name: &str,
+        value: serde_json::Value,
+    ) -> Result<(), Self::Error>;
 
     /// Start to gather measurements for a group.
     fn visit_start_group(&mut self, group: &str) -> Result<(), Self::Error>;
