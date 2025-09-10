@@ -93,15 +93,20 @@ impl Units {
     }
 
     pub fn set_unit(&mut self, measurement: String, meta: serde_json::Value) {
-        if let Some(unit) = meta.get("unit") {
-            // "Temperature": {"unit": "°C"},
-            if let serde_json::Value::String(unit_name) = unit {
-                self.units.insert(measurement, unit_name.to_owned());
+        if let Some(serde_json::Value::String(unit)) = meta.get("unit") {
+            match measurement.split_once('.') {
+                None => {
+                    // "Temperature": {"unit": "°C"},
+                    self.units.insert(measurement, unit.to_owned());
+                }
+                Some((group, measurement)) => {
+                    // "Climate.Temperature": {"unit": "°C"},
+                    self.group_units
+                        .entry(group.to_owned())
+                        .or_default()
+                        .set_unit(measurement.to_owned(), meta);
+                }
             }
-        } else {
-            // "Climate": { "Temperature": {"unit": "°C"}, "Humidity": {"unit": "%RH"} }
-            let group = measurement;
-            self.set_group_units(group, meta);
         }
     }
 
@@ -328,15 +333,11 @@ mod tests {
 
         let units = r#"
     {
-      "Climate":{
-        "Temperature": {"unit": "°C"},
-        "Humidity": {"unit": "%RH"}
-      },
-      "Acceleration":{
-        "X-Axis": {"unit": "m/s²"},
-        "Y-Axis": {"unit": "m/s²"},
-        "Z-Axis": {"unit": "m/s²"}
-      }
+      "Climate.Temperature":{"unit": "°C"},
+      "Climate.Humidity": {"unit": "%RH"},
+      "Acceleration.X-Axis": {"unit": "m/s²"},
+      "Acceleration.Y-Axis": {"unit": "m/s²"},
+      "Acceleration.Z-Axis": {"unit": "m/s²"}
     }"#;
 
         let expected_output = r#"
