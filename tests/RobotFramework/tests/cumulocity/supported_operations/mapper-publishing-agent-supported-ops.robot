@@ -63,10 +63,12 @@ Re-publish supported operations by signal channel
     Execute Command    tedge mqtt pub -r te/device/child01/service/foo '{"@type": "service"}'
     Execute Command    tedge mqtt pub -r te/device/child01/service/foo/cmd/restart '{}'
 
-    Execute Command    tedge mqtt pub te/device/main/service/tedge-mapper-c8y/signal/sync_operations '{}'
-    Should Have MQTT Messages    c8y/s/us    message_contains=114
-    Should Have MQTT Messages    c8y/s/us/${DEVICE_SN}:device:child01    message_contains=114
-    Should Have MQTT Messages    c8y/s/us/${DEVICE_SN}:device:child01:service:foo    message_contains=114
+    Execute Command    tedge mqtt pub te/device/main/service/tedge-mapper-c8y/signal/sync '{}'
+    Should Have MQTT Messages
+    ...    c8y/s/us
+    ...    message_contains=114,c8y_DeviceProfile,c8y_DownloadConfigFile,c8y_LogfileRequest,c8y_RemoteAccessConnect,c8y_Restart,c8y_SoftwareUpdate,c8y_UploadConfigFile
+    Should Have MQTT Messages    c8y/s/us/${DEVICE_SN}:device:child01    message_contains=114,c8y_Restart
+    Should Have MQTT Messages    c8y/s/us/${DEVICE_SN}:device:child01:service:foo    message_contains=114,c8y_Restart
 
 
 *** Keywords ***

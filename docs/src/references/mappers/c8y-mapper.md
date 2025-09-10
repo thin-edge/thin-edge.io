@@ -1279,7 +1279,7 @@ This request makes the `c8y-mapper` republish the supported operations of all th
 **%%te%% (input)**
 
 ```text title="Topic"
-te/device/main/service/tedge-mapper-c8y/signal/sync_operations
+te/device/main/service/tedge-mapper-c8y/signal/sync
 ```
 
 ```json5 title="Payload"

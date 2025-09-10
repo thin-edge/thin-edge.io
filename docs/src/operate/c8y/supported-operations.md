@@ -488,7 +488,7 @@ Available only in the template operation file definition:
 To send or resend `c8y_SupportedOperations` fragment from %%te%% to your Cumulocity tenant, publish the following message:
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub te/device/main/service/tedge-mapper-c8y/signal/sync_operations '{}'
+tedge mqtt pub te/device/main/service/tedge-mapper-c8y/signal/sync '{}'
 ```
 
 This command republishes the supported operations for the main device and all its child devices.

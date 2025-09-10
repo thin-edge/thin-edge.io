@@ -712,9 +712,9 @@ Where the signal segments are describe as follows:
 
 The following table details some example signal types which are supported by %%te%%.
 
-| Signal Type      | Example Topic                            |
-|------------------|------------------------------------------|
-| sync_operations  | `te/<identifier>/signal/sync_operations` |
+| Signal Type | Example Topic                 |
+|-------------|-------------------------------|
+| sync        | `te/<identifier>/signal/sync` |
 
 The signal would be interpreted differently based on the target entity.
 
@@ -730,7 +730,7 @@ We plan to add support for more signal types in the future.
 Signal to request the supported operations of the `tedge-mapper-c8y` service:
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub te/device/main/service/tedge-mapper-c8y/signal/sync_operations '{}'
+tedge mqtt pub te/device/main/service/tedge-mapper-c8y/signal/sync '{}'
 ```
 
 ## Health check
