@@ -1292,9 +1292,9 @@ dependencies = [
 
 [[package]]
 name = "cryptoki"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e45b5f1ddb06ae54aea3f6d60e88c493356c51f43b8e741c9d5ac661f4d02d3"
+checksum = "781357a7779a8e92ea985121bbf379a9adf0777f44ab6392efc6abd5aa9b67db"
 dependencies = [
  "bitflags 1.3.2",
  "cryptoki-sys",
@@ -1306,9 +1306,9 @@ dependencies = [
 
 [[package]]
 name = "cryptoki-sys"
-version = "0.2.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "062316aeb324b15a0b10c9475a9e67d613b7409056c33fbe33b7c12027408cfb"
+checksum = "753e27d860277930ae9f394c119c8c70303236aab0ffab1d51f3d207dbb2bc4b"
 dependencies = [
  "libloading",
 ]
@@ -2547,11 +2547,11 @@ checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
 
 [[package]]
 name = "libloading"
-version = "0.7.4"
-source = "git+https://github.com/Bravo555/rust_libloading.git?branch=v0.7.4#12922084558bc82482edd7e9339394bbc9afcee3"
+version = "0.8.8"
+source = "git+https://github.com/Bravo555/rust_libloading.git?branch=0.8.8#d000ffa239652d21152e5a3460095a27d5883113"
 dependencies = [
  "cfg-if",
- "winapi",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]

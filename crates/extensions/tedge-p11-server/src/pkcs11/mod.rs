@@ -10,6 +10,7 @@ use asn1_rs::FromDer as _;
 use asn1_rs::Integer;
 use asn1_rs::SequenceOf;
 use asn1_rs::ToDer;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use cryptoki::context::CInitializeArgs;
 use cryptoki::context::Pkcs11;
@@ -37,6 +38,7 @@ use tracing::trace;
 use tracing::warn;
 
 use std::fmt::Debug;
+use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -77,7 +79,7 @@ impl Debug for CryptokiConfigDirect {
 /// A [`TedgeP11Service`] implementation that uses the loaded cryptoki library to perform PKCS #11 operations.
 #[derive(Debug, Clone)]
 pub struct Cryptoki {
-    context: Pkcs11,
+    context: Arc<Mutex<Pkcs11>>,
     config: CryptokiConfigDirect,
 }
 
@@ -111,36 +113,72 @@ impl TedgeP11Service for Cryptoki {
 
 impl Cryptoki {
     pub fn new(config: CryptokiConfigDirect) -> anyhow::Result<Self> {
-        debug!(module_path = %config.module_path, "Loading PKCS#11 module");
-        // can fail with Pkcs11(GeneralError, GetFunctionList) if P11_KIT_SERVER_ADDRESS is wrong
-        let pkcs11client = match Pkcs11::new(&config.module_path) {
-            Ok(p) => p,
-            // i want to get inner error but i don't know if there is a better way to do this
-            Err(Error::LibraryLoading(e)) => {
-                return Err(e).context("Failed to load PKCS#11 dynamic object");
-            }
-            Err(e) => {
-                return Err(e).context("Failed to load PKCS#11 dynamic object");
-            }
-        };
-
+        let pkcs11client = Self::load(&config.module_path)?;
         pkcs11client.initialize(CInitializeArgs::OsThreads)?;
 
         Ok(Self {
-            context: pkcs11client,
+            context: Arc::new(Mutex::new(pkcs11client)),
             config,
         })
+    }
+
+    /// Reinitializes the PKCS11 library.
+    ///
+    /// In some libraries, if the slot list changes, this change might not be visible until C_Initialize is called
+    /// again ([C_GetSlotList]).
+    ///
+    /// [C_GetSlotList]: https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/errata01/os/pkcs11-base-v2.40-errata01-os-complete.html#_Toc441755804
+    fn reinit(&self) -> anyhow::Result<()> {
+        // load a new client before locking so if error we don't poison the mutex
+        let new_client = Self::load(&self.config.module_path)?;
+
+        // we never use multiple threads or modify context outside of new and reinit, so we should never panic
+        self.context.clear_poison();
+        let mut context = self.context.lock().unwrap();
+        let old_client = std::mem::replace(context.deref_mut(), new_client);
+
+        // the spec says "(C_Finalize) should be the last Cryptoki call made by an application", so call it on the old
+        // client before initializing new client
+        // https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/errata01/os/pkcs11-base-v2.40-errata01-os-complete.html#_Toc441755803
+        old_client.finalize();
+
+        // can return Error::AlreadyInitialized, but it shouldn't, only warn if it does anyway
+        if let Err(err) = context.initialize(CInitializeArgs::OsThreads) {
+            warn!(?err, "Initializing cryptoki library failed");
+        }
+
+        Ok(())
+    }
+
+    fn load(module_path: &Utf8Path) -> anyhow::Result<Pkcs11> {
+        debug!(%module_path, "Loading PKCS#11 module");
+        // can fail with Pkcs11(GeneralError, GetFunctionList) if P11_KIT_SERVER_ADDRESS is wrong
+        let client = match Pkcs11::new(module_path) {
+            Ok(p) => p,
+            // i want to get inner error but i don't know if there is a better way to do this
+            Err(Error::LibraryLoading(e)) => {
+                return Err(e).context("Failed to load PKCS#11 dynamic object")
+            }
+            Err(e) => return Err(e).context("Failed to load PKCS#11 dynamic object"),
+        };
+        Ok(client)
     }
 
     fn open_session(&self, uri_attributes: &uri::Pkcs11Uri) -> anyhow::Result<Session> {
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
 
-        let slots_with_tokens = self.context.get_slots_with_token()?;
+        self.reinit()?;
+        let context = match self.context.lock() {
+            Ok(c) => c,
+            Err(e) => e.into_inner(),
+        };
+
+        let slots_with_tokens = context.get_slots_with_token()?;
         let tokens: Result<Vec<_>, _> = slots_with_tokens
             .iter()
             .map(|s| {
-                self.context
+                context
                     .get_token_info(*s)
                     .context("Failed to get slot info")
             })
@@ -159,11 +197,11 @@ impl Cryptoki {
             .next()
             .context("Didn't find a slot to use. The device may be disconnected.")?;
 
-        let slot_info = self.context.get_slot_info(slot)?;
-        let token_info = self.context.get_token_info(slot)?;
+        let slot_info = context.get_slot_info(slot)?;
+        let token_info = context.get_token_info(slot)?;
         debug!(?slot_info, ?token_info, "Selected slot");
 
-        let session = self.context.open_ro_session(slot)?;
+        let session = context.open_ro_session(slot)?;
         session.login(UserType::User, Some(&self.config.pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
