@@ -791,7 +791,7 @@ impl OperationType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SignalType {
-    SyncOperations,
+    Sync,
     Custom(String),
 }
 
@@ -826,7 +826,7 @@ impl FromStr for SignalType {
 impl<'a> From<&'a str> for SignalType {
     fn from(s: &'a str) -> SignalType {
         match s {
-            "sync_operations" => SignalType::SyncOperations,
+            "sync" => SignalType::Sync,
             custom => SignalType::Custom(custom.to_string()),
         }
     }
@@ -835,7 +835,7 @@ impl<'a> From<&'a str> for SignalType {
 impl Display for SignalType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            SignalType::SyncOperations => write!(f, "sync_operations"),
+            SignalType::Sync => write!(f, "sync"),
             SignalType::Custom(custom) => write!(f, "{custom}"),
         }
     }
@@ -1158,10 +1158,10 @@ mod tests {
             mqtt_schema.topic_for(
                 &device,
                 &Channel::Signal {
-                    signal_type: SignalType::SyncOperations,
+                    signal_type: SignalType::Sync,
                 }
             ),
-            mqtt_channel::Topic::new_unchecked("te/device/main///signal/sync_operations")
+            mqtt_channel::Topic::new_unchecked("te/device/main///signal/sync")
         );
         assert_eq!(
             mqtt_schema.topic_for(&device, &Channel::Health),

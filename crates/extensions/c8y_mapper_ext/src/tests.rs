@@ -3172,7 +3172,7 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
     mqtt.skip(3).await; // Skip registration messages
 
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/tedge-mapper-c8y/signal/sync_operations"),
+        &Topic::new_unchecked("te/device/main/service/tedge-mapper-c8y/signal/sync"),
         "{}",
     ))
     .await
