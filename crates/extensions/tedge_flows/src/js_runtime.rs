@@ -1,6 +1,6 @@
 use crate::js_lib;
 use crate::js_script::JsScript;
-use crate::js_script::JsonValue;
+use crate::js_value::JsonValue;
 use crate::LoadError;
 use anyhow::anyhow;
 use rquickjs::module::Evaluated;

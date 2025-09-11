@@ -1,4 +1,4 @@
-use crate::js_script::JsonValue;
+use crate::js_value::JsonValue;
 use rquickjs::class::Trace;
 use rquickjs::function::Rest;
 use rquickjs::Ctx;
