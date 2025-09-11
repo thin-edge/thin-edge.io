@@ -1,3 +1,4 @@
+use crate::js_lib;
 use crate::js_script::JsScript;
 use crate::js_script::JsonValue;
 use crate::LoadError;
@@ -175,6 +176,8 @@ impl JsWorker {
     async fn run(mut self) {
         rquickjs::async_with!(self.context => |ctx| {
             console::init(&ctx);
+            js_lib::text_decoder::init(&ctx);
+            js_lib::text_encoder::init(&ctx);
             let mut modules = JsModules::new();
             while let Some(request) = self.requests.recv().await {
                 match request {

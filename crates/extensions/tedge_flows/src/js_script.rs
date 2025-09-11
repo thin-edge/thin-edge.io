@@ -514,6 +514,52 @@ export function onMessage(message) {
             .contains("Maximum call stack size exceeded"));
     }
 
+    #[tokio::test]
+    async fn using_text_decoder() {
+        let js = r#"
+export async function onMessage(message, config) {
+    const utf8decoder = new TextDecoder();
+    const encodedText = new Uint8Array([240, 159, 146, 150]);
+    return [{topic:"decoded", payload: utf8decoder.decode(encodedText)}];
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("encoded", "content");
+        let mut output = Message::new("decoded", "💖");
+        output.timestamp = None;
+        assert_eq!(
+            script
+                .on_message(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn using_text_encoder() {
+        let js = r#"
+export async function onMessage(message, config) {
+    const utf8encoder = new TextEncoder();
+    const encodedText = utf8encoder.encode(message.payload);
+    return [{topic:"encoded", payload: `[${encodedText}]`}];
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("decoded", "💖");
+        let mut output = Message::new("encoded", "[240,159,146,150]");
+        output.timestamp = None;
+        assert_eq!(
+            script
+                .on_message(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
     async fn runtime_with(js: &str) -> (JsRuntime, JsScript) {
         let mut runtime = JsRuntime::try_new().await.unwrap();
         let mut script = JsScript::new("toml".into(), 1, "js".into());
