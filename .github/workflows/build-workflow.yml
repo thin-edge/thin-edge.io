@@ -27,6 +27,9 @@ on:
   pull_request_target:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -501,6 +504,8 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     needs: [publish-virtual-packages, publish-containers]
     if: |
       always() &&

@@ -6,6 +6,10 @@ name: autotag
 on:
   push:
     branches: [main]
+
+permissions:
+  contents: read
+
 jobs:
   create_tag:
     runs-on: ubuntu-latest

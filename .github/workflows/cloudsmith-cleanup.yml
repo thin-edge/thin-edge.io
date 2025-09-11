@@ -6,6 +6,10 @@ on:
   # run automatically every Monday at 01:00 UTC
   schedule:
   - cron: "0 1 * * 1"
+
+permissions:
+  contents: read
+
 jobs:
   cleanup:
     name: Cleanup
