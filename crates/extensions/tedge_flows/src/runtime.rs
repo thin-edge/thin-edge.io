@@ -142,7 +142,7 @@ impl MessageProcessor {
     pub async fn on_message(
         &mut self,
         source: MessageSource,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         message: &Message,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let started_at = self.stats.runtime_on_message_start();
@@ -170,7 +170,7 @@ impl MessageProcessor {
 
     pub async fn on_interval(
         &mut self,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         now: Instant,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let mut out_messages = vec![];
@@ -186,46 +186,9 @@ impl MessageProcessor {
         out_messages
     }
 
-    pub async fn process(
-        &mut self,
-        source: MessageSource,
-        timestamp: &DateTime,
-        message: &Message,
-    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
-        let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter_mut() {
-            let flow_output = flow
-                .on_message(
-                    &self.js_runtime,
-                    source,
-                    &mut self.stats,
-                    timestamp,
-                    message,
-                )
-                .await;
-            out_messages.push((flow_id.clone(), flow_output));
-        }
-        out_messages
-    }
-
-    pub async fn tick(
-        &mut self,
-        timestamp: &DateTime,
-        now: Instant,
-    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
-        let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter_mut() {
-            let flow_output = flow
-                .on_interval(&self.js_runtime, &mut self.stats, timestamp, now)
-                .await;
-            out_messages.push((flow_id.clone(), flow_output));
-        }
-        out_messages
-    }
-
     pub async fn drain_db(
         &mut self,
-        timestamp: &DateTime,
+        timestamp: DateTime,
     ) -> Vec<(String, Result<Vec<(DateTime, Message)>, DatabaseError>)> {
         let mut out_messages = vec![];
         for (flow_id, flow) in self.flows.iter() {
@@ -430,8 +393,8 @@ pub trait ToFromSlice {
 impl ToFromSlice for DateTime {
     fn to_slice(&self) -> Slice {
         let mut arr = [0u8; 12];
-        *&mut arr[0..8].copy_from_slice(&self.seconds.to_be_bytes());
-        *&mut arr[8..12].copy_from_slice(&self.nanoseconds.to_be_bytes());
+        arr[0..8].copy_from_slice(&self.seconds.to_be_bytes());
+        arr[8..12].copy_from_slice(&self.nanoseconds.to_be_bytes());
         Slice::new(&arr)
     }
 
@@ -454,7 +417,7 @@ impl ToFromSlice for Message {
     }
 
     fn from_slice(slice: Slice) -> Self {
-        serde_json::from_slice(&*slice).unwrap()
+        serde_json::from_slice(&slice).unwrap()
     }
 }
 
@@ -581,7 +544,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify the message was stored
-        let stored_messages = db.drain_older_than(timestamp, &series).await.unwrap();
+        let stored_messages = db.drain_older_than(timestamp, series).await.unwrap();
         assert_eq!(stored_messages.len(), 1);
         assert_eq!(stored_messages[0], (timestamp, message));
     }

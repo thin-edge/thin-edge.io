@@ -30,7 +30,6 @@ async fn main() -> anyhow::Result<()> {
 fn print_record(record: &Record) {
     let time = record.0.seconds;
     let topic = &record.1.topic;
-    let payload = &record.1.payload;
-    let payload = String::from_utf8_lossy(payload);
-    println!("[{time}]\t{topic}\t{payload}");
+    let payload = std::str::from_utf8(&record.1.payload).unwrap_or("[Not UTF-8]");
+    println!("[{time}]\t{topic}\t{payload}")
 }
