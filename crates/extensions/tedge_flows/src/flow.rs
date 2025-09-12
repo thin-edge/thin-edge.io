@@ -117,7 +117,7 @@ impl Flow {
         js_runtime: &JsRuntime,
         source: MessageSource,
         stats: &mut Counter,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         self.on_config_update(js_runtime, message).await?;
@@ -152,7 +152,7 @@ impl Flow {
         &mut self,
         js_runtime: &JsRuntime,
         stats: &mut Counter,
-        timestamp: &DateTime,
+        timestamp: DateTime,
     ) -> Result<Vec<Message>, FlowError> {
         let stated_at = stats.flow_on_interval_start(self.source.as_str());
         let mut messages = vec![];
@@ -222,7 +222,7 @@ impl FlowInput {
                 // MeaDB inputs don't subscribe to MQTT topics
                 // Return an empty topic filter
                 static EMPTY_TOPICS: std::sync::OnceLock<TopicFilter> = std::sync::OnceLock::new();
-                EMPTY_TOPICS.get_or_init(|| TopicFilter::empty())
+                EMPTY_TOPICS.get_or_init(TopicFilter::empty)
             }
         }
     }

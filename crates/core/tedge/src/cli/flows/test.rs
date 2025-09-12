@@ -33,17 +33,17 @@ impl Command for TestCommand {
         };
         if let Some(message) = &self.message {
             let timestamp = DateTime::now();
-            self.process(&mut processor, message, &timestamp).await;
+            self.process(&mut processor, message, timestamp).await;
         } else {
             let mut stdin = BufReader::new(tokio::io::stdin());
             while let Some(message) = next_message(&mut stdin).await {
                 let timestamp = DateTime::now();
-                self.process(&mut processor, &message, &timestamp).await;
+                self.process(&mut processor, &message, timestamp).await;
             }
         }
         if self.final_on_interval {
             let timestamp = DateTime::now();
-            self.tick(&mut processor, &timestamp).await;
+            self.tick(&mut processor, timestamp).await;
         }
         Ok(())
     }
@@ -54,7 +54,7 @@ impl TestCommand {
         &self,
         processor: &mut MessageProcessor,
         message: &Message,
-        timestamp: &DateTime,
+        timestamp: DateTime,
     ) {
         processor
             .on_message(MessageSource::MQTT, timestamp, message)
@@ -64,7 +64,7 @@ impl TestCommand {
             .for_each(print)
     }
 
-    async fn tick(&self, processor: &mut MessageProcessor, timestamp: &DateTime) {
+    async fn tick(&self, processor: &mut MessageProcessor, timestamp: DateTime) {
         processor
             .on_interval(timestamp)
             .await

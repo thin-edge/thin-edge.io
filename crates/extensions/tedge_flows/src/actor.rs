@@ -40,14 +40,14 @@ impl Actor for FlowsMapper {
             tokio::select! {
                 _ = interval.tick() => {
                     let drained_messages = self.drain_db().await?;
-                    self.filter_all(MessageSource::MeaDB, drained_messages).await?;
+                    self.on_messages(MessageSource::MeaDB, drained_messages).await?;
 
                     self.on_interval().await?;
                 }
                 message = self.messages.recv() => {
                     match message {
                         Some(InputMessage::MqttMessage(message)) => match Message::try_from(message) {
-                            Ok(message) => self.on_message(message).await?,
+                            Ok(message) => self.on_message(MessageSource::MQTT, DateTime::now(), message).await?,
                             Err(err) => {
                                 error!(target: "flows", "Cannot process message: {err}");
                             }
@@ -108,66 +108,33 @@ impl FlowsMapper {
         diff
     }
 
-    async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {
-        let timestamp = DateTime::now();
-        for (flow_id, flow_messages) in self
-            .processor
-            .on_message(MessageSource::MQTT, &timestamp, &message)
-            .await
-        {
-            match flow_messages {
-                Ok(messages) => {
-                    for message in messages {
-                        match MqttMessage::try_from(message) {
-                            Ok(message) => {
-                                self.messages
-                                    .send(OutputMessage::MqttMessage(message))
-                                    .await?
-                            }
-                            Err(err) => {
-                                error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
-                            }
-                        }
-                    }
-                }
-                Err(err) => {
-                    error!(target: "flows", "{flow_id}: {err}");
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn filter_all(
-        &mut self,
-        source: MessageSource,
-        messages: Vec<(DateTime, Message)>,
-    ) -> Result<(), RuntimeError> {
-        for (timestamp, message) in messages {
-            self.filter(source, timestamp, message).await?
-        }
-        Ok(())
-    }
-
-    async fn filter(
+    async fn on_message(
         &mut self,
         source: MessageSource,
         timestamp: DateTime,
         message: Message,
     ) -> Result<(), RuntimeError> {
-        for (flow_id, flow_messages) in self.processor.process(source, &timestamp, &message).await {
+        for (flow_id, flow_messages) in self.processor.on_message(source, timestamp, &message).await
+        {
             match flow_messages {
-                Ok(messages) => {
-                    self.publish_messages(flow_id.clone(), timestamp.clone(), messages)
-                        .await?;
-                }
+                Ok(messages) => self.publish_messages(flow_id, timestamp, messages).await?,
                 Err(err) => {
                     error!(target: "flows", "{flow_id}: {err}");
                 }
             }
         }
 
+        Ok(())
+    }
+
+    async fn on_messages(
+        &mut self,
+        source: MessageSource,
+        messages: Vec<(DateTime, Message)>,
+    ) -> Result<(), RuntimeError> {
+        for (timestamp, message) in messages {
+            self.on_message(source, timestamp, message).await?
+        }
         Ok(())
     }
 
@@ -177,10 +144,10 @@ impl FlowsMapper {
             self.processor.dump_memory_stats().await;
             self.processor.dump_processing_stats().await;
         }
-        for (flow_id, flow_messages) in self.processor.on_interval(&timestamp).await {
+        for (flow_id, flow_messages) in self.processor.on_interval(timestamp).await {
             match flow_messages {
                 Ok(messages) => {
-                    self.publish_messages(flow_id.clone(), timestamp.clone(), messages)
+                    self.publish_messages(flow_id.clone(), timestamp, messages)
                         .await?;
                 }
                 Err(err) => {
@@ -238,7 +205,7 @@ impl FlowsMapper {
     async fn drain_db(&mut self) -> Result<Vec<(DateTime, Message)>, RuntimeError> {
         let timestamp = DateTime::now();
         let mut messages = vec![];
-        for (flow_id, flow_messages) in self.processor.drain_db(&timestamp).await {
+        for (flow_id, flow_messages) in self.processor.drain_db(timestamp).await {
             match flow_messages {
                 Ok(flow_messages) => {
                     for (t, m) in flow_messages.iter() {

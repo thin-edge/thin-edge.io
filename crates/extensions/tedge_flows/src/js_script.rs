@@ -84,7 +84,7 @@ impl JsScript {
     pub async fn on_message(
         &self,
         js: &JsRuntime,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         debug!(target: "flows", "{}: onMessage({timestamp:?}, {message:?})", self.module_name());
@@ -94,7 +94,7 @@ impl JsScript {
 
         let mut message = message.clone();
         if message.timestamp.is_none() {
-            message.timestamp = Some(timestamp.clone());
+            message.timestamp = Some(timestamp);
         }
         let input = vec![message.into(), self.config.clone()];
         js.call_function(&self.module_name(), "onMessage", input)
@@ -139,7 +139,7 @@ impl JsScript {
     pub async fn on_interval(
         &self,
         js: &JsRuntime,
-        timestamp: &DateTime,
+        timestamp: DateTime,
     ) -> Result<Vec<Message>, FlowError> {
         if self.no_js_on_interval_fun {
             return Ok(vec![]);
@@ -148,7 +148,7 @@ impl JsScript {
             return Ok(vec![]);
         }
         debug!(target: "flows", "{}: onInterval({timestamp:?})", self.module_name());
-        let input = vec![timestamp.clone().into(), self.config.clone()];
+        let input = vec![timestamp.into(), self.config.clone()];
         js.call_function(&self.module_name(), "onInterval", input)
             .await
             .map_err(flow::error_from_js)?
@@ -321,7 +321,7 @@ mod tests {
         let output = input.clone();
         assert_eq!(
             script
-                .on_message(&runtime, &DateTime::now(), &input)
+                .on_message(&runtime, DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![output]
@@ -337,7 +337,7 @@ mod tests {
         let output = input.clone();
         assert_eq!(
             script
-                .on_message(&runtime, &DateTime::now(), &input)
+                .on_message(&runtime, DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![output]
@@ -352,7 +352,7 @@ mod tests {
         let input = Message::new("te/main/device///m/", "hello world");
         assert_eq!(
             script
-                .on_message(&runtime, &DateTime::now(), &input)
+                .on_message(&runtime, DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![]
@@ -367,7 +367,7 @@ mod tests {
         let input = Message::new("te/main/device///m/", "hello world");
         assert_eq!(
             script
-                .on_message(&runtime, &DateTime::now(), &input)
+                .on_message(&runtime, DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![]
@@ -381,7 +381,7 @@ mod tests {
 
         let input = Message::new("te/main/device///m/", "hello world");
         let error = script
-            .on_message(&runtime, &DateTime::now(), &input)
+            .on_message(&runtime, DateTime::now(), &input)
             .await
             .unwrap_err();
         eprintln!("{:?}", error);
@@ -424,7 +424,7 @@ export function onMessage(message, config) {
         output.timestamp = None;
         assert_eq!(
             script
-                .on_message(&runtime, &DateTime::now(), &input)
+                .on_message(&runtime, DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![output]
@@ -445,7 +445,7 @@ export async function onMessage(message, config) {
         output.timestamp = None;
         assert_eq!(
             script
-                .on_message(&runtime, &DateTime::now(), &input)
+                .on_message(&runtime, DateTime::now(), &input)
                 .await
                 .unwrap(),
             vec![output]
@@ -463,7 +463,7 @@ export function onMessage(message) {
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("dummy", "content");
-        let err = script.on_message(&runtime, &DateTime::now(), &input).await;
+        let err = script.on_message(&runtime, DateTime::now(), &input).await;
         assert!(format!("{:?}", err).contains("setTimeout is not defined"));
     }
 
@@ -474,7 +474,7 @@ export function onMessage(message) {
 
         let input = Message::new("topic", "payload");
         let error = script
-            .on_message(&runtime, &DateTime::now(), &input)
+            .on_message(&runtime, DateTime::now(), &input)
             .await
             .unwrap_err();
         eprintln!("{:?}", error);
@@ -488,7 +488,7 @@ export function onMessage(message) {
 
         let input = Message::new("topic", "payload");
         let error = script
-            .on_message(&runtime, &DateTime::now(), &input)
+            .on_message(&runtime, DateTime::now(), &input)
             .await
             .unwrap_err();
         eprintln!("{:?}", error);
@@ -502,7 +502,7 @@ export function onMessage(message) {
 
         let input = Message::new("topic", "payload");
         let error = script
-            .on_message(&runtime, &DateTime::now(), &input)
+            .on_message(&runtime, DateTime::now(), &input)
             .await
             .unwrap_err();
         eprintln!("{:?}", error);
