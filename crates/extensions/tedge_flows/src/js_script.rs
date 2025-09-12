@@ -40,7 +40,7 @@ impl JsScript {
     pub fn with_config(self, config: Option<serde_json::Value>) -> Self {
         if let Some(config) = config {
             Self {
-                config: JsonValue(config),
+                config: JsonValue::from(config),
                 ..self
             }
         } else {
