@@ -51,7 +51,8 @@ pub enum InputConfig {
     #[serde(rename = "mea-db")]
     MeaDB {
         series: String,
-        frequency: u64,
+        #[serde(deserialize_with = "parse_human_duration")]
+        frequency: Duration,
         #[serde(deserialize_with = "parse_human_duration")]
         max_age: Duration,
     },
@@ -144,7 +145,7 @@ impl StepConfig {
         };
         let script = JsScript::new(flow.to_owned().into(), index, path)
             .with_config(self.config)
-            .with_interval_secs(self.interval.as_secs());
+            .with_interval(self.interval);
         let config_topics = topic_filters(self.meta_topics)?;
         Ok(FlowStep {
             script,

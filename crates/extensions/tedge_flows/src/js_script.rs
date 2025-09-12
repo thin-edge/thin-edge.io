@@ -17,7 +17,7 @@ pub struct JsScript {
     pub module_name: String,
     pub path: PathBuf,
     pub config: JsonValue,
-    pub interval_secs: u64,
+    pub interval: std::time::Duration,
     pub no_js_on_message_fun: bool,
     pub no_js_on_config_update_fun: bool,
     pub no_js_on_interval_fun: bool,
@@ -39,7 +39,7 @@ impl JsScript {
             module_name,
             path,
             config: JsonValue::default(),
-            interval_secs: 0,
+            interval: std::time::Duration::ZERO,
             no_js_on_message_fun: true,
             no_js_on_config_update_fun: true,
             no_js_on_interval_fun: true,
@@ -61,11 +61,8 @@ impl JsScript {
         }
     }
 
-    pub fn with_interval_secs(self, interval_secs: u64) -> Self {
-        Self {
-            interval_secs,
-            ..self
-        }
+    pub fn with_interval(self, interval: std::time::Duration) -> Self {
+        Self { interval, ..self }
     }
 
     pub fn path(&self) -> &Path {
@@ -147,7 +144,7 @@ impl JsScript {
         if self.no_js_on_interval_fun {
             return Ok(vec![]);
         }
-        if !timestamp.tick_now(self.interval_secs) {
+        if !timestamp.tick_now(self.interval) {
             return Ok(vec![]);
         }
         debug!(target: "flows", "{}: onInterval({timestamp:?})", self.module_name());

@@ -37,7 +37,7 @@ pub enum FlowInput {
     },
     MeaDB {
         series: String,
-        frequency: u64,
+        frequency: std::time::Duration,
         max_age: std::time::Duration,
     },
 }
@@ -200,16 +200,16 @@ impl FlowStep {
         if script.no_js_on_config_update_fun && !self.config_topics.is_empty() {
             warn!(target: "flows", "Flow script with no 'onConfigUpdate' function: {}; but configured with 'config_topics' in {flow}", script.path.display());
         }
-        if script.no_js_on_interval_fun && script.interval_secs != 0 {
+        if script.no_js_on_interval_fun && !script.interval.is_zero() {
             warn!(target: "flows", "Flow script with no 'onInterval' function: {}; but configured with an 'interval' in {flow}", script.path.display());
         }
     }
 
     pub(crate) fn fix(&mut self) {
         let script = &mut self.script;
-        if !script.no_js_on_interval_fun && script.interval_secs == 0 {
-            // 0 as a default is not appropriate for a script with an onInterval handler
-            script.interval_secs = 1;
+        if !script.no_js_on_interval_fun && script.interval.is_zero() {
+            // Zero as a default is not appropriate for a script with an onInterval handler
+            script.interval = std::time::Duration::from_secs(1);
         }
     }
 }
@@ -237,8 +237,9 @@ impl DateTime {
         json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
     }
 
-    pub fn tick_now(&self, tick_every_seconds: u64) -> bool {
-        tick_every_seconds != 0 && (self.seconds % tick_every_seconds == 0)
+    pub fn tick_now(&self, tick_every: std::time::Duration) -> bool {
+        let tick_every_secs = tick_every.as_secs();
+        tick_every_secs != 0 && (self.seconds % tick_every_secs == 0)
     }
 
     pub fn sub_duration(&self, duration: std::time::Duration) -> Self {
