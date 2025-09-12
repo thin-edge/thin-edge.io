@@ -8,6 +8,7 @@ use crate::flow::MessageSource;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
 use crate::LoadError;
+use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use fjall::Keyspace;
@@ -59,12 +60,12 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(Self::db_path()).await?,
+            database: MeaDb::open(&Self::db_path(config_dir)).await?,
         })
     }
 
-    fn db_path() -> Utf8PathBuf {
-        "/etc/tedge/tedge-flows.db".into()
+    fn db_path(config_dir: &Utf8Path) -> Utf8PathBuf {
+        config_dir.join("tedge-flows.db")
     }
 
     pub async fn try_new_single_flow(
@@ -84,7 +85,7 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(Self::db_path()).await?,
+            database: MeaDb::open(&Self::db_path(config_dir)).await?,
         })
     }
 
@@ -104,7 +105,7 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(Self::db_path()).await?,
+            database: MeaDb::open(&Self::db_path(config_dir)).await?,
         })
     }
 
@@ -426,11 +427,13 @@ where
     Payload: ToFromSlice + Send + 'static,
     Timestamp: ToFromSlice + Ord + Copy + Send + 'static,
 {
-    pub async fn open(path: impl AsRef<Path> + Send) -> Result<Self, fjall::Error> {
-        let path = path.as_ref().to_owned();
-        let keyspace = spawn_blocking(move || fjall::Config::new(path).open())
+    pub async fn open(path: impl AsRef<Utf8Path>) -> Result<Self, anyhow::Error> {
+        let path = path.as_ref();
+        let config = fjall::Config::new(path);
+        let keyspace = spawn_blocking(move || config.open())
             .await
-            .unwrap()?;
+            .unwrap()
+            .with_context(|| format!("opening database at {path}"))?;
         Ok(Self {
             keyspace,
             _types: PhantomData,
@@ -510,11 +513,11 @@ mod tests {
     use time::macros::datetime;
 
     use super::*;
-    use std::path::PathBuf;
+    use camino::Utf8PathBuf;
 
     // Helper function to create a dummy path
-    fn dummy_path() -> PathBuf {
-        PathBuf::from("/tmp/test_db")
+    fn dummy_path() -> Utf8PathBuf {
+        Utf8PathBuf::from("/tmp/test_db")
     }
 
     impl ToFromSlice for String {
