@@ -186,43 +186,6 @@ impl MessageProcessor {
         out_messages
     }
 
-    pub async fn process(
-        &mut self,
-        source: MessageSource,
-        timestamp: DateTime,
-        message: &Message,
-    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
-        let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter_mut() {
-            let flow_output = flow
-                .on_message(
-                    &self.js_runtime,
-                    source,
-                    &mut self.stats,
-                    timestamp,
-                    message,
-                )
-                .await;
-            out_messages.push((flow_id.clone(), flow_output));
-        }
-        out_messages
-    }
-
-    pub async fn tick(
-        &mut self,
-        timestamp: DateTime,
-        now: Instant,
-    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
-        let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter_mut() {
-            let flow_output = flow
-                .on_interval(&self.js_runtime, &mut self.stats, timestamp, now)
-                .await;
-            out_messages.push((flow_id.clone(), flow_output));
-        }
-        out_messages
-    }
-
     pub async fn drain_db(
         &mut self,
         timestamp: DateTime,
