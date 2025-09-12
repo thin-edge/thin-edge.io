@@ -48,7 +48,7 @@ pub enum ScriptSpec {
 pub enum InputConfig {
     #[serde(rename = "mqtt")]
     Mqtt { topics: Vec<String> },
-    #[serde(rename = "mea-db")]
+    #[serde(rename = "db")]
     MeaDB {
         series: String,
         #[serde(deserialize_with = "parse_human_duration")]
@@ -65,7 +65,7 @@ pub enum OutputConfig {
         #[serde(default = "default_output_topics")]
         topics: Vec<String>,
     },
-    #[serde(rename = "mea-db")]
+    #[serde(rename = "db")]
     MeaDB { series: String },
 }
 
