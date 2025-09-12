@@ -506,15 +506,41 @@ can be updated by publishing the following message:
 
 ```sh te2mqtt formats=v1
 tedge mqtt pub -r te/device/main///m/battery_reading/meta '{
-  "units": {
-    "temperature": "°C",
-    "voltage": "V",
-    "current": "A"
-  }
+  "temperature": { "unit": "°C", "precision": "±0.1°C" },
+  "voltage": { "unit": "V", "min": 0, "max": 20 },
+  "current": { "unit": "A" }
 }'
 ```
 
-The metadata fields supported by each data type will be defined in detail later.
+These free-form metadata fields are used to interpret the values published on the associated topic.
+
+Continuing the example with the following measurement:
+
+```sh te2mqtt formats=v1
+tedge mqtt pub te/device/main///m/battery_reading '{
+  "temperature": 25,
+  "voltage": 20,
+  "current": 5,
+  "ttl": 1
+}'
+```
+
+The metadata for *battery_reading* are used by the Cumulocity mapper, to attach units to these values:
+
+```json
+{
+  "temperature": {"temperature":{"value":25.0,"unit":"°C"}},
+  "voltage":{"voltage":{"value":20.0,"unit":"V"}},
+  "current":{"current":{"value":5.0,"unit":"A"}},
+  "ttl":{"ttl":{"value":1.0}},
+  "time":"2025-09-05T13:47:23.818993647Z",
+  "type":"battery_reading"
+}
+```
+
+Note that:
+- Metadata can be missing. The Cumulocity mapper doesn't mandate units and publishes the *ttl* value even if no units is known.
+- Extra metadata can be added. The Cumulocity mapper only uses the units and ignores all other metadata fields.
 
 ## Twin metadata
 

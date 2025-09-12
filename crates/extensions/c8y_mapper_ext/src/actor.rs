@@ -177,7 +177,7 @@ impl C8yMapperActor {
                     }
                 }
             } else {
-                self.process_message(message.clone()).await?;
+                self.process_message(message).await?;
             }
         } else {
             self.convert_and_publish(&message).await?;

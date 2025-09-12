@@ -12,6 +12,7 @@ use crate::entity_cache::UpdateOutcome;
 use crate::error::ConversionError;
 use crate::error::MessageConversionError;
 use crate::json;
+use crate::json::Units;
 use crate::operations;
 use crate::operations::OperationHandler;
 use crate::supported_operations::operation::get_child_ops;
@@ -190,6 +191,8 @@ pub struct CumulocityConverter {
 
     supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
+
+    units: Units,
 }
 
 impl CumulocityConverter {
@@ -277,6 +280,7 @@ impl CumulocityConverter {
             recently_completed_commands: HashMap::new(),
             active_commands_last_cleared: Instant::now(),
             operation_handler,
+            units: Units::default(),
         })
     }
 
@@ -470,8 +474,9 @@ impl CumulocityConverter {
 
         if let Some(entity) = self.entity_cache.get(source) {
             // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
+            let units = self.get_measurement_type_units(source, measurement_type);
             let c8y_json_payload =
-                json::from_thin_edge_json(input.payload_str()?, entity, measurement_type)?;
+                json::from_thin_edge_json(input.payload_str()?, entity, measurement_type, units)?;
 
             if c8y_json_payload.len() < self.size_threshold.0 {
                 mqtt_messages.push(MqttMessage::new(
@@ -1163,6 +1168,31 @@ impl CumulocityConverter {
         self.active_commands.contains_key(cmd_id)
             || self.recently_completed_commands.contains_key(cmd_id)
     }
+
+    fn get_measurement_type_units(
+        &self,
+        source: &EntityTopicId,
+        measurement_type: &str,
+    ) -> Option<&Units> {
+        let group = format!("{source}/{measurement_type}");
+        self.units.get_group_units(&group)
+    }
+
+    fn set_measurement_type_units(
+        &mut self,
+        source: &EntityTopicId,
+        measurement_type: &str,
+        message: &MqttMessage,
+    ) {
+        if let Ok(payload) = message.payload_str() {
+            let group = format!("{source}/{measurement_type}");
+            if let Ok(meta) = serde_json::from_str(payload) {
+                self.units.set_group_units(group, meta)
+            } else if payload.is_empty() {
+                self.units.unset_group_units(group)
+            }
+        }
+    }
 }
 
 #[derive(Error, Debug)]
@@ -1205,6 +1235,10 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         match &channel {
             Channel::EntityMetadata => self.try_convert_entity_registration(source, message),
+            Channel::MeasurementMetadata { measurement_type } => {
+                self.set_measurement_type_units(&source, measurement_type, message);
+                Ok(vec![])
+            }
             _ => {
                 self.try_convert_data_message(source, channel, message)
                     .await

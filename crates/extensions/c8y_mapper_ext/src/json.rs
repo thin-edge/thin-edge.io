@@ -13,13 +13,14 @@
 //!        "pressure": 220
 //!     }"#;
 //! let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
-//! let output = from_thin_edge_json(single_value_thin_edge_json, &entity,"");
+//! let output = from_thin_edge_json(single_value_thin_edge_json, &entity,"",None);
 //! ```
 
 use crate::entity_cache::CloudEntityMetadata;
 use crate::serializer;
 use clock::Clock;
 use clock::WallClock;
+use std::collections::HashMap;
 use tedge_api::measurement::*;
 use time::OffsetDateTime;
 use time::{self};
@@ -38,9 +39,10 @@ pub fn from_thin_edge_json(
     input: &str,
     entity: &CloudEntityMetadata,
     m_type: &str,
+    units: Option<&Units>,
 ) -> Result<String, CumulocityJsonError> {
     let timestamp = WallClock.now();
-    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, entity, m_type)?;
+    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, entity, m_type, units)?;
     Ok(c8y_vec)
 }
 
@@ -49,10 +51,87 @@ fn from_thin_edge_json_with_timestamp(
     timestamp: OffsetDateTime,
     entity: &CloudEntityMetadata,
     m_type: &str,
+    units: Option<&Units>,
 ) -> Result<String, CumulocityJsonError> {
-    let mut serializer = serializer::C8yJsonSerializer::new(timestamp, entity, m_type);
+    let mut serializer = serializer::C8yJsonSerializer::new(timestamp, entity, m_type, units);
     parse_str(input, &mut serializer)?;
     Ok(serializer.into_string()?)
+}
+
+/// Units used for measurements of a given type
+#[derive(Default)]
+pub struct Units {
+    units: HashMap<String, String>,
+    group_units: HashMap<String, Units>,
+}
+
+impl Units {
+    /// An empty set of measurement units
+    ///
+    /// This is the default when no measurement metadata is published for a measurement topic
+    pub fn new() -> Units {
+        Units {
+            units: HashMap::new(),
+            group_units: HashMap::new(),
+        }
+    }
+
+    /// True if no units are actually defined
+    pub fn is_empty(&self) -> bool {
+        self.units.is_empty() && self.group_units.is_empty()
+    }
+
+    /// Measurement units as defined by metadata published on a measurement topic
+    pub fn from_metadata(meta: serde_json::Value) -> Self {
+        let mut units = Units::new();
+        if let serde_json::Value::Object(map) = meta {
+            for (k, v) in map {
+                units.set_unit(k, v);
+            }
+        }
+        units
+    }
+
+    pub fn set_unit(&mut self, measurement: String, meta: serde_json::Value) {
+        if let Some(serde_json::Value::String(unit)) = meta.get("unit") {
+            match measurement.split_once('.') {
+                None => {
+                    // "Temperature": {"unit": "°C"},
+                    self.units.insert(measurement, unit.to_owned());
+                }
+                Some((group, measurement)) => {
+                    // "Climate.Temperature": {"unit": "°C"},
+                    self.group_units
+                        .entry(group.to_owned())
+                        .or_default()
+                        .set_unit(measurement.to_owned(), meta);
+                }
+            }
+        }
+    }
+
+    pub fn set_group_units(&mut self, group: String, meta: serde_json::Value) {
+        let units = Units::from_metadata(meta);
+        if units.is_empty() {
+            self.group_units.remove(&group);
+        } else {
+            self.group_units.insert(group, units);
+        }
+    }
+
+    pub fn unset_group_units(&mut self, group: String) {
+        self.group_units.remove(&group);
+    }
+
+    /// Retrieve the unit to be used for a measurement, if any
+    pub fn get_unit(&self, measurement: &str) -> Option<&str> {
+        self.units.get(measurement).map(|x| x.as_str())
+    }
+
+    /// Retrieve the units to be used for a measurement group, if any
+    pub fn get_group_units(&self, group: &str) -> Option<&Units> {
+        self.group_units.get(group)
+    }
 }
 
 #[cfg(test)]
@@ -77,8 +156,13 @@ mod tests {
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
         let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
-        let output =
-            from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, &entity, "");
+        let output = from_thin_edge_json_with_timestamp(
+            single_value_thin_edge_json,
+            timestamp,
+            &entity,
+            "",
+            None,
+        );
 
         let expected_output = json!({
             "time": timestamp
@@ -114,8 +198,13 @@ mod tests {
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
         let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
-        let output =
-            from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, &entity, "");
+        let output = from_thin_edge_json_with_timestamp(
+            single_value_thin_edge_json,
+            timestamp,
+            &entity,
+            "",
+            None,
+        );
 
         let expected_output = json!({
             "time": timestamp
@@ -160,7 +249,7 @@ mod tests {
                   }"#;
 
         let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
-        let output = from_thin_edge_json(single_value_thin_edge_json, &entity, "");
+        let output = from_thin_edge_json(single_value_thin_edge_json, &entity, "", None);
 
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
@@ -183,8 +272,13 @@ mod tests {
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
         let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
-        let output =
-            from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp, &entity, "");
+        let output = from_thin_edge_json_with_timestamp(
+            multi_value_thin_edge_json,
+            timestamp,
+            &entity,
+            "",
+            None,
+        );
 
         let expected_output = json!({
             "time": timestamp
@@ -222,6 +316,56 @@ mod tests {
     }
 
     #[test]
+    fn using_metadata_to_define_measurement_units() {
+        let input = r#"
+    {
+      "time": "2013-06-22T17:03:14.123+02:00",
+      "Climate":{
+        "Temperature":23.4,
+        "Humidity":95.0
+      },
+      "Acceleration":{
+        "X-Axis":0.002,
+        "Y-Axis":0.015,
+        "Z-Axis":5.0
+      }
+    }"#;
+
+        let units = r#"
+    {
+      "Climate.Temperature":{"unit": "°C"},
+      "Climate.Humidity": {"unit": "%RH"},
+      "Acceleration.X-Axis": {"unit": "m/s²"},
+      "Acceleration.Y-Axis": {"unit": "m/s²"},
+      "Acceleration.Z-Axis": {"unit": "m/s²"}
+    }"#;
+
+        let expected_output = r#"
+    {
+      "time": "2013-06-22T17:03:14.123+02:00",
+      "Climate": {
+        "Temperature": {"value":23.4,"unit":"°C"},
+        "Humidity":{"value":95.0,"unit":"%RH"}
+      },
+      "Acceleration": {
+        "X-Axis": {"value":0.002,"unit":"m/s²"},
+        "Y-Axis": {"value":0.015,"unit":"m/s²"},
+        "Z-Axis": {"value":5.0,"unit":"m/s²"}
+      },
+      "type": "ThinEdgeMeasurement"
+    }"#;
+
+        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
+        let units = Units::from_metadata(serde_json::from_str(units).unwrap());
+        let output = from_thin_edge_json(input, &entity, "", Some(&units));
+
+        assert_eq!(
+            expected_output.split_whitespace().collect::<String>(),
+            output.unwrap().split_whitespace().collect::<String>()
+        );
+    }
+
+    #[test]
     fn thin_edge_json_round_tiny_number() {
         let input = r#"{
            "time" : "2013-06-22T17:03:14.000+02:00",
@@ -239,7 +383,7 @@ mod tests {
         }"#;
 
         let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
-        let output = from_thin_edge_json(input, &entity, "");
+        let output = from_thin_edge_json(input, &entity, "", None);
 
         let actual_output = output.unwrap().split_whitespace().collect::<String>();
 
@@ -272,7 +416,7 @@ mod tests {
                 }}"#, time, measurement, measurement);
 
         let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
-        let output = from_thin_edge_json(input.as_str(), &entity, "").unwrap();
+        let output = from_thin_edge_json(input.as_str(), &entity, "", None).unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
             output
@@ -323,7 +467,8 @@ mod tests {
             child_id.into(),
             EntityMetadata::child_device(child_id.to_string()).unwrap(),
         );
-        let output = from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, &entity, "");
+        let output =
+            from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, &entity, "", None);
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output
