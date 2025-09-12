@@ -109,7 +109,7 @@ impl StepConfig {
         };
         let script = JsScript::new(flow.to_owned().into(), index, path)
             .with_config(self.config)
-            .with_interval_secs(self.interval.as_secs());
+            .with_interval(self.interval);
         let config_topics = topic_filters(self.meta_topics)?;
         Ok(FlowStep {
             script,
