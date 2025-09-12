@@ -9,7 +9,6 @@ mod stats;
 use crate::actor::FlowsMapper;
 pub use crate::runtime::MessageProcessor;
 use std::convert::Infallible;
-use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Builder;
@@ -26,6 +25,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
+use camino::Utf8Path;
 use tracing::error;
 
 pub use runtime::MeaDB;
@@ -39,7 +39,7 @@ pub struct FlowsMapperBuilder {
 }
 
 impl FlowsMapperBuilder {
-    pub async fn try_new(config_dir: impl AsRef<Path>) -> Result<Self, LoadError> {
+    pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
         let processor = MessageProcessor::try_new(config_dir).await?;
         Ok(FlowsMapperBuilder {
             message_box: SimpleMessageBoxBuilder::new("GenMapper", 16),
@@ -68,7 +68,7 @@ impl FlowsMapperBuilder {
 
     pub fn connect_fs(&mut self, fs: &mut impl MessageSource<FsWatchEvent, PathBuf>) {
         fs.connect_mapped_sink(
-            self.processor.config_dir.clone(),
+            self.processor.config_dir.clone().into(),
             &self.message_box,
             |msg| Some(InputMessage::FsWatchEvent(msg)),
         );

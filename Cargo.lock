@@ -5279,6 +5279,7 @@ dependencies = [
  "tedge_actors",
  "tedge_file_system_ext",
  "tedge_mqtt_ext",
+ "tempfile",
  "thiserror 1.0.69",
  "time",
  "tokio",

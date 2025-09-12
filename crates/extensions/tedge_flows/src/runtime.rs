@@ -1,4 +1,5 @@
 use crate::config::FlowConfig;
+use anyhow::Context;
 use crate::flow::DateTime;
 use crate::flow::Flow;
 use crate::flow::FlowError;
@@ -26,7 +27,7 @@ use tracing::info;
 use tracing::warn;
 
 pub struct MessageProcessor {
-    pub config_dir: PathBuf,
+    pub config_dir: Utf8PathBuf,
     pub flows: HashMap<String, Flow>,
     pub(super) js_runtime: JsRuntime,
     pub stats: Counter,
@@ -46,65 +47,65 @@ impl MessageProcessor {
         format!("{}", path.as_ref().display())
     }
 
-    pub async fn try_new(config_dir: impl AsRef<Path>) -> Result<Self, LoadError> {
-        let config_dir = config_dir.as_ref().to_owned();
+    pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
+        let config_dir = config_dir.as_ref();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut flow_specs = FlowSpecs::default();
-        flow_specs.load(&config_dir).await;
-        let flows = flow_specs.compile(&mut js_runtime, &config_dir).await;
+        flow_specs.load(config_dir).await;
+        let flows = flow_specs.compile(&mut js_runtime, config_dir).await;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
-            config_dir,
+            config_dir: config_dir.to_owned(),
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(Self::db_path()).await?,
+            database: MeaDb::open(&Self::db_path(config_dir)).await?,
         })
     }
 
-    fn db_path() -> Utf8PathBuf {
-        "/etc/tedge/tedge-flows.db".into()
+    fn db_path(config_dir: &Utf8Path) -> Utf8PathBuf {
+        config_dir.join("tedge-flows.db")
     }
 
     pub async fn try_new_single_flow(
-        config_dir: impl AsRef<Path>,
+        config_dir: impl AsRef<Utf8Path>,
         flow: impl AsRef<Path>,
     ) -> Result<Self, LoadError> {
-        let config_dir = config_dir.as_ref().to_owned();
+        let config_dir = config_dir.as_ref();
         let flow = flow.as_ref().to_owned();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut flow_specs = FlowSpecs::default();
         flow_specs.load_single_flow(&flow).await;
-        let flows = flow_specs.compile(&mut js_runtime, &config_dir).await;
+        let flows = flow_specs.compile(&mut js_runtime, config_dir).await;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
-            config_dir,
+            config_dir: config_dir.to_owned(),
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(Self::db_path()).await?,
+            database: MeaDb::open(&Self::db_path(config_dir)).await?,
         })
     }
 
     pub async fn try_new_single_step_flow(
-        config_dir: impl AsRef<Path>,
+        config_dir: impl AsRef<Utf8Path>,
         script: impl AsRef<Path>,
     ) -> Result<Self, LoadError> {
-        let config_dir = config_dir.as_ref().to_owned();
+        let config_dir = config_dir.as_ref();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut flow_specs = FlowSpecs::default();
         flow_specs.load_single_script(&script).await;
-        let flows = flow_specs.compile(&mut js_runtime, &config_dir).await;
+        let flows = flow_specs.compile(&mut js_runtime, config_dir).await;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
-            config_dir,
+            config_dir: config_dir.to_owned(),
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(Self::db_path()).await?,
+            database: MeaDb::open(&Self::db_path(config_dir)).await?,
         })
     }
 
@@ -279,10 +280,10 @@ struct FlowSpecs {
 }
 
 impl FlowSpecs {
-    pub async fn load(&mut self, config_dir: &PathBuf) {
+    pub async fn load(&mut self, config_dir: &Utf8Path) {
         let Ok(mut entries) = read_dir(config_dir).await.map_err(|err|
-            error!(target: "flows", "Failed to read flows from {}: {err}", config_dir.display())
-        ) else {
+            error!(target: "flows", "Failed to read flows from {config_dir}: {err}"))
+         else {
             return;
         };
 
@@ -338,7 +339,7 @@ impl FlowSpecs {
     async fn compile(
         mut self,
         js_runtime: &mut JsRuntime,
-        config_dir: &Path,
+        config_dir: &Utf8Path,
     ) -> HashMap<String, Flow> {
         let mut flows = HashMap::new();
         for (name, (source, specs)) in self.flow_specs.drain() {
@@ -401,11 +402,13 @@ where
     Payload: ToFromSlice + Send + 'static,
     Timestamp: ToFromSlice + Ord + Copy + Send + 'static,
 {
-    pub async fn open(path: impl AsRef<Path> + Send) -> Result<Self, fjall::Error> {
-        let path = path.as_ref().to_owned();
-        let keyspace = spawn_blocking(move || fjall::Config::new(path).open())
+    pub async fn open(path: impl AsRef<Utf8Path>) -> Result<Self, anyhow::Error> {
+        let path = path.as_ref();
+        let config = fjall::Config::new(path);
+        let keyspace = spawn_blocking(move || config.open())
             .await
-            .unwrap()?;
+            .unwrap()
+            .with_context(|| format!("opening database at {path}"))?;
         Ok(Self {
             keyspace,
             _types: PhantomData,
@@ -485,11 +488,11 @@ mod tests {
     use time::macros::datetime;
 
     use super::*;
-    use std::path::PathBuf;
+    use camino::Utf8PathBuf;
 
     // Helper function to create a dummy path
-    fn dummy_path() -> PathBuf {
-        PathBuf::from("/tmp/test_db")
+    fn dummy_path() -> Utf8PathBuf {
+        Utf8PathBuf::from("/tmp/test_db")
     }
 
     impl ToFromSlice for String {

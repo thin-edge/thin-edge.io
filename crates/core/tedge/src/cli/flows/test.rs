@@ -2,7 +2,7 @@ use crate::cli::flows::TEdgeFlowsCli;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use anyhow::Error;
-use std::path::PathBuf;
+use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
 use tedge_flows::flow::*;
 use tedge_flows::MessageProcessor;
@@ -11,8 +11,8 @@ use tokio::io::BufReader;
 use tokio::io::Stdin;
 
 pub struct TestCommand {
-    pub flows_dir: PathBuf,
-    pub flow: Option<PathBuf>,
+    pub flows_dir: Utf8PathBuf,
+    pub flow: Option<Utf8PathBuf>,
     pub message: Option<Message>,
     pub final_on_interval: bool,
 }
@@ -21,8 +21,8 @@ pub struct TestCommand {
 impl Command for TestCommand {
     fn description(&self) -> String {
         format!(
-            "process message samples using flows and steps in {:}",
-            self.flows_dir.display()
+            "process message samples using flows and steps in {}",
+            self.flows_dir
         )
     }
 

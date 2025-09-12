@@ -10,7 +10,6 @@ use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde_json::Value;
 use std::fmt::Debug;
-use std::path::Path;
 use std::time::Duration;
 use tedge_mqtt_ext::TopicFilter;
 
@@ -109,7 +108,7 @@ impl FlowConfig {
     pub async fn compile(
         self,
         js_runtime: &mut JsRuntime,
-        config_dir: &Path,
+        config_dir: &Utf8Path,
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
         let input = self.input.try_into()?;
@@ -134,7 +133,7 @@ impl FlowConfig {
 impl StepConfig {
     pub async fn compile(
         self,
-        config_dir: &Path,
+        config_dir: &Utf8Path,
         index: usize,
         flow: &Utf8Path,
     ) -> Result<FlowStep, ConfigError> {

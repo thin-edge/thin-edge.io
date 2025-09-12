@@ -8,14 +8,14 @@ use rquickjs::Ctx;
 use rquickjs::FromJs;
 use rquickjs::IntoJs;
 use rquickjs::Value;
-use std::path::Path;
-use std::path::PathBuf;
 use tracing::debug;
+use camino::Utf8PathBuf;
+use camino::Utf8Path;
 
 #[derive(Clone)]
 pub struct JsScript {
     pub module_name: String,
-    pub path: PathBuf,
+    pub path: Utf8PathBuf,
     pub config: JsonValue,
     pub interval: std::time::Duration,
     pub no_js_on_message_fun: bool,
@@ -33,8 +33,8 @@ impl Default for JsonValue {
 }
 
 impl JsScript {
-    pub fn new(flow: PathBuf, index: usize, path: PathBuf) -> Self {
-        let module_name = format!("{}|{}|{}", flow.display(), index, path.display());
+    pub fn new(flow: Utf8PathBuf, index: usize, path: Utf8PathBuf) -> Self {
+        let module_name = format!("{flow}|{index}|{path}");
         JsScript {
             module_name,
             path,
@@ -65,12 +65,12 @@ impl JsScript {
         Self { interval, ..self }
     }
 
-    pub fn path(&self) -> &Path {
+    pub fn path(&self) -> &Utf8Path {
         &self.path
     }
 
     pub fn source(&self) -> String {
-        format!("{}", self.path.display())
+        self.path.to_string()
     }
 
     /// Transform an input message into zero, one or more output messages
