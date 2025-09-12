@@ -1,0 +1,10 @@
+[Unit]
+Description=Hello World Service
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/hello.sh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

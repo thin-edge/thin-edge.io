@@ -1,12 +1,16 @@
-use std::collections::HashMap;
-
+use super::error::LogManagementError;
+use super::LogManagerConfig;
+use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
 use crate::manager::LogPluginConfig;
+use crate::plugin::Plugin;
+use crate::plugin_manager::ExternalPlugins;
+use crate::plugin_manager::Plugins;
 use async_trait::async_trait;
-use camino::Utf8Path;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use std::collections::HashMap;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
@@ -26,10 +30,7 @@ use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
-
-use super::error::LogManagementError;
-use super::LogManagerConfig;
-use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
+use time::OffsetDateTime;
 
 type MqttTopic = String;
 
@@ -60,6 +61,7 @@ pub struct LogManagerActor {
     pending_operations: HashMap<String, LogUploadCmd>,
     messages: SimpleMessageBox<LogInput, LogOutput>,
     upload_sender: DynSender<LogUploadRequest>,
+    external_plugins: ExternalPlugins,
 }
 
 #[async_trait]
@@ -69,6 +71,8 @@ impl Actor for LogManagerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        self.external_plugins.load().await?;
+
         self.reload_supported_log_types().await?;
 
         while let Some(event) = self.messages.recv().await {
@@ -94,6 +98,7 @@ impl LogManagerActor {
         plugin_config: LogPluginConfig,
         messages: SimpleMessageBox<LogInput, LogOutput>,
         upload_sender: DynSender<LogUploadRequest>,
+        external_plugins: ExternalPlugins,
     ) -> Self {
         Self {
             config,
@@ -101,6 +106,7 @@ impl LogManagerActor {
             pending_operations: HashMap::new(),
             messages,
             upload_sender,
+            external_plugins,
         }
     }
 
@@ -155,24 +161,55 @@ impl LogManagerActor {
         request: &LogUploadCmd,
     ) -> Result<(), LogManagementError> {
         let topic = request.topic(&self.config.mqtt_schema).as_ref().to_string();
-        let request = &request.payload;
-        let log_path = crate::manager::new_read_logs(
-            &self.plugin_config.files,
-            &request.log_type,
-            request.date_from,
-            request.lines.to_owned(),
-            &request.search_text,
-            &self.config.tmp_dir,
-        )?;
+        let request_payload = &request.payload;
 
-        let upload_request = UploadRequest::new(
-            &request.tedge_url,
-            Utf8Path::from_path(log_path.as_path()).unwrap(),
-        );
+        let log_path =
+            if let Some((log_type, plugin_name)) = request_payload.log_type.split_once("::") {
+                // External plugin log retrieval
+                if let Some(plugin) = self.external_plugins.by_plugin_type(plugin_name) {
+                    let temp_log_file = self.config.tmp_dir.join(format!(
+                        "{}_{}_{}.log",
+                        log_type,
+                        plugin_name,
+                        OffsetDateTime::now_utc().unix_timestamp()
+                    ));
+                    warn!("Retrieving log to temp file: {:?}", temp_log_file.as_path());
+
+                    plugin
+                        .get(
+                            log_type,
+                            temp_log_file.as_path(),
+                            Some(request_payload.date_from),
+                            Some(request_payload.date_to),
+                            request_payload.search_text.as_deref(),
+                            Some(request_payload.lines),
+                        )
+                        .await?;
+
+                    temp_log_file.to_path_buf()
+                } else {
+                    return Err(LogManagementError::PluginError {
+                        plugin_name: plugin_name.to_string(),
+                        reason: "Plugin not found".to_string(),
+                    });
+                }
+            } else {
+                // File-based log retrieval (existing logic)
+                crate::manager::new_read_logs(
+                    &self.plugin_config.files,
+                    &request_payload.log_type,
+                    request_payload.date_from,
+                    request_payload.lines.to_owned(),
+                    &request_payload.search_text,
+                    &self.config.tmp_dir,
+                )?
+            };
+
+        let upload_request = UploadRequest::new(&request_payload.tedge_url, log_path.as_path());
 
         info!(
             "Awaiting upload of log type: {} to url: {}",
-            request.log_type, request.tedge_url
+            request_payload.log_type, request_payload.tedge_url
         );
 
         self.upload_sender.send((topic, upload_request)).await?;
@@ -260,6 +297,25 @@ impl LogManagerActor {
     async fn publish_supported_log_types(&mut self) -> Result<(), ChannelError> {
         let mut types = self.plugin_config.get_all_file_types();
         types.sort();
+
+        // Add external plugin log types with ::plugin_name suffix
+        for plugin_type in self.external_plugins.get_all_plugin_types() {
+            warn!("Listing log types using plugin: {}", plugin_type);
+            if let Some(plugin) = self.external_plugins.by_plugin_type(&plugin_type) {
+                match plugin.list(None).await {
+                    Ok(log_types) => {
+                        warn!("Plugin {} supports log types: {:?}", plugin_type, log_types);
+                        for log_type in log_types {
+                            types.push(format!("{}::{}", log_type, plugin_type));
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to get log types from plugin {}: {}", plugin_type, e);
+                    }
+                }
+            }
+        }
+
         let metadata = LogUploadCmdMetadata { types };
         self.messages
             .send(LogOutput::LogUploadCmdMetadata(metadata))

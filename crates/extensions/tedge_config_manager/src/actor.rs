@@ -5,6 +5,7 @@ use camino::Utf8PathBuf;
 use log::debug;
 use log::error;
 use log::info;
+use log::warn;
 use serde_json::json;
 use std::io::ErrorKind;
 use std::sync::Arc;
@@ -35,7 +36,10 @@ use tedge_uploader_ext::UploadResult;
 use tedge_utils::atomic::MaybePermissions;
 use tedge_write::CopyOptions;
 use tedge_write::CreateDirsOptions;
+use time::OffsetDateTime;
 
+use crate::plugin::Plugin;
+use crate::plugin_manager::ExternalPlugins;
 use crate::FileEntry;
 use crate::TedgeWriteStatus;
 
@@ -61,6 +65,7 @@ pub struct ConfigManagerActor {
     output_sender: LoggingSender<ConfigOperationData>,
     downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
     uploader: ClientMessageBox<ConfigUploadRequest, ConfigUploadResult>,
+    external_plugins: ExternalPlugins,
 }
 
 #[async_trait]
@@ -70,12 +75,14 @@ impl Actor for ConfigManagerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        self.external_plugins.load().await?;
         let mut worker = ConfigManagerWorker {
             config: Arc::from(self.config),
             plugin_config: self.plugin_config,
             output_sender: self.output_sender,
             downloader: self.downloader,
             uploader: self.uploader,
+            external_plugins: self.external_plugins,
         };
 
         worker.reload_supported_config_types().await?;
@@ -107,6 +114,7 @@ impl ConfigManagerActor {
         output_sender: LoggingSender<ConfigOperationData>,
         downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
         uploader: ClientMessageBox<ConfigUploadRequest, ConfigUploadResult>,
+        external_plugins: ExternalPlugins,
     ) -> Self {
         ConfigManagerActor {
             config,
@@ -115,6 +123,7 @@ impl ConfigManagerActor {
             output_sender,
             downloader,
             uploader,
+            external_plugins,
         }
     }
 }
@@ -126,6 +135,7 @@ struct ConfigManagerWorker {
     output_sender: LoggingSender<ConfigOperationData>,
     downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
     uploader: ClientMessageBox<ConfigUploadRequest, ConfigUploadResult>,
+    external_plugins: ExternalPlugins,
 }
 
 impl ConfigManagerWorker {
@@ -228,9 +238,36 @@ impl ConfigManagerWorker {
         topic: &Topic,
         request: &mut ConfigSnapshotCmdPayload,
     ) -> Result<Utf8PathBuf, ConfigManagementError> {
-        let file_entry = self
-            .plugin_config
-            .get_file_entry_from_type(&request.config_type)?;
+        let config_path =
+            if let Some((config_type, plugin_name)) = request.config_type.split_once("::") {
+                if let Some(plugin) = self.external_plugins.by_plugin_type(plugin_name) {
+                    let target_file = self.config.tmp_path.join(format!(
+                        "{}_{}_{}.conf",
+                        config_type,
+                        plugin_name,
+                        OffsetDateTime::now_utc().unix_timestamp()
+                    ));
+                    warn!(
+                        "Retrieving config to target file: {:?}",
+                        target_file.as_path()
+                    );
+
+                    plugin.get(config_type, target_file.as_std_path()).await?;
+
+                    target_file.to_path_buf()
+                } else {
+                    return Err(ConfigManagementError::PluginError {
+                        plugin_name: plugin_name.to_string(),
+                        reason: "Plugin not found".to_string(),
+                    });
+                }
+            } else {
+                // File-based config retrieval
+                let file_entry = self
+                    .plugin_config
+                    .get_file_entry_from_type(&request.config_type)?;
+                Utf8PathBuf::from(&file_entry.path)
+            };
 
         let tedge_url = match &request.tedge_url {
             Some(tedge_url) => tedge_url,
@@ -243,7 +280,7 @@ impl ConfigManagerWorker {
             }
         };
 
-        let upload_request = UploadRequest::new(tedge_url, Utf8Path::new(&file_entry.path));
+        let upload_request = UploadRequest::new(tedge_url, config_path.as_path());
 
         info!(
             "Awaiting upload of config type: {} to url: {}",
@@ -325,14 +362,10 @@ impl ConfigManagerWorker {
         &mut self,
         topic: &Topic,
         request: &ConfigUpdateCmdPayload,
-    ) -> Result<Utf8PathBuf, ConfigManagementError> {
-        let file_entry = self
-            .plugin_config
-            .get_file_entry_from_type(&request.config_type)?;
-
+    ) -> Result<Option<Utf8PathBuf>, ConfigManagementError> {
         // because we might not have permissions to write to destination, save in tmpdir and then
         // move to destination later
-        let temp_path = &self.config.tmp_path.join(&file_entry.config_type);
+        let temp_path = &self.config.tmp_path.join(&request.config_type);
 
         let Some(tedge_url) = &request.tedge_url else {
             return Err(anyhow::anyhow!("tedge_url not present in config update payload").into());
@@ -358,22 +391,38 @@ impl ConfigManagerWorker {
         let from_path = Utf8Path::from_path(&from)
             .with_context(|| format!("path is not utf-8: '{}'", from.to_string_lossy()))?;
 
-        let file_entry = self
-            .plugin_config
-            .get_file_entry_from_type(&request.config_type)?;
-        let to = Utf8PathBuf::from(&file_entry.path);
+        let config_path =
+            if let Some((config_type, plugin_name)) = request.config_type.split_once("::") {
+                if let Some(plugin) = self.external_plugins.by_plugin_type(plugin_name) {
+                    plugin.set(config_type, from_path.as_std_path()).await?;
+                    plugin.finalize(config_type).await?;
+                    None
+                } else {
+                    return Err(ConfigManagementError::PluginError {
+                        plugin_name: plugin_name.to_string(),
+                        reason: "Plugin not found".to_string(),
+                    });
+                }
+            } else {
+                // File-based config update
+                let file_entry = self
+                    .plugin_config
+                    .get_file_entry_from_type(&request.config_type)?;
+                let to = Utf8PathBuf::from(&file_entry.path);
 
-        if let Some(parent) = to.parent() {
-            if !parent.exists() {
-                self.create_parent_dirs(parent, file_entry)?;
-            }
-        }
+                if let Some(parent) = to.parent() {
+                    if !parent.exists() {
+                        self.create_parent_dirs(parent, file_entry)?;
+                    }
+                }
 
-        let deployed_to_path = self
-            .deploy_config_file(from_path, file_entry)
-            .context("failed to deploy configuration file")?;
+                let deployed_to_path = self
+                    .deploy_config_file(from_path, file_entry)
+                    .context("failed to deploy configuration file")?;
+                Some(deployed_to_path)
+            };
 
-        Ok(deployed_to_path)
+        Ok(config_path)
     }
 
     /// Creates the parent directories of the target file if they are missing,
@@ -514,6 +563,31 @@ impl ConfigManagerWorker {
     async fn publish_supported_config_types(&mut self) -> Result<(), ChannelError> {
         let mut config_types = self.plugin_config.get_all_file_types();
         config_types.sort();
+
+        // Add external plugin config types with ::plugin_name suffix
+        for plugin_type in self.external_plugins.get_all_plugin_types() {
+            warn!("Listing config types using plugin: {}", plugin_type);
+            if let Some(plugin) = self.external_plugins.by_plugin_type(&plugin_type) {
+                match plugin.list(None).await {
+                    Ok(conf_types) => {
+                        warn!(
+                            "Config plugin {} supports types: {:?}",
+                            plugin_type, config_types
+                        );
+                        for conf_type in conf_types {
+                            config_types.push(format!("{}::{}", conf_type, plugin_type));
+                        }
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to get config types from plugin {}: {}",
+                            plugin_type, e
+                        );
+                    }
+                }
+            }
+        }
+
         for topic in self.config.config_reload_topics.iter() {
             let metadata = ConfigOperationData::Metadata {
                 topic: topic.clone(),
