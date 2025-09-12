@@ -92,7 +92,7 @@ impl Flow {
     }
 
     pub fn topics(&self) -> TopicFilter {
-        let mut topics = self.input.topics().clone();
+        let mut topics = self.input.topics();
         for step in self.steps.iter() {
             topics.add_all(step.config_topics.clone())
         }
@@ -215,14 +215,12 @@ impl FlowStep {
 }
 
 impl FlowInput {
-    pub fn topics(&self) -> &TopicFilter {
+    fn topics(&self) -> TopicFilter {
         match self {
-            FlowInput::MQTT { topics } => topics,
+            FlowInput::MQTT { topics } => topics.clone(),
             FlowInput::MeaDB { .. } => {
                 // MeaDB inputs don't subscribe to MQTT topics
-                // Return an empty topic filter
-                static EMPTY_TOPICS: std::sync::OnceLock<TopicFilter> = std::sync::OnceLock::new();
-                EMPTY_TOPICS.get_or_init(TopicFilter::empty)
+                TopicFilter::empty()
             }
         }
     }
