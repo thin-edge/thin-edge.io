@@ -498,7 +498,7 @@ tedge mqtt pub -r 'te/device/child01/service/nodered/m/environment' '{
 }'
 ```
 
-### Telemetry type metadata
+### Telemetry metadata  {#telemetry-metadata}
 
 The data types also may have additional metadata associated with it,
 which can be added/updated by publishing to `/meta` subtopics of those data types.
