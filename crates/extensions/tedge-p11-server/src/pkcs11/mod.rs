@@ -1,8 +1,66 @@
-//! rustls connector for PKCS#11 devices.
+//! rustls connector for PKCS#11 tokens.
+//!
+//! # `p11tool` quirks
+//!
+//! As `p11tool` was used during development to inspect and manipulate PKCS #11 token and may be used by users for the
+//! same purpose, below is a description of some `p11tool` quirks and why some information it should display is missing.
+//!
+//! These quirks were observed with p11tool 3.8.9.
+//!
+//! ## Listing full algorithm types of private keys
+//!
+//! When displaying objects on the token, like this:
+//!
+//! ```sh
+//! $ p11tool --login --set-pin=123456 --list-all "pkcs11:token=create-key-token"
+//! Object 0:
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%6A%6C%5A%EA%8C%04%91%5C%67%77%AA%E2%B1%67%C7%C0%56%4E%97%01;object=p11tool-ec256;type=public
+//!     Type: Public key (EC/ECDSA-SECP256R1)
+//!     Label: p11tool-ec256
+//!     Flags: CKA_WRAP/UNWRAP;
+//!     ID: 6a:6c:5a:ea:8c:04:91:5c:67:77:aa:e2:b1:67:c7:c0:56:4e:97:01
+//!
+//! Object 1:
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%43%2F%58%39%E5%33%30%B2%F9%E0%99%6E%FD%92%32%03%98%E7%72%7A;object=ec521;type=private
+//!     Type: Private key (EC/ECDSA)
+//!     Label: ec521
+//!     Flags: CKA_WRAP/UNWRAP; CKA_PRIVATE; CKA_NEVER_EXTRACTABLE; CKA_SENSITIVE;
+//!     ID: 43:2f:58:39:e5:33:30:b2:f9:e0:99:6e:fd:92:32:03:98:e7:72:7a
+//!
+//! Object 2:
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%BB%DD%35%F4%26%51%C8%E2%ED%E9%1E%21%4E%59%29%5F%C1%75%FB%21;object=rsa3072;type=private
+//!     Type: Private key (RSA-3072)
+//!     Label: rsa3072
+//!     Flags: CKA_WRAP/UNWRAP; CKA_PRIVATE; CKA_NEVER_EXTRACTABLE; CKA_SENSITIVE;
+//!     ID: bb:dd:35:f4:26:51:c8:e2:ed:e9:1e:21:4e:59:29:5f:c1:75:fb:21
+//!
+//! Object 3:
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%6A%6C%5A%EA%8C%04%91%5C%67%77%AA%E2%B1%67%C7%C0%56%4E%97%01;object=p11tool-ec256;type=private
+//!     Type: Private key (EC/ECDSA-SECP256R1)
+//!     Label: p11tool-ec256
+//!     Flags: CKA_WRAP/UNWRAP; CKA_PRIVATE; CKA_NEVER_EXTRACTABLE; CKA_SENSITIVE;
+//!     ID: 6a:6c:5a:ea:8c:04:91:5c:67:77:aa:e2:b1:67:c7:c0:56:4e:97:01
+//!
+//! Object 4:
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%EC%60%3C%DF%10%E7%54%7D%EE%27%EE%B9%99%8A%D6%B1%45%C3%73%B8;type=public
+//!     Type: Public key (EC/ECDSA-SECP521R1)
+//!     Label:
+//!     Flags: CKA_WRAP/UNWRAP;
+//!     ID: ec:60:3c:df:10:e7:54:7d:ee:27:ee:b9:99:8a:d6:b1:45:c3:73:b8
+//! ```
+//!
+//! Things to note are:
+//! - for full key algorithm type (EC/ECDSA-SECP256R1) to be displayed next to private keys
+//!     - distinct keys/keypairs need to have unique ids (otherwise it gets confused and can display incorrect keytype)
+//!     - for EC keys
+//!         - there needs to be both private and public key objects (curve is read from pubkey object)
+//!         - pubkey object needs to have the same ID as the privkey object
+//!     - for RSA keys
+//!         - only private key object itself needs to be present
 //!
 //! Reference:
 //! - thin-edge: docs/src/references/hsm-support.md
-//! - PKCS#11: https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html
+//! - PKCS#11: <https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html>
 
 use anyhow::Context;
 use asn1_rs::BigInt;
@@ -48,6 +106,7 @@ pub use cryptoki::types::AuthPin;
 use crate::service;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::CreateKeyResponse;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::SignResponse;
 use crate::service::TedgeP11Service;
@@ -116,6 +175,19 @@ impl TedgeP11Service for Cryptoki {
     fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
         let session = self.open_session_ro(uri)?;
         session.get_public_key_pem()
+    }
+
+    fn create_key(
+        &self,
+        uri: Option<&str>,
+        params: CreateKeyParams,
+    ) -> anyhow::Result<CreateKeyResponse> {
+        // NOTE: when writing to HSM, session must always be rw
+        let session = self.open_session_rw(uri)?;
+        let key = session.create_key(params)?;
+        let pem = session.export_public_key_pem(key)?;
+        let uri = session.export_public_key_uri(key)?;
+        Ok(CreateKeyResponse { pem, uri })
     }
 }
 
@@ -440,6 +512,133 @@ impl<'a> CryptokiSession<'a> {
 
         Ok(pubkey_pem)
     }
+
+    /// Create a new keypair on the token.
+    fn create_key(&self, params: CreateKeyParams) -> anyhow::Result<ObjectHandle> {
+        let (mechanism, attrs_pub, attrs_priv) = match params.key {
+            KeyTypeParams::Rsa { bits } => {
+                anyhow::ensure!(
+                    bits == 2048 || bits == 3072 || bits == 4096,
+                    "Invalid bits value: only 2048/3072/4096 key sizes are valid"
+                );
+                (
+                    Mechanism::RsaPkcsKeyPairGen,
+                    vec![Attribute::ModulusBits(
+                        // u64 or u32 depending on the platform
+                        std::os::raw::c_ulong::from(bits).into(),
+                    )],
+                    vec![],
+                )
+            }
+            KeyTypeParams::Ec { curve } => {
+                // serialize chosen curve to CKA_EC_PARAMS choice structure
+                // https://docs.oasis-open.org/pkcs11/pkcs11-curr/v3.0/os/pkcs11-curr-v3.0-os.html#_Toc30061181
+                let oid = match curve {
+                    256 => SECP256R1_OID,
+                    384 => SECP384R1_OID,
+                    _ => anyhow::bail!("Invalid EC curve value: only P256/P384 valid"),
+                };
+                let components: Vec<u64> = oid.split('.').map(|c| c.parse().unwrap()).collect();
+                let curve_oid = asn1_rs::Oid::from(&components)
+                    .unwrap()
+                    .to_der_vec()
+                    .unwrap();
+                trace!("{curve_oid:x?}");
+                (
+                    Mechanism::EccKeyPairGen,
+                    vec![Attribute::EcParams(curve_oid)],
+                    vec![],
+                )
+            }
+        };
+
+        // generate unique ids
+        let mut id = vec![0u8; 20];
+        rand::fill(&mut id[..]);
+
+        let mut pub_key_template = attrs_pub;
+        pub_key_template.extend_from_slice(&[
+            Attribute::Token(true),
+            Attribute::Private(false),
+            Attribute::Verify(true),
+            Attribute::Encrypt(true),
+            Attribute::Label(params.label.clone().into()),
+            Attribute::Id(id.clone()),
+        ]);
+
+        let mut priv_key_template = attrs_priv;
+        priv_key_template.extend_from_slice(&[
+            Attribute::Token(true),
+            Attribute::Private(true),
+            Attribute::Sensitive(true),
+            Attribute::Extractable(false),
+            Attribute::Sign(true),
+            Attribute::Decrypt(true),
+            Attribute::Label(params.label.clone().into()),
+            Attribute::Id(id.clone()),
+        ]);
+
+        trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
+        let (pub_handle, _priv_handle) = self
+            .session
+            .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template)
+            .context("Failed to generate keypair")?;
+
+        Ok(pub_handle)
+    }
+
+    fn export_public_key_uri(&self, key: ObjectHandle) -> anyhow::Result<String> {
+        let mut attrs = self
+            .session
+            .get_attributes(key, &[AttributeType::Id, AttributeType::Label])?
+            .into_iter();
+
+        let id = attrs.next().context("No id")?;
+        let Attribute::Id(id) = id else {
+            anyhow::bail!("Not id");
+        };
+
+        let label = attrs.next().context("No label")?;
+        let Attribute::Label(label) = label else {
+            anyhow::bail!("Not label");
+        };
+        let label = std::str::from_utf8(&label).context("label should be utf-8")?;
+
+        let mut key_uri = export_session_uri(&self.token_info);
+
+        // id, object, type
+        key_uri.push(';');
+        key_uri.push_str("id=");
+        // from RFC section 2.3: Note that the value of the "id" attribute SHOULD NOT be encoded as UTF-8 because it can
+        // contain non-textual data, instead it SHOULD be entirely percent-encoded
+        for byte in &id {
+            key_uri.push_str(percent_encoding::percent_encode_byte(*byte));
+        }
+
+        key_uri.push(';');
+        key_uri.push_str("object=");
+        let label = uri::percent_encode(label);
+        key_uri.push_str(&label);
+
+        // omit the "type" attribute since its not relevant when used as device.key_uri, which is intended use for this produced value
+
+        anyhow::ensure!(key_uri.starts_with("pkcs11:"));
+
+        Ok(key_uri)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateKeyParams {
+    pub key: KeyTypeParams,
+    pub token: Option<String>,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KeyTypeParams {
+    Rsa { bits: u16 },
+    Ec { curve: u16 },
 }
 
 #[derive(Debug)]
@@ -683,6 +882,36 @@ fn get_ec_mechanism(session: &Session, key: ObjectHandle) -> anyhow::Result<SigS
         SECP521R1_OID => Ok(SigScheme::EcdsaNistp521Sha512),
         _ => anyhow::bail!("Parsed oID({oid}) doesn't match any supported EC curve"),
     }
+}
+
+/// Generates PKCS11 URI of the selected token.
+///
+/// The generated URI attempts to be similar to URIs generated by gnutls. Notably, "slot-description", "slot-id", and
+/// "slot-manufacturer" attributes are missing from gnutls URIs, perhaps for portability (URI points to the same thing
+/// even if token is reinserted into a different slot).
+fn export_session_uri(token_info: &TokenInfo) -> String {
+    let mut uri = String::from("pkcs11:");
+
+    uri.push_str("model=");
+    let model = uri::percent_encode(token_info.model());
+    uri.push_str(&model);
+
+    uri.push(';');
+    uri.push_str("manufacturer=");
+    let manufacturer = uri::percent_encode(token_info.manufacturer_id());
+    uri.push_str(&manufacturer);
+
+    uri.push(';');
+    uri.push_str("serial=");
+    let serial = uri::percent_encode(token_info.serial_number());
+    uri.push_str(&serial);
+
+    uri.push(';');
+    uri.push_str("token=");
+    let token = uri::percent_encode(token_info.label());
+    uri.push_str(&token);
+
+    uri
 }
 
 #[cfg(test)]
