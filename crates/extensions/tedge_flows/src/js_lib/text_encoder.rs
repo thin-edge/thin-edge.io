@@ -29,7 +29,14 @@ impl<'js> TextEncoder {
 
     pub fn encode(&self, ctx: Ctx<'js>, text: Value<'js>) -> Result<TypedArray<'js, u8>> {
         let string = match text.as_string() {
-            None => "".to_string(),
+            None => {
+                if let Some(object) = text.as_object() {
+                    if let Some(bytes) = object.as_typed_array::<u8>() {
+                        return Ok(bytes.clone());
+                    }
+                }
+                "".to_string()
+            }
             Some(js_string) => js_string.to_string()?,
         };
         TypedArray::new(ctx.clone(), string.as_bytes())

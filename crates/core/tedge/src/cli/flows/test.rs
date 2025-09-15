@@ -78,7 +78,7 @@ fn print(messages: Result<Vec<Message>, FlowError>) {
     match messages {
         Ok(messages) => {
             for message in messages {
-                println!("[{}] {}", message.topic, message.payload);
+                println!("{message}");
             }
         }
         Err(err) => {
@@ -104,7 +104,7 @@ fn parse(line: String) -> Result<Option<Message>, Error> {
 
     Ok(Some(Message {
         topic,
-        payload,
+        payload: payload.into_bytes(),
         timestamp: None,
     }))
 }
