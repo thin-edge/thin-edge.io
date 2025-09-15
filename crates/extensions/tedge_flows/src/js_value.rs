@@ -53,9 +53,15 @@ impl JsonValue {
 
 impl From<Message> for JsonValue {
     fn from(value: Message) -> Self {
+        let raw_payload = JsonValue::Bytes(value.payload.clone());
+        let payload = match String::from_utf8(value.payload) {
+            Ok(utf8) => JsonValue::string(utf8),
+            Err(_) => JsonValue::Null,
+        };
         JsonValue::object([
             ("topic", JsonValue::string(value.topic)),
-            ("payload", JsonValue::string(value.payload)),
+            ("payload", payload),
+            ("raw_payload", raw_payload),
             ("timestamp", JsonValue::option(value.timestamp)),
         ])
     }
@@ -114,8 +120,10 @@ impl TryFrom<BTreeMap<String, JsonValue>> for Message {
         let Some(JsonValue::String(topic)) = value.get("topic") else {
             return Err(anyhow::anyhow!("Missing message topic").into());
         };
-        let Some(JsonValue::String(payload)) = value.get("payload") else {
-            return Err(anyhow::anyhow!("Missing message payload").into());
+        let payload = match value.get("payload") {
+            Some(JsonValue::String(payload)) => payload.to_owned().into_bytes(),
+            Some(JsonValue::Bytes(payload)) => payload.to_owned(),
+            _ => return Err(anyhow::anyhow!("Missing message payload").into()),
         };
         let timestamp = value
             .get("timestamp")
@@ -124,7 +132,7 @@ impl TryFrom<BTreeMap<String, JsonValue>> for Message {
 
         Ok(Message {
             topic: topic.to_owned(),
-            payload: payload.to_owned(),
+            payload,
             timestamp,
         })
     }
@@ -225,8 +233,8 @@ impl<'js> IntoJs<'js> for JsonValueRef<'_> {
                 Ok(string.into_value())
             }
             JsonValue::Bytes(value) => {
-                let string = rquickjs::TypedArray::new(ctx.clone(), value.clone())?;
-                Ok(string.into_value())
+                let bytes = rquickjs::TypedArray::new(ctx.clone(), value.clone())?;
+                Ok(bytes.into_value())
             }
             JsonValue::Array(values) => {
                 let array = rquickjs::Array::new(ctx.clone())?;
@@ -270,6 +278,12 @@ impl JsonValue {
                 .map(JsonValue::Number)
                 .unwrap_or(JsonValue::Null);
             return Ok(js_n);
+        }
+        if let Some(object) = value.as_object() {
+            if let Some(bytes) = object.as_typed_array::<u8>() {
+                let bytes = bytes.as_bytes().unwrap_or_default().to_vec();
+                return Ok(JsonValue::Bytes(bytes));
+            }
         }
         if let Some(string) = value.as_string() {
             return Ok(JsonValue::String(string.to_string()?));

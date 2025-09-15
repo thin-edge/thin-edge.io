@@ -38,10 +38,10 @@ pub struct DateTime {
     pub nanoseconds: u32,
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
+#[derive(Clone, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
 pub struct Message {
     pub topic: String,
-    pub payload: String,
+    pub payload: Vec<u8>,
     pub timestamp: Option<DateTime>,
 }
 
@@ -222,7 +222,16 @@ impl Message {
     pub(crate) fn new(topic: &str, payload: &str) -> Self {
         Message {
             topic: topic.to_string(),
-            payload: payload.to_string(),
+            payload: payload.to_string().into_bytes(),
+            timestamp: Some(DateTime::now()),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_binary(topic: &str, payload: impl Into<Vec<u8>>) -> Self {
+        Message {
+            topic: topic.to_string(),
+            payload: payload.into(),
             timestamp: Some(DateTime::now()),
         }
     }
@@ -234,17 +243,33 @@ impl Message {
             json!({"topic": self.topic, "payload": self.payload, "timestamp": null})
         }
     }
+
+    pub fn payload_str(&self) -> Option<&str> {
+        std::str::from_utf8(&self.payload).ok()
+    }
+}
+
+impl std::fmt::Display for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] ", self.topic)?;
+        match &self.payload_str() {
+            Some(str) => write!(f, "{str}"),
+            None => write!(f, "{:?}", self.payload),
+        }
+    }
+}
+
+impl std::fmt::Debug for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
 }
 
 impl TryFrom<MqttMessage> for Message {
     type Error = FlowError;
 
     fn try_from(message: MqttMessage) -> Result<Self, Self::Error> {
-        let topic = message.topic.to_string();
-        let payload = message
-            .payload_str()
-            .map_err(|_| FlowError::UnsupportedMessage("Not an UTF8 payload".to_string()))?
-            .to_string();
+        let (topic, payload) = message.split();
         Ok(Message {
             topic,
             payload,

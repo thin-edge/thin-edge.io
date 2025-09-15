@@ -77,7 +77,7 @@ impl JsScript {
         timestamp: &DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
-        debug!(target: "flows", "{}: onMessage({timestamp:?}, {message:?})", self.module_name());
+        debug!(target: "flows", "{}: onMessage({timestamp:?}, {message})", self.module_name());
         if self.no_js_on_message_fun {
             return Ok(vec![message.clone()]);
         }
@@ -105,7 +105,7 @@ impl JsScript {
         js: &JsRuntime,
         message: &Message,
     ) -> Result<(), FlowError> {
-        debug!(target: "flows", "{}: onConfigUpdate({message:?})", self.module_name());
+        debug!(target: "flows", "{}: onConfigUpdate({message})", self.module_name());
         if self.no_js_on_config_update_fun {
             return Ok(());
         }
@@ -354,13 +354,16 @@ export function onMessage(message) {
         let js = r#"
 export async function onMessage(message, config) {
     const utf8decoder = new TextDecoder();
-    const encodedText = new Uint8Array([240, 159, 146, 150]);
-    return [{topic:"decoded", payload: utf8decoder.decode(encodedText)}];
+    const encodedText = message.raw_payload;
+    console.log(encodedText);
+    const decodedText = utf8decoder.decode(encodedText);
+    console.log(decodedText);
+    return [{topic:"decoded", payload: decodedText}];
 }
         "#;
         let (runtime, script) = runtime_with(js).await;
 
-        let input = Message::new("encoded", "content");
+        let input = Message::new_binary("encoded", [240, 159, 146, 150]);
         let mut output = Message::new("decoded", "💖");
         output.timestamp = None;
         assert_eq!(
@@ -377,14 +380,16 @@ export async function onMessage(message, config) {
         let js = r#"
 export async function onMessage(message, config) {
     const utf8encoder = new TextEncoder();
+    console.log(message.payload);
     const encodedText = utf8encoder.encode(message.payload);
-    return [{topic:"encoded", payload: `[${encodedText}]`}];
+    console.log(encodedText);
+    return [{topic:"encoded", payload: encodedText}];
 }
         "#;
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("decoded", "💖");
-        let mut output = Message::new("encoded", "[240,159,146,150]");
+        let mut output = Message::new_binary("encoded", [240, 159, 146, 150]);
         output.timestamp = None;
         assert_eq!(
             script

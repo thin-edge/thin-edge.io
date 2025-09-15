@@ -78,7 +78,7 @@ impl BuildCommand for TEdgeFlowsCli {
                 let message = match (topic, payload) {
                     (Some(topic), Some(payload)) => Some(Message {
                         topic,
-                        payload,
+                        payload: payload.into_bytes(),
                         timestamp: None,
                     }),
                     (Some(_), None) => Err(anyhow!("Missing sample payload"))?,
