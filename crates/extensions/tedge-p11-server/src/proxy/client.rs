@@ -12,6 +12,7 @@ use super::connection::Frame1;
 use crate::pkcs11::SigScheme;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::CreateKeyRequest;
 use crate::service::SecretString;
 use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
@@ -60,6 +61,24 @@ impl TedgeP11Service for TedgeP11Client {
     fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
         let uri = uri.or(self.uri.as_deref()).map(ToString::to_string);
         self.get_public_key_pem(uri)
+    }
+
+    fn create_key(
+        &self,
+        _request: CreateKeyRequest,
+    ) -> anyhow::Result<crate::service::CreateKeyResponse> {
+        self.create_key(_request)
+    }
+
+    fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
+        let request = Frame1::GetTokensUrisRequest;
+        let response = self.do_request(request)?;
+
+        let Frame1::GetTokensUrisResponse(uris) = response else {
+            bail!("protocol error: bad response, expected get_uris, received: {response:?}");
+        };
+
+        Ok(uris)
     }
 }
 
@@ -189,7 +208,9 @@ impl TedgeP11Client {
         let response = self.do_request(request)?;
 
         let Frame1::GetPublicKeyPemResponse(pubkey_pem) = response else {
-            bail!("protocol error: bad response, expected create_key, received: {response:?}");
+            bail!(
+                "protocol error: bad response, expected get_public_key_pem, received: {response:?}"
+            );
         };
 
         Ok(pubkey_pem)
@@ -204,6 +225,20 @@ impl TedgeP11Client {
         };
 
         Ok(())
+    }
+
+    pub fn create_key(
+        &self,
+        request: CreateKeyRequest,
+    ) -> anyhow::Result<crate::service::CreateKeyResponse> {
+        let request = Frame1::CreateKeyRequest(request);
+        let response = self.do_request(request)?;
+
+        let Frame1::CreateKeyResponse(pubkey) = response else {
+            bail!("protocol error: bad response, expected create_key, received: {response:?}");
+        };
+
+        Ok(pubkey)
     }
 
     fn do_request(&self, request: Frame1) -> anyhow::Result<Frame1> {

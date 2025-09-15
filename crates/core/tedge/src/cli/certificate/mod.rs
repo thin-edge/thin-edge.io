@@ -6,6 +6,7 @@ mod c8y;
 mod cli;
 mod create;
 mod create_csr;
+mod create_key;
 mod error;
 mod remove;
 mod renew;
