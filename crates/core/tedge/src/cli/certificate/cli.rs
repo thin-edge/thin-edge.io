@@ -56,13 +56,18 @@ pub enum TEdgeCertCli {
         cloud: Option<CloudArg>,
     },
 
-    /// Generate a new keypair on the PKCS11 token.
+    /// Generate a new keypair on the PKCS11 token and select it to be used.
     ///
     /// Can be used to generate an RSA or an ECDSA keypair. When using RSA, `--bits` is used to set
     /// the size of the key, when using ECDSA, `--curve` is used.
     ///
-    /// When multiple tokens are connected, if `device.key_uri` setting is present, the token identified
-    /// by this URI will be used. Otherwise, the first token returned by the system will be used.
+    /// After the key is generated, tedge config is updated to use the new key using
+    /// `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting
+    /// for that cloud, e.g. `create-key c8y` will write to `c8y.device.key_uri`.
+    ///
+    /// When multiple tokens are connected, if `device.key_uri` setting is present, the token
+    /// identified by this URI will be used. Otherwise, the first token returned by the system will
+    /// be used.
     CreateKey {
         #[arg(long)]
         label: String,
@@ -76,6 +81,8 @@ pub enum TEdgeCertCli {
         #[arg(long, default_value = "p256", group = "key_params")]
         curve: EcCurve,
 
+        // can't document subcommands here because one would have to document variants of the enum
+        // but this type is used in other places
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
     },
@@ -263,11 +270,11 @@ impl BuildCommand for TEdgeCertCli {
 
                 CreateKeyCmd {
                     cryptoki_config,
-
-                    bits,
                     label,
                     r#type,
+                    bits,
                     curve,
+                    cloud,
                 }
                 .into_boxed()
             }

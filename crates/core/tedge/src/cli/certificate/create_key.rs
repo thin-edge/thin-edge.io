@@ -4,6 +4,7 @@ use tedge_p11_server::pkcs11::CreateKeyParams;
 use tedge_p11_server::pkcs11::KeyTypeParams;
 use tedge_p11_server::CryptokiConfig;
 
+use crate::cli::common::Cloud;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 
@@ -13,6 +14,7 @@ pub struct CreateKeyCmd {
     pub curve: EcCurve,
     pub label: String,
     pub r#type: KeyType,
+    pub cloud: Option<Cloud>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -82,12 +84,30 @@ impl Command for CreateKeyCmd {
         let cryptoki = tedge_p11_server::tedge_p11_service(self.cryptoki_config.clone())?;
         let key = cryptoki.create_key(None, params)?;
         let pubkey_pem = key.pem;
+        let uri = key.uri;
 
         eprintln!("New keypair was successfully created.");
+        eprintln!("Key URI: {uri}");
         eprintln!("Public key:\n{pubkey_pem}\n");
 
-        eprintln!("Insert this as a new value of device.key_uri:");
-        eprintln!("{}", key.uri);
+        _config
+            .update_toml(&|dto, _reader| {
+                // XXX: will probably break if the keys ever change
+                // FIXME: profiles not supported
+                let key = match self.cloud {
+                    None => "device.key_uri",
+                    Some(Cloud::C8y(_)) => "c8y.device.key_uri",
+                    Some(Cloud::Azure(_)) => "az.device.key_uri",
+                    Some(Cloud::Aws(_)) => "aws.device.key_uri",
+                }
+                .parse()
+                .expect("should be valid WritableKeys");
+                let r = dto.try_update_str(&key, &uri).map_err(|e| e.into());
+                eprintln!("Value of `{key}` was updated to point to the new key");
+                r
+            })
+            .await
+            .map_err(anyhow::Error::new)?;
 
         Ok(())
     }
