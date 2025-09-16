@@ -120,11 +120,15 @@ impl MessageProcessor {
     /// Get the next deadline for interval execution across all scripts
     /// Returns None if no scripts have intervals configured
     pub fn next_interval_deadline(&self) -> Option<tokio::time::Instant> {
-        self.flows
+        let script_deadlines = self
+            .flows
             .values()
             .flat_map(|flow| &flow.steps)
-            .filter_map(|step| step.script.next_execution)
-            .min()
+            .filter_map(|step| step.script.next_execution);
+
+        let drain_deadlines = self.flows.values().filter_map(|flow| flow.next_drain);
+
+        script_deadlines.chain(drain_deadlines).min()
     }
 
     /// Get the last deadline for interval execution across all scripts Returns
@@ -192,21 +196,23 @@ impl MessageProcessor {
         timestamp: DateTime,
     ) -> Vec<(String, Result<Vec<(DateTime, Message)>, DatabaseError>)> {
         let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter() {
-            if let FlowInput::MeaDB {
-                series: input_series,
-                frequency: input_frequency,
-                max_age: input_span,
-            } = &flow.input
-            {
-                if timestamp.tick_now(*input_frequency) {
-                    let cutoff_time = timestamp.sub_duration(*input_span);
-                    let drained_messages = self
-                        .database
-                        .drain_older_than(cutoff_time, input_series)
-                        .await
-                        .map_err(DatabaseError::from);
-                    out_messages.push((flow_id.to_owned(), drained_messages));
+        for (flow_id, flow) in self.flows.iter_mut() {
+            if flow.should_drain_at(timestamp) {
+                if let FlowInput::MeaDB {
+                    series: input_series,
+                    frequency: input_frequency,
+                    max_age: input_span,
+                } = &flow.input
+                {
+                    if timestamp.tick_now(*input_frequency) {
+                        let cutoff_time = timestamp.sub_duration(*input_span);
+                        let drained_messages = self
+                            .database
+                            .drain_older_than(cutoff_time, input_series)
+                            .await
+                            .map_err(DatabaseError::from);
+                        out_messages.push((flow_id.to_owned(), drained_messages));
+                    }
                 }
             }
         }
@@ -510,14 +516,14 @@ where
 
 #[cfg(test)]
 mod tests {
+    use tempfile::TempDir;
     use time::macros::datetime;
 
     use super::*;
-    use camino::Utf8PathBuf;
 
     // Helper function to create a dummy path
-    fn dummy_path() -> Utf8PathBuf {
-        Utf8PathBuf::from("/tmp/test_db")
+    fn temp_dir() -> TempDir {
+        TempDir::new().expect("Failed to create temp dir")
     }
 
     impl ToFromSlice for String {
@@ -532,7 +538,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_store_single_message() {
-        let path = dummy_path();
+        let temp_dir = temp_dir();
+        let path = temp_dir.path().to_str().unwrap();
         let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
 
         let series = "sensor_data";
@@ -548,13 +555,15 @@ mod tests {
 
         // Verify the message was stored
         let stored_messages = db.drain_older_than(timestamp, series).await.unwrap();
+        println!("{:?}", stored_messages);
         assert_eq!(stored_messages.len(), 1);
         assert_eq!(stored_messages[0], (timestamp, message));
     }
 
     #[tokio::test]
     async fn test_store_multiple_messages_same_series() {
-        let path = dummy_path();
+        let temp_dir = temp_dir();
+        let path = temp_dir.path().to_str().unwrap();
         let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
 
         let series = "sensor_data".to_string();
@@ -592,7 +601,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_store_messages_different_series() {
-        let path = dummy_path();
+        let temp_dir = temp_dir();
+        let path = temp_dir.path().to_str().unwrap();
         let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
 
         let series1 = "sensor_data_a".to_string();
@@ -622,7 +632,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_drain_removes_data() {
-        let path = dummy_path();
+        let temp_dir = temp_dir();
+        let path = temp_dir.path().to_str().unwrap();
         let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
 
         let series = "sensor_data_a".to_string();
