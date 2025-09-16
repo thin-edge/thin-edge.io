@@ -553,8 +553,7 @@ impl<'a> CryptokiSession<'a> {
         };
 
         // generate unique ids
-        let mut id = vec![0u8; 20];
-        rand::fill(&mut id[..]);
+        let id: [u8; 20] = rand::random();
 
         let mut pub_key_template = attrs_pub;
         pub_key_template.extend_from_slice(&[
@@ -563,7 +562,7 @@ impl<'a> CryptokiSession<'a> {
             Attribute::Verify(true),
             Attribute::Encrypt(true),
             Attribute::Label(params.label.clone().into()),
-            Attribute::Id(id.clone()),
+            Attribute::Id(id.to_vec()),
         ]);
 
         let mut priv_key_template = attrs_priv;
@@ -575,7 +574,7 @@ impl<'a> CryptokiSession<'a> {
             Attribute::Sign(true),
             Attribute::Decrypt(true),
             Attribute::Label(params.label.clone().into()),
-            Attribute::Id(id.clone()),
+            Attribute::Id(id.to_vec()),
         ]);
 
         trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
