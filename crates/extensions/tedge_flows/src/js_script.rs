@@ -4,13 +4,13 @@ use crate::flow::FlowError;
 use crate::flow::Message;
 use crate::js_runtime::JsRuntime;
 use anyhow::Context;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use rquickjs::Ctx;
 use rquickjs::FromJs;
 use rquickjs::IntoJs;
 use rquickjs::Value;
 use tracing::debug;
-use camino::Utf8PathBuf;
-use camino::Utf8Path;
 
 #[derive(Clone)]
 pub struct JsScript {

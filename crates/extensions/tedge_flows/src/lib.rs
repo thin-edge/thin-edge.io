@@ -8,6 +8,7 @@ mod stats;
 
 use crate::actor::FlowsMapper;
 pub use crate::runtime::MessageProcessor;
+use camino::Utf8Path;
 use std::convert::Infallible;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
@@ -25,7 +26,6 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
-use camino::Utf8Path;
 use tracing::error;
 
 pub use runtime::MeaDB;

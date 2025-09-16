@@ -1,5 +1,4 @@
 use crate::config::FlowConfig;
-use anyhow::Context;
 use crate::flow::DateTime;
 use crate::flow::Flow;
 use crate::flow::FlowError;
@@ -9,6 +8,7 @@ use crate::flow::MessageSource;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
 use crate::LoadError;
+use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use fjall::Keyspace;
@@ -17,7 +17,6 @@ use fjall::Slice;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::path::Path;
-use std::path::PathBuf;
 use tedge_mqtt_ext::TopicFilter;
 use tokio::fs::read_dir;
 use tokio::fs::read_to_string;
@@ -281,9 +280,9 @@ struct FlowSpecs {
 
 impl FlowSpecs {
     pub async fn load(&mut self, config_dir: &Utf8Path) {
-        let Ok(mut entries) = read_dir(config_dir).await.map_err(|err|
-            error!(target: "flows", "Failed to read flows from {config_dir}: {err}"))
-         else {
+        let Ok(mut entries) = read_dir(config_dir).await.map_err(
+            |err| error!(target: "flows", "Failed to read flows from {config_dir}: {err}"),
+        ) else {
             return;
         };
 

@@ -2,8 +2,8 @@ use crate::cli::flows::TEdgeFlowsCli;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use anyhow::Error;
-use tedge_config::TEdgeConfig;
 use camino::Utf8PathBuf;
+use tedge_config::TEdgeConfig;
 use tedge_flows::flow::Flow;
 
 pub struct ListCommand {

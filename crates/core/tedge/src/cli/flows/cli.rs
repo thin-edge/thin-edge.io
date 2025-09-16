@@ -1,5 +1,4 @@
 use crate::cli::flows::list::ListCommand;
-use camino::Utf8PathBuf;
 use crate::cli::flows::test::TestCommand;
 use crate::command::BuildCommand;
 use crate::command::Command;
@@ -7,6 +6,7 @@ use crate::ConfigError;
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Error;
+use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
 use tedge_flows::flow::Message;
 use tedge_flows::MessageProcessor;
@@ -108,7 +108,10 @@ impl TEdgeFlowsCli {
             .with_context(|| format!("loading flows and steps from {flows_dir}"))
     }
 
-    pub async fn load_file(flows_dir: &Utf8PathBuf, path: &Utf8PathBuf) -> Result<MessageProcessor, Error> {
+    pub async fn load_file(
+        flows_dir: &Utf8PathBuf,
+        path: &Utf8PathBuf,
+    ) -> Result<MessageProcessor, Error> {
         if let Some("toml") = path.extension() {
             MessageProcessor::try_new_single_flow(flows_dir, path)
                 .await
