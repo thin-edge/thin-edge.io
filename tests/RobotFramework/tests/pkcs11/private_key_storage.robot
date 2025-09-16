@@ -263,7 +263,7 @@ Create private key
     IF    $curve
         VAR    ${command}=    ${command} --curve ${curve}
     END
-    Execute Command    ${command}
+    ${create_key_output}=    Execute Command    ${command}    strip=True    stderr=True    stdout=False
 
     # check if key is created
     ${output}=    Execute Command
@@ -274,6 +274,9 @@ Create private key
         Should Contain    ${output}    Type: Private key
     END
     Should Contain    ${output}    Label: ${label}
+
+    ${key_uri}=    Execute Command    tedge config get device.key_uri    strip=True
+    Should Contain    ${create_key_output}    ${key_uri}
 
 Test tedge cert renew
     [Arguments]    ${type}    ${bits}=${EMPTY}    ${curve}=${EMPTY}
