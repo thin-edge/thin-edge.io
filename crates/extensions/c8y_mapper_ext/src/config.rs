@@ -14,6 +14,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommandMetadata;
+use tedge_api::mqtt_topics::ChannelFilter::AnySignal;
+use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
@@ -212,6 +214,10 @@ impl C8yMapperConfig {
         // Add command topics
         topics.add_all(mqtt_schema.topics(AnyEntity, AnyCommand));
         topics.add_all(mqtt_schema.topics(AnyEntity, AnyCommandMetadata));
+
+        // Add signal topic
+        let mapper_service_tid = EntityTopicId::default_main_service("tedge-mapper-c8y").unwrap();
+        topics.add_all(mqtt_schema.topics(EntityFilter::Entity(&mapper_service_tid), AnySignal));
 
         // Add user configurable external topic filters
         for topic in c8y_config.topics.0.clone() {

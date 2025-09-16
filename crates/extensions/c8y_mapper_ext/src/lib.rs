@@ -13,6 +13,7 @@ pub mod json;
 mod operations;
 mod serializer;
 pub mod service_monitor;
+mod signals;
 mod supported_operations;
 
 #[cfg(test)]

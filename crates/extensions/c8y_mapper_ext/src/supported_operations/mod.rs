@@ -48,6 +48,7 @@ type OperationName = String;
 type OperationNameRef = str;
 
 /// Used to hold and query supported operations for all devices.
+#[derive(Debug)]
 pub struct SupportedOperations {
     /// External ID of the main device.
     ///

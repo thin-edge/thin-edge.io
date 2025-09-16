@@ -1264,3 +1264,38 @@ te/device/main///cmd/log_upload/<cmd_id>
 </div>
 
 Where the `url` is the target URL in the tedge file transfer repository to which the config snapshot must be uploaded.
+
+## Signals
+
+Use the `signal` channel to synchronize the %%te%% command capabilities with Cumulocity.
+
+
+### Synchronizing Supported Operations
+
+This request makes the `c8y-mapper` republish the supported operations of all the devices.
+
+<div class="code-indent-left">
+
+**%%te%% (input)**
+
+```text title="Topic"
+te/device/main/service/tedge-mapper-c8y/signal/sync
+```
+
+```json5 title="Payload"
+{}
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**Cumulocity (output example)**
+
+```text title="Output"
+[c8y/s/us] 114,c8y_Command,c8y_DeviceProfile,c8y_DownloadConfigFile,c8y_LogfileRequest,c8y_RemoteAccessConnect,c8y_Restart,c8y_SoftwareUpdate,c8y_UploadConfigFile
+[c8y/s/us/<main-device-id>:device:child01] 114,c8y_LogfileRequest,c8y_Restart
+[c8y/s/us/<main-device-id>:device:child02] 114,c8y_Restart
+```
+
+</div>
