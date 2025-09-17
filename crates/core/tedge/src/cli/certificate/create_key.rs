@@ -20,7 +20,7 @@ pub struct CreateKeyCmd {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum KeyType {
     Rsa,
-    Ec,
+    Ecdsa,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -69,7 +69,7 @@ impl Command for CreateKeyCmd {
             KeyType::Rsa => KeyTypeParams::Rsa {
                 bits: self.bits.into(),
             },
-            KeyType::Ec => KeyTypeParams::Ec {
+            KeyType::Ecdsa => KeyTypeParams::Ec {
                 curve: self.curve.into(),
             },
         };
