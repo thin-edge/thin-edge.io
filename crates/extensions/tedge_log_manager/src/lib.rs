@@ -1,7 +1,6 @@
 mod actor;
 mod config;
 mod error;
-mod manager;
 mod plugin;
 mod plugin_manager;
 

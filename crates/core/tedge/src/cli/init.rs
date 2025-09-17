@@ -59,7 +59,7 @@ impl TEdgeInitCmd {
             Component::augment_subcommands(clap::Command::new("tedge"))
                 .get_subcommands()
                 .map(|c| c.get_name().to_owned())
-                .chain(["tedge-apt-plugin".to_owned(), "tedge-file-log-plugin".to_owned()])
+                .chain(["tedge-apt-plugin".to_owned()])
                 .collect();
 
         let target = Target {
