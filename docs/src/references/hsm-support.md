@@ -254,7 +254,13 @@ selected, even if another token contains the intended key.
 ## Key generation
 
 ```sh command="tedge cert create-key -h" title="tedge cert create-key -h"
-Create a new keypair using a PKCS11 token
+Generate a new keypair on the PKCS11 token and select it to be used.
+
+Can be used to generate an RSA or an ECDSA keypair. When using RSA, `--bits` is used to set the size of the key, when using ECDSA, `--curve` is used.
+
+After the key is generated, tedge config is updated to use the new key using `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting for that cloud, e.g. `create-key c8y` will write to `c8y.device.key_uri`.
+
+When multiple tokens are connected, if `device.key_uri` setting is present, the token identified by this URI will be used. Otherwise, the first token returned by the system will be used.
 
 Usage: tedge cert create-key [OPTIONS] --label <LABEL> --type <TYPE> [COMMAND]
 
@@ -265,58 +271,75 @@ Commands:
   help  Print this message or the help of the given subcommand(s)
 
 Options:
-      --config-dir <CONFIG_DIR>  [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
-      --label <LABEL>            
-      --debug                    Turn-on the DEBUG log level
-      --type <TYPE>              [possible values: rsa, ec]
-      --bits <BITS>              [default: 2048]
-      --log-level <LOG_LEVEL>    Configures the logging level
-      --curve <CURVE>            [default: 256]
-      --device-id <ID>           The device identifier to be used as the common name for the certificate
-  -h, --help                     Print help (see more with '--help')
+      --config-dir <CONFIG_DIR>
+          [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
+
+      --label <LABEL>
+          Human readable description (CKA_LABEL attribute) for the key
+
+      --debug
+          Turn-on the DEBUG log level.
+          
+          If off only reports ERROR, WARN, and INFO, if on also reports DEBUG
+
+      --type <TYPE>
+          The type of the key
+          
+          [possible values: rsa, ecdsa]
+
+      --bits <BITS>
+          The size of the RSA keys in bits. Should only be used with --type rsa
+          
+          [default: 2048]
+          [possible values: 2048, 3072, 4096]
+
+      --log-level <LOG_LEVEL>
+          Configures the logging level.
+          
+          One of error/warn/info/debug/trace. Logs with verbosity lower or equal to the selected level will be printed, i.e. warn prints ERROR and WARN logs and trace prints logs of all levels.
+          
+          Overrides `--debug`
+
+      --curve <CURVE>
+          The curve (size) of the ECSA key. Should only be used with --type ecdsa
+          
+          [default: p256]
+          [possible values: p256, p384]
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
 
-`tedge cert create-key` command generates a new keypair on the PKCS #11 token and creates a new CSR
-using the newly created key.
+`tedge cert create-key` command generates a new keypair on the PKCS #11 token.
 
 1. Configure cryptoki in `module` or `socket` mode as described in previous sections.
-2. Set the `device.key_uri` setting. The value of this setting will be used to select the token on
-   which a new key will be created, if multiple tokens are connected. If this value already points
-   to a key that you're already using, the new key will be created on the same token as currently
-   used key.
-3. Run the `tedge cert create-key` command. You'll need to provide key type, size and label of the
-   key object. If another object on the token already has that label, it will be removed.
+2. Run the `tedge cert create-key` command. You'll need to provide key type, size and label of the
+   key object.
 
     ```sh
-    tedge cert create-key --type ec --curve 256 --label my-key
+    tedge cert create-key --type ecdsa --curve 256 --label my-key
     ```
 
     ```sh title="Output"
     New keypair was successfully created.
+    Key URI: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=a30ed1ca6244fc5f;token=test-token;id=%51%05%87%75%6F%B7%28%EC%5E%5D%1F%B8%EB%CF%FD%96%B7%E4%28%B6;object=my-key
     Public key:
     -----BEGIN PUBLIC KEY-----
-    BJ2vhTSHOh6KBB5NHG3wWJBj7sFAfW/W0GAenEwTttIWk+7EMT2mFgonVw1U1OPK
-    0CjBq4TKf4EtuzV+UYorBE4=
+    BEsjmiXDdko90IDdjlAb/bWyTf6kd6S+/KPlj2Yd3zjHZe54evLyHJ1e8dSDhpy7
+    2Tcml9ZcHWBHA+MM0NFAbaw=
     -----END PUBLIC KEY-----
+
+
+    Value of `device.key_uri` was updated to point to the new key
     ```
 
-    The command also creates a CSR at `device.csr_path`, which should be used when requesting a new certificate.
-
-4. Change the `device.key_uri` setting to point to the new private key. This is most easily done by
-   swapping the current value of `object` attribute and removing other properties related to keys:
-
-    Example:
-
-    ```title="Previous URI"
-    pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=c8y%20token;id=%02;object=azure%20keypair;type=private
-    ```
-
-    ```title="New URI"
-    pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=83f9cf49039c051a;token=c8y%20token;object=my-key
-    ```
-
-5. Run `tedge cert renew c8y` using the generated CSR.
+3. Run `tedge config get device.key_uri` to confirm tedge will use the new key.
 
     ```sh
-    tedge cert download c8y --device-id <DEVICE_ID> -p <OTP> --csr-path /etc/tedge/device-certs/tedge.csr
+    tedge config get device.key_uri
     ```
+    pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=a30ed1ca6244fc5f;token=test-token;id=%51%05%87%75%6F%B7%28%EC%5E%5D%1F%B8%EB%CF%FD%96%B7%E4%28%B6;object=my-key
+    ```sh title="Output"
+
+Now you're free to use the new key to either request a signed certificate using a CSR or to create a
+self-signed certificate.
