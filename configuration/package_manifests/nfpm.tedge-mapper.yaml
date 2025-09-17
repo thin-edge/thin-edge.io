@@ -177,6 +177,40 @@ contents:
       mode: 0644
     packager: rpm
 
+  # Cumulocity cloud profile cert renewal service
+  - src: ./configuration/init/systemd/tedge-cert-renewer-c8y.target
+    dst: /lib/systemd/system/tedge-cert-renewer-c8y.target
+    file_info:
+      mode: 0644
+    packager: deb
+  - src: ./configuration/init/systemd/tedge-cert-renewer-c8y.target
+    dst: /lib/systemd/system/tedge-cert-renewer-c8y.target
+    file_info:
+      mode: 0644
+    packager: rpm
+
+  - src: ./configuration/init/systemd/tedge-cert-renewer-c8y@.service
+    dst: /lib/systemd/system/tedge-cert-renewer-c8y@.service
+    file_info:
+      mode: 0644
+    packager: deb
+  - src: ./configuration/init/systemd/tedge-cert-renewer-c8y@.service
+    dst: /lib/systemd/system/tedge-cert-renewer-c8y@.service
+    file_info:
+      mode: 0644
+    packager: rpm
+
+  - src: ./configuration/init/systemd/tedge-cert-renewer-c8y@.timer
+    dst: /lib/systemd/system/tedge-cert-renewer-c8y@.timer
+    file_info:
+      mode: 0644
+    packager: deb
+  - src: ./configuration/init/systemd/tedge-cert-renewer-c8y@.timer
+    dst: /lib/systemd/system/tedge-cert-renewer-c8y@.timer
+    file_info:
+      mode: 0644
+    packager: rpm
+
   - src: ./configuration/contrib/collectd/collectd.conf
     dst: /etc/tedge/contrib/collectd/
     file_info:
