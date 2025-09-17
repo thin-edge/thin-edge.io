@@ -69,15 +69,19 @@ pub enum TEdgeCertCli {
     /// identified by this URI will be used. Otherwise, the first token returned by the system will
     /// be used.
     CreateKey {
+        /// Human readable description (CKA_LABEL attribute) for the key.
         #[arg(long)]
         label: String,
 
+        /// The type of the key.
         #[arg(long)]
         r#type: KeyType,
 
+        /// The size of the RSA keys in bits. Should only be used with --type rsa.
         #[arg(long, default_value = "2048", group = "key_params")]
         bits: RsaBits,
 
+        /// The curve (size) of the ECSA key. Should only be used with --type ecdsa.
         #[arg(long, default_value = "p256", group = "key_params")]
         curve: EcCurve,
 
