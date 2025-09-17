@@ -2,6 +2,8 @@ use crate::error::LogManagementError;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use log::warn;
+use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Output;
 use std::sync::Arc;
@@ -20,7 +22,7 @@ pub trait Plugin {
     async fn get(
         &self,
         log_type: &str,
-        temp_file_path: &Utf8Path,
+        output_file_path: &Utf8Path,
         since: Option<OffsetDateTime>,
         until: Option<OffsetDateTime>,
         filter_text: Option<&str>,
@@ -37,7 +39,6 @@ pub struct ExternalPluginCommand {
 }
 
 impl ExternalPluginCommand {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: impl Into<String>,
         path: impl Into<PathBuf>,
@@ -103,11 +104,17 @@ impl Plugin for ExternalPluginCommand {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let log_types = stdout
-            .lines()
-            .map(|line| line.trim().to_string())
-            .filter(|line| !line.is_empty())
-            .collect();
+
+        let mut log_types = vec![];
+        let mut in_tedge_block = false;
+        for line in stdout.lines() {
+            match line {
+                ":::begin-tedge:::" => in_tedge_block = true,
+                ":::end-tedge:::" => break,
+                _ if in_tedge_block => log_types.push(line.trim().to_string()),
+                _ => (),
+            }
+        }
 
         Ok(log_types)
     }
@@ -115,7 +122,7 @@ impl Plugin for ExternalPluginCommand {
     async fn get(
         &self,
         log_type: &str,
-        temp_file_path: &Utf8Path,
+        output_file_path: &Utf8Path,
         since: Option<OffsetDateTime>,
         until: Option<OffsetDateTime>,
         filter_text: Option<&str>,
@@ -123,24 +130,15 @@ impl Plugin for ExternalPluginCommand {
     ) -> Result<(), LogManagementError> {
         let mut command = self.command(GET)?;
         command.arg(log_type);
-        command.arg(temp_file_path);
 
         if let Some(since_time) = since {
             command.arg("--since");
-            command.arg(
-                since_time
-                    .format(&time::format_description::well_known::Rfc3339)
-                    .unwrap(),
-            );
+            command.arg(since_time.unix_timestamp().to_string());
         }
 
         if let Some(until_time) = until {
             command.arg("--until");
-            command.arg(
-                until_time
-                    .format(&time::format_description::well_known::Rfc3339)
-                    .unwrap(),
-            );
+            command.arg(until_time.unix_timestamp().to_string());
         }
 
         if let Some(filter) = filter_text {
@@ -158,11 +156,47 @@ impl Plugin for ExternalPluginCommand {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(LogManagementError::PluginError {
-                plugin_name: self.name.clone(),
-                reason: format!("Get command failed: {}", stderr),
-            });
+            return Err(self.plugin_error(format!("Get command error: {}", stderr)));
         }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut in_tedge_block = false;
+        let file = File::create(output_file_path).map_err(|err| {
+            self.plugin_error(format!(
+                "Failed to create plugin output file at {} due to {}",
+                output_file_path, err
+            ))
+        })?;
+        let mut writer = std::io::BufWriter::new(&file);
+
+        for line in stdout.lines() {
+            match line {
+                ":::begin-tedge:::" => in_tedge_block = true,
+                ":::end-tedge:::" => break,
+                _ if in_tedge_block => {
+                    writeln!(writer, "{}", line).map_err(|err| {
+                        self.plugin_error(format!(
+                            "Failed to write plugin output to {} due to {}",
+                            output_file_path, err
+                        ))
+                    })?;
+                }
+                _ => continue,
+            }
+        }
+
+        writer.flush().map_err(|err| {
+            self.plugin_error(format!(
+                "Failed to flush plugin output to {} due to {}",
+                output_file_path, err
+            ))
+        })?;
+        file.sync_all().map_err(|err| {
+            self.plugin_error(format!(
+                "Failed to sync plugin output to {} due to {}",
+                output_file_path, err
+            ))
+        })?;
 
         Ok(())
     }

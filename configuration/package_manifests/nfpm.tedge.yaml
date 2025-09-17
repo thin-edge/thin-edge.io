@@ -133,3 +133,7 @@ contents:
     dst: /usr/share/tedge/diag-plugins/
     file_info:
       mode: 0755
+
+  - src: /usr/bin/tedge-file-log-plugin
+    dst: /etc/tedge/log-plugins/file
+    type: symlink

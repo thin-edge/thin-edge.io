@@ -5,22 +5,25 @@ set -euo pipefail
 usage() {
     echo "Usage: $0 <command> [args...]"
     echo "Commands:"
-    echo "  list                                                       List all log types supported by this plugin"
-    echo "  get <type> <target-log-file-path> [--since <timestamp>]    Get logs for the specified type"
-    echo "      [--until <timestamp>] [--filter <filter-text>]"
+    echo "  list                                List all log types supported by this plugin"
+    echo "  get <type>                          Get logs for the specified type"
+    echo "      [--since <timestamp>]"
+    echo "      [--until <timestamp>]"
+    echo "      [--filter <text-filter>]"
     echo "      [--tail <lines-from-end>]"
     exit 1
 }
 
 list_log_types() {
+    echo ":::begin-tedge:::"
     systemctl list-units --type=service --no-legend --no-pager --plain \
         | awk '{ sub(/\.service$/, "", $1); print $1 }'
+    echo ":::end-tedge:::"
 }
 
 get_logs() {
     local log_type="$1"
-    local temp_file="$2"
-    shift 2
+    shift
     
     local since_arg=""
     local until_arg=""
@@ -30,14 +33,11 @@ get_logs() {
     while [[ $# -gt 0 ]]; do
         case $1 in
             --since)
-                # journalctl does not support timestamps in ISO-8601 format and expects it in 'YYYY-MM-DD HH:MM:SS' format
-                timestamp=$(date -d "$2" '+%Y-%m-%d %H:%M:%S')
-                since_arg="--since='$timestamp'"
+                since_arg="--since=@$2"
                 shift 2
                 ;;
             --until)
-                timestamp=$(date -d "$2" '+%Y-%m-%d %H:%M:%S')
-                until_arg="--until='$timestamp'"
+                until_arg="--until=@$2"
                 shift 2
                 ;;
             --filter)
@@ -70,11 +70,13 @@ get_logs() {
     fi
     
     # Execute journalctl and apply text filter if specified
+    echo ":::begin-tedge:::"
     if [[ -n "$filter_arg" ]]; then
-        eval "$cmd" | grep -i "$filter_arg" > "$temp_file"
+        eval "$cmd" | grep -i "$filter_arg"
     else
-        eval "$cmd" > "$temp_file"
-    fi    
+        eval "$cmd"
+    fi
+    echo ":::end-tedge:::"
 }
 
 main() {
@@ -90,9 +92,9 @@ main() {
             list_log_types
             ;;
         "get")
-            if [[ $# -lt 2 ]]; then
-                echo "Error: 'get' command requires <type> and <target-log-file-path> arguments" >&2
-                exit 1
+            if [[ $# -lt 1 ]]; then
+                echo "Error: 'get' command expects a mandatory <type> arguments" >&2
+                usage
             fi
             get_logs "$@"
             ;;

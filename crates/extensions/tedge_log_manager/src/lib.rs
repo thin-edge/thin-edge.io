@@ -1,7 +1,6 @@
 mod actor;
 mod config;
 mod error;
-mod manager;
 mod plugin;
 mod plugin_manager;
 
@@ -12,7 +11,6 @@ use crate::plugin_manager::ExternalPlugins;
 pub use actor::*;
 pub use config::*;
 use log::error;
-use manager::LogPluginConfig;
 use std::path::PathBuf;
 use tedge_actors::Builder;
 use tedge_actors::CloneSender;
@@ -45,7 +43,6 @@ use toml::toml;
 /// This is an actor builder.
 pub struct LogManagerBuilder {
     config: LogManagerConfig,
-    plugin_config: LogPluginConfig,
     box_builder: SimpleMessageBoxBuilder<LogInput, LogOutput>,
     upload_sender: DynSender<LogUploadRequest>,
 }
@@ -57,7 +54,6 @@ impl LogManagerBuilder {
         uploader_actor: &mut impl Service<LogUploadRequest, LogUploadResult>,
     ) -> Result<Self, FileError> {
         Self::init(&config).await?;
-        let plugin_config = LogPluginConfig::new(&config.plugin_config_path);
 
         let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
         fs_notify.connect_sink(
@@ -69,7 +65,6 @@ impl LogManagerBuilder {
 
         Ok(Self {
             config,
-            plugin_config,
             box_builder,
             upload_sender,
         })
@@ -195,7 +190,6 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
 
         Ok(LogManagerActor::new(
             self.config,
-            self.plugin_config,
             message_box,
             self.upload_sender,
             external_plugins,

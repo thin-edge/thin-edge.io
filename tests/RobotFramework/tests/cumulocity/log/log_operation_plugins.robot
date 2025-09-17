@@ -14,7 +14,7 @@ Test Tags           theme:c8y    theme:log
 
 *** Test Cases ***
 Log operation journald plugin
-    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${operation}=    Create Log Request Operation
     ...    ${start_timestamp}

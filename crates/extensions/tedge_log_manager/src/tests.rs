@@ -4,8 +4,6 @@ use crate::LogUploadRequest;
 use crate::LogUploadResult;
 use crate::Topic;
 use camino::Utf8Path;
-use filetime::set_file_mtime;
-use filetime::FileTime;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::sync::Arc;
@@ -36,51 +34,55 @@ type UploaderMessageBox = TimedMessageBox<FakeServerBox<LogUploadRequest, LogUpl
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
-/// Preparing a temp directory containing four files, with
-/// two types { type_one, type_two } and one file for log type that does not exists:
-///
-///     file_a, type_one
-///     file_b, type_one
-///     file_c, type_two
-///     file_d, type_one
-///     file_e, type_three (does not exist)
-/// each file has the following modified "file update" timestamp:
-///     file_a has timestamp: 1970/01/01 00:00:02
-///     file_b has timestamp: 1970/01/01 00:00:03
-///     file_c has timestamp: 1970/01/01 00:00:11
-///     file_d has timestamp: (current, not modified)
+/// Preparing a temp directory with a mocked `file` plugin.
 fn prepare() -> Result<TempTedgeDir, anyhow::Error> {
     let tempdir = TempTedgeDir::new();
-    let tempdir_path = tempdir
-        .path()
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("temp dir not created"))?;
 
-    std::fs::File::create(format!("{tempdir_path}/file_a"))?;
-    std::fs::File::create(format!("{tempdir_path}/file_b"))?;
-    tempdir.file("file_c").with_raw_content("Some content");
-    std::fs::File::create(format!("{tempdir_path}/file_d"))?;
+    let plugin_dir = tempdir.dir("log-plugins");
 
-    let new_mtime = FileTime::from_unix_time(2, 0);
-    set_file_mtime(format!("{tempdir_path}/file_a"), new_mtime).unwrap();
+    let plugin_script = r#"#!/bin/bash
+case "$1" in
+    "list")
+        echo ":::begin-tedge:::"
+        echo "type_one"
+        echo "type_two"
+        echo ":::end-tedge:::"
+        ;;
+    "get")
+        case "$2" in
+            "type_one")
+                echo ":::begin-tedge:::"
+                echo "Sample type_one log content"
+                echo ":::end-tedge:::"
+                ;;
+            "type_two")
+                echo ":::begin-tedge:::"
+                echo "Some content"
+                echo ":::end-tedge:::"
+                ;;
+            *)
+                # Simulate no logs found for unknown types
+                echo "No logs found for log type \"$2\"" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    *)
+        exit 1
+        ;;
+esac
+"#;
 
-    let new_mtime = FileTime::from_unix_time(3, 0);
-    set_file_mtime(format!("{tempdir_path}/file_b"), new_mtime).unwrap();
+    let plugin_path = plugin_dir.file("file").with_raw_content(plugin_script);
 
-    let new_mtime = FileTime::from_unix_time(11, 0);
-    set_file_mtime(format!("{tempdir_path}/file_c"), new_mtime).unwrap();
-
-    tempdir
-        .file("tedge-log-plugin.toml")
-        .with_raw_content(&format!(
-            r#"files = [
-            {{ type = "type_one", path = "{tempdir_path}/file_a" }},
-            {{ type = "type_one", path = "{tempdir_path}/file_b" }},
-            {{ type = "type_two", path = "{tempdir_path}/file_c" }},
-            {{ type = "type_one", path = "{tempdir_path}/file_d" }},
-            {{ type = "type_three", path = "{tempdir_path}/file_e" }}, 
-        ]"#
-        ));
+    // Make the plugin executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(plugin_path.path())?.permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(plugin_path.path(), perms)?;
+    }
 
     Ok(tempdir)
 }
@@ -101,7 +103,7 @@ async fn new_log_manager_builder(
         config_dir: temp_dir.to_path_buf(),
         tmp_dir: Arc::from(Utf8Path::from_path(temp_dir).unwrap()),
         log_dir: temp_dir.to_path_buf().try_into().unwrap(),
-        plugins_dir: temp_dir.to_path_buf().join("sm-plugins"),
+        plugins_dir: temp_dir.to_path_buf().join("log-plugins"),
         plugin_config_dir: temp_dir.to_path_buf(),
         plugin_config_path: temp_dir.join("tedge-log-plugin.toml"),
         logtype_reload_topic: Topic::new_unchecked("te/device/main///cmd/log_upload"),
@@ -175,11 +177,8 @@ async fn log_manager_reloads_log_types() -> Result<(), anyhow::Error> {
     assert_eq!(
         mqtt.recv().await,
         Some(
-            MqttMessage::new(
-                &log_reload_topic,
-                r#"{"types":["type_one","type_three","type_two"]}"#
-            )
-            .with_retain()
+            MqttMessage::new(&log_reload_topic, r#"{"types":["type_one","type_two"]}"#)
+                .with_retain()
         )
     );
 
@@ -301,7 +300,7 @@ async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
         mqtt.recv().await,
         Some(MqttMessage::new(
             &logfile_topic,
-            r#"{"status":"failed","reason":"Failed to initiate log file upload: No logs found for log type \"type_four\"","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_four-1234","type":"type_four","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
+            r#"{"status":"failed","reason":"Failed to initiate log file upload: Log plugin 'file' error: Get command error: No logs found for log type \"type_four\"\n","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_four-1234","type":"type_four","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
         ).with_retain())
     );
 
@@ -407,7 +406,7 @@ async fn read_log_from_file_that_does_not_exist() -> Result<(), anyhow::Error> {
         mqtt.recv().await,
         Some(MqttMessage::new(
             &logfile_topic,
-            r#"{"status":"failed","reason":"Failed to initiate log file upload: No logs found for log type \"type_three\"","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_three-1234","type":"type_three","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
+            r#"{"status":"failed","reason":"Failed to initiate log file upload: Log plugin 'file' error: Get command error: No logs found for log type \"type_three\"\n","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_three-1234","type":"type_three","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
         ).with_retain())
     );
 
