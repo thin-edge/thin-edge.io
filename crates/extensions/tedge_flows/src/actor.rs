@@ -52,7 +52,7 @@ impl Actor for FlowsMapper {
                 }
                 InputMessage::MqttMessage(message) => match Message::try_from(message) {
                     Ok(message) => {
-                        self.on_message(MessageSource::MQTT, DateTime::now(), message)
+                        self.on_message(MessageSource::Mqtt, DateTime::now(), message)
                             .await?
                     }
                     Err(err) => {
@@ -142,7 +142,7 @@ impl FlowsMapper {
             match flow_messages {
                 Ok(messages) => self.publish_messages(flow_id, timestamp, messages).await?,
                 Err(err) => {
-                    error!(target: "flows", "{flow_id}: {err}");
+                    error!(target: "flows", "{flow_id}: {err:#}");
                 }
             }
         }
@@ -192,7 +192,7 @@ impl FlowsMapper {
     ) -> Result<(), RuntimeError> {
         if let Some(flow) = self.processor.flows.get(&flow_id) {
             match &flow.output {
-                FlowOutput::MQTT { output_topics } => {
+                FlowOutput::Mqtt { output_topics } => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
                             Ok(message) if output_topics.accept_topic(&message.topic) => {
@@ -212,6 +212,7 @@ impl FlowsMapper {
                 FlowOutput::MeaDB { output_series } => {
                     for message in messages {
                         info!(target: "flows", "store {output_series} @{}.{} [{}]", timestamp.seconds, timestamp.nanoseconds, message.topic);
+                        let timestamp = DateTime::now();
                         if let Err(err) = self
                             .processor
                             .database

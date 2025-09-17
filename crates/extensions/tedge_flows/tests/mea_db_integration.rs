@@ -16,11 +16,12 @@ use tedge_actors::NoConfig;
 use tedge_actors::Sender as _;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_flows::database::FjallMeaDb;
+use tedge_flows::database::MeaDb;
 use tedge_flows::flow::DateTime;
 use tedge_flows::flow::Message;
 use tedge_flows::flow::MessageSource;
 use tedge_flows::FlowsMapperBuilder;
-use tedge_flows::MeaDB;
 use tedge_flows::MessageProcessor;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
@@ -32,25 +33,10 @@ use tokio::time::sleep;
 use tokio::time::timeout;
 use tokio::time::Instant;
 
-fn temp_db_path() -> (TempDir, Utf8PathBuf) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let db_path = Utf8PathBuf::from_path_buf(temp_dir.path().join("test_mea_db"))
-        .expect("Failed to create UTF-8 path");
-    (temp_dir, db_path)
-}
-
-fn message(topic: &str, payload: &str) -> Message {
-    Message {
-        topic: topic.to_string(),
-        payload: payload.into(),
-        timestamp: Some(DateTime::now()),
-    }
-}
-
 #[tokio::test]
 async fn stores_message_and_retrieves_it_with_correct_timestamp() {
     let (_temp_dir, db_path) = temp_db_path();
-    let mut db: MeaDB = MeaDB::open(&db_path)
+    let mut db = FjallMeaDb::open(&db_path)
         .await
         .expect("Failed to open database");
 
@@ -73,7 +59,7 @@ async fn stores_message_and_retrieves_it_with_correct_timestamp() {
 #[tokio::test]
 async fn drains_messages_older_than_cutoff_leaving_newer_ones() {
     let (_temp_dir, db_path) = temp_db_path();
-    let mut db: MeaDB = MeaDB::open(&db_path)
+    let mut db = FjallMeaDb::open(&db_path)
         .await
         .expect("Failed to open database");
 
@@ -115,7 +101,7 @@ async fn drains_messages_older_than_cutoff_leaving_newer_ones() {
 #[tokio::test]
 async fn isolates_messages_between_different_series() {
     let (_temp_dir, db_path) = temp_db_path();
-    let mut db: MeaDB = MeaDB::open(&db_path)
+    let mut db = FjallMeaDb::open(&db_path)
         .await
         .expect("Failed to open database");
 
@@ -335,7 +321,7 @@ async fn chains_mqtt_storage_drain_and_output_flows_end_to_end() {
     );
 
     let storage_results = processor
-        .on_message(MessageSource::MQTT, input_timestamp, &input_message)
+        .on_message(MessageSource::Mqtt, input_timestamp, &input_message)
         .await;
 
     // Verify storage flow processed the message
@@ -416,7 +402,7 @@ async fn processes_messages_only_from_matching_input_sources() {
 
     // Test MQTT message source
     let mqtt_results = processor
-        .on_message(MessageSource::MQTT, timestamp, &test_message)
+        .on_message(MessageSource::Mqtt, timestamp, &test_message)
         .await;
 
     // Test MeaDB message source
@@ -569,7 +555,7 @@ async fn timing_logic_respects_frequency_intervals() {
 
 /// Helper function to poll until database contains expected number of messages
 async fn poll_until_database_contains(
-    db: &mut MeaDB,
+    db: &mut FjallMeaDb,
     series: &str,
     expected_count: usize,
     timeout_duration: Duration,
@@ -655,7 +641,7 @@ async fn real_actor_mqtt_to_database_integration() {
     // The actor should have stored the message in the "test-data" series
     let db_path = Utf8PathBuf::from_path_buf(config_dir.join("tedge-flows.db"))
         .expect("Failed to create DB path");
-    let mut db = MeaDB::open(&db_path)
+    let mut db = FjallMeaDb::open(&db_path)
         .await
         .expect("Failed to open database");
 
@@ -708,7 +694,7 @@ async fn real_actor_database_to_mqtt_integration() {
     // Pre-populate database with test data
     let db_path = Utf8PathBuf::from_path_buf(config_dir.join("tedge-flows.db"))
         .expect("Failed to create DB path");
-    let mut db = MeaDB::open(&db_path)
+    let mut db = FjallMeaDb::open(&db_path)
         .await
         .expect("Failed to open database");
 
@@ -768,7 +754,7 @@ async fn real_actor_database_to_mqtt_integration() {
     }
 
     // Verify database is now empty (message was drained)
-    let mut db = MeaDB::open(&db_path)
+    let mut db = FjallMeaDb::open(&db_path)
         .await
         .expect("Failed to reopen database");
     let remaining_messages = db.query_all("sensor-data").await.unwrap();
@@ -858,5 +844,20 @@ impl Builder<MockMqttActor> for MockMqttBuilder {
 
     fn build(self) -> MockMqttActor {
         self.messages.build()
+    }
+}
+
+fn temp_db_path() -> (TempDir, Utf8PathBuf) {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = Utf8PathBuf::from_path_buf(temp_dir.path().join("test_mea_db"))
+        .expect("Failed to create UTF-8 path");
+    (temp_dir, db_path)
+}
+
+fn message(topic: &str, payload: &str) -> Message {
+    Message {
+        topic: topic.to_string(),
+        payload: payload.into(),
+        timestamp: Some(DateTime::now()),
     }
 }

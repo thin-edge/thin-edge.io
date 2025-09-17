@@ -42,7 +42,7 @@ pub struct FlowStep {
 
 #[derive(Debug)]
 pub enum FlowInput {
-    MQTT {
+    Mqtt {
         topics: TopicFilter,
     },
     MeaDB {
@@ -54,13 +54,13 @@ pub enum FlowInput {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FlowOutput {
-    MQTT { output_topics: TopicFilter },
+    Mqtt { output_topics: TopicFilter },
     MeaDB { output_series: String },
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum MessageSource {
-    MQTT,
+    Mqtt,
     MeaDB,
 }
 
@@ -94,9 +94,9 @@ pub enum FlowError {
 impl Flow {
     pub fn accept(&self, source: MessageSource, message_topic: &str) -> bool {
         match &self.input {
-            FlowInput::MQTT {
+            FlowInput::Mqtt {
                 topics: input_topics,
-            } => source == MessageSource::MQTT && input_topics.accept_topic_name(message_topic),
+            } => source == MessageSource::Mqtt && input_topics.accept_topic_name(message_topic),
             FlowInput::MeaDB { .. } => source == MessageSource::MeaDB,
         }
     }
@@ -270,7 +270,7 @@ impl FlowStep {
 impl FlowInput {
     fn topics(&self) -> TopicFilter {
         match self {
-            FlowInput::MQTT { topics } => topics.clone(),
+            FlowInput::Mqtt { topics } => topics.clone(),
             FlowInput::MeaDB { .. } => {
                 // MeaDB inputs don't subscribe to MQTT topics
                 TopicFilter::empty()
