@@ -1,5 +1,6 @@
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use base64::prelude::*;
 use camino::Utf8PathBuf;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::PubChannel;
@@ -19,6 +20,7 @@ pub struct MqttPublishCommand {
     pub qos: mqtt_channel::QoS,
     pub client_id: String,
     pub retain: bool,
+    pub base64: bool,
     pub ca_file: Option<Utf8PathBuf>,
     pub ca_dir: Option<Utf8PathBuf>,
     pub client_auth_config: Option<MqttAuthClientConfig>,
@@ -72,7 +74,13 @@ async fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
     let mut mqtt = mqtt_channel::Connection::new(&config).await?;
     let mut signals = tedge_utils::signals::TermSignals::new(None);
 
-    let message = MqttMessage::new(&cmd.topic, cmd.message.clone())
+    let payload = if cmd.base64 {
+        BASE64_STANDARD.decode(cmd.message.as_bytes())?
+    } else {
+        cmd.message.clone().into_bytes()
+    };
+
+    let message = MqttMessage::new(&cmd.topic, payload)
         .with_qos(cmd.qos)
         .with_retain_flag(cmd.retain);
 
