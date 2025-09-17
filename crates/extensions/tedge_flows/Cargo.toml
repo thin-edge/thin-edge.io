@@ -35,6 +35,8 @@ toml = { workspace = true, features = ["parse"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
+env_logger = { workspace = true }
+rstest = { workspace = true }
 tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

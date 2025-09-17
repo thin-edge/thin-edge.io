@@ -1,4 +1,7 @@
 use crate::config::FlowConfig;
+use crate::database::DatabaseError;
+use crate::database::FjallMeaDb;
+use crate::database::MeaDb;
 use crate::flow::DateTime;
 use crate::flow::Flow;
 use crate::flow::FlowError;
@@ -8,20 +11,13 @@ use crate::flow::MessageSource;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
 use crate::LoadError;
-use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use fjall::Keyspace;
-use fjall::PartitionCreateOptions;
-use fjall::Slice;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::path::Path;
 use tedge_mqtt_ext::TopicFilter;
 use tokio::fs::read_dir;
 use tokio::fs::read_to_string;
-use tokio::task::spawn_blocking;
 use tokio::time::Instant;
 use tracing::error;
 use tracing::info;
@@ -32,16 +28,8 @@ pub struct MessageProcessor {
     pub flows: HashMap<String, Flow>,
     pub(super) js_runtime: JsRuntime,
     pub stats: Counter,
-    pub database: MeaDB,
+    pub database: Box<dyn MeaDb>,
 }
-
-#[derive(thiserror::Error, Debug)]
-pub enum DatabaseError {
-    #[error(transparent)]
-    Fjall(#[from] fjall::Error),
-}
-
-pub type MeaDB = MeaDb<DateTime, Message>;
 
 impl MessageProcessor {
     pub fn flow_id(path: impl AsRef<Path>) -> String {
@@ -49,6 +37,15 @@ impl MessageProcessor {
     }
 
     pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
+        let config_dir = config_dir.as_ref();
+        let database = Box::new(FjallMeaDb::open(&Self::db_path(config_dir)).await?);
+        Self::new_with_database(config_dir, database).await
+    }
+
+    pub async fn new_with_database(
+        config_dir: impl AsRef<Utf8Path>,
+        database: Box<dyn MeaDb>,
+    ) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut flow_specs = FlowSpecs::default();
@@ -61,7 +58,7 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(&Self::db_path(config_dir)).await?,
+            database,
         })
     }
 
@@ -72,6 +69,17 @@ impl MessageProcessor {
     pub async fn try_new_single_flow(
         config_dir: impl AsRef<Utf8Path>,
         flow: impl AsRef<Path>,
+    ) -> Result<Self, LoadError> {
+        let config_dir = config_dir.as_ref();
+        let flow = flow.as_ref().to_owned();
+        let database = Box::new(FjallMeaDb::open(&Self::db_path(config_dir)).await?);
+        Self::new_single_flow_with_database(config_dir, flow, database).await
+    }
+
+    async fn new_single_flow_with_database(
+        config_dir: impl AsRef<Utf8Path>,
+        flow: impl AsRef<Path>,
+        database: Box<dyn MeaDb>,
     ) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref();
         let flow = flow.as_ref().to_owned();
@@ -86,13 +94,23 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(&Self::db_path(config_dir)).await?,
+            database,
         })
     }
 
     pub async fn try_new_single_step_flow(
         config_dir: impl AsRef<Utf8Path>,
         script: impl AsRef<Path>,
+    ) -> Result<Self, LoadError> {
+        let config_dir = config_dir.as_ref();
+        let database = Box::new(FjallMeaDb::open(&Self::db_path(config_dir)).await?);
+        Self::new_single_step_flow_with_database(config_dir, script, database).await
+    }
+
+    async fn new_single_step_flow_with_database(
+        config_dir: impl AsRef<Utf8Path>,
+        script: impl AsRef<Path>,
+        database: Box<dyn MeaDb>,
     ) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref();
         let mut js_runtime = JsRuntime::try_new().await?;
@@ -106,7 +124,7 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
-            database: MeaDb::open(&Self::db_path(config_dir)).await?,
+            database,
         })
     }
 
@@ -210,8 +228,7 @@ impl MessageProcessor {
                         let drained_messages = self
                             .database
                             .drain_older_than(cutoff_time, input_series)
-                            .await
-                            .map_err(DatabaseError::from);
+                            .await;
                         out_messages.push((flow_id.to_owned(), drained_messages));
                     }
                 }
@@ -388,260 +405,78 @@ impl FlowSpecs {
     }
 }
 
-pub struct MeaDb<Timestamp, Payload> {
-    keyspace: Keyspace,
-    oldest: BTreeMap<String, Timestamp>,
-    _payload: PhantomData<Payload>,
-}
-
-pub trait ToFromSlice {
-    fn to_slice(&self) -> Slice;
-    fn from_slice(slice: Slice) -> Self;
-}
-
-impl ToFromSlice for DateTime {
-    fn to_slice(&self) -> Slice {
-        let mut arr = [0u8; 12];
-        let secs_bytes = self.seconds.to_be_bytes();
-        let nanos_bytes = self.nanoseconds.to_be_bytes();
-
-        arr[..8].copy_from_slice(&secs_bytes);
-        arr[8..12].copy_from_slice(&nanos_bytes);
-
-        Slice::new(&arr)
-    }
-
-    fn from_slice(slice: Slice) -> Self {
-        let secs_be = &slice[..8];
-        let nanos_be = &slice[8..];
-        let secs = u64::from_be_bytes(secs_be.try_into().unwrap());
-        let nanos = u32::from_be_bytes(nanos_be.try_into().unwrap());
-
-        Self {
-            seconds: secs,
-            nanoseconds: nanos,
-        }
-    }
-}
-
-impl ToFromSlice for Message {
-    fn to_slice(&self) -> Slice {
-        Slice::new(self.json().to_string().as_bytes())
-    }
-
-    fn from_slice(slice: Slice) -> Self {
-        serde_json::from_slice(&slice).unwrap()
-    }
-}
-
-impl<Timestamp, Payload> MeaDb<Timestamp, Payload>
-where
-    Payload: ToFromSlice + Send + 'static,
-    Timestamp: ToFromSlice + Ord + Copy + Send + 'static,
-{
-    pub async fn open(path: impl AsRef<Utf8Path>) -> Result<Self, anyhow::Error> {
-        let path = path.as_ref();
-        let config = fjall::Config::new(path);
-        let keyspace = spawn_blocking(move || config.open())
-            .await
-            .unwrap()
-            .with_context(|| format!("opening database at {path}"))?;
-        Ok(Self {
-            keyspace,
-            oldest: <_>::default(),
-            _payload: PhantomData,
-        })
-    }
-
-    pub async fn query_all(
-        &mut self,
-        series: &str,
-    ) -> Result<Vec<(Timestamp, Payload)>, fjall::Error> {
-        let ks = self.keyspace.clone();
-        let series = series.to_owned();
-        spawn_blocking(move || {
-            let partition = ks.open_partition(&series, PartitionCreateOptions::default())?;
-            let messages = partition
-                .iter()
-                .map(|res| res.map(Self::decode))
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(messages)
-        })
-        .await
-        .unwrap()
-    }
-
-    pub async fn drain_older_than(
-        &mut self,
-        timestamp: Timestamp,
-        series: &str,
-    ) -> Result<Vec<(Timestamp, Payload)>, fjall::Error> {
-        let ks = self.keyspace.clone();
-        let (messages, new_oldest) = spawn_blocking({
-            let series = series.to_owned();
-            move || {
-                let partition = ks.open_partition(&series, PartitionCreateOptions::default())?;
-                let messages = partition
-                    .range(..=timestamp.to_slice())
-                    .map(|res| res.map(Self::decode))
-                    .collect::<Result<Vec<_>, _>>()?;
-                for msg in &messages {
-                    partition.remove(msg.0.to_slice())?;
-                }
-                Ok::<_, fjall::Error>((messages, partition.first_key_value()?))
-            }
-        })
-        .await
-        .unwrap()?;
-
-        self.oldest.remove(series);
-        if let Some((ts, _payload)) = new_oldest {
-            self.update_oldest(series, Timestamp::from_slice(ts));
-        }
-        Ok(messages)
-    }
-
-    fn decode((key, value): (Slice, Slice)) -> (Timestamp, Payload) {
-        (Timestamp::from_slice(key), Payload::from_slice(value))
-    }
-
-    pub async fn store(
-        &mut self,
-        series: &str,
-        timestamp: Timestamp,
-        payload: Payload,
-    ) -> Result<(), fjall::Error> {
-        let result = spawn_blocking({
-            let ks = self.keyspace.clone();
-            let series = series.to_owned();
-            move || {
-                let partition = ks.open_partition(&series, PartitionCreateOptions::default())?;
-                partition.insert(timestamp.to_slice(), payload.to_slice())?;
-                Ok(())
-            }
-        })
-        .await
-        .unwrap();
-        self.update_oldest(series, timestamp);
-        result
-    }
-
-    fn update_oldest(&mut self, topic: &str, inserted_ts: Timestamp) {
-        if let Some(value) = self.oldest.get_mut(topic) {
-            *value = std::cmp::min(*value, inserted_ts)
-        } else {
-            self.oldest.insert(topic.to_owned(), inserted_ts);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
     use time::macros::datetime;
 
     use super::*;
+    use crate::database::InMemoryMeaDb;
+    use camino::Utf8PathBuf;
 
-    // Helper function to create a dummy path
-    fn temp_dir() -> TempDir {
-        TempDir::new().expect("Failed to create temp dir")
-    }
+    #[tokio::test]
+    async fn message_processor_stores_message_to_database() {
+        let (mut processor, _temp_dir) = create_test_processor_with_memory_db().await;
 
-    impl ToFromSlice for String {
-        fn to_slice(&self) -> Slice {
-            Slice::new(self.as_bytes())
-        }
+        let series = "test_series";
+        let timestamp = DateTime::try_from(datetime!(2023-01-01 10:00 UTC)).unwrap();
+        let message = crate::flow::Message {
+            topic: "test/topic".to_string(),
+            payload: r#"{"value": 42}"#.into(),
+            timestamp: Some(timestamp),
+        };
 
-        fn from_slice(slice: Slice) -> Self {
-            String::from_utf8(slice.to_vec()).unwrap()
-        }
+        processor
+            .database
+            .store(series, timestamp, message.clone())
+            .await
+            .expect("store should succeed");
+
+        let stored_messages = processor.database.query_all(series).await.unwrap();
+        assert_eq!(stored_messages, [(timestamp, message)]);
     }
 
     #[tokio::test]
-    async fn test_store_single_message() {
-        let temp_dir = temp_dir();
-        let path = temp_dir.path().to_str().unwrap();
-        let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
+    async fn message_processor_drains_messages_from_database() {
+        let (mut processor, _temp_dir) = create_test_processor_with_memory_db().await;
 
-        let series = "sensor_data";
-        let timestamp = datetime!(2023-01-01 10:00 UTC).try_into().unwrap();
-        let message = "temp: 25C".to_string();
+        let series = "test_series";
+        let timestamp = DateTime::try_from(datetime!(2023-01-01 10:00 UTC)).unwrap();
+        let message = crate::flow::Message {
+            topic: "test/topic".to_string(),
+            payload: r#"{"value": 42}"#.into(),
+            timestamp: Some(timestamp),
+        };
 
-        let result = db.store(series, timestamp, message.clone()).await;
-        assert!(result.is_ok());
+        // Store a message first
+        processor
+            .database
+            .store(series, timestamp, message.clone())
+            .await
+            .unwrap();
 
-        // Verify the message was stored
-        let stored_messages = db.drain_older_than(timestamp, series).await.unwrap();
-        println!("{:?}", stored_messages);
-        assert_eq!(stored_messages.len(), 1);
-        assert_eq!(stored_messages[0], (timestamp, message));
+        // Drain the message
+        let drained_messages = processor
+            .database
+            .drain_older_than(timestamp, series)
+            .await
+            .unwrap();
+        assert_eq!(drained_messages, [(timestamp, message)]);
+
+        // Verify database is empty after drain
+        let remaining_messages = processor.database.query_all(series).await.unwrap();
+        assert_eq!(remaining_messages, []);
     }
 
-    #[tokio::test]
-    async fn test_store_multiple_messages_same_series() {
-        let temp_dir = temp_dir();
-        let path = temp_dir.path().to_str().unwrap();
-        let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
+    async fn create_test_processor_with_memory_db() -> (MessageProcessor, TempDir) {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let config_dir = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).unwrap();
 
-        let series = "sensor_data".to_string();
-        let ts1 = datetime!(2023-01-01 10:00 UTC).try_into().unwrap();
-        let msg1 = "temp: 25C".to_string();
-        let ts2 = datetime!(2023-01-01 10:05 UTC).try_into().unwrap();
-        let msg2 = "temp: 26C".to_string();
-        let ts3 = datetime!(2023-01-01 09:55 UTC).try_into().unwrap();
-        let msg3 = "temp: 24C".to_string();
+        let database = Box::new(InMemoryMeaDb::default());
+        let processor = MessageProcessor::new_with_database(config_dir, database)
+            .await
+            .expect("Failed to create MessageProcessor");
 
-        db.store(&series, ts1, msg1.clone()).await.unwrap();
-        db.store(&series, ts2, msg2.clone()).await.unwrap();
-        db.store(&series, ts3, msg3.clone()).await.unwrap();
-
-        let stored_messages = db.drain_older_than(ts2, &series).await.unwrap();
-
-        assert_eq!(stored_messages.len(), 3);
-        // Verify messages are sorted by timestamp
-        assert_eq!(stored_messages[0], (ts3, msg3));
-        assert_eq!(stored_messages[1], (ts1, msg1));
-        assert_eq!(stored_messages[2], (ts2, msg2));
-    }
-
-    #[tokio::test]
-    async fn test_store_messages_different_series() {
-        let temp_dir = temp_dir();
-        let path = temp_dir.path().to_str().unwrap();
-        let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
-
-        let series1 = "sensor_data_a".to_string();
-        let ts1 = datetime!(2023-01-01 10:00 UTC).try_into().unwrap();
-        let msg1 = "data A1".to_string();
-
-        let series2 = "sensor_data_b".to_string();
-        let ts2 = datetime!(2023-01-01 10:01 UTC).try_into().unwrap();
-        let msg2 = "data B1".to_string();
-
-        db.store(&series1, ts1, msg1.clone()).await.unwrap();
-        db.store(&series2, ts2, msg2.clone()).await.unwrap();
-
-        let s1_data = db.drain_older_than(ts1, &series1).await.unwrap();
-        let s2_data = db.drain_older_than(ts2, &series2).await.unwrap();
-        assert_eq!(s1_data.len(), 1);
-        assert_eq!(s2_data.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_drain_removes_data() {
-        let temp_dir = temp_dir();
-        let path = temp_dir.path().to_str().unwrap();
-        let mut db: MeaDb<DateTime, String> = MeaDb::open(&path).await.unwrap();
-
-        let series = "sensor_data_a".to_string();
-        let timestamp = datetime!(2023-01-01 10:00 UTC).try_into().unwrap();
-        let msg = "data A1".to_string();
-
-        db.store(&series, timestamp, msg.clone()).await.unwrap();
-
-        let data = db.drain_older_than(timestamp, &series).await.unwrap();
-        assert_eq!(data.len(), 1);
-        let data_after_drain = db.drain_older_than(timestamp, &series).await.unwrap();
-        assert_eq!(data_after_drain.len(), 0);
+        (processor, temp_dir)
     }
 }

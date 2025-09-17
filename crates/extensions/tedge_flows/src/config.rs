@@ -163,7 +163,7 @@ impl TryFrom<InputConfig> for FlowInput {
 
     fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
         match input {
-            InputConfig::Mqtt { topics } => Ok(FlowInput::MQTT {
+            InputConfig::Mqtt { topics } => Ok(FlowInput::Mqtt {
                 topics: topic_filters(topics)?,
             }),
             InputConfig::MeaDB {
@@ -184,7 +184,7 @@ impl TryFrom<OutputConfig> for FlowOutput {
 
     fn try_from(output: OutputConfig) -> Result<Self, Self::Error> {
         match output {
-            OutputConfig::Mqtt { topics } => Ok(FlowOutput::MQTT {
+            OutputConfig::Mqtt { topics } => Ok(FlowOutput::Mqtt {
                 output_topics: topic_filters(topics)?,
             }),
             OutputConfig::MeaDB { series } => Ok(FlowOutput::MeaDB {
