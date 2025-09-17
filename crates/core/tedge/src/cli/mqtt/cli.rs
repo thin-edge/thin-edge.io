@@ -30,6 +30,9 @@ pub enum TEdgeMqttCli {
         /// Retain flag
         #[clap(short, long = "retain")]
         retain: bool,
+        /// Decode the payload before publishing
+        #[clap(long)]
+        base64: bool,
         /// Repeat the message
         #[clap(long)]
         repeat: Option<u32>,
@@ -51,6 +54,9 @@ pub enum TEdgeMqttCli {
         /// Avoid printing the message topics on the console
         #[clap(long = "no-topic")]
         hide_topic: bool,
+        /// Encode the received payloads
+        #[clap(long)]
+        base64: bool,
         /// Disconnect and exit after the specified timeout (e.g., 60s, 1h)
         #[clap(long, short = 'W')]
         duration: Option<SecondsOrHumanTime>,
@@ -75,6 +81,7 @@ impl BuildCommand for TEdgeMqttCli {
                     message,
                     qos,
                     retain,
+                    base64,
                     repeat,
                     sleep,
                 } => MqttPublishCommand {
@@ -85,6 +92,7 @@ impl BuildCommand for TEdgeMqttCli {
                     qos,
                     client_id: format!("{}-{}", PUB_CLIENT_PREFIX, std::process::id()),
                     retain,
+                    base64,
                     ca_file: auth_config.ca_file.clone(),
                     ca_dir: auth_config.ca_dir,
                     client_auth_config: auth_config.client,
@@ -96,6 +104,7 @@ impl BuildCommand for TEdgeMqttCli {
                     topic,
                     qos,
                     hide_topic,
+                    base64,
                     duration,
                     count,
                     retained_only,
@@ -105,6 +114,7 @@ impl BuildCommand for TEdgeMqttCli {
                     topic,
                     qos,
                     hide_topic,
+                    base64,
                     client_id: format!("{}-{}", SUB_CLIENT_PREFIX, std::process::id()),
                     ca_file: auth_config.ca_file,
                     ca_dir: auth_config.ca_dir,

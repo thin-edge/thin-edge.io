@@ -1,5 +1,6 @@
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use base64::prelude::*;
 use camino::Utf8PathBuf;
 use mqtt_channel::QoS;
 use mqtt_channel::StreamExt;
@@ -8,7 +9,6 @@ use std::time::Duration;
 use tedge_config::tedge_toml::MqttAuthClientConfig;
 use tedge_config::TEdgeConfig;
 use tokio::io::AsyncWriteExt;
-use tracing::error;
 use tracing::info;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
@@ -20,6 +20,7 @@ pub struct MqttSubscribeCommand {
     pub topic: SimpleTopicFilter,
     pub qos: QoS,
     pub hide_topic: bool,
+    pub base64: bool,
     pub client_id: String,
     pub ca_file: Option<Utf8PathBuf>,
     pub ca_dir: Option<Utf8PathBuf>,
@@ -83,26 +84,35 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
             }
         };
 
-        match message.payload_str() {
-            Ok(payload) => {
-                if cmd.retained_only && !message.retain {
-                    info!(target: "MQTT", "Received first non-retained message. topic={}", message.topic.name);
-                    break;
-                }
-                let line = if cmd.hide_topic {
-                    format!("{payload}\n")
-                } else {
-                    format!("[{}] {payload}\n", &message.topic)
-                };
-                let _ = stdout.write_all(line.as_bytes()).await;
-                let _ = stdout.flush().await;
-                n_messages += 1;
-                if matches!(cmd.count, Some(count) if count > 0 && n_messages >= count) {
-                    info!(target: "MQTT", "Received {n_messages} message/s");
-                    break;
-                }
+        if cmd.retained_only && !message.retain {
+            info!(target: "MQTT", topic = message.topic.name, "Received first non-retained message.");
+            break;
+        }
+
+        let payload = if cmd.base64 {
+            BASE64_STANDARD.encode(message.payload_bytes())
+        } else {
+            match message.payload_str() {
+                Ok(payload_str) => payload_str.to_string(),
+                Err(_) => format!(
+                    "<ERR=NON-UTF8> {}",
+                    BASE64_STANDARD.encode(message.payload_bytes())
+                ),
             }
-            Err(err) => error!(target: "MQTT", "{err}"),
+        };
+
+        let line = if cmd.hide_topic {
+            format!("{payload}\n")
+        } else {
+            format!("[{}] {payload}\n", &message.topic)
+        };
+        let _ = stdout.write_all(line.as_bytes()).await;
+        let _ = stdout.flush().await;
+
+        n_messages += 1;
+        if matches!(cmd.count, Some(count) if count > 0 && n_messages >= count) {
+            info!(target: "MQTT", "Received {n_messages} message/s");
+            break;
         }
     }
 

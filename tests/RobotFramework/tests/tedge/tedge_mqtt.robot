@@ -45,6 +45,18 @@ tedge mqtt sub breaks after receiving first non-retailed message
     Should Contain    ${messages[0]}    [foo/1] bar1
     Should Contain    ${messages[1]}    [foo/2] bar2
 
+sending binary payload with tedge mqtt
+    Execute Command
+    ...    tedge mqtt pub -r --base64 te/device/main///m/ eyAidGVtcGVyYXR1cmUiOiAzMC4yLCAiaHVtaWRpdHkiOiAyMyB9
+    ${messages}=    Execute Command    tedge mqtt sub te/device/main///m/ --count 1
+    Should Contain    ${messages}    { "temperature": 30.2, "humidity": 23 }
+
+receiving binary payload with tedge mqtt
+    Execute Command
+    ...    tedge mqtt pub -r te/device/main///m/ '{ "temperature": 30.2, "humidity": 23 }'
+    ${messages}=    Execute Command    tedge mqtt sub --base64 te/device/main///m/ --count 1
+    Should Contain    ${messages}    eyAidGVtcGVyYXR1cmUiOiAzMC4yLCAiaHVtaWRpdHkiOiAyMyB9
+
 
 *** Keywords ***
 Validate duration
