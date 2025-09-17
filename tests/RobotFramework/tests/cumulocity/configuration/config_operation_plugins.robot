@@ -15,14 +15,15 @@ Test Tags           theme:c8y    theme:log
 *** Test Cases ***
 Config operation journald plugin
     ${operation}=    Cumulocity.Get Configuration    hello.conf::hello
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=10
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=10
 
     ${config_url}=    Cumulocity.Create Inventory Binary
     ...    hello.conf
     ...    hello.conf
     ...    file=${CURDIR}/plugins/hello-v2.conf
     ${operation}=    Cumulocity.Set Configuration    hello.conf::hello    url=${config_url}
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=10
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=10
+    Execute Command    grep 'Hello mars' /var/log/hello.log
 
 
 *** Keywords ***
