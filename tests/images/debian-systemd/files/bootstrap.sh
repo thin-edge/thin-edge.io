@@ -295,6 +295,7 @@ install_via_apt() {
             tedge-mapper="$VERSION" \
             tedge-agent="$VERSION" \
             tedge-apt-plugin="$VERSION" \
+            tedge-file-log-plugin="$VERSION" \
             c8y-firmware-plugin="$VERSION" \
             c8y-remote-access-plugin="$VERSION" \
             tedge-watchdog="$VERSION"
@@ -305,6 +306,7 @@ install_via_apt() {
             tedge-mapper \
             tedge-agent \
             tedge-apt-plugin \
+            tedge-file-log-plugin \
             c8y-firmware-plugin \
             c8y-remote-access-plugin \
             tedge-watchdog
@@ -350,6 +352,7 @@ install_via_local_files() {
     find_then_install_deb "$INSTALL_SOURCEDIR" "c8y-remote-access-plugin*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge-p11-server*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge-flows*_$ARCH.deb"
+    find_then_install_deb "$INSTALL_SOURCEDIR" "tedge-file-log-plugin*_$ARCH.deb"
 }
 
 stop_services() {

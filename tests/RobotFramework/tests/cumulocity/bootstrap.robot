@@ -10,7 +10,7 @@ Test Teardown       Get Logs
 *** Test Cases ***
 No unexpected child devices created with service autostart
     [Tags]    \#2584
-    ${DEVICE_SN}=    Setup    connect=${False}
+    ${DEVICE_SN}=    Setup    skip_bootrap=${True}
     Execute Command    systemctl start mosquitto
     Execute Command    systemctl start tedge-agent
     Execute Command    systemctl start tedge-mapper-c8y

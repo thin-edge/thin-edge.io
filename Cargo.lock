@@ -4764,6 +4764,7 @@ dependencies = [
  "tar",
  "tedge-agent",
  "tedge-apt-plugin",
+ "tedge-file-log-plugin",
  "tedge-mapper",
  "tedge-watchdog",
  "tedge-write",
@@ -4854,6 +4855,30 @@ dependencies = [
  "test-case",
  "thiserror 1.0.69",
  "tracing",
+]
+
+[[package]]
+name = "tedge-file-log-plugin"
+version = "1.6.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "camino",
+ "clap",
+ "easy_reader",
+ "filetime",
+ "glob",
+ "log",
+ "rand 0.8.5",
+ "regex",
+ "serde",
+ "tedge_api",
+ "tedge_config",
+ "tedge_test_utils",
+ "thiserror 1.0.69",
+ "time",
+ "tokio",
+ "toml 0.8.22",
 ]
 
 [[package]]
