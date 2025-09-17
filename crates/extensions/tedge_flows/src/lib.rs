@@ -1,5 +1,6 @@
 mod actor;
 mod config;
+pub mod database;
 pub mod flow;
 mod js_runtime;
 mod js_script;
@@ -27,8 +28,6 @@ use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::error;
-
-pub use runtime::MeaDB;
 
 fan_in_message_type!(InputMessage[MqttMessage, FsWatchEvent]: Clone, Debug, Eq, PartialEq);
 fan_in_message_type!(OutputMessage[MqttMessage, SubscriptionDiff]: Clone, Debug, Eq, PartialEq);
@@ -126,5 +125,5 @@ pub enum LoadError {
     Anyhow(#[from] anyhow::Error),
 
     #[error(transparent)]
-    Fjall(#[from] fjall::Error),
+    Database(#[from] crate::database::DatabaseError),
 }

@@ -47,7 +47,7 @@ impl Actor for FlowsMapper {
                 message = self.messages.recv() => {
                     match message {
                         Some(InputMessage::MqttMessage(message)) => match Message::try_from(message) {
-                            Ok(message) => self.on_message(MessageSource::MQTT, DateTime::now(), message).await?,
+                            Ok(message) => self.on_message(MessageSource::Mqtt, DateTime::now(), message).await?,
                             Err(err) => {
                                 error!(target: "flows", "Cannot process message: {err}");
                             }
@@ -167,7 +167,7 @@ impl FlowsMapper {
     ) -> Result<(), RuntimeError> {
         if let Some(flow) = self.processor.flows.get(&flow_id) {
             match &flow.output {
-                FlowOutput::MQTT { output_topics } => {
+                FlowOutput::Mqtt { output_topics } => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
                             Ok(message) if output_topics.accept_topic(&message.topic) => {
