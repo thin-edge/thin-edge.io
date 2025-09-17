@@ -267,6 +267,8 @@ jobs:
     permissions:
       # Required to publish system test results to the PR
       issues: write
+      pull-requests: write
+      contents: read
     environment:
       name: Test Auto
     runs-on: ubuntu-24.04
