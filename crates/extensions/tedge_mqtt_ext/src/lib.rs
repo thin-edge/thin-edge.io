@@ -14,6 +14,7 @@ use mqtt_channel::StreamExt;
 use mqtt_channel::SubscriberOps;
 pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
+use std::collections::HashSet;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
@@ -356,10 +357,10 @@ impl TrieService {
 }
 
 #[cfg(feature = "test-helpers")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ClientId(pub usize);
 #[cfg(not(feature = "test-helpers"))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ClientId(usize);
 
 type MatchRequest = String;
@@ -627,7 +628,7 @@ impl ToPeers {
         let TrieResponse::Matched(matches) = subscribed else {
             unreachable!("MatchRequest always returns Matched")
         };
-        for client in matches {
+        for client in HashSet::<ClientId>::from_iter(matches) {
             self.sender_by_id(client).send(message.clone()).await?;
         }
         Ok(())
