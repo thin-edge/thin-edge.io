@@ -25,7 +25,7 @@ get_config() {
         exit 1
     fi
 
-    cp /etc/hello.conf  $target_path
+    cp /etc/hello.conf  "$target_path"
 }
 
 set_config() {
@@ -36,7 +36,7 @@ set_config() {
         echo "Error: Unsupported config type '$config_type'" >&2
         exit 1
     fi
-    mv $target_config /etc/hello.conf
+    mv "$target_config" /etc/hello.conf
 }
 
 finalize_config() {
