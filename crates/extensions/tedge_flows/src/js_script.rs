@@ -155,7 +155,7 @@ mod tests {
         let js = "export function onMessage(msg) { return [msg]; };";
         let (runtime, script) = runtime_with(js).await;
 
-        let input = Message::new("te/main/device///m/", "hello world");
+        let input = Message::new("te/main/device///m/", "hello world").sent_now();
         let output = input.clone();
         assert_eq!(
             script
@@ -171,7 +171,7 @@ mod tests {
         let js = "export function onMessage(msg) { return msg; };";
         let (runtime, script) = runtime_with(js).await;
 
-        let input = Message::new("te/main/device///m/", "hello world");
+        let input = Message::new("te/main/device///m/", "hello world").sent_now();
         let output = input.clone();
         assert_eq!(
             script
@@ -255,11 +255,10 @@ export function onMessage(message, config) {
             "collectd/h/memory/percent-used",
             "1748440192.104:19.9289468288182",
         );
-        let mut output = Message::new(
+        let output = Message::new(
             "te/device/main///m/collectd",
             r#"{"time": 1748440192.104, "memory": {"percent-used": 19.9289468288182}}"#,
         );
-        output.timestamp = None;
         assert_eq!(
             script
                 .on_message(&runtime, &DateTime::now(), &input)
@@ -279,8 +278,7 @@ export async function onMessage(message, config) {
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("dummy", "content");
-        let mut output = Message::new("foo/bar", r#"{foo:"bar"}"#);
-        output.timestamp = None;
+        let output = Message::new("foo/bar", r#"{foo:"bar"}"#);
         assert_eq!(
             script
                 .on_message(&runtime, &DateTime::now(), &input)
@@ -364,8 +362,7 @@ export async function onMessage(message, config) {
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new_binary("encoded", [240, 159, 146, 150]);
-        let mut output = Message::new("decoded", "💖");
-        output.timestamp = None;
+        let output = Message::new("decoded", "💖");
         assert_eq!(
             script
                 .on_message(&runtime, &DateTime::now(), &input)
@@ -389,8 +386,7 @@ export async function onMessage(message, config) {
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("decoded", "💖");
-        let mut output = Message::new_binary("encoded", [240, 159, 146, 150]);
-        output.timestamp = None;
+        let output = Message::new_binary("encoded", [240, 159, 146, 150]);
         assert_eq!(
             script
                 .on_message(&runtime, &DateTime::now(), &input)
