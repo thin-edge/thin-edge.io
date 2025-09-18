@@ -396,6 +396,61 @@ export async function onMessage(message, config) {
         );
     }
 
+    #[tokio::test]
+    async fn using_standard_built_in_objects() {
+        let js = r#"
+export async function onMessage(message, config) {
+    const te = new globalThis.TextEncoder();
+    const td = new globalThis.TextDecoder();
+
+    const encodedText = message.raw_payload;
+    const decodedText = td.decode(encodedText);
+    const finalPayload = te.encode(decodedText + decodedText);
+    return [{topic:"decoded", payload: finalPayload}];
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new_binary("encoded", [240, 159, 146, 150]);
+        let output = Message::new_binary("decoded", [240, 159, 146, 150, 240, 159, 146, 150]);
+        assert_eq!(
+            script
+                .on_message(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn reading_raw_integers() {
+        let js = r#"
+export async function onMessage(message, config) {
+    const measurements = new Uint32Array(message.raw_payload.buffer);
+
+    const tedge_json = {
+        time: measurements[0],
+        value: measurements[1]
+    }
+
+    return [{topic:"decoded", payload: JSON.stringify(tedge_json)}];
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let time = 1758212648u32.to_le_bytes();
+        let value = 12345u32.to_le_bytes();
+        let input = Message::new_binary("encoded", [time, value].as_flattened());
+        let output = Message::new("decoded", r#"{"time":1758212648,"value":12345}"#);
+        assert_eq!(
+            script
+                .on_message(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
     async fn runtime_with(js: &str) -> (JsRuntime, JsScript) {
         let mut runtime = JsRuntime::try_new().await.unwrap();
         let mut script = JsScript::new("toml".into(), 1, "js".into());
