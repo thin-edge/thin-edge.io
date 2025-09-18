@@ -443,7 +443,7 @@ so that it can process them.
 #### Publish to the main device
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub -r 'te/device/main///m/environment' '{
+tedge mqtt pub 'te/device/main///m/environment' '{
   "temperature": 23.4
 }'
 ```
@@ -451,7 +451,7 @@ tedge mqtt pub -r 'te/device/main///m/environment' '{
 If the there is no measurement type, then the type can be left empty, but it must have the trailing slash `/` (so that the number of topic segments is the same).
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub -r 'te/device/main///m/' '{
+tedge mqtt pub 'te/device/main///m/' '{
   "temperature": 23.4
 }'
 ```
@@ -459,7 +459,7 @@ tedge mqtt pub -r 'te/device/main///m/' '{
 #### Publish to a child device
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub -r 'te/device/child01///m/environment' '{
+tedge mqtt pub 'te/device/child01///m/environment' '{
   "temperature": 23.4
 }'
 ```
@@ -467,7 +467,7 @@ tedge mqtt pub -r 'te/device/child01///m/environment' '{
 #### Publish to a service on the main device
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub -r 'te/device/main/service/nodered/m/environment' '{
+tedge mqtt pub 'te/device/main/service/nodered/m/environment' '{
   "temperature": 23.4
 }'
 ```
@@ -493,7 +493,7 @@ tedge mqtt sub 'te/device/main/service/+/m/memory'
 #### Publish to a service on a child device
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub -r 'te/device/child01/service/nodered/m/environment' '{
+tedge mqtt pub 'te/device/child01/service/nodered/m/environment' '{
   "temperature": 23.4
 }'
 ```

@@ -27,7 +27,7 @@ MQTT messages can also be published using the retained option which means that t
 Below shows an example of publishing a retained MQTT message:
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub --retain --qos 1 te/device/main///a/high_temperature '{
+tedge mqtt pub -r -q 2 te/device/main///a/high_temperature '{
     "text": "Temperature is critical",
     "severity": "critical"
 }'
@@ -55,7 +55,7 @@ tedge mqtt sub '#'
 Now using a different console/shell, publish the following measurement so that the previous subscription will receive it:
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub --retain --qos 1 te/device/main///m/env_sensor '{"temperature": 21.3}'
+tedge mqtt pub --qos 1 te/device/main///m/env_sensor '{"temperature": 21.3}'
 ```
 
 All messages from sub command are printed to `stdout` and can be captured to a file if you need to:

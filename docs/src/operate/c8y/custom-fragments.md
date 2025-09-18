@@ -51,7 +51,7 @@ In order to display your custom fragments in Cumulocity's Device Management UI, 
 The following shows an example of publishing the name and version of the Operating System to the `os_Version` fragment for the main device.
 
 ```sh te2mqtt
-tedge mqtt pub te/device/main///twin/os_Version '{
+tedge mqtt pub -r te/device/main///twin/os_Version '{
     "name": "Poky (Yocto Project Reference Distro)",
     "version": "4.0.15 (kirkstone)"
 }'
@@ -113,7 +113,7 @@ The `tedge-agent` publishes fragments in this file to their corresponding twin t
 For example, the above `inventory.json` file is processed as follows:
 
 ```sh te2mqtt
-tedge mqtt pub --retained te/device/main///twin/c8y_Hardware '{
+tedge mqtt pub -r te/device/main///twin/c8y_Hardware '{
   "model": "BCM2708",
   "revision": "000e",
   "serialNumber": "00000000e2f5ad4d"
@@ -124,7 +124,7 @@ Since these entries are persistent retained messages, when entries are removed f
 the corresponding twin entries must also be cleared explicitly from the broker as follows:
 
 ```sh te2mqtt
-tedge mqtt pub --retained  te/device/main///twin/c8y_Hardware ''
+tedge mqtt pub -r te/device/main///twin/c8y_Hardware ''
 ```
 
 For information on which fragments Cumulocity supports please see the

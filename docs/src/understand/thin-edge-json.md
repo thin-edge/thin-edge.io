@@ -236,7 +236,7 @@ For instance:
 - free disk space going critically low
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub te/device/main///a/temperature_high '{
+tedge mqtt pub -r -q 2 te/device/main///a/temperature_high '{
   "text": "Temperature is very high",
   "severity": "warning",
   "time": "2021-01-01T05:30:45+00:00",
@@ -256,3 +256,10 @@ tedge mqtt pub te/device/main///a/temperature_high '{
 | `timestamp`  | Optional time that indicates when the alarm has occurred, in ISO 8601 string format or as a unix timestamp (in seconds); when not provided, %%te%% uses the current system time                  |
 | `*`          | Additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud |
 
+### Clearing an alarm
+
+An alarm can be cleared by sending an empty retained message to the relevant alarm topic.
+
+```sh te2mqtt formats=v1
+tedge mqtt pub -r -q2 te/device/main///a/temperature_high ''
+```
