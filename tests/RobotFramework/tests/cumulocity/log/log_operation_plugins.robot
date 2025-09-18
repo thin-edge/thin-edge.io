@@ -16,9 +16,10 @@ Test Tags           theme:c8y    theme:log
 Log operation journald plugin
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
-    ${operation}=    Cumulocity.Create Operation
-    ...    description=Log file request
-    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"tedge-agent::journald","searchText":"","maximumLines":100}}
+    ${operation}=    Create Log Request Operation
+    ...    ${start_timestamp}
+    ...    ${end_timestamp}
+    ...    log_type=tedge-agent::journald
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Log Operation Attachment File Contains
     ...    ${operation}
@@ -35,8 +36,6 @@ Custom Setup
     ...    ${CURDIR}/plugins/*
     ...    /etc/tedge/log-plugins/
     Execute Command    chmod +x /etc/tedge/log-plugins/journald
-    Execute Command
-    ...    cmd=echo "tedge ALL = (ALL) NOPASSWD:SETENV: /etc/tedge/log-plugins/[a-zA-Z0-9]**" >> /etc/sudoers.d/tedge
 
     Restart Service    tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
