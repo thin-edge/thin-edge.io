@@ -96,7 +96,7 @@ To tell the units used by the measurements sent on the topic `te/device/main///m
 a message has to be sent on the associated meta topic, i.e. `te/device/main///m/environment/meta`
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub --retain te/device/main///m/environment '{
+tedge mqtt pub -r te/device/main///m/environment/meta '{
     "temperature": { "unit": "°C" },
     "pressure": { "unit": "bar" },
     "current.L1": { "unit": "A" },
