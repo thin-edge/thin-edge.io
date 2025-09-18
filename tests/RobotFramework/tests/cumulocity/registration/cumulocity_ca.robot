@@ -43,6 +43,44 @@ Certificate Renewal Service Using Cumulocity Certificate Authority
     ${cert_after}=    Execute Command    tedge cert show c8y | grep -v Status:
     Should Not Be Equal    ${cert_before}    ${cert_after}
 
+Certificate Renewal with Cloud Profiles
+    [Documentation]    Check if the certificate renewal service is automatically created when using Cumulocity with
+    ...    cloud profiles. In the test, a device is connected twice to the same tenant (using different device ids).
+    ...    Normally the device would be connected to two different tenants, however this would require more testing
+    ...    infrastructure
+    [Setup]    Setup With Cumulocity CA Certificate
+    ${DEVICE_SN_2}=    Set Variable    ${DEVICE_SN}_2
+    ThinEdgeIO.Register Device With Cumulocity CA    external_id
+    ${credentials}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN_2}
+    ${DOMAIN}=    Cumulocity.Get Domain
+
+    Execute Command    tedge config set c8y.url "${DOMAIN}" --profile customer
+    Execute Command
+    ...    tedge config set c8y.device.cert_path /etc/tedge/device-certs/tedge-certificate-customer.pem --profile customer
+    Execute Command    tedge config set c8y.bridge.topic_prefix c8y-customer --profile customer
+    Execute Command    tedge config set c8y.proxy.bind.port 8002 --profile customer
+    Execute Command
+    ...    cmd=tedge cert download c8y --device-id "${DEVICE_SN_2}" --one-time-password '${credentials.one_time_password}' --retry-every 5s --max-timeout 30s --profile customer
+    Execute Command    cmd=tedge config set c8y.enable.log_upload false --profile customer
+    Execute Command    cmd=tedge config set c8y.enable.config_snapshot true --profile customer
+    Execute Command    cmd=tedge config set c8y.enable.config_update false --profile customer
+    Execute Command    cmd=tedge config set c8y.enable.firmware_update false --profile customer
+    Execute Command    cmd=tedge config set c8y.enable.device_profile false --profile customer
+
+    Execute Command    tedge connect c8y --profile customer
+
+    # check if the cert renewal c8y timer is enabled by default
+    Execute Command    systemctl is-active tedge-cert-renewer-c8y@customer.timer
+
+    # Enforce a renewal using the service
+    ${cert_before}=    Execute Command    tedge cert show c8y --profile customer | grep Thumbprint
+    Execute Command    tedge config set certificate.validity.minimum_duration 365d
+    Execute Command    systemctl start tedge-cert-renewer-c8y@customer.service
+
+    ${cert_after}=    Execute Command    tedge cert show c8y --profile customer | grep Thumbprint
+    Should Not Be Equal    ${cert_before}    ${cert_after}
+    [Teardown]    Cumulocity.Delete Managed Object And Device User    external_id=${DEVICE_SN_2}
+
 
 *** Keywords ***
 Custom Setup
@@ -51,4 +89,8 @@ Custom Setup
 
 Setup With Self-Signed Certificate
     ${DEVICE_SN}=    Setup    register_using=self-signed
+    Set Test Variable    $DEVICE_SN
+
+Setup With Cumulocity CA Certificate
+    ${DEVICE_SN}=    Setup    register_using=c8y-ca
     Set Test Variable    $DEVICE_SN
