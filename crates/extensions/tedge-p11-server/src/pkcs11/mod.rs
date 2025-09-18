@@ -26,6 +26,7 @@ use cryptoki::object::ObjectClass;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use cryptoki::slot::SlotInfo;
 use cryptoki::slot::TokenInfo;
 use rsa::pkcs1::EncodeRsaPublicKey;
 use rustls::sign::Signer;
@@ -35,6 +36,7 @@ use rustls::SignatureScheme;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
+use tracing::error;
 use tracing::trace;
 use tracing::warn;
 
@@ -181,8 +183,8 @@ impl Cryptoki {
         self.open_session(uri, CryptokiSessionType::ReadOnly)
     }
 
-    fn open_session_rw<'a>(&'a self, uri: Option<&'a str>) -> anyhow::Result<CryptokiSession<'a>> {
-        self.open_session(uri, CryptokiSessionType::ReadWrite)
+    fn _open_session_rw<'a>(&'a self, uri: Option<&'a str>) -> anyhow::Result<CryptokiSession<'a>> {
+        self.open_session(uri, CryptokiSessionType::_ReadWrite)
     }
 
     fn open_session<'a>(
@@ -202,6 +204,9 @@ impl Cryptoki {
             Ok(c) => c,
             Err(e) => e.into_inner(),
         };
+
+        debug!(slots = ?get_all_slots_info(&context));
+        debug!(tokens = ?get_all_token_info(&context));
 
         let slots_with_tokens = context.get_slots_with_token()?;
         let tokens: Result<Vec<_>, _> = slots_with_tokens
@@ -232,18 +237,40 @@ impl Cryptoki {
 
         let session = match session_type {
             CryptokiSessionType::ReadOnly => context.open_ro_session(slot)?,
-            CryptokiSessionType::ReadWrite => context.open_rw_session(slot)?,
+            CryptokiSessionType::_ReadWrite => context.open_rw_session(slot)?,
         };
 
         session.login(UserType::User, Some(&self.config.pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
 
-        Ok(CryptokiSession {
+        let session = CryptokiSession {
             session,
             token_info,
             uri_attributes,
-        })
+        };
+
+        let template = [];
+        let objects = session.session.find_objects(&template);
+        match objects {
+            Err(err) => {
+                error!(?template, ?err, "failed to find objects");
+            }
+            Ok(objects) => {
+                let objects = objects
+                    .into_iter()
+                    .flat_map(|o| {
+                        let uri = session.export_object_uri(o).inspect_err(
+                            |err| error!(?err, object = ?o, "failed to read properties of object"),
+                        );
+                        uri.map(|u| (o, u)).ok()
+                    })
+                    .collect::<Vec<_>>();
+                trace!(?objects, "Objects found in the token");
+            }
+        }
+
+        Ok(session)
     }
 
     fn request_uri<'a>(
@@ -268,6 +295,45 @@ impl Cryptoki {
     }
 }
 
+fn get_all_slots_info(cryptoki: &Pkcs11) -> Vec<SlotInfo> {
+    let slots = match cryptoki.get_all_slots() {
+        Ok(slots) => slots,
+        Err(err) => {
+            error!(?err, "failed to get slots");
+            return vec![];
+        }
+    };
+    slots
+        .into_iter()
+        .flat_map(|s| {
+            cryptoki
+                .get_slot_info(s)
+                .inspect_err(|err| error!(slot = ?s, ?err, "failed to read slot info from slot"))
+                .ok()
+        })
+        .collect::<Vec<_>>()
+}
+
+fn get_all_token_info(cryptoki: &Pkcs11) -> Vec<TokenInfo> {
+    let slots = match cryptoki.get_slots_with_token() {
+        Ok(slots) => slots,
+        Err(err) => {
+            error!(?err, "failed to get slots");
+            return vec![];
+        }
+    };
+
+    slots
+        .into_iter()
+        .flat_map(|s| {
+            cryptoki
+                .get_token_info(s)
+                .inspect_err(|err| error!(slot = ?s, ?err, "failed to read token info from slot"))
+                .ok()
+        })
+        .collect::<Vec<_>>()
+}
+
 /// A cryptoki session opened with a token.
 struct CryptokiSession<'a> {
     session: Session,
@@ -278,7 +344,7 @@ struct CryptokiSession<'a> {
 #[derive(Debug, Clone, Copy)]
 enum CryptokiSessionType {
     ReadOnly,
-    ReadWrite,
+    _ReadWrite,
 }
 
 impl CryptokiSession<'_> {
@@ -441,6 +507,41 @@ impl CryptokiSession<'_> {
         let pubkey_pem = pem::encode(&pubkey_pem);
 
         Ok(pubkey_pem)
+    }
+
+    fn export_object_uri(&self, object: ObjectHandle) -> anyhow::Result<String> {
+        let template = &[AttributeType::Id, AttributeType::Label];
+        let attrs = self.session.get_attributes(object, template)?.into_iter();
+
+        let mut key_uri = export_session_uri(&self.token_info);
+
+        for attr in attrs {
+            match attr {
+                Attribute::Id(id) => {
+                    key_uri.push(';');
+                    key_uri.push_str("id=");
+                    // from RFC section 2.3: Note that the value of the "id" attribute SHOULD NOT be encoded as UTF-8 because it can
+                    // contain non-textual data, instead it SHOULD be entirely percent-encoded
+                    for byte in &id {
+                        key_uri.push_str(percent_encoding::percent_encode_byte(*byte));
+                    }
+                }
+                Attribute::Label(label) => {
+                    let label = std::str::from_utf8(&label).context("label should be utf-8")?;
+                    key_uri.push(';');
+                    key_uri.push_str("object=");
+                    let label = uri::percent_encode(label);
+                    key_uri.push_str(&label);
+                }
+                other => warn!(asked = ?template, got= ?other, "Got invalid attribute"),
+            }
+        }
+
+        // omit the "type" attribute since its not relevant when used as device.key_uri, which is intended use for this produced value
+
+        anyhow::ensure!(key_uri.starts_with("pkcs11:"));
+
+        Ok(key_uri)
     }
 }
 
@@ -685,6 +786,36 @@ fn get_ec_mechanism(session: &Session, key: ObjectHandle) -> anyhow::Result<SigS
         SECP521R1_OID => Ok(SigScheme::EcdsaNistp521Sha512),
         _ => anyhow::bail!("Parsed oID({oid}) doesn't match any supported EC curve"),
     }
+}
+
+/// Generates PKCS11 URI of the selected token.
+///
+/// The generated URI attempts to be similar to URIs generated by gnutls. Notably, "slot-description", "slot-id", and
+/// "slot-manufacturer" attributes are missing from gnutls URIs, perhaps for portability (URI points to the same thing
+/// even if token is reinserted into a different slot).
+fn export_session_uri(token_info: &TokenInfo) -> String {
+    let mut uri = String::from("pkcs11:");
+
+    uri.push_str("model=");
+    let model = uri::percent_encode(token_info.model());
+    uri.push_str(&model);
+
+    uri.push(';');
+    uri.push_str("manufacturer=");
+    let manufacturer = uri::percent_encode(token_info.manufacturer_id());
+    uri.push_str(&manufacturer);
+
+    uri.push(';');
+    uri.push_str("serial=");
+    let serial = uri::percent_encode(token_info.serial_number());
+    uri.push_str(&serial);
+
+    uri.push(';');
+    uri.push_str("token=");
+    let token = uri::percent_encode(token_info.label());
+    uri.push_str(&token);
+
+    uri
 }
 
 #[cfg(test)]
