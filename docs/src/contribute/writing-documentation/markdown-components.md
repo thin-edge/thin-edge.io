@@ -247,14 +247,14 @@ The MQTT code block can also be written using the new MQTT api and the command w
 
 ````markdown title="Markdown"
 ```sh te2mqtt formats=legacy,v1
-tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+tedge mqtt pub -r -q 2 te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
 ```
 ````
 
 **Output**
 
 ```sh te2mqtt formats=legacy,v1
-tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+tedge mqtt pub -r -q 2 te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
 ```
 
 ### Example: MQTT code blocks with different grouping options
@@ -267,14 +267,14 @@ The tedge api code blocks can also be grouped in different ways.
 
 ````markdown title="Markdown"
 ```sh te2mqtt formats=legacy,v1 groupTabs=true
-tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+tedge mqtt pub -r -q 2 te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
 ```
 ````
 
 **Output**
 
 ```sh te2mqtt formats=legacy,v1 groupTabs=true
-tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+tedge mqtt pub -r -q 2 te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
 ```
 
 #### Ungrouped
@@ -283,14 +283,14 @@ tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "
 
 ````markdown title="Markdown"
 ```sh te2mqtt formats=legacy,v1 groupTabs=false
-tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+tedge mqtt pub -r -q 2 te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
 ```
 ````
 
 **Output**
 
 ```sh te2mqtt formats=legacy,v1 groupTabs=false
-tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+tedge mqtt pub -r -q 2 te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
 ```
 
 ### Example: Subscribe to MQTT messages

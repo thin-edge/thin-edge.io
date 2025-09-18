@@ -27,7 +27,7 @@ MQTT messages can also be published using the retained option which means that t
 Below shows an example of publishing a retained MQTT message:
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub --retain --qos 1 te/device/main///a/high_temperature '{
+tedge mqtt pub -r -q 2 te/device/main///a/high_temperature '{
     "text": "Temperature is critical",
     "severity": "critical"
 }'
