@@ -136,7 +136,7 @@ impl Cryptoki {
     /// again ([C_GetSlotList]).
     ///
     /// [C_GetSlotList]: https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/errata01/os/pkcs11-base-v2.40-errata01-os-complete.html#_Toc441755804
-    fn reinit(&self) -> anyhow::Result<()> {
+    fn _reinit(&self) -> anyhow::Result<()> {
         // load a new client before locking so if error we don't poison the mutex
         let new_client = Self::load(&self.config.module_path)?;
 
@@ -195,7 +195,9 @@ impl Cryptoki {
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
 
-        self.reinit()?;
+        // avoid reinitializing for now because of Nitrokey slowness
+        // self.reinit()?;
+
         let context = match self.context.lock() {
             Ok(c) => c,
             Err(e) => e.into_inner(),
