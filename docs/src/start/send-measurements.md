@@ -87,6 +87,31 @@ The `time` field is not a regular measurement like `temperature` or `pressure` b
 Refer to [%%te%% JSON Specification](../understand/thin-edge-json.md) for more details on the kinds of telemetry 
 data that can be represented in %%te%% JSON format and the reserved fields like `time` used in the above example.
 
+## Measurement Units
+
+The default for %%te%% is to have the measurement units implied.
+However, the units actually used by a source of measurements can be configured using MQTT.
+
+To tell the units used by the measurements sent on the topic `te/device/main///m/environment`,
+a message has to be sent on the associated meta topic, i.e. `te/device/main///m/environment/meta`
+
+```sh te2mqtt formats=v1
+tedge mqtt pub --retain te/device/main///m/environment '{
+    "temperature": { "unit": "°C" },
+    "pressure": { "unit": "bar" },
+    "current.L1": { "unit": "A" },
+    "current.L2": { "unit": "A" },
+    "current.L3": { "unit": "A" }
+}'
+```
+
+:::note
+The `--retain` flag marks the message as retained making it available to all applications,
+not only for the subsequent measurements but also across application restarts.
+:::
+
+For details, refer to [%%te%% JSON Specification](../../references/mqtt-api/#telemetry-metadata)
+
 ## Sending measurements to child devices
 
 If valid %%te%% JSON measurements are published to the `te/device/<child-id>///m/<measurement-type>` topic,
