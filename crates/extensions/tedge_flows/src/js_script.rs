@@ -155,7 +155,7 @@ mod tests {
         let js = "export function onMessage(msg) { return [msg]; };";
         let (runtime, script) = runtime_with(js).await;
 
-        let input = Message::new("te/main/device///m/", "hello world");
+        let input = Message::new("te/main/device///m/", "hello world").sent_now();
         let output = input.clone();
         assert_eq!(
             script
@@ -171,7 +171,7 @@ mod tests {
         let js = "export function onMessage(msg) { return msg; };";
         let (runtime, script) = runtime_with(js).await;
 
-        let input = Message::new("te/main/device///m/", "hello world");
+        let input = Message::new("te/main/device///m/", "hello world").sent_now();
         let output = input.clone();
         assert_eq!(
             script
@@ -255,11 +255,10 @@ export function onMessage(message, config) {
             "collectd/h/memory/percent-used",
             "1748440192.104:19.9289468288182",
         );
-        let mut output = Message::new(
+        let output = Message::new(
             "te/device/main///m/collectd",
             r#"{"time": 1748440192.104, "memory": {"percent-used": 19.9289468288182}}"#,
         );
-        output.timestamp = None;
         assert_eq!(
             script
                 .on_message(&runtime, &DateTime::now(), &input)
@@ -279,8 +278,7 @@ export async function onMessage(message, config) {
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("dummy", "content");
-        let mut output = Message::new("foo/bar", r#"{foo:"bar"}"#);
-        output.timestamp = None;
+        let output = Message::new("foo/bar", r#"{foo:"bar"}"#);
         assert_eq!(
             script
                 .on_message(&runtime, &DateTime::now(), &input)
@@ -363,9 +361,8 @@ export async function onMessage(message, config) {
         "#;
         let (runtime, script) = runtime_with(js).await;
 
-        let input = Message::new_binary("encoded", [240, 159, 146, 150]);
-        let mut output = Message::new("decoded", "💖");
-        output.timestamp = None;
+        let input = Message::new("encoded", [240, 159, 146, 150]);
+        let output = Message::new("decoded", "💖");
         assert_eq!(
             script
                 .on_message(&runtime, &DateTime::now(), &input)
@@ -389,8 +386,111 @@ export async function onMessage(message, config) {
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("decoded", "💖");
-        let mut output = Message::new_binary("encoded", [240, 159, 146, 150]);
-        output.timestamp = None;
+        let output = Message::new("encoded", [240, 159, 146, 150]);
+        assert_eq!(
+            script
+                .on_message(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn decode_utf8_with_bom_and_invalid_chars() {
+        let js = r#"
+export async function onMessage(message, config) {
+    const utf8decoder = new TextDecoder();
+    const encodedText = message.raw_payload;
+    const decodedText = utf8decoder.decode(encodedText);
+    return [{topic:"decoded", payload: decodedText}];
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let utf8_with_bom_and_invalid_chars = b"\xEF\xBB\xBFHello \xF0\x90\x80World";
+        let input = Message::new("encoded", utf8_with_bom_and_invalid_chars);
+        let output = Message::new("decoded", "Hello �World");
+        assert_eq!(
+            script
+                .on_message(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn using_text_encoder_into() {
+        let js = r#"
+export async function onMessage(message, config) {
+    const utf8encoder = new TextEncoder();
+    const u8array = new Uint8Array(8);
+    const result = utf8encoder.encodeInto(message.payload, u8array);
+    console.log(result);
+    utf8encoder.encodeInto(message.payload, u8array.subarray(4));
+    return [{topic:"encoded", payload: u8array}];
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("decoded", "💖");
+        let output = Message::new("encoded", [240, 159, 146, 150, 240, 159, 146, 150]);
+        assert_eq!(
+            script
+                .on_message(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn using_standard_built_in_objects() {
+        let js = r#"
+export async function onMessage(message, config) {
+    const te = new globalThis.TextEncoder();
+    const td = new globalThis.TextDecoder();
+
+    const encodedText = message.raw_payload;
+    const decodedText = td.decode(encodedText);
+    const finalPayload = te.encode(decodedText + decodedText);
+    return [{topic:"decoded", payload: finalPayload}];
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("encoded", [240, 159, 146, 150]);
+        let output = Message::new("decoded", [240, 159, 146, 150, 240, 159, 146, 150]);
+        assert_eq!(
+            script
+                .on_message(&runtime, &DateTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn reading_raw_integers() {
+        let js = r#"
+export async function onMessage(message, config) {
+    const measurements = new Uint32Array(message.raw_payload.buffer);
+
+    const tedge_json = {
+        time: measurements[0],
+        value: measurements[1]
+    }
+
+    return [{topic:"decoded", payload: JSON.stringify(tedge_json)}];
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let time = 1758212648u32.to_le_bytes();
+        let value = 12345u32.to_le_bytes();
+        let input = Message::new("encoded", [time, value].as_flattened());
+        let output = Message::new("decoded", r#"{"time":1758212648,"value":12345}"#);
         assert_eq!(
             script
                 .on_message(&runtime, &DateTime::now(), &input)

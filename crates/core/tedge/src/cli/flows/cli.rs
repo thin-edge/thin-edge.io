@@ -46,6 +46,14 @@ pub enum TEdgeFlowsCli {
         #[clap(long = "final-on-interval")]
         final_on_interval: bool,
 
+        /// The input payloads are base64 encoded and have to be decoded first
+        #[clap(long = "base64-input")]
+        base64_input: bool,
+
+        /// The output payloads have to be base64 encoded before being displayed
+        #[clap(long = "base64-output")]
+        base64_output: bool,
+
         /// Topic of the message sample
         ///
         /// If none is provided, messages are read from stdin expecting a line per message:
@@ -71,16 +79,14 @@ impl BuildCommand for TEdgeFlowsCli {
                 flows_dir,
                 flow,
                 final_on_interval,
+                base64_input,
+                base64_output,
                 topic,
                 payload,
             } => {
                 let flows_dir = flows_dir.unwrap_or_else(|| Self::default_flows_dir(config));
                 let message = match (topic, payload) {
-                    (Some(topic), Some(payload)) => Some(Message {
-                        topic,
-                        payload: payload.into_bytes(),
-                        timestamp: None,
-                    }),
+                    (Some(topic), Some(payload)) => Some(Message::new(topic, payload)),
                     (Some(_), None) => Err(anyhow!("Missing sample payload"))?,
                     (None, Some(_)) => Err(anyhow!("Missing sample topic"))?,
                     (None, None) => None,
@@ -90,6 +96,8 @@ impl BuildCommand for TEdgeFlowsCli {
                     flow,
                     message,
                     final_on_interval,
+                    base64_input,
+                    base64_output,
                 }
                 .into_boxed())
             }

@@ -218,22 +218,18 @@ impl TryFrom<OffsetDateTime> for DateTime {
 }
 
 impl Message {
-    #[cfg(test)]
-    pub(crate) fn new(topic: &str, payload: &str) -> Self {
+    pub fn new(topic: impl ToString, payload: impl Into<Vec<u8>>) -> Self {
         Message {
             topic: topic.to_string(),
-            payload: payload.to_string().into_bytes(),
-            timestamp: Some(DateTime::now()),
+            payload: payload.into(),
+            timestamp: None,
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn new_binary(topic: &str, payload: impl Into<Vec<u8>>) -> Self {
-        Message {
-            topic: topic.to_string(),
-            payload: payload.into(),
-            timestamp: Some(DateTime::now()),
-        }
+    pub fn sent_now(mut self) -> Self {
+        self.timestamp = Some(DateTime::now());
+        self
     }
 
     pub fn json(&self) -> Value {
