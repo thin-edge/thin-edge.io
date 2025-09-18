@@ -251,6 +251,57 @@ async fn dynamic_subscriptions() {
 }
 
 #[tokio::test]
+async fn client_with_overlapping_subscriptions() {
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mqtt_config = MqttConfig::default().with_port(broker.port);
+    let mut mqtt = MqttActorBuilder::new(mqtt_config);
+    let mut publisher = SimpleMessageBoxBuilder::<MqttRequest, _>::new("publisher", 16);
+    publisher.connect_sink(NoConfig, &mqtt);
+
+    // A client starts with a single subscription
+    let mut client = SimpleMessageBoxBuilder::<_, MqttRequest>::new("dyn-subscriber", 16);
+    let client_id = mqtt.connect_id_sink(TopicFilter::new_unchecked("a/+"), &client);
+    client.connect_sink(NoConfig, &mqtt);
+
+    let mqtt = mqtt.build();
+    tokio::spawn(async move { mqtt.run().await.unwrap() });
+    let mut publisher = publisher.build();
+    let mut client = client.build();
+
+    // The client then dynamically subscribes to an overlapping topic
+    client
+        .send(MqttRequest::Subscribe(SubscriptionRequest {
+            diff: SubscriptionDiff {
+                // a more convincing example would be to subscribe to "+/b"
+                // but in that case rumqttd sends the message twice
+                // something we can do little about
+                subscribe: ["a/b".into()].into(),
+                unsubscribe: [].into(), // still wants to receive messages from "a/+"
+            },
+            client_id,
+        }))
+        .await
+        .unwrap();
+
+    // A message published on the overlap ...
+    let msg = MqttMessage::new(&Topic::new_unchecked("a/b"), "hello");
+    publisher
+        .send(MqttRequest::Publish(msg.clone()))
+        .await
+        .unwrap();
+
+    // ... should then not be received twice
+    assert_eq!(timeout(client.recv()).await.unwrap(), msg);
+    if let Ok(Some(duplicate)) =
+        tokio::time::timeout(Duration::from_millis(10), client.recv()).await
+    {
+        if duplicate == msg {
+            panic!("A message has been delivered twice to the subscriber");
+        }
+    }
+}
+
+#[tokio::test]
 async fn dynamic_subscribers_receive_retain_messages() {
     let broker = mqtt_tests::test_mqtt_broker();
     let mqtt_config = MqttConfig::default()
