@@ -236,7 +236,7 @@ For instance:
 - free disk space going critically low
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub te/device/main///a/temperature_high '{
+tedge mqtt pub -q 2 -r te/device/main///a/temperature_high '{
   "text": "Temperature is very high",
   "severity": "warning",
   "time": "2021-01-01T05:30:45+00:00",

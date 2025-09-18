@@ -50,7 +50,7 @@ If multiple messages are sent to the same alarm topic, the last alarm is conside
 Here is a sample alarm raised for `temperature_high` alarm type with `critical` severity:
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub te/device/main///a/temperature_high '
+tedge mqtt pub -q 2 -r te/device/main///a/temperature_high '
 {
   "text": "Temperature is very high",
   "severity": "critical"
