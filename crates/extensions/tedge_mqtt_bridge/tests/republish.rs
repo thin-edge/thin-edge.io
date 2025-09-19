@@ -39,6 +39,7 @@ async fn start_mqtt_bridge(
         &health_topic,
         rules,
         cloud_config,
+        None,
     )
     .await;
 }

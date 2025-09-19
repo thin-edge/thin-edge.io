@@ -1,6 +1,5 @@
 mod backoff;
 mod config;
-mod health;
 #[cfg(test)]
 mod test_helpers;
 mod topics;
@@ -72,7 +71,8 @@ macro_rules! log_event {
     };
 }
 
-// We have to declare mqtt_logging after the macro as it depends on the macro
+// We have to declare these modules here as they depend on the macro defined above
+mod health;
 mod mqtt_logging;
 
 pub struct MqttBridgeActorBuilder {}
@@ -85,6 +85,7 @@ impl MqttBridgeActorBuilder {
         health_topic: &Topic,
         rules: BridgeConfig,
         mut cloud_config: MqttOptions,
+        on_cloud_reconnect: Option<Publish>,
     ) -> Self {
         let mut local_config = MqttOptions::new(
             service_name,
@@ -143,6 +144,8 @@ impl MqttBridgeActorBuilder {
             rules.converters_and_bidirectional_topic_filters();
         let (tx_status, monitor) =
             BridgeHealthMonitor::new(health_topic.name.clone(), &local_target);
+        let cloud_tx = cloud_target.clone_sender();
+        let local_tx = local_target.clone_sender();
         tokio::spawn(monitor.monitor());
         tokio::spawn(half_bridge(
             local_event_loop,
@@ -154,6 +157,8 @@ impl MqttBridgeActorBuilder {
             "local",
             local_topics,
             reconnect_policy.clone(),
+            None,
+            local_tx,
         ));
         tokio::spawn(half_bridge(
             cloud_event_loop,
@@ -165,6 +170,8 @@ impl MqttBridgeActorBuilder {
             "cloud",
             cloud_topics,
             reconnect_policy,
+            on_cloud_reconnect,
+            cloud_tx,
         ));
 
         Self {}
@@ -452,6 +459,8 @@ async fn half_bridge(
     name: &'static str,
     topics: Vec<SubscribeFilter>,
     reconnect_policy: TEdgeConfigReaderMqttBridgeReconnectPolicy,
+    reconnect_message: Option<Publish>,
+    mut self_tx: BridgeMessageSender,
 ) {
     let mut backoff = CustomBackoff::new(
         ::backoff::SystemClock {},
@@ -516,6 +525,16 @@ async fn half_bridge(
         match notification {
             Event::Incoming(Incoming::ConnAck(conn_ack)) => {
                 log_event!(name, "Bridge connection subscribing to {topics:?}");
+
+                // Publish reconnect message if provided
+                if let Some(msg) = &reconnect_message {
+                    let msg = msg.clone();
+                    log_event!(
+                        name,
+                        "Bridge connection publishing reconnect message: {msg:?}"
+                    );
+                    self_tx.internal_publish(msg);
+                }
 
                 let recv_client = recv_client.clone();
                 let topics = topics.clone();
@@ -1306,6 +1325,111 @@ mod tests {
             assert_eq!(cloud_events.message_count().await, message_count);
         }
 
+        #[tokio::test]
+        async fn publishes_reconnect_message_on_cloud_connection() {
+            let reconnect_msg = Publish::new("reconnect/status", QoS::AtLeastOnce, "reconnected");
+            let events = [inc!(connack)];
+
+            let bridge = Bridge::default()
+                .with_cloud_events(events)
+                .with_cloud_reconnect_message(Some(reconnect_msg.clone()))
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.cloud_client.next_action().unwrap(),
+                Action::Publish(reconnect_msg)
+            )
+        }
+
+        #[tokio::test]
+        async fn does_not_publish_when_no_reconnect_message_configured() {
+            let events = [inc!(connack)];
+
+            let bridge = Bridge::default()
+                .with_cloud_events(events)
+                .with_cloud_reconnect_message(None)
+                .process_all_events()
+                .await;
+
+            // Should not have any publish actions for reconnect message
+            assert!(bridge.cloud_client.next_action().is_err())
+        }
+
+        #[tokio::test]
+        async fn publishes_reconnect_message_multiple_times_on_multiple_reconnections() {
+            let reconnect_msg = Publish::new("reconnect/status", QoS::AtLeastOnce, "reconnected");
+            let events = [
+                inc!(connack),       // First connection
+                inc!(network_error), // Disconnect
+                inc!(connack),       // Second connection
+            ];
+
+            let bridge = Bridge::default()
+                .with_cloud_events(events)
+                .with_cloud_reconnect_message(Some(reconnect_msg.clone()))
+                .process_all_events()
+                .await;
+
+            // Should publish reconnect message twice
+            assert_eq!(
+                bridge.cloud_client.next_action().unwrap(),
+                Action::Publish(reconnect_msg.clone())
+            );
+            assert_eq!(
+                bridge.cloud_client.next_action().unwrap(),
+                Action::Publish(reconnect_msg)
+            )
+        }
+
+        #[tokio::test]
+        async fn publishes_reconnect_message_with_correct_qos_and_retain() {
+            let mut reconnect_msg =
+                Publish::new("reconnect/status", QoS::ExactlyOnce, "reconnected");
+            reconnect_msg.retain = true;
+            let events = [inc!(connack)];
+
+            let bridge = Bridge::default()
+                .with_cloud_events(events)
+                .with_cloud_reconnect_message(Some(reconnect_msg.clone()))
+                .process_all_events()
+                .await;
+
+            let published = bridge.cloud_client.next_action().unwrap();
+            match published {
+                Action::Publish(msg) => {
+                    assert_eq!(msg, reconnect_msg);
+                }
+                _ => panic!("Expected Publish action, got {:?}", published),
+            }
+        }
+
+        #[tokio::test]
+        async fn reconnect_message_does_not_interfere_with_regular_forwarding() {
+            let reconnect_msg = Publish::new("reconnect/status", QoS::AtLeastOnce, "reconnected");
+            let regular_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "regular_payload");
+            let expected_forwarded = Publish::new("s/us", QoS::AtLeastOnce, "regular_payload");
+
+            let cloud_events = [inc!(connack)];
+            let local_events = [inc!(publish(regular_msg))];
+
+            let bridge = Bridge::default()
+                .with_local_events(local_events)
+                .with_cloud_events(cloud_events)
+                .with_cloud_reconnect_message(Some(reconnect_msg.clone()))
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            // Should have both reconnect message (to cloud) and forwarded message (to cloud)
+            let actions: Vec<_> = (0..2)
+                .map(|_| bridge.cloud_client.next_action().unwrap())
+                .collect();
+
+            assert!(actions.contains(&Action::Publish(reconnect_msg)));
+            assert!(actions.contains(&Action::Publish(expected_forwarded)));
+        }
+
         struct Bridge<LoEv, ClEv, LoCl, ClCl> {
             local_events: LoEv,
             cloud_events: ClEv,
@@ -1314,6 +1438,7 @@ mod tests {
             subscription_topics: Vec<SubscribeFilter>,
             local_topic_converter: TopicConverter,
             cloud_topic_converter: TopicConverter,
+            cloud_reconnect_message: Option<Publish>,
         }
 
         struct CompletedBridge<Local, Cloud> {
@@ -1340,6 +1465,7 @@ mod tests {
                     subscription_topics: <_>::default(),
                     local_topic_converter: <_>::default(),
                     cloud_topic_converter: <_>::default(),
+                    cloud_reconnect_message: None,
                 }
             }
         }
@@ -1369,6 +1495,13 @@ mod tests {
                 }
             }
 
+            fn with_cloud_reconnect_message(self, message: Option<Publish>) -> Self {
+                Self {
+                    cloud_reconnect_message: message,
+                    ..self
+                }
+            }
+
             fn with_local_client<C>(self, client: C) -> Bridge<LoEv, ClEv, C, ClCl> {
                 Bridge {
                     local_client: client,
@@ -1378,6 +1511,7 @@ mod tests {
                     subscription_topics: self.subscription_topics,
                     local_topic_converter: self.local_topic_converter,
                     cloud_topic_converter: self.cloud_topic_converter,
+                    cloud_reconnect_message: self.cloud_reconnect_message,
                 }
             }
 
@@ -1390,6 +1524,7 @@ mod tests {
                     subscription_topics: self.subscription_topics,
                     local_topic_converter: self.local_topic_converter,
                     cloud_topic_converter: self.cloud_topic_converter,
+                    cloud_reconnect_message: self.cloud_reconnect_message,
                 }
             }
 
@@ -1405,6 +1540,7 @@ mod tests {
                     subscription_topics: self.subscription_topics,
                     local_topic_converter: self.local_topic_converter,
                     cloud_topic_converter: self.cloud_topic_converter,
+                    cloud_reconnect_message: self.cloud_reconnect_message,
                 }
             }
 
@@ -1414,28 +1550,36 @@ mod tests {
                 let (tx1, rx1) = mpsc::channel(10);
 
                 let (tx_health, rx_health) = mpsc::channel(10);
+                let cloud_target = BridgeAsyncClient::new(self.cloud_client.clone(), tx0, rx1);
+                let local_target = BridgeAsyncClient::new(self.local_client.clone(), tx1, rx0);
+                let cloud_sender = cloud_target.clone_sender();
+                let local_sender = local_target.clone_sender();
 
                 let local_task = tokio::spawn(half_bridge(
                     self.local_events.clone(),
                     self.local_client.clone(),
-                    BridgeAsyncClient::new(self.cloud_client.clone(), tx0, rx1),
+                    cloud_target,
                     self.local_topic_converter,
                     vec![],
                     tx_health.clone(),
                     "local",
                     self.subscription_topics.clone(),
                     TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
+                    None,
+                    local_sender,
                 ));
                 let cloud_task = tokio::spawn(half_bridge(
                     self.cloud_events.clone(),
                     self.cloud_client.clone(),
-                    BridgeAsyncClient::new(self.local_client.clone(), tx1, rx0),
+                    local_target,
                     self.cloud_topic_converter,
                     vec![],
                     tx_health,
                     "cloud",
                     self.subscription_topics,
                     TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
+                    self.cloud_reconnect_message,
+                    cloud_sender,
                 ));
 
                 tokio::time::timeout(Duration::from_secs(5), self.local_events.all_processed())
