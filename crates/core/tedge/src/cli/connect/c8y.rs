@@ -11,6 +11,8 @@ use anyhow::bail;
 use anyhow::Context as _;
 use base64::prelude::*;
 use c8y_api::smartrest::message::get_smartrest_template_id;
+use c8y_api::smartrest::message_ids::GET_DEVICE_MANAGED_OBJECT_ID;
+use c8y_api::smartrest::message_ids::GET_DEVICE_MANAGED_OBJECT_ID_RESPONSE;
 use c8y_api::smartrest::message_ids::JWT_TOKEN;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
@@ -170,14 +172,6 @@ pub(crate) async fn check_device_status_c8y(
 ) -> Result<DeviceStatus, ConnectError> {
     let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
 
-    // TODO: Use SmartREST1 to check connection
-    if c8y_config
-        .auth_method
-        .is_basic(&c8y_config.credentials_path)
-    {
-        return Ok(DeviceStatus::AlreadyExists);
-    }
-
     let prefix = &c8y_config.bridge.topic_prefix;
     let built_in_bridge = tedge_config.mqtt.bridge.built_in;
     let mqtt_service_enabled = c8y_config.mqtt_service.enabled;
@@ -187,8 +181,23 @@ pub(crate) async fn check_device_status_c8y(
             .unwrap()
             .name;
 
-    let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
-    let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
+    let (downstream_topic, upstream_topic, payload) = if c8y_config
+        .auth_method
+        .is_basic(&c8y_config.credentials_path)
+    {
+        (
+            format!("{prefix}/s/ds"),
+            format!("{prefix}/s/us"),
+            GET_DEVICE_MANAGED_OBJECT_ID.to_string(),
+        )
+    } else {
+        (
+            format!("{prefix}/s/dat"),
+            format!("{prefix}/s/uat"),
+            "".to_string(),
+        )
+    };
+
     const CLIENT_ID: &str = "check_connection_c8y";
 
     let mut mqtt_options = tedge_config
@@ -208,9 +217,7 @@ pub(crate) async fn check_device_status_c8y(
     client
         .subscribe(&core_mqtt_bridge_health_topic, AtLeastOnce)
         .await?;
-    client
-        .subscribe(&c8y_topic_builtin_jwt_token_downstream, AtLeastOnce)
-        .await?;
+    client.subscribe(&downstream_topic, AtLeastOnce).await?;
     if mqtt_service_enabled {
         client
             .subscribe(&mqtt_service_bridge_health_topic, AtLeastOnce)
@@ -228,11 +235,13 @@ pub(crate) async fn check_device_status_c8y(
                 acknowledged = true;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
-                if response.topic == c8y_topic_builtin_jwt_token_downstream {
+                if response.topic == downstream_topic {
                     // We got a response
                     let response = std::str::from_utf8(&response.payload).unwrap();
                     let message_id = get_smartrest_template_id(response);
-                    if message_id.parse() == Ok(JWT_TOKEN) {
+                    if message_id.parse() == Ok(GET_DEVICE_MANAGED_OBJECT_ID_RESPONSE)
+                        || message_id.parse() == Ok(JWT_TOKEN)
+                    {
                         core_mqtt_connected = true;
                         break;
                     }
@@ -243,10 +252,10 @@ pub(crate) async fn check_device_status_c8y(
                 ) {
                     client
                         .publish(
-                            &c8y_topic_builtin_jwt_token_upstream,
+                            &upstream_topic,
                             rumqttc::QoS::AtMostOnce,
                             false,
-                            "",
+                            payload.clone(),
                         )
                         .await?;
                 } else if is_bridge_health_up_message(

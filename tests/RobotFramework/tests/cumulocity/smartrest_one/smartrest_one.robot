@@ -25,6 +25,12 @@ Supports SmartREST 1.0 Templates - mosquitto
     [Tags]    test:retry(1)    workaround    # rarely no message arrives on c8y/s/dl/template
     Register and Use SmartREST 1.0. Templates    use_builtin_bridge=false
 
+tedge connect c8y --test works with basic auth
+    [Tags]    \#3791
+    Register and Use SmartREST 1.0. Templates    use_builtin_bridge=true
+    Execute Command    tedge connect c8y --test
+    Should Have MQTT Messages    c8y/s/ds    message_contains=124
+
 
 *** Keywords ***
 Register and Use SmartREST 1.0. Templates
