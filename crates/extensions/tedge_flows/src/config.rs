@@ -1,5 +1,6 @@
 use crate::flow::Flow;
 use crate::flow::FlowInput;
+use crate::flow::FlowOutput;
 use crate::flow::FlowStep;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
@@ -9,7 +10,6 @@ use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde_json::Value;
 use std::fmt::Debug;
-use std::path::Path;
 use std::time::Duration;
 use tedge_mqtt_ext::TopicFilter;
 
@@ -17,6 +17,9 @@ use tedge_mqtt_ext::TopicFilter;
 pub struct FlowConfig {
     input: InputConfig,
     steps: Vec<StepConfig>,
+
+    #[serde(default = "default_output")]
+    output: OutputConfig,
 }
 
 #[derive(Deserialize)]
@@ -44,6 +47,35 @@ pub enum ScriptSpec {
 pub enum InputConfig {
     #[serde(rename = "mqtt")]
     Mqtt { topics: Vec<String> },
+    #[serde(rename = "db")]
+    MeaDB {
+        series: String,
+        #[serde(deserialize_with = "parse_human_duration")]
+        frequency: Duration,
+        #[serde(deserialize_with = "parse_human_duration")]
+        max_age: Duration,
+    },
+}
+
+#[derive(Deserialize)]
+pub enum OutputConfig {
+    #[serde(rename = "mqtt")]
+    Mqtt {
+        #[serde(default = "default_output_topics")]
+        topics: Vec<String>,
+    },
+    #[serde(rename = "db")]
+    MeaDB { series: String },
+}
+
+fn default_output() -> OutputConfig {
+    OutputConfig::Mqtt {
+        topics: vec!["#".to_string()],
+    }
+}
+
+fn default_output_topics() -> Vec<String> {
+    vec!["#".to_string()]
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -69,13 +101,14 @@ impl FlowConfig {
                 topics: vec![input_topic],
             },
             steps: vec![step],
+            output: default_output(),
         }
     }
 
     pub async fn compile(
         self,
         js_runtime: &mut JsRuntime,
-        config_dir: &Path,
+        config_dir: &Utf8Path,
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
         let input = self.input.try_into()?;
@@ -87,10 +120,12 @@ impl FlowConfig {
             step.fix();
             steps.push(step);
         }
+        let output = self.output.try_into()?;
         Ok(Flow {
             input,
             steps,
             source,
+            output,
         })
     }
 }
@@ -98,7 +133,7 @@ impl FlowConfig {
 impl StepConfig {
     pub async fn compile(
         self,
-        config_dir: &Path,
+        config_dir: &Utf8Path,
         index: usize,
         flow: &Utf8Path,
     ) -> Result<FlowStep, ConfigError> {
@@ -109,7 +144,7 @@ impl StepConfig {
         };
         let script = JsScript::new(flow.to_owned().into(), index, path)
             .with_config(self.config)
-            .with_interval_secs(self.interval.as_secs());
+            .with_interval(self.interval);
         let config_topics = topic_filters(self.meta_topics)?;
         Ok(FlowStep {
             script,
@@ -123,8 +158,32 @@ impl TryFrom<InputConfig> for FlowInput {
 
     fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
         match input {
-            InputConfig::Mqtt { topics } => Ok(FlowInput::MQTT {
+            InputConfig::Mqtt { topics } => Ok(FlowInput::Mqtt {
                 topics: topic_filters(topics)?,
+            }),
+            InputConfig::MeaDB {
+                series,
+                frequency,
+                max_age,
+            } => Ok(FlowInput::MeaDB {
+                series,
+                frequency,
+                max_age,
+            }),
+        }
+    }
+}
+
+impl TryFrom<OutputConfig> for FlowOutput {
+    type Error = ConfigError;
+
+    fn try_from(output: OutputConfig) -> Result<Self, Self::Error> {
+        match output {
+            OutputConfig::Mqtt { topics } => Ok(FlowOutput::Mqtt {
+                output_topics: topic_filters(topics)?,
+            }),
+            OutputConfig::MeaDB { series } => Ok(FlowOutput::MeaDB {
+                output_series: series,
             }),
         }
     }

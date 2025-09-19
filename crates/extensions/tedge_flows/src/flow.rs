@@ -20,6 +20,9 @@ pub struct Flow {
     pub steps: Vec<FlowStep>,
 
     pub source: Utf8PathBuf,
+
+    /// Target of the transformed messages
+    pub output: FlowOutput,
 }
 
 /// A message transformation step
@@ -29,10 +32,31 @@ pub struct FlowStep {
 }
 
 pub enum FlowInput {
-    MQTT { topics: TopicFilter },
+    Mqtt {
+        topics: TopicFilter,
+    },
+    MeaDB {
+        series: String,
+        frequency: std::time::Duration,
+        max_age: std::time::Duration,
+    },
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FlowOutput {
+    Mqtt { output_topics: TopicFilter },
+    MeaDB { output_series: String },
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum MessageSource {
+    Mqtt,
+    MeaDB,
+}
+
+#[derive(
+    Clone, Copy, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq, Ord, PartialOrd,
+)]
 pub struct DateTime {
     pub seconds: u64,
     pub nanoseconds: u32,
@@ -58,8 +82,17 @@ pub enum FlowError {
 }
 
 impl Flow {
+    pub fn accept(&self, source: MessageSource, message_topic: &str) -> bool {
+        match &self.input {
+            FlowInput::Mqtt {
+                topics: input_topics,
+            } => source == MessageSource::Mqtt && input_topics.accept_topic_name(message_topic),
+            FlowInput::MeaDB { .. } => source == MessageSource::MeaDB,
+        }
+    }
+
     pub fn topics(&self) -> TopicFilter {
-        let mut topics = self.input.topics().clone();
+        let mut topics = self.input.topics();
         for step in self.steps.iter() {
             topics.add_all(step.config_topics.clone())
         }
@@ -82,12 +115,13 @@ impl Flow {
     pub async fn on_message(
         &mut self,
         js_runtime: &JsRuntime,
+        source: MessageSource,
         stats: &mut Counter,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         self.on_config_update(js_runtime, message).await?;
-        if !self.input.topics().accept_topic_name(&message.topic) {
+        if !self.accept(source, &message.topic) {
             return Ok(vec![]);
         }
 
@@ -118,7 +152,7 @@ impl Flow {
         &mut self,
         js_runtime: &JsRuntime,
         stats: &mut Counter,
-        timestamp: &DateTime,
+        timestamp: DateTime,
     ) -> Result<Vec<Message>, FlowError> {
         let stated_at = stats.flow_on_interval_start(self.source.as_str());
         let mut messages = vec![];
@@ -161,29 +195,33 @@ impl FlowStep {
     pub(crate) fn check(&self, flow: &Utf8Path) {
         let script = &self.script;
         if script.no_js_on_message_fun {
-            warn!(target: "flows", "Flow script with no 'onMessage' function: {}", script.path.display());
+            warn!(target: "flows", "Flow script with no 'onMessage' function: {}", script.path);
         }
         if script.no_js_on_config_update_fun && !self.config_topics.is_empty() {
-            warn!(target: "flows", "Flow script with no 'onConfigUpdate' function: {}; but configured with 'config_topics' in {flow}", script.path.display());
+            warn!(target: "flows", "Flow script with no 'onConfigUpdate' function: {}; but configured with 'config_topics' in {flow}", script.path);
         }
-        if script.no_js_on_interval_fun && script.interval_secs != 0 {
-            warn!(target: "flows", "Flow script with no 'onInterval' function: {}; but configured with an 'interval' in {flow}", script.path.display());
+        if script.no_js_on_interval_fun && !script.interval.is_zero() {
+            warn!(target: "flows", "Flow script with no 'onInterval' function: {}; but configured with an 'interval' in {flow}", script.path);
         }
     }
 
     pub(crate) fn fix(&mut self) {
         let script = &mut self.script;
-        if !script.no_js_on_interval_fun && script.interval_secs == 0 {
-            // 0 as a default is not appropriate for a script with an onInterval handler
-            script.interval_secs = 1;
+        if !script.no_js_on_interval_fun && script.interval.is_zero() {
+            // Zero as a default is not appropriate for a script with an onInterval handler
+            script.interval = std::time::Duration::from_secs(1);
         }
     }
 }
 
 impl FlowInput {
-    pub fn topics(&self) -> &TopicFilter {
+    fn topics(&self) -> TopicFilter {
         match self {
-            FlowInput::MQTT { topics } => topics,
+            FlowInput::Mqtt { topics } => topics.clone(),
+            FlowInput::MeaDB { .. } => {
+                // MeaDB inputs don't subscribe to MQTT topics
+                TopicFilter::empty()
+            }
         }
     }
 }
@@ -193,12 +231,20 @@ impl DateTime {
         DateTime::try_from(OffsetDateTime::now_utc()).unwrap()
     }
 
-    pub fn tick_now(&self, tick_every_seconds: u64) -> bool {
-        tick_every_seconds != 0 && (self.seconds % tick_every_seconds == 0)
-    }
-
     pub fn json(&self) -> Value {
         json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
+    }
+
+    pub fn tick_now(&self, tick_every: std::time::Duration) -> bool {
+        let tick_every_secs = tick_every.as_secs();
+        tick_every_secs != 0 && (self.seconds % tick_every_secs == 0)
+    }
+
+    pub fn sub_duration(&self, duration: std::time::Duration) -> Self {
+        DateTime {
+            seconds: self.seconds - duration.as_secs(),
+            nanoseconds: self.nanoseconds,
+        }
     }
 }
 

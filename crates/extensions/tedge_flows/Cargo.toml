@@ -12,6 +12,7 @@ repository.workspace = true
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true, features = ["serde1"] }
+fjall = { workspace = true }
 humantime = { workspace = true }
 rquickjs = { git = "https://github.com/thin-edge/rquickjs", rev = "4ed04ac9af3de453dd41ff09fdd1837c7ceb1f1c", default-features = false, features = [
     # disable bindgen and rely on pre-generated bindings due to problems
@@ -31,6 +32,13 @@ time = { workspace = true }
 tokio = { workspace = true, features = ["fs", "macros", "time", "sync"] }
 toml = { workspace = true, features = ["parse"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+env_logger = { workspace = true }
+futures = { workspace = true }
+rstest = { workspace = true }
+tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true
