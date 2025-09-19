@@ -1,8 +1,10 @@
 mod actor;
 mod config;
 pub mod flow;
+mod js_lib;
 mod js_runtime;
 mod js_script;
+mod js_value;
 mod runtime;
 mod stats;
 
