@@ -25,6 +25,7 @@ use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_bridge::rumqttc::LastWill;
+use tedge_mqtt_bridge::rumqttc::Publish;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::use_credentials;
 use tedge_mqtt_bridge::BridgeConfig;
@@ -58,7 +59,7 @@ impl TEdgeComponent for CumulocityMapper {
         let c8y_mapper_config =
             C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, c8y_profile)?;
         if tedge_config.mqtt.bridge.built_in {
-            let (tc, cloud_config) = core_mqtt_bridge_config(
+            let (tc, cloud_config, reconnect_message_mapper) = core_mqtt_bridge_config(
                 &tedge_config,
                 c8y_config,
                 &c8y_mapper_config,
@@ -72,6 +73,7 @@ impl TEdgeComponent for CumulocityMapper {
                         &c8y_mapper_config.bridge_health_topic,
                         tc,
                         cloud_config,
+                        Some(reconnect_message_mapper),
                     )
                     .await,
                 )
@@ -89,6 +91,7 @@ impl TEdgeComponent for CumulocityMapper {
                             &bridge_health_topic,
                             bridge_config,
                             cloud_config,
+                            None,
                         )
                         .await,
                     )
@@ -222,7 +225,7 @@ fn core_mqtt_bridge_config(
     c8y_config: &TEdgeConfigReaderC8y,
     c8y_mapper_config: &C8yMapperConfig,
     c8y_mapper_name: &str,
-) -> Result<(BridgeConfig, MqttOptions), anyhow::Error> {
+) -> Result<(BridgeConfig, MqttOptions, Publish), anyhow::Error> {
     let smartrest_1_topics = c8y_config
         .smartrest1
         .templates
@@ -382,6 +385,22 @@ fn core_mqtt_bridge_config(
     )?
     .into_inner();
 
+    let reconnect_message_mapper = c8y_api::smartrest::inventory::service_creation_message_payload(
+        mapper_service_external_id.as_ref(),
+        c8y_mapper_name,
+        service_type.as_str(),
+        "up",
+    )?
+    .into_inner();
+    let reconnect_message_mapper = Publish {
+        topic: "s/us".into(),
+        qos: QoS::AtLeastOnce,
+        payload: reconnect_message_mapper.into(),
+        retain: false,
+        dup: false,
+        pkid: 0,
+    };
+
     cloud_config.set_last_will(LastWill {
         topic: "s/us".into(),
         qos: QoS::AtLeastOnce,
@@ -391,7 +410,7 @@ fn core_mqtt_bridge_config(
     cloud_config.set_keep_alive(c8y_config.bridge.keepalive_interval.duration());
 
     configure_proxy(tedge_config, &mut cloud_config)?;
-    Ok((tc, cloud_config))
+    Ok((tc, cloud_config, reconnect_message_mapper))
 }
 
 fn mqtt_service_bridge_config(

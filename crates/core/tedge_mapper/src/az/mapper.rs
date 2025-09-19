@@ -81,6 +81,7 @@ impl TEdgeComponent for AzureMapper {
                 &health_topic,
                 rules,
                 cloud_config,
+                None,
             )
             .await;
             runtime.spawn(bridge_actor).await?;

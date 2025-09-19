@@ -72,6 +72,7 @@ impl TEdgeComponent for AwsMapper {
                 &health_topic,
                 rules,
                 cloud_config,
+                None,
             )
             .await;
             runtime.spawn(bridge_actor).await?;
