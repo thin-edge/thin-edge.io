@@ -3,7 +3,7 @@ Resource            ./pkcs11_common.resource
 
 Test Teardown       Get Suite Logs
 
-Test Tags           adapter:docker    theme:cryptoki
+Test Tags           adapter:docker    theme:cryptoki    test:on_demand
 
 
 *** Test Cases ***

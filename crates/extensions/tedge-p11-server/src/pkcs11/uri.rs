@@ -85,6 +85,22 @@ impl<'a> Pkcs11Uri<'a> {
     }
 }
 
+const PKCS11_ASCII_SET: &percent_encoding::AsciiSet =
+    &percent_encoding::NON_ALPHANUMERIC.remove(b'-');
+
+/// Percent-encode PKCS11 attribute values.
+///
+/// In contrast to more general URL percent-encoding, some characters like `-` don't need to be
+/// percent-encoded in PKCS11 URIs[1], so we don't encode them. Note that if we did, encoding these
+/// characters that don't have to be encoded is not a mistake, as any URI parser would eagerly
+/// decode all percent-encode sequences, the difference is just better/worse readability for the
+/// user.
+///
+/// [1]: https://www.rfc-editor.org/rfc/rfc7512.html#section-2.3
+pub fn percent_encode(input: &str) -> String {
+    percent_encoding::utf8_percent_encode(input, PKCS11_ASCII_SET).to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
