@@ -1,4 +1,3 @@
-use log::info;
 use log::warn;
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -30,7 +29,6 @@ impl LogPluginConfig {
 
     pub fn read_config(path: &Path) -> Self {
         let path_str = path.display().to_string();
-        info!("Using the configuration from {}", path_str);
         match fs::read_to_string(path) {
             Ok(contents) => match toml::from_str(contents.as_str()) {
                 Ok(config) => config,
@@ -60,21 +58,26 @@ impl LogPluginConfig {
     }
 }
 
-#[test]
-fn test_no_duplicated_file_types() {
-    let files = vec![
-        FileEntry {
-            path: "a/path".to_string(),
-            config_type: "type_one".to_string(),
-        },
-        FileEntry {
-            path: "some/path".to_string(),
-            config_type: "type_one".to_string(),
-        },
-    ];
-    let logs_config = LogPluginConfig { files };
-    assert_eq!(
-        logs_config.get_all_file_types(),
-        vec!["type_one".to_string()]
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_no_duplicated_file_types() {
+        let files = vec![
+            FileEntry {
+                path: "a/path".to_string(),
+                config_type: "type_one".to_string(),
+            },
+            FileEntry {
+                path: "some/path".to_string(),
+                config_type: "type_one".to_string(),
+            },
+        ];
+        let logs_config = LogPluginConfig { files };
+        assert_eq!(
+            logs_config.get_all_file_types(),
+            vec!["type_one".to_string()]
+        );
+    }
 }

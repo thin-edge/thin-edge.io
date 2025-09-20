@@ -24,6 +24,7 @@ use tedge_utils::file::PermissionEntry;
 
 use super::error::InvalidConfigTypeError;
 
+pub const DEFAULT_PLUGIN_DIR: &str = "config-plugins";
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "tedge-configuration-plugin.toml";
 pub const DEFAULT_OPERATION_DIR_NAME: &str = "plugins/";
 pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "tedge-configuration-plugin";
@@ -32,6 +33,7 @@ pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "tedge-configuration-plugin";
 #[derive(Clone, Debug)]
 pub struct ConfigManagerConfig {
     pub config_dir: PathBuf,
+    pub plugins_dir: PathBuf,
     pub plugin_config_dir: PathBuf,
     pub plugin_config_path: PathBuf,
     pub tmp_path: Arc<Utf8Path>,
@@ -62,6 +64,7 @@ impl ConfigManagerConfig {
         let mqtt_topic_root = cliopts.mqtt_topic_root;
         let mqtt_device_topic_id = cliopts.mqtt_device_topic_id;
 
+        let plugins_dir = config_dir.join(DEFAULT_PLUGIN_DIR);
         let plugin_config_dir = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
         let plugin_config_path = plugin_config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
 
@@ -82,6 +85,7 @@ impl ConfigManagerConfig {
 
         Ok(Self {
             config_dir,
+            plugins_dir,
             plugin_config_dir,
             plugin_config_path,
             tmp_path: cliopts.tmp_path,

@@ -1,0 +1,106 @@
+#!/bin/bash
+
+set -euo pipefail
+
+usage() {
+    echo "Usage: $0 <command> [args...]"
+    echo "Commands:"
+    echo "  list                                                       List all log types supported by this plugin"
+    echo "  get <type> <target-log-file-path> [--since <timestamp>]    Get logs for the specified type"
+    echo "      [--until <timestamp>] [--filter <filter-text>]"
+    echo "      [--tail <lines-from-end>]"
+    exit 1
+}
+
+list_log_types() {
+    systemctl list-units --type=service --no-legend --no-pager --plain \
+        | awk '{ sub(/\.service$/, "", $1); print $1 }'
+}
+
+get_logs() {
+    local log_type="$1"
+    local temp_file="$2"
+    shift 2
+    
+    local since_arg=""
+    local until_arg=""
+    local filter_arg=""
+    local tail_arg=""
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --since)
+                # journalctl does not support timestamps in ISO-8601 format and expects it in 'YYYY-MM-DD HH:MM:SS' format
+                timestamp=$(date -d "$2" '+%Y-%m-%d %H:%M:%S')
+                since_arg="--since='$timestamp'"
+                shift 2
+                ;;
+            --until)
+                timestamp=$(date -d "$2" '+%Y-%m-%d %H:%M:%S')
+                until_arg="--until='$timestamp'"
+                shift 2
+                ;;
+            --filter)
+                filter_arg="$2"
+                shift 2
+                ;;
+            --tail)
+                tail_arg="--lines=$2"
+                shift 2
+                ;;
+            *)
+                echo "Unknown option: $1" >&2
+                exit 1
+                ;;
+        esac
+    done
+    
+    local cmd="journalctl --no-pager --output=short-iso --unit=${log_type}"
+    
+    if [[ -n "$since_arg" ]]; then
+        cmd="$cmd $since_arg"
+    fi
+    
+    if [[ -n "$until_arg" ]]; then
+        cmd="$cmd $until_arg"
+    fi
+    
+    if [[ -n "$tail_arg" ]]; then
+        cmd="$cmd $tail_arg"
+    fi
+    
+    # Execute journalctl and apply text filter if specified
+    if [[ -n "$filter_arg" ]]; then
+        eval "$cmd" | grep -i "$filter_arg" > "$temp_file"
+    else
+        eval "$cmd" > "$temp_file"
+    fi    
+}
+
+main() {
+    if [[ $# -lt 1 ]]; then
+        usage
+    fi
+    
+    local command="$1"
+    shift
+    
+    case "$command" in
+        "list")
+            list_log_types
+            ;;
+        "get")
+            if [[ $# -lt 2 ]]; then
+                echo "Error: 'get' command requires <type> and <target-log-file-path> arguments" >&2
+                exit 1
+            fi
+            get_logs "$@"
+            ;;
+        *)
+            echo "Error: Unknown command '$command'" >&2
+            usage
+            ;;
+    esac
+}
+
+main "$@"
