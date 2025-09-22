@@ -53,7 +53,7 @@ pub fn signing_key(config: CryptokiConfig) -> anyhow::Result<Arc<dyn TedgeP11Sig
                 Cryptoki::new(config_direct).context("Failed to load cryptoki library")?;
             Arc::new(
                 cryptoki
-                    .signing_key(uri.as_deref())
+                    .signing_key_retry(uri.as_deref())
                     .context("failed to create a TLS signer using PKCS#11 device")?,
             )
         }

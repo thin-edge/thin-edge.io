@@ -37,6 +37,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 use tracing::error;
+use tracing::instrument;
 use tracing::trace;
 use tracing::warn;
 
@@ -87,30 +88,23 @@ pub struct Cryptoki {
 }
 
 impl TedgeP11Service for Cryptoki {
+    #[instrument(skip_all)]
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse> {
-        let session = self
-            .open_session_ro(request.uri.as_deref())
-            .context("Failed to find a signing key")?;
-        let signing_key = session
-            .signing_key()
-            .context("Failed to find a signing key")?;
+        let signing_key = self.signing_key_retry(request.uri.as_deref())?;
         let offered: Vec<_> = request.offered.into_iter().map(|s| s.0).collect();
         let signer = signing_key
             .choose_scheme(&offered[..])
             .context("failed to choose scheme")?;
+
         Ok(ChooseSchemeResponse {
             scheme: Some(service::SignatureScheme(signer.scheme())),
             algorithm: service::SignatureAlgorithm(signing_key.algorithm()),
         })
     }
 
+    #[instrument(skip_all)]
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse> {
-        let session = self
-            .open_session_ro(request.uri.as_deref())
-            .context("Failed to find a signing key")?;
-        let signing_key = session
-            .signing_key()
-            .context("Failed to find a signing key")?;
+        let signing_key = self.signing_key_retry(request.uri.as_deref())?;
         let signature = signing_key.sign(&request.to_sign, request.sigscheme)?;
         Ok(SignResponse(signature))
     }
@@ -138,7 +132,7 @@ impl Cryptoki {
     /// again ([C_GetSlotList]).
     ///
     /// [C_GetSlotList]: https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/errata01/os/pkcs11-base-v2.40-errata01-os-complete.html#_Toc441755804
-    fn _reinit(&self) -> anyhow::Result<()> {
+    fn reinit(&self) -> anyhow::Result<()> {
         // load a new client before locking so if error we don't poison the mutex
         let new_client = Self::load(&self.config.module_path)?;
 
@@ -174,9 +168,40 @@ impl Cryptoki {
         Ok(client)
     }
 
-    pub fn signing_key(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
-        let session = self.open_session_ro(uri)?;
-        session.signing_key()
+    /// Returns the signing key.
+    ///
+    /// If the key is not found, we reload the PKCS11 library and retry because some PKCS11
+    /// libraries may not always show new slots/objects properly when something changes and we don't
+    /// want to restart the server manually. If the key is still missing after a reload, the
+    /// original error is returned.
+    pub fn signing_key_retry(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
+        let signing_key = self
+            .open_session_ro(uri)
+            .and_then(|s| s.signing_key())
+            .context("Failed to find a signing key");
+
+        let signing_key = match signing_key {
+            Ok(key) => key,
+            // refresh the slots only if the key couldn't be found, i.e.:
+            // - we didn't find a slot with the token that matches the URI
+            // - we didn't find an object on the token that matches the URI
+            Err(ref e)
+                if format!("{e:#}").contains("Didn't find a slot to use")
+                    || format!("{e:#}").contains("Failed to find a key") =>
+            {
+                warn!("Failed to find a signing key, reloading the library to retry");
+                // ensure current session is dropped before opening a new one
+                drop(signing_key);
+                self.reinit()?;
+                self.open_session_ro(uri)
+                    .and_then(|s| s.signing_key())
+                    .context("Failed to find a signing key")?
+            }
+
+            Err(e) => return Err(e),
+        };
+
+        Ok(signing_key)
     }
 
     fn open_session_ro<'a>(&'a self, uri: Option<&'a str>) -> anyhow::Result<CryptokiSession<'a>> {
@@ -187,6 +212,7 @@ impl Cryptoki {
         self.open_session(uri, CryptokiSessionType::_ReadWrite)
     }
 
+    #[instrument(skip_all)]
     fn open_session<'a>(
         &'a self,
         uri: Option<&'a str>,
@@ -196,9 +222,6 @@ impl Cryptoki {
 
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
-
-        // avoid reinitializing for now because of Nitrokey slowness
-        // self.reinit()?;
 
         let context = match self.context.lock() {
             Ok(c) => c,
@@ -349,11 +372,11 @@ enum CryptokiSessionType {
 
 impl CryptokiSession<'_> {
     pub fn signing_key(self) -> anyhow::Result<Pkcs11Signer> {
-        let session = &self.session;
-
         // get the signing key
         let key = self.find_key_by_attributes(&self.uri_attributes, ObjectClass::PRIVATE_KEY)?;
-        let key_type = session
+
+        let key_type = self
+            .session
             .get_attributes(key, &[AttributeType::KeyType])?
             .into_iter()
             .next()
