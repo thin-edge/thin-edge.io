@@ -1,10 +1,11 @@
 use rquickjs::class::Trace;
 use rquickjs::Class;
 use rquickjs::Ctx;
+use rquickjs::Exception;
 use rquickjs::JsLifetime;
+use rquickjs::Object;
 use rquickjs::Result;
 use rquickjs::TypedArray;
-use rquickjs::Value;
 
 #[derive(Clone, Trace, JsLifetime)]
 #[rquickjs::class(frozen)]
@@ -27,18 +28,51 @@ impl<'js> TextEncoder {
         "utf-8"
     }
 
-    pub fn encode(&self, ctx: Ctx<'js>, text: Value<'js>) -> Result<TypedArray<'js, u8>> {
-        let string = match text.as_string() {
-            None => {
-                if let Some(object) = text.as_object() {
-                    if let Some(bytes) = object.as_typed_array::<u8>() {
-                        return Ok(bytes.clone());
-                    }
-                }
-                "".to_string()
-            }
-            Some(js_string) => js_string.to_string()?,
-        };
+    pub fn encode(
+        &self,
+        ctx: Ctx<'js>,
+        text: rquickjs::String<'js>,
+    ) -> Result<TypedArray<'js, u8>> {
+        let string = text.to_string()?;
         TypedArray::new(ctx.clone(), string.as_bytes())
+    }
+
+    #[qjs(rename = "encodeInto")]
+    pub fn encode_into(
+        &self,
+        ctx: Ctx<'js>,
+        text: rquickjs::String<'js>,
+        array: TypedArray<'js, u8>,
+    ) -> Result<Object<'js>> {
+        let string = text.to_string()?;
+        let offset: usize = array.get("byteOffset").unwrap_or_default();
+        let buffer = array
+            .arraybuffer()?
+            .as_raw()
+            .ok_or(Exception::throw_message(&ctx, "ArrayBuffer is detached"))?;
+
+        let mut read = 0;
+        let mut written = 0;
+        let max_len = buffer.len - offset;
+        for char in string.chars() {
+            let len = char.len_utf8();
+            if written + len > max_len {
+                break;
+            }
+            read += char.len_utf16();
+            written += len;
+        }
+
+        let bytes = &string.as_bytes()[..written];
+        unsafe {
+            let buffer_ptr =
+                std::slice::from_raw_parts_mut(buffer.ptr.as_ptr().add(offset), written);
+            buffer_ptr.copy_from_slice(bytes);
+        }
+
+        let obj = Object::new(ctx)?;
+        obj.set("read", read)?;
+        obj.set("written", written)?;
+        Ok(obj)
     }
 }
