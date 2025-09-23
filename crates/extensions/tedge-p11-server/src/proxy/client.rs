@@ -91,7 +91,7 @@ impl TedgeP11Client {
         };
 
         // make any request to make sure the service is online and it will respond
-        let _ = client.choose_scheme(&[], None);
+        let _ = client.ping();
 
         client
     }
@@ -185,9 +185,18 @@ impl TedgeP11Client {
             bail!("protocol error: bad response, expected create_key, received: {response:?}");
         };
 
-        debug!("Sign complete");
-
         Ok(pubkey_pem)
+    }
+
+    pub fn ping(&self) -> anyhow::Result<()> {
+        let request = Frame1::Ping;
+        let response = self.do_request(request)?;
+
+        let Frame1::Pong = response else {
+            bail!("protocol error: bad response, expected pong, received: {response:?}");
+        };
+
+        Ok(())
     }
 
     fn do_request(&self, request: Frame1) -> anyhow::Result<Frame1> {
