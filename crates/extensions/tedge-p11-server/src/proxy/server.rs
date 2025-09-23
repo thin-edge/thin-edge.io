@@ -55,7 +55,8 @@ impl TedgeP11Server {
             Frame1::Error(_)
             | Frame1::ChooseSchemeResponse { .. }
             | Frame1::SignResponse { .. }
-            | Frame1::GetPublicKeyPemResponse(_) => {
+            | Frame1::GetPublicKeyPemResponse(_)
+            | Frame1::Pong => {
                 let error = ProtocolError("invalid request".to_string());
                 let _ = connection.write_frame(&Frame1::Error(error));
                 anyhow::bail!("protocol error: invalid request")
@@ -118,6 +119,14 @@ impl TedgeP11Server {
                     }
                 }
             }
+
+            // The Ping/Pong request does no PKCS11/cryptographic operations and is there only so a
+            // client can confirm that tedge-p11-server is running and is ready to serve requests.
+            // Notably, with systemd being configured to start the service when a request is
+            // received on the associated socket, a Ping/Pong request triggers a service start and
+            // ensures the PKCS11 library is loaded and ready to serve signing requests. In
+            // practice, this only occurs with a client calls TedgeP11Client::with_ready_check.
+            Frame1::Ping => Frame1::Pong,
         };
 
         connection.write_frame(&response).context("write")?;
