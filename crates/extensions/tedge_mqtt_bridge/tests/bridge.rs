@@ -40,6 +40,15 @@ fn new_broker_and_client(name: &str, port: u16) -> (AsyncClient, EventLoop) {
 }
 
 async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig) {
+    start_mqtt_bridge_with_reconnect_message(local_port, cloud_port, rules, None).await;
+}
+
+async fn start_mqtt_bridge_with_reconnect_message(
+    local_port: u16,
+    cloud_port: u16,
+    rules: BridgeConfig,
+    reconnect_message: Option<Publish>,
+) {
     let cloud_config = MqttOptions::new("a-device-id", "127.0.0.1", cloud_port);
     let service_name = "tedge-mapper-test";
     let health_topic = format!("te/device/main/service/{service_name}/status/health")
@@ -52,6 +61,7 @@ async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig
         &health_topic,
         rules,
         cloud_config,
+        reconnect_message,
     )
     .await;
 }
@@ -443,6 +453,70 @@ async fn bidirectional_forwarding_avoids_infinite_loop() {
     }
 
     timeout(DEFAULT_TIMEOUT, cloud).await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn bridge_publishes_reconnect_message_on_cloud_reconnection() {
+    std::env::set_var(
+        "RUST_LOG",
+        "tedge_mqtt_bridge=debug,bridge=debug,MQTT bridge=debug",
+    );
+    let _ = env_logger::try_init();
+    let local_broker_port = free_port().await;
+    let cloud_broker_port = free_port().await;
+    let (local, mut ev_local) = new_broker_and_client("local", local_broker_port);
+    let (cloud, mut ev_cloud) = new_broker_and_client("cloud", cloud_broker_port);
+
+    // We can't easily restart rumqttd, so instead, we'll connect via a proxy
+    // that we can interrupt the connection of
+    let cloud_proxy = Proxy::start(cloud_broker_port).await;
+
+    let mut rules = BridgeConfig::new();
+    rules.forward_from_local("s/us", "c8y/", "").unwrap();
+    rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
+
+    let reconnect_msg = Publish::new("device/status/connection", QoS::AtLeastOnce, "reconnected");
+
+    start_mqtt_bridge_with_reconnect_message(
+        local_broker_port,
+        cloud_proxy.port,
+        rules,
+        Some(reconnect_msg.clone()),
+    )
+    .await;
+
+    local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
+    cloud
+        .subscribe("device/status/connection", QoS::AtLeastOnce)
+        .await
+        .unwrap();
+    await_subscription(&mut ev_cloud).await;
+
+    wait_until_health_status_is("up", &mut ev_local)
+        .await
+        .unwrap();
+
+    // Should receive the initial reconnect message on the cloud broker
+    let msg = next_received_message(&mut ev_cloud).await.unwrap();
+    assert_eq!(msg.topic, "device/status/connection");
+    assert_eq!(from_utf8(&msg.payload).unwrap(), "reconnected");
+
+    // Interrupt the cloud connection to trigger a reconnection
+    cloud_proxy.interrupt_connections();
+    wait_until_health_status_is("down", &mut ev_local)
+        .await
+        .unwrap();
+    wait_until_health_status_is("up", &mut ev_local)
+        .await
+        .unwrap();
+
+    // Should receive another reconnect message after reconnection
+    let msg = next_received_message(&mut ev_cloud).await.unwrap();
+    assert_eq!(msg.topic, "device/status/connection");
+    assert_eq!(from_utf8(&msg.payload).unwrap(), "reconnected");
+
+    let _ev_cloud = EventPoller::run_in_bg(ev_cloud);
+    EventPoller::run_in_bg(ev_local);
 }
 
 async fn wait_until_health_status_is(

@@ -135,6 +135,30 @@ Check health status of child device service
     Should Be Equal    ${SERVICE["status"]}    unknown
     Should Be Equal    ${SERVICE["type"]}    c8y_Service
 
+tedge-mapper-c8y service tracks network connectivity with built-in bridge
+    [Documentation]    Test tedge-mapper-c8y service status with built-in bridge after network outage
+
+    Execute Command    tedge config set mqtt.bridge.built_in true
+    Execute Command    tedge config set mqtt.bridge.reconnect_policy.initial_interval 0s
+    Execute Command    tedge reconnect c8y
+
+    Device Should Exist    ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
+    Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
+    Should Be Equal    ${SERVICE["status"]}    up
+
+    ThinEdgeIO.Disconnect From Network
+
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down    timeout=${TIMEOUT}
+    Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
+    Should Be Equal    ${SERVICE["status"]}    down
+
+    ThinEdgeIO.Connect To Network
+
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
+    Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
+    Should Be Equal    ${SERVICE["status"]}    up
+
 
 *** Keywords ***
 Custom Setup

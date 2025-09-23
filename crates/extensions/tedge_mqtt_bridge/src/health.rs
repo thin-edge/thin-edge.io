@@ -10,8 +10,6 @@ use rumqttc::Publish;
 use rumqttc::QoS;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
-use tracing::error;
-use tracing::log::info;
 
 /// A tool for monitoring and publishing the health of the two bridge halves
 ///
@@ -87,7 +85,7 @@ impl BridgeHealth {
         let err = match result {
             Ok(event) => {
                 if let Event::Incoming(Incoming::ConnAck(_)) = event {
-                    info!("MQTT bridge connected to {name} broker")
+                    log_event!(name, "MQTT bridge connected to {name} broker");
                 }
                 None
             }
@@ -96,7 +94,7 @@ impl BridgeHealth {
 
         if self.last_err != err {
             if let Some(err) = &err {
-                error!("MQTT bridge failed to connect to {name} broker: {err}")
+                log_event!(error: name, "MQTT bridge failed to connect to {name} broker: {err}");
             }
             self.last_err = err;
             let status = self.last_err.as_ref().map_or(Status::Up, |_| Status::Down);
