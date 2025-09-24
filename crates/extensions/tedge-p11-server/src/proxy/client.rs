@@ -192,7 +192,9 @@ impl TedgeP11Client {
         let response = self.do_request(request)?;
 
         let Frame1::GetPublicKeyPemResponse(pubkey_pem) = response else {
-            bail!("protocol error: bad response, expected create_key, received: {response:?}");
+            bail!(
+                "protocol error: bad response, expected get_public_key_pem, received: {response:?}"
+            );
         };
 
         Ok(pubkey_pem)
