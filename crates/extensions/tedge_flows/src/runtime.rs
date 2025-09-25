@@ -1,7 +1,9 @@
 use crate::config::FlowConfig;
+use crate::database;
 use crate::database::DatabaseError;
-use crate::database::FjallMeaDb;
 use crate::database::MeaDb;
+use cfg_if::cfg_if;
+
 use crate::flow::DateTime;
 use crate::flow::Flow;
 use crate::flow::FlowError;
@@ -38,7 +40,9 @@ impl MessageProcessor {
 
     pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref();
-        let database = Box::new(FjallMeaDb::open(&Self::db_path(config_dir)).await?);
+
+        let database = Self::create_database(config_dir).await?;
+
         Self::new_with_database(config_dir, database).await
     }
 
@@ -66,13 +70,27 @@ impl MessageProcessor {
         config_dir.join("tedge-flows.db")
     }
 
+    async fn create_database(config_dir: &Utf8Path) -> Result<Box<dyn MeaDb>, DatabaseError> {
+        cfg_if! {
+            if #[cfg(feature = "fjall-db")] {
+                Ok(Box::new(database::FjallMeaDb::open(&Self::db_path(config_dir)).await?))
+            } else if #[cfg(feature = "sqlite-db")] {
+                Ok(Box::new(database::SqliteMeaDb::open(&Self::db_path(config_dir)).await?))
+            } else {
+                compile_error!("Either 'fjall-db' or 'sqlite-db' feature must be enabled");
+            }
+        }
+    }
+
     pub async fn try_new_single_flow(
         config_dir: impl AsRef<Utf8Path>,
         flow: impl AsRef<Path>,
     ) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref();
         let flow = flow.as_ref().to_owned();
-        let database = Box::new(FjallMeaDb::open(&Self::db_path(config_dir)).await?);
+
+        let database = Self::create_database(config_dir).await?;
+
         Self::new_single_flow_with_database(config_dir, flow, database).await
     }
 
@@ -103,7 +121,9 @@ impl MessageProcessor {
         script: impl AsRef<Path>,
     ) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref();
-        let database = Box::new(FjallMeaDb::open(&Self::db_path(config_dir)).await?);
+
+        let database = Self::create_database(config_dir).await?;
+
         Self::new_single_step_flow_with_database(config_dir, script, database).await
     }
 

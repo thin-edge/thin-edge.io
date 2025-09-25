@@ -122,7 +122,7 @@ impl FlowsMapper {
         for (flow_id, flow_messages) in self.processor.on_message(source, timestamp, &message).await
         {
             match flow_messages {
-                Ok(messages) => self.publish_messages(flow_id, timestamp, messages).await?,
+                Ok(messages) => self.publish_messages(flow_id, messages).await?,
                 Err(err) => {
                     error!(target: "flows", "{flow_id}: {err:#}");
                 }
@@ -153,8 +153,7 @@ impl FlowsMapper {
         for (flow_id, flow_messages) in self.processor.on_interval(timestamp, now).await {
             match flow_messages {
                 Ok(messages) => {
-                    self.publish_messages(flow_id.clone(), timestamp, messages)
-                        .await?;
+                    self.publish_messages(flow_id.clone(), messages).await?;
                 }
                 Err(err) => {
                     error!(target: "flows", "{flow_id}: {err}");
@@ -168,7 +167,6 @@ impl FlowsMapper {
     async fn publish_messages(
         &mut self,
         flow_id: String,
-        timestamp: DateTime,
         messages: Vec<Message>,
     ) -> Result<(), RuntimeError> {
         if let Some(flow) = self.processor.flows.get(&flow_id) {
@@ -191,17 +189,17 @@ impl FlowsMapper {
                     }
                 }
                 FlowOutput::MeaDB { output_series } => {
-                    for message in messages {
-                        info!(target: "flows", "store {output_series} @{}.{} [{}]", timestamp.seconds, timestamp.nanoseconds, message.topic);
-                        let timestamp = DateTime::now();
-                        if let Err(err) = self
-                            .processor
-                            .database
-                            .store(output_series, timestamp, message)
-                            .await
-                        {
-                            error!(target: "flows", "{flow_id}: fail to persist message: {err}");
-                        }
+                    let messages = messages
+                        .into_iter()
+                        .map(|m| (DateTime::now(), m))
+                        .collect::<Vec<_>>();
+                    if let Err(err) = self
+                        .processor
+                        .database
+                        .store_many(output_series, messages)
+                        .await
+                    {
+                        error!(target: "flows", "{flow_id}: fail to persist message: {err}");
                     }
                 }
             }
