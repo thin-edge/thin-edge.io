@@ -172,7 +172,11 @@ impl LogManagerBuilder {
     /// - for configuration changes
     /// - for plugin changes
     fn watched_directories(config: &LogManagerConfig) -> Vec<PathBuf> {
-        vec![config.plugin_config_dir.clone(), config.plugins_dir.clone()]
+        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
+        for dir in &config.plugin_dirs {
+            watch_dirs.push(dir.clone());
+        }
+        watch_dirs
     }
 }
 
@@ -188,8 +192,11 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
     fn try_build(self) -> Result<LogManagerActor, Self::Error> {
         let message_box = self.box_builder.build();
 
-        let external_plugins =
-            ExternalPlugins::new(&self.config.plugins_dir, true, self.config.tmp_dir.clone());
+        let external_plugins = ExternalPlugins::new(
+            self.config.plugin_dirs.clone(),
+            true,
+            self.config.tmp_dir.clone(),
+        );
 
         Ok(LogManagerActor::new(
             self.config,

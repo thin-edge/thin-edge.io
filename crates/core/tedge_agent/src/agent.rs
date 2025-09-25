@@ -30,6 +30,7 @@ use reqwest::Identity;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::vec;
 use tedge_actors::Concurrent;
 use tedge_actors::ConvertingActor;
 use tedge_actors::ConvertingActorBuilder;
@@ -365,6 +366,10 @@ impl Agent {
                 log_dir: self.config.log_dir,
                 mqtt_schema: mqtt_schema.clone(),
                 mqtt_device_topic_id: device_topic_id.clone(),
+                plugin_dirs: vec![
+                    "/usr/lib/tedge/log-plugins".into(),
+                    "/usr/local/lib/tedge/log-plugins".into(),
+                ],
             })?;
             let mut log_actor = LogManagerBuilder::try_new(
                 log_manager_config,

@@ -89,7 +89,6 @@ impl TEdgeInitCmd {
         create_directory(config_dir.join("operations").join("c8y"), &permissions).await?;
         create_directory(config_dir.join("plugins"), &permissions).await?;
         create_directory(config_dir.join("sm-plugins"), &permissions).await?;
-        create_directory(config_dir.join("log-plugins"), &permissions).await?;
         create_directory(config_dir.join("device-certs"), &permissions).await?;
         create_directory(config_dir.join(".tedge-mapper-c8y"), &permissions).await?;
 

@@ -103,7 +103,7 @@ async fn new_log_manager_builder(
         config_dir: temp_dir.to_path_buf(),
         tmp_dir: Arc::from(Utf8Path::from_path(temp_dir).unwrap()),
         log_dir: temp_dir.to_path_buf().try_into().unwrap(),
-        plugins_dir: temp_dir.to_path_buf().join("log-plugins"),
+        plugin_dirs: vec![temp_dir.to_path_buf().join("log-plugins")],
         plugin_config_dir: temp_dir.to_path_buf(),
         plugin_config_path: temp_dir.join("tedge-log-plugin.toml"),
         logtype_reload_topic: Topic::new_unchecked("te/device/main///cmd/log_upload"),

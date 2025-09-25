@@ -135,5 +135,7 @@ contents:
       mode: 0755
 
   - src: /usr/bin/tedge-file-log-plugin
-    dst: /etc/tedge/log-plugins/file
+    dst: /usr/lib/tedge/log-plugins/file
     type: symlink
+  - dst: /usr/local/lib/tedge/log-plugins
+    type: dir

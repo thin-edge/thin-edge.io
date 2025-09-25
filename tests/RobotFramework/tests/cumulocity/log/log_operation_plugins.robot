@@ -36,8 +36,8 @@ Custom Setup
 
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/plugins/*
-    ...    /etc/tedge/log-plugins/
-    Execute Command    chmod +x /etc/tedge/log-plugins/journald
+    ...    /usr/local/lib/tedge/log-plugins/
+    Execute Command    chmod +x /usr/local/lib/tedge/log-plugins/journald
 
 Create Log Request Operation
     [Arguments]    ${start_timestamp}

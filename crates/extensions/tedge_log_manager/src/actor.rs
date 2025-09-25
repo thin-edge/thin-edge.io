@@ -254,7 +254,14 @@ impl LogManagerActor {
             FsWatchEvent::DirectoryCreated(_) => return Ok(()),
         };
 
-        if path.parent() == Some(&self.config.plugins_dir)
+        let mut plugin_changed = false;
+        for plugin_dir in &self.config.plugin_dirs {
+            if path.starts_with(plugin_dir) {
+                plugin_changed = true;
+                break;
+            }
+        }
+        if plugin_changed
             || path
                 .file_name()
                 .is_some_and(|name| name.eq(DEFAULT_PLUGIN_CONFIG_FILE_NAME))

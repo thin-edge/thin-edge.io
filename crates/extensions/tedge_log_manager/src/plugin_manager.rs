@@ -26,7 +26,7 @@ pub trait Plugins {
 
 #[derive(Debug)]
 pub struct ExternalPlugins {
-    plugin_dir: PathBuf,
+    plugin_dirs: Vec<PathBuf>,
     plugin_map: BTreeMap<PluginType, ExternalPluginCommand>,
     sudo: SudoCommandBuilder,
     tmp_dir: Arc<Utf8Path>,
@@ -47,9 +47,9 @@ impl Plugins for ExternalPlugins {
 }
 
 impl ExternalPlugins {
-    pub fn new(plugin_dir: impl Into<PathBuf>, sudo_enabled: bool, tmp_dir: Arc<Utf8Path>) -> Self {
+    pub fn new(plugin_dirs: Vec<PathBuf>, sudo_enabled: bool, tmp_dir: Arc<Utf8Path>) -> Self {
         ExternalPlugins {
-            plugin_dir: plugin_dir.into(),
+            plugin_dirs,
             plugin_map: BTreeMap::new(),
             sudo: SudoCommandBuilder::enabled(sudo_enabled),
             tmp_dir,
@@ -59,60 +59,62 @@ impl ExternalPlugins {
     pub async fn load(&mut self) -> Result<(), LogManagementError> {
         self.plugin_map.clear();
 
-        for maybe_entry in fs::read_dir(&self.plugin_dir)? {
-            let entry = maybe_entry?;
-            let path = entry.path();
-            if path.is_file() {
-                let mut command = self.sudo.command(&path);
+        for plugin_dir in &self.plugin_dirs {
+            for maybe_entry in fs::read_dir(plugin_dir)? {
+                let entry = maybe_entry?;
+                let path = entry.path();
+                if path.is_file() {
+                    let mut command = self.sudo.command(&path);
 
-                match command
-                    .arg(LIST)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                {
-                    Ok(code) if code.success() => {
-                        info!("Log plugin activated: {}", path.display());
-                    }
+                    match command
+                        .arg(LIST)
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()
+                    {
+                        Ok(code) if code.success() => {
+                            info!("Log plugin activated: {}", path.display());
+                        }
 
-                    // If the file is not executable or returned non 0 status code we assume it is not a valid log plugin and skip further processing.
-                    Ok(_) => {
-                        error!(
+                        // If the file is not executable or returned non 0 status code we assume it is not a valid log plugin and skip further processing.
+                        Ok(_) => {
+                            error!(
                             "File {} in log plugin directory does not support list operation and may not be a valid plugin, skipping.",
                             path.display()
                         );
-                        continue;
-                    }
+                            continue;
+                        }
 
-                    Err(err) if err.kind() == ErrorKind::PermissionDenied => {
-                        error!(
-                            "File {} Permission Denied, is the file an executable?\n
+                        Err(err) if err.kind() == ErrorKind::PermissionDenied => {
+                            error!(
+                                "File {} Permission Denied, is the file an executable?\n
                             The file will not be registered as a log plugin.",
-                            path.display()
-                        );
-                        continue;
-                    }
+                                path.display()
+                            );
+                            continue;
+                        }
 
-                    Err(err) => {
-                        error!(
-                            "An error occurred while trying to run: {}: {}\n
+                        Err(err) => {
+                            error!(
+                                "An error occurred while trying to run: {}: {}\n
                             The file will not be registered as a log plugin.",
-                            path.display(),
-                            err
-                        );
-                        continue;
+                                path.display(),
+                                err
+                            );
+                            continue;
+                        }
                     }
-                }
 
-                if let Some(file_name) = path.file_name() {
-                    if let Some(plugin_name) = file_name.to_str() {
-                        let plugin = ExternalPluginCommand::new(
-                            plugin_name.to_string(),
-                            path.clone(),
-                            self.sudo.clone(),
-                            self.tmp_dir.clone(),
-                        );
-                        self.plugin_map.insert(plugin_name.into(), plugin);
+                    if let Some(file_name) = path.file_name() {
+                        if let Some(plugin_name) = file_name.to_str() {
+                            let plugin = ExternalPluginCommand::new(
+                                plugin_name.to_string(),
+                                path.clone(),
+                                self.sudo.clone(),
+                                self.tmp_dir.clone(),
+                            );
+                            self.plugin_map.insert(plugin_name.into(), plugin);
+                        }
                     }
                 }
             }
