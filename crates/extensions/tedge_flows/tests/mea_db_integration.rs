@@ -763,6 +763,145 @@ async fn real_actor_database_to_mqtt_integration() {
     );
 }
 
+#[tokio::test]
+async fn flow_that_outputs_multiple_messages_persists_all_to_database() {
+    // Test that when a flow outputs multiple messages, they all get persisted to the database
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let config_dir = temp_dir.path();
+
+    // Create a script that splits a sensor reading into multiple messages
+    let js_content = r#"
+        export function onMessage(message) {
+            let data = JSON.parse(message.payload);
+            
+            // Split sensor data into separate messages for temperature and humidity
+            let messages = [];
+            
+            if (data.temperature !== undefined) {
+                messages.push({
+                    topic: "te/device/main///m/temperature",
+                    payload: JSON.stringify({ temperature: data.temperature }),
+                    timestamp: message.timestamp
+                });
+            }
+            
+            if (data.humidity !== undefined) {
+                messages.push({
+                    topic: "te/device/main///m/humidity", 
+                    payload: JSON.stringify({ humidity: data.humidity }),
+                    timestamp: message.timestamp
+                });
+            }
+            
+            if (data.pressure !== undefined) {
+                messages.push({
+                    topic: "te/device/main///m/pressure",
+                    payload: JSON.stringify({ pressure: data.pressure }),
+                    timestamp: message.timestamp
+                });
+            }
+            
+            return messages;
+        }
+    "#;
+    std::fs::write(config_dir.join("splitter.js"), js_content)
+        .expect("Failed to write JS file");
+
+    // Create flow config that outputs multiple messages to database
+    let config = r#"
+        input.mqtt.topics = ["te/device/main///m/sensor"]
+
+        steps = [
+            { script = "splitter.js" }
+        ]
+
+        output.db.series = "split-sensor-data"
+    "#;
+    std::fs::write(config_dir.join("split_flow.toml"), config)
+        .expect("Failed to write config");
+
+    // Build FlowsMapper actor with mock MQTT
+    let mut flows_builder = FlowsMapperBuilder::try_new(Utf8Path::from_path(config_dir).unwrap())
+        .await
+        .expect("Failed to create FlowsMapperBuilder");
+
+    let mut mock_mqtt = MockMqttBuilder::new();
+    flows_builder.connect(&mut mock_mqtt);
+
+    let flows_actor = flows_builder.build();
+    let mut mqtt_mock = mock_mqtt.build();
+
+    tokio::spawn(flows_actor.run());
+
+    // Create test message with sensor data that should be split into 3 messages
+    let test_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///m/sensor"),
+        br#"{"temperature": 25.5, "humidity": 60.0, "pressure": 1013.25}"#,
+    );
+
+    // Send MQTT message to the actor
+    mqtt_mock
+        .send(test_message.clone())
+        .await
+        .expect("Failed to send MQTT message to actor");
+
+    // Give the actor time to process the message
+    sleep(Duration::from_millis(200)).await;
+
+    // Verify all three split messages were stored in database
+    let db_path = Utf8PathBuf::from_path_buf(config_dir.join("tedge-flows.db"))
+        .expect("Failed to create DB path");
+    let mut db = FjallMeaDb::open(&db_path)
+        .await
+        .expect("Failed to open database");
+
+    let stored_messages =
+        poll_until_database_contains(&mut db, "split-sensor-data", 3, Duration::from_secs(2))
+            .await
+            .expect("Expected 3 messages to be stored in database");
+
+    assert_eq!(
+        stored_messages.len(),
+        3,
+        "Should have 3 messages stored: {stored_messages:?}"
+    );
+
+    // Verify the content of the stored messages
+    let topics: Vec<_> = stored_messages.iter().map(|(_, msg)| &msg.topic).collect();
+
+    assert!(topics.contains(&&"te/device/main///m/temperature".to_string()));
+    assert!(topics.contains(&&"te/device/main///m/humidity".to_string()));
+    assert!(topics.contains(&&"te/device/main///m/pressure".to_string()));
+
+    // Verify the payload content
+    let temp_message = stored_messages
+        .iter()
+        .find(|(_, msg)| msg.topic == "te/device/main///m/temperature")
+        .expect("Temperature message should exist");
+    assert_eq!(
+        String::from_utf8(temp_message.1.payload.clone()).unwrap(),
+        r#"{"temperature":25.5}"#
+    );
+
+    let humidity_message = stored_messages
+        .iter()
+        .find(|(_, msg)| msg.topic == "te/device/main///m/humidity")
+        .expect("Humidity message should exist");
+    assert_eq!(
+        String::from_utf8(humidity_message.1.payload.clone()).unwrap(),
+        r#"{"humidity":60}"#
+    );
+
+    let pressure_message = stored_messages
+        .iter()
+        .find(|(_, msg)| msg.topic == "te/device/main///m/pressure")
+        .expect("Pressure message should exist");
+    assert_eq!(
+        String::from_utf8(pressure_message.1.payload.clone()).unwrap(),
+        r#"{"pressure":1013.25}"#
+    );
+}
+
 /// Mock MQTT actor for testing - captures outgoing MQTT requests and provides incoming messages
 type MockMqttActor = SimpleMessageBox<MqttMessage, MqttMessage>;
 
