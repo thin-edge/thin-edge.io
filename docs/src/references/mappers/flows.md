@@ -71,12 +71,14 @@ interface FlowStep {
 }
 ```
 
-A message contains the message topic and payload as well as an ingestion timestamp: 
+A message contains the message topic and payload as well as an ingestion timestamp.
+The bytes of the raw message payload are also accessible as an array of unsigned bytes: 
 
 ```ts
 type Message = {
   topic: string,
   payload: string,
+  raw_payload: Uint8Array,
   timestamp: Timestamp
 }
 
@@ -91,7 +93,7 @@ These values are configured by the flow and can be dynamically updated on recept
 
 The `onMessage` function is called for each message to be transformed
   - The arguments passed to the function are:
-    - The message `{ topic: string, payload: string, timestamp: { seconds: u64, nanoseconds: u32 } }`
+    - The message `{ topic: string, payload: string, raw_payload: Uint8Array, timestamp: { seconds: u64, nanoseconds: u32 } }`
     - The config as read from the flow config or updated by the script
   - The function is expected to return zero, one or many transformed messages `[{ topic: string, payload: string }]`
   - An exception can be thrown if the input message cannot be transformed.
@@ -186,3 +188,17 @@ $ tedge flows test collectd/mandarine/cpu/percent-active '1754571280.572:2.07156
 
 [c8y/measurement/measurements/create] {"type":"collectd","time":"2025-08-07T12:54:40.572Z","cpu":{"percent-active":2.07156308851224}}
 ```
+
+## Builtin Objects
+
+%%te%% flows uses the [QuickJS](https://bellard.org/quickjs/) engine and supports [ECMAScript® 2023](https://tc39.es/ecma262/2023/).
+
+Flows and step functions are executed in a sandbox with no access to the system, the disk or the network.
+
+The following builtin objects are exported:
+
+- [`console.log()`](https://developer.mozilla.org/en-US/docs/Web/API/console/log_static)
+  - Output log messages to the mapper log
+- [`TextDecoder`](https://developer.mozilla.org/en-US/docs/Web/API/TextDecoder)
+  - Only `utf-8` is supported 
+- [`TextEncoder`](https://developer.mozilla.org/en-US/docs/Web/API/TextEncoder)
