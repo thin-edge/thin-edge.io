@@ -124,7 +124,7 @@ impl FlowsMapper {
             match flow_messages {
                 Ok(messages) => self.publish_messages(flow_id, timestamp, messages).await?,
                 Err(err) => {
-                    error!(target: "flows", "{flow_id}: {err}");
+                    error!(target: "flows", "{flow_id}: {err:#}");
                 }
             }
         }
@@ -193,6 +193,7 @@ impl FlowsMapper {
                 FlowOutput::MeaDB { output_series } => {
                     for message in messages {
                         info!(target: "flows", "store {output_series} @{}.{} [{}]", timestamp.seconds, timestamp.nanoseconds, message.topic);
+                        let timestamp = DateTime::now();
                         if let Err(err) = self
                             .processor
                             .database
