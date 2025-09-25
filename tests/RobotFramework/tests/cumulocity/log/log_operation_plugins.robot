@@ -14,6 +14,7 @@ Test Tags           theme:c8y    theme:log
 
 *** Test Cases ***
 Log operation journald plugin
+    Should Support Log File Types    tedge-agent::journald    includes=${True}
     ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${operation}=    Create Log Request Operation
@@ -31,14 +32,12 @@ Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist    ${DEVICE_SN}
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/plugins/*
     ...    /etc/tedge/log-plugins/
     Execute Command    chmod +x /etc/tedge/log-plugins/journald
-
-    Restart Service    tedge-agent
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
 Create Log Request Operation
     [Arguments]    ${start_timestamp}

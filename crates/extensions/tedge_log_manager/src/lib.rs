@@ -12,6 +12,7 @@ pub use actor::*;
 pub use config::*;
 use log::error;
 use std::path::PathBuf;
+use std::vec;
 use tedge_actors::Builder;
 use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
@@ -50,14 +51,14 @@ pub struct LogManagerBuilder {
 impl LogManagerBuilder {
     pub async fn try_new(
         config: LogManagerConfig,
-        fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
+        fs_notify: &mut impl MessageSource<FsWatchEvent, Vec<PathBuf>>,
         uploader_actor: &mut impl Service<LogUploadRequest, LogUploadResult>,
     ) -> Result<Self, FileError> {
         Self::init(&config).await?;
 
         let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
         fs_notify.connect_sink(
-            LogManagerBuilder::watched_directory(&config),
+            LogManagerBuilder::watched_directories(&config),
             &box_builder.get_sender(),
         );
 
@@ -167,9 +168,11 @@ impl LogManagerBuilder {
         }
     }
 
-    /// Directory watched by the log actors for configuration changes
-    fn watched_directory(config: &LogManagerConfig) -> PathBuf {
-        config.plugin_config_dir.clone()
+    /// Directories watched by the log actor
+    /// - for configuration changes
+    /// - for plugin changes
+    fn watched_directories(config: &LogManagerConfig) -> Vec<PathBuf> {
+        vec![config.plugin_config_dir.clone(), config.plugins_dir.clone()]
     }
 }
 
