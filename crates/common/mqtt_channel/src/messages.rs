@@ -78,6 +78,18 @@ impl From<String> for DebugPayload {
     }
 }
 
+impl From<DebugPayload> for Vec<u8> {
+    fn from(value: DebugPayload) -> Self {
+        value.0
+    }
+}
+
+impl From<Vec<u8>> for DebugPayload {
+    fn from(value: Vec<u8>) -> Self {
+        DebugPayload(value)
+    }
+}
+
 impl AsRef<Payload> for DebugPayload {
     fn as_ref(&self) -> &Payload {
         &self.0
@@ -201,6 +213,11 @@ impl MqttMessage {
     /// The bytes of the payload (except any trailing null char)
     pub fn payload_bytes(&self) -> &[u8] {
         self.payload.as_bytes()
+    }
+
+    /// Split the message into a (topic, payload) pair
+    pub fn split(self) -> (String, Payload) {
+        (self.topic.name, self.payload.0)
     }
 }
 

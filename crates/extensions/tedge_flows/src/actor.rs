@@ -50,7 +50,7 @@ impl Actor for FlowsMapper {
                             let Ok(path) = Utf8PathBuf::try_from(path) else {
                                 continue;
                             };
-                            if matches!(path.extension(), Some("js" | "ts")) {
+                            if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
                                 self.processor.reload_script(path).await;
                             } else if path.extension() == Some("toml") {
                                 self.processor.reload_flow(path).await;
@@ -70,7 +70,7 @@ impl Actor for FlowsMapper {
                             let Ok(path) = Utf8PathBuf::try_from(path) else {
                                 continue;
                             };
-                            if matches!(path.extension(), Some("js" | "ts")) {
+                            if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
                                 self.processor.remove_script(path).await;
                             } else if path.extension() == Some("toml") {
                                 self.processor.remove_flow(path).await;

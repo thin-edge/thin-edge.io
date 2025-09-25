@@ -38,6 +38,26 @@ Translate complex tedge json to c8y json
     ...    ${transformed_msg}
     ...    [c8y/measurement/measurements/create] {"type":"environment","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":258},"location":{"latitude":32.54,"longitude":-117.67,"altitude":98.6},"pressure":{"pressure":98}}
 
+Using base64 to encode tedge flows input
+    ${encoded_input}    Execute Command
+    ...    echo -n '{"time":"2025-06-27T08:11:05.301804125Z", "temperature": 258}' | base64 --wrap\=0
+    ${transformed_msg}    Execute Command
+    ...    tedge flows test --base64-input te/device/main///m/env ${encoded_input}
+    ...    strip=True
+    Should Be Equal
+    ...    ${transformed_msg}
+    ...    [c8y/measurement/measurements/create] {"type":"env","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":258}}
+
+Using base64 to encode tedge flows output
+    ${encoded_output}    Execute Command
+    ...    echo -n '{"type":"env","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":258}}' | base64 --wrap\=0
+    ${transformed_msg}    Execute Command
+    ...    tedge flows test --base64-output te/device/main///m/env '{"time":"2025-06-27T08:11:05.301804125Z", "temperature": 258}'
+    ...    strip=True
+    Should Be Equal
+    ...    ${transformed_msg}
+    ...    [c8y/measurement/measurements/create] ${encoded_output}
+
 Units are configured using topic metadata
     ${transformed_msg}    Execute Command
     ...    cat /etc/tedge/flows/measurements.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test

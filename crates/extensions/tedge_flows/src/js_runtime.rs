@@ -1,5 +1,6 @@
+use crate::js_lib;
 use crate::js_script::JsScript;
-use crate::js_script::JsonValue;
+use crate::js_value::JsonValue;
 use crate::LoadError;
 use anyhow::anyhow;
 use rquickjs::module::Evaluated;
@@ -174,7 +175,9 @@ impl JsWorker {
 
     async fn run(mut self) {
         rquickjs::async_with!(self.context => |ctx| {
-            console::init(&ctx);
+            js_lib::console::init(&ctx);
+            js_lib::text_decoder::init(&ctx);
+            js_lib::text_encoder::init(&ctx);
             let mut modules = JsModules::new();
             while let Some(request) = self.requests.recv().await {
                 match request {
@@ -281,59 +284,6 @@ impl LoadError {
             let err = CaughtError::from_error(ctx, err);
             let err = anyhow::anyhow!("{err}");
             err.context("JS runtime error").into()
-        }
-    }
-}
-
-mod console {
-    use crate::js_script::JsonValue;
-    use rquickjs::class::Trace;
-    use rquickjs::function::Rest;
-    use rquickjs::Ctx;
-    use rquickjs::JsLifetime;
-    use rquickjs::Result;
-    use rquickjs::Value;
-    use std::fmt::Write;
-
-    #[derive(Clone, Trace, JsLifetime)]
-    #[rquickjs::class(frozen)]
-    struct Console {}
-
-    pub fn init(ctx: &Ctx<'_>) {
-        let console = Console {};
-        let _ = ctx.globals().set("console", console);
-    }
-
-    impl Console {
-        fn print(&self, _level: tracing::Level, values: Rest<Value<'_>>) -> Result<()> {
-            let mut message = String::new();
-            for (i, value) in values.0.into_iter().enumerate() {
-                if i > 0 {
-                    let _ = write!(&mut message, ", ");
-                }
-                let _ = write!(&mut message, "{}", JsonValue::display(value));
-            }
-            eprintln!("JavaScript.Console: {message}");
-            Ok(())
-        }
-    }
-
-    #[rquickjs::methods]
-    impl Console {
-        fn debug(&self, values: Rest<Value<'_>>) -> Result<()> {
-            self.print(tracing::Level::DEBUG, values)
-        }
-
-        fn log(&self, values: Rest<Value<'_>>) -> Result<()> {
-            self.print(tracing::Level::INFO, values)
-        }
-
-        fn warn(&self, values: Rest<Value<'_>>) -> Result<()> {
-            self.print(tracing::Level::WARN, values)
-        }
-
-        fn error(&self, values: Rest<Value<'_>>) -> Result<()> {
-            self.print(tracing::Level::ERROR, values)
         }
     }
 }
