@@ -4,10 +4,7 @@ use tedge_flows::database;
 use tedge_flows::database::MeaDb;
 use tedge_flows::flow::DateTime;
 use tedge_flows::flow::Message;
-
-const DEFAULT_DB_PATH: &str = "/etc/tedge/tedge-flows.db";
-
-type Record = (DateTime, Message);
+use tokio::time::Instant;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -15,8 +12,6 @@ async fn main() -> anyhow::Result<()> {
     let _program_name = args.next();
 
     // Parse arguments: [series_name] [db_path] [--backend=fjall|sqlite]
-    let series_name = args.next().unwrap_or("latest-data-points".to_string());
-    let db_path = args.next().unwrap_or(DEFAULT_DB_PATH.to_string());
     let backend = args.next().unwrap_or_else(|| {
         cfg_if! {
             if #[cfg(feature = "fjall-db")] {
@@ -30,8 +25,18 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     });
+    let count: usize = args
+        .next()
+        .unwrap_or_else(|| "1000".to_string())
+        .parse()
+        .unwrap_or(1000);
+    let db_path = format!("bench.{backend}");
 
-    println!("Reading series: {series_name} from {db_path} using {backend} backend");
+    println!(
+        "Benchmarking {backend} backend with {} inserts and {} drains from {db_path}",
+        count * 5 * 3,
+        count * 5
+    );
 
     let mut db: Box<dyn MeaDb> = match backend.as_str() {
         #[cfg(feature = "fjall-db")]
@@ -58,20 +63,42 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    let time = Instant::now();
+    for _ in 0..5 {
+        for series in ["bench1", "bench2", "bench3"] {
+            db.store_many(
+                series,
+                std::iter::repeat_with(|| {
+                    (
+                        DateTime::now(),
+                        Message {
+                            timestamp: None,
+                            topic: "bench".into(),
+                            payload: "a payload for benchmarking read write performance".into(),
+                        },
+                    )
+                })
+                .take(count)
+                .collect(),
+            )
+            .await
+            .unwrap();
+        }
+    }
+    println!(
+        "Inserted {} items (across 15 batches of {count}) in {:?}",
+        count * 5 * 3,
+        time.elapsed()
+    );
+
+    let time = Instant::now();
+
     let items = db
-        .query_all(&series_name)
+        .drain_older_than(DateTime::now(), "bench1")
         .await
         .context("Failed to query for all items")?;
 
-    items.iter().for_each(print_record);
+    println!("Drained {} items in {:?}", items.len(), time.elapsed());
 
     Ok(())
-}
-
-fn print_record(record: &Record) {
-    let time = record.0.seconds;
-    let nanos = record.0.nanoseconds;
-    let topic = &record.1.topic;
-    let payload = std::str::from_utf8(&record.1.payload).unwrap_or("<binary payload>");
-    println!("[{time}.{nanos}]\t{topic}\t{payload}")
 }

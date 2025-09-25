@@ -44,10 +44,7 @@ impl Actor for FlowsMapper {
         while let Some(message) = self.next_message().await {
             match message {
                 InputMessage::Tick(_) => {
-                    let drained_messages = self.drain_db().await?;
-                    self.on_messages(MessageSource::MeaDB, drained_messages)
-                        .await?;
-
+                    self.poll_ready_sources().await?;
                     self.on_interval().await?;
                 }
                 InputMessage::MqttMessage(message) => match Message::try_from(message) {
@@ -140,24 +137,13 @@ impl FlowsMapper {
         for (flow_id, flow_messages) in self.processor.on_message(source, timestamp, &message).await
         {
             match flow_messages {
-                Ok(messages) => self.publish_messages(flow_id, timestamp, messages).await?,
+                Ok(messages) => self.publish_messages(flow_id, messages).await?,
                 Err(err) => {
                     error!(target: "flows", "{flow_id}: {err:#}");
                 }
             }
         }
 
-        Ok(())
-    }
-
-    async fn on_messages(
-        &mut self,
-        source: MessageSource,
-        messages: Vec<(DateTime, Message)>,
-    ) -> Result<(), RuntimeError> {
-        for (timestamp, message) in messages {
-            self.on_message(source, timestamp, message).await?
-        }
         Ok(())
     }
 
@@ -172,8 +158,7 @@ impl FlowsMapper {
         for (flow_id, flow_messages) in self.processor.on_interval(timestamp, now).await {
             match flow_messages {
                 Ok(messages) => {
-                    self.publish_messages(flow_id.clone(), timestamp, messages)
-                        .await?;
+                    self.publish_messages(flow_id.clone(), messages).await?;
                 }
                 Err(err) => {
                     error!(target: "flows", "{flow_id}: {err}");
@@ -187,7 +172,6 @@ impl FlowsMapper {
     async fn publish_messages(
         &mut self,
         flow_id: String,
-        timestamp: DateTime,
         messages: Vec<Message>,
     ) -> Result<(), RuntimeError> {
         if let Some(flow) = self.processor.flows.get(&flow_id) {
@@ -210,17 +194,19 @@ impl FlowsMapper {
                     }
                 }
                 FlowOutput::MeaDB { output_series } => {
-                    for message in messages {
-                        info!(target: "flows", "store {output_series} @{}.{} [{}]", timestamp.seconds, timestamp.nanoseconds, message.topic);
-                        let timestamp = DateTime::now();
-                        if let Err(err) = self
-                            .processor
-                            .database
-                            .store(output_series, timestamp, message)
-                            .await
-                        {
-                            error!(target: "flows", "{flow_id}: fail to persist message: {err}");
-                        }
+                    let messages = messages
+                        .into_iter()
+                        .map(|m| (DateTime::now(), m))
+                        .collect::<Vec<_>>();
+                    if let Err(err) = self
+                        .processor
+                        .database
+                        .lock()
+                        .await
+                        .store_many(output_series, messages)
+                        .await
+                    {
+                        error!(target: "flows", "{flow_id}: fail to persist message: {err}");
                     }
                 }
             }
@@ -228,22 +214,47 @@ impl FlowsMapper {
         Ok(())
     }
 
-    async fn drain_db(&mut self) -> Result<Vec<(DateTime, Message)>, RuntimeError> {
+    async fn poll_ready_sources(&mut self) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
-        let mut messages = vec![];
-        for (flow_id, flow_messages) in self.processor.drain_db(timestamp).await {
-            match flow_messages {
-                Ok(flow_messages) => {
-                    for (t, m) in flow_messages.iter() {
-                        info!(target: "flows", "drained: @{}.{} [{}]", t.seconds, t.nanoseconds, m.topic);
+
+        // Collect flow IDs with ready sources
+        let ready_flows: Vec<String> = self
+            .processor
+            .flows
+            .iter()
+            .filter_map(|(flow_id, flow)| {
+                flow.input_source
+                    .as_ref()
+                    .filter(|source| source.is_ready(timestamp))
+                    .map(|_| flow_id.clone())
+            })
+            .collect();
+
+        // Poll each ready source and process messages
+        for flow_id in ready_flows {
+            if let Some(flow) = self.processor.flows.get_mut(&flow_id) {
+                if let Some(source) = &mut flow.input_source {
+                    match source.poll(timestamp).await {
+                        Ok(messages) => {
+                            for (t, m) in messages.iter() {
+                                info!(target: "flows", "drained: @{}.{} [{}]", t.seconds, t.nanoseconds, m.topic);
+                            }
+                            source.update_after_poll(timestamp);
+
+                            // Process the messages through the flow
+                            for (msg_timestamp, message) in messages {
+                                self.on_message(MessageSource::MeaDB, msg_timestamp, message)
+                                    .await?;
+                            }
+                        }
+                        Err(err) => {
+                            error!(target: "flows", "{flow_id}: Failed to poll source: {err}");
+                        }
                     }
-                    messages.extend(flow_messages);
-                }
-                Err(err) => {
-                    error!(target: "flows", "{flow_id}: {err}");
                 }
             }
         }
-        Ok(messages)
+
+        Ok(())
     }
 }

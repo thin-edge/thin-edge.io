@@ -1,16 +1,26 @@
-//! Database abstraction for time-series message storage
-
 use crate::flow::DateTime;
 use crate::flow::Message;
 use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use fjall::Keyspace;
-use fjall::PartitionCreateOptions;
-use fjall::Slice;
 use thiserror::Error;
+
+#[cfg(feature = "fjall-db")]
+use fjall::Keyspace;
+#[cfg(feature = "fjall-db")]
+use fjall::PartitionCreateOptions;
+#[cfg(feature = "fjall-db")]
+use fjall::Slice;
+#[cfg(feature = "fjall-db")]
 use tokio::task::spawn_blocking;
+
+#[cfg(feature = "sqlite-db")]
+use sqlx::sqlite::SqlitePool;
+#[cfg(feature = "sqlite-db")]
+use sqlx::sqlite::SqlitePoolOptions;
+#[cfg(feature = "sqlite-db")]
+use sqlx::Row;
 
 /// Errors that can occur during database operations
 #[derive(Error, Debug)]
@@ -50,6 +60,7 @@ pub enum DatabaseError {
     },
 }
 
+#[cfg(feature = "fjall-db")]
 impl From<fjall::Error> for DatabaseError {
     fn from(err: fjall::Error) -> Self {
         DatabaseError::Internal {
@@ -69,6 +80,17 @@ pub trait MeaDb: Send + Sync {
         payload: Message,
     ) -> Result<(), DatabaseError>;
 
+    async fn store_many(
+        &mut self,
+        series: &str,
+        data: Vec<(DateTime, Message)>,
+    ) -> Result<(), DatabaseError> {
+        for (timestamp, payload) in data {
+            self.store(series, timestamp, payload).await?;
+        }
+        Ok(())
+    }
+
     /// Drain all messages older than or equal to the cutoff timestamp from the specified series
     ///
     /// This operation removes the messages from the database and returns them.
@@ -86,10 +108,12 @@ pub trait MeaDb: Send + Sync {
 }
 
 /// Database service implementation using fjall as the storage backend
+#[cfg(feature = "fjall-db")]
 pub struct FjallMeaDb {
     keyspace: Keyspace,
 }
 
+#[cfg(feature = "fjall-db")]
 impl FjallMeaDb {
     /// Open a database at the specified path
     pub async fn open(path: impl AsRef<Utf8Path>) -> Result<Self, DatabaseError> {
@@ -106,6 +130,7 @@ impl FjallMeaDb {
     }
 }
 
+#[cfg(feature = "fjall-db")]
 #[async_trait]
 impl MeaDb for FjallMeaDb {
     async fn store(
@@ -121,6 +146,33 @@ impl MeaDb for FjallMeaDb {
         spawn_blocking(move || {
             let partition = ks.open_partition(&series_owned, PartitionCreateOptions::default())?;
             partition.insert(timestamp.to_slice(), payload.to_slice())?;
+            Ok(())
+        })
+        .await
+        .expect("database store task should not panic")
+        .map_err(|e: fjall::Error| DatabaseError::StoreError {
+            series: series_for_error,
+            source: anyhow::Error::from(e),
+        })
+    }
+
+    async fn store_many(
+        &mut self,
+        series: &str,
+        data: Vec<(DateTime, Message)>,
+    ) -> Result<(), DatabaseError> {
+        let ks = self.keyspace.clone();
+        let series_owned = series.to_owned();
+        let series_for_error = series.to_owned();
+
+        spawn_blocking(move || {
+            let mut batch = ks.batch();
+            let partition = ks.open_partition(&series_owned, PartitionCreateOptions::default())?;
+            for (timestamp, payload) in data {
+                batch.insert(&partition, timestamp.to_slice(), payload.to_slice());
+            }
+            batch.commit()?;
+
             Ok(())
         })
         .await
@@ -185,11 +237,13 @@ impl MeaDb for FjallMeaDb {
 }
 
 /// Helper trait for converting types to/from fjall Slice format
+#[cfg(feature = "fjall-db")]
 pub trait ToFromSlice {
     fn to_slice(&self) -> Slice;
     fn from_slice(slice: Slice) -> Self;
 }
 
+#[cfg(feature = "fjall-db")]
 impl ToFromSlice for DateTime {
     fn to_slice(&self) -> Slice {
         let mut arr = [0u8; 12];
@@ -211,6 +265,7 @@ impl ToFromSlice for DateTime {
     }
 }
 
+#[cfg(feature = "fjall-db")]
 impl ToFromSlice for Message {
     fn to_slice(&self) -> Slice {
         Slice::new(self.json().to_string().as_bytes())
@@ -221,8 +276,257 @@ impl ToFromSlice for Message {
     }
 }
 
+#[cfg(feature = "fjall-db")]
 fn decode_message((key, value): (Slice, Slice)) -> (DateTime, Message) {
     (DateTime::from_slice(key), Message::from_slice(value))
+}
+
+/// Database service implementation using SQLite as the storage backend
+#[cfg(feature = "sqlite-db")]
+pub struct SqliteMeaDb {
+    pool: SqlitePool,
+}
+
+#[cfg(feature = "sqlite-db")]
+impl SqliteMeaDb {
+    fn datetime_to_nanos(dt: DateTime) -> i64 {
+        (dt.seconds as i64) * 1_000_000_000 + (dt.nanoseconds as i64)
+    }
+
+    fn nanos_to_datetime(nanos: i64) -> DateTime {
+        DateTime {
+            seconds: (nanos / 1_000_000_000) as u64,
+            nanoseconds: (nanos % 1_000_000_000) as u32,
+        }
+    }
+    /// Open a database at the specified path
+    pub async fn open(path: impl AsRef<Utf8Path>) -> Result<Self, DatabaseError> {
+        let path = path.as_ref();
+        let database_url = format!("sqlite:{path}?mode=rwc");
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1) // SQLite doesn't handle concurrent writes well
+            .connect(&database_url)
+            .await
+            .with_context(|| format!("opening SQLite database at {path:?}"))
+            .map_err(|source| DatabaseError::OpenError {
+                path: path.to_owned(),
+                source,
+            })?;
+
+        // Create the messages table if it doesn't exist
+        // Store timestamp as nanoseconds since epoch (i64) for simpler ordering
+        // id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS messages (
+                series TEXT NOT NULL,
+                timestamp_nanos INTEGER NOT NULL,
+                topic TEXT NOT NULL,
+                payload BLOB NOT NULL,
+                message_timestamp_nanos INTEGER,
+                PRIMARY KEY (series, timestamp_nanos)
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .with_context(|| "creating messages table")
+        .map_err(|source| DatabaseError::Internal { source })?;
+
+        // Create index for efficient querying
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_messages_series ON messages (series, timestamp_nanos)",
+        )
+        .execute(&pool)
+        .await
+        .with_context(|| "creating index on messages table")
+        .map_err(|source| DatabaseError::Internal { source })?;
+
+        Ok(Self { pool })
+    }
+}
+
+#[cfg(feature = "sqlite-db")]
+#[async_trait]
+impl MeaDb for SqliteMeaDb {
+    async fn store(
+        &mut self,
+        series: &str,
+        timestamp: DateTime,
+        payload: Message,
+    ) -> Result<(), DatabaseError> {
+        sqlx::query(
+            r#"
+            INSERT OR REPLACE INTO messages
+            (series, timestamp_nanos, topic, payload, message_timestamp_nanos)
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(series)
+        .bind(Self::datetime_to_nanos(timestamp))
+        .bind(&payload.topic)
+        .bind(&payload.payload)
+        .bind(payload.timestamp.map(Self::datetime_to_nanos))
+        .execute(&self.pool)
+        .await
+        .with_context(|| format!("storing message in series {series:?}"))
+        .map_err(|source| DatabaseError::StoreError {
+            series: series.to_owned(),
+            source,
+        })?;
+
+        Ok(())
+    }
+
+    async fn store_many(
+        &mut self,
+        series: &str,
+        data: Vec<(DateTime, Message)>,
+    ) -> Result<(), DatabaseError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|source| DatabaseError::Internal {
+                source: source.into(),
+            })?;
+        for (timestamp, payload) in data {
+            sqlx::query(
+                r#"
+            INSERT OR REPLACE INTO messages
+            (series, timestamp_nanos, topic, payload, message_timestamp_nanos)
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+            )
+            .bind(series)
+            .bind(Self::datetime_to_nanos(timestamp))
+            .bind(&payload.topic)
+            .bind(&payload.payload)
+            .bind(payload.timestamp.map(Self::datetime_to_nanos))
+            .execute(&mut *tx)
+            .await
+            .with_context(|| format!("storing message in series {series:?}"))
+            .map_err(|source| DatabaseError::StoreError {
+                series: series.to_owned(),
+                source,
+            })?;
+        }
+        tx.commit()
+            .await
+            .map_err(|source| DatabaseError::Internal {
+                source: anyhow::Error::from(source),
+            })?;
+
+        Ok(())
+    }
+
+    async fn drain_older_than(
+        &mut self,
+        cutoff: DateTime,
+        series: &str,
+    ) -> Result<Vec<(DateTime, Message)>, DatabaseError> {
+        // First, select the messages to drain
+        let cutoff_nanos = Self::datetime_to_nanos(cutoff);
+        let rows = sqlx::query(
+            r#"
+            SELECT timestamp_nanos, topic, payload, message_timestamp_nanos
+            FROM messages
+            WHERE series = ? AND timestamp_nanos <= ?
+            ORDER BY timestamp_nanos
+            "#,
+        )
+        .bind(series)
+        .bind(cutoff_nanos)
+        .fetch_all(&self.pool)
+        .await
+        .with_context(|| format!("querying messages to drain from series {series:?}"))
+        .map_err(|source| DatabaseError::DrainError {
+            series: series.to_owned(),
+            source,
+        })?;
+
+        // Convert rows to messages
+        let mut messages = Vec::new();
+        for row in &rows {
+            let timestamp_nanos: i64 = row.get("timestamp_nanos");
+            let timestamp = Self::nanos_to_datetime(timestamp_nanos);
+
+            let topic: String = row.get("topic");
+            let payload: Vec<u8> = row.get("payload");
+            let message_timestamp_nanos: Option<i64> = row.get("message_timestamp_nanos");
+
+            let message_timestamp = message_timestamp_nanos.map(Self::nanos_to_datetime);
+
+            let message = Message {
+                topic,
+                payload,
+                timestamp: message_timestamp,
+            };
+
+            messages.push((timestamp, message));
+        }
+
+        // Delete the drained messages
+        sqlx::query(
+            r#"
+            DELETE FROM messages
+            WHERE series = ? AND timestamp_nanos <= ?
+            "#,
+        )
+        .bind(series)
+        .bind(cutoff_nanos)
+        .execute(&self.pool)
+        .await
+        .with_context(|| format!("deleting drained messages from series {series:?}"))
+        .map_err(|source| DatabaseError::DrainError {
+            series: series.to_owned(),
+            source,
+        })?;
+
+        Ok(messages)
+    }
+
+    async fn query_all(&mut self, series: &str) -> Result<Vec<(DateTime, Message)>, DatabaseError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT timestamp_nanos, topic, payload, message_timestamp_nanos
+            FROM messages
+            WHERE series = ?
+            ORDER BY timestamp_nanos
+            "#,
+        )
+        .bind(series)
+        .fetch_all(&self.pool)
+        .await
+        .with_context(|| format!("querying all messages from series {series:?}"))
+        .map_err(|source| DatabaseError::QueryError {
+            series: series.to_owned(),
+            source,
+        })?;
+
+        let mut messages = Vec::new();
+        for row in rows {
+            let timestamp_nanos: i64 = row.get("timestamp_nanos");
+            let timestamp = Self::nanos_to_datetime(timestamp_nanos);
+
+            let topic: String = row.get("topic");
+            let payload: Vec<u8> = row.get("payload");
+            let message_timestamp_nanos: Option<i64> = row.get("message_timestamp_nanos");
+
+            let message_timestamp = message_timestamp_nanos.map(Self::nanos_to_datetime);
+
+            let message = Message {
+                topic,
+                payload,
+                timestamp: message_timestamp,
+            };
+
+            messages.push((timestamp, message));
+        }
+
+        Ok(messages)
+    }
 }
 
 /// In-memory database implementation for testing
@@ -296,7 +600,8 @@ mod tests {
     type DbFactory = fn() -> BoxFuture<'static, Box<dyn MeaDb>>;
 
     #[rstest]
-    #[case::fjall(create_fjall_db)]
+    #[cfg_attr(feature = "fjall-db", case::fjall(create_fjall_db))]
+    #[cfg_attr(feature = "sqlite-db", case::sqlite(create_sqlite_db))]
     #[case::inmemory(create_inmemory_db)]
     #[tokio::test]
     async fn stored_message_can_be_retrieved(#[case] db_factory: DbFactory) {
@@ -320,7 +625,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case::fjall(create_fjall_db)]
+    #[cfg_attr(feature = "fjall-db", case::fjall(create_fjall_db))]
+    #[cfg_attr(feature = "sqlite-db", case::sqlite(create_sqlite_db))]
     #[case::inmemory(create_inmemory_db)]
     #[tokio::test]
     async fn stored_messages_are_retrieved_in_chronological_order(#[case] db_factory: DbFactory) {
@@ -357,7 +663,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case::fjall(create_fjall_db)]
+    #[cfg_attr(feature = "fjall-db", case::fjall(create_fjall_db))]
+    #[cfg_attr(feature = "sqlite-db", case::sqlite(create_sqlite_db))]
     #[case::inmemory(create_inmemory_db)]
     #[tokio::test]
     async fn messages_in_different_series_remain_isolated(#[case] db_factory: DbFactory) {
@@ -389,7 +696,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case::fjall(create_fjall_db)]
+    #[cfg_attr(feature = "fjall-db", case::fjall(create_fjall_db))]
+    #[cfg_attr(feature = "sqlite-db", case::sqlite(create_sqlite_db))]
     #[case::inmemory(create_inmemory_db)]
     #[tokio::test]
     async fn drained_messages_are_removed_from_database(#[case] db_factory: DbFactory) {
@@ -412,7 +720,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case::fjall(create_fjall_db)]
+    #[cfg_attr(feature = "fjall-db", case::fjall(create_fjall_db))]
+    #[cfg_attr(feature = "sqlite-db", case::sqlite(create_sqlite_db))]
     #[case::inmemory(create_inmemory_db)]
     #[tokio::test]
     async fn queried_messages_are_returned_in_chronological_order(#[case] db_factory: DbFactory) {
@@ -445,11 +754,24 @@ mod tests {
     }
 
     // Database factory functions for rstest
+    #[cfg(feature = "fjall-db")]
     fn create_fjall_db() -> BoxFuture<'static, Box<dyn MeaDb>> {
         Box::pin(async {
             let temp_dir = tempfile::tempdir().unwrap();
             let path = Utf8PathBuf::from_path_buf(temp_dir.path().join("test_db")).unwrap();
             let db = FjallMeaDb::open(&path).await.unwrap();
+            // Keep temp_dir alive by leaking it - this is acceptable for tests
+            std::mem::forget(temp_dir);
+            Box::new(db) as Box<dyn MeaDb>
+        })
+    }
+
+    #[cfg(feature = "sqlite-db")]
+    fn create_sqlite_db() -> BoxFuture<'static, Box<dyn MeaDb>> {
+        Box::pin(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let path = Utf8PathBuf::from_path_buf(temp_dir.path().join("test_db.sqlite")).unwrap();
+            let db = SqliteMeaDb::open(&path).await.unwrap();
             // Keep temp_dir alive by leaking it - this is acceptable for tests
             std::mem::forget(temp_dir);
             Box::new(db) as Box<dyn MeaDb>
