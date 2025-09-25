@@ -1,19 +1,19 @@
 use camino::Utf8Path;
-use tedge_actors::Actor as _;
 use camino::Utf8PathBuf;
-use tedge_actors::CloneSender as _;
-use tedge_actors::MessageReceiver as _;
-use tedge_actors::Sender as _;
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
+use tedge_actors::Actor as _;
 use tedge_actors::Builder;
+use tedge_actors::CloneSender as _;
 use tedge_actors::DynSender;
 use tedge_actors::MappingSender;
+use tedge_actors::MessageReceiver as _;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource as ActorMessageSource;
 use tedge_actors::NoConfig;
+use tedge_actors::Sender as _;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_flows::database::FjallMeaDb;
@@ -109,8 +109,7 @@ async fn isolates_messages_between_different_series() {
     let series_b = "humidity_series";
     let timestamp = DateTime::now();
 
-    let temp_msg =
-        message("te/device/main///m/temperature", r#"{"temperature": 25.5}"#);
+    let temp_msg = message("te/device/main///m/temperature", r#"{"temperature": 25.5}"#);
     let humidity_msg = message("te/device/main///m/humidity", r#"{"humidity": 60.0}"#);
 
     // Store in different series
