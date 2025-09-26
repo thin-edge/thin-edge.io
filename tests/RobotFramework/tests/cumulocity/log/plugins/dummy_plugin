@@ -1,0 +1,25 @@
+#!/bin/bash
+case "$1" in
+    "list")
+        echo ":::begin-tedge:::"
+        echo "dummy_log"
+        echo ":::end-tedge:::"
+        ;;
+    "get")
+        case "$2" in
+            "dummy_log")
+                echo ":::begin-tedge:::"
+                echo "Dummy content"
+                echo ":::end-tedge:::"
+                ;;
+            *)
+                # Simulate no logs found for unknown types
+                echo "No logs found for log type \"$2\"" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    *)
+        exit 1
+        ;;
+esac

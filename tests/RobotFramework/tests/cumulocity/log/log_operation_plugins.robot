@@ -26,6 +26,56 @@ Log operation journald plugin
     ...    ${operation}
     ...    expected_pattern=.*Starting tedge-agent.*
 
+Non-existent plugin
+    ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=    Create Log Request Operation
+    ...    ${start_timestamp}
+    ...    ${end_timestamp}
+    ...    log_type=some_log::non_existent_plugin
+    ${operation}=    Operation Should Be FAILED
+    ...    ${operation}
+    ...    timeout=120
+    ...    failure_reason=.*Plugin not found.*
+
+Dynamic plugin install
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/fake_plugin
+    ...    /usr/local/lib/tedge/log-plugins/fake_plugin
+    Execute Command    chmod +x /usr/local/lib/tedge/log-plugins/fake_plugin
+    Should Support Log File Types    fake_log::fake_plugin    includes=${True}
+
+    ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=    Create Log Request Operation
+    ...    ${start_timestamp}
+    ...    ${end_timestamp}
+    ...    log_type=fake_log::fake_plugin
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    Log Operation Attachment File Contains
+    ...    ${operation}
+    ...    expected_pattern=.*Some content.*
+
+Remove plugins dynamically
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/dummy_plugin
+    ...    /usr/local/lib/tedge/log-plugins/dummy_plugin
+    Execute Command    chmod +x /usr/local/lib/tedge/log-plugins/dummy_plugin
+    Should Support Log File Types    dummy_log::dummy_plugin    includes=${True}
+
+    Execute Command    rm /usr/local/lib/tedge/log-plugins/dummy_plugin
+
+    ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=    Create Log Request Operation
+    ...    ${start_timestamp}
+    ...    ${end_timestamp}
+    ...    log_type=dummy_log::dummy_plugin
+    ${operation}=    Operation Should Be FAILED
+    ...    ${operation}
+    ...    timeout=120
+    ...    failure_reason=.*Plugin not found.*
+
 
 *** Keywords ***
 Custom Setup
@@ -35,8 +85,8 @@ Custom Setup
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
     ThinEdgeIO.Transfer To Device
-    ...    ${CURDIR}/plugins/*
-    ...    /usr/local/lib/tedge/log-plugins/
+    ...    ${CURDIR}/plugins/journald
+    ...    /usr/local/lib/tedge/log-plugins/journald
     Execute Command    chmod +x /usr/local/lib/tedge/log-plugins/journald
 
 Create Log Request Operation
