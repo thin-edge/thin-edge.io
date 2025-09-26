@@ -76,6 +76,20 @@ Remove plugins dynamically
     ...    timeout=120
     ...    failure_reason=.*Plugin not found.*
 
+Agent resilient to plugin dirs removal
+    ${date_from}=    Get Unix Timestamp
+    Execute Command    rm -rf /usr/local/lib/tedge/log-plugins
+    Should Have MQTT Messages    c8y/s/us    date_from=${date_from}    message_pattern=118,software-management
+
+    ${date_from}=    Get Unix Timestamp
+    Execute Command    rm -rf /usr/lib/tedge/log-plugins
+    Should Have MQTT Messages    c8y/s/us    date_from=${date_from}    message_pattern=118,
+
+    ${date_from}=    Get Unix Timestamp
+    Restart Service    tedge-agent
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
+    Should Have MQTT Messages    c8y/s/us    date_from=${date_from}    message_pattern=118,
+
 
 *** Keywords ***
 Custom Setup

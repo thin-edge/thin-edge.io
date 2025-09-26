@@ -60,8 +60,30 @@ impl ExternalPlugins {
         self.plugin_map.clear();
 
         for plugin_dir in &self.plugin_dirs {
-            for maybe_entry in fs::read_dir(plugin_dir)? {
-                let entry = maybe_entry?;
+            let read_dir = match fs::read_dir(plugin_dir) {
+                Ok(entries) => entries,
+                Err(err) => {
+                    error!(
+                        "Failed to read plugin directory {} due to: {}, skipping",
+                        plugin_dir.display(),
+                        err
+                    );
+                    continue;
+                }
+            };
+
+            for maybe_entry in read_dir {
+                let entry = match maybe_entry {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        error!(
+                            "Failed to read directory entry in {}: due to {}, skipping",
+                            plugin_dir.display(),
+                            err
+                        );
+                        continue;
+                    }
+                };
                 let path = entry.path();
                 if path.is_file() {
                     let mut command = self.sudo.command(&path);
