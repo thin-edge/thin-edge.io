@@ -29,6 +29,13 @@ username = "t5678/octocat"
 password = "abcd1234"
 ```
 
+After creating the credentials.toml file, change the ownership so that it can only be read by the tedge user.
+
+```sh
+sudo chown tedge:tedge /etc/tedge/credentials.toml
+sudo chmod 600 /etc/tedge/credentials.toml
+```
+
 If needed, you can specify a custom location for the credentials file using the `tedge config` CLI tool:
 
 ```sh
