@@ -3,11 +3,8 @@
 
 use anyhow::Context;
 use cap::Cap;
-use clap::error::ErrorFormatter;
-use clap::error::RichFormatter;
 use clap::CommandFactory;
 use clap::FromArgMatches;
-use clap::Parser;
 use std::alloc;
 use std::ffi::OsString;
 use std::io::IsTerminal;
@@ -20,11 +17,9 @@ use tedge::ComponentOpt;
 use tedge::TEdgeCli;
 use tedge::TEdgeOpt;
 use tedge::TEdgeOptMulticall;
-use tedge_apt_plugin::AptCli;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use tedge_config::unconfigured_logger;
-use tedge_file_log_plugin::bin::FileLogCli;
 use tedge_file_log_plugin::bin::TEdgeConfigView;
 use tracing::log;
 
@@ -37,7 +32,9 @@ async fn main() -> anyhow::Result<()> {
         clap_complete::CompleteEnv::with_factory(TEdgeCli::command).complete();
 
         parse_multicall(&executable_name(), std::env::args_os())
-    });
+    })
+    .unwrap_or_else(|code| std::process::exit(code));
+
     match opt {
         TEdgeOptMulticall::Component(Component::TedgeMapper(opt)) => {
             let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;
@@ -131,38 +128,14 @@ fn executable_name() -> Option<String> {
     )
 }
 
-fn parse_multicall<Arg, Args>(executable_name: &Option<String>, args: Args) -> TEdgeOptMulticall
+fn parse_multicall<Arg, Args>(
+    executable_name: &Option<String>,
+    args: Args,
+) -> Result<TEdgeOptMulticall, i32>
 where
     Args: IntoIterator<Item = Arg>,
     Arg: Into<OsString> + Clone,
 {
-    if matches!(executable_name.as_deref(), Some("apt" | "tedge-apt-plugin")) {
-        // the apt plugin must be treated apart
-        // as we want to exit 1 and not 2 when the command line cannot be parsed
-        match AptCli::try_parse() {
-            Ok(apt) => return TEdgeOptMulticall::Component(Component::TedgeAptPlugin(apt)),
-            Err(e) => {
-                eprintln!("{e}");
-                std::process::exit(1);
-            }
-        }
-    }
-
-    if matches!(
-        executable_name.as_deref(),
-        Some("file" | "tedge-file-log-plugin")
-    ) {
-        // the file log plugin must be treated apart
-        // as we want to exit 1 and not 2 when the command line cannot be parsed
-        match FileLogCli::try_parse() {
-            Ok(cli) => return TEdgeOptMulticall::Component(Component::TedgeFileLogPlugin(cli)),
-            Err(e) => {
-                eprintln!("{e}");
-                std::process::exit(1);
-            }
-        }
-    }
-
     let cmd = TEdgeOptMulticall::command();
 
     let is_known_subcommand = executable_name
@@ -170,15 +143,30 @@ where
         .is_some_and(|name| cmd.find_subcommand(name).is_some());
     let cmd = cmd.multicall(is_known_subcommand);
 
-    let cmd2 = cmd.clone();
-    match TEdgeOptMulticall::from_arg_matches(&cmd.get_matches_from(args)) {
+    match cmd
+        .try_get_matches_from(args)
+        .and_then(|matches| TEdgeOptMulticall::from_arg_matches(&matches))
+    {
         Ok(TEdgeOptMulticall::Tedge(TEdgeCli { cmd, common })) => {
-            redirect_if_multicall(cmd, common)
+            Ok(redirect_if_multicall(cmd, common))
         }
-        Ok(t) => t,
+        Ok(t) => Ok(t),
         Err(e) => {
-            eprintln!("{}", RichFormatter::format_error(&e.with_cmd(&cmd2)));
-            std::process::exit(1);
+            let _ = e.print();
+
+            if e.exit_code() == 0 {
+                // e.g. --help was passed
+                Err(0)
+            } else if matches!(
+                executable_name.as_deref(),
+                Some("file" | "tedge-file-log-plugin" | "apt" | "tedge-apt-plugin")
+            ) {
+                // Adhere to the plugin specification, which requires exit code 1 for invalid commands
+                Err(1)
+            } else {
+                // For other commands, return the exit code from clap
+                Err(e.exit_code())
+            }
         }
     }
 }
@@ -203,7 +191,7 @@ mod tests {
     #[test]
     fn launching_a_mapper() {
         let exec = Some("tedge-mapper".to_string());
-        let cmd = parse_multicall(&exec, ["tedge-mapper", "c8y"]);
+        let cmd = parse_multicall(&exec, ["tedge-mapper", "c8y"]).unwrap();
         assert!(matches!(
             cmd,
             TEdgeOptMulticall::Component(Component::TedgeMapper(_))
@@ -213,7 +201,7 @@ mod tests {
     #[test]
     fn using_tedge_to_launch_a_mapper() {
         let exec = Some("tedge".to_string());
-        let cmd = parse_multicall(&exec, ["tedge", "run", "tedge-mapper", "c8y"]);
+        let cmd = parse_multicall(&exec, ["tedge", "run", "tedge-mapper", "c8y"]).unwrap();
         assert!(matches!(
             cmd,
             TEdgeOptMulticall::Component(Component::TedgeMapper(_))
@@ -230,12 +218,31 @@ mod tests {
     fn setting_config_dir(cmd_line: &'static str) {
         let args: Vec<&str> = cmd_line.split(' ').collect();
         let exec = Some(args.get(0).unwrap().to_string());
-        let cmd = parse_multicall(&exec, args);
+        let cmd = parse_multicall(&exec, args).unwrap();
         match cmd {
             TEdgeOptMulticall::Component(Component::TedgeMapper(mapper)) => {
                 assert_eq!(mapper.common.config_dir, "/some/dir")
             }
             _ => panic!(),
         }
+    }
+
+    #[test_case("apt --help", 0)]
+    #[test_case("apt", 1)]
+    #[test_case("apt list excessive arguments", 1)]
+    #[test_case("tedge-apt-plugin --help", 0)]
+    #[test_case("tedge-apt-plugin unknownarg", 1)]
+    #[test_case("file unknownarg", 1)]
+    #[test_case("file", 1)]
+    #[test_case("tedge-file-log-plugin unknownarg", 1)]
+    #[test_case("tedge unknown", 2)]
+    #[test_case("tedge --help", 0)]
+    #[test_case("tedge", 2)]
+    fn subcommands_exit_with_expected_codes(cmd_line: &'static str, expected_exit_code: i32) {
+        let args: Vec<&str> = cmd_line.split(' ').collect();
+        let exec = Some(args.get(0).unwrap().to_string());
+        let res = parse_multicall(&exec, args);
+        assert!(res.is_err());
+        assert_eq!(res.err().unwrap(), expected_exit_code);
     }
 }
