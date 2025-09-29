@@ -43,22 +43,16 @@ fn prepare() -> Result<TempTedgeDir, anyhow::Error> {
     let plugin_script = r#"#!/bin/bash
 case "$1" in
     "list")
-        echo ":::begin-tedge:::"
         echo "type_one"
         echo "type_two"
-        echo ":::end-tedge:::"
         ;;
     "get")
         case "$2" in
             "type_one")
-                echo ":::begin-tedge:::"
                 echo "Sample type_one log content"
-                echo ":::end-tedge:::"
                 ;;
             "type_two")
-                echo ":::begin-tedge:::"
                 echo "Some content"
-                echo ":::end-tedge:::"
                 ;;
             *)
                 # Simulate no logs found for unknown types

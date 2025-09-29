@@ -1,9 +1,7 @@
 use super::error::LogManagementError;
 use super::LogManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
-use crate::plugin::Plugin;
 use crate::plugin_manager::ExternalPlugins;
-use crate::plugin_manager::Plugins;
 use async_trait::async_trait;
 use log::debug;
 use log::error;

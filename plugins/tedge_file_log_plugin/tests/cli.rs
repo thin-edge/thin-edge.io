@@ -70,10 +70,8 @@ fn list_command() {
         .arg("list")
         .assert()
         .success()
-        .stdout(contains(":::begin-tedge:::"))
         .stdout(contains("app"))
-        .stdout(contains("service"))
-        .stdout(contains(":::end-tedge:::"));
+        .stdout(contains("service"));
 }
 
 #[test]
@@ -85,26 +83,10 @@ fn get_command_basic() {
         .args(["get", "app"])
         .assert()
         .success()
-        .stdout(contains(":::begin-tedge:::"))
         .stdout(contains("INFO Application started"))
         .stdout(contains("DEBUG Loading configuration"))
         .stdout(contains("INFO Processing request"))
-        .stdout(contains("ERROR Request timeout"))
-        .stdout(contains(":::end-tedge:::"));
-}
-
-#[test]
-fn get_command_with_filter() {
-    let (_temp_dir, config_dir) = setup();
-
-    let mut cmd = Command::cargo_bin(BINARY_NAME).unwrap();
-    cmd.args(["--config-dir", &config_dir])
-        .args(["get", "service", "--filter", "ERROR"])
-        .assert()
-        .success()
-        .stdout(contains("ERROR Service1 database connection failed"))
-        .stdout(contains("ERROR Service2 database connection failed"))
-        .stdout(contains("INFO").not());
+        .stdout(contains("ERROR Request timeout"));
 }
 
 #[test]

@@ -1,16 +1,12 @@
 #!/bin/bash
 case "$1" in
     "list")
-        echo ":::begin-tedge:::"
         echo "fake_log"
-        echo ":::end-tedge:::"
         ;;
     "get")
         case "$2" in
             "fake_log")
-                echo ":::begin-tedge:::"
-                echo "Some content"
-                echo ":::end-tedge:::"
+                echo "Fake content"
                 ;;
             *)
                 # Simulate no logs found for unknown types

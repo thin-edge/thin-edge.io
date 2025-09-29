@@ -43,10 +43,6 @@ pub enum PluginOp {
         #[clap(long = "until")]
         until: Option<String>,
 
-        /// Filter text to search for in logs
-        #[clap(long = "filter")]
-        filter: Option<String>,
-
         /// Maximum number of lines to retrieve from the end
         #[clap(long = "tail")]
         tail: Option<usize>,
@@ -85,11 +81,9 @@ pub fn run(cli: FileLogCli, plugin_config: TEdgeConfigView) -> anyhow::Result<()
     match cli.operation {
         PluginOp::List => match plugin.list(None) {
             Ok(types) => {
-                println!(":::begin-tedge:::");
                 for log_type in types {
                     println!("{}", log_type);
                 }
-                println!(":::end-tedge:::");
                 Ok(())
             }
             Err(err) => {
@@ -101,7 +95,6 @@ pub fn run(cli: FileLogCli, plugin_config: TEdgeConfigView) -> anyhow::Result<()
             log_type,
             since,
             until,
-            filter,
             tail,
         } => {
             let since_date = if let Some(since_str) = since {
@@ -128,17 +121,15 @@ pub fn run(cli: FileLogCli, plugin_config: TEdgeConfigView) -> anyhow::Result<()
                 None
             };
 
-            match plugin.get(&log_type, since_date, until_date, filter.as_deref(), tail) {
+            match plugin.get(&log_type, since_date, until_date, tail) {
                 Ok(log_path) => {
                     let src = File::open(&log_path)?;
                     let reader = BufReader::new(src);
 
-                    println!(":::begin-tedge:::");
                     for line in reader.lines() {
                         let line = line?;
                         println!("{}", line);
                     }
-                    println!(":::end-tedge:::");
                     Ok(())
                 }
                 Err(err) => {

@@ -1,5 +1,4 @@
 use crate::error::LogManagementError;
-use async_trait::async_trait;
 use camino::Utf8Path;
 use log::warn;
 use std::fs::File;
@@ -12,23 +11,8 @@ use tedge_api::LoggedCommand;
 use tedge_config::SudoCommandBuilder;
 use time::OffsetDateTime;
 
-#[async_trait]
-pub trait Plugin {
-    async fn list(
-        &self,
-        command_log: Option<&mut CommandLog>,
-    ) -> Result<Vec<String>, LogManagementError>;
-
-    async fn get(
-        &self,
-        log_type: &str,
-        output_file_path: &Utf8Path,
-        since: Option<OffsetDateTime>,
-        until: Option<OffsetDateTime>,
-        filter_text: Option<&str>,
-        lines: Option<usize>,
-    ) -> Result<(), LogManagementError>;
-}
+pub const LIST: &str = "list";
+const GET: &str = "get";
 
 #[derive(Debug)]
 pub struct ExternalPluginCommand {
@@ -80,14 +64,8 @@ impl ExternalPluginCommand {
             reason: format!("{}", err),
         }
     }
-}
 
-pub const LIST: &str = "list";
-const GET: &str = "get";
-
-#[async_trait]
-impl Plugin for ExternalPluginCommand {
-    async fn list(
+    pub(crate) async fn list(
         &self,
         command_log: Option<&mut CommandLog>,
     ) -> Result<Vec<String>, LogManagementError> {
@@ -106,20 +84,14 @@ impl Plugin for ExternalPluginCommand {
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         let mut log_types = vec![];
-        let mut in_tedge_block = false;
         for line in stdout.lines() {
-            match line {
-                ":::begin-tedge:::" => in_tedge_block = true,
-                ":::end-tedge:::" => break,
-                _ if in_tedge_block => log_types.push(line.trim().to_string()),
-                _ => (),
-            }
+            log_types.push(line.trim().to_string())
         }
 
         Ok(log_types)
     }
 
-    async fn get(
+    pub(crate) async fn get(
         &self,
         log_type: &str,
         output_file_path: &Utf8Path,
@@ -141,11 +113,6 @@ impl Plugin for ExternalPluginCommand {
             command.arg(until_time.unix_timestamp().to_string());
         }
 
-        if let Some(filter) = filter_text {
-            command.arg("--filter");
-            command.arg(filter);
-        }
-
         if let Some(line_count) = lines {
             command.arg("--tail");
             command.arg(line_count.to_string());
@@ -160,7 +127,6 @@ impl Plugin for ExternalPluginCommand {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut in_tedge_block = false;
         let file = File::create(output_file_path).map_err(|err| {
             self.plugin_error(format!(
                 "Failed to create plugin output file at {} due to {}",
@@ -170,19 +136,18 @@ impl Plugin for ExternalPluginCommand {
         let mut writer = std::io::BufWriter::new(&file);
 
         for line in stdout.lines() {
-            match line {
-                ":::begin-tedge:::" => in_tedge_block = true,
-                ":::end-tedge:::" => break,
-                _ if in_tedge_block => {
-                    writeln!(writer, "{}", line).map_err(|err| {
-                        self.plugin_error(format!(
-                            "Failed to write plugin output to {} due to {}",
-                            output_file_path, err
-                        ))
-                    })?;
+            if let Some(filter) = filter_text {
+                if !line.is_empty() && !line.contains(filter) {
+                    continue;
                 }
-                _ => continue,
             }
+
+            writeln!(writer, "{}", line).map_err(|err| {
+                self.plugin_error(format!(
+                    "Failed to write plugin output to {} due to {}",
+                    output_file_path, err
+                ))
+            })?;
         }
 
         writer.flush().map_err(|err| {

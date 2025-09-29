@@ -54,7 +54,7 @@ Dynamic plugin install
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Log Operation Attachment File Contains
     ...    ${operation}
-    ...    expected_pattern=.*Some content.*
+    ...    expected_pattern=.*Fake content.*
 
 Remove plugins dynamically
     ThinEdgeIO.Transfer To Device

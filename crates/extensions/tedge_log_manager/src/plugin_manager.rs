@@ -14,36 +14,12 @@ use tedge_config::SudoCommandBuilder;
 
 pub type PluginType = String;
 
-/// The main responsibility of a `LogPlugins` implementation is to retrieve the appropriate plugin for a given log type.
-pub trait Plugins {
-    type Plugin;
-
-    /// Return the plugin declared with the given name, if any.
-    fn by_plugin_type(&self, plugin_type: &str) -> Option<&Self::Plugin>;
-
-    fn get_all_plugin_types(&self) -> Vec<PluginType>;
-}
-
 #[derive(Debug)]
 pub struct ExternalPlugins {
     plugin_dirs: Vec<PathBuf>,
     plugin_map: BTreeMap<PluginType, ExternalPluginCommand>,
     sudo: SudoCommandBuilder,
     tmp_dir: Arc<Utf8Path>,
-}
-
-impl Plugins for ExternalPlugins {
-    type Plugin = ExternalPluginCommand;
-
-    fn by_plugin_type(&self, plugin_type: &str) -> Option<&Self::Plugin> {
-        self.plugin_map.get(plugin_type)
-    }
-
-    fn get_all_plugin_types(&self) -> Vec<PluginType> {
-        let mut plugin_types: Vec<PluginType> = self.plugin_map.keys().cloned().collect();
-        plugin_types.sort();
-        plugin_types
-    }
 }
 
 impl ExternalPlugins {
@@ -143,6 +119,16 @@ impl ExternalPlugins {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn by_plugin_type(&self, plugin_type: &str) -> Option<&ExternalPluginCommand> {
+        self.plugin_map.get(plugin_type)
+    }
+
+    pub(crate) fn get_all_plugin_types(&self) -> Vec<PluginType> {
+        let mut plugin_types: Vec<PluginType> = self.plugin_map.keys().cloned().collect();
+        plugin_types.sort();
+        plugin_types
     }
 
     pub fn is_empty(&self) -> bool {
