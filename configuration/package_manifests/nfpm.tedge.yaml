@@ -137,5 +137,3 @@ contents:
   - src: /usr/bin/tedge-file-log-plugin
     dst: /usr/lib/tedge/log-plugins/file
     type: symlink
-  - dst: /usr/local/lib/tedge/log-plugins
-    type: dir

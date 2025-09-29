@@ -76,6 +76,8 @@ impl TEdgeInitCmd {
         }
 
         let config_dir = &config.root_dir();
+        let tedge_plugins_root = Path::new("/usr/lib/tedge");
+        let user_plugins_root = Path::new("/usr/local/lib/tedge");
         let permissions = {
             PermissionEntry::new(
                 Some(self.user.clone()),
@@ -91,6 +93,9 @@ impl TEdgeInitCmd {
         create_directory(config_dir.join("sm-plugins"), &permissions).await?;
         create_directory(config_dir.join("device-certs"), &permissions).await?;
         create_directory(config_dir.join(".tedge-mapper-c8y"), &permissions).await?;
+
+        create_directory(tedge_plugins_root.join("log-plugins"), &permissions).await?;
+        create_directory(user_plugins_root.join("log-plugins"), &permissions).await?;
 
         create_directory(&config.logs.path, &permissions).await?;
         create_directory(&config.data.path, &permissions).await?;
