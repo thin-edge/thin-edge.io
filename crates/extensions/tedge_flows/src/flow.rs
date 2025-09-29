@@ -1,3 +1,6 @@
+use std::ops::Sub;
+use std::time::Duration;
+
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::stats::Counter;
@@ -292,11 +295,24 @@ impl DateTime {
         let tick_every_secs = tick_every.as_secs();
         tick_every_secs != 0 && (self.seconds % tick_every_secs == 0)
     }
+}
 
-    pub fn sub_duration(&self, duration: std::time::Duration) -> Self {
-        DateTime {
-            seconds: self.seconds - duration.as_secs(),
-            nanoseconds: self.nanoseconds,
+impl Sub<Duration> for DateTime {
+    type Output = DateTime;
+
+    fn sub(self, rhs: Duration) -> Self::Output {
+        if rhs.subsec_nanos() > self.nanoseconds {
+            let seconds = self.seconds - 1;
+            let nanoseconds = self.nanoseconds + 1_000_000_000 - rhs.subsec_nanos();
+            DateTime {
+                seconds: seconds - rhs.as_secs(),
+                nanoseconds,
+            }
+        } else {
+            DateTime {
+                seconds: self.seconds - rhs.as_secs(),
+                nanoseconds: self.nanoseconds - rhs.subsec_nanos(),
+            }
         }
     }
 }
