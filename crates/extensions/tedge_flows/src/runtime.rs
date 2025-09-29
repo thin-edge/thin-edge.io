@@ -244,7 +244,7 @@ impl MessageProcessor {
                 } = &flow.input
                 {
                     if timestamp.tick_now(*input_frequency) {
-                        let cutoff_time = timestamp.sub_duration(*input_span);
+                    let cutoff_time = timestamp - *input_span;
                         let drained_messages = self
                             .database
                             .drain_older_than(cutoff_time, input_series)
