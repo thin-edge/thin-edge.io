@@ -42,10 +42,6 @@ pub enum PluginOp {
         /// Filter logs up to this date
         #[clap(long = "until")]
         until: Option<String>,
-
-        /// Maximum number of lines to retrieve from the end
-        #[clap(long = "tail")]
-        tail: Option<usize>,
     },
 }
 
@@ -95,7 +91,6 @@ pub fn run(cli: FileLogCli, plugin_config: TEdgeConfigView) -> anyhow::Result<()
             log_type,
             since,
             until,
-            tail,
         } => {
             let since_date = if let Some(since_str) = since {
                 match parse_date(&since_str) {
@@ -121,7 +116,7 @@ pub fn run(cli: FileLogCli, plugin_config: TEdgeConfigView) -> anyhow::Result<()
                 None
             };
 
-            match plugin.get(&log_type, since_date, until_date, tail) {
+            match plugin.get(&log_type, since_date, until_date) {
                 Ok(log_path) => {
                     let src = File::open(&log_path)?;
                     let reader = BufReader::new(src);

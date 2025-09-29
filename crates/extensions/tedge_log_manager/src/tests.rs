@@ -49,7 +49,14 @@ case "$1" in
     "get")
         case "$2" in
             "type_one")
-                echo "Sample type_one log content"
+                echo "DEBUG: Starting application"
+                echo "INFO: Application initialized"
+                echo "ERROR: Database connection failed"
+                echo "DEBUG: Retrying database connection"
+                echo "INFO: Database connected successfully"
+                echo "WARN: Low memory detected"
+                echo "DEBUG: Garbage collection started"
+                echo "INFO: Processing complete"
                 ;;
             "type_two")
                 echo "Some content"
@@ -248,6 +255,197 @@ async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> 
             Some(MqttMessage::new(
                 &logfile_topic,
                 r#"{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_two-1234","type":"type_two","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
+            ).with_retain())
+        );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn filter_logs_by_line_count() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.path()).await;
+
+    let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/5678");
+
+    // Let's ignore the init message sent on start
+    mqtt.skip(1).await;
+
+    // When a log request is received with lines limit of 3
+    let log_request = r#"
+        {
+            "status": "init",
+            "tedgeUrl": "http://127.0.0.1:3000/te/v1/files/main/log_upload/type_one-5678",
+            "type": "type_one",
+            "dateFrom": "1970-01-01T00:00:00+00:00",
+            "dateTo": "1970-01-01T00:00:30+00:00",
+            "lines": 3
+        }"#;
+    mqtt.send(MqttMessage::new(&logfile_topic, log_request).with_retain())
+        .await?;
+
+    // The log manager notifies that the request has been received and is processed
+    let executing_message = mqtt.recv().await;
+    assert_eq!(
+        executing_message,
+        Some(MqttMessage::new(
+                &logfile_topic,
+                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_one-5678","type":"type_one","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":3}"#
+            ).with_retain())
+        );
+    // This message being published over MQTT is also received by the log-manager itself
+    mqtt.send(executing_message.unwrap()).await?;
+
+    // Assert log upload request.
+    let (topic, upload_request) = uploader.recv().await.unwrap();
+
+    assert_eq!(Topic::new_unchecked(&topic), logfile_topic);
+
+    // Verify the uploaded file contains only the last 3 lines
+    let file_content = read_to_string(&upload_request.file_path).unwrap();
+    let lines: Vec<&str> = file_content.lines().collect();
+    assert_eq!(lines.len(), 3);
+    assert!(lines.contains(&"WARN: Low memory detected"));
+    assert!(lines.contains(&"DEBUG: Garbage collection started"));
+    assert!(lines.contains(&"INFO: Processing complete"));
+
+    // Simulate upload is completed.
+    let upload_response = UploadResponse::new(&upload_request.url, upload_request.file_path);
+    uploader.send((topic, Ok(upload_response))).await?;
+
+    // Finally, the log manager notifies that request was successfully processed
+    assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(
+                &logfile_topic,
+                r#"{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_one-5678","type":"type_one","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":3}"#
+            ).with_retain())
+        );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn filter_logs_by_search_text() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.path()).await;
+
+    let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/9012");
+
+    // Let's ignore the init message sent on start
+    mqtt.skip(1).await;
+
+    // When a log request is received with search text filter for "ERROR"
+    let log_request = r#"
+        {
+            "status": "init",
+            "tedgeUrl": "http://127.0.0.1:3000/te/v1/files/main/log_upload/type_one-9012",
+            "type": "type_one",
+            "dateFrom": "1970-01-01T00:00:00+00:00",
+            "dateTo": "1970-01-01T00:00:30+00:00",
+            "lines": 1000,
+            "searchText": "ERROR"
+        }"#;
+    mqtt.send(MqttMessage::new(&logfile_topic, log_request).with_retain())
+        .await?;
+
+    // The log manager notifies that the request has been received and is processed
+    let executing_message = mqtt.recv().await;
+    assert_eq!(
+        executing_message,
+        Some(MqttMessage::new(
+                &logfile_topic,
+                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_one-9012","type":"type_one","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","searchText":"ERROR","lines":1000}"#
+            ).with_retain())
+        );
+    // This message being published over MQTT is also received by the log-manager itself
+    mqtt.send(executing_message.unwrap()).await?;
+
+    // Assert log upload request.
+    let (topic, upload_request) = uploader.recv().await.unwrap();
+
+    assert_eq!(Topic::new_unchecked(&topic), logfile_topic);
+
+    // Verify the uploaded file contains only lines with "ERROR"
+    let file_content = read_to_string(&upload_request.file_path).unwrap();
+    let lines: Vec<&str> = file_content.lines().collect();
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0], "ERROR: Database connection failed");
+
+    // Simulate upload is completed.
+    let upload_response = UploadResponse::new(&upload_request.url, upload_request.file_path);
+    uploader.send((topic, Ok(upload_response))).await?;
+
+    // Finally, the log manager notifies that request was successfully processed
+    assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(
+                &logfile_topic,
+                r#"{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_one-9012","type":"type_one","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","searchText":"ERROR","lines":1000}"#
+            ).with_retain())
+        );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn filter_logs_by_search_text_and_line_count() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.path()).await;
+
+    let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/3456");
+
+    // Let's ignore the init message sent on start
+    mqtt.skip(1).await;
+
+    // When a log request is received with both search text filter and line count
+    let log_request = r#"
+        {
+            "status": "init",
+            "tedgeUrl": "http://127.0.0.1:3000/te/v1/files/main/log_upload/type_one-3456",
+            "type": "type_one",
+            "dateFrom": "1970-01-01T00:00:00+00:00",
+            "dateTo": "1970-01-01T00:00:30+00:00",
+            "lines": 2,
+            "searchText": "DEBUG"
+        }"#;
+    mqtt.send(MqttMessage::new(&logfile_topic, log_request).with_retain())
+        .await?;
+
+    // The log manager notifies that the request has been received and is processed
+    let executing_message = mqtt.recv().await;
+    assert_eq!(
+        executing_message,
+        Some(MqttMessage::new(
+                &logfile_topic,
+                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_one-3456","type":"type_one","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","searchText":"DEBUG","lines":2}"#
+            ).with_retain())
+        );
+    // This message being published over MQTT is also received by the log-manager itself
+    mqtt.send(executing_message.unwrap()).await?;
+
+    // Assert log upload request.
+    let (topic, upload_request) = uploader.recv().await.unwrap();
+
+    assert_eq!(Topic::new_unchecked(&topic), logfile_topic);
+
+    // Verify the uploaded file contains only the last 2 lines that match "DEBUG"
+    let file_content = read_to_string(&upload_request.file_path).unwrap();
+    let lines: Vec<&str> = file_content.lines().collect();
+    assert_eq!(lines.len(), 2);
+    assert!(lines.contains(&"DEBUG: Retrying database connection"));
+    assert!(lines.contains(&"DEBUG: Garbage collection started"));
+
+    // Simulate upload is completed.
+    let upload_response = UploadResponse::new(&upload_request.url, upload_request.file_path);
+    uploader.send((topic, Ok(upload_response))).await?;
+
+    // Finally, the log manager notifies that request was successfully processed
+    assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(
+                &logfile_topic,
+                r#"{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_one-3456","type":"type_one","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","searchText":"DEBUG","lines":2}"#
             ).with_retain())
         );
 

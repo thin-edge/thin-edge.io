@@ -1,6 +1,7 @@
 use crate::error::LogManagementError;
 use camino::Utf8Path;
 use log::warn;
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -113,11 +114,6 @@ impl ExternalPluginCommand {
             command.arg(until_time.unix_timestamp().to_string());
         }
 
-        if let Some(line_count) = lines {
-            command.arg("--tail");
-            command.arg(line_count.to_string());
-        }
-
         warn!("Fetching log using command: {}", command);
         let output = self.execute(command, None).await?;
 
@@ -135,13 +131,24 @@ impl ExternalPluginCommand {
         })?;
         let mut writer = std::io::BufWriter::new(&file);
 
+        let mut filtered_lines = VecDeque::new();
+
         for line in stdout.lines() {
             if let Some(filter) = filter_text {
-                if !line.is_empty() && !line.contains(filter) {
+                if !filter.is_empty() && !line.contains(filter) {
                     continue;
                 }
             }
 
+            if let Some(limit) = lines {
+                if filtered_lines.len() == limit {
+                    filtered_lines.pop_front();
+                }
+            }
+            filtered_lines.push_back(line);
+        }
+
+        for line in filtered_lines {
             writeln!(writer, "{}", line).map_err(|err| {
                 self.plugin_error(format!(
                     "Failed to write plugin output to {} due to {}",

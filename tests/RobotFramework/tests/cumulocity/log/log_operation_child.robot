@@ -20,7 +20,7 @@ Successful log operation
     ...    description=Log file request
     ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"first","maximumLines":10}}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    Log File Contents Should Be Equal    ${operation}    filename: example.log\n1 first line\n
+    Log File Contents Should Be Equal    ${operation}    1 first line\n
 
 
 *** Keywords ***

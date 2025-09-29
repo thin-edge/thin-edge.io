@@ -1,5 +1,4 @@
 use assert_cmd::Command;
-use predicates::prelude::*;
 use predicates::str::contains;
 use std::fs;
 use std::fs::File;
@@ -108,20 +107,6 @@ fn get_command_since_and_until_parse_unix_timestamp() {
         ])
         .assert()
         .success();
-}
-
-#[test]
-fn get_command_with_tail() {
-    let (_temp_dir, config_dir) = setup();
-
-    let mut cmd = Command::cargo_bin(BINARY_NAME).unwrap();
-    cmd.args(["--config-dir", &config_dir])
-        .args(["get", "app", "--tail", "2"])
-        .assert()
-        .success()
-        .stdout(contains("INFO Processing request"))
-        .stdout(contains("ERROR Request timeout"))
-        .stdout(contains("DEBUG Loading configuration").not());
 }
 
 #[test]

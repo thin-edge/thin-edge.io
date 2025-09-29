@@ -18,8 +18,6 @@ pub fn new_read_logs(
     files: &[FileEntry],
     log_type: &str,
     date_from: OffsetDateTime,
-    lines: usize,
-    search_text: &Option<String>,
     tmp_dir: &Utf8Path,
 ) -> Result<Utf8PathBuf, LogRetrievalError> {
     //filter logs on type and date
@@ -28,15 +26,10 @@ pub fn new_read_logs(
     let temp_path = tmp_dir.join(format!("{log_type}-{}", rand::random::<u128>()));
     let mut temp_file = File::create(&temp_path)?;
 
-    let mut line_counter = 0usize;
     for logfile in logfiles_to_read {
-        match read_log_content(logfile.as_path(), line_counter, lines, search_text) {
-            Ok((lines, file_content)) => {
-                line_counter = lines;
+        match read_log_content(logfile.as_path()) {
+            Ok(file_content) => {
                 temp_file.write_all(file_content.as_bytes())?;
-            }
-            Err(_error @ LogRetrievalError::MaxLines) => {
-                break;
             }
             Err(error) => {
                 temp_file.flush()?;
@@ -50,52 +43,30 @@ pub fn new_read_logs(
     Ok(temp_path)
 }
 
-fn read_log_content(
-    logfile: &Path,
-    mut line_counter: usize,
-    max_lines: usize,
-    search_text: &Option<String>,
-) -> Result<(usize, String), LogRetrievalError> {
-    if line_counter >= max_lines {
-        Err(LogRetrievalError::MaxLines)
-    } else {
-        let mut file_content_as_vec = VecDeque::new();
-        let file = std::fs::File::open(logfile)?;
-        let file_name = format!(
-            "filename: {}\n",
-            logfile.file_name().unwrap().to_str().unwrap() // never fails because we check file exists
-        );
-        let reader = EasyReader::new(file);
-        match reader {
-            Ok(mut reader) => {
-                reader.eof();
-                while line_counter < max_lines {
-                    if let Some(haystack) = reader.prev_line()? {
-                        if let Some(needle) = &search_text {
-                            if haystack.contains(needle) {
-                                file_content_as_vec.push_front(format!("{}\n", haystack));
-                                line_counter += 1;
-                            }
-                        } else {
-                            file_content_as_vec.push_front(format!("{}\n", haystack));
-                            line_counter += 1;
-                        }
-                    } else {
-                        // there are no more lines.prev_line()
-                        break;
-                    }
-                }
-
-                file_content_as_vec.push_front(file_name);
-
-                let file_content = file_content_as_vec
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<String>();
-                Ok((line_counter, file_content))
+fn read_log_content(logfile: &Path) -> Result<String, LogRetrievalError> {
+    let mut file_content = VecDeque::new();
+    let file = std::fs::File::open(logfile)?;
+    let file_name = format!(
+        "filename: {}\n",
+        logfile.file_name().unwrap().to_str().unwrap() // never fails because we check file exists
+    );
+    let reader = EasyReader::new(file);
+    match reader {
+        Ok(mut reader) => {
+            reader.eof();
+            while let Some(line) = reader.prev_line()? {
+                file_content.push_front(format!("{}\n", line));
             }
-            Err(_err) => Ok((line_counter, String::new())),
+
+            file_content.push_front(file_name);
+
+            let file_content = file_content
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<String>();
+            Ok(file_content)
         }
+        Err(_err) => Ok(String::new()),
     }
 }
 
@@ -312,15 +283,7 @@ mod tests {
     ///     this is the fifth line.
     /// ]
     ///
-    /// Requesting back only 4. Note that because we read the logs in reverse order, the first line
-    /// should be omitted. The result should be:
-    /// [
-    ///     this is the second line.
-    ///     this is the third line.
-    ///     this is the fourth line.
-    ///     this is the fifth line.
-    /// ]
-    ///
+    /// Now returns all lines since filtering is done by the agent.
     fn test_read_log_content() {
         let (tempdir, _) = prepare();
         let tempdir_path = tempdir.path().to_str().unwrap();
@@ -336,15 +299,9 @@ mod tests {
         log_file.write_all(data.as_bytes()).unwrap();
         log_file.flush().unwrap();
 
-        let line_counter = 0;
-        let max_lines = 4;
-        let filter_text = None;
+        let result = read_log_content(Path::new(file_path)).unwrap();
 
-        let (line_counter, result) =
-            read_log_content(Path::new(file_path), line_counter, max_lines, &filter_text).unwrap();
-
-        assert_eq!(line_counter, max_lines);
-        assert_eq!(result, "filename: file_a_one\nthis is the second line.\nthis is the third line.\nthis is the forth line.\nthis is the fifth line.\n");
+        assert_eq!(result, "filename: file_a_one\nthis is the first line.\nthis is the second line.\nthis is the third line.\nthis is the forth line.\nthis is the fifth line.\n");
     }
 
     #[test]
@@ -361,11 +318,7 @@ mod tests {
     ///
     /// file_d is the newest file, so its logs are read first. then file_b.
     ///
-    /// Because only 7 lines are requested (and each file has 5 lines), the expected
-    /// result is:
-    ///
-    /// - all logs from file_d (5)
-    /// - last two logs from file_b (2)
+    /// Now returns all lines since filtering is done by the agent.
     fn test_read_log_content_multiple_files() {
         let (tempdir, files) = prepare();
         let tempdir_path = tempdir.path().to_str().unwrap();
@@ -396,8 +349,6 @@ mod tests {
             &files,
             "type_one",
             datetime!(1970-01-01 00:00:03 +00:00),
-            7,
-            &None,
             tempdir.utf8_path(),
         )
         .unwrap();
@@ -405,6 +356,6 @@ mod tests {
         assert_eq!(temp_path.parent().unwrap(), tempdir.path());
 
         let result = std::fs::read_to_string(temp_path).unwrap();
-        assert_eq!(result, String::from("filename: file_d_one\nthis is the first line of file_d_one.\nthis is the second line of file_d_one.\nthis is the third line of file_d_one.\nthis is the forth line of file_d_one.\nthis is the fifth line of file_d_one.\nfilename: file_b_one\nthis is the forth line of file_b_one.\nthis is the fifth line of file_b_one.\n"))
+        assert_eq!(result, String::from("filename: file_d_one\nthis is the first line of file_d_one.\nthis is the second line of file_d_one.\nthis is the third line of file_d_one.\nthis is the forth line of file_d_one.\nthis is the fifth line of file_d_one.\nfilename: file_b_one\nthis is the first line of file_b_one.\nthis is the second line of file_b_one.\nthis is the third line of file_b_one.\nthis is the forth line of file_b_one.\nthis is the fifth line of file_b_one.\n"))
     }
 }

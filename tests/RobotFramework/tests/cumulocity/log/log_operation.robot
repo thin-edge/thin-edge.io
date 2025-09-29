@@ -20,7 +20,7 @@ Log operation ignore date range when log file has a static path
     ...    description=Log file request
     ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"first","maximumLines":10}}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    Log File Contents Should Be Equal    ${operation}    filename: example.log\n1 first line\n
+    Log File Contents Should Be Equal    ${operation}    1 first line\n
 
 Request with non-existing log type
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
@@ -49,7 +49,7 @@ Trigger log_upload operation from another operation
     ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/te/v1/files/${DEVICE_SN}/sub_log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"repeated","lines":3}
     ${log_excerpt}=    Execute Command
     ...    curl http://127.0.0.1:8000/te/v1/files/${DEVICE_SN}/sub_log_upload/example-1234
-    Should Be Equal    ${log_excerpt}    filename: example.log\n13 repeated line\n14 repeated line\n15 repeated line\n
+    Should Be Equal    ${log_excerpt}    13 repeated line\n14 repeated line\n15 repeated line\n
 
 Trigger custom log_upload operation
     Customize log_upload operation
@@ -70,7 +70,7 @@ Log file request limits maximum number of lines with text filter
     ...    description=Log file request
     ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"repeated line","maximumLines":2}}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    Log File Contents Should Be Equal    ${operation}    filename: example.log\n14 repeated line\n15 repeated line\n
+    Log File Contents Should Be Equal    ${operation}    14 repeated line\n15 repeated line\n
 
 Log file request limits maximum number of lines without text filter
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000

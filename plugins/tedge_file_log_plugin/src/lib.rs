@@ -37,19 +37,10 @@ impl FileLogPlugin {
         log_type: &str,
         since: Option<OffsetDateTime>,
         _until: Option<OffsetDateTime>,
-        lines: Option<usize>,
     ) -> Result<Utf8PathBuf, LogManagementError> {
         let date_from = since.unwrap_or(OffsetDateTime::UNIX_EPOCH);
-        let lines = lines.unwrap_or(1000);
 
-        let log_path = new_read_logs(
-            &self.config.files,
-            log_type,
-            date_from,
-            lines,
-            &None,
-            &self.tmp_dir,
-        )?;
+        let log_path = new_read_logs(&self.config.files, log_type, date_from, &self.tmp_dir)?;
 
         Ok(log_path)
     }

@@ -9,7 +9,6 @@ usage() {
     echo "  get <log-type>                      Get logs for the specified type"
     echo "      [--since <timestamp>]"
     echo "      [--until <timestamp>]"
-    echo "      [--tail <lines-from-end>]"
     exit 1
 }
 
@@ -25,7 +24,6 @@ get_logs() {
     
     local since_arg=""
     local until_arg=""
-    local tail_arg=""
     
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -35,10 +33,6 @@ get_logs() {
                 ;;
             --until)
                 until_arg="--until=@$2"
-                shift 2
-                ;;
-            --tail)
-                tail_arg="--lines=$2"
                 shift 2
                 ;;
             *)
@@ -56,10 +50,6 @@ get_logs() {
     
     if [[ -n "$until_arg" ]]; then
         cmd="$cmd $until_arg"
-    fi
-    
-    if [[ -n "$tail_arg" ]]; then
-        cmd="$cmd $tail_arg"
     fi
     
     eval "$cmd"
