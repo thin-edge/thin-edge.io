@@ -2,28 +2,27 @@ use crate::error::LogManagementError;
 use crate::plugin::ExternalPluginCommand;
 use crate::plugin::LIST;
 use camino::Utf8Path;
-use log::error;
-use log::info;
+use camino::Utf8PathBuf;
 use std::collections::BTreeMap;
-use std::fs;
 use std::io::ErrorKind;
-use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use tedge_config::SudoCommandBuilder;
+use tracing::error;
+use tracing::info;
 
 pub type PluginType = String;
 
 #[derive(Debug)]
 pub struct ExternalPlugins {
-    plugin_dirs: Vec<PathBuf>,
+    plugin_dirs: Vec<Utf8PathBuf>,
     plugin_map: BTreeMap<PluginType, ExternalPluginCommand>,
     sudo: SudoCommandBuilder,
     tmp_dir: Arc<Utf8Path>,
 }
 
 impl ExternalPlugins {
-    pub fn new(plugin_dirs: Vec<PathBuf>, sudo_enabled: bool, tmp_dir: Arc<Utf8Path>) -> Self {
+    pub fn new(plugin_dirs: Vec<Utf8PathBuf>, sudo_enabled: bool, tmp_dir: Arc<Utf8Path>) -> Self {
         ExternalPlugins {
             plugin_dirs,
             plugin_map: BTreeMap::new(),
@@ -34,35 +33,47 @@ impl ExternalPlugins {
 
     pub async fn load(&mut self) -> Result<(), LogManagementError> {
         self.plugin_map.clear();
-
         for plugin_dir in &self.plugin_dirs {
-            let read_dir = match fs::read_dir(plugin_dir) {
+            let entries = match plugin_dir.read_dir_utf8() {
                 Ok(entries) => entries,
                 Err(err) => {
                     error!(
-                        "Failed to read plugin directory {} due to: {}, skipping",
-                        plugin_dir.display(),
-                        err
+                        target: "log plugins",
+                        "Failed to read log plugin directory {plugin_dir} due to: {err}, skipping"
                     );
                     continue;
                 }
             };
 
-            for maybe_entry in read_dir {
+            for maybe_entry in entries {
                 let entry = match maybe_entry {
                     Ok(entry) => entry,
                     Err(err) => {
-                        error!(
-                            "Failed to read directory entry in {}: due to {}, skipping",
-                            plugin_dir.display(),
-                            err
+                        error!(target: "log plugins",
+                            "Failed to read log plugin directory entry in {plugin_dir}: due to {err}, skipping",
                         );
                         continue;
                     }
                 };
                 let path = entry.path();
                 if path.is_file() {
-                    let mut command = self.sudo.command(&path);
+                    let Some(plugin_name) = path.file_name() else {
+                        error!(
+                            target: "log plugins",
+                            "Failed to extract log plugin name from {path}, skipping",
+                        );
+                        continue;
+                    };
+                    if let Some(plugin) = self.plugin_map.get(plugin_name) {
+                        info!(
+                            target: "log plugins",
+                            "The log plugin {path} is overriden by {}, skipping",
+                            plugin.path.display()
+                        );
+                        continue;
+                    }
+
+                    let mut command = self.sudo.command(path);
 
                     match command
                         .arg(LIST)
@@ -71,49 +82,43 @@ impl ExternalPlugins {
                         .status()
                     {
                         Ok(code) if code.success() => {
-                            info!("Log plugin activated: {}", path.display());
+                            info!(target: "log plugins", "Log plugin activated: {path}");
                         }
 
                         // If the file is not executable or returned non 0 status code we assume it is not a valid log plugin and skip further processing.
                         Ok(_) => {
-                            error!(
-                            "File {} in log plugin directory does not support list operation and may not be a valid plugin, skipping.",
-                            path.display()
-                        );
+                            error!(target: "log plugins",
+                                "File {path} in log plugin directory does not support list operation and may not be a valid plugin, skipping."
+                            );
                             continue;
                         }
 
                         Err(err) if err.kind() == ErrorKind::PermissionDenied => {
                             error!(
-                                "File {} Permission Denied, is the file an executable?\n
-                            The file will not be registered as a log plugin.",
-                                path.display()
+                                target: "log plugins",
+                                "File {path} Permission Denied, is the file an executable?\n
+                                The file will not be registered as a log plugin."
                             );
                             continue;
                         }
 
                         Err(err) => {
                             error!(
-                                "An error occurred while trying to run: {}: {}\n
-                            The file will not be registered as a log plugin.",
-                                path.display(),
-                                err
+                                target: "log plugins",
+                                "An error occurred while trying to run: {path}: {err}\n
+                                The file will not be registered as a log plugin."
                             );
                             continue;
                         }
                     }
 
-                    if let Some(file_name) = path.file_name() {
-                        if let Some(plugin_name) = file_name.to_str() {
-                            let plugin = ExternalPluginCommand::new(
-                                plugin_name.to_string(),
-                                path.clone(),
-                                self.sudo.clone(),
-                                self.tmp_dir.clone(),
-                            );
-                            self.plugin_map.insert(plugin_name.into(), plugin);
-                        }
-                    }
+                    let plugin = ExternalPluginCommand::new(
+                        plugin_name.to_string(),
+                        path,
+                        self.sudo.clone(),
+                        self.tmp_dir.clone(),
+                    );
+                    self.plugin_map.insert(plugin_name.into(), plugin);
                 }
             }
         }

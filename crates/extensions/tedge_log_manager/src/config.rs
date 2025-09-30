@@ -22,7 +22,7 @@ pub struct LogManagerConfig {
     pub config_dir: PathBuf,
     pub tmp_dir: Arc<Utf8Path>,
     pub log_dir: Utf8PathBuf,
-    pub plugin_dirs: Vec<PathBuf>,
+    pub plugin_dirs: Vec<Utf8PathBuf>,
     pub plugin_config_dir: PathBuf,
     pub plugin_config_path: PathBuf,
     pub logtype_reload_topic: Topic,
@@ -36,7 +36,7 @@ pub struct LogManagerOptions {
     pub log_dir: Utf8PathBuf,
     pub mqtt_schema: MqttSchema,
     pub mqtt_device_topic_id: EntityTopicId,
-    pub plugin_dirs: Vec<PathBuf>,
+    pub plugin_dirs: Vec<Utf8PathBuf>,
 }
 
 impl LogManagerConfig {

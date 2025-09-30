@@ -10,7 +10,6 @@ mod tests;
 use crate::plugin_manager::ExternalPlugins;
 pub use actor::*;
 pub use config::*;
-use log::error;
 use std::path::PathBuf;
 use std::vec;
 use tedge_actors::Builder;
@@ -40,6 +39,7 @@ use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
 use tedge_utils::fs::AtomFileError;
 use toml::toml;
+use tracing::error;
 
 /// This is an actor builder.
 pub struct LogManagerBuilder {
@@ -136,14 +136,19 @@ impl LogManagerBuilder {
         move |message| {
             if !logfile_request_topic.accept(&message) {
                 error!(
-                    "Received unexpected message on topic: {}",
-                    message.topic.name
+                    target: "log plugins",
+                    "Received unexpected message on topic: {}", message.topic.name
                 );
                 return None;
             }
 
             LogUploadCmd::parse(&mqtt_schema, message)
-                .map_err(|err| error!("Incorrect log request payload: {}", err))
+                .map_err(|err| {
+                    error!(
+                        target: "log plugins",
+                        "Incorrect log request payload: {}", err
+                    )
+                })
                 .unwrap_or(None)
                 .map(|cmd| cmd.into())
         }
@@ -174,7 +179,7 @@ impl LogManagerBuilder {
     fn watched_directories(config: &LogManagerConfig) -> Vec<PathBuf> {
         let mut watch_dirs = vec![config.plugin_config_dir.clone()];
         for dir in &config.plugin_dirs {
-            watch_dirs.push(dir.clone());
+            watch_dirs.push(dir.into());
         }
         watch_dirs
     }

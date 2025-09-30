@@ -98,6 +98,7 @@ pub(crate) struct AgentConfig {
     pub fts_url: Arc<str>,
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
+    pub log_plugin_dirs: Vec<Utf8PathBuf>,
     entity_auto_register: bool,
     entity_store_clean_start: bool,
 }
@@ -187,6 +188,13 @@ impl AgentConfig {
 
         let entity_auto_register = tedge_config.agent.entity_store.auto_register;
         let entity_store_clean_start = tedge_config.agent.entity_store.clean_start;
+        let log_plugin_dirs = tedge_config
+            .log
+            .plugin_paths
+            .0
+            .iter()
+            .map(Utf8PathBuf::from)
+            .collect();
 
         Ok(Self {
             mqtt_config,
@@ -212,6 +220,7 @@ impl AgentConfig {
             is_sudo_enabled,
             service: tedge_config.service.clone(),
             capabilities,
+            log_plugin_dirs,
             entity_auto_register,
             entity_store_clean_start,
         })
@@ -366,10 +375,7 @@ impl Agent {
                 log_dir: self.config.log_dir,
                 mqtt_schema: mqtt_schema.clone(),
                 mqtt_device_topic_id: device_topic_id.clone(),
-                plugin_dirs: vec![
-                    "/usr/lib/tedge/log-plugins".into(),
-                    "/usr/local/lib/tedge/log-plugins".into(),
-                ],
+                plugin_dirs: self.config.log_plugin_dirs,
             })?;
             let mut log_actor = LogManagerBuilder::try_new(
                 log_manager_config,

@@ -13,12 +13,6 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true }
-easy_reader = { workspace = true }
-glob = { workspace = true }
-log = { workspace = true }
-rand = { workspace = true }
-regex = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
@@ -31,9 +25,9 @@ thiserror = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["macros"] }
 toml = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
-filetime = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
 time = { workspace = true, features = ["macros"] }

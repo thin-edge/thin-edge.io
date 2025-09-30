@@ -16,8 +16,8 @@ Test Tags           theme:c8y    theme:log
 Log operation journald plugin
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/plugins/journald
-    ...    /usr/local/lib/tedge/log-plugins/journald
-    Execute Command    chmod +x /usr/local/lib/tedge/log-plugins/journald
+    ...    /usr/share/tedge/log-plugins/journald
+    Execute Command    chmod +x /usr/share/tedge/log-plugins/journald
 
     Should Support Log File Types    tedge-agent::journald    includes=${True}
     ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
@@ -103,8 +103,8 @@ Non-existent plugin
 Dynamic plugin install and remove
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/plugins/dummy_plugin
-    ...    /usr/local/lib/tedge/log-plugins/dummy_plugin
-    Execute Command    chmod +x /usr/local/lib/tedge/log-plugins/dummy_plugin
+    ...    /usr/share/tedge/log-plugins/dummy_plugin
+    Execute Command    chmod +x /usr/share/tedge/log-plugins/dummy_plugin
     Should Support Log File Types    dummy_log::dummy_plugin    includes=${True}
 
     ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
@@ -119,7 +119,7 @@ Dynamic plugin install and remove
     ...    expected_pattern=.*Dummy content.*
 
     # Dynamically remove the plugin and verify subsequent operations for that plugin fails
-    Execute Command    rm /usr/local/lib/tedge/log-plugins/dummy_plugin
+    Execute Command    rm /usr/share/tedge/log-plugins/dummy_plugin
 
     ${operation}=    Create Log Request Operation
     ...    ${start_timestamp}
@@ -130,13 +130,37 @@ Dynamic plugin install and remove
     ...    timeout=120
     ...    failure_reason=.*Plugin not found.*
 
+Overriding a log plugin
+    # Add an extra location for local log plugins
+    Execute Command    mkdir -p /usr/local/tedge/log-plugins
+    Execute Command    tedge config set log.plugin_paths '/usr/local/tedge/log-plugins,/usr/share/tedge/log-plugins'
+    Execute Command    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/local/tedge/log-plugins/[a-zA-Z0-9]*' | sudo tee -a /etc/sudoers.d/tedge
+    Restart Service    tedge-agent
+    Should Support Log File Types    fake_log::fake_plugin    includes=${True}
+    # Override the fake plugin with a dummy plugin
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/dummy_plugin
+    ...    /usr/local/tedge/log-plugins/fake_plugin
+    Execute Command    chmod a+x /usr/local/tedge/log-plugins/fake_plugin
+    ${dummy_types}=    Execute Command    /usr/local/tedge/log-plugins/fake_plugin list
+    Should Be Equal    ${dummy_types}    dummy_log    strip_spaces=${True}
+    # The fake plugin has been overridden
+    Should Support Log File Types    dummy_log::fake_plugin    includes=${True}
+
+    ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=    Create Log Request Operation
+    ...    ${start_timestamp}
+    ...    ${end_timestamp}
+    ...    log_type=dummy_log::fake_plugin
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    Log Operation Attachment File Contains
+    ...    ${operation}
+    ...    expected_pattern=.*Dummy content.*
+
 Agent resilient to plugin dirs removal
     ${date_from}=    Get Unix Timestamp
-    Execute Command    rm -rf /usr/local/lib/tedge/log-plugins
-    Should Have MQTT Messages    c8y/s/us    date_from=${date_from}    message_pattern=118,software-management
-
-    ${date_from}=    Get Unix Timestamp
-    Execute Command    rm -rf /usr/lib/tedge/log-plugins
+    Execute Command    rm -rf /usr/share/tedge/log-plugins
     Should Have MQTT Messages    c8y/s/us    date_from=${date_from}    message_pattern=118,
 
     ${date_from}=    Get Unix Timestamp
@@ -154,8 +178,8 @@ Custom Setup
 
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/plugins/fake_plugin
-    ...    /usr/local/lib/tedge/log-plugins/fake_plugin
-    Execute Command    chmod +x /usr/local/lib/tedge/log-plugins/fake_plugin
+    ...    /usr/share/tedge/log-plugins/fake_plugin
+    Execute Command    chmod +x /usr/share/tedge/log-plugins/fake_plugin
 
 Create Log Request Operation
     [Arguments]    ${start_timestamp}

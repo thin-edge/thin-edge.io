@@ -5198,13 +5198,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "camino",
- "easy_reader",
- "filetime",
- "glob",
- "log",
- "rand 0.8.5",
- "regex",
- "serde",
  "serde_json",
  "tedge_actors",
  "tedge_api",
@@ -5218,6 +5211,7 @@ dependencies = [
  "time",
  "tokio",
  "toml 0.8.22",
+ "tracing",
 ]
 
 [[package]]

@@ -936,7 +936,13 @@ define_tedge_config! {
         /// The directories where diagnostic plugins are stored
         #[tedge_config(example = "/usr/share/diag-plugins,/etc/tedge/diag-plugins", default(value = "/usr/share/tedge/diag-plugins"))]
         plugin_paths: TemplatesSet,
-    }
+    },
+
+    log: {
+        /// The directories where log plugins are stored
+        #[tedge_config(example = "/usr/share/log-plugins,/etc/tedge/log-plugins", default(value = "/usr/share/tedge/log-plugins"))]
+        plugin_paths: TemplatesSet,
+    },
 }
 
 static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();

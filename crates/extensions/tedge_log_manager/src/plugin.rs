@@ -1,6 +1,5 @@
 use crate::error::LogManagementError;
 use camino::Utf8Path;
-use log::warn;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Write;
@@ -11,6 +10,7 @@ use tedge_api::CommandLog;
 use tedge_api::LoggedCommand;
 use tedge_config::SudoCommandBuilder;
 use time::OffsetDateTime;
+use tracing::debug;
 
 pub const LIST: &str = "list";
 const GET: &str = "get";
@@ -71,7 +71,10 @@ impl ExternalPluginCommand {
         command_log: Option<&mut CommandLog>,
     ) -> Result<Vec<String>, LogManagementError> {
         let command = self.command(LIST)?;
-        warn!("Listing log types using plugin command: {}", command);
+        debug!(
+            target: "log plugins",
+            "Listing log types using plugin command: {}", command
+        );
         let output = self.execute(command, command_log).await?;
 
         if !output.status.success() {
@@ -114,7 +117,10 @@ impl ExternalPluginCommand {
             command.arg(until_time.unix_timestamp().to_string());
         }
 
-        warn!("Fetching log using command: {}", command);
+        debug!(
+            target: "log plugins",
+            "Fetching log using command: {}", command
+        );
         let output = self.execute(command, None).await?;
 
         if !output.status.success() {
