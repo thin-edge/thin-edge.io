@@ -1,5 +1,3 @@
-//! Database abstraction for time-series message storage
-
 use crate::flow::DateTime;
 use crate::flow::Message;
 use anyhow::Context;
@@ -320,7 +318,7 @@ impl SqliteMeaDb {
                 series TEXT NOT NULL,
                 timestamp_nanos INTEGER NOT NULL,
                 topic TEXT NOT NULL,
-                payload TEXT NOT NULL,
+                payload BLOB NOT NULL,
                 message_timestamp_nanos INTEGER,
                 PRIMARY KEY (series, timestamp_nanos)
             )
@@ -433,7 +431,7 @@ impl MeaDb for SqliteMeaDb {
             let timestamp = Self::nanos_to_datetime(timestamp_nanos);
 
             let topic: String = row.get("topic");
-            let payload: String = row.get("payload");
+            let payload: Vec<u8> = row.get("payload");
             let message_timestamp_nanos: Option<i64> = row.get("message_timestamp_nanos");
 
             let message_timestamp = message_timestamp_nanos.map(Self::nanos_to_datetime);
@@ -485,7 +483,7 @@ impl MeaDb for SqliteMeaDb {
             let timestamp = Self::nanos_to_datetime(timestamp_nanos);
 
             let topic: String = row.get("topic");
-            let payload: String = row.get("payload");
+            let payload: Vec<u8> = row.get("payload");
             let message_timestamp_nanos: Option<i64> = row.get("message_timestamp_nanos");
 
             let message_timestamp = message_timestamp_nanos.map(Self::nanos_to_datetime);
