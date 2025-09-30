@@ -27,6 +27,7 @@ pub struct LogManagerConfig {
     pub plugin_config_path: PathBuf,
     pub logtype_reload_topic: Topic,
     pub logfile_request_topic: TopicFilter,
+    pub sudo_enabled: bool,
 }
 
 pub struct LogManagerOptions {
@@ -71,6 +72,7 @@ impl LogManagerConfig {
             plugin_config_path,
             logtype_reload_topic,
             logfile_request_topic,
+            sudo_enabled: true,
         })
     }
 }

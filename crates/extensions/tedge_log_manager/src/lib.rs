@@ -194,7 +194,7 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
 
         let external_plugins = ExternalPlugins::new(
             self.config.plugin_dirs.clone(),
-            true,
+            self.config.sudo_enabled,
             self.config.tmp_dir.clone(),
         );
 
