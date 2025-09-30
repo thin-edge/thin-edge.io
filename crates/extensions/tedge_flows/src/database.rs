@@ -1,5 +1,3 @@
-//! Database abstraction for time-series message storage
-
 use crate::flow::DateTime;
 use crate::flow::Message;
 use anyhow::Context;
