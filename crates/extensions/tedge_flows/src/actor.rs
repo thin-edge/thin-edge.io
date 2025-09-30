@@ -153,8 +153,7 @@ impl FlowsMapper {
         for (flow_id, flow_messages) in self.processor.on_interval(timestamp, now).await {
             match flow_messages {
                 Ok(messages) => {
-                    self.publish_messages(flow_id.clone(), messages)
-                        .await?;
+                    self.publish_messages(flow_id.clone(), messages).await?;
                 }
                 Err(err) => {
                     error!(target: "flows", "{flow_id}: {err}");
@@ -190,15 +189,18 @@ impl FlowsMapper {
                     }
                 }
                 FlowOutput::MeaDB { output_series } => {
-                    let messages = messages.into_iter().map(|m| (DateTime::now(), m)).collect::<Vec<_>>();
-                        if let Err(err) = self
-                            .processor
-                            .database
-                            .store_many(output_series, messages)
-                            .await
-                        {
-                            error!(target: "flows", "{flow_id}: fail to persist message: {err}");
-                        }
+                    let messages = messages
+                        .into_iter()
+                        .map(|m| (DateTime::now(), m))
+                        .collect::<Vec<_>>();
+                    if let Err(err) = self
+                        .processor
+                        .database
+                        .store_many(output_series, messages)
+                        .await
+                    {
+                        error!(target: "flows", "{flow_id}: fail to persist message: {err}");
+                    }
                 }
             }
         }

@@ -156,9 +156,7 @@ impl MessageProcessor {
         topics
     }
 
-    /// Get the next deadline for interval execution across all scripts
-    /// Returns None if no scripts have intervals configured
-    pub fn next_interval_deadline(&self) -> Option<tokio::time::Instant> {
+    fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + use<'_> {
         let script_deadlines = self
             .flows
             .values()
@@ -167,7 +165,13 @@ impl MessageProcessor {
 
         let drain_deadlines = self.flows.values().filter_map(|flow| flow.next_drain);
 
-        script_deadlines.chain(drain_deadlines).min()
+        script_deadlines.chain(drain_deadlines)
+    }
+
+    /// Get the next deadline for interval execution across all scripts and database drains
+    /// Returns None if no scripts have intervals configured and no database drains are scheduled
+    pub fn next_interval_deadline(&self) -> Option<tokio::time::Instant> {
+        self.deadlines().min()
     }
 
     /// Get the last deadline for interval execution across all scripts Returns
@@ -176,11 +180,7 @@ impl MessageProcessor {
     /// This is intended for `tedge flows test` to ensure it processes all
     /// intervals
     pub fn last_interval_deadline(&self) -> Option<tokio::time::Instant> {
-        self.flows
-            .values()
-            .flat_map(|flow| &flow.steps)
-            .filter_map(|step| step.script.next_execution)
-            .max()
+        self.deadlines().max()
     }
 
     pub async fn on_message(
@@ -239,19 +239,16 @@ impl MessageProcessor {
             if flow.should_drain_at(timestamp) {
                 if let FlowInput::MeaDB {
                     series: input_series,
-                    frequency: input_frequency,
                     max_age: input_span,
+                    ..
                 } = &flow.input
                 {
-                    if timestamp.tick_now(*input_frequency) {
                     let cutoff_time = timestamp - *input_span;
-                        let drained_messages = self
-                            .database
-                            .drain_older_than(cutoff_time, input_series)
-                            .await
-                            .map_err(DatabaseError::from);
-                        out_messages.push((flow_id.to_owned(), drained_messages));
-                    }
+                    let drained_messages = self
+                        .database
+                        .drain_older_than(cutoff_time, input_series)
+                        .await;
+                    out_messages.push((flow_id.to_owned(), drained_messages));
                 }
             }
         }
