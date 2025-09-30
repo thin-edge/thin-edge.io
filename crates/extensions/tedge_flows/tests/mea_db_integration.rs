@@ -679,8 +679,8 @@ async fn real_actor_database_to_mqtt_integration() {
     // Config: Database input → MQTT output with very short timings for fast test
     let drain_config = r#"
         input.db.series = "sensor-data"
-        input.db.frequency = "1s"
-        input.db.max_age = "2s"
+        input.db.frequency = "1ms"
+        input.db.max_age = "2ms"
 
         steps = [
             { script = "identity.js" }
@@ -720,10 +720,10 @@ async fn real_actor_database_to_mqtt_integration() {
 
     tokio::spawn(flows_actor.run());
 
-    // Wait for at least 3 seconds for the actor's interval timer to trigger draining
-    // At T=0, T=1s, T=2s the message won't be drained (not old enough)
-    // At T=3s the message will be drained (3s old > 2s max_age)
-    sleep(Duration::from_millis(3200)).await;
+    // Wait for at least 3 milliseconds for the actor's interval timer to trigger draining
+    // At T=0, T=1ms, T=2ms the message won't be drained (not old enough)
+    // At T=3ms the message will be drained (3ms old > 2ms max_age)
+    sleep(Duration::from_millis(3)).await;
 
     // Check for MQTT output messages from the actor
     let mut received_messages = vec![];
@@ -806,8 +806,7 @@ async fn flow_that_outputs_multiple_messages_persists_all_to_database() {
             return messages;
         }
     "#;
-    std::fs::write(config_dir.join("splitter.js"), js_content)
-        .expect("Failed to write JS file");
+    std::fs::write(config_dir.join("splitter.js"), js_content).expect("Failed to write JS file");
 
     // Create flow config that outputs multiple messages to database
     let config = r#"
@@ -819,8 +818,7 @@ async fn flow_that_outputs_multiple_messages_persists_all_to_database() {
 
         output.db.series = "split-sensor-data"
     "#;
-    std::fs::write(config_dir.join("split_flow.toml"), config)
-        .expect("Failed to write config");
+    std::fs::write(config_dir.join("split_flow.toml"), config).expect("Failed to write config");
 
     // Build FlowsMapper actor with mock MQTT
     let mut flows_builder = FlowsMapperBuilder::try_new(Utf8Path::from_path(config_dir).unwrap())

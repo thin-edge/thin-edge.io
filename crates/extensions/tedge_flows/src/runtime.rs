@@ -168,8 +168,8 @@ impl MessageProcessor {
         script_deadlines.chain(drain_deadlines)
     }
 
-    /// Get the next deadline for interval execution across all scripts
-    /// Returns None if no scripts have intervals configured
+    /// Get the next deadline for interval execution across all scripts and database drains
+    /// Returns None if no scripts have intervals configured and no database drains are scheduled
     pub fn next_interval_deadline(&self) -> Option<tokio::time::Instant> {
         self.deadlines().min()
     }
@@ -239,18 +239,16 @@ impl MessageProcessor {
             if flow.should_drain_at(timestamp) {
                 if let FlowInput::MeaDB {
                     series: input_series,
-                    frequency: input_frequency,
                     max_age: input_span,
+                    ..
                 } = &flow.input
                 {
-                    if timestamp.tick_now(*input_frequency) {
                     let cutoff_time = timestamp - *input_span;
-                        let drained_messages = self
-                            .database
-                            .drain_older_than(cutoff_time, input_series)
-                            .await;
-                        out_messages.push((flow_id.to_owned(), drained_messages));
-                    }
+                    let drained_messages = self
+                        .database
+                        .drain_older_than(cutoff_time, input_series)
+                        .await;
+                    out_messages.push((flow_id.to_owned(), drained_messages));
                 }
             }
         }
