@@ -1,19 +1,37 @@
 #!/bin/bash
+
 case "$1" in
     "list")
         echo "fake_log"
         ;;
     "get")
-        case "$2" in
-            "fake_log")
-                echo "Fake content"
-                ;;
-            *)
-                # Simulate no logs found for unknown types
-                echo "No logs found for log type \"$2\"" >&2
-                exit 1
-                ;;
-        esac
+        if [[ "$2" != "fake_log" ]]; then
+            echo "No logs found for log type \"$2\"" >&2
+            exit 1
+        fi
+
+        # Simple filtering for tests - specific time range for testing:
+        # 1640995320 (2022-01-01 00:02:00) to 1640995620 (2022-01-01 00:07:00)
+        if [[ "$*" == *"--since 1640995320"* && "$*" == *"--until 1640995620"* ]]; then
+            # Return filtered logs for specific test time range
+            echo "1640995320 [INFO] info log 2"
+            echo "1640995380 [WARN] warn log 1"
+            echo "1640995440 [INFO] info log 3"
+            echo "1640995500 [ERROR] error log 1"
+            echo "1640995560 [INFO] info log 4"
+        else
+            # Return all logs for other time ranges: 1640995200 (2022-01-01 00:00:00) to 1640995740 (2022-01-01 00:09:00)
+            echo "1640995200 [INFO] info log 1"
+            echo "1640995260 [DEBUG] debug log 1"
+            echo "1640995320 [INFO] info log 2"
+            echo "1640995380 [WARN] warn log 1"
+            echo "1640995440 [INFO] info log 3"
+            echo "1640995500 [ERROR] error log 1"
+            echo "1640995560 [INFO] info log 4"
+            echo "1640995620 [DEBUG] debug log 2"
+            echo "1640995680 [ERROR] error log 2"
+            echo "1640995740 [INFO] info log 5"
+        fi
         ;;
     *)
         exit 1
