@@ -6,7 +6,7 @@ use crate::ConfigError;
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Error;
-use std::path::PathBuf;
+use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
 use tedge_flows::flow::Message;
 use tedge_flows::MessageProcessor;
@@ -19,7 +19,7 @@ pub enum TEdgeFlowsCli {
         ///
         /// Default to /etc/tedge/flows
         #[clap(long)]
-        flows_dir: Option<PathBuf>,
+        flows_dir: Option<Utf8PathBuf>,
 
         /// List flows processing messages published on this topic
         ///
@@ -34,13 +34,13 @@ pub enum TEdgeFlowsCli {
         ///
         /// Default to /etc/tedge/flows
         #[clap(long)]
-        flows_dir: Option<PathBuf>,
+        flows_dir: Option<Utf8PathBuf>,
 
         /// Path to the flow step script or TOML flow definition
         ///
         /// If none is provided, applies all the matching flows
         #[clap(long)]
-        flow: Option<PathBuf>,
+        flow: Option<Utf8PathBuf>,
 
         /// Trigger onInterval after all the message samples
         #[clap(long = "final-on-interval")]
@@ -106,25 +106,28 @@ impl BuildCommand for TEdgeFlowsCli {
 }
 
 impl TEdgeFlowsCli {
-    fn default_flows_dir(config: &TEdgeConfig) -> PathBuf {
-        config.root_dir().join("flows").into()
+    fn default_flows_dir(config: &TEdgeConfig) -> Utf8PathBuf {
+        config.root_dir().join("flows")
     }
 
-    pub async fn load_flows(flows_dir: &PathBuf) -> Result<MessageProcessor, Error> {
+    pub async fn load_flows(flows_dir: &Utf8PathBuf) -> Result<MessageProcessor, Error> {
         MessageProcessor::try_new(flows_dir)
             .await
-            .with_context(|| format!("loading flows and steps from {}", flows_dir.display()))
+            .with_context(|| format!("loading flows and steps from {flows_dir}"))
     }
 
-    pub async fn load_file(flows_dir: &PathBuf, path: &PathBuf) -> Result<MessageProcessor, Error> {
-        if let Some("toml") = path.extension().and_then(|s| s.to_str()) {
+    pub async fn load_file(
+        flows_dir: &Utf8PathBuf,
+        path: &Utf8PathBuf,
+    ) -> Result<MessageProcessor, Error> {
+        if let Some("toml") = path.extension() {
             MessageProcessor::try_new_single_flow(flows_dir, path)
                 .await
-                .with_context(|| format!("loading flow {flow}", flow = path.display()))
+                .with_context(|| format!("loading flow {path}"))
         } else {
             MessageProcessor::try_new_single_step_flow(flows_dir, path)
                 .await
-                .with_context(|| format!("loading flow script {script}", script = path.display()))
+                .with_context(|| format!("loading flow script {path}"))
         }
     }
 }

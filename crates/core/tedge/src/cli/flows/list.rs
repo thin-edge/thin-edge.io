@@ -2,19 +2,19 @@ use crate::cli::flows::TEdgeFlowsCli;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use anyhow::Error;
-use std::path::PathBuf;
+use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
 use tedge_flows::flow::Flow;
 
 pub struct ListCommand {
-    pub flows_dir: PathBuf,
+    pub flows_dir: Utf8PathBuf,
     pub topic: Option<String>,
 }
 
 #[async_trait::async_trait]
 impl Command for ListCommand {
     fn description(&self) -> String {
-        format!("list flows and flow steps in {}", self.flows_dir.display())
+        format!("list flows and flow steps in {}", self.flows_dir)
     }
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
@@ -38,7 +38,7 @@ impl ListCommand {
     fn display((flow_id, flow): (&String, &Flow)) {
         println!("{flow_id}");
         for step in flow.steps.iter() {
-            println!("\t{}", step.script.path.display());
+            println!("\t{}", step.script.path);
         }
     }
 }

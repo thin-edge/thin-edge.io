@@ -9,7 +9,6 @@ use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde_json::Value;
 use std::fmt::Debug;
-use std::path::Path;
 use std::time::Duration;
 use tedge_mqtt_ext::TopicFilter;
 
@@ -75,7 +74,7 @@ impl FlowConfig {
     pub async fn compile(
         self,
         js_runtime: &mut JsRuntime,
-        config_dir: &Path,
+        config_dir: &Utf8Path,
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
         let input = self.input.try_into()?;
@@ -98,18 +97,18 @@ impl FlowConfig {
 impl StepConfig {
     pub async fn compile(
         self,
-        config_dir: &Path,
+        config_dir: &Utf8Path,
         index: usize,
         flow: &Utf8Path,
     ) -> Result<FlowStep, ConfigError> {
         let path = match self.script {
-            ScriptSpec::JavaScript(path) if path.is_absolute() => path.into(),
-            ScriptSpec::JavaScript(path) if path.starts_with(config_dir) => path.into(),
+            ScriptSpec::JavaScript(path) if path.is_absolute() => path,
+            ScriptSpec::JavaScript(path) if path.starts_with(config_dir) => path,
             ScriptSpec::JavaScript(path) => config_dir.join(path),
         };
-        let script = JsScript::new(flow.to_owned().into(), index, path)
+        let script = JsScript::new(flow.to_owned(), index, path)
             .with_config(self.config)
-            .with_interval_secs(self.interval.as_secs());
+            .with_interval(self.interval);
         let config_topics = topic_filters(self.meta_topics)?;
         Ok(FlowStep {
             script,

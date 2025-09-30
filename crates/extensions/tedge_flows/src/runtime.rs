@@ -10,7 +10,6 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
 use std::path::Path;
-use std::path::PathBuf;
 use tedge_mqtt_ext::TopicFilter;
 use tokio::fs::read_dir;
 use tokio::fs::read_to_string;
@@ -19,7 +18,7 @@ use tracing::info;
 use tracing::warn;
 
 pub struct MessageProcessor {
-    pub config_dir: PathBuf,
+    pub config_dir: Utf8PathBuf,
     pub flows: HashMap<String, Flow>,
     pub(super) js_runtime: JsRuntime,
     pub stats: Counter,
@@ -30,16 +29,16 @@ impl MessageProcessor {
         format!("{}", path.as_ref().display())
     }
 
-    pub async fn try_new(config_dir: impl AsRef<Path>) -> Result<Self, LoadError> {
-        let config_dir = config_dir.as_ref().to_owned();
+    pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
+        let config_dir = config_dir.as_ref();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut flow_specs = FlowSpecs::default();
-        flow_specs.load(&config_dir).await;
-        let flows = flow_specs.compile(&mut js_runtime, &config_dir).await;
+        flow_specs.load(config_dir).await;
+        let flows = flow_specs.compile(&mut js_runtime, config_dir).await;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
-            config_dir,
+            config_dir: config_dir.to_owned(),
             flows,
             js_runtime,
             stats,
@@ -47,19 +46,19 @@ impl MessageProcessor {
     }
 
     pub async fn try_new_single_flow(
-        config_dir: impl AsRef<Path>,
+        config_dir: impl AsRef<Utf8Path>,
         flow: impl AsRef<Path>,
     ) -> Result<Self, LoadError> {
-        let config_dir = config_dir.as_ref().to_owned();
+        let config_dir = config_dir.as_ref();
         let flow = flow.as_ref().to_owned();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut flow_specs = FlowSpecs::default();
         flow_specs.load_single_flow(&flow).await;
-        let flows = flow_specs.compile(&mut js_runtime, &config_dir).await;
+        let flows = flow_specs.compile(&mut js_runtime, config_dir).await;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
-            config_dir,
+            config_dir: config_dir.to_owned(),
             flows,
             js_runtime,
             stats,
@@ -67,18 +66,18 @@ impl MessageProcessor {
     }
 
     pub async fn try_new_single_step_flow(
-        config_dir: impl AsRef<Path>,
+        config_dir: impl AsRef<Utf8Path>,
         script: impl AsRef<Path>,
     ) -> Result<Self, LoadError> {
-        let config_dir = config_dir.as_ref().to_owned();
+        let config_dir = config_dir.as_ref();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut flow_specs = FlowSpecs::default();
         flow_specs.load_single_script(&script).await;
-        let flows = flow_specs.compile(&mut js_runtime, &config_dir).await;
+        let flows = flow_specs.compile(&mut js_runtime, config_dir).await;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
-            config_dir,
+            config_dir: config_dir.to_owned(),
             flows,
             js_runtime,
             stats,
@@ -223,9 +222,9 @@ struct FlowSpecs {
 }
 
 impl FlowSpecs {
-    pub async fn load(&mut self, config_dir: &PathBuf) {
-        let Ok(mut entries) = read_dir(config_dir).await.map_err(|err|
-            error!(target: "flows", "Failed to read flows from {}: {err}", config_dir.display())
+    pub async fn load(&mut self, config_dir: &Utf8Path) {
+        let Ok(mut entries) = read_dir(config_dir).await.map_err(
+            |err| error!(target: "flows", "Failed to read flows from {config_dir}: {err}"),
         ) else {
             return;
         };
@@ -282,7 +281,7 @@ impl FlowSpecs {
     async fn compile(
         mut self,
         js_runtime: &mut JsRuntime,
-        config_dir: &Path,
+        config_dir: &Utf8Path,
     ) -> HashMap<String, Flow> {
         let mut flows = HashMap::new();
         for (name, (source, specs)) in self.flow_specs.drain() {
