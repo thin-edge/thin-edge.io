@@ -1,9 +1,9 @@
 use anyhow::Context;
 use cfg_if::cfg_if;
+use tedge_flows::database;
 use tedge_flows::database::MeaDb;
 use tedge_flows::flow::DateTime;
 use tedge_flows::flow::Message;
-use tedge_flows::database;
 
 const DEFAULT_DB_PATH: &str = "/etc/tedge/tedge-flows.db";
 

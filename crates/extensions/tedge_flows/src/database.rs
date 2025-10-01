@@ -16,7 +16,9 @@ use fjall::Slice;
 use tokio::task::spawn_blocking;
 
 #[cfg(feature = "sqlite-db")]
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use sqlx::sqlite::SqlitePool;
+#[cfg(feature = "sqlite-db")]
+use sqlx::sqlite::SqlitePoolOptions;
 #[cfg(feature = "sqlite-db")]
 use sqlx::Row;
 
@@ -307,7 +309,10 @@ impl SqliteMeaDb {
             .connect(&database_url)
             .await
             .with_context(|| format!("opening SQLite database at {path:?}"))
-            .map_err(|source| DatabaseError::OpenError { path: path.to_owned(), source })?;
+            .map_err(|source| DatabaseError::OpenError {
+                path: path.to_owned(),
+                source,
+            })?;
 
         // Create the messages table if it doesn't exist
         // Store timestamp as nanoseconds since epoch (i64) for simpler ordering
@@ -322,7 +327,7 @@ impl SqliteMeaDb {
                 message_timestamp_nanos INTEGER,
                 PRIMARY KEY (series, timestamp_nanos)
             )
-            "#
+            "#,
         )
         .execute(&pool)
         .await
@@ -331,7 +336,7 @@ impl SqliteMeaDb {
 
         // Create index for efficient querying
         sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_messages_series ON messages (series, timestamp_nanos)"
+            "CREATE INDEX IF NOT EXISTS idx_messages_series ON messages (series, timestamp_nanos)",
         )
         .execute(&pool)
         .await
@@ -356,7 +361,7 @@ impl MeaDb for SqliteMeaDb {
             INSERT OR REPLACE INTO messages
             (series, timestamp_nanos, topic, payload, message_timestamp_nanos)
             VALUES (?, ?, ?, ?, ?)
-            "#
+            "#,
         )
         .bind(series)
         .bind(Self::datetime_to_nanos(timestamp))
@@ -366,7 +371,10 @@ impl MeaDb for SqliteMeaDb {
         .execute(&self.pool)
         .await
         .with_context(|| format!("storing message in series {series:?}"))
-        .map_err(|source| DatabaseError::StoreError { series: series.to_owned(), source })?;
+        .map_err(|source| DatabaseError::StoreError {
+            series: series.to_owned(),
+            source,
+        })?;
 
         Ok(())
     }
@@ -376,31 +384,42 @@ impl MeaDb for SqliteMeaDb {
         series: &str,
         data: Vec<(DateTime, Message)>,
     ) -> Result<(), DatabaseError> {
-        let mut tx = self.pool.begin().await.map_err(|source| DatabaseError::Internal { source: source.into() })?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|source| DatabaseError::Internal {
+                source: source.into(),
+            })?;
         for (timestamp, payload) in data {
-        sqlx::query(
-            r#"
+            sqlx::query(
+                r#"
             INSERT OR REPLACE INTO messages
             (series, timestamp_nanos, topic, payload, message_timestamp_nanos)
             VALUES (?, ?, ?, ?, ?)
-            "#
-        )
-        .bind(series)
-        .bind(Self::datetime_to_nanos(timestamp))
-        .bind(&payload.topic)
-        .bind(&payload.payload)
-        .bind(payload.timestamp.map(Self::datetime_to_nanos))
-        .execute(&mut *tx)
-        .await
-        .with_context(|| format!("storing message in series {series:?}"))
-        .map_err(|source| DatabaseError::StoreError { series: series.to_owned(), source })?;
+            "#,
+            )
+            .bind(series)
+            .bind(Self::datetime_to_nanos(timestamp))
+            .bind(&payload.topic)
+            .bind(&payload.payload)
+            .bind(payload.timestamp.map(Self::datetime_to_nanos))
+            .execute(&mut *tx)
+            .await
+            .with_context(|| format!("storing message in series {series:?}"))
+            .map_err(|source| DatabaseError::StoreError {
+                series: series.to_owned(),
+                source,
+            })?;
         }
-        tx.commit().await.map_err(|source| DatabaseError::Internal { source: anyhow::Error::from(source) })?;
+        tx.commit()
+            .await
+            .map_err(|source| DatabaseError::Internal {
+                source: anyhow::Error::from(source),
+            })?;
 
         Ok(())
     }
-
-
 
     async fn drain_older_than(
         &mut self,
@@ -415,14 +434,17 @@ impl MeaDb for SqliteMeaDb {
             FROM messages
             WHERE series = ? AND timestamp_nanos <= ?
             ORDER BY timestamp_nanos
-            "#
+            "#,
         )
         .bind(series)
         .bind(cutoff_nanos)
         .fetch_all(&self.pool)
         .await
         .with_context(|| format!("querying messages to drain from series {series:?}"))
-        .map_err(|source| DatabaseError::DrainError { series: series.to_owned(), source })?;
+        .map_err(|source| DatabaseError::DrainError {
+            series: series.to_owned(),
+            source,
+        })?;
 
         // Convert rows to messages
         let mut messages = Vec::new();
@@ -450,14 +472,17 @@ impl MeaDb for SqliteMeaDb {
             r#"
             DELETE FROM messages
             WHERE series = ? AND timestamp_nanos <= ?
-            "#
+            "#,
         )
         .bind(series)
         .bind(cutoff_nanos)
         .execute(&self.pool)
         .await
         .with_context(|| format!("deleting drained messages from series {series:?}"))
-        .map_err(|source| DatabaseError::DrainError { series: series.to_owned(), source })?;
+        .map_err(|source| DatabaseError::DrainError {
+            series: series.to_owned(),
+            source,
+        })?;
 
         Ok(messages)
     }
@@ -469,13 +494,16 @@ impl MeaDb for SqliteMeaDb {
             FROM messages
             WHERE series = ?
             ORDER BY timestamp_nanos
-            "#
+            "#,
         )
         .bind(series)
         .fetch_all(&self.pool)
         .await
         .with_context(|| format!("querying all messages from series {series:?}"))
-        .map_err(|source| DatabaseError::QueryError { series: series.to_owned(), source })?;
+        .map_err(|source| DatabaseError::QueryError {
+            series: series.to_owned(),
+            source,
+        })?;
 
         let mut messages = Vec::new();
         for row in rows {
@@ -751,9 +779,7 @@ mod tests {
     }
 
     fn create_inmemory_db() -> BoxFuture<'static, Box<dyn MeaDb>> {
-        Box::pin(async {
-            Box::new(InMemoryMeaDb::default()) as Box<dyn MeaDb>
-        })
+        Box::pin(async { Box::new(InMemoryMeaDb::default()) as Box<dyn MeaDb> })
     }
 
     fn test_message(topic: &str, payload: &str) -> Message {

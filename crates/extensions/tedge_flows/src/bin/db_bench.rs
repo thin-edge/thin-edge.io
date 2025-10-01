@@ -32,7 +32,11 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(1000);
     let db_path = format!("bench.{backend}");
 
-    println!("Benchmarking {backend} backend with {} inserts and {} drains from {db_path}", count * 5 * 3, count * 5);
+    println!(
+        "Benchmarking {backend} backend with {} inserts and {} drains from {db_path}",
+        count * 5 * 3,
+        count * 5
+    );
 
     let mut db: Box<dyn MeaDb> = match backend.as_str() {
         #[cfg(feature = "fjall-db")]
@@ -81,7 +85,11 @@ async fn main() -> anyhow::Result<()> {
             .unwrap();
         }
     }
-    println!("Inserted {} items (across 15 batches of {count}) in {:?}", count * 5 * 3, time.elapsed());
+    println!(
+        "Inserted {} items (across 15 batches of {count}) in {:?}",
+        count * 5 * 3,
+        time.elapsed()
+    );
 
     let time = Instant::now();
 
