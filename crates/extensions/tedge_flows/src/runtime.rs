@@ -13,6 +13,7 @@ use std::path::Path;
 use tedge_mqtt_ext::TopicFilter;
 use tokio::fs::read_dir;
 use tokio::fs::read_to_string;
+use tokio::time::Instant;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -92,6 +93,29 @@ impl MessageProcessor {
         topics
     }
 
+    /// Get the next deadline for interval execution across all scripts
+    /// Returns None if no scripts have intervals configured
+    pub fn next_interval_deadline(&self) -> Option<tokio::time::Instant> {
+        self.flows
+            .values()
+            .flat_map(|flow| &flow.steps)
+            .filter_map(|step| step.script.next_execution)
+            .min()
+    }
+
+    /// Get the last deadline for interval execution across all scripts Returns
+    /// None if no scripts have intervals configured
+    ///
+    /// This is intended for `tedge flows test` to ensure it processes all
+    /// intervals
+    pub fn last_interval_deadline(&self) -> Option<tokio::time::Instant> {
+        self.flows
+            .values()
+            .flat_map(|flow| &flow.steps)
+            .filter_map(|step| step.script.next_execution)
+            .max()
+    }
+
     pub async fn on_message(
         &mut self,
         timestamp: &DateTime,
@@ -117,11 +141,12 @@ impl MessageProcessor {
     pub async fn on_interval(
         &mut self,
         timestamp: &DateTime,
+        now: Instant,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let mut out_messages = vec![];
         for (flow_id, flow) in self.flows.iter_mut() {
             let flow_output = flow
-                .on_interval(&self.js_runtime, &mut self.stats, timestamp)
+                .on_interval(&self.js_runtime, &mut self.stats, timestamp, now)
                 .await;
             if flow_output.is_err() {
                 self.stats.flow_on_interval_failed(flow_id);
@@ -145,6 +170,7 @@ impl MessageProcessor {
                 if step.script.path() == path {
                     match self.js_runtime.load_script(&mut step.script).await {
                         Ok(()) => {
+                            step.script.init_next_execution();
                             info!(target: "flows", "Reloaded flow script {path}");
                         }
                         Err(e) => {

@@ -11,6 +11,7 @@ use tedge_flows::MessageProcessor;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::io::Stdin;
+use tokio::time::Instant;
 
 pub struct TestCommand {
     pub flows_dir: Utf8PathBuf,
@@ -48,7 +49,10 @@ impl Command for TestCommand {
         }
         if self.final_on_interval {
             let timestamp = DateTime::now();
-            self.tick(&mut processor, &timestamp).await;
+            let now = processor
+                .last_interval_deadline()
+                .unwrap_or_else(Instant::now);
+            self.tick(&mut processor, &timestamp, now).await;
         }
         Ok(())
     }
@@ -77,9 +81,9 @@ impl TestCommand {
             .for_each(|msg| self.print_messages(msg))
     }
 
-    async fn tick(&self, processor: &mut MessageProcessor, timestamp: &DateTime) {
+    async fn tick(&self, processor: &mut MessageProcessor, timestamp: &DateTime, now: Instant) {
         processor
-            .on_interval(timestamp)
+            .on_interval(timestamp, now)
             .await
             .into_iter()
             .for_each(|msg| self.print_messages(msg))
