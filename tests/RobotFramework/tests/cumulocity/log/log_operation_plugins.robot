@@ -134,7 +134,8 @@ Overriding a log plugin
     # Add an extra location for local log plugins
     Execute Command    mkdir -p /usr/local/tedge/log-plugins
     Execute Command    tedge config set log.plugin_paths '/usr/local/tedge/log-plugins,/usr/share/tedge/log-plugins'
-    Execute Command    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/local/tedge/log-plugins/[a-zA-Z0-9]*' | sudo tee -a /etc/sudoers.d/tedge
+    Execute Command
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/local/tedge/log-plugins/[a-zA-Z0-9]*' | sudo tee -a /etc/sudoers.d/tedge
     Restart Service    tedge-agent
     Should Support Log File Types    fake_log::fake_plugin    includes=${True}
     # Override the fake plugin with a dummy plugin
@@ -157,6 +158,23 @@ Overriding a log plugin
     Log Operation Attachment File Contains
     ...    ${operation}
     ...    expected_pattern=.*Dummy content.*
+
+Reporting sudo misconfiguration
+    # Add an extra location for local log plugins
+    # BUT failing to authorize tedge to run these plugins with sudo
+    Stop Service    tedge-agent
+    Execute Command    mkdir -p /etc/share/tedge/log-plugins
+    Execute Command    tedge config add log.plugin_paths /etc/share/tedge/log-plugins
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/dummy_plugin
+    ...    /etc/share/tedge/log-plugins/dummy_plugin
+    Execute Command    chmod a+x /etc/share/tedge/log-plugins/dummy_plugin
+
+    Start Service    tedge-agent
+    Service Logs Should Contain
+    ...    tedge-agent
+    ...    current_only=${True}
+    ...    text=ERROR log plugins: Skipping /etc/share/tedge/log-plugins/dummy_plugin: not properly configured to run with sudo
 
 Agent resilient to plugin dirs removal
     ${date_from}=    Get Unix Timestamp

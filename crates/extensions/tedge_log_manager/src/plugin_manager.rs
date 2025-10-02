@@ -4,10 +4,9 @@ use crate::plugin::LIST;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::collections::BTreeMap;
-use std::io::ErrorKind;
-use std::process::Stdio;
 use std::sync::Arc;
 use tedge_config::SudoCommandBuilder;
+use tedge_config::SudoError;
 use tracing::error;
 use tracing::info;
 
@@ -39,7 +38,7 @@ impl ExternalPlugins {
                 Err(err) => {
                     error!(
                         target: "log plugins",
-                        "Failed to read log plugin directory {plugin_dir} due to: {err}, skipping"
+                        "Skipping directory {plugin_dir}: {err}"
                     );
                     continue;
                 }
@@ -50,7 +49,7 @@ impl ExternalPlugins {
                     Ok(entry) => entry,
                     Err(err) => {
                         error!(target: "log plugins",
-                            "Failed to read log plugin directory entry in {plugin_dir}: due to {err}, skipping",
+                            "Skipping directory entry in {plugin_dir}: {err}",
                         );
                         continue;
                     }
@@ -60,53 +59,38 @@ impl ExternalPlugins {
                     let Some(plugin_name) = path.file_name() else {
                         error!(
                             target: "log plugins",
-                            "Failed to extract log plugin name from {path}, skipping",
+                            "Skipping {path}: failed to extract plugin name",
                         );
                         continue;
                     };
                     if let Some(plugin) = self.plugin_map.get(plugin_name) {
                         info!(
                             target: "log plugins",
-                            "The log plugin {path} is overriden by {}, skipping",
+                            "Skipping {path}: overridden by {}",
                             plugin.path.display()
                         );
                         continue;
                     }
 
-                    let mut command = self.sudo.command(path);
-
-                    match command
-                        .arg(LIST)
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .status()
-                    {
-                        Ok(code) if code.success() => {
+                    match self.sudo.ensure_command_succeeds(&path, &vec![LIST]) {
+                        Ok(()) => {
                             info!(target: "log plugins", "Log plugin activated: {path}");
                         }
-
-                        // If the file is not executable or returned non 0 status code we assume it is not a valid log plugin and skip further processing.
-                        Ok(_) => {
+                        Err(SudoError::CannotSudo) => {
                             error!(target: "log plugins",
-                                "File {path} in log plugin directory does not support list operation and may not be a valid plugin, skipping."
+                                "Skipping {path}: not properly configured to run with sudo"
                             );
                             continue;
                         }
-
-                        Err(err) if err.kind() == ErrorKind::PermissionDenied => {
-                            error!(
-                                target: "log plugins",
-                                "File {path} Permission Denied, is the file an executable?\n
-                                The file will not be registered as a log plugin."
+                        Err(SudoError::ExecutionFailed(_)) => {
+                            error!(target: "log plugins",
+                             "Skipping {path}: does not support list operation and may not be a valid plugin"
                             );
                             continue;
                         }
-
                         Err(err) => {
-                            error!(
-                                target: "log plugins",
-                                "An error occurred while trying to run: {path}: {err}\n
-                                The file will not be registered as a log plugin."
+                            error!(target: "log plugins",
+                                "Skipping {path}: can not be launched as a plugin: {err}"
                             );
                             continue;
                         }
