@@ -1,6 +1,6 @@
 [package]
-name = "tedge_log_manager"
-description = "thin-edge operation extension adding support for log management"
+name = "tedge-file-log-plugin"
+description = "Thin-edge.io plugin for file-based log management"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
@@ -13,24 +13,25 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true }
-serde_json = { workspace = true }
-tedge_actors = { workspace = true }
+clap = { workspace = true }
+easy_reader = { workspace = true }
+glob = { workspace = true }
+log = { workspace = true }
+rand = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
-tedge_file_system_ext = { workspace = true }
-tedge_mqtt_ext = { workspace = true }
-tedge_uploader_ext = { workspace = true }
-tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["macros", "rt"] }
 toml = { workspace = true }
-tracing = { workspace = true }
 
 [dev-dependencies]
-tedge_actors = { workspace = true, features = ["test-helpers"] }
+assert_cmd = { workspace = true }
+filetime = { workspace = true }
+predicates = { workspace = true }
 tedge_test_utils = { workspace = true }
-time = { workspace = true, features = ["macros"] }
 
 [lints]
 workspace = true

@@ -91,6 +91,14 @@ impl MessageSource<FsWatchEvent, PathBuf> for FsWatchActorBuilder {
     }
 }
 
+impl MessageSource<FsWatchEvent, Vec<PathBuf>> for FsWatchActorBuilder {
+    fn connect_sink(&mut self, paths: Vec<PathBuf>, peer: &impl MessageSink<FsWatchEvent>) {
+        for path in paths {
+            self.connect_sink(path, peer);
+        }
+    }
+}
+
 impl RuntimeRequestSink for FsWatchActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         Box::new(self.signal_sender.clone())

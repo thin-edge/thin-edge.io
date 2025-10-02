@@ -95,6 +95,14 @@ impl TEdgeInitCmd {
         create_directory(&config.logs.path, &permissions).await?;
         create_directory(&config.data.path, &permissions).await?;
 
+        for log_plugins_dir in &config.log.plugin_paths.0 {
+            create_directory(&log_plugins_dir, &permissions).await?;
+        }
+        // The last directory of the log plugin path list is the location for thin-edge provided plugins
+        if let Some(main_log_plugins_dir) = config.log.plugin_paths.0.last() {
+            create_symlinks_for("file", target, Path::new(main_log_plugins_dir), &RealEnv).await?;
+        }
+
         let entity_store_file = config_dir.join(".agent").join("entity_store.jsonl");
 
         if entity_store_file.exists() {

@@ -1,0 +1,21 @@
+#!/bin/bash
+case "$1" in
+    "list")
+        echo "dummy_log"
+        ;;
+    "get")
+        case "$2" in
+            "dummy_log")
+                echo "Dummy content"
+                ;;
+            *)
+                # Simulate no logs found for unknown types
+                echo "No logs found for log type \"$2\"" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    *)
+        exit 1
+        ;;
+esac

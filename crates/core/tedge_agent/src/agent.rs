@@ -30,6 +30,7 @@ use reqwest::Identity;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::vec;
 use tedge_actors::Concurrent;
 use tedge_actors::ConvertingActor;
 use tedge_actors::ConvertingActorBuilder;
@@ -97,6 +98,7 @@ pub(crate) struct AgentConfig {
     pub fts_url: Arc<str>,
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
+    pub log_plugin_dirs: Vec<Utf8PathBuf>,
     entity_auto_register: bool,
     entity_store_clean_start: bool,
 }
@@ -186,6 +188,13 @@ impl AgentConfig {
 
         let entity_auto_register = tedge_config.agent.entity_store.auto_register;
         let entity_store_clean_start = tedge_config.agent.entity_store.clean_start;
+        let log_plugin_dirs = tedge_config
+            .log
+            .plugin_paths
+            .0
+            .iter()
+            .map(Utf8PathBuf::from)
+            .collect();
 
         Ok(Self {
             mqtt_config,
@@ -211,6 +220,7 @@ impl AgentConfig {
             is_sudo_enabled,
             service: tedge_config.service.clone(),
             capabilities,
+            log_plugin_dirs,
             entity_auto_register,
             entity_store_clean_start,
         })
@@ -361,10 +371,11 @@ impl Agent {
         let log_actor_builder = if self.config.capabilities.log_upload {
             let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
                 config_dir: self.config.config_dir.clone().into(),
-                tmp_dir: self.config.tmp_dir.to_path_buf().into(),
+                tmp_dir: self.config.tmp_dir.clone(),
                 log_dir: self.config.log_dir,
                 mqtt_schema: mqtt_schema.clone(),
                 mqtt_device_topic_id: device_topic_id.clone(),
+                plugin_dirs: self.config.log_plugin_dirs,
             })?;
             let mut log_actor = LogManagerBuilder::try_new(
                 log_manager_config,

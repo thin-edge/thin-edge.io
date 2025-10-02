@@ -24,6 +24,8 @@ use tedge_apt_plugin::AptCli;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use tedge_config::unconfigured_logger;
+use tedge_file_log_plugin::bin::FileLogCli;
+use tedge_file_log_plugin::bin::TEdgeConfigView;
 use tracing::log;
 
 #[global_allocator]
@@ -67,6 +69,13 @@ async fn main() -> anyhow::Result<()> {
             tokio::task::spawn_blocking(move || tedge_apt_plugin::run_and_exit(opt, config))
                 .await
                 .context("failed to run tedge apt plugin")?
+        }
+        TEdgeOptMulticall::Component(Component::TedgeFileLogPlugin(opt)) => {
+            let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;
+            let plugin_config = TEdgeConfigView::new(tedge_config.tmp.path.as_path());
+            tokio::task::spawn_blocking(move || tedge_file_log_plugin::bin::run(opt, plugin_config))
+                .await
+                .context("failed to run tedge file log plugin")?
         }
         TEdgeOptMulticall::Tedge(TEdgeCli { cmd, common }) => {
             log_init(
@@ -133,7 +142,22 @@ where
         match AptCli::try_parse() {
             Ok(apt) => return TEdgeOptMulticall::Component(Component::TedgeAptPlugin(apt)),
             Err(e) => {
-                eprintln!("{}", RichFormatter::format_error(&e));
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        }
+    }
+
+    if matches!(
+        executable_name.as_deref(),
+        Some("file" | "tedge-file-log-plugin")
+    ) {
+        // the file log plugin must be treated apart
+        // as we want to exit 1 and not 2 when the command line cannot be parsed
+        match FileLogCli::try_parse() {
+            Ok(cli) => return TEdgeOptMulticall::Component(Component::TedgeFileLogPlugin(cli)),
+            Err(e) => {
+                eprintln!("{e}");
                 std::process::exit(1);
             }
         }

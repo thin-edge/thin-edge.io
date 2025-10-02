@@ -1,16 +1,17 @@
 mod actor;
 mod config;
 mod error;
-mod manager;
+mod plugin;
+mod plugin_manager;
 
 #[cfg(test)]
 mod tests;
 
+use crate::plugin_manager::ExternalPlugins;
 pub use actor::*;
 pub use config::*;
-use log::error;
-use manager::LogPluginConfig;
 use std::path::PathBuf;
+use std::vec;
 use tedge_actors::Builder;
 use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
@@ -38,11 +39,11 @@ use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
 use tedge_utils::fs::AtomFileError;
 use toml::toml;
+use tracing::error;
 
 /// This is an actor builder.
 pub struct LogManagerBuilder {
     config: LogManagerConfig,
-    plugin_config: LogPluginConfig,
     box_builder: SimpleMessageBoxBuilder<LogInput, LogOutput>,
     upload_sender: DynSender<LogUploadRequest>,
 }
@@ -50,15 +51,14 @@ pub struct LogManagerBuilder {
 impl LogManagerBuilder {
     pub async fn try_new(
         config: LogManagerConfig,
-        fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
+        fs_notify: &mut impl MessageSource<FsWatchEvent, Vec<PathBuf>>,
         uploader_actor: &mut impl Service<LogUploadRequest, LogUploadResult>,
     ) -> Result<Self, FileError> {
         Self::init(&config).await?;
-        let plugin_config = LogPluginConfig::new(&config.plugin_config_path);
 
         let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
         fs_notify.connect_sink(
-            LogManagerBuilder::watched_directory(&config),
+            LogManagerBuilder::watched_directories(&config),
             &box_builder.get_sender(),
         );
 
@@ -66,7 +66,6 @@ impl LogManagerBuilder {
 
         Ok(Self {
             config,
-            plugin_config,
             box_builder,
             upload_sender,
         })
@@ -137,14 +136,19 @@ impl LogManagerBuilder {
         move |message| {
             if !logfile_request_topic.accept(&message) {
                 error!(
-                    "Received unexpected message on topic: {}",
-                    message.topic.name
+                    target: "log plugins",
+                    "Received unexpected message on topic: {}", message.topic.name
                 );
                 return None;
             }
 
             LogUploadCmd::parse(&mqtt_schema, message)
-                .map_err(|err| error!("Incorrect log request payload: {}", err))
+                .map_err(|err| {
+                    error!(
+                        target: "log plugins",
+                        "Incorrect log request payload: {}", err
+                    )
+                })
                 .unwrap_or(None)
                 .map(|cmd| cmd.into())
         }
@@ -169,9 +173,15 @@ impl LogManagerBuilder {
         }
     }
 
-    /// Directory watched by the log actors for configuration changes
-    fn watched_directory(config: &LogManagerConfig) -> PathBuf {
-        config.plugin_config_dir.clone()
+    /// Directories watched by the log actor
+    /// - for configuration changes
+    /// - for plugin changes
+    fn watched_directories(config: &LogManagerConfig) -> Vec<PathBuf> {
+        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
+        for dir in &config.plugin_dirs {
+            watch_dirs.push(dir.into());
+        }
+        watch_dirs
     }
 }
 
@@ -187,11 +197,17 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
     fn try_build(self) -> Result<LogManagerActor, Self::Error> {
         let message_box = self.box_builder.build();
 
+        let external_plugins = ExternalPlugins::new(
+            self.config.plugin_dirs.clone(),
+            self.config.sudo_enabled,
+            self.config.tmp_dir.clone(),
+        );
+
         Ok(LogManagerActor::new(
             self.config,
-            self.plugin_config,
             message_box,
             self.upload_sender,
+            external_plugins,
         ))
     }
 }

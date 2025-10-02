@@ -1,4 +1,19 @@
 #[derive(thiserror::Error, Debug)]
+pub enum LogManagementError {
+    #[error(transparent)]
+    FromStdIo(#[from] std::io::Error),
+
+    #[error("Log retrieval error: {0}")]
+    LogRetrievalError(#[from] LogRetrievalError),
+
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
+
+    #[error("Path error: {0}")]
+    PathError(String),
+}
+
+#[derive(thiserror::Error, Debug)]
 pub enum LogRetrievalError {
     #[error(transparent)]
     FromStdIo(#[from] std::io::Error),
@@ -8,12 +23,6 @@ pub enum LogRetrievalError {
 
     #[error(transparent)]
     FromGlobError(#[from] glob::GlobError),
-
-    #[error(transparent)]
-    FromPathsError(#[from] tedge_utils::paths::PathsError),
-
-    #[error(transparent)]
-    FromFileError(#[from] tedge_utils::file::FileError),
 
     // NOTE: `MaxLines` is not a client-facing error. It is used
     // to break out of `read_log_content`.

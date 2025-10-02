@@ -56,6 +56,7 @@ fi
 if [ -d /etc/sudoers.d ]; then
     echo "tedge    ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" > /etc/sudoers.d/tedge
     echo "tedge    ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge-write /etc/*" >> /etc/sudoers.d/tedge
+    echo "tedge    ALL = (ALL) NOPASSWD:SETENV: /usr/share/tedge/log-plugins/[a-zA-Z0-9]*" >> /etc/sudoers.d/tedge
 fi
 
 

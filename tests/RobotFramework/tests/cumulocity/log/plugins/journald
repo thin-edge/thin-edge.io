@@ -1,0 +1,84 @@
+#!/bin/bash
+
+set -euo pipefail
+
+usage() {
+    echo "Usage: $0 <command> [args...]"
+    echo "Commands:"
+    echo "  list                                List all log types supported by this plugin"
+    echo "  get <log-type>                      Get logs for the specified type"
+    echo "      [--since <timestamp>]"
+    echo "      [--until <timestamp>]"
+    exit 1
+}
+
+list_log_types() {
+    systemctl list-units --type=service --no-legend --no-pager --plain \
+        | grep -v "^systemd" \
+        | awk '{ sub(/\.service$/, "", $1); print $1 }'
+}
+
+get_logs() {
+    local log_type="$1"
+    shift
+    
+    local since_arg=""
+    local until_arg=""
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --since)
+                since_arg="--since=@$2"
+                shift 2
+                ;;
+            --until)
+                until_arg="--until=@$2"
+                shift 2
+                ;;
+            *)
+                echo "Unknown option: $1" >&2
+                exit 1
+                ;;
+        esac
+    done
+    
+    local cmd="journalctl --no-pager --output=short-iso --unit=${log_type}"
+    
+    if [[ -n "$since_arg" ]]; then
+        cmd="$cmd $since_arg"
+    fi
+    
+    if [[ -n "$until_arg" ]]; then
+        cmd="$cmd $until_arg"
+    fi
+    
+    eval "$cmd"
+}
+
+main() {
+    if [[ $# -lt 1 ]]; then
+        usage
+    fi
+    
+    local command="$1"
+    shift
+    
+    case "$command" in
+        "list")
+            list_log_types
+            ;;
+        "get")
+            if [[ $# -lt 1 ]]; then
+                echo "Error: 'get' command expects a mandatory <log-type> arguments" >&2
+                usage
+            fi
+            get_logs "$@"
+            ;;
+        *)
+            echo "Error: Unknown command '$command'" >&2
+            usage
+            ;;
+    esac
+}
+
+main "$@"
