@@ -5,11 +5,9 @@ use camino::Utf8PathBuf;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::ErrorKind;
 use std::io::{self};
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Stdio;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::SoftwareListCommand;
 use tedge_api::commands::SoftwareUpdateCommand;
@@ -18,6 +16,7 @@ use tedge_api::SoftwareError;
 use tedge_api::SoftwareType;
 use tedge_api::DEFAULT;
 use tedge_config::SudoCommandBuilder;
+use tedge_config::SudoError;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -106,7 +105,7 @@ impl ExternalPlugins {
             config_dir,
         };
         if let Err(e) = plugins.load().await {
-            warn!(
+            warn!(target: "SM plugins",
                 "Reading the plugins directory ({:?}): failed with: {e:?}",
                 &plugins.plugin_dir
             );
@@ -119,15 +118,15 @@ impl ExternalPlugins {
                     .by_software_type(default_plugin_type.as_str())
                     .is_none()
                 {
-                    warn!(
+                    warn!(target: "SM plugins",
                         "The configured default plugin: {} not found",
                         default_plugin_type
                     );
                 }
-                info!("Default plugin type: {}", default_plugin_type)
+                info!(target: "SM plugins", "Default plugin type: {}", default_plugin_type)
             }
             None => {
-                info!("Default plugin type: Not configured")
+                info!(target: "SM plugins", "Default plugin type: Not configured")
             }
         }
 
@@ -145,42 +144,28 @@ impl ExternalPlugins {
             let entry = maybe_entry?;
             let path = entry.path();
             if path.is_file() {
-                let mut command = self.sudo.command(&path);
-
-                match command
-                    .arg(LIST)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                {
-                    Ok(code) if code.success() => {
-                        info!("Plugin activated: {}", path.display());
+                match self.sudo.ensure_command_succeeds(&path, &vec![LIST]) {
+                    Ok(()) => {
+                        info!(target: "SM plugins", "Plugin activated: {}", path.display());
                     }
-
-                    // If the file is not executable or returned non 0 status code we assume it is not a valid and skip further processing.
-                    Ok(_) => {
-                        error!(
-                            "File {} in plugin directory does not support list operation and may not be a valid plugin, skipping.",
+                    Err(SudoError::CannotSudo) => {
+                        error!(target: "SM plugins",
+                            "Skipping {}: not properly configured to run with sudo",
                             path.display()
                         );
                         continue;
                     }
-
-                    Err(err) if err.kind() == ErrorKind::PermissionDenied => {
-                        error!(
-                            "File {} Permission Denied, is the file an executable?\n
-                            The file will not be registered as a plugin.",
+                    Err(SudoError::ExecutionFailed(_)) => {
+                        error!(target: "SM plugins",
+                            "Skipping {}: does not support list operation and may not be a valid plugin",
                             path.display()
                         );
                         continue;
                     }
-
                     Err(err) => {
-                        error!(
-                            "An error occurred while trying to run: {}: {}\n
-                            The file will not be registered as a plugin.",
-                            path.display(),
-                            err
+                        error!(target: "SM plugins",
+                            "Skipping {}: can not be launched as a plugin: {err}",
+                            path.display()
                         );
                         continue;
                     }
