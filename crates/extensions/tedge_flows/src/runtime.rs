@@ -1,8 +1,15 @@
 use crate::config::FlowConfig;
+use crate::database;
+use crate::database::DatabaseError;
+use crate::database::MeaDb;
+use cfg_if::cfg_if;
+
 use crate::flow::DateTime;
 use crate::flow::Flow;
 use crate::flow::FlowError;
+use crate::flow::FlowInput;
 use crate::flow::Message;
+use crate::flow::MessageSource;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
 use crate::LoadError;
@@ -23,6 +30,7 @@ pub struct MessageProcessor {
     pub flows: HashMap<String, Flow>,
     pub(super) js_runtime: JsRuntime,
     pub stats: Counter,
+    pub database: Box<dyn MeaDb>,
 }
 
 impl MessageProcessor {
@@ -31,6 +39,17 @@ impl MessageProcessor {
     }
 
     pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
+        let config_dir = config_dir.as_ref();
+
+        let database = Self::create_database(config_dir).await?;
+
+        Self::new_with_database(config_dir, database).await
+    }
+
+    pub async fn new_with_database(
+        config_dir: impl AsRef<Utf8Path>,
+        database: Box<dyn MeaDb>,
+    ) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref();
         let mut js_runtime = JsRuntime::try_new().await?;
         let mut flow_specs = FlowSpecs::default();
@@ -43,12 +62,42 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
+            database,
         })
+    }
+
+    fn db_path(config_dir: &Utf8Path) -> Utf8PathBuf {
+        config_dir.join("tedge-flows.db")
+    }
+
+    async fn create_database(config_dir: &Utf8Path) -> Result<Box<dyn MeaDb>, DatabaseError> {
+        cfg_if! {
+            if #[cfg(feature = "fjall-db")] {
+                Ok(Box::new(database::FjallMeaDb::open(&Self::db_path(config_dir)).await?))
+            } else if #[cfg(feature = "sqlite-db")] {
+                Ok(Box::new(database::SqliteMeaDb::open(&Self::db_path(config_dir)).await?))
+            } else {
+                compile_error!("Either 'fjall-db' or 'sqlite-db' feature must be enabled");
+            }
+        }
     }
 
     pub async fn try_new_single_flow(
         config_dir: impl AsRef<Utf8Path>,
         flow: impl AsRef<Path>,
+    ) -> Result<Self, LoadError> {
+        let config_dir = config_dir.as_ref();
+        let flow = flow.as_ref().to_owned();
+
+        let database = Self::create_database(config_dir).await?;
+
+        Self::new_single_flow_with_database(config_dir, flow, database).await
+    }
+
+    async fn new_single_flow_with_database(
+        config_dir: impl AsRef<Utf8Path>,
+        flow: impl AsRef<Path>,
+        database: Box<dyn MeaDb>,
     ) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref();
         let flow = flow.as_ref().to_owned();
@@ -63,12 +112,25 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
+            database,
         })
     }
 
     pub async fn try_new_single_step_flow(
         config_dir: impl AsRef<Utf8Path>,
         script: impl AsRef<Path>,
+    ) -> Result<Self, LoadError> {
+        let config_dir = config_dir.as_ref();
+
+        let database = Self::create_database(config_dir).await?;
+
+        Self::new_single_step_flow_with_database(config_dir, script, database).await
+    }
+
+    async fn new_single_step_flow_with_database(
+        config_dir: impl AsRef<Utf8Path>,
+        script: impl AsRef<Path>,
+        database: Box<dyn MeaDb>,
     ) -> Result<Self, LoadError> {
         let config_dir = config_dir.as_ref();
         let mut js_runtime = JsRuntime::try_new().await?;
@@ -82,6 +144,7 @@ impl MessageProcessor {
             flows,
             js_runtime,
             stats,
+            database,
         })
     }
 
@@ -93,14 +156,22 @@ impl MessageProcessor {
         topics
     }
 
-    /// Get the next deadline for interval execution across all scripts
-    /// Returns None if no scripts have intervals configured
-    pub fn next_interval_deadline(&self) -> Option<tokio::time::Instant> {
-        self.flows
+    fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + use<'_> {
+        let script_deadlines = self
+            .flows
             .values()
             .flat_map(|flow| &flow.steps)
-            .filter_map(|step| step.script.next_execution)
-            .min()
+            .filter_map(|step| step.script.next_execution);
+
+        let drain_deadlines = self.flows.values().filter_map(|flow| flow.next_drain);
+
+        script_deadlines.chain(drain_deadlines)
+    }
+
+    /// Get the next deadline for interval execution across all scripts and database drains
+    /// Returns None if no scripts have intervals configured and no database drains are scheduled
+    pub fn next_interval_deadline(&self) -> Option<tokio::time::Instant> {
+        self.deadlines().min()
     }
 
     /// Get the last deadline for interval execution across all scripts Returns
@@ -109,16 +180,13 @@ impl MessageProcessor {
     /// This is intended for `tedge flows test` to ensure it processes all
     /// intervals
     pub fn last_interval_deadline(&self) -> Option<tokio::time::Instant> {
-        self.flows
-            .values()
-            .flat_map(|flow| &flow.steps)
-            .filter_map(|step| step.script.next_execution)
-            .max()
+        self.deadlines().max()
     }
 
     pub async fn on_message(
         &mut self,
-        timestamp: &DateTime,
+        source: MessageSource,
+        timestamp: DateTime,
         message: &Message,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let started_at = self.stats.runtime_on_message_start();
@@ -126,7 +194,13 @@ impl MessageProcessor {
         let mut out_messages = vec![];
         for (flow_id, flow) in self.flows.iter_mut() {
             let flow_output = flow
-                .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
+                .on_message(
+                    &self.js_runtime,
+                    source,
+                    &mut self.stats,
+                    timestamp,
+                    message,
+                )
                 .await;
             if flow_output.is_err() {
                 self.stats.flow_on_message_failed(flow_id);
@@ -140,7 +214,7 @@ impl MessageProcessor {
 
     pub async fn on_interval(
         &mut self,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         now: Instant,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let mut out_messages = vec![];
@@ -152,6 +226,31 @@ impl MessageProcessor {
                 self.stats.flow_on_interval_failed(flow_id);
             }
             out_messages.push((flow_id.clone(), flow_output));
+        }
+        out_messages
+    }
+
+    pub async fn drain_db(
+        &mut self,
+        timestamp: DateTime,
+    ) -> Vec<(String, Result<Vec<(DateTime, Message)>, DatabaseError>)> {
+        let mut out_messages = vec![];
+        for (flow_id, flow) in self.flows.iter_mut() {
+            if flow.should_drain_at(timestamp) {
+                if let FlowInput::MeaDB {
+                    series: input_series,
+                    max_age: input_span,
+                    ..
+                } = &flow.input
+                {
+                    let cutoff_time = timestamp - *input_span;
+                    let drained_messages = self
+                        .database
+                        .drain_older_than(cutoff_time, input_series)
+                        .await;
+                    out_messages.push((flow_id.to_owned(), drained_messages));
+                }
+            }
         }
         out_messages
     }
@@ -321,5 +420,81 @@ impl FlowSpecs {
             }
         }
         flows
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+    use time::macros::datetime;
+
+    use super::*;
+    use crate::database::InMemoryMeaDb;
+    use camino::Utf8PathBuf;
+
+    #[tokio::test]
+    async fn message_processor_stores_message_to_database() {
+        let (mut processor, _temp_dir) = create_test_processor_with_memory_db().await;
+
+        let series = "test_series";
+        let timestamp = DateTime::try_from(datetime!(2023-01-01 10:00 UTC)).unwrap();
+        let message = crate::flow::Message {
+            topic: "test/topic".to_string(),
+            payload: r#"{"value": 42}"#.into(),
+            timestamp: Some(timestamp),
+        };
+
+        processor
+            .database
+            .store(series, timestamp, message.clone())
+            .await
+            .expect("store should succeed");
+
+        let stored_messages = processor.database.query_all(series).await.unwrap();
+        assert_eq!(stored_messages, [(timestamp, message)]);
+    }
+
+    #[tokio::test]
+    async fn message_processor_drains_messages_from_database() {
+        let (mut processor, _temp_dir) = create_test_processor_with_memory_db().await;
+
+        let series = "test_series";
+        let timestamp = DateTime::try_from(datetime!(2023-01-01 10:00 UTC)).unwrap();
+        let message = crate::flow::Message {
+            topic: "test/topic".to_string(),
+            payload: r#"{"value": 42}"#.into(),
+            timestamp: Some(timestamp),
+        };
+
+        // Store a message first
+        processor
+            .database
+            .store(series, timestamp, message.clone())
+            .await
+            .unwrap();
+
+        // Drain the message
+        let drained_messages = processor
+            .database
+            .drain_older_than(timestamp, series)
+            .await
+            .unwrap();
+        assert_eq!(drained_messages, [(timestamp, message)]);
+
+        // Verify database is empty after drain
+        let remaining_messages = processor.database.query_all(series).await.unwrap();
+        assert_eq!(remaining_messages, []);
+    }
+
+    async fn create_test_processor_with_memory_db() -> (MessageProcessor, TempDir) {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let config_dir = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).unwrap();
+
+        let database = Box::new(InMemoryMeaDb::default());
+        let processor = MessageProcessor::new_with_database(config_dir, database)
+            .await
+            .expect("Failed to create MessageProcessor");
+
+        (processor, temp_dir)
     }
 }

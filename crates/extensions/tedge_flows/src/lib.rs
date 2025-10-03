@@ -1,5 +1,6 @@
 mod actor;
 mod config;
+pub mod database;
 pub mod flow;
 mod js_lib;
 mod js_runtime;
@@ -124,4 +125,7 @@ pub enum LoadError {
 
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
+
+    #[error(transparent)]
+    Database(#[from] crate::database::DatabaseError),
 }

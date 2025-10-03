@@ -1,5 +1,7 @@
 use crate::flow::DateTime;
+use crate::flow::FlowOutput;
 use crate::flow::Message;
+use crate::flow::MessageSource;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
 use crate::OutputMessage;
@@ -19,6 +21,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tokio::time::sleep_until;
 use tokio::time::Instant;
 use tracing::error;
+use tracing::info;
 
 pub struct FlowsMapper {
     pub(super) messages: SimpleMessageBox<InputMessage, OutputMessage>,
@@ -41,12 +44,15 @@ impl Actor for FlowsMapper {
 
             tokio::select! {
                 _ = deadline_future => {
+                    let drained_messages = self.drain_db().await?;
+                    self.on_messages(MessageSource::MeaDB, drained_messages).await?;
+
                     self.on_interval().await?;
                 }
                 message = self.messages.recv() => {
                     match message {
                         Some(InputMessage::MqttMessage(message)) => match Message::try_from(message) {
-                            Ok(message) => self.on_message(message).await?,
+                            Ok(message) => self.on_message(MessageSource::Mqtt, DateTime::now(), message).await?,
                             Err(err) => {
                                 error!(target: "flows", "Cannot process message: {err}");
                             }
@@ -107,30 +113,33 @@ impl FlowsMapper {
         diff
     }
 
-    async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {
-        let timestamp = DateTime::now();
-        for (flow_id, flow_messages) in self.processor.on_message(&timestamp, &message).await {
+    async fn on_message(
+        &mut self,
+        source: MessageSource,
+        timestamp: DateTime,
+        message: Message,
+    ) -> Result<(), RuntimeError> {
+        for (flow_id, flow_messages) in self.processor.on_message(source, timestamp, &message).await
+        {
             match flow_messages {
-                Ok(messages) => {
-                    for message in messages {
-                        match MqttMessage::try_from(message) {
-                            Ok(message) => {
-                                self.messages
-                                    .send(OutputMessage::MqttMessage(message))
-                                    .await?
-                            }
-                            Err(err) => {
-                                error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
-                            }
-                        }
-                    }
-                }
+                Ok(messages) => self.publish_messages(flow_id, messages).await?,
                 Err(err) => {
-                    error!(target: "flows", "{flow_id}: {err}");
+                    error!(target: "flows", "{flow_id}: {err:#}");
                 }
             }
         }
 
+        Ok(())
+    }
+
+    async fn on_messages(
+        &mut self,
+        source: MessageSource,
+        messages: Vec<(DateTime, Message)>,
+    ) -> Result<(), RuntimeError> {
+        for (timestamp, message) in messages {
+            self.on_message(source, timestamp, message).await?
+        }
         Ok(())
     }
 
@@ -141,21 +150,10 @@ impl FlowsMapper {
             self.processor.dump_memory_stats().await;
             self.processor.dump_processing_stats().await;
         }
-        for (flow_id, flow_messages) in self.processor.on_interval(&timestamp, now).await {
+        for (flow_id, flow_messages) in self.processor.on_interval(timestamp, now).await {
             match flow_messages {
                 Ok(messages) => {
-                    for message in messages {
-                        match MqttMessage::try_from(message) {
-                            Ok(message) => {
-                                self.messages
-                                    .send(OutputMessage::MqttMessage(message))
-                                    .await?
-                            }
-                            Err(err) => {
-                                error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
-                            }
-                        }
-                    }
+                    self.publish_messages(flow_id.clone(), messages).await?;
                 }
                 Err(err) => {
                     error!(target: "flows", "{flow_id}: {err}");
@@ -164,5 +162,67 @@ impl FlowsMapper {
         }
 
         Ok(())
+    }
+
+    async fn publish_messages(
+        &mut self,
+        flow_id: String,
+        messages: Vec<Message>,
+    ) -> Result<(), RuntimeError> {
+        if let Some(flow) = self.processor.flows.get(&flow_id) {
+            match &flow.output {
+                FlowOutput::Mqtt { output_topics } => {
+                    for message in messages {
+                        match MqttMessage::try_from(message) {
+                            Ok(message) if output_topics.accept_topic(&message.topic) => {
+                                self.messages
+                                    .send(OutputMessage::MqttMessage(message))
+                                    .await?
+                            }
+                            Ok(message) => {
+                                error!(target: "flows", "{flow_id}: reject out-of-scope message: {}", message.topic)
+                            }
+                            Err(err) => {
+                                error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
+                            }
+                        }
+                    }
+                }
+                FlowOutput::MeaDB { output_series } => {
+                    let messages = messages
+                        .into_iter()
+                        .map(|m| (DateTime::now(), m))
+                        .collect::<Vec<_>>();
+                    if let Err(err) = self
+                        .processor
+                        .database
+                        .store_many(output_series, messages)
+                        .await
+                    {
+                        error!(target: "flows", "{flow_id}: fail to persist message: {err}");
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn drain_db(&mut self) -> Result<Vec<(DateTime, Message)>, RuntimeError> {
+        let timestamp = DateTime::now();
+        let mut messages = vec![];
+        for (flow_id, flow_messages) in self.processor.drain_db(timestamp).await {
+            match flow_messages {
+                Ok(flow_messages) => {
+                    for (t, m) in flow_messages.iter() {
+                        info!(target: "flows", "drained: @{}.{} [{}]", t.seconds, t.nanoseconds, m.topic);
+                    }
+                    messages.extend(flow_messages);
+                }
+                Err(err) => {
+                    error!(target: "flows", "{flow_id}: {err}");
+                }
+            }
+        }
+        Ok(messages)
     }
 }

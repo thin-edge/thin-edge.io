@@ -1,0 +1,7 @@
+input.db.series = "latest-15min-average"
+input.db.frequency = "4h" # "1d"
+input.db.max_age = "1h"  # "7d"
+
+steps = [
+    { script = "set_topic.js", config = { topic = "te/discarded" } }
+]

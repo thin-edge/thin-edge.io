@@ -70,7 +70,7 @@ export function onMessage (message) {
         State.agg_for_topic[topic] = agg_payload
     }
 
-    console.log("average.state", State.agg_for_topic)
+    //console.log("average.state", State.agg_for_topic)
     return []
 }
 
