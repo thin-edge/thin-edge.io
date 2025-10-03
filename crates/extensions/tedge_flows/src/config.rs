@@ -84,6 +84,7 @@ impl FlowConfig {
             js_runtime.load_script(&mut step.script).await?;
             step.check(&source);
             step.fix();
+            step.script.init_next_execution();
             steps.push(step);
         }
         Ok(Flow {

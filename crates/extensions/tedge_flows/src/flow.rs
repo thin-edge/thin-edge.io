@@ -9,6 +9,7 @@ use serde_json::Value;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use time::OffsetDateTime;
+use tokio::time::Instant;
 use tracing::warn;
 
 /// A chain of transformation of MQTT messages
@@ -119,10 +120,11 @@ impl Flow {
         js_runtime: &JsRuntime,
         stats: &mut Counter,
         timestamp: &DateTime,
+        now: Instant,
     ) -> Result<Vec<Message>, FlowError> {
         let stated_at = stats.flow_on_interval_start(self.source.as_str());
         let mut messages = vec![];
-        for step in self.steps.iter() {
+        for step in self.steps.iter_mut() {
             let js = step.script.source();
             // Process first the messages triggered upstream by the tick
             let mut transformed_messages = vec![];
@@ -138,16 +140,18 @@ impl Flow {
                 transformed_messages.extend(step_output?);
             }
 
-            // Only then process the tick
-            let step_started_at = stats.flow_step_start(&js, "onInterval");
-            let tick_output = step.script.on_interval(js_runtime, timestamp).await;
-            match &tick_output {
-                Ok(messages) => {
-                    stats.flow_step_done(&js, "onInterval", step_started_at, messages.len())
+            // Only then process the tick if it's time to execute
+            if step.script.should_execute_interval(now) {
+                let step_started_at = stats.flow_step_start(&js, "onInterval");
+                let tick_output = step.script.on_interval(js_runtime, timestamp).await;
+                match &tick_output {
+                    Ok(messages) => {
+                        stats.flow_step_done(&js, "onInterval", step_started_at, messages.len())
+                    }
+                    Err(_) => stats.flow_step_failed(&js, "onInterval"),
                 }
-                Err(_) => stats.flow_step_failed(&js, "onInterval"),
+                transformed_messages.extend(tick_output?);
             }
-            transformed_messages.extend(tick_output?);
 
             // Iterate with all the messages collected at this step
             messages = transformed_messages;

@@ -5142,6 +5142,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "camino",
+ "futures",
  "humantime",
  "rquickjs",
  "serde",

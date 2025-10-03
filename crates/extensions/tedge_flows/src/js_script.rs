@@ -6,14 +6,16 @@ use crate::js_runtime::JsRuntime;
 use crate::js_value::JsonValue;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use tokio::time::Instant;
 use tracing::debug;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct JsScript {
     pub module_name: String,
     pub path: Utf8PathBuf,
     pub config: JsonValue,
     pub interval: std::time::Duration,
+    pub next_execution: Option<Instant>,
     pub no_js_on_message_fun: bool,
     pub no_js_on_config_update_fun: bool,
     pub no_js_on_interval_fun: bool,
@@ -27,6 +29,7 @@ impl JsScript {
             path,
             config: JsonValue::default(),
             interval: std::time::Duration::ZERO,
+            next_execution: None,
             no_js_on_message_fun: true,
             no_js_on_config_update_fun: true,
             no_js_on_interval_fun: true,
@@ -116,6 +119,36 @@ impl JsScript {
         Ok(())
     }
 
+    /// Initialize the next execution time for this script's interval
+    /// Should be called after the script is loaded and interval is set
+    pub fn init_next_execution(&mut self) {
+        if !self.no_js_on_interval_fun && !self.interval.is_zero() {
+            self.next_execution = Some(Instant::now() + self.interval);
+        }
+    }
+
+    /// Check if this script should execute its interval function now
+    /// Returns true and updates next_execution if it's time to execute
+    pub fn should_execute_interval(&mut self, now: Instant) -> bool {
+        if self.no_js_on_interval_fun || self.interval.is_zero() {
+            return false;
+        }
+
+        match self.next_execution {
+            Some(deadline) if now >= deadline => {
+                // Time to execute - schedule next execution
+                self.next_execution = Some(now + self.interval);
+                true
+            }
+            None => {
+                // First execution - initialize and execute
+                self.next_execution = Some(now + self.interval);
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Trigger the onInterval function of the JS module
     ///
     /// The "onInterval" function is passed 2 arguments
@@ -123,17 +156,13 @@ impl JsScript {
     /// - the current flow step config
     ///
     /// Return zero, one or more messages
+    ///
+    /// Note: Caller should check should_execute_interval() before calling this
     pub async fn on_interval(
         &self,
         js: &JsRuntime,
         timestamp: &DateTime,
     ) -> Result<Vec<Message>, FlowError> {
-        if self.no_js_on_interval_fun {
-            return Ok(vec![]);
-        }
-        if !timestamp.tick_now(self.interval) {
-            return Ok(vec![]);
-        }
         debug!(target: "flows", "{}: onInterval({timestamp:?})", self.module_name());
         let input = vec![timestamp.clone().into(), self.config.clone()];
         js.call_function(&self.module_name(), "onInterval", input)

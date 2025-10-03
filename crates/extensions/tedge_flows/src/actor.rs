@@ -5,6 +5,8 @@ use crate::InputMessage;
 use crate::OutputMessage;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
+use futures::future::Either;
+use std::future::pending;
 use tedge_actors::Actor;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
@@ -14,8 +16,8 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
-use tokio::time::interval;
-use tokio::time::Duration;
+use tokio::time::sleep_until;
+use tokio::time::Instant;
 use tracing::error;
 
 pub struct FlowsMapper {
@@ -31,11 +33,14 @@ impl Actor for FlowsMapper {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        let mut interval = interval(Duration::from_secs(1));
-
         loop {
+            let deadline_future = match self.processor.next_interval_deadline() {
+                Some(deadline) => Either::Left(sleep_until(deadline)),
+                None => Either::Right(pending()),
+            };
+
             tokio::select! {
-                _ = interval.tick() => {
+                _ = deadline_future => {
                     self.on_interval().await?;
                 }
                 message = self.messages.recv() => {
@@ -130,12 +135,13 @@ impl FlowsMapper {
     }
 
     async fn on_interval(&mut self) -> Result<(), RuntimeError> {
+        let now = Instant::now();
         let timestamp = DateTime::now();
         if timestamp.seconds % 300 == 0 {
             self.processor.dump_memory_stats().await;
             self.processor.dump_processing_stats().await;
         }
-        for (flow_id, flow_messages) in self.processor.on_interval(&timestamp).await {
+        for (flow_id, flow_messages) in self.processor.on_interval(&timestamp, now).await {
             match flow_messages {
                 Ok(messages) => {
                     for message in messages {
