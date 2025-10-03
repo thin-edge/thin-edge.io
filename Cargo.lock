@@ -5347,6 +5347,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_watch_ext"
+version = "1.6.1"
+dependencies = [
+ "async-trait",
+ "camino",
+ "shell-words",
+ "tedge_actors",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
