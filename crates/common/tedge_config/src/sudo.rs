@@ -67,8 +67,10 @@ impl SudoCommandBuilder {
         }
     }
 
-    /// Check that the command can be executed using sudo
-    pub fn command_is_executable<S: AsRef<OsStr>>(
+    /// Ensure the command can be executed using sudo
+    ///
+    /// Be warned, that the command is actually executed.
+    pub fn ensure_command_succeeds<S: AsRef<OsStr>>(
         &self,
         program: &impl AsRef<OsStr>,
         args: &Vec<S>,
@@ -95,6 +97,9 @@ impl SudoCommandBuilder {
         }
     }
 
+    /// Check that sudo is enabled and the user authorized to run the command with sudo
+    ///
+    /// This is done by running `sudo --list <command> <args>`.
     fn command_is_sudo_enabled<S: AsRef<OsStr>>(
         &self,
         program: &impl AsRef<OsStr>,

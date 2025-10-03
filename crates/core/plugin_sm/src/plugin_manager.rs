@@ -144,7 +144,7 @@ impl ExternalPlugins {
             let entry = maybe_entry?;
             let path = entry.path();
             if path.is_file() {
-                match self.sudo.command_is_executable(&path, &vec![LIST]) {
+                match self.sudo.ensure_command_succeeds(&path, &vec![LIST]) {
                     Ok(()) => {
                         info!(target: "SM plugins", "Plugin activated: {}", path.display());
                     }

@@ -72,7 +72,7 @@ impl ExternalPlugins {
                         continue;
                     }
 
-                    match self.sudo.command_is_executable(&path, &vec![LIST]) {
+                    match self.sudo.ensure_command_succeeds(&path, &vec![LIST]) {
                         Ok(()) => {
                             info!(target: "log plugins", "Log plugin activated: {path}");
                         }
