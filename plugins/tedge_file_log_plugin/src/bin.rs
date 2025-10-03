@@ -13,6 +13,7 @@ use time::OffsetDateTime;
 #[derive(clap::Parser, Debug)]
 #[clap(
     name = "tedge-file-log-plugin",
+    alias = "file",
     version = clap::crate_version!(),
     about = clap::crate_description!(),
     arg_required_else_help(true)
