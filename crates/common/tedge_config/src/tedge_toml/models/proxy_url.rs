@@ -96,7 +96,7 @@ fn parse_host_port(s: &str) -> anyhow::Result<(url::Host, Port)> {
         url.password().is_none(),
         "URL should not contain a password, please specify this in the dedicated configuration"
     );
-    match (url.host(), url.port()) {
+    match (url.host(), url.port_or_known_default()) {
         (Some(host), Some(port)) => Ok((host.to_owned(), Port(port))),
         (None, _) => {
             unreachable!("Host cannot be empty for http:// URLs, only for e.g. `data:` URLs")
@@ -117,6 +117,18 @@ mod tests {
                 scheme: ProxyScheme::Https,
                 host: url::Host::Domain("proxy-host".into()),
                 port: Port(8000),
+            }
+        )
+    }
+
+    #[test]
+    fn fromstr_https_port_80() {
+        assert_eq!(
+            "https://proxy-host:80".parse::<ProxyUrl>().unwrap(),
+            ProxyUrl {
+                scheme: ProxyScheme::Https,
+                host: url::Host::Domain("proxy-host".into()),
+                port: Port(80),
             }
         )
     }
@@ -148,11 +160,12 @@ mod tests {
     #[test]
     fn fromstr_without_port() {
         assert_eq!(
-            "http://192.168.1.2"
-                .parse::<ProxyUrl>()
-                .unwrap_err()
-                .to_string(),
-            "Invalid proxy URL: 192.168.1.2 is missing a port"
+            "http://192.168.1.2".parse::<ProxyUrl>().unwrap(),
+            ProxyUrl {
+                scheme: ProxyScheme::Http,
+                host: url::Host::Ipv4("192.168.1.2".parse().unwrap()),
+                port: Port(80),
+            }
         )
     }
 
