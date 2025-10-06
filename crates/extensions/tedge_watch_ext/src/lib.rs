@@ -2,11 +2,11 @@ use crate::actor::Watcher;
 use camino::Utf8PathBuf;
 use std::convert::Infallible;
 use tedge_actors::Builder;
-use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_actors::NoMessage;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -42,39 +42,39 @@ pub enum WatchError {
 }
 
 pub struct WatchActorBuilder {
-    message_box: SimpleMessageBoxBuilder<WatchRequest, WatchEvent>,
+    request_box: SimpleMessageBoxBuilder<(u32, WatchRequest), NoMessage>,
+    event_senders: Vec<DynSender<WatchEvent>>,
 }
 
 impl WatchActorBuilder {
     pub fn new() -> Self {
-        let message_box = SimpleMessageBoxBuilder::new("watcher", 16);
-        WatchActorBuilder { message_box }
+        let request_box = SimpleMessageBoxBuilder::new("watcher", 16);
+        let event_senders = vec![];
+        WatchActorBuilder {
+            request_box,
+            event_senders,
+        }
     }
 
     pub fn connect(
         &mut self,
         client: &mut (impl MessageSource<WatchRequest, NoConfig> + MessageSink<WatchEvent>),
     ) {
-        self.connect_source(NoConfig, client);
-        self.connect_sink(NoConfig, client);
+        let client_id = self.event_senders.len() as u32;
+        self.event_senders.push(client.get_sender());
+        client.connect_mapped_sink(NoConfig, self, move |req| Some((client_id, req)));
     }
 }
 
-impl MessageSink<WatchRequest> for WatchActorBuilder {
-    fn get_sender(&self) -> DynSender<WatchRequest> {
-        self.message_box.get_sender()
-    }
-}
-
-impl MessageSource<WatchEvent, NoConfig> for WatchActorBuilder {
-    fn connect_sink(&mut self, config: NoConfig, peer: &impl MessageSink<WatchEvent>) {
-        self.message_box.connect_sink(config, peer);
+impl MessageSink<(u32, WatchRequest)> for WatchActorBuilder {
+    fn get_sender(&self) -> DynSender<(u32, WatchRequest)> {
+        self.request_box.get_sender()
     }
 }
 
 impl RuntimeRequestSink for WatchActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        self.message_box.get_signal_sender()
+        self.request_box.get_signal_sender()
     }
 }
 
@@ -86,13 +86,9 @@ impl Builder<Watcher> for WatchActorBuilder {
     }
 
     fn build(self) -> Watcher {
-        let request_sender = self.message_box.get_sender();
-        let (event_sender, request_receiver) = self.message_box.build().into_split();
-        Watcher::new(
-            event_sender.sender_clone(),
-            request_sender,
-            request_receiver,
-        )
+        let request_sender = self.request_box.get_sender();
+        let (_, request_receiver) = self.request_box.build().into_split();
+        Watcher::new(self.event_senders, request_sender, request_receiver)
     }
 }
 
