@@ -38,13 +38,13 @@ impl Command for TestCommand {
         };
         if let Some(message) = &self.message {
             let timestamp = DateTime::now();
-            self.process(&mut processor, message.clone(), &timestamp)
+            self.process(&mut processor, message.clone(), timestamp)
                 .await;
         } else {
             let mut stdin = BufReader::new(tokio::io::stdin());
             while let Some(message) = next_message(&mut stdin).await {
                 let timestamp = DateTime::now();
-                self.process(&mut processor, message, &timestamp).await;
+                self.process(&mut processor, message, timestamp).await;
             }
         }
         if self.final_on_interval {
@@ -52,7 +52,7 @@ impl Command for TestCommand {
             let now = processor
                 .last_interval_deadline()
                 .unwrap_or_else(Instant::now);
-            self.tick(&mut processor, &timestamp, now).await;
+            self.tick(&mut processor, timestamp, now).await;
         }
         Ok(())
     }
@@ -63,7 +63,7 @@ impl TestCommand {
         &self,
         processor: &mut MessageProcessor,
         mut message: Message,
-        timestamp: &DateTime,
+        timestamp: DateTime,
     ) {
         if self.base64_input {
             match BASE64_STANDARD.decode(message.payload) {
@@ -81,7 +81,7 @@ impl TestCommand {
             .for_each(|msg| self.print_messages(msg))
     }
 
-    async fn tick(&self, processor: &mut MessageProcessor, timestamp: &DateTime, now: Instant) {
+    async fn tick(&self, processor: &mut MessageProcessor, timestamp: DateTime, now: Instant) {
         processor
             .on_interval(timestamp, now)
             .await

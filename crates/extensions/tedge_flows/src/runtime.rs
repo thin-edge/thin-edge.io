@@ -118,7 +118,7 @@ impl MessageProcessor {
 
     pub async fn on_message(
         &mut self,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         message: &Message,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let started_at = self.stats.runtime_on_message_start();
@@ -140,7 +140,7 @@ impl MessageProcessor {
 
     pub async fn on_interval(
         &mut self,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         now: Instant,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let mut out_messages = vec![];

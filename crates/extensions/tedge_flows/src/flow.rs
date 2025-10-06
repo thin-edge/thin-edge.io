@@ -33,7 +33,7 @@ pub enum FlowInput {
     MQTT { topics: TopicFilter },
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
 pub struct DateTime {
     pub seconds: u64,
     pub nanoseconds: u32,
@@ -84,7 +84,7 @@ impl Flow {
         &mut self,
         js_runtime: &JsRuntime,
         stats: &mut Counter,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         self.on_config_update(js_runtime, message).await?;
@@ -119,7 +119,7 @@ impl Flow {
         &mut self,
         js_runtime: &JsRuntime,
         stats: &mut Counter,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         now: Instant,
     ) -> Result<Vec<Message>, FlowError> {
         let stated_at = stats.flow_on_interval_start(self.source.as_str());
