@@ -263,7 +263,11 @@ impl Cryptoki {
             CryptokiSessionType::_ReadWrite => context.open_rw_session(slot)?,
         };
 
-        session.login(UserType::User, Some(&self.config.pin))?;
+        let pin = uri_attributes
+            .pin_value
+            .as_ref()
+            .unwrap_or(&self.config.pin);
+        session.login(UserType::User, Some(pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
 
