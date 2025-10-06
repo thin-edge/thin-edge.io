@@ -1,28 +1,39 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use secrecy::SecretString;
+
 /// Attributes decoded from a PKCS #11 URL.
 ///
 /// Attributes only relevant to us shall be put into fields and the rest is in `other` hashmap.
 ///
 /// https://www.rfc-editor.org/rfc/rfc7512.html
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct Pkcs11Uri<'a> {
     pub token: Option<Cow<'a, str>>,
     pub serial: Option<Cow<'a, str>>,
     pub id: Option<Vec<u8>>,
     pub object: Option<Cow<'a, str>>,
     pub other: HashMap<&'a str, Cow<'a, str>>,
+
+    /// PIN to be used for the request.
+    ///
+    /// If not present, default PIN given by the server will be used.
+    /// This is sensitive, so it shouldn't be printed.
+    pub pin_value: Option<SecretString>,
 }
 
 impl<'a> Pkcs11Uri<'a> {
     pub fn parse(uri: &'a str) -> anyhow::Result<Self> {
-        let path = uri
+        let uri = uri
             .strip_prefix("pkcs11:")
             .ok_or_else(|| anyhow::anyhow!("missing PKCS #11 URI scheme"))?;
 
-        // split of the query component
-        let path = path.split_once('?').map(|(l, _)| l).unwrap_or(path);
+        // separate path and query components, if there is no query separator, there's no query
+        let (path, query) = match uri.split_once('?') {
+            Some((p, q)) => (p, Some(q)),
+            None => (uri, None),
+        };
 
         // parse attributes, duplicate attributes are an error (RFC section 2.3)
         let pairs_iter = path.split(';').filter_map(|pair| pair.split_once('='));
@@ -58,12 +69,29 @@ impl<'a> Pkcs11Uri<'a> {
             })
             .collect();
 
+        // parse query attributes if present
+        let mut qattr_pairs = HashMap::new();
+        if let Some(query) = query {
+            let qattr_pairs_iter = query.split('&').filter_map(|pair| pair.split_once('='));
+            for (k, v) in qattr_pairs_iter {
+                let prev_value = qattr_pairs.insert(k, v);
+                if prev_value.is_some() {
+                    anyhow::bail!("PKCS#11 URI contains duplicate attribute ({k})");
+                }
+            }
+        }
+
+        let pin_value = qattr_pairs
+            .remove("pin-value")
+            .map(|p| SecretString::new(p.to_string()));
+
         Ok(Self {
             token,
             serial,
             id,
             object,
             other,
+            pin_value,
         })
     }
 
@@ -76,6 +104,7 @@ impl<'a> Pkcs11Uri<'a> {
         self.serial = self.serial.take().or(other.serial);
         self.id = self.id.take().or(other.id);
         self.object = self.object.take().or(other.object);
+        self.pin_value = self.pin_value.take().or(other.pin_value);
 
         for (attribute, value) in other.other {
             if !self.other.contains_key(attribute) {
@@ -203,5 +232,17 @@ mod tests {
         assert_eq!(uri1.object.unwrap(), "object1");
         assert_eq!(uri1.other.get("key1").unwrap(), "value1");
         assert_eq!(uri1.other.get("key2").unwrap(), "value2");
+    }
+
+    #[test]
+    fn parses_pin_value() {
+        use secrecy::ExposeSecret;
+        let uri = Pkcs11Uri::parse(
+            "pkcs11:token=Software%20PKCS%2311%20softtoken;
+            manufacturer=Snake%20Oil,%20Inc.
+            ?pin-value=the-pin",
+        )
+        .unwrap();
+        assert_eq!(uri.pin_value.unwrap().expose_secret(), "the-pin");
     }
 }
