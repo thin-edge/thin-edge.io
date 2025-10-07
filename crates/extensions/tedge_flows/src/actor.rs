@@ -1,4 +1,5 @@
 use crate::flow::DateTime;
+use crate::flow::FlowInput;
 use crate::flow::Message;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
@@ -8,8 +9,10 @@ use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use futures::FutureExt;
 use std::cmp::min;
+use std::collections::HashSet;
 use std::time::Duration;
 use tedge_actors::Actor;
+use tedge_actors::DynSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
@@ -18,15 +21,20 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_watch_ext::WatchEvent;
+use tedge_watch_ext::WatchRequest;
 use tokio::time::sleep_until;
 use tokio::time::Instant;
 use tracing::error;
+use tracing::info;
 
 pub const STATS_DUMP_INTERVAL: Duration = Duration::from_secs(300);
 
 pub struct FlowsMapper {
     pub(super) messages: SimpleMessageBox<InputMessage, OutputMessage>,
+    pub(super) watch_request_sender: DynSender<WatchRequest>,
     pub(super) subscriptions: TopicFilter,
+    pub(super) watched_commands: HashSet<String>,
     pub(super) processor: MessageProcessor,
     pub(super) next_dump: Instant,
 }
@@ -38,17 +46,22 @@ impl Actor for FlowsMapper {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        self.send_updated_subscriptions().await?;
+
         while let Some(message) = self.next_message().await {
             match message {
                 InputMessage::Tick(_) => {
                     self.on_interval().await?;
                 }
-                InputMessage::MqttMessage(message) => match Message::try_from(message) {
-                    Ok(message) => self.on_message(message).await?,
-                    Err(err) => {
-                        error!(target: "flows", "Cannot process message: {err}");
-                    }
-                },
+                InputMessage::MqttMessage(message) => {
+                    self.on_message(Message::from(message)).await?
+                }
+                InputMessage::WatchEvent(WatchEvent::NewLine { topic, line }) => {
+                    self.on_message(Message::new(topic, line)).await?
+                }
+                InputMessage::WatchEvent(WatchEvent::Error { error, .. }) => {
+                    error!(target: "flows", "Cannot monitor command: {error}");
+                }
                 InputMessage::FsWatchEvent(FsWatchEvent::Modified(path)) => {
                     let Ok(path) = Utf8PathBuf::try_from(path) else {
                         continue;
@@ -80,7 +93,7 @@ impl Actor for FlowsMapper {
                         self.send_updated_subscriptions().await?;
                     }
                 }
-                InputMessage::FsWatchEvent(_) => unimplemented!(),
+                _ => continue,
             }
         }
 
@@ -111,6 +124,10 @@ impl FlowsMapper {
         self.messages
             .send(OutputMessage::SubscriptionDiff(diff))
             .await?;
+
+        for watch_request in self.update_watched_commands() {
+            self.watch_request_sender.send(watch_request).await?;
+        }
         Ok(())
     }
 
@@ -119,6 +136,46 @@ impl FlowsMapper {
         let diff = SubscriptionDiff::new(&new_subscriptions, &self.subscriptions);
         self.subscriptions = new_subscriptions;
         diff
+    }
+
+    fn update_watched_commands(&mut self) -> Vec<WatchRequest> {
+        let mut watch_requests = Vec::new();
+        let mut new_watched_commands = HashSet::new();
+        for flow in self.processor.flows.values() {
+            let (topic, request) = match &flow.input {
+                FlowInput::Mqtt { .. } => continue,
+                FlowInput::File { topic, path } => {
+                    info!(target: "flows", "Watching file: {path}");
+                    (
+                        topic,
+                        WatchRequest::WatchFile {
+                            topic: topic.to_owned(),
+                            file: path.to_owned(),
+                        },
+                    )
+                }
+                FlowInput::Process { topic, command } => {
+                    info!(target: "flows", "Watching command: {command}");
+                    (
+                        topic,
+                        WatchRequest::WatchCommand {
+                            topic: topic.to_owned(),
+                            command: command.to_owned(),
+                        },
+                    )
+                }
+            };
+            if !self.watched_commands.contains(topic) {
+                watch_requests.push(request);
+            }
+            self.watched_commands.remove(topic);
+            new_watched_commands.insert(topic.to_owned());
+        }
+        for old_command in self.watched_commands.drain() {
+            watch_requests.push(WatchRequest::UnWatch { topic: old_command });
+        }
+        self.watched_commands = new_watched_commands;
+        watch_requests
     }
 
     async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {

@@ -43,6 +43,12 @@ pub enum ScriptSpec {
 pub enum InputConfig {
     #[serde(rename = "mqtt")]
     Mqtt { topics: Vec<String> },
+
+    #[serde(rename = "file")]
+    File { path: Utf8PathBuf },
+
+    #[serde(rename = "process")]
+    Process { command: String },
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -123,12 +129,25 @@ impl TryFrom<InputConfig> for FlowInput {
 
     fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
         match input {
-            InputConfig::Mqtt { topics } => Ok(FlowInput::MQTT {
+            InputConfig::Mqtt { topics } => Ok(FlowInput::Mqtt {
                 topics: topic_filters(topics)?,
             }),
+            InputConfig::File { path } => {
+                let topic = resource_specific_topic("file", path.as_str());
+                Ok(FlowInput::File { path, topic })
+            }
+            InputConfig::Process { command } => {
+                let topic = resource_specific_topic("cmd", &command);
+                Ok(FlowInput::Process { command, topic })
+            }
         }
     }
 }
+
+fn resource_specific_topic(protocol: &str, resource: &str) -> String {
+    format!("{protocol}://{}", sha256::digest(resource))
+}
+
 fn topic_filters(patterns: Vec<String>) -> Result<TopicFilter, ConfigError> {
     let mut topics = TopicFilter::empty();
     for pattern in patterns {

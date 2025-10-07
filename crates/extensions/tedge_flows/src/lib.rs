@@ -12,14 +12,17 @@ use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
 pub use crate::runtime::MessageProcessor;
 use camino::Utf8Path;
+use std::collections::HashSet;
 use std::convert::Infallible;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Builder;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_actors::NullSender;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -29,10 +32,11 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_watch_ext::WatchEvent;
+use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 use tracing::error;
-
-fan_in_message_type!(InputMessage[MqttMessage, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
+fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 fan_in_message_type!(OutputMessage[MqttMessage, SubscriptionDiff]: Clone, Debug, Eq, PartialEq);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,14 +44,18 @@ struct Tick;
 
 pub struct FlowsMapperBuilder {
     message_box: SimpleMessageBoxBuilder<InputMessage, OutputMessage>,
+    watch_request_sender: DynSender<WatchRequest>,
     processor: MessageProcessor,
 }
 
 impl FlowsMapperBuilder {
     pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
         let processor = MessageProcessor::try_new(config_dir).await?;
+        let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
+        let watch_request_sender = NullSender.into();
         Ok(FlowsMapperBuilder {
-            message_box: SimpleMessageBoxBuilder::new("GenMapper", 16),
+            message_box,
+            watch_request_sender,
             processor,
         })
     }
@@ -84,6 +92,18 @@ impl FlowsMapperBuilder {
     }
 }
 
+impl MessageSource<WatchRequest, NoConfig> for FlowsMapperBuilder {
+    fn connect_sink(&mut self, _config: NoConfig, peer: &impl MessageSink<WatchRequest>) {
+        self.watch_request_sender = peer.get_sender();
+    }
+}
+
+impl MessageSink<WatchEvent> for FlowsMapperBuilder {
+    fn get_sender(&self) -> DynSender<WatchEvent> {
+        self.message_box.get_sender().sender_clone()
+    }
+}
+
 impl RuntimeRequestSink for FlowsMapperBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.message_box.get_signal_sender()
@@ -99,9 +119,12 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
 
     fn build(self) -> FlowsMapper {
         let subscriptions = self.topics().clone();
+        let watched_commands = HashSet::new();
         FlowsMapper {
             messages: self.message_box.build(),
+            watch_request_sender: self.watch_request_sender,
             subscriptions,
+            watched_commands,
             processor: self.processor,
             next_dump: Instant::now() + STATS_DUMP_INTERVAL,
         }
