@@ -61,33 +61,20 @@ impl From<ProxyUrl> for String {
 impl FromStr for ProxyUrl {
     type Err = InvalidProxyUrl;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some(rem) = s.strip_prefix("https://") {
-            let (host, port) = parse_host_port(rem)?;
-            Ok(Self {
-                scheme: ProxyScheme::Https,
-                host,
-                port,
-            })
-        } else if let Some(rem) = s.strip_prefix("http://") {
-            let (host, port) = parse_host_port(rem)?;
-            Ok(Self {
-                scheme: ProxyScheme::Http,
-                host,
-                port,
-            })
-        } else {
-            let (host, port) = parse_host_port(s)?;
-            Ok(Self {
-                scheme: ProxyScheme::Http,
-                host,
-                port,
-            })
-        }
+        let (host, port, scheme) = parse_host_port(s)?;
+        Ok(Self { scheme, host, port })
     }
 }
 
-fn parse_host_port(s: &str) -> anyhow::Result<(url::Host, Port)> {
-    let url = url::Url::parse(&format!("http://{s}"))?;
+fn parse_host_port(s: &str) -> anyhow::Result<(url::Host, Port, ProxyScheme)> {
+    let url = url::Url::parse(s).or_else(|err| {
+        // Make sure we're not doubling up the supplied scheme if there is one
+        if !s.contains("://") {
+            url::Url::parse(&format!("http://{s}"))
+        } else {
+            Err(err)
+        }
+    })?;
     ensure!(
         url.username() == "",
         "URL should not contain a username, please specify this in the dedicated configuration"
@@ -96,12 +83,17 @@ fn parse_host_port(s: &str) -> anyhow::Result<(url::Host, Port)> {
         url.password().is_none(),
         "URL should not contain a password, please specify this in the dedicated configuration"
     );
+    let scheme = match url.scheme() {
+        "http" => ProxyScheme::Http,
+        "https" => ProxyScheme::Https,
+        other => bail!("Unsupported proxy scheme: {other}"),
+    };
     match (url.host(), url.port_or_known_default()) {
-        (Some(host), Some(port)) => Ok((host.to_owned(), Port(port))),
+        (Some(host), Some(port)) => Ok((host.to_owned(), Port(port), scheme)),
         (None, _) => {
             unreachable!("Host cannot be empty for http:// URLs, only for e.g. `data:` URLs")
         }
-        (_, None) => bail!("{s} is missing a port"),
+        (_, None) => unreachable!("{scheme} URLs always have a default port"),
     }
 }
 
@@ -165,6 +157,76 @@ mod tests {
                 scheme: ProxyScheme::Http,
                 host: url::Host::Ipv4("192.168.1.2".parse().unwrap()),
                 port: Port(80),
+            }
+        )
+    }
+
+    #[test]
+    fn fromstr_without_scheme() {
+        assert_eq!(
+            "192.168.1.2".parse::<ProxyUrl>().unwrap(),
+            ProxyUrl {
+                scheme: ProxyScheme::Http,
+                host: url::Host::Ipv4("192.168.1.2".parse().unwrap()),
+                port: Port(80),
+            }
+        )
+    }
+
+    #[test]
+    fn fromstr_with_unknown_scheme() {
+        assert_eq!(
+            "nonsense://192.168.1.2"
+                .parse::<ProxyUrl>()
+                .unwrap_err()
+                .to_string(),
+            "Invalid proxy URL: Unsupported proxy scheme: nonsense"
+        )
+    }
+
+    #[test]
+    fn fromstr_with_unknown_scheme_and_invalid_port() {
+        assert_eq!(
+            "nonsense://192.168.1.2:notanumber"
+                .parse::<ProxyUrl>()
+                .unwrap_err()
+                .to_string(),
+            "Invalid proxy URL: invalid port number"
+        )
+    }
+
+    #[test]
+    fn fromstr_without_port_https() {
+        assert_eq!(
+            "https://192.168.1.2".parse::<ProxyUrl>().unwrap(),
+            ProxyUrl {
+                scheme: ProxyScheme::Https,
+                host: url::Host::Ipv4("192.168.1.2".parse().unwrap()),
+                port: Port(443),
+            }
+        )
+    }
+
+    #[test]
+    fn fromstr_with_explicit_default_http_port() {
+        assert_eq!(
+            "http://192.168.1.2:80".parse::<ProxyUrl>().unwrap(),
+            ProxyUrl {
+                scheme: ProxyScheme::Http,
+                host: url::Host::Ipv4("192.168.1.2".parse().unwrap()),
+                port: Port(80),
+            }
+        )
+    }
+
+    #[test]
+    fn fromstr_with_explicit_default_https_port() {
+        assert_eq!(
+            "https://192.168.1.2:443".parse::<ProxyUrl>().unwrap(),
+            ProxyUrl {
+                scheme: ProxyScheme::Https,
+                host: url::Host::Ipv4("192.168.1.2".parse().unwrap()),
+                port: Port(443),
             }
         )
     }
