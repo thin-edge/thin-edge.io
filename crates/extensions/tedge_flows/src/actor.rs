@@ -109,7 +109,7 @@ impl FlowsMapper {
 
     async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
-        for (flow_id, flow_messages) in self.processor.on_message(&timestamp, &message).await {
+        for (flow_id, flow_messages) in self.processor.on_message(timestamp, &message).await {
             match flow_messages {
                 Ok(messages) => {
                     for message in messages {
@@ -141,7 +141,7 @@ impl FlowsMapper {
             self.processor.dump_memory_stats().await;
             self.processor.dump_processing_stats().await;
         }
-        for (flow_id, flow_messages) in self.processor.on_interval(&timestamp, now).await {
+        for (flow_id, flow_messages) in self.processor.on_interval(timestamp, now).await {
             match flow_messages {
                 Ok(messages) => {
                     for message in messages {

@@ -93,14 +93,17 @@ impl MessageProcessor {
         topics
     }
 
-    /// Get the next deadline for interval execution across all scripts
-    /// Returns None if no scripts have intervals configured
-    pub fn next_interval_deadline(&self) -> Option<tokio::time::Instant> {
+    fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + '_ {
         self.flows
             .values()
             .flat_map(|flow| &flow.steps)
             .filter_map(|step| step.script.next_execution)
-            .min()
+    }
+
+    /// Get the next deadline for interval execution across all scripts
+    /// Returns None if no scripts have intervals configured
+    pub fn next_interval_deadline(&self) -> Option<tokio::time::Instant> {
+        self.deadlines().min()
     }
 
     /// Get the last deadline for interval execution across all scripts Returns
@@ -109,16 +112,12 @@ impl MessageProcessor {
     /// This is intended for `tedge flows test` to ensure it processes all
     /// intervals
     pub fn last_interval_deadline(&self) -> Option<tokio::time::Instant> {
-        self.flows
-            .values()
-            .flat_map(|flow| &flow.steps)
-            .filter_map(|step| step.script.next_execution)
-            .max()
+        self.deadlines().max()
     }
 
     pub async fn on_message(
         &mut self,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         message: &Message,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let started_at = self.stats.runtime_on_message_start();
@@ -140,7 +139,7 @@ impl MessageProcessor {
 
     pub async fn on_interval(
         &mut self,
-        timestamp: &DateTime,
+        timestamp: DateTime,
         now: Instant,
     ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
         let mut out_messages = vec![];
