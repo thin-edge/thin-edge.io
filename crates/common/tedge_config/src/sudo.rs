@@ -1,5 +1,6 @@
 use std::ffi::OsStr;
 use std::process::Command;
+use std::process::Stdio;
 use std::sync::Arc;
 use tracing::warn;
 
@@ -65,4 +66,79 @@ impl SudoCommandBuilder {
             }
         }
     }
+
+    /// Ensure the command can be executed using sudo
+    ///
+    /// Be warned, that the command is actually executed.
+    pub fn ensure_command_succeeds<S: AsRef<OsStr>>(
+        &self,
+        program: &impl AsRef<OsStr>,
+        args: &Vec<S>,
+    ) -> Result<(), SudoError> {
+        let output = self
+            .command(program)
+            .args(args)
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output();
+        match output {
+            Ok(output) if output.status.success() => Ok(()),
+            Ok(output) => {
+                tracing::error!(target: "sudo", "{} failed with stderr: <<EOF\n{}\nEOF",
+                    program.as_ref().to_string_lossy(),
+                    String::from_utf8_lossy(output.stderr.as_ref()));
+                match output.status.code() {
+                    Some(exit_code) => {
+                        if self.command_is_sudo_enabled(program, args) {
+                            Err(SudoError::ExecutionFailed(exit_code))
+                        } else {
+                            Err(SudoError::CannotSudo)
+                        }
+                    }
+                    None => Err(SudoError::ExecutionInterrupted),
+                }
+            }
+            Err(err) => Err(SudoError::CannotExecute(err)),
+        }
+    }
+
+    /// Check that sudo is enabled and the user authorized to run the command with sudo
+    ///
+    /// This is done by running `sudo --list <command> <args>`.
+    fn command_is_sudo_enabled<S: AsRef<OsStr>>(
+        &self,
+        program: &impl AsRef<OsStr>,
+        args: &Vec<S>,
+    ) -> bool {
+        if !self.enabled {
+            return false;
+        }
+        let Ok(sudo) = which::which(self.sudo_program.as_ref()) else {
+            return false;
+        };
+        let status = Command::new(sudo)
+            .arg("-n")
+            .arg("--list")
+            .arg(program)
+            .args(args)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        matches!(status, Ok(status) if status.success())
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum SudoError {
+    #[error("The user has not been authorized to run the command with sudo")]
+    CannotSudo,
+
+    #[error(transparent)]
+    CannotExecute(#[from] std::io::Error),
+
+    #[error("The command returned a non-zero exit code: {0}")]
+    ExecutionFailed(i32),
+
+    #[error("The command has been interrupted by a signal")]
+    ExecutionInterrupted,
 }

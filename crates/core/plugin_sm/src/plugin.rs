@@ -138,7 +138,7 @@ pub trait Plugin {
         if failed_updates.is_empty() {
             let outcome = self.update_list(&updates, command_log.as_deref_mut()).await;
             if let Err(err @ SoftwareError::UpdateListNotSupported(_)) = outcome {
-                info!("{err}");
+                info!(target: "SM plugins", "{err}");
                 for update in updates.iter() {
                     if let Err(error) = self
                         .apply(update, command_log.as_deref_mut(), download_path)
@@ -228,7 +228,7 @@ pub trait Plugin {
                     url: url.url().to_string(),
                 })
         {
-            error!("Download error: {err:#?}");
+            error!(target: "SM plugins", "Download error: {err:#?}");
             if let Some(ref mut logger) = command_log {
                 logger
                     .write(format!("error: {}\n", &err).as_bytes())
