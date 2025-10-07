@@ -27,6 +27,7 @@ path-clean = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 rustls = { workspace = true }
+secrecy = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 strum = { workspace = true }
 strum_macros = { workspace = true }

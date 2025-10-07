@@ -139,7 +139,7 @@ Can renew the certificate using different keypair
     ${stdout}=    Tedge Reconnect Should Succeed
     Should Contain    ${stdout}    The new certificate is now the active certificate
 
-Can pass PIN in the request
+Can pass PIN in the request using pin-value
     [Documentation]    Tests if the PIN can be changed for the request by assuming current one is correct and setting a
     ...    different one to see if we get an error about pin being incorrect.
 
@@ -149,6 +149,12 @@ Can pass PIN in the request
     Tedge Reconnect Should Fail With    The specified PIN is incorrect
 
     [Teardown]    Execute Command    tedge config set device.key_uri "${key_uri}"
+
+Can pass PIN in the request using device.key_pin
+    Execute Command    tedge config set device.key_pin incorrect
+    Tedge Reconnect Should Fail With    The specified PIN is incorrect
+
+    [Teardown]    Execute Command    tedge config unset device.key_pin
 
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml

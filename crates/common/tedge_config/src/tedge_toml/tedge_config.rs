@@ -152,6 +152,16 @@ define_tedge_config! {
         #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
         key_uri: Arc<str>,
 
+        /// User PIN value for logging into the PKCS#11 token provided by the consumer.
+        ///
+        /// This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a
+        /// default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given
+        /// `key_uri`.
+        ///
+        /// In practice, this can be used to define separate keys and separate PINs for different connection profiles.
+        #[tedge_config(example = "123456", example = "my-pin")]
+        key_pin: Arc<str>,
+
         cryptoki: {
             /// Whether to use a Hardware Security Module for authenticating the MQTT connection with the cloud.
             ///

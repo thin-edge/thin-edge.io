@@ -1,3 +1,4 @@
+pub use crate::service::SecretString;
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -14,9 +15,14 @@ pub fn tedge_p11_service(config: CryptokiConfig) -> anyhow::Result<Arc<dyn Tedge
                 pkcs11::Cryptoki::new(config_direct).context("Failed to load cryptoki library")?;
             Arc::new(cryptoki)
         }
-        CryptokiConfig::SocketService { socket_path, uri } => {
+        CryptokiConfig::SocketService {
+            socket_path,
+            uri,
+            pin,
+        } => {
             let mut client = proxy::client::TedgeP11Client::with_ready_check(socket_path.into());
             client.uri = uri;
+            client.pin = pin;
             Arc::new(client)
         }
     };
@@ -47,5 +53,6 @@ pub enum CryptokiConfig {
     SocketService {
         socket_path: Utf8PathBuf,
         uri: Option<Arc<str>>,
+        pin: Option<SecretString>,
     },
 }

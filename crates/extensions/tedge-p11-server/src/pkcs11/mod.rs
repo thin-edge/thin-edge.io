@@ -51,6 +51,7 @@ pub use cryptoki::types::AuthPin;
 use crate::service;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::SecretString;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::SignResponse;
 use crate::service::TedgeP11Service;
@@ -62,6 +63,8 @@ mod uri;
 pub struct SessionParams {
     /// URI identifying the token to which we want to open the session.
     pub(crate) uri: Option<String>,
+    /// User PIN value when logging in to the token.
+    pub(crate) pin: Option<SecretString>,
 }
 
 // oIDs for curves defined here: https://datatracker.ietf.org/doc/html/rfc5480#section-2.1.1.1
@@ -97,7 +100,10 @@ pub struct Cryptoki {
 impl TedgeP11Service for Cryptoki {
     #[instrument(skip_all)]
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse> {
-        let signing_key = self.signing_key_retry(SessionParams { uri: request.uri })?;
+        let signing_key = self.signing_key_retry(SessionParams {
+            uri: request.uri,
+            pin: request.pin,
+        })?;
         let offered: Vec<_> = request.offered.into_iter().map(|s| s.0).collect();
         let signer = signing_key
             .choose_scheme(&offered[..])
@@ -111,7 +117,10 @@ impl TedgeP11Service for Cryptoki {
 
     #[instrument(skip_all)]
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse> {
-        let signing_key = self.signing_key_retry(SessionParams { uri: request.uri })?;
+        let signing_key = self.signing_key_retry(SessionParams {
+            uri: request.uri,
+            pin: request.pin,
+        })?;
         let signature = signing_key.sign(&request.to_sign, request.sigscheme)?;
         Ok(SignResponse(signature))
     }
@@ -119,6 +128,8 @@ impl TedgeP11Service for Cryptoki {
     fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
         let params = SessionParams {
             uri: uri.map(|s| s.to_string()),
+            // PIN is not required when reading public objects like public keys
+            pin: None,
         };
         let session = self.open_session_ro(&params)?;
         session.get_public_key_pem()
@@ -282,7 +293,11 @@ impl Cryptoki {
         let pin = uri_attributes
             .pin_value
             .as_ref()
-            .unwrap_or(&self.config.pin);
+            .or(params.pin.as_ref())
+            .cloned()
+            .map(AuthPin::from);
+        let pin = pin.as_ref().unwrap_or(&self.config.pin);
+
         session.login(UserType::User, Some(pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");

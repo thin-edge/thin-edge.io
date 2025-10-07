@@ -10,6 +10,7 @@ use crate::TEdgeConfig;
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::AuthPin;
+use certificate::parse_root_certificate::SecretString;
 use certificate::CertificateError;
 use tedge_config_macros::all_or_nothing;
 
@@ -241,6 +242,12 @@ impl TEdgeConfigReaderDevice {
             Cryptoki::Socket => Ok(Some(CryptokiConfig::SocketService {
                 socket_path: cryptoki.socket_path.clone(),
                 uri,
+                pin: self
+                    .key_pin
+                    .as_ref()
+                    .map(|p| SecretString::new(p.to_string()))
+                    .or_none()
+                    .cloned(),
             })),
         }
     }
