@@ -91,12 +91,36 @@ Each instance of a script must have its own static state
     ...    ${transformed_msg}
     ...    ${expected_msg}
 
+Running tedge-flows
+    # Assuming the flow count-events.toml has been properly installed
+    Execute Command    tedge mqtt sub test/count/e --duration 2s | grep '{}'
+
+Consuming messages from a process stdout
+    # Assuming the flow journalctl.toml has been properly installed
+    Execute Command    (sleep 1;tedge mqtt pub --retain te/device/main///cmd/software_list/test '{"status":"init"}')&
+    Execute Command    tedge mqtt sub log/journalctl --duration 2s | grep software_list
+
+Consuming messages from the tail of file
+    # Assuming the flow tail-named-pipe.toml has been properly installed
+    Execute Command    (for i in $(seq 10); do sleep 1; echo hello>/tmp/events; done)&
+    Execute Command    tedge mqtt sub log/events --duration 2s | grep hello
+
 
 *** Keywords ***
 Custom Setup
-    ${DEVICE_SN}    Setup    connect=${False}
+    ${DEVICE_SN}    Setup
     Set Suite Variable    $DEVICE_SN
     Copy Configuration Files
+    Configure flows
+    Start Service    tedge-flows
 
 Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*    /etc/tedge/flows/
+
+Configure flows
+    # Required by tail-named-pipe.toml
+    Execute Command    mkfifo /tmp/events
+    Execute Command    chmod a+r /tmp/events
+    # Required by journalctl.toml
+    Execute Command
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/bin/journalctl' | sudo tee -a /etc/sudoers.d/tedge

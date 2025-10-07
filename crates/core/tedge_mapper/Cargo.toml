@@ -36,6 +36,7 @@ tedge_mqtt_ext = { workspace = true }
 tedge_signal_ext = { workspace = true }
 tedge_timer_ext = { workspace = true }
 tedge_uploader_ext = { workspace = true }
+tedge_watch_ext = { workspace = true }
 tracing = { workspace = true }
 yansi = { workspace = true }
 
