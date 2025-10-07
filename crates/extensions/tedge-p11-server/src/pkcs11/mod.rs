@@ -57,6 +57,13 @@ use crate::service::TedgeP11Service;
 
 mod uri;
 
+/// Parameters used when opening a session.
+#[derive(Debug, Clone)]
+pub struct SessionParams {
+    /// URI identifying the token to which we want to open the session.
+    pub(crate) uri: Option<String>,
+}
+
 // oIDs for curves defined here: https://datatracker.ietf.org/doc/html/rfc5480#section-2.1.1.1
 // other can be browsed here: https://oid-base.com/get/1.3.132.0.34
 const SECP256R1_OID: &str = "1.2.840.10045.3.1.7";
@@ -90,7 +97,7 @@ pub struct Cryptoki {
 impl TedgeP11Service for Cryptoki {
     #[instrument(skip_all)]
     fn choose_scheme(&self, request: ChooseSchemeRequest) -> anyhow::Result<ChooseSchemeResponse> {
-        let signing_key = self.signing_key_retry(request.uri.as_deref())?;
+        let signing_key = self.signing_key_retry(SessionParams { uri: request.uri })?;
         let offered: Vec<_> = request.offered.into_iter().map(|s| s.0).collect();
         let signer = signing_key
             .choose_scheme(&offered[..])
@@ -104,13 +111,16 @@ impl TedgeP11Service for Cryptoki {
 
     #[instrument(skip_all)]
     fn sign(&self, request: SignRequestWithSigScheme) -> anyhow::Result<SignResponse> {
-        let signing_key = self.signing_key_retry(request.uri.as_deref())?;
+        let signing_key = self.signing_key_retry(SessionParams { uri: request.uri })?;
         let signature = signing_key.sign(&request.to_sign, request.sigscheme)?;
         Ok(SignResponse(signature))
     }
 
     fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
-        let session = self.open_session_ro(uri)?;
+        let params = SessionParams {
+            uri: uri.map(|s| s.to_string()),
+        };
+        let session = self.open_session_ro(&params)?;
         session.get_public_key_pem()
     }
 }
@@ -174,9 +184,9 @@ impl Cryptoki {
     /// libraries may not always show new slots/objects properly when something changes and we don't
     /// want to restart the server manually. If the key is still missing after a reload, the
     /// original error is returned.
-    pub fn signing_key_retry(&self, uri: Option<&str>) -> anyhow::Result<Pkcs11Signer> {
+    pub fn signing_key_retry(&self, session_params: SessionParams) -> anyhow::Result<Pkcs11Signer> {
         let signing_key = self
-            .open_session_ro(uri)
+            .open_session_ro(&session_params)
             .and_then(|s| s.signing_key())
             .context("Failed to find a signing key");
 
@@ -193,7 +203,7 @@ impl Cryptoki {
                 // ensure current session is dropped before opening a new one
                 drop(signing_key);
                 self.reinit()?;
-                self.open_session_ro(uri)
+                self.open_session_ro(&session_params)
                     .and_then(|s| s.signing_key())
                     .context("Failed to find a signing key")?
             }
@@ -204,21 +214,27 @@ impl Cryptoki {
         Ok(signing_key)
     }
 
-    fn open_session_ro<'a>(&'a self, uri: Option<&'a str>) -> anyhow::Result<CryptokiSession<'a>> {
-        self.open_session(uri, CryptokiSessionType::ReadOnly)
+    fn open_session_ro<'a>(
+        &'a self,
+        params: &'a SessionParams,
+    ) -> anyhow::Result<CryptokiSession<'a>> {
+        self.open_session(params, CryptokiSessionType::ReadOnly)
     }
 
-    fn _open_session_rw<'a>(&'a self, uri: Option<&'a str>) -> anyhow::Result<CryptokiSession<'a>> {
-        self.open_session(uri, CryptokiSessionType::_ReadWrite)
+    fn _open_session_rw<'a>(
+        &'a self,
+        params: &'a SessionParams,
+    ) -> anyhow::Result<CryptokiSession<'a>> {
+        self.open_session(params, CryptokiSessionType::_ReadWrite)
     }
 
     #[instrument(skip_all)]
     fn open_session<'a>(
         &'a self,
-        uri: Option<&'a str>,
+        params: &'a SessionParams,
         session_type: CryptokiSessionType,
     ) -> anyhow::Result<CryptokiSession<'a>> {
-        let uri_attributes = self.request_uri(uri)?;
+        let uri_attributes = self.request_uri(params.uri.as_deref())?;
 
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
