@@ -15,21 +15,21 @@ mod actor;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WatchRequest {
     WatchFile { topic: String, file: Utf8PathBuf },
     WatchCommand { topic: String, command: String },
     UnWatch { topic: String },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WatchEvent {
     NewLine { topic: String, line: String },
     EndOfStream { topic: String },
     Error { topic: String, error: WatchError },
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug, Eq, PartialEq)]
 pub enum WatchError {
     #[error("Invalid command `{command}`: {error}")]
     InvalidCommand { command: String, error: String },

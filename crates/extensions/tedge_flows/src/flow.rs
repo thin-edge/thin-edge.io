@@ -20,6 +20,7 @@ pub struct Flow {
     /// Transformation steps to apply in order to the messages
     pub steps: Vec<FlowStep>,
 
+    /// Path to the configuration file for this flow
     pub source: Utf8PathBuf,
 }
 
@@ -30,7 +31,9 @@ pub struct FlowStep {
 }
 
 pub enum FlowInput {
-    MQTT { topics: TopicFilter },
+    Mqtt { topics: TopicFilter },
+    File { topic: String, path: Utf8PathBuf },
+    Process { topic: String, command: String },
 }
 
 #[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -60,7 +63,7 @@ pub enum FlowError {
 
 impl Flow {
     pub fn topics(&self) -> TopicFilter {
-        let mut topics = self.input.topics().clone();
+        let mut topics = self.input.topics();
         for step in self.steps.iter() {
             topics.add_all(step.config_topics.clone())
         }
@@ -88,7 +91,7 @@ impl Flow {
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         self.on_config_update(js_runtime, message).await?;
-        if !self.input.topics().accept_topic_name(&message.topic) {
+        if !self.input.accept_input_message(message) {
             return Ok(vec![]);
         }
 
@@ -185,9 +188,18 @@ impl FlowStep {
 }
 
 impl FlowInput {
-    pub fn topics(&self) -> &TopicFilter {
+    pub fn topics(&self) -> TopicFilter {
         match self {
-            FlowInput::MQTT { topics } => topics,
+            FlowInput::Mqtt { topics } => topics.clone(),
+            FlowInput::File { .. } | FlowInput::Process { .. } => TopicFilter::empty(),
+        }
+    }
+
+    pub fn accept_input_message(&self, message: &Message) -> bool {
+        match self {
+            FlowInput::Mqtt { topics } => topics.accept_topic_name(&message.topic),
+            FlowInput::File { topic, .. } => &message.topic == topic,
+            FlowInput::Process { topic, .. } => &message.topic == topic,
         }
     }
 }
@@ -266,16 +278,10 @@ impl std::fmt::Debug for Message {
     }
 }
 
-impl TryFrom<MqttMessage> for Message {
-    type Error = FlowError;
-
-    fn try_from(message: MqttMessage) -> Result<Self, Self::Error> {
+impl From<MqttMessage> for Message {
+    fn from(message: MqttMessage) -> Self {
         let (topic, payload) = message.split();
-        Ok(Message {
-            topic,
-            payload,
-            timestamp: None,
-        })
+        Message::new(topic, payload)
     }
 }
 
