@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use secrecy::SecretString;
+use crate::service::SecretString;
 
 /// Attributes decoded from a PKCS #11 URL.
 ///
@@ -236,13 +236,12 @@ mod tests {
 
     #[test]
     fn parses_pin_value() {
-        use secrecy::ExposeSecret;
         let uri = Pkcs11Uri::parse(
             "pkcs11:token=Software%20PKCS%2311%20softtoken;
             manufacturer=Snake%20Oil,%20Inc.
             ?pin-value=the-pin",
         )
         .unwrap();
-        assert_eq!(uri.pin_value.unwrap().expose_secret(), "the-pin");
+        assert_eq!(uri.pin_value.unwrap().expose(), "the-pin");
     }
 }

@@ -62,6 +62,17 @@ aws.device.key_uri  A PKCS#11 URI of the private key.  See RFC #7512.
                     Example: pkcs11:model=PKCS%2315%20emulated
 ```
 
+```sh command="tedge config list --doc key_pin" title="tedge config list --doc key_pin"
+    device.key_pin  User PIN value for logging into the PKCS#11 token provided by the consumer.  This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given `key_uri`.  In practice, this can be used to define separate keys and separate PINs for different connection profiles.
+                    Examples: 123456, my-pin
+c8y.device.key_pin  User PIN value for logging into the PKCS#11 token provided by the consumer.  This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given `key_uri`.  In practice, this can be used to define separate keys and separate PINs for different connection profiles.
+                    Examples: 123456, my-pin
+ az.device.key_pin  User PIN value for logging into the PKCS#11 token provided by the consumer.  This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given `key_uri`.  In practice, this can be used to define separate keys and separate PINs for different connection profiles.
+                    Examples: 123456, my-pin
+aws.device.key_pin  User PIN value for logging into the PKCS#11 token provided by the consumer.  This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given `key_uri`.  In practice, this can be used to define separate keys and separate PINs for different connection profiles.
+                    Examples: 123456, my-pin
+```
+
 ## Setup guide
 <!-- split the guide into a separate page under "Operate Devices" category? -->
 <!-- also would be nice to write a test for this guide -->

@@ -1,3 +1,6 @@
+use std::fmt::Debug;
+use std::fmt::Display;
+
 use crate::pkcs11::SigScheme;
 use serde::Deserialize;
 use serde::Serialize;
@@ -25,6 +28,7 @@ pub trait TedgeP11Service: Send + Sync {
 pub struct ChooseSchemeRequest {
     pub offered: Vec<SignatureScheme>,
     pub uri: Option<String>,
+    pub pin: Option<SecretString>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,6 +41,7 @@ pub struct ChooseSchemeResponse {
 pub struct SignRequest {
     pub to_sign: Vec<u8>,
     pub uri: Option<String>,
+    pub pin: Option<SecretString>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +49,49 @@ pub struct SignRequestWithSigScheme {
     pub to_sign: Vec<u8>,
     pub uri: Option<String>,
     pub sigscheme: Option<SigScheme>,
+    pub pin: Option<SecretString>,
+}
+
+/// A secret string that should not be printed by accident.
+///
+/// Rolling our own type because `secrecy::SecretString` doesn't impl Serialize,
+/// and we don't need eager zeroizing, we only need to make sure not to print
+/// the value.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecretString(String);
+
+impl SecretString {
+    pub fn new(string: String) -> Self {
+        Self(string)
+    }
+
+    pub fn expose(self) -> String {
+        self.0
+    }
+}
+
+impl From<SecretString> for secrecy::SecretString {
+    fn from(value: SecretString) -> Self {
+        secrecy::SecretString::new(value.0)
+    }
+}
+
+impl From<String> for SecretString {
+    fn from(value: String) -> Self {
+        SecretString::new(value)
+    }
+}
+
+impl Display for SecretString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[REDACTED]")
+    }
+}
+
+impl Debug for SecretString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self, f)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
