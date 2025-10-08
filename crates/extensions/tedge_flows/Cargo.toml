@@ -24,7 +24,6 @@ rquickjs = { git = "https://github.com/thin-edge/rquickjs", rev = "4ed04ac9af3de
 ] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-sha256 = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_file_system_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
