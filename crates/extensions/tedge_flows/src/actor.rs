@@ -63,6 +63,7 @@ impl Actor for FlowsMapper {
                 }
                 InputMessage::WatchEvent(WatchEvent::EndOfStream { topic }) => {
                     error!(target: "flows", "End of input stream: {topic}");
+                    self.on_input_eos(&topic).await?
                 }
                 InputMessage::FsWatchEvent(FsWatchEvent::Modified(path)) => {
                     let Ok(path) = Utf8PathBuf::try_from(path) else {
@@ -218,6 +219,17 @@ impl FlowsMapper {
                     error!(target: "flows", "{flow_id}: {err}");
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    async fn on_input_eos(&mut self, flow_name: &str) -> Result<(), RuntimeError> {
+        if let Some(flow) = self.processor.flows.get(flow_name) {
+            if let Some(request) = flow.watch_request() {
+                info!(target: "flows", "Reconnecting input: {}", flow.input);
+                self.watch_request_sender.send(request).await?
+            };
         }
 
         Ok(())
