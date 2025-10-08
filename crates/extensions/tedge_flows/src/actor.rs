@@ -1,5 +1,4 @@
 use crate::flow::DateTime;
-use crate::flow::FlowInput;
 use crate::flow::Message;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
@@ -61,6 +60,9 @@ impl Actor for FlowsMapper {
                 }
                 InputMessage::WatchEvent(WatchEvent::Error { error, .. }) => {
                     error!(target: "flows", "Cannot monitor command: {error}");
+                }
+                InputMessage::WatchEvent(WatchEvent::EndOfStream { topic }) => {
+                    error!(target: "flows", "End of input stream: {topic}");
                 }
                 InputMessage::FsWatchEvent(FsWatchEvent::Modified(path)) => {
                     let Ok(path) = Utf8PathBuf::try_from(path) else {
@@ -142,36 +144,19 @@ impl FlowsMapper {
         let mut watch_requests = Vec::new();
         let mut new_watched_commands = HashSet::new();
         for flow in self.processor.flows.values() {
-            let (topic, request) = match &flow.input {
-                FlowInput::Mqtt { .. } => continue,
-                FlowInput::File { topic, path } => {
-                    info!(target: "flows", "Watching file: {path}");
-                    (
-                        topic,
-                        WatchRequest::WatchFile {
-                            topic: topic.to_owned(),
-                            file: path.to_owned(),
-                        },
-                    )
-                }
-                FlowInput::Process { topic, command } => {
-                    info!(target: "flows", "Watching command: {command}");
-                    (
-                        topic,
-                        WatchRequest::WatchCommand {
-                            topic: topic.to_owned(),
-                            command: command.to_owned(),
-                        },
-                    )
-                }
+            let topic = flow.name();
+            let Some(request) = flow.watch_request() else {
+                continue;
             };
             if !self.watched_commands.contains(topic) {
+                info!(target: "flows", "Adding input: {}", flow.input);
                 watch_requests.push(request);
             }
             self.watched_commands.remove(topic);
             new_watched_commands.insert(topic.to_owned());
         }
         for old_command in self.watched_commands.drain() {
+            info!(target: "flows", "removing input: {}", old_command);
             watch_requests.push(WatchRequest::UnWatch { topic: old_command });
         }
         self.watched_commands = new_watched_commands;

@@ -5148,7 +5148,6 @@ dependencies = [
  "rquickjs",
  "serde",
  "serde_json",
- "sha256",
  "tedge_actors",
  "tedge_file_system_ext",
  "tedge_mqtt_ext",

@@ -6,8 +6,11 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_watch_ext::WatchRequest;
 use time::OffsetDateTime;
 use tokio::time::Instant;
 use tracing::warn;
@@ -32,8 +35,8 @@ pub struct FlowStep {
 
 pub enum FlowInput {
     Mqtt { topics: TopicFilter },
-    File { topic: String, path: Utf8PathBuf },
-    Process { topic: String, command: String },
+    File { path: Utf8PathBuf },
+    Process { command: String },
 }
 
 #[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -62,12 +65,20 @@ pub enum FlowError {
 }
 
 impl Flow {
+    pub fn name(&self) -> &str {
+        self.source.as_str()
+    }
+
     pub fn topics(&self) -> TopicFilter {
         let mut topics = self.input.topics();
         for step in self.steps.iter() {
             topics.add_all(step.config_topics.clone())
         }
         topics
+    }
+
+    pub fn watch_request(&self) -> Option<WatchRequest> {
+        self.input.watch_request(self.name().to_string())
     }
 
     pub async fn on_config_update(
@@ -91,7 +102,7 @@ impl Flow {
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         self.on_config_update(js_runtime, message).await?;
-        if !self.input.accept_input_message(message) {
+        if !self.input.accept_input_message(self.name(), message) {
             return Ok(vec![]);
         }
 
@@ -187,6 +198,16 @@ impl FlowStep {
     }
 }
 
+impl Display for FlowInput {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FlowInput::Mqtt { topics } => write!(f, "topics: {topics:?}"),
+            FlowInput::File { path } => write!(f, "file: {path}"),
+            FlowInput::Process { command } => write!(f, "command: {command}"),
+        }
+    }
+}
+
 impl FlowInput {
     pub fn topics(&self) -> TopicFilter {
         match self {
@@ -195,11 +216,24 @@ impl FlowInput {
         }
     }
 
-    pub fn accept_input_message(&self, message: &Message) -> bool {
+    pub fn accept_input_message(&self, flow: &str, message: &Message) -> bool {
         match self {
             FlowInput::Mqtt { topics } => topics.accept_topic_name(&message.topic),
-            FlowInput::File { topic, .. } => &message.topic == topic,
-            FlowInput::Process { topic, .. } => &message.topic == topic,
+            FlowInput::File { .. } | FlowInput::Process { .. } => message.topic == flow,
+        }
+    }
+
+    pub fn watch_request(&self, flow_name: String) -> Option<WatchRequest> {
+        match self {
+            FlowInput::Mqtt { .. } => None,
+            FlowInput::File { path } => Some(WatchRequest::WatchFile {
+                topic: flow_name,
+                file: path.to_owned(),
+            }),
+            FlowInput::Process { command } => Some(WatchRequest::WatchCommand {
+                topic: flow_name,
+                command: command.to_owned(),
+            }),
         }
     }
 }
