@@ -128,24 +128,14 @@ impl TryFrom<InputConfig> for FlowInput {
     type Error = ConfigError;
 
     fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
-        match input {
-            InputConfig::Mqtt { topics } => Ok(FlowInput::Mqtt {
+        Ok(match input {
+            InputConfig::Mqtt { topics } => FlowInput::Mqtt {
                 topics: topic_filters(topics)?,
-            }),
-            InputConfig::File { path } => {
-                let topic = resource_specific_topic("file", path.as_str());
-                Ok(FlowInput::File { path, topic })
-            }
-            InputConfig::Process { command } => {
-                let topic = resource_specific_topic("cmd", &command);
-                Ok(FlowInput::Process { command, topic })
-            }
-        }
+            },
+            InputConfig::File { path } => FlowInput::File { path },
+            InputConfig::Process { command } => FlowInput::Process { command },
+        })
     }
-}
-
-fn resource_specific_topic(protocol: &str, resource: &str) -> String {
-    format!("{protocol}://{}", sha256::digest(resource))
 }
 
 fn topic_filters(patterns: Vec<String>) -> Result<TopicFilter, ConfigError> {
