@@ -14,11 +14,6 @@ Test Tags           theme:c8y    theme:log
 
 *** Test Cases ***
 Log operation journald plugin
-    ThinEdgeIO.Transfer To Device
-    ...    ${CURDIR}/plugins/journald
-    ...    /usr/share/tedge/log-plugins/journald
-    Execute Command    chmod +x /usr/share/tedge/log-plugins/journald
-
     Should Support Log File Types    tedge-agent::journald    includes=${True}
     ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
@@ -26,10 +21,23 @@ Log operation journald plugin
     ...    ${start_timestamp}
     ...    ${end_timestamp}
     ...    log_type=tedge-agent::journald
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}
     Log Operation Attachment File Contains
     ...    ${operation}
     ...    expected_pattern=.*Starting tedge-agent.*
+
+Log operation journald plugin can return logs for all units
+    Should Support Log File Types    all-units::journald    includes=${True}
+    ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=    Create Log Request Operation
+    ...    ${start_timestamp}
+    ...    ${end_timestamp}
+    ...    log_type=all-units::journald
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}
+    Log Operation Attachment File Contains
+    ...    ${operation}
+    ...    expected_pattern=.*
 
 Time range filtering
     # Test with specific time range that triggers filtering in fake_plugin

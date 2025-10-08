@@ -1,0 +1,139 @@
+#!/bin/sh
+set -eu
+
+# Special log type name which allows users to collect logs from any unit
+# it will be translated to journalctl -u "*"
+ALL_UNITS="all-units"
+
+usage() {
+    cat <<EOT
+Usage:
+  $0 list
+      List all log types supported by this plugin
+
+  $0 get <unit_name> [options]
+      Fetch logs for the given unit/service. Use "$ALL_UNITS" to include log output from all units/services.
+
+Options for "get":
+  --since <timestamp>   Show logs since the given timestamp (in seconds since epoch)
+  --until <timestamp>   Show logs up to the given timestamp  (in seconds since epoch)
+  --help, -h            Show this help message and exit
+
+Examples:
+  $0 list
+  $0 get ssh
+  $0 get tedge-agent --since 1696250000 --until 1696260000
+EOT
+}
+
+list_log_types() {
+    # Check pre-requisites
+    if ! command -V systemctl >/dev/null 2>&1; then
+        echo "Error: 'systemctl' command was not found" >&2
+        exit 1
+    fi
+    if ! command -V journalctl >/dev/null 2>&1; then
+        echo "Error: 'journalctl' command was not found" >&2
+        exit 1
+    fi
+    status=0
+    { systemctl list-units --type=service --no-legend --no-pager --plain || status=$?; } | awk '!/^systemd/ { sub(/\.service$/, "", $1); print $1 }' || status=$?
+    if [ "$status" -ne 0 ]; then
+        echo "Pipeline failed with $status" >&2
+        exit "$status"
+    fi
+    # add additional type to collect logs from all units
+    printf '%s\n' "$ALL_UNITS"
+}
+
+parse_timestamp() {
+    # Support parsing input from other formats (to help with testing manually)
+    # If an epoch timestamp is detected, then it is prefixed with "@"
+    case "$1" in
+        ''|*[!0-9]*)
+            echo "$1"
+            ;;
+        *)
+            # seconds since epoch
+            echo "@$1"
+            ;;
+    esac
+}
+
+get_logs() {
+    if [ $# -lt 1 ]; then
+        echo "Error: 'get' command expects a mandatory <log-type> argument" >&2
+        usage
+    fi
+
+    log_type="$1"
+    shift
+
+    if [ "$log_type" = "$ALL_UNITS" ]; then
+        echo "Collecting logs for all units" >&2
+        log_type="*"
+    fi
+
+    # set defaults
+    since="1 day ago"
+    until="now"
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --since)
+                shift
+                [ $# -gt 0 ] || { echo "Error: --since requires a timestamp" >&2; exit 1; }
+                since=$(parse_timestamp "$1")
+                ;;
+
+            --until)
+                shift
+                [ $# -gt 0 ] || { echo "Error: --until requires a timestamp" >&2; exit 1; }
+                until=$(parse_timestamp "$1")
+                ;;
+
+            --help|-h)
+                usage
+                exit 0
+                ;;
+            *)
+                echo "Unknown option: $1" >&2
+                exit 1
+                ;;
+        esac
+        shift
+    done
+
+    journalctl \
+        --no-pager \
+        --output=short-iso \
+        --unit="$log_type" \
+        --since="$since" \
+        --until="$until"
+}
+
+main() {
+    if [ $# -lt 1 ]; then
+        usage
+        exit 1
+    fi
+
+    command="$1"
+    shift
+
+    case "$command" in
+        "list")
+            list_log_types
+            ;;
+        "get")
+            get_logs "$@"
+            ;;
+        *)
+            echo "Error: Unknown command '$command'" >&2
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
