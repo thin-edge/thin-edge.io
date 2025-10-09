@@ -37,13 +37,13 @@ use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 use tracing::error;
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
-fan_in_message_type!(OutputMessage[MqttMessage, SubscriptionDiff]: Clone, Debug, Eq, PartialEq);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Tick;
 
 pub struct FlowsMapperBuilder {
-    message_box: SimpleMessageBoxBuilder<InputMessage, OutputMessage>,
+    message_box: SimpleMessageBoxBuilder<InputMessage, SubscriptionDiff>,
+    mqtt_sender: DynSender<MqttMessage>,
     watch_request_sender: DynSender<WatchRequest>,
     processor: MessageProcessor,
 }
@@ -52,9 +52,11 @@ impl FlowsMapperBuilder {
     pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
         let processor = MessageProcessor::try_new(config_dir).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
+        let mqtt_sender = NullSender.into();
         let watch_request_sender = NullSender.into();
         Ok(FlowsMapperBuilder {
             message_box,
+            mqtt_sender,
             watch_request_sender,
             processor,
         })
@@ -66,17 +68,14 @@ impl FlowsMapperBuilder {
                   + MessageSink<MqttRequest>),
     ) {
         let mut dyn_subscriptions = DynSubscriptions::new(self.topics());
-        mqtt.connect_mapped_sink(&mut dyn_subscriptions, &self.message_box, |msg| {
-            Some(InputMessage::MqttMessage(msg))
-        });
+        self.message_box
+            .connect_source(&mut dyn_subscriptions, mqtt);
         let client_id = dyn_subscriptions.client_id();
         self.message_box
-            .connect_mapped_sink(NoConfig, mqtt, move |msg| match msg {
-                OutputMessage::MqttMessage(mqtt) => Some(MqttRequest::Publish(mqtt)),
-                OutputMessage::SubscriptionDiff(diff) => {
-                    Some(MqttRequest::subscribe(client_id, diff))
-                }
+            .connect_mapped_sink(NoConfig, mqtt, move |diff| {
+                Some(MqttRequest::subscribe(client_id, diff))
             });
+        self.mqtt_sender = mqtt.get_sender().sender_clone();
     }
 
     pub fn connect_fs(&mut self, fs: &mut impl MessageSource<FsWatchEvent, PathBuf>) {
@@ -122,6 +121,7 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
         let watched_commands = HashSet::new();
         FlowsMapper {
             messages: self.message_box.build(),
+            mqtt_sender: self.mqtt_sender,
             watch_request_sender: self.watch_request_sender,
             subscriptions,
             watched_commands,
