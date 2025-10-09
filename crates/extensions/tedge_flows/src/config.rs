@@ -1,5 +1,6 @@
 use crate::flow::Flow;
 use crate::flow::FlowInput;
+use crate::flow::FlowOutput;
 use crate::flow::FlowStep;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
@@ -16,6 +17,8 @@ use tedge_mqtt_ext::TopicFilter;
 pub struct FlowConfig {
     input: InputConfig,
     steps: Vec<StepConfig>,
+    #[serde(default = "default_output")]
+    output: OutputConfig,
 }
 
 #[derive(Deserialize)]
@@ -51,6 +54,19 @@ pub enum InputConfig {
     Process { command: String },
 }
 
+#[derive(Deserialize)]
+pub enum OutputConfig {
+    #[serde(rename = "mqtt")]
+    Mqtt {},
+
+    #[serde(rename = "file")]
+    File { path: Utf8PathBuf },
+}
+
+fn default_output() -> OutputConfig {
+    OutputConfig::Mqtt {}
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
     #[error("Not a valid MQTT topic filter: {0}")]
@@ -74,6 +90,7 @@ impl FlowConfig {
                 topics: vec![input_topic],
             },
             steps: vec![step],
+            output: OutputConfig::Mqtt {},
         }
     }
 
@@ -84,6 +101,7 @@ impl FlowConfig {
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
         let input = self.input.try_into()?;
+        let output = self.output.try_into()?;
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
             let mut step = step.compile(config_dir, i, &source).await?;
@@ -96,6 +114,7 @@ impl FlowConfig {
         Ok(Flow {
             input,
             steps,
+            output,
             source,
         })
     }
@@ -134,6 +153,17 @@ impl TryFrom<InputConfig> for FlowInput {
             },
             InputConfig::File { path } => FlowInput::File { path },
             InputConfig::Process { command } => FlowInput::Process { command },
+        })
+    }
+}
+
+impl TryFrom<OutputConfig> for FlowOutput {
+    type Error = ConfigError;
+
+    fn try_from(input: OutputConfig) -> Result<Self, Self::Error> {
+        Ok(match input {
+            OutputConfig::Mqtt {} => FlowOutput::Mqtt {},
+            OutputConfig::File { path } => FlowOutput::File { path },
         })
     }
 }
