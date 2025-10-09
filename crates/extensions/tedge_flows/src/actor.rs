@@ -26,6 +26,7 @@ use tokio::time::sleep_until;
 use tokio::time::Instant;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 pub const STATS_DUMP_INTERVAL: Duration = Duration::from_secs(300);
 
@@ -55,8 +56,11 @@ impl Actor for FlowsMapper {
                 InputMessage::MqttMessage(message) => {
                     self.on_message(Message::from(message)).await?
                 }
-                InputMessage::WatchEvent(WatchEvent::NewLine { topic, line }) => {
+                InputMessage::WatchEvent(WatchEvent::StdoutLine { topic, line }) => {
                     self.on_message(Message::new(topic, line)).await?
+                }
+                InputMessage::WatchEvent(WatchEvent::StderrLine { topic, line }) => {
+                    warn!(target: "flows", "Input command {topic}: {line}");
                 }
                 InputMessage::WatchEvent(WatchEvent::Error { error, .. }) => {
                     error!(target: "flows", "Cannot monitor command: {error}");
@@ -227,7 +231,7 @@ impl FlowsMapper {
     async fn on_input_eos(&mut self, flow_name: &str) -> Result<(), RuntimeError> {
         if let Some(flow) = self.processor.flows.get(flow_name) {
             if let Some(request) = flow.watch_request() {
-                info!(target: "flows", "Reconnecting input: {}", flow.input);
+                info!(target: "flows", "Reconnecting input: {flow_name}: {}", flow.input);
                 self.watch_request_sender.send(request).await?
             };
         }
