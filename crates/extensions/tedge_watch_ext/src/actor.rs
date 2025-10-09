@@ -3,6 +3,7 @@ use crate::WatchEvent;
 use crate::WatchRequest;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
+use std::os::unix::prelude::ExitStatusExt;
 use std::process::Stdio;
 use tedge_actors::Actor;
 use tedge_actors::CloneSender;
@@ -15,6 +16,7 @@ use tedge_actors::Sender;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::process::Child;
+use tokio::process::ChildStderr;
 use tokio::process::ChildStdout;
 use tokio::process::Command;
 
@@ -109,7 +111,7 @@ impl Watcher {
             .args(&args[1..])
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|err| WatchError::InvalidCommand {
                 command: command.clone(),
@@ -117,7 +119,10 @@ impl Watcher {
             })?;
 
         if let Some(stdout) = child.stdout.take() {
-            self.spawn_reader(client, topic.clone(), stdout);
+            self.spawn_stdout_reader(client, topic.clone(), stdout);
+        }
+        if let Some(stderr) = child.stderr.take() {
+            self.spawn_stderr_reader(client, topic.clone(), stderr);
         }
 
         self.processes.insert((client, topic), (command, child));
@@ -131,7 +136,7 @@ impl Watcher {
             .unwrap_or(NullSender.into())
     }
 
-    fn spawn_reader(&self, client: ClientId, topic: Topic, stdout: ChildStdout) {
+    fn spawn_stdout_reader(&self, client: ClientId, topic: Topic, stdout: ChildStdout) {
         let mut event_sender = self.client_sender(client);
         let mut request_sender: DynSender<(ClientId, WatchRequest)> =
             self.request_sender.sender_clone();
@@ -140,25 +145,58 @@ impl Watcher {
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 let _ = event_sender
-                    .send(WatchEvent::NewLine {
+                    .send(WatchEvent::StdoutLine {
                         topic: topic.clone(),
                         line,
                     })
                     .await;
             }
-            let _ = event_sender
-                .send(WatchEvent::EndOfStream {
-                    topic: topic.clone(),
-                })
-                .await;
             let _ = request_sender
-                .send((client, WatchRequest::UnWatch { topic }))
+                .send((
+                    client,
+                    WatchRequest::UnWatch {
+                        topic: topic.clone(),
+                    },
+                ))
                 .await;
+            let _ = event_sender.send(WatchEvent::EndOfStream { topic }).await;
+        });
+    }
+
+    fn spawn_stderr_reader(&self, client: ClientId, topic: Topic, stderr: ChildStderr) {
+        let mut event_sender = self.client_sender(client);
+        tokio::spawn(async move {
+            let reader = BufReader::new(stderr);
+            let mut lines = reader.lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let _ = event_sender
+                    .send(WatchEvent::StderrLine {
+                        topic: topic.clone(),
+                        line,
+                    })
+                    .await;
+            }
         });
     }
 
     pub async fn unwatch(&mut self, client: u32, topic: Topic) -> Result<(), WatchError> {
         if let Some((command, mut child)) = self.processes.remove(&(client, topic)) {
+            if let Ok(Some(exit_code)) = child.try_wait() {
+                if exit_code.success() {
+                    return Ok(());
+                }
+                match exit_code.code() {
+                    Some(exit_code) => {
+                        return Err(WatchError::CommandFailed { command, exit_code })
+                    }
+                    None => {
+                        return Err(WatchError::CommandKilled {
+                            command,
+                            signal: exit_code.signal().unwrap_or_default(),
+                        })
+                    }
+                }
+            }
             child
                 .kill()
                 .await

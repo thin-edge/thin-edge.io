@@ -24,6 +24,7 @@ use tokio::time::sleep_until;
 use tokio::time::Instant;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 pub struct FlowsMapper {
     pub(super) messages: SimpleMessageBox<InputMessage, OutputMessage>,
@@ -56,14 +57,17 @@ impl Actor for FlowsMapper {
                         Some(InputMessage::MqttMessage(message)) => {
                             self.on_message(Message::from(message)).await?
                         },
-                        Some(InputMessage::WatchEvent(WatchEvent::NewLine{topic, line})) => {
+                        Some(InputMessage::WatchEvent(WatchEvent::StdoutLine{topic, line})) => {
                             self.on_message(Message::new(topic, line)).await?
+                        },
+                        Some(InputMessage::WatchEvent(WatchEvent::StderrLine{topic, line})) => {
+                           warn!(target: "flows", "Input command {topic}: {line}");
                         },
                         Some(InputMessage::WatchEvent(WatchEvent::Error { error, .. })) => {
                             error!(target: "flows", "Cannot monitor command: {error}");
                         },
                         Some(InputMessage::WatchEvent(WatchEvent::EndOfStream { topic })) => {
-                            error!(target: "flows", "End of input stream: {topic}");
+                            warn!(target: "flows", "End of input stream: {topic}");
                             self.on_input_eos(&topic).await?
                         },
                         Some(InputMessage::FsWatchEvent(FsWatchEvent::Modified(path))) => {
@@ -211,7 +215,7 @@ impl FlowsMapper {
     async fn on_input_eos(&mut self, flow_name: &str) -> Result<(), RuntimeError> {
         if let Some(flow) = self.processor.flows.get(flow_name) {
             if let Some(request) = flow.watch_request() {
-                info!(target: "flows", "Reconnecting input: {}", flow.input);
+                info!(target: "flows", "Reconnecting input: {flow_name}: {}", flow.input);
                 self.watch_request_sender.send(request).await?
             };
         }

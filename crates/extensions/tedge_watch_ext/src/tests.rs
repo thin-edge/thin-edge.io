@@ -22,7 +22,7 @@ async fn reading_process_stdout() {
         .unwrap();
     for i in 0..=9 {
         let msg = actor.recv().await;
-        let Some(WatchEvent::NewLine { topic, line }) = msg else {
+        let Some(WatchEvent::StdoutLine { topic, line }) = msg else {
             panic!("Expecting line from process stdout, got: {:?}", msg);
         };
         assert_eq!(&topic, "seq");
@@ -60,14 +60,14 @@ async fn serving_independent_clients() {
 
     for i in 0..=9 {
         let msg_1 = actor_1.recv().await;
-        let Some(WatchEvent::NewLine { topic, line }) = msg_1 else {
+        let Some(WatchEvent::StdoutLine { topic, line }) = msg_1 else {
             panic!("Expecting line from process stdout, got: {:?}", msg_1);
         };
         assert_eq!(&topic, "seq");
         assert_eq!(line, i.to_string());
 
         let msg_2 = actor_2.recv().await;
-        let Some(WatchEvent::NewLine { topic, line }) = msg_2 else {
+        let Some(WatchEvent::StdoutLine { topic, line }) = msg_2 else {
             panic!("Expecting line from process stdout, got: {:?}", msg_2);
         };
         assert_eq!(&topic, "seq");
