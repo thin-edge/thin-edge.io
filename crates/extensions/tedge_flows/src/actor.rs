@@ -3,7 +3,6 @@ use crate::flow::FlowError;
 use crate::flow::Message;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
-use crate::OutputMessage;
 use crate::Tick;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
@@ -33,7 +32,8 @@ use tracing::warn;
 pub const STATS_DUMP_INTERVAL: Duration = Duration::from_secs(300);
 
 pub struct FlowsMapper {
-    pub(super) messages: SimpleMessageBox<InputMessage, OutputMessage>,
+    pub(super) messages: SimpleMessageBox<InputMessage, SubscriptionDiff>,
+    pub(super) mqtt_sender: DynSender<MqttMessage>,
     pub(super) watch_request_sender: DynSender<WatchRequest>,
     pub(super) subscriptions: TopicFilter,
     pub(super) watched_commands: HashSet<String>,
@@ -129,14 +129,12 @@ impl FlowsMapper {
     }
 
     fn mqtt_sender(&self) -> DynSender<MqttMessage> {
-        self.messages.sender_clone().sender_clone()
+        self.mqtt_sender.sender_clone()
     }
 
     async fn send_updated_subscriptions(&mut self) -> Result<(), RuntimeError> {
         let diff = self.update_subscriptions();
-        self.messages
-            .send(OutputMessage::SubscriptionDiff(diff))
-            .await?;
+        self.messages.send(diff).await?;
 
         for watch_request in self.update_watched_commands() {
             self.watch_request_sender.send(watch_request).await?;
