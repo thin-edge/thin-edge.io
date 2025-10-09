@@ -24,7 +24,8 @@ pub enum WatchRequest {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WatchEvent {
-    NewLine { topic: String, line: String },
+    StdoutLine { topic: String, line: String },
+    StderrLine { topic: String, line: String },
     EndOfStream { topic: String },
     Error { topic: String, error: WatchError },
 }
@@ -36,6 +37,12 @@ pub enum WatchError {
 
     #[error("Failed to execute `{command}`: {error}")]
     ExecutionFailed { command: String, error: String },
+
+    #[error("Exited with exit-code {exit_code}: `{command}`")]
+    CommandFailed { command: String, exit_code: i32 },
+
+    #[error("Command killed by signal {signal}: `{command}`")]
+    CommandKilled { command: String, signal: i32 },
 
     #[error("Failed to kill `{command}`: {error}")]
     TerminationFailed { command: String, error: String },
