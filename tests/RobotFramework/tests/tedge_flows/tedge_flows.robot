@@ -105,6 +105,13 @@ Consuming messages from the tail of file
     Execute Command    (for i in $(seq 10); do sleep 1; echo hello>/tmp/events; done)&
     Execute Command    tedge mqtt sub log/events --duration 2s | grep hello
 
+Appending messages to a file
+    # Assuming the flow append-to-file.toml has been properly installed
+    Execute Command    for i in $(seq 3); do tedge mqtt pub seq/events "$i"; done
+    Execute Command    grep '\\[seq/events\\] 1' /tmp/events.log
+    Execute Command    grep '\\[seq/events\\] 2' /tmp/events.log
+    Execute Command    grep '\\[seq/events\\] 3' /tmp/events.log
+
 
 *** Keywords ***
 Custom Setup

@@ -6,22 +6,31 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
-use std::fmt::Display;
-use std::fmt::Formatter;
+use tedge_actors::DynSender;
+use tedge_actors::RuntimeError;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchRequest;
 use time::OffsetDateTime;
+use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
+use tracing::error;
 use tracing::warn;
 
-/// A chain of transformation of MQTT messages
+/// A chain of message transformations
+///
+/// A flow consumes messages from a source of type [FlowInput],
+/// processes those along a chain of transformation steps,
+/// and finally produces the derived messages to a sink of type [FlowOutput].
 pub struct Flow {
-    /// The source topics
+    /// The message source
     pub input: FlowInput,
 
     /// Transformation steps to apply in order to the messages
     pub steps: Vec<FlowStep>,
+
+    /// The target for the transformed messages
+    pub output: FlowOutput,
 
     /// Path to the configuration file for this flow
     pub source: Utf8PathBuf,
@@ -37,6 +46,11 @@ pub enum FlowInput {
     Mqtt { topics: TopicFilter },
     File { path: Utf8PathBuf },
     Process { command: String },
+}
+
+pub enum FlowOutput {
+    Mqtt {},
+    File { path: Utf8PathBuf },
 }
 
 #[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -198,8 +212,8 @@ impl FlowStep {
     }
 }
 
-impl Display for FlowInput {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl std::fmt::Display for FlowInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FlowInput::Mqtt { topics } => write!(f, "topics: {topics:?}"),
             FlowInput::File { path } => write!(f, "file: {path}"),
@@ -235,6 +249,51 @@ impl FlowInput {
                 command: command.to_owned(),
             }),
         }
+    }
+}
+
+impl FlowOutput {
+    pub async fn publish_messages(
+        &self,
+        flow: &str,
+        mut mqtt: DynSender<MqttMessage>,
+        messages: Vec<Message>,
+    ) -> Result<(), RuntimeError> {
+        match self {
+            FlowOutput::Mqtt {} => {
+                for message in messages {
+                    match MqttMessage::try_from(message) {
+                        Ok(message) => mqtt.send(message).await?,
+                        Err(err) => {
+                            error!(target: "flows", "{flow}: cannot publish transformed message: {err}")
+                        }
+                    }
+                }
+            }
+            FlowOutput::File { path } => {
+                let Ok(mut file) = tokio::fs::File::options()
+                    .create(true)
+                    .append(true)
+                    .open(path)
+                    .await
+                    .map_err(|err| {
+                        error!(target: "flows", "{flow}: cannot open {path}: {err}");
+                    })
+                else {
+                    return Ok(());
+                };
+                for message in messages {
+                    if let Err(err) = file.write_all(format!("{message}\n").as_bytes()).await {
+                        error!(target: "flows", "{flow}: cannot append to {path}: {err}");
+                    }
+                }
+                if let Err(err) = file.flush().await {
+                    error!(target: "flows", "{flow}: cannot flush {path}: {err}");
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -308,7 +367,12 @@ impl std::fmt::Display for Message {
 
 impl std::fmt::Debug for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(self, f)
+        write!(
+            f,
+            "[{}] {}",
+            self.topic,
+            String::from_utf8_lossy(self.payload.as_ref())
+        )
     }
 }
 

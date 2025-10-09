@@ -1,0 +1,6 @@
+input.mqtt.topics = ["seq/events"]
+
+steps = [
+]
+
+output.file.path = "/tmp/events.log"
