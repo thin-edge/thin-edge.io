@@ -1,4 +1,5 @@
 use crate::flow::DateTime;
+use crate::flow::FlowError;
 use crate::flow::Message;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
@@ -11,6 +12,7 @@ use std::cmp::min;
 use std::collections::HashSet;
 use std::time::Duration;
 use tedge_actors::Actor;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
@@ -126,6 +128,10 @@ impl FlowsMapper {
             .0
     }
 
+    fn mqtt_sender(&self) -> DynSender<MqttMessage> {
+        self.messages.sender_clone().sender_clone()
+    }
+
     async fn send_updated_subscriptions(&mut self) -> Result<(), RuntimeError> {
         let diff = self.update_subscriptions();
         self.messages
@@ -170,26 +176,8 @@ impl FlowsMapper {
 
     async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
-        for (flow_id, flow_messages) in self.processor.on_message(timestamp, &message).await {
-            match flow_messages {
-                Ok(messages) => {
-                    for message in messages {
-                        match MqttMessage::try_from(message) {
-                            Ok(message) => {
-                                self.messages
-                                    .send(OutputMessage::MqttMessage(message))
-                                    .await?
-                            }
-                            Err(err) => {
-                                error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
-                            }
-                        }
-                    }
-                }
-                Err(err) => {
-                    error!(target: "flows", "{flow_id}: {err}");
-                }
-            }
+        for (flow, messages) in self.processor.on_message(timestamp, &message).await {
+            self.publish_transformed_messages(&flow, messages).await?;
         }
 
         Ok(())
@@ -203,26 +191,8 @@ impl FlowsMapper {
             self.processor.dump_processing_stats().await;
             self.next_dump = now + STATS_DUMP_INTERVAL;
         }
-        for (flow_id, flow_messages) in self.processor.on_interval(timestamp, now).await {
-            match flow_messages {
-                Ok(messages) => {
-                    for message in messages {
-                        match MqttMessage::try_from(message) {
-                            Ok(message) => {
-                                self.messages
-                                    .send(OutputMessage::MqttMessage(message))
-                                    .await?
-                            }
-                            Err(err) => {
-                                error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
-                            }
-                        }
-                    }
-                }
-                Err(err) => {
-                    error!(target: "flows", "{flow_id}: {err}");
-                }
-            }
+        for (flow, messages) in self.processor.on_interval(timestamp, now).await {
+            self.publish_transformed_messages(&flow, messages).await?;
         }
 
         Ok(())
@@ -236,6 +206,31 @@ impl FlowsMapper {
             };
         }
 
+        Ok(())
+    }
+
+    async fn publish_transformed_messages(
+        &mut self,
+        flow_id: &str,
+        transformation_outcome: Result<Vec<Message>, FlowError>,
+    ) -> Result<(), RuntimeError> {
+        let Some(flow) = self.processor.flows.get(flow_id) else {
+            return Ok(());
+        };
+        match transformation_outcome {
+            Ok(messages) => {
+                if let Err(err) = flow
+                    .output
+                    .publish_messages(flow_id, self.mqtt_sender(), messages)
+                    .await
+                {
+                    error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
+                }
+            }
+            Err(err) => {
+                error!(target: "flows", "{flow_id}: {err}");
+            }
+        }
         Ok(())
     }
 }
