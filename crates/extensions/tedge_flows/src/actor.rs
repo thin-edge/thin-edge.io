@@ -3,8 +3,10 @@ use crate::flow::Message;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
 use crate::OutputMessage;
+use crate::Tick;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
+use futures::FutureExt;
 use std::cmp::min;
 use std::time::Duration;
 use tedge_actors::Actor;
@@ -36,65 +38,74 @@ impl Actor for FlowsMapper {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        loop {
-            let deadline = self
-                .processor
-                .next_interval_deadline()
-                .map_or(self.next_dump, |deadline| min(deadline, self.next_dump));
-
-            tokio::select! {
-                _ = sleep_until(deadline) => {
+        while let Some(message) = self.next_message().await {
+            match message {
+                InputMessage::Tick(_) => {
                     self.on_interval().await?;
                 }
-                message = self.messages.recv() => {
-                    match message {
-                        Some(InputMessage::MqttMessage(message)) => match Message::try_from(message) {
-                            Ok(message) => self.on_message(message).await?,
-                            Err(err) => {
-                                error!(target: "flows", "Cannot process message: {err}");
-                            }
-                        },
-                        Some(InputMessage::FsWatchEvent(FsWatchEvent::Modified(path))) => {
-                            let Ok(path) = Utf8PathBuf::try_from(path) else {
-                                continue;
-                            };
-                            if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
-                                self.processor.reload_script(path).await;
-                            } else if path.extension() == Some("toml") {
-                                self.processor.reload_flow(path).await;
-                                self.send_updated_subscriptions().await?;
-                            }
-                        },
-                        Some(InputMessage::FsWatchEvent(FsWatchEvent::FileCreated(path))) => {
-                            let Ok(path) = Utf8PathBuf::try_from(path) else {
-                                continue;
-                            };
-                            if matches!(path.extension(), Some("toml")) {
-                                self.processor.add_flow(path).await;
-                                self.send_updated_subscriptions().await?;
-                            }
-                        },
-                        Some(InputMessage::FsWatchEvent(FsWatchEvent::FileDeleted(path))) => {
-                            let Ok(path) = Utf8PathBuf::try_from(path) else {
-                                continue;
-                            };
-                            if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
-                                self.processor.remove_script(path).await;
-                            } else if path.extension() == Some("toml") {
-                                self.processor.remove_flow(path).await;
-                                self.send_updated_subscriptions().await?;
-                            }
-                        },
-                        _ => break,
+                InputMessage::MqttMessage(message) => match Message::try_from(message) {
+                    Ok(message) => self.on_message(message).await?,
+                    Err(err) => {
+                        error!(target: "flows", "Cannot process message: {err}");
+                    }
+                },
+                InputMessage::FsWatchEvent(FsWatchEvent::Modified(path)) => {
+                    let Ok(path) = Utf8PathBuf::try_from(path) else {
+                        continue;
+                    };
+                    if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
+                        self.processor.reload_script(path).await;
+                    } else if path.extension() == Some("toml") {
+                        self.processor.reload_flow(path).await;
+                        self.send_updated_subscriptions().await?;
                     }
                 }
+                InputMessage::FsWatchEvent(FsWatchEvent::FileCreated(path)) => {
+                    let Ok(path) = Utf8PathBuf::try_from(path) else {
+                        continue;
+                    };
+                    if matches!(path.extension(), Some("toml")) {
+                        self.processor.add_flow(path).await;
+                        self.send_updated_subscriptions().await?;
+                    }
+                }
+                InputMessage::FsWatchEvent(FsWatchEvent::FileDeleted(path)) => {
+                    let Ok(path) = Utf8PathBuf::try_from(path) else {
+                        continue;
+                    };
+                    if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
+                        self.processor.remove_script(path).await;
+                    } else if path.extension() == Some("toml") {
+                        self.processor.remove_flow(path).await;
+                        self.send_updated_subscriptions().await?;
+                    }
+                }
+                InputMessage::FsWatchEvent(_) => unimplemented!(),
             }
         }
+
         Ok(())
     }
 }
 
 impl FlowsMapper {
+    async fn next_message(&mut self) -> Option<InputMessage> {
+        let deadline = self
+            .processor
+            .next_interval_deadline()
+            .map_or(self.next_dump, |deadline| min(deadline, self.next_dump));
+        let deadline_future = sleep_until(deadline).map(|_| Some(InputMessage::Tick(Tick)));
+        let incoming_message_future = self.messages.recv();
+
+        futures::pin_mut!(incoming_message_future);
+        futures::pin_mut!(deadline_future);
+
+        futures::future::select(deadline_future, incoming_message_future)
+            .await
+            .factor_first()
+            .0
+    }
+
     async fn send_updated_subscriptions(&mut self) -> Result<(), RuntimeError> {
         let diff = self.update_subscriptions();
         self.messages
