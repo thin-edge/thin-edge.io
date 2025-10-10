@@ -57,7 +57,7 @@ tedge_config_macros-impl = { path = "crates/common/tedge_config_macros/impl" }
 tedge_config_manager = { path = "crates/extensions/tedge_config_manager" }
 tedge_downloader_ext = { path = "crates/extensions/tedge_downloader_ext" }
 tedge_file_system_ext = { path = "crates/extensions/tedge_file_system_ext" }
-tedge_flows = { path = "crates/extensions/tedge_flows" }
+tedge_flows = { path = "crates/extensions/tedge_flows", default-features = false }
 tedge_health_ext = { path = "crates/extensions/tedge_health_ext" }
 tedge_http_ext = { path = "crates/extensions/tedge_http_ext" }
 tedge_log_manager = { path = "crates/extensions/tedge_log_manager" }
@@ -95,6 +95,7 @@ base64 = "0.22"
 bytes = "1.4"
 camino = "1.1"
 cap = "0.1"
+cfg-if = "1.0"
 clap = { version = "4.5", features = [
     "cargo",
     "derive",
@@ -112,6 +113,7 @@ env_logger = "0.10"
 fastrand = "2.0"
 figment = { version = "0.10" }
 filetime = "0.2"
+fjall = "2.11"
 flate2 = "1.1.1"
 freedesktop_entry_parser = "1.3.0"
 futures = "0.3"
@@ -185,6 +187,7 @@ serde_json = "1.0"
 sha1 = "0.10"
 sha256 = "1.1"
 shell-words = "1.1"
+sqlx = { version = "0.8", default-features = false }
 strum = "0.24"
 strum_macros = "0.24"
 syn = { version = "2", features = ["full", "extra-traits"] }
