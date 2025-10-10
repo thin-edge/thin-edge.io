@@ -227,6 +227,10 @@ impl TEdgeConfigReaderDevice {
         let uri = cloud
             .and_then(|c| c.key_uri().or(self.key_uri.or_none().cloned()))
             .or(self.key_uri.or_none().cloned());
+        let pin = cloud
+            .and_then(|c| c.key_pin().or(self.key_pin.or_none().cloned()))
+            .map(|p| SecretString::new(p.to_string()));
+
         match cryptoki.mode {
             Cryptoki::Off => Ok(None),
             Cryptoki::Module => Ok(Some(CryptokiConfig::Direct(CryptokiConfigDirect {
@@ -242,12 +246,7 @@ impl TEdgeConfigReaderDevice {
             Cryptoki::Socket => Ok(Some(CryptokiConfig::SocketService {
                 socket_path: cryptoki.socket_path.clone(),
                 uri,
-                pin: self
-                    .key_pin
-                    .as_ref()
-                    .map(|p| SecretString::new(p.to_string()))
-                    .or_none()
-                    .cloned(),
+                pin,
             })),
         }
     }
