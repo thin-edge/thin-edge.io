@@ -9,6 +9,7 @@ use serde_json::Value;
 use tedge_actors::DynSender;
 use tedge_actors::RuntimeError;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchRequest;
 use time::OffsetDateTime;
@@ -32,6 +33,9 @@ pub struct Flow {
     /// The target for the transformed messages
     pub output: FlowOutput,
 
+    /// The target for error messages
+    pub errors: FlowOutput,
+
     /// Path to the configuration file for this flow
     pub source: Utf8PathBuf,
 }
@@ -49,7 +53,7 @@ pub enum FlowInput {
 }
 
 pub enum FlowOutput {
-    Mqtt {},
+    Mqtt { topic: Option<Topic> },
     File { path: Utf8PathBuf },
 }
 
@@ -260,8 +264,11 @@ impl FlowOutput {
         messages: Vec<Message>,
     ) -> Result<(), RuntimeError> {
         match self {
-            FlowOutput::Mqtt {} => {
-                for message in messages {
+            FlowOutput::Mqtt { topic } => {
+                for mut message in messages {
+                    if let Some(output_topic) = topic {
+                        message.topic = output_topic.name.clone();
+                    }
                     match MqttMessage::try_from(message) {
                         Ok(message) => mqtt.send(message).await?,
                         Err(err) => {

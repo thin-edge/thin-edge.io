@@ -112,6 +112,15 @@ Appending messages to a file
     Execute Command    grep '\\[seq/events\\] 2' /tmp/events.log
     Execute Command    grep '\\[seq/events\\] 3' /tmp/events.log
 
+Publishing transformation errors
+    # Assuming the flow publish-js-errors.toml has been properly installed
+    Execute Command    (for i in $(seq 3); do sleep 1; tedge mqtt pub collectd/foo 12345:6789; done)&
+    Execute Command    tedge mqtt sub test/errors --duration 2s | grep 'Error: Not a collectd topic'
+    Execute Command    (for i in $(seq 3); do sleep 1; tedge mqtt pub collectd/a/b/c foo,bar; done)&
+    Execute Command    tedge mqtt sub test/errors --duration 2s | grep 'Error: Not a collectd payload'
+    Execute Command    (for i in $(seq 3); do sleep 1; tedge mqtt pub collectd/a/b/c 12345:6789; done)&
+    Execute Command    tedge mqtt sub test/output --duration 2s | grep '{"time": 12345, "b": {"c": 6789}}'
+
 
 *** Keywords ***
 Custom Setup
