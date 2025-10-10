@@ -9,6 +9,7 @@ mod runtime;
 mod stats;
 
 use crate::actor::FlowsMapper;
+use crate::actor::STATS_DUMP_INTERVAL;
 pub use crate::runtime::MessageProcessor;
 use camino::Utf8Path;
 use std::convert::Infallible;
@@ -28,6 +29,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
+use tokio::time::Instant;
 use tracing::error;
 
 fan_in_message_type!(InputMessage[MqttMessage, FsWatchEvent]: Clone, Debug, Eq, PartialEq);
@@ -98,6 +100,7 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
             messages: self.message_box.build(),
             subscriptions,
             processor: self.processor,
+            next_dump: Instant::now() + STATS_DUMP_INTERVAL,
         }
     }
 }
