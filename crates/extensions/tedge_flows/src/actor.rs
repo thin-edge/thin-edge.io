@@ -1,4 +1,5 @@
 use crate::flow::DateTime;
+use crate::flow::Flow;
 use crate::flow::FlowError;
 use crate::flow::Message;
 use crate::runtime::MessageProcessor;
@@ -175,7 +176,7 @@ impl FlowsMapper {
     async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
         for (flow, messages) in self.processor.on_message(timestamp, &message).await {
-            self.publish_transformed_messages(&flow, messages).await?;
+            self.publish_transformation_outcome(&flow, messages).await?;
         }
 
         Ok(())
@@ -190,7 +191,7 @@ impl FlowsMapper {
             self.next_dump = now + STATS_DUMP_INTERVAL;
         }
         for (flow, messages) in self.processor.on_interval(timestamp, now).await {
-            self.publish_transformed_messages(&flow, messages).await?;
+            self.publish_transformation_outcome(&flow, messages).await?;
         }
 
         Ok(())
@@ -207,7 +208,7 @@ impl FlowsMapper {
         Ok(())
     }
 
-    async fn publish_transformed_messages(
+    async fn publish_transformation_outcome(
         &mut self,
         flow_id: &str,
         transformation_outcome: Result<Vec<Message>, FlowError>,
@@ -216,19 +217,41 @@ impl FlowsMapper {
             return Ok(());
         };
         match transformation_outcome {
-            Ok(messages) => {
-                if let Err(err) = flow
-                    .output
-                    .publish_messages(flow_id, self.mqtt_sender(), messages)
-                    .await
-                {
-                    error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
-                }
-            }
-            Err(err) => {
-                error!(target: "flows", "{flow_id}: {err}");
-            }
+            Ok(messages) => self.publish_transformed_messages(flow, messages).await,
+            Err(err) => self.publish_transformation_error(flow, err).await,
         }
+    }
+
+    async fn publish_transformed_messages(
+        &self,
+        flow: &Flow,
+        messages: Vec<Message>,
+    ) -> Result<(), RuntimeError> {
+        if let Err(err) = flow
+            .output
+            .publish_messages(flow.name(), self.mqtt_sender(), messages)
+            .await
+        {
+            error!(target: "flows", "{}: cannot publish transformed message: {err}", flow.name());
+        }
+
+        Ok(())
+    }
+
+    async fn publish_transformation_error(
+        &self,
+        flow: &Flow,
+        error: FlowError,
+    ) -> Result<(), RuntimeError> {
+        let message = Message::new("te/error".to_string(), error.to_string());
+        if let Err(err) = flow
+            .errors
+            .publish_messages(flow.name(), self.mqtt_sender(), vec![message])
+            .await
+        {
+            error!(target: "flows", "{}: cannot publish transformation error: {err}", flow.name());
+        }
+
         Ok(())
     }
 }
