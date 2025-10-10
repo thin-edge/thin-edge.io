@@ -1,6 +1,7 @@
 use std::ops::Sub;
 use std::time::Duration;
 
+use crate::input_source::InputSource;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::stats::Counter;
@@ -16,10 +17,12 @@ use tokio::time::Instant;
 use tracing::warn;
 
 /// A chain of transformation of MQTT messages
-#[derive(Debug)]
 pub struct Flow {
     /// The source topics
     pub input: FlowInput,
+
+    /// Input source for polling (e.g., database drains)
+    pub input_source: Option<Box<dyn InputSource>>,
 
     /// Transformation steps to apply in order to the messages
     pub steps: Vec<FlowStep>,
@@ -28,12 +31,6 @@ pub struct Flow {
 
     /// Target of the transformed messages
     pub output: FlowOutput,
-
-    /// Next time to drain database for MeaDB inputs (for deadline-based wakeup)
-    pub next_drain: Option<tokio::time::Instant>,
-
-    /// Last time database was drained (for frequency checking)
-    pub last_drain: Option<DateTime>,
 }
 
 /// A message transformation step
@@ -104,45 +101,6 @@ impl Flow {
         }
     }
 
-    pub fn init_next_drain(&mut self) {
-        if let FlowInput::MeaDB { frequency, .. } = &self.input {
-            if !frequency.is_zero() {
-                self.next_drain = Some(tokio::time::Instant::now() + *frequency);
-            }
-        }
-    }
-
-    pub fn should_drain_at(&mut self, timestamp: DateTime) -> bool {
-        if let FlowInput::MeaDB { frequency, .. } = &self.input {
-            if frequency.is_zero() {
-                return false;
-            }
-
-            // Check if enough time has passed since last drain
-            match self.last_drain {
-                Some(last_drain) => {
-                    let elapsed_secs = timestamp.seconds.saturating_sub(last_drain.seconds);
-                    let frequency_secs = frequency.as_secs();
-                    if elapsed_secs >= frequency_secs {
-                        self.last_drain = Some(timestamp);
-                        // Also update the deadline for the actor loop
-                        self.next_drain = Some(tokio::time::Instant::now() + *frequency);
-                        true
-                    } else {
-                        false
-                    }
-                }
-                None => {
-                    // First drain
-                    self.last_drain = Some(timestamp);
-                    self.next_drain = Some(tokio::time::Instant::now() + *frequency);
-                    true
-                }
-            }
-        } else {
-            false
-        }
-    }
 
     pub fn topics(&self) -> TopicFilter {
         let mut topics = self.input.topics();

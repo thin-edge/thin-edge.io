@@ -162,7 +162,7 @@ async fn only_drains_database_at_configured_frequency_intervals() {
     let non_interval = DateTime::try_from(datetime!(2022-01-01 00:00:07 UTC)).unwrap(); // 7 seconds later
 
     // Test that draining happens at exact intervals
-    let drain_results_interval = processor.drain_db(exact_interval).await;
+    let drain_results_interval = processor.poll_input_sources(exact_interval).await;
     assert_eq!(
         drain_results_interval.len(),
         1,
@@ -170,7 +170,7 @@ async fn only_drains_database_at_configured_frequency_intervals() {
     );
 
     // Test that draining doesn't happen at non-intervals
-    let drain_results_non_interval = processor.drain_db(non_interval).await;
+    let drain_results_non_interval = processor.poll_input_sources(non_interval).await;
     assert_eq!(
         drain_results_non_interval.len(),
         0,
@@ -223,22 +223,28 @@ async fn drains_messages_older_than_max_age_retention_period() {
 
     processor
         .database
+        .lock()
+        .await
         .store("age-filtered-data", recent_timestamp, recent_msg)
         .await
         .unwrap();
     processor
         .database
+        .lock()
+        .await
         .store("age-filtered-data", old_timestamp, old_msg)
         .await
         .unwrap();
     processor
         .database
+        .lock()
+        .await
         .store("age-filtered-data", very_old_timestamp, very_old_msg)
         .await
         .unwrap();
 
     let drained_messages: Vec<_> = processor
-        .drain_db(current_timestamp)
+        .poll_input_sources(current_timestamp)
         .await
         .into_iter()
         .flat_map(|(_, res)| res.unwrap())
@@ -334,7 +340,7 @@ async fn chains_mqtt_storage_drain_and_output_flows_end_to_end() {
 
     // Step 2: Wait and then drain database
     let drain_timestamp = DateTime::try_from(datetime!(2022-01-01 00:01:00 UTC)).unwrap();
-    let drain_results = processor.drain_db(drain_timestamp).await;
+    let drain_results = processor.poll_input_sources(drain_timestamp).await;
 
     // Verify drain operation found data
     assert!(
@@ -515,6 +521,8 @@ async fn timing_logic_respects_frequency_intervals() {
     let test_message = message("te/test", r#"{"data": "test"}"#);
     processor
         .database
+        .lock()
+        .await
         .store("timing-test", test_timestamp, test_message)
         .await
         .expect("Failed to store test message");
@@ -526,10 +534,10 @@ async fn timing_logic_respects_frequency_intervals() {
     let at_6s = DateTime::try_from(datetime!(2022-01-01 00:00:06 UTC)).unwrap(); // Should drain
 
     // Test draining at different times
-    let drain_at_0s = processor.drain_db(at_0s).await;
-    let drain_at_3s = processor.drain_db(at_3s).await;
-    let drain_at_5s = processor.drain_db(at_5s).await;
-    let drain_at_6s = processor.drain_db(at_6s).await;
+    let drain_at_0s = processor.poll_input_sources(at_0s).await;
+    let drain_at_3s = processor.poll_input_sources(at_3s).await;
+    let drain_at_5s = processor.poll_input_sources(at_5s).await;
+    let drain_at_6s = processor.poll_input_sources(at_6s).await;
 
     assert_eq!(
         drain_at_0s.len(),

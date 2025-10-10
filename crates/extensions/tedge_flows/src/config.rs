@@ -1,7 +1,9 @@
+use crate::database::MeaDb;
 use crate::flow::Flow;
 use crate::flow::FlowInput;
 use crate::flow::FlowOutput;
 use crate::flow::FlowStep;
+use crate::input_source::DatabaseSource;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::LoadError;
@@ -10,8 +12,10 @@ use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde_json::Value;
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_mqtt_ext::TopicFilter;
+use tokio::sync::Mutex;
 
 #[derive(Deserialize)]
 pub struct FlowConfig {
@@ -110,8 +114,25 @@ impl FlowConfig {
         js_runtime: &mut JsRuntime,
         config_dir: &Utf8Path,
         source: Utf8PathBuf,
+        database: Arc<Mutex<Box<dyn MeaDb>>>,
     ) -> Result<Flow, ConfigError> {
         let input = self.input.try_into()?;
+
+        // Create input source for MeaDB inputs
+        let input_source = match &input {
+            FlowInput::MeaDB {
+                series,
+                frequency,
+                max_age,
+            } => Some(Box::new(DatabaseSource::new(
+                database.clone(),
+                series.clone(),
+                *frequency,
+                *max_age,
+            )) as Box<dyn crate::input_source::InputSource>),
+            FlowInput::Mqtt { .. } => None,
+        };
+
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
             let mut step = step.compile(config_dir, i, &source).await?;
@@ -122,15 +143,13 @@ impl FlowConfig {
             steps.push(step);
         }
         let output = self.output.try_into()?;
-        let mut flow = Flow {
+        let flow = Flow {
             input,
+            input_source,
             steps,
             source,
             output,
-            next_drain: None,
-            last_drain: None,
         };
-        flow.init_next_drain();
         Ok(flow)
     }
 }
