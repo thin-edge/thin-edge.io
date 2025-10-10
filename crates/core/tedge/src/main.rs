@@ -157,10 +157,7 @@ where
             if e.exit_code() == 0 {
                 // e.g. --help was passed
                 Err(0)
-            } else if matches!(
-                executable_name.as_deref(),
-                Some("file" | "tedge-file-log-plugin" | "apt" | "tedge-apt-plugin")
-            ) {
+            } else if matches!(executable_name.as_deref(), Some("apt" | "tedge-apt-plugin")) {
                 // Adhere to the plugin specification, which requires exit code 1 for invalid commands
                 Err(1)
             } else {
@@ -232,9 +229,8 @@ mod tests {
     #[test_case("apt list excessive arguments", 1)]
     #[test_case("tedge-apt-plugin --help", 0)]
     #[test_case("tedge-apt-plugin unknownarg", 1)]
-    #[test_case("file unknownarg", 1)]
-    #[test_case("file", 1)]
-    #[test_case("tedge-file-log-plugin unknownarg", 1)]
+    #[test_case("tedge-file-log-plugin --help", 0)]
+    #[test_case("tedge-file-log-plugin unknownarg", 2)]
     #[test_case("tedge unknown", 2)]
     #[test_case("tedge --help", 0)]
     #[test_case("tedge", 2)]

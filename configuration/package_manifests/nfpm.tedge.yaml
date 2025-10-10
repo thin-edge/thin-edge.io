@@ -94,6 +94,13 @@ contents:
     packager: rpm
 
   # preset log plugins
+
+  # file
+  - src: ./configuration/contrib/log-plugins/file
+    dst: /usr/share/tedge/log-plugins/
+    file_info:
+      mode: 0755
+
   # journald
   - src: ./configuration/contrib/log-plugins/journald
     dst: /usr/share/tedge/log-plugins/
