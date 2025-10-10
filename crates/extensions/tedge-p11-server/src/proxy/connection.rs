@@ -99,6 +99,8 @@ pub enum Frame1 {
     Pong,
     CreateKeyRequest(CreateKeyRequest),
     CreateKeyResponse(CreateKeyResponse),
+    GetTokensUrisRequest,
+    GetTokensUrisResponse(Vec<String>),
 }
 
 /// An error that can be returned to the client by the server.

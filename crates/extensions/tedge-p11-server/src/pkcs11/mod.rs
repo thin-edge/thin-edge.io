@@ -173,13 +173,23 @@ impl TedgeP11Service for Cryptoki {
         session.get_public_key_pem()
     }
 
-    fn create_key(
-        &self,
-        uri: Option<&str>,
-        params: CreateKeyParams,
-    ) -> anyhow::Result<CreateKeyResponse> {
+    fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
+        let cryptoki = self.context.lock().unwrap();
+        let slots = cryptoki.get_slots_with_initialized_token().unwrap();
+        let uris = slots
+            .into_iter()
+            .map(|slot| {
+                let token_info = cryptoki.get_token_info(slot).unwrap();
+                export_session_uri(&token_info)
+            })
+            .collect();
+
+        Ok(uris)
+    }
+
+    fn create_key(&self, uri: &str, params: CreateKeyParams) -> anyhow::Result<CreateKeyResponse> {
         // NOTE: when writing to HSM, session must always be rw
-        let session = self.open_session_rw(uri)?;
+        let session = self.open_session_rw(Some(uri))?;
         let key = session.create_key(params)?;
         let pem = session.export_public_key_pem(key)?;
         let uri = session.export_object_uri(key)?;
@@ -716,7 +726,6 @@ impl CryptokiSession<'_> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateKeyParams {
     pub key: KeyTypeParams,
-    pub token: Option<String>,
     pub label: String,
 }
 

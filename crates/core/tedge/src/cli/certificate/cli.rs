@@ -89,6 +89,8 @@ pub enum TEdgeCertCli {
         // but this type is used in other places
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
+
+        token: Option<String>,
     },
 
     /// Renew the device certificate
@@ -261,6 +263,7 @@ impl BuildCommand for TEdgeCertCli {
                 curve,
 
                 cloud,
+                token,
             } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cloud_config = cloud
@@ -279,6 +282,7 @@ impl BuildCommand for TEdgeCertCli {
                     bits,
                     curve,
                     cloud,
+                    token,
                 }
                 .into_boxed()
             }

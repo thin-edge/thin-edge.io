@@ -169,6 +169,21 @@ Can create a private key on the PKCS11 token and download new cert from c8y
 
     [Teardown]    Set tedge-p11-server Uri    value=
 
+tedge cert create-key should ask where to create keypair if multiple tokens available
+    # setup multiple tokens
+    Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token1 --pin=123456 --so-pin=123456
+    Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token2 --pin=123456 --so-pin=123456
+
+    # restart to refresh slots (not necessary for things that aren't softhsm2)
+    Restart Service    tedge-p11-server
+
+    # unset key_uri so there there's no hint where to generate the keypair
+    Execute Command    cmd=tedge config unset device.key_uri
+    ${stderr}=    Execute Command    cmd=tedge cert create-key --type ecdsa --label my-key    strip=True    stdout=False    stderr=True
+    Should Contain    ${stderr}    No token URL was provided for this operation; the available tokens are:
+    Should Contain    ${stderr}    token=create-key-token1
+    Should Contain    ${stderr}    token=create-key-token2
+
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
     ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0
@@ -239,7 +254,7 @@ Warn the user if tedge.toml cannot be parsed
 Create private key
     [Arguments]    ${type}    ${label}    ${bits}=${EMPTY}    ${curve}=${EMPTY}    ${p11tool_keytype}=${EMPTY}
     # create the private key on token and write CSR to device.csr_path
-    VAR    ${command}=    tedge cert create-key --label ${label} --type ${type}
+    VAR    ${command}=    tedge cert create-key --label ${label} --type ${type} "pkcs11:token=create-key-token"
     IF    $bits
         VAR    ${command}=    ${command} --bits ${bits}
     END
