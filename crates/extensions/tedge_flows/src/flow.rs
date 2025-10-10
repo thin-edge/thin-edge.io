@@ -6,20 +6,37 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
+use tedge_actors::DynSender;
+use tedge_actors::RuntimeError;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_watch_ext::WatchRequest;
 use time::OffsetDateTime;
+use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
+use tracing::error;
 use tracing::warn;
 
-/// A chain of transformation of MQTT messages
+/// A chain of message transformations
+///
+/// A flow consumes messages from a source of type [FlowInput],
+/// processes those along a chain of transformation steps,
+/// and finally produces the derived messages to a sink of type [FlowOutput].
 pub struct Flow {
-    /// The source topics
+    /// The message source
     pub input: FlowInput,
 
     /// Transformation steps to apply in order to the messages
     pub steps: Vec<FlowStep>,
 
+    /// The target for the transformed messages
+    pub output: FlowOutput,
+
+    /// The target for error messages
+    pub errors: FlowOutput,
+
+    /// Path to the configuration file for this flow
     pub source: Utf8PathBuf,
 }
 
@@ -30,7 +47,14 @@ pub struct FlowStep {
 }
 
 pub enum FlowInput {
-    MQTT { topics: TopicFilter },
+    Mqtt { topics: TopicFilter },
+    File { path: Utf8PathBuf },
+    Process { command: String },
+}
+
+pub enum FlowOutput {
+    Mqtt { topic: Option<Topic> },
+    File { path: Utf8PathBuf },
 }
 
 #[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -59,12 +83,20 @@ pub enum FlowError {
 }
 
 impl Flow {
+    pub fn name(&self) -> &str {
+        self.source.as_str()
+    }
+
     pub fn topics(&self) -> TopicFilter {
-        let mut topics = self.input.topics().clone();
+        let mut topics = self.input.topics();
         for step in self.steps.iter() {
             topics.add_all(step.config_topics.clone())
         }
         topics
+    }
+
+    pub fn watch_request(&self) -> Option<WatchRequest> {
+        self.input.watch_request(self.name().to_string())
     }
 
     pub async fn on_config_update(
@@ -88,7 +120,7 @@ impl Flow {
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         self.on_config_update(js_runtime, message).await?;
-        if !self.input.topics().accept_topic_name(&message.topic) {
+        if !self.input.accept_input_message(self.name(), message) {
             return Ok(vec![]);
         }
 
@@ -184,11 +216,91 @@ impl FlowStep {
     }
 }
 
-impl FlowInput {
-    pub fn topics(&self) -> &TopicFilter {
+impl std::fmt::Display for FlowInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FlowInput::MQTT { topics } => topics,
+            FlowInput::Mqtt { topics } => write!(f, "topics: {topics:?}"),
+            FlowInput::File { path } => write!(f, "file: {path}"),
+            FlowInput::Process { command } => write!(f, "command: {command}"),
         }
+    }
+}
+
+impl FlowInput {
+    pub fn topics(&self) -> TopicFilter {
+        match self {
+            FlowInput::Mqtt { topics } => topics.clone(),
+            FlowInput::File { .. } | FlowInput::Process { .. } => TopicFilter::empty(),
+        }
+    }
+
+    pub fn accept_input_message(&self, flow: &str, message: &Message) -> bool {
+        match self {
+            FlowInput::Mqtt { topics } => topics.accept_topic_name(&message.topic),
+            FlowInput::File { .. } | FlowInput::Process { .. } => message.topic == flow,
+        }
+    }
+
+    pub fn watch_request(&self, flow_name: String) -> Option<WatchRequest> {
+        match self {
+            FlowInput::Mqtt { .. } => None,
+            FlowInput::File { path } => Some(WatchRequest::WatchFile {
+                topic: flow_name,
+                file: path.to_owned(),
+            }),
+            FlowInput::Process { command } => Some(WatchRequest::WatchCommand {
+                topic: flow_name,
+                command: command.to_owned(),
+            }),
+        }
+    }
+}
+
+impl FlowOutput {
+    pub async fn publish_messages(
+        &self,
+        flow: &str,
+        mut mqtt: DynSender<MqttMessage>,
+        messages: Vec<Message>,
+    ) -> Result<(), RuntimeError> {
+        match self {
+            FlowOutput::Mqtt { topic } => {
+                for mut message in messages {
+                    if let Some(output_topic) = topic {
+                        message.topic = output_topic.name.clone();
+                    }
+                    match MqttMessage::try_from(message) {
+                        Ok(message) => mqtt.send(message).await?,
+                        Err(err) => {
+                            error!(target: "flows", "{flow}: cannot publish transformed message: {err}")
+                        }
+                    }
+                }
+            }
+            FlowOutput::File { path } => {
+                let Ok(mut file) = tokio::fs::File::options()
+                    .create(true)
+                    .append(true)
+                    .open(path)
+                    .await
+                    .map_err(|err| {
+                        error!(target: "flows", "{flow}: cannot open {path}: {err}");
+                    })
+                else {
+                    return Ok(());
+                };
+                for message in messages {
+                    if let Err(err) = file.write_all(format!("{message}\n").as_bytes()).await {
+                        error!(target: "flows", "{flow}: cannot append to {path}: {err}");
+                    }
+                }
+                if let Err(err) = file.flush().await {
+                    error!(target: "flows", "{flow}: cannot flush {path}: {err}");
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -262,20 +374,19 @@ impl std::fmt::Display for Message {
 
 impl std::fmt::Debug for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(self, f)
+        write!(
+            f,
+            "[{}] {}",
+            self.topic,
+            String::from_utf8_lossy(self.payload.as_ref())
+        )
     }
 }
 
-impl TryFrom<MqttMessage> for Message {
-    type Error = FlowError;
-
-    fn try_from(message: MqttMessage) -> Result<Self, Self::Error> {
+impl From<MqttMessage> for Message {
+    fn from(message: MqttMessage) -> Self {
         let (topic, payload) = message.split();
-        Ok(Message {
-            topic,
-            payload,
-            timestamp: None,
-        })
+        Message::new(topic, payload)
     }
 }
 

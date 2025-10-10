@@ -3,6 +3,7 @@ use crate::TEdgeComponent;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_flows::FlowsMapperBuilder;
+use tedge_watch_ext::WatchActorBuilder;
 
 pub struct GenMapper;
 
@@ -21,9 +22,13 @@ impl TEdgeComponent for GenMapper {
         flows_mapper.connect(&mut mqtt_actor);
         flows_mapper.connect_fs(&mut fs_actor);
 
+        let mut cmd_watcher_actor = WatchActorBuilder::new();
+        cmd_watcher_actor.connect(&mut flows_mapper);
+
         runtime.spawn(flows_mapper).await?;
         runtime.spawn(mqtt_actor).await?;
         runtime.spawn(fs_actor).await?;
+        runtime.spawn(cmd_watcher_actor).await?;
         runtime.run_to_completion().await?;
         Ok(())
     }
