@@ -5,8 +5,8 @@ use crate::InputMessage;
 use crate::OutputMessage;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
-use futures::future::Either;
-use std::future::pending;
+use std::cmp::min;
+use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
@@ -20,10 +20,13 @@ use tokio::time::sleep_until;
 use tokio::time::Instant;
 use tracing::error;
 
+pub const STATS_DUMP_INTERVAL: Duration = Duration::from_secs(300);
+
 pub struct FlowsMapper {
     pub(super) messages: SimpleMessageBox<InputMessage, OutputMessage>,
     pub(super) subscriptions: TopicFilter,
     pub(super) processor: MessageProcessor,
+    pub(super) next_dump: Instant,
 }
 
 #[async_trait]
@@ -34,13 +37,13 @@ impl Actor for FlowsMapper {
 
     async fn run(mut self) -> Result<(), RuntimeError> {
         loop {
-            let deadline_future = match self.processor.next_interval_deadline() {
-                Some(deadline) => Either::Left(sleep_until(deadline)),
-                None => Either::Right(pending()),
-            };
+            let deadline = self
+                .processor
+                .next_interval_deadline()
+                .map_or(self.next_dump, |deadline| min(deadline, self.next_dump));
 
             tokio::select! {
-                _ = deadline_future => {
+                _ = sleep_until(deadline) => {
                     self.on_interval().await?;
                 }
                 message = self.messages.recv() => {
@@ -137,9 +140,10 @@ impl FlowsMapper {
     async fn on_interval(&mut self) -> Result<(), RuntimeError> {
         let now = Instant::now();
         let timestamp = DateTime::now();
-        if timestamp.seconds % 300 == 0 {
+        if self.next_dump <= now {
             self.processor.dump_memory_stats().await;
             self.processor.dump_processing_stats().await;
+            self.next_dump = now + STATS_DUMP_INTERVAL;
         }
         for (flow_id, flow_messages) in self.processor.on_interval(timestamp, now).await {
             match flow_messages {

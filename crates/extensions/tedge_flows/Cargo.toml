@@ -37,6 +37,7 @@ tracing = { workspace = true }
 tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [lints]
 workspace = true
