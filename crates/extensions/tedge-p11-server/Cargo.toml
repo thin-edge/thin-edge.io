@@ -19,6 +19,7 @@ cryptoki.workspace = true
 pem.workspace = true
 percent-encoding.workspace = true
 postcard.workspace = true
+rand.workspace = true
 rsa.workspace = true
 rustls.workspace = true
 sd-listen-fds.workspace = true

@@ -14,6 +14,7 @@ default-run = "tedge"
 [dependencies]
 anstyle = { workspace = true }
 anyhow = { workspace = true }
+asn1-rs.workspace = true
 async-trait = { workspace = true }
 base64 = { workspace = true }
 c8y-firmware-plugin = { workspace = true }
@@ -32,7 +33,7 @@ mime_guess = { workspace = true }
 mqtt_channel = { workspace = true }
 nix = { workspace = true }
 pad = { workspace = true }
-pem = { workspace = true }
+pem.workspace = true
 rasn = { workspace = true }
 rasn-cms = { workspace = true }
 reqwest = { workspace = true, features = [
@@ -51,6 +52,7 @@ tedge-agent = { workspace = true }
 tedge-apt-plugin = { workspace = true }
 tedge-file-log-plugin = { workspace = true }
 tedge-mapper = { workspace = true, default-features = false }
+tedge-p11-server = { workspace = true }
 tedge-watchdog = { workspace = true }
 tedge-write = { workspace = true }
 tedge_api = { workspace = true }

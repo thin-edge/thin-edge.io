@@ -6,6 +6,10 @@ use super::show::ShowCertCmd;
 use crate::certificate_is_self_signed;
 use crate::cli::certificate::c8y;
 use crate::cli::certificate::create_csr::Key;
+use crate::cli::certificate::create_key::CreateKeyCmd;
+use crate::cli::certificate::create_key::EcCurve;
+use crate::cli::certificate::create_key::KeyType;
+use crate::cli::certificate::create_key::RsaBits;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
@@ -13,6 +17,7 @@ use crate::command::Command;
 use crate::CertificateShift;
 use crate::ConfigError;
 use anyhow::anyhow;
+use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
@@ -49,6 +54,43 @@ pub enum TEdgeCertCli {
 
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
+    },
+
+    /// Generate a new keypair on the PKCS11 token and select it to be used.
+    ///
+    /// Can be used to generate an RSA or an ECDSA keypair. When using RSA, `--bits` is used to set
+    /// the size of the key, when using ECDSA, `--curve` is used.
+    ///
+    /// After the key is generated, tedge config is updated to use the new key using
+    /// `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting
+    /// for that cloud, e.g. `create-key c8y` will write to `c8y.device.key_uri`.
+    ///
+    /// When multiple tokens are connected, if `device.key_uri` setting is present, the token
+    /// identified by this URI will be used. Otherwise, the first token returned by the system will
+    /// be used.
+    CreateKey {
+        /// Human readable description (CKA_LABEL attribute) for the key.
+        #[arg(long)]
+        label: String,
+
+        /// The type of the key.
+        #[arg(long)]
+        r#type: KeyType,
+
+        /// The size of the RSA keys in bits. Should only be used with --type rsa.
+        #[arg(long, default_value = "2048", group = "key_params")]
+        bits: RsaBits,
+
+        /// The curve (size) of the ECSA key. Should only be used with --type ecdsa.
+        #[arg(long, default_value = "p256", group = "key_params")]
+        curve: EcCurve,
+
+        // can't document subcommands here because one would have to document variants of the enum
+        // but this type is used in other places
+        #[clap(subcommand)]
+        cloud: Option<CloudArg>,
+
+        token: Option<String>,
     },
 
     /// Renew the device certificate
@@ -214,6 +256,36 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
+            TEdgeCertCli::CreateKey {
+                bits,
+                label,
+                r#type,
+                curve,
+
+                cloud,
+                token,
+            } => {
+                let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
+                let cloud_config = cloud
+                    .as_ref()
+                    .map(|c| config.as_cloud_config((c).into()))
+                    .transpose()?;
+                let cryptoki_config = config
+                    .device
+                    .cryptoki_config(cloud_config)?
+                    .context("Cryptoki config is not enabled")?;
+
+                CreateKeyCmd {
+                    cryptoki_config,
+                    label,
+                    r#type,
+                    bits,
+                    curve,
+                    cloud,
+                    token,
+                }
+                .into_boxed()
+            }
             TEdgeCertCli::Show {
                 cloud,
                 cert_path,
