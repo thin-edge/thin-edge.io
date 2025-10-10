@@ -66,10 +66,21 @@ impl TedgeP11Service for TedgeP11Client {
 
     fn create_key(
         &self,
-        uri: Option<&str>,
+        uri: &str,
         params: CreateKeyParams,
     ) -> anyhow::Result<crate::service::CreateKeyResponse> {
-        self.create_key(uri.map(|s| s.into()), params)
+        self.create_key(uri.to_string(), params)
+    }
+
+    fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
+        let request = Frame1::GetTokensUrisRequest;
+        let response = self.do_request(request)?;
+
+        let Frame1::GetTokensUrisResponse(uris) = response else {
+            bail!("protocol error: bad response, expected get_uris, received: {response:?}");
+        };
+
+        Ok(uris)
     }
 }
 
@@ -220,7 +231,7 @@ impl TedgeP11Client {
 
     pub fn create_key(
         &self,
-        uri: Option<String>,
+        uri: String,
         params: CreateKeyParams,
     ) -> anyhow::Result<crate::service::CreateKeyResponse> {
         let request = Frame1::CreateKeyRequest(CreateKeyRequest { uri, params });

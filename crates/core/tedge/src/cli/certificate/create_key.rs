@@ -15,6 +15,7 @@ pub struct CreateKeyCmd {
     pub label: String,
     pub r#type: KeyType,
     pub cloud: Option<Cloud>,
+    pub token: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -73,16 +74,25 @@ impl Command for CreateKeyCmd {
                 curve: self.curve.into(),
             },
         };
+
+        let cryptoki = tedge_p11_server::tedge_p11_service(self.cryptoki_config.clone())?;
+        let Some(token) = self.token.clone() else {
+            eprintln!("No token URL was provided for this operation; the available tokens are:");
+            let tokens = cryptoki.get_tokens_uris()?;
+            for token_uri in tokens {
+                eprintln!("{token_uri}");
+            }
+            return Ok(());
+        };
+
         let params = CreateKeyParams {
             key,
-            token: None,
             label: self.label.clone(),
         };
 
         // generate a keypair
         // should probably verify the keys before using them
-        let cryptoki = tedge_p11_server::tedge_p11_service(self.cryptoki_config.clone())?;
-        let key = cryptoki.create_key(None, params)?;
+        let key = cryptoki.create_key(&token, params)?;
         let pubkey_pem = key.pem;
         let uri = key.uri;
 

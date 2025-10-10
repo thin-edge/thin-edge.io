@@ -194,14 +194,23 @@ impl TedgeP11Service for Cryptoki {
         session.get_public_key_pem()
     }
 
-    fn create_key(
-        &self,
-        uri: Option<&str>,
-        params: CreateKeyParams,
-    ) -> anyhow::Result<CreateKeyResponse> {
-        // NOTE: when writing to HSM, session must always be rw
+    fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
+        let cryptoki = self.context.lock().unwrap();
+        let slots = cryptoki.get_slots_with_initialized_token().unwrap();
+        let uris = slots
+            .into_iter()
+            .map(|slot| {
+                let token_info = cryptoki.get_token_info(slot).unwrap();
+                export_session_uri(&token_info)
+            })
+            .collect();
+
+        Ok(uris)
+    }
+
+    fn create_key(&self, uri: &str, params: CreateKeyParams) -> anyhow::Result<CreateKeyResponse> {
         let session_params = SessionParams {
-            uri: uri.map(|s| s.to_string()),
+            uri: Some(uri.to_string()),
             // TODO: do we want to use client-provided (device.key_pin) PIN in create-key (we can still use extract PIN
             // from URI)? Options are:
             // - don't handle it at all (users who use tedge-p11-server and connect a new token with a different pin
@@ -214,6 +223,7 @@ impl TedgeP11Service for Cryptoki {
             // - add a --pin flag to pass the pin in the command directly, but DO write to key_pin
             pin: None,
         };
+        // NOTE: when writing to HSM, session must always be rw
         let session = self.open_session_rw(&session_params)?;
         let key = session.create_key(params)?;
         let pem = session.export_public_key_pem(key)?;
@@ -767,7 +777,6 @@ impl CryptokiSession<'_> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateKeyParams {
     pub key: KeyTypeParams,
-    pub token: Option<String>,
     pub label: String,
 }
 
