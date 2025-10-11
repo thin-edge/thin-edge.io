@@ -3,11 +3,13 @@ use std::sync::Arc;
 use anyhow::Context;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
+use secrecy::ExposeSecret;
 use tracing::error;
 use tracing::instrument;
 
 use crate::pkcs11::Cryptoki;
 use crate::pkcs11::Pkcs11Signer;
+use crate::pkcs11::SessionParams;
 use crate::pkcs11::SigScheme;
 use crate::proxy::client::TedgeP11Client;
 use crate::CryptokiConfig;
@@ -48,25 +50,33 @@ impl TedgeP11Signer for Pkcs11Signer {
 pub fn signing_key(config: CryptokiConfig) -> anyhow::Result<Arc<dyn TedgeP11Signer>> {
     let signing_key: Arc<dyn TedgeP11Signer> = match config {
         CryptokiConfig::Direct(config_direct) => {
-            let uri = config_direct.uri.clone();
+            let uri = config_direct.uri.as_ref().map(|u| u.to_string());
+            let pin = Some(crate::service::SecretString::new(
+                config_direct.pin.expose_secret().clone(),
+            ));
             let cryptoki =
                 Cryptoki::new(config_direct).context("Failed to load cryptoki library")?;
             Arc::new(
                 cryptoki
-                    .signing_key_retry(uri.as_deref())
+                    .signing_key_retry(SessionParams { uri, pin })
                     .context("failed to create a TLS signer using PKCS#11 device")?,
             )
         }
-        CryptokiConfig::SocketService { socket_path, uri } => Arc::new(TedgeP11ClientSigningKey {
-            client: TedgeP11Client::with_ready_check(socket_path.into()),
+        CryptokiConfig::SocketService {
+            socket_path,
             uri,
-        }),
+            pin,
+        } => {
+            let mut client = TedgeP11Client::with_ready_check(socket_path.into());
+            client.pin = pin;
+            Arc::new(TedgeP11ClientSigningKey { client, uri })
+        }
     };
 
     Ok(signing_key)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct TedgeP11ClientSigningKey {
     pub client: TedgeP11Client,
     pub uri: Option<Arc<str>>,
@@ -118,7 +128,7 @@ impl SigningKey for TedgeP11ClientSigningKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct TedgeP11ClientSigner {
     pub client: TedgeP11Client,
     scheme: rustls::SignatureScheme,

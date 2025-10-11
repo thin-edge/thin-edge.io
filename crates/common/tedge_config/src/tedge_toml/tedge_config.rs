@@ -152,6 +152,16 @@ define_tedge_config! {
         #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
         key_uri: Arc<str>,
 
+        /// User PIN value for logging into the PKCS#11 token provided by the consumer.
+        ///
+        /// This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a
+        /// default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given
+        /// `key_uri`.
+        ///
+        /// In practice, this can be used to define separate keys and separate PINs for different connection profiles.
+        #[tedge_config(example = "123456", example = "my-pin")]
+        key_pin: Arc<str>,
+
         cryptoki: {
             /// Whether to use a Hardware Security Module for authenticating the MQTT connection with the cloud.
             ///
@@ -168,13 +178,28 @@ define_tedge_config! {
             #[doku(as = "PathBuf")]
             module_path: AbsolutePath,
 
-            /// Pin value for logging into the HSM.
+            /// A default User PIN value for logging into the PKCS11 token.
+            ///
+            /// May be overridden on a per-key basis using device.key_pin config setting.
             #[tedge_config(example = "123456", default(value = "123456"))]
             pin: Arc<str>,
 
             /// A URI of the token/object to be used by tedge-p11-server.
             ///
-            /// See RFC #7512.
+            /// If set, tedge-p11-server will by default use this URI to select a key for signing if a client does not
+            /// provide its URI in the request. If the client provides the URI, then the attributes of this server URI
+            /// will be used as a base onto which client-provided URI attributes will be appended, potentially limiting
+            /// the scope of keys or tokens that can be used by the clients.
+            ///
+            /// For example, if `cryptoki.uri=pkcs11:token=token1` and `device.key_uri=pkcs11:token2;object=key1`,
+            /// `tedge-p11-server` will use URI `pkcs11:token1;object=key1`.
+            ///
+            /// For more information about PKCS11 URIs, see RFC7512.
+
+            // NOTE: combining URI behaviour seems unintuitive and surprising. If a client asks for a key on `token2`,
+            // but the server only allows accessing `token1` then it probably should receive a KeyNotFound instead of
+            // getting a signature from key on `token1` and then NotAuthorized because the signature is wrong.
+
             // NOTE: this field isn't actually used by anything in tedge-config yet - it can appear in tedge.toml though
             // because it's read by tedge-p11-server crate, but the crate doesn't use tedge-config to read it (because
             // adding tedge-config as dependency would introduce dependency cycle) but defines the schema itself. So
@@ -268,6 +293,16 @@ define_tedge_config! {
             /// See RFC #7512.
             #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
             key_uri: Arc<str>,
+
+            /// User PIN value for logging into the PKCS#11 token provided by the consumer.
+            ///
+            /// This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a
+            /// default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given
+            /// `key_uri`.
+            ///
+            /// In practice, this can be used to define separate keys and separate PINs for different connection profiles.
+            #[tedge_config(example = "123456", example = "my-pin")]
+            key_pin: Arc<str>,
         },
 
         smartrest: {
@@ -496,6 +531,16 @@ define_tedge_config! {
             /// See RFC #7512.
             #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
             key_uri: Arc<str>,
+
+            /// User PIN value for logging into the PKCS#11 token provided by the consumer.
+            ///
+            /// This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a
+            /// default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given
+            /// `key_uri`.
+            ///
+            /// In practice, this can be used to define separate keys and separate PINs for different connection profiles.
+            #[tedge_config(example = "123456", example = "my-pin")]
+            key_pin: Arc<str>,
         },
 
         mapper: {
@@ -572,6 +617,16 @@ define_tedge_config! {
             /// See RFC #7512.
             #[tedge_config(example = "pkcs11:model=PKCS%2315%20emulated")]
             key_uri: Arc<str>,
+
+            /// User PIN value for logging into the PKCS#11 token provided by the consumer.
+            ///
+            /// This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a
+            /// default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given
+            /// `key_uri`.
+            ///
+            /// In practice, this can be used to define separate keys and separate PINs for different connection profiles.
+            #[tedge_config(example = "123456", example = "my-pin")]
+            key_pin: Arc<str>,
         },
 
         mapper: {
@@ -1083,6 +1138,7 @@ pub trait CloudConfig {
     fn device_cert_path(&self) -> &Utf8Path;
     fn root_cert_path(&self) -> &Utf8Path;
     fn key_uri(&self) -> Option<Arc<str>>;
+    fn key_pin(&self) -> Option<Arc<str>>;
 }
 
 impl CloudConfig for TEdgeConfigReaderC8y {
@@ -1100,6 +1156,10 @@ impl CloudConfig for TEdgeConfigReaderC8y {
 
     fn key_uri(&self) -> Option<Arc<str>> {
         self.device.key_uri.or_none().cloned()
+    }
+
+    fn key_pin(&self) -> Option<Arc<str>> {
+        self.device.key_pin.or_none().cloned()
     }
 }
 
@@ -1119,6 +1179,10 @@ impl CloudConfig for TEdgeConfigReaderAz {
     fn key_uri(&self) -> Option<Arc<str>> {
         self.device.key_uri.or_none().cloned()
     }
+
+    fn key_pin(&self) -> Option<Arc<str>> {
+        self.device.key_pin.or_none().cloned()
+    }
 }
 
 impl CloudConfig for TEdgeConfigReaderAws {
@@ -1136,6 +1200,10 @@ impl CloudConfig for TEdgeConfigReaderAws {
 
     fn key_uri(&self) -> Option<Arc<str>> {
         self.device.key_uri.or_none().cloned()
+    }
+
+    fn key_pin(&self) -> Option<Arc<str>> {
+        self.device.key_pin.or_none().cloned()
     }
 }
 
