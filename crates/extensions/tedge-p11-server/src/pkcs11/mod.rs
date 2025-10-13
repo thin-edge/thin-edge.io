@@ -76,7 +76,7 @@ const SECP521R1_OID: &str = "1.3.132.0.35";
 #[derive(Clone)]
 pub struct CryptokiConfigDirect {
     pub module_path: Utf8PathBuf,
-    pub pin: AuthPin,
+    pub pin: SecretString,
     pub uri: Option<Arc<str>>,
 }
 
@@ -295,10 +295,12 @@ impl Cryptoki {
             .as_ref()
             .or(params.pin.as_ref())
             .cloned()
-            .map(AuthPin::from);
-        let pin = pin.as_ref().unwrap_or(&self.config.pin);
+            .as_ref()
+            .unwrap_or(&self.config.pin)
+            .to_owned();
+        let pin = AuthPin::from(pin);
 
-        session.login(UserType::User, Some(pin))?;
+        session.login(UserType::User, Some(&pin))?;
         let session_info = session.get_session_info()?;
         debug!(?session_info, "Opened a readonly session");
 

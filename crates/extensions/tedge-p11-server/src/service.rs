@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 
 use crate::pkcs11::SigScheme;
+use cryptoki::types::AuthPin;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -70,9 +71,9 @@ impl SecretString {
     }
 }
 
-impl From<SecretString> for secrecy::SecretString {
+impl From<SecretString> for AuthPin {
     fn from(value: SecretString) -> Self {
-        secrecy::SecretString::new(value.0)
+        AuthPin::new(value.0)
     }
 }
 

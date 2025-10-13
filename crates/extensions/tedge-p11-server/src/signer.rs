@@ -3,7 +3,6 @@ use std::sync::Arc;
 use anyhow::Context;
 use rustls::sign::Signer;
 use rustls::sign::SigningKey;
-use secrecy::ExposeSecret;
 use tracing::error;
 use tracing::instrument;
 
@@ -51,9 +50,7 @@ pub fn signing_key(config: CryptokiConfig) -> anyhow::Result<Arc<dyn TedgeP11Sig
     let signing_key: Arc<dyn TedgeP11Signer> = match config {
         CryptokiConfig::Direct(config_direct) => {
             let uri = config_direct.uri.as_ref().map(|u| u.to_string());
-            let pin = Some(crate::service::SecretString::new(
-                config_direct.pin.expose_secret().clone(),
-            ));
+            let pin = Some(config_direct.pin.clone());
             let cryptoki =
                 Cryptoki::new(config_direct).context("Failed to load cryptoki library")?;
             Arc::new(

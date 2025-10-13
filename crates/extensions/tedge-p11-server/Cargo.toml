@@ -22,9 +22,13 @@ postcard.workspace = true
 rsa.workspace = true
 rustls.workspace = true
 sd-listen-fds.workspace = true
-secrecy.workspace = true
 serde.workspace = true
-tokio = { workspace = true }
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+    "signal",
+    "net",
+] }
 toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
