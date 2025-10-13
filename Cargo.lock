@@ -2551,7 +2551,7 @@ version = "0.8.8"
 source = "git+https://github.com/Bravo555/rust_libloading.git?branch=0.8.8#d000ffa239652d21152e5a3460095a27d5883113"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.53.0",
 ]
 
 [[package]]

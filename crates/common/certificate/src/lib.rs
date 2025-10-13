@@ -212,6 +212,8 @@ impl KeyKind {
                 ),
             ],
             uri: None,
+            // pin will be applied anyway by the client
+            pin: None,
         })?;
         let signature_algorithm = signature_algorithm
             .scheme

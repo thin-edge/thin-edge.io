@@ -12,16 +12,18 @@ use super::connection::Frame1;
 use crate::pkcs11::SigScheme;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::SecretString;
 use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::TedgeP11Service;
 
 /// A [`TedgeP11Service`] implementation that proxies requests to the [`TedgeP11Server`](super::TedgeP11Server) that
 /// does the operations.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct TedgeP11Client {
     pub(crate) socket_path: Arc<Path>,
     pub(crate) uri: Option<Arc<str>>,
+    pub(crate) pin: Option<SecretString>,
 }
 
 impl TedgeP11Service for TedgeP11Client {
@@ -88,6 +90,7 @@ impl TedgeP11Client {
         let client = Self {
             socket_path,
             uri: None,
+            pin: None,
         };
 
         // make any request to make sure the service is online and it will respond
@@ -108,6 +111,7 @@ impl TedgeP11Client {
                 .map(crate::service::SignatureScheme)
                 .collect::<Vec<_>>(),
             uri,
+            pin: self.pin.clone(),
         });
         let response = self.do_request(request)?;
 
@@ -127,6 +131,7 @@ impl TedgeP11Client {
         let request = Frame1::ChooseSchemeRequest(ChooseSchemeRequest {
             offered: vec![],
             uri: None,
+            pin: self.pin.clone(),
         });
         let response = self.do_request(request)?;
 
@@ -143,6 +148,7 @@ impl TedgeP11Client {
         let request = Frame1::SignRequest(SignRequest {
             to_sign: message.to_vec(),
             uri,
+            pin: self.pin.clone(),
         });
         let response = self.do_request(request)?;
 
@@ -165,6 +171,7 @@ impl TedgeP11Client {
             to_sign: message.to_vec(),
             sigscheme: Some(sigscheme),
             uri,
+            pin: self.pin.clone(),
         });
         let response = self.do_request(request)?;
 

@@ -10,9 +10,9 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
-pub use tedge_p11_server::AuthPin;
 pub use tedge_p11_server::CryptokiConfig;
 pub use tedge_p11_server::CryptokiConfigDirect;
+pub use tedge_p11_server::SecretString;
 
 use crate::CertificateError;
 

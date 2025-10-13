@@ -9,7 +9,7 @@ use crate::models::Cryptoki;
 use crate::TEdgeConfig;
 use anyhow::Context;
 use camino::Utf8PathBuf;
-use certificate::parse_root_certificate::AuthPin;
+use certificate::parse_root_certificate::SecretString;
 use certificate::CertificateError;
 use tedge_config_macros::all_or_nothing;
 
@@ -226,6 +226,10 @@ impl TEdgeConfigReaderDevice {
         let uri = cloud
             .and_then(|c| c.key_uri().or(self.key_uri.or_none().cloned()))
             .or(self.key_uri.or_none().cloned());
+        let pin = cloud
+            .and_then(|c| c.key_pin().or(self.key_pin.or_none().cloned()))
+            .map(|p| SecretString::new(p.to_string()));
+
         match cryptoki.mode {
             Cryptoki::Off => Ok(None),
             Cryptoki::Module => Ok(Some(CryptokiConfig::Direct(CryptokiConfigDirect {
@@ -235,12 +239,13 @@ impl TEdgeConfigReaderDevice {
                     .context("required because `device.cryptoki.mode` is set to `module`")?
                     .clone()
                     .into(),
-                pin: AuthPin::new(cryptoki.pin.to_string()),
+                pin: SecretString::new(cryptoki.pin.to_string()),
                 uri,
             }))),
             Cryptoki::Socket => Ok(Some(CryptokiConfig::SocketService {
                 socket_path: cryptoki.socket_path.clone(),
                 uri,
+                pin,
             })),
         }
     }

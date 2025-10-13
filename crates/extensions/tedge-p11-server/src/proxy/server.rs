@@ -79,6 +79,7 @@ impl TedgeP11Server {
                     to_sign: request.to_sign,
                     uri: request.uri,
                     sigscheme: None,
+                    pin: request.pin,
                 };
                 let response = self.service.sign(sign_request_2);
                 match response {

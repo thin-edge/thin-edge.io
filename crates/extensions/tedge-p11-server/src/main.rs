@@ -18,7 +18,6 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::command;
 use clap::Parser;
-use cryptoki::types::AuthPin;
 use serde::Deserialize;
 use tedge_p11_server::CryptokiConfigDirect;
 use tedge_p11_server::TedgeP11Server;
@@ -239,7 +238,7 @@ async fn main() -> anyhow::Result<()> {
     let config = try_read_config(args).await?;
     let cryptoki_config = CryptokiConfigDirect {
         module_path: config.module_path,
-        pin: AuthPin::new(config.pin),
+        pin: tedge_p11_server::SecretString::new(config.pin),
         uri: config.uri.filter(|s| !s.is_empty()).map(|s| {
             let v = s.into_boxed_str();
             Arc::<str>::from(v)
