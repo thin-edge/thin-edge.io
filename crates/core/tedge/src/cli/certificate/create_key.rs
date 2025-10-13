@@ -65,7 +65,7 @@ impl Command for CreateKeyCmd {
         "Generate a keypair.".into()
     }
 
-    async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         let key = match self.r#type {
             KeyType::Rsa => KeyTypeParams::Rsa {
                 bits: self.bits.into(),
@@ -100,25 +100,123 @@ impl Command for CreateKeyCmd {
         eprintln!("Key URI: {uri}");
         eprintln!("Public key:\n{pubkey_pem}\n");
 
-        _config
-            .update_toml(&|dto, _reader| {
-                // XXX: will probably break if the keys ever change
-                // FIXME: profiles not supported
-                let key = match self.cloud {
-                    None => "device.key_uri",
-                    Some(Cloud::C8y(_)) => "c8y.device.key_uri",
-                    Some(Cloud::Azure(_)) => "az.device.key_uri",
-                    Some(Cloud::Aws(_)) => "aws.device.key_uri",
-                }
-                .parse()
-                .expect("should be valid WritableKeys");
-                let r = dto.try_update_str(&key, &uri).map_err(|e| e.into());
-                eprintln!("Value of `{key}` was updated to point to the new key");
-                r
-            })
-            .await
-            .map_err(anyhow::Error::new)?;
+        save_key_uri_to_config(config, self.cloud.as_ref(), &uri).await?;
 
         Ok(())
+    }
+}
+
+async fn save_key_uri_to_config(
+    config: TEdgeConfig,
+    cloud: Option<&Cloud>,
+    uri: &str,
+) -> anyhow::Result<()> {
+    config
+        .update_toml(&|dto, _reader| {
+            // XXX: can break if the keys ever change and having to use strings sucks
+            let profile = cloud.as_ref().and_then(|c| c.profile_name());
+            // XXX: this should be elsewhere!
+            let cloud = cloud.map(|c| match c {
+                crate::cli::common::MaybeBorrowedCloud::Aws(_) => "aws",
+                crate::cli::common::MaybeBorrowedCloud::Azure(_) => "az",
+                crate::cli::common::MaybeBorrowedCloud::C8y(_) => "c8y",
+            });
+            let mut key = "device.key_uri".to_string();
+
+            if let Some(profile) = profile {
+                key = format!("profiles.{profile}.{key}");
+            }
+
+            if let Some(cloud) = cloud {
+                key = format!("{cloud}.{key}");
+            }
+
+            let key = key.parse().expect("should be valid WritableKeys");
+            let r = dto.try_update_str(&key, uri).map_err(|e| e.into());
+            eprintln!("Value of `{key}` was updated to point to the new key");
+            r
+        })
+        .await
+        .map_err(anyhow::Error::new)?;
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    use crate::cli::common::MaybeBorrowedCloud;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn saves_uri_under_correct_key() {
+        let tempdir = TempTedgeDir::new();
+
+        assert_saves_under_key(None, "device.key_uri", &tempdir).await;
+
+        assert_saves_under_key(
+            Some(&MaybeBorrowedCloud::c8y(None)),
+            "c8y.device.key_uri",
+            &tempdir,
+        )
+        .await;
+
+        assert_saves_under_key(
+            Some(&MaybeBorrowedCloud::c8y(Some(
+                "profile1".to_string().try_into().unwrap(),
+            ))),
+            "c8y.profiles.profile1.device.key_uri",
+            &tempdir,
+        )
+        .await;
+
+        assert_saves_under_key(
+            Some(&MaybeBorrowedCloud::az(None)),
+            "az.device.key_uri",
+            &tempdir,
+        )
+        .await;
+
+        assert_saves_under_key(
+            Some(&MaybeBorrowedCloud::az(Some(
+                "profile1".to_string().try_into().unwrap(),
+            ))),
+            "az.profiles.profile1.device.key_uri",
+            &tempdir,
+        )
+        .await;
+
+        assert_saves_under_key(
+            Some(&MaybeBorrowedCloud::aws(None)),
+            "aws.device.key_uri",
+            &tempdir,
+        )
+        .await;
+
+        assert_saves_under_key(
+            Some(&MaybeBorrowedCloud::aws(Some(
+                "profile1".to_string().try_into().unwrap(),
+            ))),
+            "aws.profiles.profile1.device.key_uri",
+            &tempdir,
+        )
+        .await;
+    }
+
+    async fn assert_saves_under_key(cloud: Option<&Cloud>, key: &str, tempdir: &TempTedgeDir) {
+        let config = TEdgeConfig::load(tempdir.path()).await.unwrap();
+        save_key_uri_to_config(config, cloud, "pkcs11:hello")
+            .await
+            .unwrap();
+
+        let config = TEdgeConfig::load(tempdir.path()).await.unwrap();
+        assert_eq!(
+            config.read_string(&key.parse().unwrap()).unwrap(),
+            "pkcs11:hello"
+        );
+
+        std::fs::remove_file(tempdir.file("tedge.toml").path()).unwrap();
     }
 }
