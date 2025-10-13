@@ -1,6 +1,7 @@
 use crate::flow::DateTime;
-use crate::flow::Flow;
 use crate::flow::FlowError;
+use crate::flow::FlowOutput;
+use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
@@ -12,7 +13,6 @@ use std::cmp::min;
 use std::collections::HashSet;
 use std::time::Duration;
 use tedge_actors::Actor;
-use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
@@ -24,6 +24,7 @@ use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
+use tokio::io::AsyncWriteExt;
 use tokio::time::sleep_until;
 use tokio::time::Instant;
 use tracing::error;
@@ -129,10 +130,6 @@ impl FlowsMapper {
             .0
     }
 
-    fn mqtt_sender(&self) -> DynSender<MqttMessage> {
-        self.mqtt_sender.sender_clone()
-    }
-
     async fn send_updated_subscriptions(&mut self) -> Result<(), RuntimeError> {
         let diff = self.update_subscriptions();
         self.messages.send(diff).await?;
@@ -175,8 +172,8 @@ impl FlowsMapper {
 
     async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
-        for (flow, messages) in self.processor.on_message(timestamp, &message).await {
-            self.publish_transformation_outcome(&flow, messages).await?;
+        for messages in self.processor.on_message(timestamp, &message).await {
+            self.publish_result(messages).await?;
         }
 
         Ok(())
@@ -190,8 +187,8 @@ impl FlowsMapper {
             self.processor.dump_processing_stats().await;
             self.next_dump = now + STATS_DUMP_INTERVAL;
         }
-        for (flow, messages) in self.processor.on_interval(timestamp, now).await {
-            self.publish_transformation_outcome(&flow, messages).await?;
+        for messages in self.processor.on_interval(timestamp, now).await {
+            self.publish_result(messages).await?;
         }
 
         Ok(())
@@ -208,50 +205,74 @@ impl FlowsMapper {
         Ok(())
     }
 
-    async fn publish_transformation_outcome(
+    async fn publish_result(&mut self, result: FlowResult) -> Result<(), RuntimeError> {
+        match result {
+            FlowResult::Ok {
+                flow,
+                messages,
+                output,
+            } => self.publish(flow, messages, &output).await,
+            FlowResult::Err {
+                flow,
+                error,
+                output,
+            } => self.publish_error(flow, error, &output).await,
+        }
+    }
+
+    async fn publish(
         &mut self,
-        flow_id: &str,
-        transformation_outcome: Result<Vec<Message>, FlowError>,
-    ) -> Result<(), RuntimeError> {
-        let Some(flow) = self.processor.flows.get(flow_id) else {
-            return Ok(());
-        };
-        match transformation_outcome {
-            Ok(messages) => self.publish_transformed_messages(flow, messages).await,
-            Err(err) => self.publish_transformation_error(flow, err).await,
-        }
-    }
-
-    async fn publish_transformed_messages(
-        &self,
-        flow: &Flow,
+        flow: String,
         messages: Vec<Message>,
+        output: &FlowOutput,
     ) -> Result<(), RuntimeError> {
-        if let Err(err) = flow
-            .output
-            .publish_messages(flow.name(), self.mqtt_sender(), messages)
-            .await
-        {
-            error!(target: "flows", "{}: cannot publish transformed message: {err}", flow.name());
+        match output {
+            FlowOutput::Mqtt { topic } => {
+                for mut message in messages {
+                    if let Some(output_topic) = topic {
+                        message.topic = output_topic.name.clone();
+                    }
+                    match MqttMessage::try_from(message) {
+                        Ok(message) => self.mqtt_sender.send(message).await?,
+                        Err(err) => {
+                            error!(target: "flows", "{flow}: cannot publish transformed message: {err}")
+                        }
+                    }
+                }
+            }
+            FlowOutput::File { path } => {
+                let Ok(file) = tokio::fs::File::options()
+                    .create(true)
+                    .append(true)
+                    .open(path)
+                    .await
+                    .map_err(|err| {
+                        error!(target: "flows", "{flow}: cannot open {path}: {err}");
+                    })
+                else {
+                    return Ok(());
+                };
+                let mut file = tokio::io::BufWriter::new(file);
+                for message in messages {
+                    if let Err(err) = file.write_all(format!("{message}\n").as_bytes()).await {
+                        error!(target: "flows", "{flow}: cannot append to {path}: {err}");
+                    }
+                }
+                if let Err(err) = file.flush().await {
+                    error!(target: "flows", "{flow}: cannot flush {path}: {err}");
+                }
+            }
         }
-
         Ok(())
     }
 
-    async fn publish_transformation_error(
-        &self,
-        flow: &Flow,
+    async fn publish_error(
+        &mut self,
+        flow: String,
         error: FlowError,
+        output: &FlowOutput,
     ) -> Result<(), RuntimeError> {
-        let message = Message::new("te/error".to_string(), error.to_string());
-        if let Err(err) = flow
-            .errors
-            .publish_messages(flow.name(), self.mqtt_sender(), vec![message])
-            .await
-        {
-            error!(target: "flows", "{}: cannot publish transformation error: {err}", flow.name());
-        }
-
-        Ok(())
+        let message = Message::new("", format!("Error in {flow}: {error}"));
+        self.publish(flow, vec![message], output).await
     }
 }

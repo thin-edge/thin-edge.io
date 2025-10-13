@@ -6,14 +6,11 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
-use tedge_actors::DynSender;
-use tedge_actors::RuntimeError;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchRequest;
 use time::OffsetDateTime;
-use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 use tracing::error;
 use tracing::warn;
@@ -52,9 +49,24 @@ pub enum FlowInput {
     Process { command: String },
 }
 
+#[derive(Clone)]
 pub enum FlowOutput {
     Mqtt { topic: Option<Topic> },
     File { path: Utf8PathBuf },
+}
+
+/// The final outcome of a sequence of transformations applied by a flow to a message
+pub enum FlowResult {
+    Ok {
+        flow: String,
+        messages: Vec<Message>,
+        output: FlowOutput,
+    },
+    Err {
+        flow: String,
+        error: FlowError,
+        output: FlowOutput,
+    },
 }
 
 #[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -118,13 +130,32 @@ impl Flow {
         stats: &mut Counter,
         timestamp: DateTime,
         message: &Message,
+    ) -> FlowResult {
+        let stated_at = stats.flow_on_message_start(self.name());
+        let result = self
+            .on_message_steps(js_runtime, stats, timestamp, message)
+            .await;
+        match &result {
+            Ok(messages) => {
+                stats.flow_on_message_done(self.name(), stated_at, messages.len());
+            }
+            Err(_) => stats.flow_on_message_failed(self.name()),
+        }
+        self.publish(result)
+    }
+
+    async fn on_message_steps(
+        &mut self,
+        js_runtime: &JsRuntime,
+        stats: &mut Counter,
+        timestamp: DateTime,
+        message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         self.on_config_update(js_runtime, message).await?;
         if !self.input.accept_input_message(self.name(), message) {
             return Ok(vec![]);
         }
 
-        let stated_at = stats.flow_on_message_start(self.source.as_str());
         let mut messages = vec![message.clone()];
         for step in self.steps.iter() {
             let js = step.script.source();
@@ -143,7 +174,6 @@ impl Flow {
             messages = transformed_messages;
         }
 
-        stats.flow_on_message_done(self.source.as_str(), stated_at, messages.len());
         Ok(messages)
     }
 
@@ -153,8 +183,27 @@ impl Flow {
         stats: &mut Counter,
         timestamp: DateTime,
         now: Instant,
+    ) -> FlowResult {
+        let stated_at = stats.flow_on_interval_start(self.name());
+        let result = self
+            .on_interval_steps(js_runtime, stats, timestamp, now)
+            .await;
+        match &result {
+            Ok(messages) => {
+                stats.flow_on_interval_done(self.name(), stated_at, messages.len());
+            }
+            Err(_) => stats.flow_on_interval_failed(self.name()),
+        }
+        self.publish(result)
+    }
+
+    async fn on_interval_steps(
+        &mut self,
+        js_runtime: &JsRuntime,
+        stats: &mut Counter,
+        timestamp: DateTime,
+        now: Instant,
     ) -> Result<Vec<Message>, FlowError> {
-        let stated_at = stats.flow_on_interval_start(self.source.as_str());
         let mut messages = vec![];
         for step in self.steps.iter_mut() {
             let js = step.script.source();
@@ -188,8 +237,22 @@ impl Flow {
             // Iterate with all the messages collected at this step
             messages = transformed_messages;
         }
-        stats.flow_on_interval_done(self.source.as_str(), stated_at, messages.len());
         Ok(messages)
+    }
+
+    fn publish(&self, result: Result<Vec<Message>, FlowError>) -> FlowResult {
+        match result {
+            Ok(messages) => FlowResult::Ok {
+                flow: self.name().to_string(),
+                messages,
+                output: self.output.clone(),
+            },
+            Err(error) => FlowResult::Err {
+                flow: self.name().to_string(),
+                error,
+                output: self.errors.clone(),
+            },
+        }
     }
 }
 
@@ -253,54 +316,6 @@ impl FlowInput {
                 command: command.to_owned(),
             }),
         }
-    }
-}
-
-impl FlowOutput {
-    pub async fn publish_messages(
-        &self,
-        flow: &str,
-        mut mqtt: DynSender<MqttMessage>,
-        messages: Vec<Message>,
-    ) -> Result<(), RuntimeError> {
-        match self {
-            FlowOutput::Mqtt { topic } => {
-                for mut message in messages {
-                    if let Some(output_topic) = topic {
-                        message.topic = output_topic.name.clone();
-                    }
-                    match MqttMessage::try_from(message) {
-                        Ok(message) => mqtt.send(message).await?,
-                        Err(err) => {
-                            error!(target: "flows", "{flow}: cannot publish transformed message: {err}")
-                        }
-                    }
-                }
-            }
-            FlowOutput::File { path } => {
-                let Ok(mut file) = tokio::fs::File::options()
-                    .create(true)
-                    .append(true)
-                    .open(path)
-                    .await
-                    .map_err(|err| {
-                        error!(target: "flows", "{flow}: cannot open {path}: {err}");
-                    })
-                else {
-                    return Ok(());
-                };
-                for message in messages {
-                    if let Err(err) = file.write_all(format!("{message}\n").as_bytes()).await {
-                        error!(target: "flows", "{flow}: cannot append to {path}: {err}");
-                    }
-                }
-                if let Err(err) = file.flush().await {
-                    error!(target: "flows", "{flow}: cannot flush {path}: {err}");
-                }
-            }
-        }
-
-        Ok(())
     }
 }
 

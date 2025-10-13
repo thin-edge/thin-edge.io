@@ -1,7 +1,7 @@
 use crate::config::FlowConfig;
 use crate::flow::DateTime;
 use crate::flow::Flow;
-use crate::flow::FlowError;
+use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
@@ -115,42 +115,28 @@ impl MessageProcessor {
         self.deadlines().max()
     }
 
-    pub async fn on_message(
-        &mut self,
-        timestamp: DateTime,
-        message: &Message,
-    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
+    pub async fn on_message(&mut self, timestamp: DateTime, message: &Message) -> Vec<FlowResult> {
         let started_at = self.stats.runtime_on_message_start();
 
         let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter_mut() {
+        for flow in self.flows.values_mut() {
             let flow_output = flow
                 .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
                 .await;
-            if flow_output.is_err() {
-                self.stats.flow_on_message_failed(flow_id);
-            }
-            out_messages.push((flow_id.clone(), flow_output));
+            out_messages.push(flow_output);
         }
 
         self.stats.runtime_on_message_done(started_at);
         out_messages
     }
 
-    pub async fn on_interval(
-        &mut self,
-        timestamp: DateTime,
-        now: Instant,
-    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
+    pub async fn on_interval(&mut self, timestamp: DateTime, now: Instant) -> Vec<FlowResult> {
         let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter_mut() {
+        for flow in self.flows.values_mut() {
             let flow_output = flow
                 .on_interval(&self.js_runtime, &mut self.stats, timestamp, now)
                 .await;
-            if flow_output.is_err() {
-                self.stats.flow_on_interval_failed(flow_id);
-            }
-            out_messages.push((flow_id.clone(), flow_output));
+            out_messages.push(flow_output);
         }
         out_messages
     }
