@@ -195,13 +195,18 @@ impl TedgeP11Service for Cryptoki {
     }
 
     fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
+        // refresh the slots before getting slot list
+        let _ = self.reinit();
         let cryptoki = self.context.lock().unwrap();
         let slots = cryptoki.get_slots_with_initialized_token().unwrap();
         let uris = slots
             .into_iter()
-            .map(|slot| {
-                let token_info = cryptoki.get_token_info(slot).unwrap();
-                export_session_uri(&token_info)
+            .filter_map(|slot| {
+                cryptoki
+                    .get_token_info(slot)
+                    .inspect_err(|e| error!(?e, ?slot, "Failed to get_token_info for slot"))
+                    .map(|t| export_session_uri(&t))
+                    .ok()
             })
             .collect();
 

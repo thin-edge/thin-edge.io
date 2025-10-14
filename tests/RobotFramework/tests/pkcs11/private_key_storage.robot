@@ -204,9 +204,6 @@ tedge cert create-key should ask where to create keypair if multiple tokens avai
     Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token1 --pin=123456 --so-pin=123456
     Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token2 --pin=123456 --so-pin=123456
 
-    # restart to refresh slots (not necessary for things that aren't softhsm2)
-    Restart Service    tedge-p11-server
-
     # unset key_uri so there there's no hint where to generate the keypair
     Execute Command    cmd=tedge config unset device.key_uri
     ${stderr}=    Execute Command    cmd=tedge cert create-key --type ecdsa --label my-key    strip=True    stdout=False    stderr=True
