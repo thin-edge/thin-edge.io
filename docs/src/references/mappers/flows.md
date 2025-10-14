@@ -28,8 +28,8 @@ which rule how to consume, transform and produce MQTT messages.
   - Steps are effect-free functions, with no access to MQTT, HTTP or the file-system.
   - The focus is on message transformation, format conversion, content extraction and completion as well as filtering and redacting.
 - A *connector* is used by the mapper to consume messages from a source and produce messages to a sink.
-  - MQTT is the primary message source and target, but overtime others can be added.
-  - Connectors can be seen as streams of messages all with the same shape so they can be processed by any step.
+  - Messages can be consumed from MQTT, files and background processes.
+  - Transformed messages can be published over MQTT or appended to files.
 - A *flow* applies a chain of transformation *steps* to input messages producing fully processed output messages.
   - The *flows* put things in motion, actually interacting with the system, consuming and producing messages.
   - Messages received on a flow are passed to the first step; and the transformed messages, if any,
@@ -114,11 +114,9 @@ The `onMessage` function is called for each message to be transformed
 
 - The generic mapper loads flows and steps stored in `/etc/tedge/flows/`.
 - A flow is defined by a TOML file with `.toml` extension.
-- A step is defined by a JavaScript file with `.js` extension.
+- A step is defined by a JavaScript file with an `.mjs` or `.js` extension.
   - This can also be a TypeScript module with a `.ts` extension.
-- The definition of flows must provide a list of MQTT topics to subscribe to.
-  - The flow will be fed with all the messages received on these topics.
-- A flow definition provides a list of steps.
+- The definition of flow defines its input, output and error sink as well as a list of transformation steps.
   - Each step is built from a javascript and is possibly given a config (arbitrary json that will be passed to the script)
   - Each step can also subscribe to a list of MQTT meta topics where the metadata about the actual data message is stored
     (e.g, meta topic of a measurement type where its units threshold values are defined).
@@ -132,6 +130,82 @@ steps = [
     { script = "drop_stragglers.js", config = { max_delay = 60 } },
     { script = "te_to_c8y.js", meta_topics = ["te/+/+/+/+/m/+/meta"] }
 ]
+```
+
+### Input connectors
+
+Messages can be consumed from MQTT, files and background processes.
+
+An MQTT connector is simply defined by a list of MQTT topics
+
+```toml
+# A flow subscribing to all measurement values and meta-data
+input.mqtt.topics = ["te/+/+/+/+/m/+", "te/+/+/+/+/m/+/meta"]
+```
+
+Messages can also be consumed from a file, each line being interpreted as the payload of a message
+which topic is by default the file path.
+
+```toml
+# A flow consuming log entries
+input.file.path = "/var/log/some-app.log"
+```
+
+By default, this file is followed as done by `tail -F`, waiting for new lines to be appended and consumed as messages.
+This behavior can be changed, the file being then read at regular intervals.
+
+```toml
+[input.file]
+path = "/var/log/some-app.log"
+topic = "some-app-log"
+interval = "1h"
+```
+
+Last but not least, messages can be consumed from a command output,
+each line being wrapped into a message which topic is the command line or a configured topic name.
+
+```toml
+# A flow subscribing to journalctl entries for the agent
+[input.process]
+topic = "tedge-agent-journalctl"
+command = "sudo journalctl --no-pager --follow --unit tedge-agent"
+```
+
+As for files, the command output can instead be consumed at regular intervals.
+
+```toml
+# A flow publishing new journalctl entries for the agent every hour 
+[input.process]
+topic = "tedge-agent-journalctl"
+command = "journalctl --no-pager --cursor-file=/tmp/tedge-agent-cursor --unit tedge-agent"
+interval = "1h"
+```
+
+### Output connectors
+
+Transformed messages and errors can be published over MQTT or appended to files.
+
+The default is to publish the transformed messages over MQTT on the topics specified by each message.
+And to direct all the errors to a specific topic, the `te/error` topic.
+
+```toml
+[output.mqtt]
+
+[errors.mqtt]
+topic = "te/error"
+```
+
+These defaults can be overridden, by:
+- assigning an MQTT topic to the messages (ignoring the topic assigned by the transformation steps)
+- accepting only a set of topics (making sure the transformation steps are sending messages to these topics)
+- redirecting transformations outcome to a file.
+
+```toml
+[output.mqtt]
+accept_topics = "c8y/#"
+
+[errors.file]
+path = "/var/run/tedge/flows.log"
 ```
 
 ## %%te%% flow mapper
