@@ -64,17 +64,13 @@ pub enum TEdgeCertCli {
     /// After the key is generated, tedge config is updated to use the new key using
     /// `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting
     /// for that cloud, e.g. `create-key c8y` will write to `c8y.device.key_uri`.
-    ///
-    /// When multiple tokens are connected, if `device.key_uri` setting is present, the token
-    /// identified by this URI will be used. Otherwise, the first token returned by the system will
-    /// be used.
     CreateKey {
         /// Human readable description (CKA_LABEL attribute) for the key.
-        #[arg(long)]
+        #[arg(long, default_value = "tedge")]
         label: String,
 
         /// The type of the key.
-        #[arg(long)]
+        #[arg(long, default_value = "ecdsa")]
         r#type: KeyType,
 
         /// The size of the RSA keys in bits. Should only be used with --type rsa.
@@ -90,6 +86,10 @@ pub enum TEdgeCertCli {
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
 
+        /// The URI of the token where the keypair should be created.
+        ///
+        /// If this argument is missing, a list of available initialized tokens will be shown. The
+        /// token needs to be initialized to be able to generate keys.
         token: Option<String>,
     },
 

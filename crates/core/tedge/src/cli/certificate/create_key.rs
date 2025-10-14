@@ -133,7 +133,9 @@ async fn save_key_uri_to_config(
 
             let key = key.parse().expect("should be valid WritableKeys");
             let r = dto.try_update_str(&key, uri).map_err(|e| e.into());
-            eprintln!("Value of `{key}` was updated to point to the new key");
+            eprintln!(
+                "The `{key}` configuration setting was updated with the newly created key's URI"
+            );
             r
         })
         .await
