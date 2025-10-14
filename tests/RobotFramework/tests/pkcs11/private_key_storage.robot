@@ -91,10 +91,23 @@ Connects to C8y supporting all TLS13 ECDSA signature algorithms
     [Documentation]    Check that we support all ECDSA sigschemes used in TLS1.3, i.e: ecdsa_secp256r1_sha256,
     ...    ecdsa_secp384r1_sha384, ecdsa_secp521r1_sha512.
     [Setup]    Unset tedge-p11-server Uri
-    [Template]    Connect to C8y using new keypair
-    type=ecdsa    curve=secp256r1
-    type=ecdsa    curve=secp384r1
-    type=ecdsa    curve=secp521r1
+
+    Connect to C8y using new keypair    type=ecdsa    curve=secp256r1
+    Connect to C8y using new keypair    type=ecdsa    curve=secp384r1
+    Connect to C8y using new keypair    type=ecdsa    curve=secp521r1
+
+    Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
+    Command Should Fail With
+    ...    tedge cert renew c8y
+    ...    error=Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
+
+    Execute Command    systemctl start tedge-p11-server.socket
+
+    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
+    Command Should Fail With
+    ...    tedge cert renew c8y
+    ...    error=PKCS #11 service failed: Failed to find a key
+    Execute Command    cmd=tedge config unset c8y.device.key_uri
 
 Can use PKCS11 key to renew the public certificate
     [Documentation]    Test that `tedge cert renew c8y` works with all supported keys. We do renew 2 times to see if we
