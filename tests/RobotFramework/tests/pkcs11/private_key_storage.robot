@@ -147,7 +147,7 @@ Can pass PIN in the request using device.key_pin
 
     [Teardown]    Execute Command    tedge config unset device.key_pin
 
-Can create a private key on the PKCS11 token and download new cert from c8y
+Can create a private key on the PKCS11 token
     Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token --pin=123456 --so-pin=123456
 
     ${output}=    Execute Command
