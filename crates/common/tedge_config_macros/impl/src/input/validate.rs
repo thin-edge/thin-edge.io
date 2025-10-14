@@ -55,6 +55,17 @@ pub struct ConfigurationGroup {
     pub contents: Vec<FieldOrGroup>,
 }
 
+impl ConfigurationGroup {
+    pub fn name(&self) -> Cow<'_, str> {
+        self.rename()
+            .map_or_else(|| Cow::Owned(self.ident.to_string()), Cow::Borrowed)
+    }
+
+    pub fn rename(&self) -> Option<&str> {
+        Some(self.rename.as_ref()?.as_str())
+    }
+}
+
 impl TryFrom<super::parse::ConfigurationGroup> for ConfigurationGroup {
     type Error = syn::Error;
 
