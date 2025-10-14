@@ -348,7 +348,7 @@ Options:
    key object.
 
     ```sh
-    tedge cert create-key --type ecdsa --curve 256 --label my-key
+    tedge cert create-key --type ecdsa --curve p256 --label my-key
     ```
 
     ```sh title="Output"
