@@ -29,9 +29,7 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
-use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_mqtt_ext::*;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
@@ -39,6 +37,12 @@ use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
 use tedge_utils::fs::AtomFileError;
 use toml::toml;
+
+#[cfg(test)]
+use tedge_api::Jsonify;
+#[cfg(test)]
+use tedge_mqtt_ext::*;
+#[cfg(test)]
 use tracing::error;
 
 /// This is an actor builder.
@@ -69,22 +73,6 @@ impl LogManagerBuilder {
             box_builder,
             upload_sender,
         })
-    }
-
-    pub fn connect_mqtt(
-        &mut self,
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
-    ) {
-        mqtt.connect_mapped_source(
-            NoConfig,
-            &mut self.box_builder,
-            Self::mqtt_message_builder(&self.config),
-        );
-        self.box_builder.connect_mapped_source(
-            Self::subscriptions(&self.config),
-            mqtt,
-            Self::mqtt_message_parser(&self.config),
-        );
     }
 
     pub async fn init(config: &LogManagerConfig) -> Result<(), FileError> {
@@ -122,6 +110,36 @@ impl LogManagerBuilder {
         )?;
 
         Ok(())
+    }
+
+    /// Directories watched by the log actor
+    /// - for configuration changes
+    /// - for plugin changes
+    fn watched_directories(config: &LogManagerConfig) -> Vec<PathBuf> {
+        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
+        for dir in &config.plugin_dirs {
+            watch_dirs.push(dir.into());
+        }
+        watch_dirs
+    }
+}
+
+#[cfg(test)]
+impl LogManagerBuilder {
+    pub(crate) fn connect_mqtt(
+        &mut self,
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
+    ) {
+        mqtt.connect_mapped_source(
+            NoConfig,
+            &mut self.box_builder,
+            Self::mqtt_message_builder(&self.config),
+        );
+        self.box_builder.connect_mapped_source(
+            Self::subscriptions(&self.config),
+            mqtt,
+            Self::mqtt_message_parser(&self.config),
+        );
     }
 
     /// List of MQTT topic filters the log actor has to subscribe to
@@ -171,17 +189,6 @@ impl LogManagerBuilder {
             };
             Some(msg)
         }
-    }
-
-    /// Directories watched by the log actor
-    /// - for configuration changes
-    /// - for plugin changes
-    fn watched_directories(config: &LogManagerConfig) -> Vec<PathBuf> {
-        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
-        for dir in &config.plugin_dirs {
-            watch_dirs.push(dir.into());
-        }
-        watch_dirs
     }
 }
 
