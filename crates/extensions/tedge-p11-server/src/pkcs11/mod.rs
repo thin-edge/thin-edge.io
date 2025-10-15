@@ -12,37 +12,37 @@
 //! When displaying objects on the token, like this:
 //!
 //! ```sh
-//! $ p11tool --login --set-pin=123456 --list-all "pkcs11:token=create-key-token"
+//! $ p11tool --login --set-pin=123456 --list-all "pkcs11:token=token1"
 //! Object 0:
-//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%6A%6C%5A%EA%8C%04%91%5C%67%77%AA%E2%B1%67%C7%C0%56%4E%97%01;object=p11tool-ec256;type=public
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=token1;id=%6A%6C%5A%EA%8C%04%91%5C%67%77%AA%E2%B1%67%C7%C0%56%4E%97%01;object=p11tool-ec256;type=public
 //!     Type: Public key (EC/ECDSA-SECP256R1)
 //!     Label: p11tool-ec256
 //!     Flags: CKA_WRAP/UNWRAP;
 //!     ID: 6a:6c:5a:ea:8c:04:91:5c:67:77:aa:e2:b1:67:c7:c0:56:4e:97:01
 //!
 //! Object 1:
-//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%43%2F%58%39%E5%33%30%B2%F9%E0%99%6E%FD%92%32%03%98%E7%72%7A;object=ec521;type=private
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=token1;id=%43%2F%58%39%E5%33%30%B2%F9%E0%99%6E%FD%92%32%03%98%E7%72%7A;object=ec521;type=private
 //!     Type: Private key (EC/ECDSA)
 //!     Label: ec521
 //!     Flags: CKA_WRAP/UNWRAP; CKA_PRIVATE; CKA_NEVER_EXTRACTABLE; CKA_SENSITIVE;
 //!     ID: 43:2f:58:39:e5:33:30:b2:f9:e0:99:6e:fd:92:32:03:98:e7:72:7a
 //!
 //! Object 2:
-//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%BB%DD%35%F4%26%51%C8%E2%ED%E9%1E%21%4E%59%29%5F%C1%75%FB%21;object=rsa3072;type=private
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=token1;id=%BB%DD%35%F4%26%51%C8%E2%ED%E9%1E%21%4E%59%29%5F%C1%75%FB%21;object=rsa3072;type=private
 //!     Type: Private key (RSA-3072)
 //!     Label: rsa3072
 //!     Flags: CKA_WRAP/UNWRAP; CKA_PRIVATE; CKA_NEVER_EXTRACTABLE; CKA_SENSITIVE;
 //!     ID: bb:dd:35:f4:26:51:c8:e2:ed:e9:1e:21:4e:59:29:5f:c1:75:fb:21
 //!
 //! Object 3:
-//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%6A%6C%5A%EA%8C%04%91%5C%67%77%AA%E2%B1%67%C7%C0%56%4E%97%01;object=p11tool-ec256;type=private
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=token1;id=%6A%6C%5A%EA%8C%04%91%5C%67%77%AA%E2%B1%67%C7%C0%56%4E%97%01;object=p11tool-ec256;type=private
 //!     Type: Private key (EC/ECDSA-SECP256R1)
 //!     Label: p11tool-ec256
 //!     Flags: CKA_WRAP/UNWRAP; CKA_PRIVATE; CKA_NEVER_EXTRACTABLE; CKA_SENSITIVE;
 //!     ID: 6a:6c:5a:ea:8c:04:91:5c:67:77:aa:e2:b1:67:c7:c0:56:4e:97:01
 //!
 //! Object 4:
-//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=create-key-token;id=%EC%60%3C%DF%10%E7%54%7D%EE%27%EE%B9%99%8A%D6%B1%45%C3%73%B8;type=public
+//!     URL: pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=c4d820e1042971ea;token=token1;id=%EC%60%3C%DF%10%E7%54%7D%EE%27%EE%B9%99%8A%D6%B1%45%C3%73%B8;type=public
 //!     Type: Public key (EC/ECDSA-SECP521R1)
 //!     Label:
 //!     Flags: CKA_WRAP/UNWRAP;
