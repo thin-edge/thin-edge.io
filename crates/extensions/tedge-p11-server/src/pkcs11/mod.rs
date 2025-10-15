@@ -216,13 +216,13 @@ impl TedgeP11Service for Cryptoki {
     fn create_key(&self, uri: &str, params: CreateKeyParams) -> anyhow::Result<CreateKeyResponse> {
         let session_params = SessionParams {
             uri: Some(uri.to_string()),
-            // TODO: do we want to use client-provided (device.key_pin) PIN in create-key (we can still use extract PIN
-            // from URI)? Options are:
+            // TODO: do we want to use client-provided (device.key_pin) PIN in create-key-pkcs11 (we can still use
+            // extract PIN from URI)? Options are:
             // - don't handle it at all (users who use tedge-p11-server and connect a new token with a different pin
             //   need to either restart tedge-p11-server with a new pin or pass pin in URI, but this isn't documented
             //   and not recommended)
             // - read key_pin setting and use it in `CreateKeyRequest` (user needs to manually set it with `tedge config
-            //   set` and then run `create-key` with the same cloud and profile as the pin)
+            //   set` and then run `create-key-pkcs11` with the same cloud and profile as the pin)
             // - add a --pin flag to pass the pin in the command directly, but DON'T write to key_pin (probably worse
             //   than 2 and 4, since we still have to set pin manually in config after providing it in the flag)
             // - add a --pin flag to pass the pin in the command directly, but DO write to key_pin

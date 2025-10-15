@@ -284,16 +284,16 @@ selected, even if another token contains the intended key.
 
 ## Key generation
 
-```sh command="tedge cert create-key -h" title="tedge cert create-key -h"
+```sh command="tedge cert create-key-pkcs11 -h" title="tedge cert create-key-pkcs11 -h"
 Generate a new keypair on the PKCS11 token and select it to be used.
 
 Can be used to generate an RSA or an ECDSA keypair. When using RSA, `--bits` is used to set the size of the key, when using ECDSA, `--curve` is used.
 
-After the key is generated, tedge config is updated to use the new key using `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting for that cloud, e.g. `create-key c8y` will write to `c8y.device.key_uri`.
+After the key is generated, tedge config is updated to use the new key using `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting for that cloud, e.g. `create-key-pkcs11 c8y` will write to `c8y.device.key_uri`.
 
 When multiple tokens are connected, if `device.key_uri` setting is present, the token identified by this URI will be used. Otherwise, the first token returned by the system will be used.
 
-Usage: tedge cert create-key [OPTIONS] --label <LABEL> --type <TYPE> [COMMAND]
+Usage: tedge cert create-key-pkcs11 [OPTIONS] --label <LABEL> --type <TYPE> [COMMAND]
 
 Commands:
   c8y   
@@ -348,7 +348,7 @@ Options:
    key object.
 
     ```sh
-    tedge cert create-key --type ecdsa --curve p256 --label my-key
+    tedge cert create-key-pkcs11 --type ecdsa --curve p256 --label my-key
     ```
 
     ```sh title="Output"
