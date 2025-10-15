@@ -128,7 +128,7 @@ Default plugin configuration
 
     Should Have MQTT Messages    c8y/s/us    message_contains=118,    date_from=${timestamp}
     Cumulocity.Set Device    ${DEVICE_SN}
-    Cumulocity.Should Support Log File Types    software-management
+    Cumulocity.Should Have Exact Supported Log Types    software-management
 
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000

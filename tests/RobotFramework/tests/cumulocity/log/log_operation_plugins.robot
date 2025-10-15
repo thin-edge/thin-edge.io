@@ -14,7 +14,7 @@ Test Tags           theme:c8y    theme:log
 
 *** Test Cases ***
 Log operation journald plugin
-    Should Support Log File Types    tedge-agent::journald    includes=${True}
+    Should Contain Supported Log Types    tedge-agent::journald
     ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${operation}=    Create Log Request Operation
@@ -27,7 +27,7 @@ Log operation journald plugin
     ...    expected_pattern=.*Starting tedge-agent.*
 
 Log operation journald plugin can return logs for all units
-    Should Support Log File Types    all-units::journald    includes=${True}
+    Should Contain Supported Log Types    all-units::journald
     ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${operation}=    Create Log Request Operation
@@ -113,7 +113,7 @@ Dynamic plugin install and remove
     ...    ${CURDIR}/plugins/dummy_plugin
     ...    /usr/share/tedge/log-plugins/dummy_plugin
     Execute Command    chmod +x /usr/share/tedge/log-plugins/dummy_plugin
-    Should Support Log File Types    dummy_log::dummy_plugin    includes=${True}
+    Should Contain Supported Log Types    dummy_log::dummy_plugin
 
     ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
@@ -145,7 +145,7 @@ Overriding a log plugin
     Execute Command
     ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/local/tedge/log-plugins/[a-zA-Z0-9]*' | sudo tee -a /etc/sudoers.d/tedge
     Restart Service    tedge-agent
-    Should Support Log File Types    fake_log::fake_plugin    includes=${True}
+    Should Contain Supported Log Types    fake_log::fake_plugin
     # Override the fake plugin with a dummy plugin
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/plugins/dummy_plugin
@@ -154,7 +154,7 @@ Overriding a log plugin
     ${dummy_types}=    Execute Command    /usr/local/tedge/log-plugins/fake_plugin list
     Should Be Equal    ${dummy_types}    dummy_log    strip_spaces=${True}
     # The fake plugin has been overridden
-    Should Support Log File Types    dummy_log::fake_plugin    includes=${True}
+    Should Contain Supported Log Types    dummy_log::fake_plugin
 
     ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000

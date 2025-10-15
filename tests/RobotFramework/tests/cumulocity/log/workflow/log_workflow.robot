@@ -16,7 +16,7 @@ Custom log workflow with pre-processor
     [Documentation]    Use a custom log_upload workflow to support command based logs. It uses a custom preprocessor
     ...    step to run a custom command (via the log_upload.sh script), which can be used to read logs from any source
     ...    (sqlite in this example)
-    Cumulocity.Should Support Log File Types    sqlite    includes=${True}
+    Cumulocity.Should Contain Supported Log Types    sqlite
 
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
