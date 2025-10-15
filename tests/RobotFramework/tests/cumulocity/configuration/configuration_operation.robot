@@ -273,7 +273,7 @@ Default plugin configuration
     Should Have MQTT Messages    c8y/s/us    message_contains=119,    date_from=${timestamp}
 
     Cumulocity.Set Device    ${PARENT_SN}
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    tedge.toml
     ...    tedge-log-plugin
@@ -474,7 +474,7 @@ Update configuration plugin config via cloud
     [Arguments]    ${test_desc}    ${external_id}
     Log    Test Description: ${test_desc}
     Cumulocity.Set Device    ${external_id}
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    harbor-certificate
@@ -488,7 +488,7 @@ Update configuration plugin config via cloud
     ...    file=${CURDIR}/tedge-configuration-plugin-updated.toml
     ${operation}=    Cumulocity.Set Configuration    tedge-configuration-plugin    url=${config_url}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    system.toml
@@ -500,7 +500,7 @@ Modify configuration plugin config via local filesystem modify inplace
     [Arguments]    ${test_desc}    ${device}    ${external_id}
     Log    Test Description: ${test_desc}
     Cumulocity.Set Device    ${external_id}
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    harbor-certificate
@@ -510,7 +510,7 @@ Modify configuration plugin config via local filesystem modify inplace
     ...    CONFIG1_BINARY
     ThinEdgeIO.Set Device Context    ${device}
     ThinEdgeIO.Execute Command    sed -i 's/CONFIG1/CONFIG3/g' /etc/tedge/plugins/tedge-configuration-plugin.toml
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    harbor-certificate
@@ -526,7 +526,7 @@ Modify configuration plugin config via local filesystem overwrite
     Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    harbor-certificate
@@ -537,7 +537,7 @@ Modify configuration plugin config via local filesystem overwrite
     ${NEW_CONFIG}=    ThinEdgeIO.Execute Command
     ...    sed 's/CONFIG1/CONFIG3/g' /etc/tedge/plugins/tedge-configuration-plugin.toml
     ThinEdgeIO.Execute Command    echo "${NEW_CONFIG}" > /etc/tedge/plugins/tedge-configuration-plugin.toml
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    harbor-certificate
@@ -553,7 +553,7 @@ Update configuration plugin config via local filesystem copy
     Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    harbor-certificate
@@ -564,7 +564,7 @@ Update configuration plugin config via local filesystem copy
     Transfer To Device    ${CURDIR}/tedge-configuration-plugin-updated.toml    /etc/tedge/plugins/
     Execute Command
     ...    cp /etc/tedge/plugins/tedge-configuration-plugin-updated.toml /etc/tedge/plugins/tedge-configuration-plugin.toml
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    system.toml
@@ -579,7 +579,7 @@ Update configuration plugin config via local filesystem move (different director
     Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    harbor-certificate
@@ -590,7 +590,7 @@ Update configuration plugin config via local filesystem move (different director
     Transfer To Device    ${CURDIR}/tedge-configuration-plugin-updated.toml    /etc/
     Execute Command
     ...    mv /etc/tedge-configuration-plugin-updated.toml /etc/tedge/plugins/tedge-configuration-plugin.toml
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    system.toml
@@ -605,7 +605,7 @@ Update configuration plugin config via local filesystem move (same directory)
     Log    Test Description: ${test_desc}
     ThinEdgeIO.Set Device Context    ${device}
     Cumulocity.Set Device    ${external_id}
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    harbor-certificate
@@ -616,7 +616,7 @@ Update configuration plugin config via local filesystem move (same directory)
     Transfer To Device    ${CURDIR}/tedge-configuration-plugin-updated.toml    /etc/tedge/plugins/
     Execute Command
     ...    mv /etc/tedge/plugins/tedge-configuration-plugin-updated.toml /etc/tedge/plugins/tedge-configuration-plugin.toml
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    system.toml
