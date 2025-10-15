@@ -744,8 +744,13 @@ impl CryptokiSession<'_> {
             }
         };
 
-        // generate unique ids
-        let id: [u8; 20] = rand::random();
+        let id = params.id.unwrap_or(rand::random::<[u8; 20]>().to_vec());
+
+        let objects = self.session.find_objects(&[Attribute::Id(id.clone())])?;
+        anyhow::ensure!(
+            objects.is_empty(),
+            "Object with this id already exists on the token"
+        );
 
         let mut pub_key_template = attrs_pub;
         pub_key_template.extend_from_slice(&[
@@ -783,6 +788,7 @@ impl CryptokiSession<'_> {
 pub struct CreateKeyParams {
     pub key: KeyTypeParams,
     pub label: String,
+    pub id: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

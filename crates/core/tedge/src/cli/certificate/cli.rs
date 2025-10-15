@@ -69,6 +69,17 @@ pub enum TEdgeCertCli {
         #[arg(long, default_value = "tedge")]
         label: String,
 
+        /// Key identifier for the keypair (CKA_ID attribute).
+        ///
+        /// If provided and no object exists on the token with the same ID, this will be the ID of
+        /// the new keypair. If an object with this ID already exists, the operation will return an
+        /// error. If not provided, a random ID will be generated and used by the keypair.
+        ///
+        /// The id shall be provided as a sequence of hex digits without `0x` prefix, optionally
+        /// separated by spaces, e.g. `--id 010203` or `-id "01 02 03"`.
+        #[arg(long)]
+        id: Option<String>,
+
         /// The type of the key.
         #[arg(long, default_value = "ecdsa")]
         r#type: KeyType,
@@ -261,6 +272,7 @@ impl BuildCommand for TEdgeCertCli {
                 label,
                 r#type,
                 curve,
+                id,
 
                 cloud,
                 token,
@@ -281,6 +293,7 @@ impl BuildCommand for TEdgeCertCli {
                     r#type,
                     bits,
                     curve,
+                    id,
                     cloud,
                     token,
                 }

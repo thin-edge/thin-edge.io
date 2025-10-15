@@ -1,3 +1,4 @@
+use anyhow::Context;
 use clap::ValueEnum;
 use tedge_config::TEdgeConfig;
 use tedge_p11_server::pkcs11::CreateKeyParams;
@@ -14,6 +15,7 @@ pub struct CreateKeyPkcs11Cmd {
     pub curve: EcCurve,
     pub label: String,
     pub r#type: KeyType,
+    pub id: Option<String>,
     pub cloud: Option<Cloud>,
     pub token: Option<String>,
 }
@@ -74,6 +76,12 @@ impl Command for CreateKeyPkcs11Cmd {
                 curve: self.curve.into(),
             },
         };
+        let id = self
+            .id
+            .as_ref()
+            .map(|s| parse_id(s))
+            .transpose()
+            .context("invalid id")?;
 
         let cryptoki = tedge_p11_server::tedge_p11_service(self.cryptoki_config.clone())?;
         let Some(token) = self.token.clone() else {
@@ -88,6 +96,7 @@ impl Command for CreateKeyPkcs11Cmd {
         let params = CreateKeyParams {
             key,
             label: self.label.clone(),
+            id,
         };
 
         // generate a keypair
@@ -142,6 +151,34 @@ async fn save_key_uri_to_config(
         .map_err(anyhow::Error::new)?;
 
     Ok(())
+}
+
+/// Parses id provided as a sequence of hex digits without `0x` prefix, optionally separated by spaces.
+fn parse_id(id_hexstr: &str) -> anyhow::Result<Vec<u8>> {
+    let id_hexstr = id_hexstr.trim();
+
+    anyhow::ensure!(!id_hexstr.is_empty(), "ID must not be empty");
+
+    let mut bytes = Vec::new();
+    let mut chars = id_hexstr.char_indices();
+    while let Some((i1, c1)) = chars.next() {
+        if c1.is_whitespace() {
+            continue;
+        }
+
+        anyhow::ensure!(c1.is_ascii_hexdigit(), "{c1} is not a hex digit");
+
+        let Some((i2, c2)) = chars.next() else {
+            anyhow::bail!("expected hex digit after {c1}");
+        };
+        anyhow::ensure!(c2.is_ascii_hexdigit(), "expected hex digit after {c1}");
+
+        let num = u8::from_str_radix(&id_hexstr[i1..=i2], 16)
+            .with_context(|| format!("failed to parse {} as u8", &id_hexstr[i1..=i2]))?;
+        bytes.push(num);
+    }
+
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -220,5 +257,27 @@ mod tests {
         );
 
         std::fs::remove_file(tempdir.file("tedge.toml").path()).unwrap();
+    }
+
+    #[test]
+    fn parses_id() {
+        assert_eq!(parse_id("01 02 03").unwrap(), vec![0x01, 0x02, 0x03]);
+        assert_eq!(parse_id("010203").unwrap(), vec![0x01, 0x02, 0x03]);
+        assert_eq!(parse_id("0102 03").unwrap(), vec![0x01, 0x02, 0x03]);
+
+        assert_eq!(
+            parse_id("    ").unwrap_err().to_string(),
+            "ID must not be empty"
+        );
+
+        assert_eq!(
+            parse_id("0").unwrap_err().to_string(),
+            "expected hex digit after 0"
+        );
+
+        assert_eq!(
+            parse_id("  0   1   2   3 ").unwrap_err().to_string(),
+            "expected hex digit after 0"
+        );
     }
 }

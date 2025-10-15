@@ -211,6 +211,13 @@ tedge cert create-key-pkcs11 should ask where to create keypair if multiple toke
     Should Contain    ${stderr}    token=create-key-token1
     Should Contain    ${stderr}    token=create-key-token2
 
+tedge cert create-key-pkcs11 can set chosen id and returns error if object with this id already exists
+    ${output}=    Execute Command    cmd=tedge cert create-key-pkcs11 --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True
+    Should Contain    ${output}    id=%01%02%03
+
+    ${output}=    Execute Command    cmd=tedge cert create-key-pkcs11 --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
+    Should Contain    ${output}    Object with this id already exists on the token
+
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
     ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0
