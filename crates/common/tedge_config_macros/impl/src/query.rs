@@ -926,8 +926,8 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                 FieldOrGroup::Multi(m) => {
                     format!("{}(?:[\\._]profiles[\\._]([^\\.]+))?", m.ident)
                 }
-                FieldOrGroup::Field(f) => f.ident().to_string(),
-                FieldOrGroup::Group(g) => g.ident.to_string(),
+                FieldOrGroup::Field(f) => f.name().to_string(),
+                FieldOrGroup::Group(g) => g.name().to_string(),
             })
             .collect::<Vec<_>>()
             .join("[\\._]");
@@ -1637,6 +1637,71 @@ mod tests {
             prettyplease::unparse(&parse_quote!(#impl_dto_block)),
             prettyplease::unparse(&expected)
         )
+    }
+
+    #[test]
+    fn fromstr_is_rename_aware_for_profiled_configurations() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(rename = "type")]
+                ty: String,
+            },
+            device: {
+                #[tedge_config(rename = "type")]
+                ty: String,
+            },
+        );
+        let dto_paths = configuration_paths_from(&input.groups, Mode::Dto);
+        let dto_keys = configuration_strings(dto_paths.iter());
+        let writers = generate_fromstr_writable(parse_quote!(DtoKey), &dto_keys);
+        let impl_dto_block = syn::parse2(writers).unwrap();
+
+        let expected = parse_quote! {
+            impl ::std::str::FromStr for DtoKey {
+                type Err = ParseKeyError;
+
+                fn from_str(value: &str) -> Result<Self, Self::Err> {
+                    #[deny(unreachable_patterns)]
+                    let res = match replace_aliases(value.to_owned()).replace(".", "_").as_str() {
+                        "mapper_type" => {
+                            if value != "mapper.type" {
+                                warn_about_deprecated_key(value.to_owned(), "mapper.type");
+                            }
+                            return Ok(Self::MapperType(None));
+                        }
+                        "device_type" => {
+                            if value != "device.type" {
+                                warn_about_deprecated_key(value.to_owned(), "device.type");
+                            }
+                            return Ok(Self::DeviceType);
+                        }
+                        _ => {
+                            if let Ok(key) = <ReadOnlyKey as ::std::str::FromStr>::from_str(value) {
+                                Err(ParseKeyError::ReadOnly(key))
+                            } else {
+                                Err(ParseKeyError::Unrecognised(value.to_owned()))
+                            }
+                        }
+                    };
+                    if let Some(captures) = ::regex::Regex::new(
+                            "^mapper(?:[\\._]profiles[\\._]([^\\.]+))?[\\._]type$",
+                        )
+                        .unwrap()
+                        .captures(value)
+                    {
+                        let key0 = captures.get(1usize).map(|re_match| re_match.as_str().to_owned());
+                        return Ok(Self::MapperType(key0));
+                    }
+                    res
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&impl_dto_block),
+            prettyplease::unparse(&expected)
+        );
     }
 
     fn keys_enum_impl_block(config_keys: &(Vec<String>, Vec<ConfigurationKey>)) -> ItemImpl {
