@@ -3,6 +3,7 @@ use crate::flow::FlowError;
 use crate::flow::FlowOutput;
 use crate::flow::FlowResult;
 use crate::flow::Message;
+use crate::flow::SourceTag;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
 use crate::Tick;
@@ -59,10 +60,14 @@ impl Actor for FlowsMapper {
                     self.on_interval().await?;
                 }
                 InputMessage::MqttMessage(message) => {
-                    self.on_message(Message::from(message)).await?
+                    let source = SourceTag::Mqtt;
+                    self.on_message(source, Message::from(message)).await?
                 }
                 InputMessage::WatchEvent(WatchEvent::StdoutLine { topic, line }) => {
-                    self.on_message(Message::new(topic, line)).await?
+                    let source = SourceTag::Process {
+                        flow: topic.clone(),
+                    };
+                    self.on_message(source, Message::new(topic, line)).await?
                 }
                 InputMessage::WatchEvent(WatchEvent::StderrLine { topic, line }) => {
                     warn!(target: "flows", "Input command {topic}: {line}");
@@ -181,9 +186,17 @@ impl FlowsMapper {
         Ok(())
     }
 
-    async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {
+    async fn on_message(
+        &mut self,
+        source: SourceTag,
+        message: Message,
+    ) -> Result<(), RuntimeError> {
         let timestamp = DateTime::now();
-        for messages in self.processor.on_message(timestamp, &message).await {
+        for messages in self
+            .processor
+            .on_message(timestamp, &source, &message)
+            .await
+        {
             self.publish_result(messages).await?;
         }
 

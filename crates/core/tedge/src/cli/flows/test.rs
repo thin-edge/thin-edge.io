@@ -74,8 +74,9 @@ impl TestCommand {
                 }
             }
         };
+        let source = SourceTag::Mqtt;
         processor
-            .on_message(timestamp, &message)
+            .on_message(timestamp, &source, &message)
             .await
             .into_iter()
             .for_each(|msg| self.print_messages(msg))

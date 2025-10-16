@@ -3,6 +3,7 @@ use crate::flow::DateTime;
 use crate::flow::Flow;
 use crate::flow::FlowResult;
 use crate::flow::Message;
+use crate::flow::SourceTag;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
 use crate::LoadError;
@@ -135,15 +136,27 @@ impl MessageProcessor {
         out_messages
     }
 
-    pub async fn on_message(&mut self, timestamp: DateTime, message: &Message) -> Vec<FlowResult> {
+    pub async fn on_message(
+        &mut self,
+        timestamp: DateTime,
+        source: &SourceTag,
+        message: &Message,
+    ) -> Vec<FlowResult> {
         let started_at = self.stats.runtime_on_message_start();
 
         let mut out_messages = vec![];
         for flow in self.flows.values_mut() {
-            let flow_output = flow
-                .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
-                .await;
-            out_messages.push(flow_output);
+            let config_result = flow.on_config_update(&self.js_runtime, message).await;
+            if config_result.is_err() {
+                out_messages.push(config_result);
+                continue;
+            }
+            if flow.accept_message(source, message) {
+                let flow_output = flow
+                    .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
+                    .await;
+                out_messages.push(flow_output);
+            }
         }
 
         self.stats.runtime_on_message_done(started_at);
