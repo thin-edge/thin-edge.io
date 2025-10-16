@@ -468,7 +468,7 @@ async fn half_bridge(
         reconnect_policy.maximum_interval.duration(),
         reconnect_policy.reset_window.duration(),
     );
-    let mut forward_pkid_to_received_msg = HashMap::<u16, Publish>::new();
+    let mut forward_pkid_to_received_msg = HashMap::<u16, Option<Publish>>::new();
     let mut bridge_health = BridgeHealth::new(name, tx_health);
     let mut loop_breaker =
         MessageLoopBreaker::new(recv_client.clone(), bidirectional_topic_filters);
@@ -575,11 +575,17 @@ async fn half_bridge(
                 Incoming::PubAck(PubAck { pkid: ack_pkid })
                 | Incoming::PubRec(PubRec { pkid: ack_pkid }),
             ) => {
-                if let Some(msg) = forward_pkid_to_received_msg.remove(&ack_pkid) {
-                    acknowledged += 1;
-                    target.ack(msg);
-                } else {
-                    log_event!(warn: name, "Received ack for unknown pkid={ack_pkid}");
+                match forward_pkid_to_received_msg.remove(&ack_pkid) {
+                    Some(Some(msg)) => {
+                        acknowledged += 1;
+                        target.ack(msg);
+                    }
+                    Some(None) => {
+                        // A health message was acked, nothing to do
+                    }
+                    None => {
+                        log_event!(warn: name, "Received ack for unknown pkid={ack_pkid}");
+                    }
                 }
             }
 
@@ -594,12 +600,14 @@ async fn half_bridge(
                             if pkid != 0 {
                                 // Messages with pkid 0 (meaning QoS=0) should not be added to the hashmap
                                 // as multiple messages with the pkid=0 can be received
-                                e.insert(msg);
+                                e.insert(Some(msg));
                             }
                         }
 
-                        // A healthcheck message was published, ignore this packet id
-                        Some(None) => {}
+                        // A healthcheck message was published, ack should ignore this packet id
+                        Some(None) => {
+                            e.insert(None);
+                        }
 
                         // The other bridge half has disconnected, break the loop and shut down the bridge
                         None => break,

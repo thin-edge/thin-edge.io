@@ -477,6 +477,13 @@ async fn bridge_publishes_reconnect_message_on_cloud_reconnection() {
 
     let reconnect_msg = Publish::new("device/status/connection", QoS::AtLeastOnce, "reconnected");
 
+    local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
+    cloud
+        .subscribe("device/status/connection", QoS::AtLeastOnce)
+        .await
+        .unwrap();
+    await_subscription(&mut ev_cloud).await;
+
     start_mqtt_bridge_with_reconnect_message(
         local_broker_port,
         cloud_proxy.port,
@@ -484,13 +491,6 @@ async fn bridge_publishes_reconnect_message_on_cloud_reconnection() {
         Some(reconnect_msg.clone()),
     )
     .await;
-
-    local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
-    cloud
-        .subscribe("device/status/connection", QoS::AtLeastOnce)
-        .await
-        .unwrap();
-    await_subscription(&mut ev_cloud).await;
 
     wait_until_health_status_is("up", &mut ev_local)
         .await
