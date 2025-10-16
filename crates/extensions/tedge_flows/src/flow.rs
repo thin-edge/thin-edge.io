@@ -55,6 +55,17 @@ pub enum FlowInput {
     OnInterval { topic: String },
 }
 
+pub enum SourceTag {
+    /// The message has been received from MQTT
+    Mqtt,
+
+    /// The message has been received from a bg process launched by the flow
+    Process { flow: String },
+
+    /// The message has been poll by the flow
+    Poll { flow: String },
+}
+
 #[derive(Clone)]
 pub enum FlowOutput {
     Mqtt { topic: Option<Topic> },
@@ -73,6 +84,15 @@ pub enum FlowResult {
         error: FlowError,
         output: FlowOutput,
     },
+}
+
+impl FlowResult {
+    pub fn is_err(&self) -> bool {
+        match self {
+            FlowResult::Ok { .. } => false,
+            FlowResult::Err { .. } => true,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -124,13 +144,22 @@ impl Flow {
         &mut self,
         js_runtime: &JsRuntime,
         message: &Message,
-    ) -> Result<(), FlowError> {
+    ) -> FlowResult {
+        let result = self.on_config_update_steps(js_runtime, message).await;
+        self.publish(result)
+    }
+
+    async fn on_config_update_steps(
+        &mut self,
+        js_runtime: &JsRuntime,
+        message: &Message,
+    ) -> Result<Vec<Message>, FlowError> {
         for step in self.steps.iter_mut() {
             if step.config_topics.accept_topic_name(&message.topic) {
                 step.script.on_config_update(js_runtime, message).await?
             }
         }
-        Ok(())
+        Ok(vec![])
     }
 
     pub async fn on_source_poll(&mut self, timestamp: DateTime, now: Instant) -> FlowResult {
@@ -153,6 +182,10 @@ impl Flow {
         let messages = source.poll(timestamp).await?;
         source.update_after_poll(now);
         Ok(messages)
+    }
+
+    pub fn accept_message(&mut self, source: &SourceTag, message: &Message) -> bool {
+        self.input.accept_message(source, self.name(), message)
     }
 
     pub async fn on_message(
@@ -182,11 +215,6 @@ impl Flow {
         timestamp: DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
-        self.on_config_update(js_runtime, message).await?;
-        if !self.input.accept_input_message(self.name(), message) {
-            return Ok(vec![]);
-        }
-
         let mut messages = vec![message.clone()];
         for step in self.steps.iter() {
             let js = step.script.source();
@@ -331,11 +359,15 @@ impl FlowInput {
         }
     }
 
-    pub fn accept_input_message(&self, flow: &str, message: &Message) -> bool {
-        match self {
-            FlowInput::Mqtt { topics } => topics.accept_topic_name(&message.topic),
-            FlowInput::File { .. } | FlowInput::Process { .. } => message.topic == flow,
-            FlowInput::OnInterval { topic } => &message.topic == topic,
+    pub fn accept_message(&self, source: &SourceTag, flow_name: &str, message: &Message) -> bool {
+        match (self, source) {
+            (FlowInput::Mqtt { topics }, SourceTag::Mqtt) => {
+                topics.accept_topic_name(&message.topic)
+            }
+            (FlowInput::File { .. }, SourceTag::Process { flow }) => flow_name == flow,
+            (FlowInput::Process { .. }, SourceTag::Process { flow }) => flow_name == flow,
+            (FlowInput::OnInterval { .. }, SourceTag::Poll { flow }) => flow_name == flow,
+            (_, _) => false,
         }
     }
 
