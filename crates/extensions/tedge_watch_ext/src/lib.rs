@@ -48,6 +48,8 @@ pub enum WatchError {
     TerminationFailed { command: String, error: String },
 }
 
+pub use actor::command_output;
+
 pub struct WatchActorBuilder {
     request_box: SimpleMessageBoxBuilder<(u32, WatchRequest), NoMessage>,
     event_senders: Vec<DynSender<WatchEvent>>,

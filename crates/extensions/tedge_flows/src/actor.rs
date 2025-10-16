@@ -55,6 +55,7 @@ impl Actor for FlowsMapper {
         while let Some(message) = self.next_message().await {
             match message {
                 InputMessage::Tick(_) => {
+                    self.on_source_poll().await?;
                     self.on_interval().await?;
                 }
                 InputMessage::MqttMessage(message) => {
@@ -168,6 +169,16 @@ impl FlowsMapper {
         }
         self.watched_commands = new_watched_commands;
         watch_requests
+    }
+
+    async fn on_source_poll(&mut self) -> Result<(), RuntimeError> {
+        let now = Instant::now();
+        let timestamp = DateTime::now();
+        for messages in self.processor.on_source_poll(timestamp, now).await {
+            self.publish_result(messages).await?;
+        }
+
+        Ok(())
     }
 
     async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {

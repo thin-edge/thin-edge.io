@@ -1,3 +1,5 @@
+use crate::input_source::PollingSource;
+use crate::input_source::PollingSourceError;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::stats::Counter;
@@ -27,6 +29,9 @@ pub struct Flow {
     /// The message source
     pub input: FlowInput,
 
+    /// Input source for polling (e.g., process output, database drains)
+    pub input_source: Option<Box<dyn PollingSource>>,
+
     /// Transformation steps to apply in order to the messages
     pub steps: Vec<FlowStep>,
 
@@ -50,6 +55,7 @@ pub enum FlowInput {
     Mqtt { topics: TopicFilter },
     File { path: Utf8PathBuf },
     Process { command: String },
+    OnInterval { topic: String },
 }
 
 #[derive(Clone)]
@@ -94,6 +100,9 @@ pub enum FlowError {
     IncorrectSetting(String),
 
     #[error(transparent)]
+    SourceError(#[from] PollingSourceError),
+
+    #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
 }
 
@@ -125,6 +134,28 @@ impl Flow {
             }
         }
         Ok(())
+    }
+
+    pub async fn on_source_poll(&mut self, timestamp: DateTime, now: Instant) -> FlowResult {
+        let result = self.on_source_poll_steps(timestamp, now).await;
+        self.publish(result)
+    }
+
+    async fn on_source_poll_steps(
+        &mut self,
+        timestamp: DateTime,
+        now: Instant,
+    ) -> Result<Vec<Message>, FlowError> {
+        let Some(source) = self.input_source.as_mut() else {
+            return Ok(vec![]);
+        };
+        if !source.is_ready(now) {
+            return Ok(vec![]);
+        };
+
+        let messages = source.poll(timestamp).await?;
+        source.update_after_poll(now);
+        Ok(messages)
     }
 
     pub async fn on_message(
@@ -288,6 +319,7 @@ impl std::fmt::Display for FlowInput {
             FlowInput::Mqtt { topics } => write!(f, "topics: {topics:?}"),
             FlowInput::File { path } => write!(f, "file: {path}"),
             FlowInput::Process { command } => write!(f, "command: {command}"),
+            FlowInput::OnInterval { topic } => write!(f, "on_interval: {topic}"),
         }
     }
 }
@@ -296,7 +328,9 @@ impl FlowInput {
     pub fn topics(&self) -> TopicFilter {
         match self {
             FlowInput::Mqtt { topics } => topics.clone(),
-            FlowInput::File { .. } | FlowInput::Process { .. } => TopicFilter::empty(),
+            FlowInput::File { .. } | FlowInput::Process { .. } | FlowInput::OnInterval { .. } => {
+                TopicFilter::empty()
+            }
         }
     }
 
@@ -304,12 +338,14 @@ impl FlowInput {
         match self {
             FlowInput::Mqtt { topics } => topics.accept_topic_name(&message.topic),
             FlowInput::File { .. } | FlowInput::Process { .. } => message.topic == flow,
+            FlowInput::OnInterval { topic } => &message.topic == topic,
         }
     }
 
     pub fn watch_request(&self, flow_name: String) -> Option<WatchRequest> {
         match self {
             FlowInput::Mqtt { .. } => None,
+            FlowInput::OnInterval { .. } => None,
             FlowInput::File { path } => Some(WatchRequest::WatchFile {
                 topic: flow_name,
                 file: path.to_owned(),
@@ -406,6 +442,18 @@ impl Message {
             topic: topic.to_string(),
             payload: payload.into(),
             timestamp: None,
+        }
+    }
+
+    pub fn with_timestamp(
+        topic: impl ToString,
+        payload: impl Into<Vec<u8>>,
+        timestamp: DateTime,
+    ) -> Self {
+        Message {
+            topic: topic.to_string(),
+            payload: payload.into(),
+            timestamp: Some(timestamp),
         }
     }
 

@@ -1,0 +1,9 @@
+[input.file]
+path = "/tmp/file.input"
+interval = "100ms"
+
+[output.mqtt]
+topic = "test/file/input"
+
+[errors.mqtt]
+topic = "test/file/input"
