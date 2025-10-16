@@ -1,10 +1,10 @@
 use crate::flow::Flow;
-use crate::flow::FlowInput;
 use crate::flow::FlowOutput;
 use crate::flow::FlowStep;
 use crate::input_source::CommandFlowInput;
 use crate::input_source::FileFlowInput;
-use crate::input_source::PollingSource;
+use crate::input_source::FlowInput;
+use crate::input_source::MqttFlowInput;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::LoadError;
@@ -125,8 +125,8 @@ impl FlowConfig {
         config_dir: &Utf8Path,
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
-        let input = self.input.clone().try_into()?;
-        let input_source = self.input.try_into()?;
+        let flow_name = source.clone().to_string();
+        let input = self.input.compile(flow_name)?;
         let output = self.output.try_into()?;
         let errors = self.errors.try_into()?;
         let mut steps = vec![];
@@ -140,7 +140,6 @@ impl FlowConfig {
         }
         Ok(Flow {
             input,
-            input_source,
             steps,
             output,
             errors,
@@ -172,63 +171,29 @@ impl StepConfig {
     }
 }
 
-impl TryFrom<InputConfig> for FlowInput {
-    type Error = ConfigError;
-
-    fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
-        Ok(match input {
-            InputConfig::Mqtt { topics } => FlowInput::Mqtt {
+impl InputConfig {
+    pub fn compile(self, flow_name: String) -> Result<Box<dyn FlowInput>, ConfigError> {
+        Ok(match self {
+            InputConfig::Mqtt { topics } => Box::new(MqttFlowInput {
                 topics: topic_filters(topics)?,
-            },
-
-            InputConfig::File { path, interval, .. } if interval.is_none() => {
-                FlowInput::File { path }
-            }
-            InputConfig::File { topic, path, .. } => {
-                let topic = topic.unwrap_or_else(|| path.to_string());
-                FlowInput::OnInterval { topic }
-            }
-
-            InputConfig::Process {
-                command, interval, ..
-            } if interval.is_none() => FlowInput::Process { command },
-            InputConfig::Process { topic, command, .. } => {
-                let topic = topic.unwrap_or(command);
-                FlowInput::OnInterval { topic }
-            }
-        })
-    }
-}
-
-impl TryFrom<InputConfig> for Option<Box<dyn PollingSource>> {
-    type Error = ConfigError;
-
-    fn try_from(value: InputConfig) -> Result<Self, Self::Error> {
-        match value {
-            InputConfig::Mqtt { .. } => Ok(None),
-
-            InputConfig::File { interval, .. } if interval.is_none() => Ok(None),
+            }),
             InputConfig::File {
                 topic,
                 path,
                 interval,
             } => {
-                let topic = topic.unwrap_or_else(|| path.to_string());
-                Ok(Some(Box::new(FileFlowInput::new(topic, path, interval))))
+                let topic = topic.unwrap_or_else(|| path.clone().to_string());
+                Box::new(FileFlowInput::new(flow_name, topic, path, interval))
             }
-
-            InputConfig::Process { interval, .. } if interval.is_none() => Ok(None),
             InputConfig::Process {
                 topic,
                 command,
                 interval,
             } => {
                 let topic = topic.unwrap_or_else(|| command.clone());
-                Ok(Some(Box::new(CommandFlowInput::new(
-                    topic, command, interval,
-                ))))
+                Box::new(CommandFlowInput::new(flow_name, topic, command, interval))
             }
-        }
+        })
     }
 }
 
