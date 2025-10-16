@@ -4,6 +4,7 @@ use crate::WatchRequest;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
 use std::os::unix::prelude::ExitStatusExt;
+use std::process::ExitStatus;
 use std::process::Stdio;
 use tedge_actors::Actor;
 use tedge_actors::CloneSender;
@@ -97,26 +98,7 @@ impl Watcher {
         topic: Topic,
         command: String,
     ) -> Result<(), WatchError> {
-        let args = shell_words::split(&command).map_err(|err| WatchError::InvalidCommand {
-            command: command.clone(),
-            error: err.to_string(),
-        })?;
-        if args.is_empty() {
-            return Err(WatchError::InvalidCommand {
-                command,
-                error: "Empty command".to_string(),
-            });
-        }
-        let mut child = Command::new(&args[0])
-            .args(&args[1..])
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|err| WatchError::InvalidCommand {
-                command: command.clone(),
-                error: err.to_string(),
-            })?;
+        let mut child = spawn(&command)?;
 
         if let Some(stdout) = child.stdout.take() {
             self.spawn_stdout_reader(client, topic.clone(), stdout);
@@ -181,21 +163,8 @@ impl Watcher {
 
     pub async fn unwatch(&mut self, client: u32, topic: Topic) -> Result<(), WatchError> {
         if let Some((command, mut child)) = self.processes.remove(&(client, topic)) {
-            if let Ok(Some(exit_code)) = child.try_wait() {
-                if exit_code.success() {
-                    return Ok(());
-                }
-                match exit_code.code() {
-                    Some(exit_code) => {
-                        return Err(WatchError::CommandFailed { command, exit_code })
-                    }
-                    None => {
-                        return Err(WatchError::CommandKilled {
-                            command,
-                            signal: exit_code.signal().unwrap_or_default(),
-                        })
-                    }
-                }
+            if let Ok(Some(status)) = child.try_wait() {
+                return check_status(&command, status);
             }
             child
                 .kill()
@@ -207,4 +176,58 @@ impl Watcher {
         }
         Ok(())
     }
+}
+
+fn spawn(command: &String) -> Result<Child, WatchError> {
+    let args = shell_words::split(command).map_err(|err| WatchError::InvalidCommand {
+        command: command.to_string(),
+        error: err.to_string(),
+    })?;
+    if args.is_empty() {
+        return Err(WatchError::InvalidCommand {
+            command: command.to_string(),
+            error: "Empty command".to_string(),
+        });
+    }
+    let child = Command::new(&args[0])
+        .args(&args[1..])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|err| WatchError::InvalidCommand {
+            command: command.to_string(),
+            error: err.to_string(),
+        })?;
+    Ok(child)
+}
+
+fn check_status(command: &String, status: ExitStatus) -> Result<(), WatchError> {
+    if status.success() {
+        Ok(())
+    } else {
+        match status.code() {
+            Some(exit_code) => Err(WatchError::CommandFailed {
+                command: command.to_string(),
+                exit_code,
+            }),
+            None => Err(WatchError::CommandKilled {
+                command: command.to_string(),
+                signal: status.signal().unwrap_or_default(),
+            }),
+        }
+    }
+}
+
+pub async fn command_output(command: &String) -> Result<String, WatchError> {
+    let output =
+        spawn(command)?
+            .wait_with_output()
+            .await
+            .map_err(|err| WatchError::ExecutionFailed {
+                command: command.to_string(),
+                error: err.to_string(),
+            })?;
+    let () = check_status(command, output.status)?;
+    Ok(String::from_utf8_lossy(output.stdout.as_slice()).to_string())
 }

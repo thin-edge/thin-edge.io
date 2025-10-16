@@ -96,14 +96,31 @@ Running tedge-flows
     Execute Command    tedge mqtt sub test/count/e --duration 2s | grep '{}'
 
 Consuming messages from a process stdout
-    # Assuming the flow journalctl.toml has been properly installed
-    Execute Command    (sleep 1;tedge mqtt pub --retain te/device/main///cmd/software_list/test '{"status":"init"}')&
-    Execute Command    tedge mqtt sub log/journalctl --duration 2s | grep software_list
+    # Assuming the flow journalctl-follow.toml has been properly installed
+    Execute Command    (sleep 1;tedge mqtt pub --retain te/device/main///cmd/software_list/test-follow '{"status":"init"}')&
+    Execute Command    tedge mqtt sub log/journalctl-follow --duration 2s | grep software_list
+
+Consuming messages from a process stdout, periodically
+    # Assuming the flow journalctl-cursor.toml has been properly installed
+    Execute Command    (sleep 1;tedge mqtt pub --retain te/device/main///cmd/software_list/test-cursor '{"status":"init"}')&
+    Execute Command    tedge mqtt sub log/journalctl-follow --duration 2s | grep software_list
+    Execute Command    tedge mqtt sub log/journalctl-cursor --duration 1s | grep 'No entries'
 
 Consuming messages from the tail of file
     # Assuming the flow tail-named-pipe.toml has been properly installed
     Execute Command    (for i in $(seq 10); do sleep 1; echo hello>/tmp/events; done)&
     Execute Command    tedge mqtt sub log/events --duration 2s | grep hello
+
+Consuming messages from a file, periodically
+    # Assuming the flow read-file-periodically.toml has been properly installed
+    Execute Command    echo hello >/tmp/file.input
+    Execute Command    tedge mqtt sub test/file/input --duration 1s | grep hello
+    Execute Command    echo world >/tmp/file.input
+    Execute Command    tedge mqtt sub test/file/input --duration 1s | grep world
+    Execute Command    rm /tmp/file.input
+    Execute Command    tedge mqtt sub test/file/input --duration 1s | grep 'Error in /etc/tedge/flows/read-file-periodically.toml'
+    Execute Command    echo 'hello world' >/tmp/file.input
+    Execute Command    tedge mqtt sub test/file/input --duration 1s | grep 'hello world'
 
 Appending messages to a file
     # Assuming the flow append-to-file.toml has been properly installed

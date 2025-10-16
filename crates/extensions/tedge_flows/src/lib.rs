@@ -1,6 +1,7 @@
 mod actor;
 mod config;
 pub mod flow;
+mod input_source;
 mod js_lib;
 mod js_runtime;
 mod js_script;

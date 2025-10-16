@@ -115,6 +115,26 @@ impl MessageProcessor {
         self.deadlines().max()
     }
 
+    pub async fn on_source_poll(&mut self, timestamp: DateTime, now: Instant) -> Vec<FlowResult> {
+        let mut out_messages = vec![];
+        for flow in self.flows.values_mut() {
+            let messages = match flow.on_source_poll(timestamp, now).await {
+                FlowResult::Ok { messages, .. } => messages,
+                error => {
+                    out_messages.push(error);
+                    continue;
+                }
+            };
+            for message in messages {
+                let flow_output = flow
+                    .on_message(&self.js_runtime, &mut self.stats, timestamp, &message)
+                    .await;
+                out_messages.push(flow_output);
+            }
+        }
+        out_messages
+    }
+
     pub async fn on_message(&mut self, timestamp: DateTime, message: &Message) -> Vec<FlowResult> {
         let started_at = self.stats.runtime_on_message_start();
 

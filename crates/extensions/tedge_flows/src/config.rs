@@ -2,6 +2,9 @@ use crate::flow::Flow;
 use crate::flow::FlowInput;
 use crate::flow::FlowOutput;
 use crate::flow::FlowStep;
+use crate::input_source::CommandFlowInput;
+use crate::input_source::FileFlowInput;
+use crate::input_source::PollingSource;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::LoadError;
@@ -17,6 +20,7 @@ use tedge_mqtt_ext::TopicFilter;
 #[derive(Deserialize)]
 pub struct FlowConfig {
     input: InputConfig,
+    #[serde(default)]
     steps: Vec<StepConfig>,
     #[serde(default = "default_output")]
     output: OutputConfig,
@@ -45,16 +49,34 @@ pub enum ScriptSpec {
     JavaScript(Utf8PathBuf),
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub enum InputConfig {
     #[serde(rename = "mqtt")]
     Mqtt { topics: Vec<String> },
 
     #[serde(rename = "file")]
-    File { path: Utf8PathBuf },
+    File {
+        path: Utf8PathBuf,
+
+        /// Default to path
+        topic: Option<String>,
+
+        #[serde(default)]
+        #[serde(deserialize_with = "parse_optional_human_duration")]
+        interval: Option<Duration>,
+    },
 
     #[serde(rename = "process")]
-    Process { command: String },
+    Process {
+        command: String,
+
+        /// Default to command
+        topic: Option<String>,
+
+        #[serde(default)]
+        #[serde(deserialize_with = "parse_optional_human_duration")]
+        interval: Option<Duration>,
+    },
 }
 
 #[derive(Deserialize)]
@@ -103,7 +125,8 @@ impl FlowConfig {
         config_dir: &Utf8Path,
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
-        let input = self.input.try_into()?;
+        let input = self.input.clone().try_into()?;
+        let input_source = self.input.try_into()?;
         let output = self.output.try_into()?;
         let errors = self.errors.try_into()?;
         let mut steps = vec![];
@@ -117,6 +140,7 @@ impl FlowConfig {
         }
         Ok(Flow {
             input,
+            input_source,
             steps,
             output,
             errors,
@@ -156,9 +180,55 @@ impl TryFrom<InputConfig> for FlowInput {
             InputConfig::Mqtt { topics } => FlowInput::Mqtt {
                 topics: topic_filters(topics)?,
             },
-            InputConfig::File { path } => FlowInput::File { path },
-            InputConfig::Process { command } => FlowInput::Process { command },
+
+            InputConfig::File { path, interval, .. } if interval.is_none() => {
+                FlowInput::File { path }
+            }
+            InputConfig::File { topic, path, .. } => {
+                let topic = topic.unwrap_or_else(|| path.to_string());
+                FlowInput::OnInterval { topic }
+            }
+
+            InputConfig::Process {
+                command, interval, ..
+            } if interval.is_none() => FlowInput::Process { command },
+            InputConfig::Process { topic, command, .. } => {
+                let topic = topic.unwrap_or(command);
+                FlowInput::OnInterval { topic }
+            }
         })
+    }
+}
+
+impl TryFrom<InputConfig> for Option<Box<dyn PollingSource>> {
+    type Error = ConfigError;
+
+    fn try_from(value: InputConfig) -> Result<Self, Self::Error> {
+        match value {
+            InputConfig::Mqtt { .. } => Ok(None),
+
+            InputConfig::File { interval, .. } if interval.is_none() => Ok(None),
+            InputConfig::File {
+                topic,
+                path,
+                interval,
+            } => {
+                let topic = topic.unwrap_or_else(|| path.to_string());
+                Ok(Some(Box::new(FileFlowInput::new(topic, path, interval))))
+            }
+
+            InputConfig::Process { interval, .. } if interval.is_none() => Ok(None),
+            InputConfig::Process {
+                topic,
+                command,
+                interval,
+            } => {
+                let topic = topic.unwrap_or_else(|| command.clone());
+                Ok(Some(Box::new(CommandFlowInput::new(
+                    topic, command, interval,
+                ))))
+            }
+        }
     }
 }
 
@@ -195,6 +265,20 @@ where
 {
     let value = String::deserialize(deserializer)?;
     humantime::parse_duration(&value).map_err(|_| serde::de::Error::custom("Invalid duration"))
+}
+
+fn parse_optional_human_duration<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    if value.trim().is_empty() {
+        Ok(None)
+    } else {
+        humantime::parse_duration(&value)
+            .map_err(|_| serde::de::Error::custom("Invalid duration"))
+            .map(Some)
+    }
 }
 
 fn default_output() -> OutputConfig {

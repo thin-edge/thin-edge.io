@@ -1,0 +1,7 @@
+[input.process]
+command = "sudo journalctl --no-pager --cursor-file=/tmp/tedge-agent-cursor --unit tedge-agent"
+interval = "1s"
+
+[[steps]]
+script = "set_topic.js"
+config.topic = "log/journalctl-cursor"
