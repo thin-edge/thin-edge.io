@@ -69,6 +69,7 @@ tedge_test_utils = { path = "crates/tests/tedge_test_utils" }
 tedge_timer_ext = { path = "crates/extensions/tedge_timer_ext" }
 tedge_uploader_ext = { path = "crates/extensions/tedge_uploader_ext" }
 tedge_utils = { path = "crates/common/tedge_utils" }
+tedge_watch_ext = { path = "crates/extensions/tedge_watch_ext" }
 upload = { path = "crates/common/upload" }
 
 # external dependencies

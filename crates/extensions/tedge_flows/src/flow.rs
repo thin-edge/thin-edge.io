@@ -1,3 +1,5 @@
+use crate::input_source::FlowInput;
+use crate::input_source::PollingSourceError;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::stats::Counter;
@@ -7,19 +9,34 @@ use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_watch_ext::WatchError;
+use tedge_watch_ext::WatchRequest;
 use time::OffsetDateTime;
 use tokio::time::Instant;
+use tracing::error;
 use tracing::warn;
 
-/// A chain of transformation of MQTT messages
+/// A chain of message transformations
+///
+/// A flow consumes messages from a source of type [FlowInput],
+/// processes those along a chain of transformation steps,
+/// and finally produces the derived messages to a sink of type [FlowOutput].
 pub struct Flow {
-    /// The source topics
-    pub input: FlowInput,
+    /// The message source
+    pub input: Box<dyn FlowInput>,
 
     /// Transformation steps to apply in order to the messages
     pub steps: Vec<FlowStep>,
 
+    /// The target for the transformed messages
+    pub output: FlowOutput,
+
+    /// The target for error messages
+    pub errors: FlowOutput,
+
+    /// Path to the configuration file for this flow
     pub source: Utf8PathBuf,
 }
 
@@ -29,8 +46,44 @@ pub struct FlowStep {
     pub config_topics: TopicFilter,
 }
 
-pub enum FlowInput {
-    MQTT { topics: TopicFilter },
+pub enum SourceTag {
+    /// The message has been received from MQTT
+    Mqtt,
+
+    /// The message has been received from a bg process launched by the flow
+    Process { flow: String },
+
+    /// The message has been poll by the flow
+    Poll { flow: String },
+}
+
+#[derive(Clone)]
+pub enum FlowOutput {
+    Mqtt { topic: Option<Topic> },
+    File { path: Utf8PathBuf },
+}
+
+/// The final outcome of a sequence of transformations applied by a flow to a message
+pub enum FlowResult {
+    Ok {
+        flow: String,
+        messages: Vec<Message>,
+        output: FlowOutput,
+    },
+    Err {
+        flow: String,
+        error: FlowError,
+        output: FlowOutput,
+    },
+}
+
+impl FlowResult {
+    pub fn is_err(&self) -> bool {
+        match self {
+            FlowResult::Ok { .. } => false,
+            FlowResult::Err { .. } => true,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -55,29 +108,76 @@ pub enum FlowError {
     IncorrectSetting(String),
 
     #[error(transparent)]
+    PollingSourceError(#[from] PollingSourceError),
+
+    #[error(transparent)]
+    StreamingSourceError(#[from] WatchError),
+
+    #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
 }
 
 impl Flow {
+    pub fn name(&self) -> &str {
+        self.source.as_str()
+    }
+
     pub fn topics(&self) -> TopicFilter {
-        let mut topics = self.input.topics().clone();
+        let mut topics = self.input.topics();
         for step in self.steps.iter() {
             topics.add_all(step.config_topics.clone())
         }
         topics
     }
 
+    pub fn watch_request(&self) -> Option<WatchRequest> {
+        self.input.watch_request()
+    }
+
     pub async fn on_config_update(
         &mut self,
         js_runtime: &JsRuntime,
         message: &Message,
-    ) -> Result<(), FlowError> {
+    ) -> FlowResult {
+        let result = self.on_config_update_steps(js_runtime, message).await;
+        self.publish(result)
+    }
+
+    async fn on_config_update_steps(
+        &mut self,
+        js_runtime: &JsRuntime,
+        message: &Message,
+    ) -> Result<Vec<Message>, FlowError> {
         for step in self.steps.iter_mut() {
             if step.config_topics.accept_topic_name(&message.topic) {
                 step.script.on_config_update(js_runtime, message).await?
             }
         }
-        Ok(())
+        Ok(vec![])
+    }
+
+    pub async fn on_source_poll(&mut self, timestamp: DateTime, now: Instant) -> FlowResult {
+        let result = self.on_source_poll_steps(timestamp, now).await;
+        self.publish(result)
+    }
+
+    async fn on_source_poll_steps(
+        &mut self,
+        timestamp: DateTime,
+        now: Instant,
+    ) -> Result<Vec<Message>, FlowError> {
+        let source = &mut self.input;
+        if !source.is_ready(now) {
+            return Ok(vec![]);
+        };
+
+        let messages = source.poll(timestamp).await?;
+        source.update_after_poll(now);
+        Ok(messages)
+    }
+
+    pub fn accept_message(&mut self, source: &SourceTag, message: &Message) -> bool {
+        self.input.accept_message(source, message)
     }
 
     pub async fn on_message(
@@ -86,13 +186,27 @@ impl Flow {
         stats: &mut Counter,
         timestamp: DateTime,
         message: &Message,
-    ) -> Result<Vec<Message>, FlowError> {
-        self.on_config_update(js_runtime, message).await?;
-        if !self.input.topics().accept_topic_name(&message.topic) {
-            return Ok(vec![]);
+    ) -> FlowResult {
+        let stated_at = stats.flow_on_message_start(self.name());
+        let result = self
+            .on_message_steps(js_runtime, stats, timestamp, message)
+            .await;
+        match &result {
+            Ok(messages) => {
+                stats.flow_on_message_done(self.name(), stated_at, messages.len());
+            }
+            Err(_) => stats.flow_on_message_failed(self.name()),
         }
+        self.publish(result)
+    }
 
-        let stated_at = stats.flow_on_message_start(self.source.as_str());
+    async fn on_message_steps(
+        &mut self,
+        js_runtime: &JsRuntime,
+        stats: &mut Counter,
+        timestamp: DateTime,
+        message: &Message,
+    ) -> Result<Vec<Message>, FlowError> {
         let mut messages = vec![message.clone()];
         for step in self.steps.iter() {
             let js = step.script.source();
@@ -111,7 +225,6 @@ impl Flow {
             messages = transformed_messages;
         }
 
-        stats.flow_on_message_done(self.source.as_str(), stated_at, messages.len());
         Ok(messages)
     }
 
@@ -121,8 +234,27 @@ impl Flow {
         stats: &mut Counter,
         timestamp: DateTime,
         now: Instant,
+    ) -> FlowResult {
+        let stated_at = stats.flow_on_interval_start(self.name());
+        let result = self
+            .on_interval_steps(js_runtime, stats, timestamp, now)
+            .await;
+        match &result {
+            Ok(messages) => {
+                stats.flow_on_interval_done(self.name(), stated_at, messages.len());
+            }
+            Err(_) => stats.flow_on_interval_failed(self.name()),
+        }
+        self.publish(result)
+    }
+
+    async fn on_interval_steps(
+        &mut self,
+        js_runtime: &JsRuntime,
+        stats: &mut Counter,
+        timestamp: DateTime,
+        now: Instant,
     ) -> Result<Vec<Message>, FlowError> {
-        let stated_at = stats.flow_on_interval_start(self.source.as_str());
         let mut messages = vec![];
         for step in self.steps.iter_mut() {
             let js = step.script.source();
@@ -156,8 +288,26 @@ impl Flow {
             // Iterate with all the messages collected at this step
             messages = transformed_messages;
         }
-        stats.flow_on_interval_done(self.source.as_str(), stated_at, messages.len());
         Ok(messages)
+    }
+
+    pub fn on_error(&self, error: FlowError) -> FlowResult {
+        self.publish(Err(error))
+    }
+
+    fn publish(&self, result: Result<Vec<Message>, FlowError>) -> FlowResult {
+        match result {
+            Ok(messages) => FlowResult::Ok {
+                flow: self.name().to_string(),
+                messages,
+                output: self.output.clone(),
+            },
+            Err(error) => FlowResult::Err {
+                flow: self.name().to_string(),
+                error,
+                output: self.errors.clone(),
+            },
+        }
     }
 }
 
@@ -180,14 +330,6 @@ impl FlowStep {
         if !script.no_js_on_interval_fun && script.interval.is_zero() {
             // Zero as a default is not appropriate for a script with an onInterval handler
             script.interval = std::time::Duration::from_secs(1);
-        }
-    }
-}
-
-impl FlowInput {
-    pub fn topics(&self) -> &TopicFilter {
-        match self {
-            FlowInput::MQTT { topics } => topics,
         }
     }
 }
@@ -231,6 +373,18 @@ impl Message {
         }
     }
 
+    pub fn with_timestamp(
+        topic: impl ToString,
+        payload: impl Into<Vec<u8>>,
+        timestamp: DateTime,
+    ) -> Self {
+        Message {
+            topic: topic.to_string(),
+            payload: payload.into(),
+            timestamp: Some(timestamp),
+        }
+    }
+
     #[cfg(test)]
     pub fn sent_now(mut self) -> Self {
         self.timestamp = Some(DateTime::now());
@@ -262,20 +416,19 @@ impl std::fmt::Display for Message {
 
 impl std::fmt::Debug for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(self, f)
+        write!(
+            f,
+            "[{}] {}",
+            self.topic,
+            String::from_utf8_lossy(self.payload.as_ref())
+        )
     }
 }
 
-impl TryFrom<MqttMessage> for Message {
-    type Error = FlowError;
-
-    fn try_from(message: MqttMessage) -> Result<Self, Self::Error> {
+impl From<MqttMessage> for Message {
+    fn from(message: MqttMessage) -> Self {
         let (topic, payload) = message.split();
-        Ok(Message {
-            topic,
-            payload,
-            timestamp: None,
-        })
+        Message::new(topic, payload)
     }
 }
 

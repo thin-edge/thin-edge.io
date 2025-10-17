@@ -91,12 +91,73 @@ Each instance of a script must have its own static state
     ...    ${transformed_msg}
     ...    ${expected_msg}
 
+Running tedge-flows
+    # Assuming the flow count-events.toml has been properly installed
+    Execute Command    tedge mqtt sub test/count/e --duration 2s | grep '{}'
+
+Consuming messages from a process stdout
+    # Assuming the flow journalctl-follow.toml has been properly installed
+    ${test_start}    Get Unix Timestamp
+    Restart Service    tedge-agent
+    ${messages}    Should Have MQTT Messages    topic=log/journalctl-follow    minimum=1    date_from=${test_start}
+    Should Not Be Empty    ${messages[0]}    msg=Output should not be empty lines
+
+Consuming messages from a process stdout, periodically
+    # Assuming the flow journalctl-cursor.toml has been properly installed
+    ${test_start}    Get Unix Timestamp
+    Restart Service    tedge-agent
+    ${messages}    Should Have MQTT Messages    topic=log/journalctl-cursor    minimum=10    date_from=${test_start}
+    Should Not Be Empty    ${messages[0]}    msg=Output should not be empty lines
+
+Consuming messages from the tail of file
+    # Assuming the flow tail-named-pipe.toml has been properly installed
+    Execute Command    (for i in $(seq 10); do sleep 1; echo hello>/tmp/events; done)&
+    Execute Command    tedge mqtt sub log/events --duration 2s | grep hello
+
+Consuming messages from of file, periodically
+    # Assuming the flow read-file-periodically.toml has been properly installed
+    Execute Command    echo hello >/tmp/file.input
+    Execute Command    tedge mqtt sub test/file/input --duration 1s | grep hello
+    Execute Command    echo world >/tmp/file.input
+    Execute Command    tedge mqtt sub test/file/input --duration 1s | grep world
+    Execute Command    rm /tmp/file.input
+    Execute Command
+    ...    tedge mqtt sub test/file/input --duration 1s | grep 'Error in /etc/tedge/flows/read-file-periodically.toml'
+    Execute Command    echo 'hello world' >/tmp/file.input
+    Execute Command    tedge mqtt sub test/file/input --duration 1s | grep 'hello world'
+
+Appending messages to a file
+    # Assuming the flow append-to-file.toml has been properly installed
+    Execute Command    for i in $(seq 3); do tedge mqtt pub seq/events "$i"; done
+    Execute Command    grep '\\[seq/events\\] 1' /tmp/events.log
+    Execute Command    grep '\\[seq/events\\] 2' /tmp/events.log
+    Execute Command    grep '\\[seq/events\\] 3' /tmp/events.log
+
+Publishing transformation errors
+    # Assuming the flow publish-js-errors.toml has been properly installed
+    Execute Command    (for i in $(seq 3); do sleep 1; tedge mqtt pub collectd/foo 12345:6789; done)&
+    Execute Command    tedge mqtt sub test/errors --duration 2s | grep 'Error: Not a collectd topic'
+    Execute Command    (for i in $(seq 3); do sleep 1; tedge mqtt pub collectd/a/b/c foo,bar; done)&
+    Execute Command    tedge mqtt sub test/errors --duration 2s | grep 'Error: Not a collectd payload'
+    Execute Command    (for i in $(seq 3); do sleep 1; tedge mqtt pub collectd/a/b/c 12345:6789; done)&
+    Execute Command    tedge mqtt sub test/output --duration 2s | grep '{"time": 12345, "b": {"c": 6789}}'
+
 
 *** Keywords ***
 Custom Setup
-    ${DEVICE_SN}    Setup    connect=${False}
+    ${DEVICE_SN}    Setup
     Set Suite Variable    $DEVICE_SN
     Copy Configuration Files
+    Configure flows
+    Start Service    tedge-flows
 
 Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*    /etc/tedge/flows/
+
+Configure flows
+    # Required by tail-named-pipe.toml
+    Execute Command    mkfifo /tmp/events
+    Execute Command    chmod a+r /tmp/events
+    # Required by journalctl.toml
+    Execute Command
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/bin/journalctl' | sudo tee -a /etc/sudoers.d/tedge

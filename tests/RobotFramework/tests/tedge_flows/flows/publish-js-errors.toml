@@ -1,0 +1,8 @@
+input.mqtt.topics = ["collectd/#"]
+
+steps = [
+    { script = "collectd-to-te.js" }
+]
+
+output.mqtt.topic = "test/output"
+errors.mqtt.topic = "test/errors"

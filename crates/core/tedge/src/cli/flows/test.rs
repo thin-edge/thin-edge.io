@@ -74,8 +74,9 @@ impl TestCommand {
                 }
             }
         };
+        let source = SourceTag::Mqtt;
         processor
-            .on_message(timestamp, &message)
+            .on_message(timestamp, &source, &message)
             .await
             .into_iter()
             .for_each(|msg| self.print_messages(msg))
@@ -89,9 +90,9 @@ impl TestCommand {
             .for_each(|msg| self.print_messages(msg))
     }
 
-    fn print_messages(&self, (flow, messages): (String, Result<Vec<Message>, FlowError>)) {
-        match messages {
-            Ok(mut messages) => {
+    fn print_messages(&self, result: FlowResult) {
+        match result {
+            FlowResult::Ok { mut messages, .. } => {
                 if self.base64_output {
                     for message in messages.iter_mut() {
                         message.payload = BASE64_STANDARD.encode(&message.payload).into_bytes();
@@ -101,8 +102,8 @@ impl TestCommand {
                     println!("{}", message);
                 }
             }
-            Err(err) => {
-                tracing::error!("Error in {flow}: {}", err)
+            FlowResult::Err { flow, error, .. } => {
+                tracing::error!("Error in {flow}: {}", error)
             }
         }
     }

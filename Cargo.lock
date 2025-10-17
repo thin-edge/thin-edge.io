@@ -4891,6 +4891,7 @@ dependencies = [
  "tedge_signal_ext",
  "tedge_timer_ext",
  "tedge_uploader_ext",
+ "tedge_watch_ext",
  "tracing",
  "yansi",
 ]
@@ -5150,6 +5151,7 @@ dependencies = [
  "tedge_actors",
  "tedge_file_system_ext",
  "tedge_mqtt_ext",
+ "tedge_watch_ext",
  "tempfile",
  "thiserror 1.0.69",
  "time",
@@ -5344,6 +5346,18 @@ dependencies = [
  "tracing",
  "uzers",
  "whoami",
+]
+
+[[package]]
+name = "tedge_watch_ext"
+version = "1.6.1"
+dependencies = [
+ "async-trait",
+ "camino",
+ "shell-words",
+ "tedge_actors",
+ "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]
