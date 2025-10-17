@@ -1,5 +1,3 @@
-input.process.command = "sudo journalctl --no-pager --follow --unit tedge-agent"
-
-steps = [
-    { script = "set_topic.js", config = { topic = "log/journalctl-follow" } }
-]
+[input.process]
+command = "sudo journalctl --no-pager --follow --unit tedge-agent"
+topic = "log/journalctl-follow"

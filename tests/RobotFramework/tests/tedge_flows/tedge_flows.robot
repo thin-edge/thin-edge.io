@@ -97,13 +97,13 @@ Running tedge-flows
 
 Consuming messages from a process stdout
     # Assuming the flow journalctl-follow.toml has been properly installed
-    Execute Command    (sleep 1;tedge mqtt pub --retain te/device/main///cmd/software_list/test-follow '{"status":"init"}')&
-    Execute Command    tedge mqtt sub log/journalctl-follow --duration 2s | grep software_list
+    Execute Command    (sleep 1; systemctl restart tedge-agent)&
+    Execute Command    tedge mqtt sub log/journalctl-follow --duration 2s | grep 'INFO Runtime: Running'
 
 Consuming messages from a process stdout, periodically
     # Assuming the flow journalctl-cursor.toml has been properly installed
-    Execute Command    (sleep 1;tedge mqtt pub --retain te/device/main///cmd/software_list/test-cursor '{"status":"init"}')&
-    Execute Command    tedge mqtt sub log/journalctl-follow --duration 2s | grep software_list
+    Execute Command    (sleep 1; systemctl restart tedge-agent)&
+    Execute Command    tedge mqtt sub log/journalctl-cursor --duration 2s | grep 'INFO Runtime: Running'
     Execute Command    tedge mqtt sub log/journalctl-cursor --duration 1s | grep 'No entries'
 
 Consuming messages from the tail of file

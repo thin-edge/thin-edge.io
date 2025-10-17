@@ -63,21 +63,8 @@ impl Actor for FlowsMapper {
                     let source = SourceTag::Mqtt;
                     self.on_message(source, Message::from(message)).await?
                 }
-                InputMessage::WatchEvent(WatchEvent::StdoutLine { topic, line }) => {
-                    let source = SourceTag::Process {
-                        flow: topic.clone(),
-                    };
-                    self.on_message(source, Message::new(topic, line)).await?
-                }
-                InputMessage::WatchEvent(WatchEvent::StderrLine { topic, line }) => {
-                    warn!(target: "flows", "Input command {topic}: {line}");
-                }
-                InputMessage::WatchEvent(WatchEvent::Error { error, .. }) => {
-                    error!(target: "flows", "Cannot monitor command: {error}");
-                }
-                InputMessage::WatchEvent(WatchEvent::EndOfStream { topic }) => {
-                    error!(target: "flows", "End of input stream: {topic}");
-                    self.on_input_eos(&topic).await?
+                InputMessage::WatchEvent(event) => {
+                    self.on_process_event(event).await?;
                 }
                 InputMessage::FsWatchEvent(FsWatchEvent::Modified(path)) => {
                     let Ok(path) = Utf8PathBuf::try_from(path) else {
@@ -218,14 +205,48 @@ impl FlowsMapper {
         Ok(())
     }
 
-    async fn on_input_eos(&mut self, flow_name: &str) -> Result<(), RuntimeError> {
+    async fn on_process_event(&mut self, event: WatchEvent) -> Result<(), RuntimeError> {
+        match event {
+            WatchEvent::StdoutLine { topic, line } => {
+                self.on_process_message(topic, line).await?;
+            }
+            WatchEvent::StderrLine { topic, line } => {
+                warn!(target: "flows", "Input command {topic}: {line}");
+            }
+            WatchEvent::Error { error, .. } => {
+                error!(target: "flows", "Cannot monitor command: {error}");
+            }
+            WatchEvent::EndOfStream { topic } => {
+                error!(target: "flows", "End of input stream: {topic}");
+                self.on_process_eos(&topic).await?
+            }
+        }
+        Ok(())
+    }
+
+    async fn on_process_message(
+        &mut self,
+        flow_name: String,
+        line: String,
+    ) -> Result<(), RuntimeError> {
+        if let Some(flow) = self.processor.flows.get(&flow_name) {
+            let topic = flow.input.enforced_topic().unwrap_or_default();
+            let source = SourceTag::Process {
+                flow: flow_name.clone(),
+            };
+            self.on_message(source, Message::new(topic, line)).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn on_process_eos(&mut self, flow_name: &str) -> Result<(), RuntimeError> {
         if let Some(flow) = self.processor.flows.get(flow_name) {
             if let Some(request) = flow.watch_request() {
                 info!(target: "flows", "Reconnecting input: {flow_name}: {}", flow.input);
                 self.watch_request_sender.send(request).await?
             };
         }
-
         Ok(())
     }
 
