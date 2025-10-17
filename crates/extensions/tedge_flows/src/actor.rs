@@ -286,7 +286,7 @@ impl FlowsMapper {
                 }
             }
             FlowOutput::File { path } => {
-                let Ok(mut file) = tokio::fs::File::options()
+                let Ok(file) = tokio::fs::File::options()
                     .create(true)
                     .append(true)
                     .open(path)
@@ -297,6 +297,7 @@ impl FlowsMapper {
                 else {
                     return Ok(());
                 };
+                let mut file = tokio::io::BufWriter::new(file);
                 for message in messages {
                     if let Err(err) = file.write_all(format!("{message}\n").as_bytes()).await {
                         error!(target: "flows", "{flow}: cannot append to {path}: {err}");
