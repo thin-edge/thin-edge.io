@@ -8,14 +8,11 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
-use tedge_actors::DynSender;
-use tedge_actors::RuntimeError;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchRequest;
 use time::OffsetDateTime;
-use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 use tracing::error;
 use tracing::warn;
@@ -326,54 +323,6 @@ impl FlowStep {
             // Zero as a default is not appropriate for a script with an onInterval handler
             script.interval = std::time::Duration::from_secs(1);
         }
-    }
-}
-
-impl FlowOutput {
-    pub async fn publish_messages(
-        &self,
-        flow: &str,
-        mut mqtt: DynSender<MqttMessage>,
-        messages: Vec<Message>,
-    ) -> Result<(), RuntimeError> {
-        match self {
-            FlowOutput::Mqtt { topic } => {
-                for mut message in messages {
-                    if let Some(output_topic) = topic {
-                        message.topic = output_topic.name.clone();
-                    }
-                    match MqttMessage::try_from(message) {
-                        Ok(message) => mqtt.send(message).await?,
-                        Err(err) => {
-                            error!(target: "flows", "{flow}: cannot publish transformed message: {err}")
-                        }
-                    }
-                }
-            }
-            FlowOutput::File { path } => {
-                let Ok(mut file) = tokio::fs::File::options()
-                    .create(true)
-                    .append(true)
-                    .open(path)
-                    .await
-                    .map_err(|err| {
-                        error!(target: "flows", "{flow}: cannot open {path}: {err}");
-                    })
-                else {
-                    return Ok(());
-                };
-                for message in messages {
-                    if let Err(err) = file.write_all(format!("{message}\n").as_bytes()).await {
-                        error!(target: "flows", "{flow}: cannot append to {path}: {err}");
-                    }
-                }
-                if let Err(err) = file.flush().await {
-                    error!(target: "flows", "{flow}: cannot flush {path}: {err}");
-                }
-            }
-        }
-
-        Ok(())
     }
 }
 
