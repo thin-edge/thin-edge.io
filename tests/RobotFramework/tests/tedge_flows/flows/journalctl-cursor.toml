@@ -1,5 +1,11 @@
 [input.process]
-command = "sudo journalctl --no-pager --cursor-file=/tmp/tedge-agent-cursor --unit tedge-agent"
+# Each interval, get the next 5 log messages for a given service
+# Use a cursor-file (built-in journalctl functionality) to remember the last
+# log entry processed.
+#
+# The output is piped to grep to filter out the "No entries" output from journalctl,
+# and then finally piped to cat to avoid exiting with a non-zero exit code.
+command = """sh -c "sudo journalctl --no-pager --cursor-file=/tmp/tedge-agent-cursor --unit tedge-agent -n 5 -b | grep -v '^-- No entries --$' | cat""""
 interval = "1s"
 
 [[steps]]
