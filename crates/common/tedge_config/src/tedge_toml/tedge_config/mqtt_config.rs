@@ -18,6 +18,7 @@ use super::TEdgeConfigReaderDevice;
 
 use certificate::parse_root_certificate::CryptokiConfig;
 use certificate::parse_root_certificate::CryptokiConfigDirect;
+use mqtt_channel::read_password;
 
 /// An MQTT authentication configuration for connecting to the remote cloud broker.
 #[derive(Debug, Clone, Default)]
@@ -80,10 +81,22 @@ pub struct MqttAuthConfig {
     pub client: Option<MqttAuthClientConfig>,
 }
 
+#[derive(Debug, Clone)]
+pub enum MqttAuthClientConfig {
+    Cert(MqttAuthClientCertConfig),
+    User(MqttAuthClientUserConfig),
+}
+
 #[derive(Debug, Clone, Default)]
-pub struct MqttAuthClientConfig {
+pub struct MqttAuthClientCertConfig {
     pub cert_file: Utf8PathBuf,
     pub key_file: Utf8PathBuf,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MqttAuthClientUserConfig {
+    pub username: String,
+    pub password_file: Utf8PathBuf,
 }
 
 impl MqttAuthConfig {
@@ -92,10 +105,10 @@ impl MqttAuthConfig {
             return Ok(None);
         };
 
-        let Some(MqttAuthClientConfig {
+        let Some(MqttAuthClientConfig::Cert(MqttAuthClientCertConfig {
             cert_file,
             key_file,
-        }) = self.client
+        })) = self.client
         else {
             let client_config =
                 certificate::parse_root_certificate::create_tls_config_without_client_cert(ca)?;
@@ -107,6 +120,21 @@ impl MqttAuthConfig {
                 .context("Failed to create TLS client config")?;
 
         Ok(Some(client_config))
+    }
+
+    // Return username and password if they are set
+    pub fn username_and_password(&self) -> Option<(String, String)> {
+        if let Some(MqttAuthClientConfig::User(MqttAuthClientUserConfig {
+            username,
+            password_file,
+        })) = self.client.clone()
+        {
+            if let Ok(password) = read_password(&password_file) {
+                return Some((username, password));
+            }
+        }
+
+        None
     }
 }
 
@@ -147,7 +175,12 @@ impl TEdgeConfig {
             self.mqtt.client.auth.cert_file.as_ref(),
             self.mqtt.client.auth.key_file.as_ref(),
         )) {
-            mqtt_config.with_client_auth(client_cert, client_key)?;
+            mqtt_config.with_client_auth_cert_key(client_cert, client_key)?;
+        } else if let Ok(Some((username, password_file))) = all_or_nothing((
+            self.mqtt.client.auth.username.as_ref(),
+            self.mqtt.client.auth.password_file.as_ref(),
+        )) {
+            mqtt_config.with_client_auth_user_pass(username, password_file)?;
         }
 
         Ok(mqtt_config)
@@ -203,10 +236,18 @@ impl TEdgeConfig {
             self.mqtt.client.auth.cert_file.as_ref(),
             self.mqtt.client.auth.key_file.as_ref(),
         )) {
-            client_auth.client = Some(MqttAuthClientConfig {
+            client_auth.client = Some(MqttAuthClientConfig::Cert(MqttAuthClientCertConfig {
                 cert_file: client_cert.clone().into(),
                 key_file: client_key.clone().into(),
-            })
+            }))
+        } else if let Ok(Some((username, password_file))) = all_or_nothing((
+            self.mqtt.client.auth.username.as_ref(),
+            self.mqtt.client.auth.password_file.as_ref(),
+        )) {
+            client_auth.client = Some(MqttAuthClientConfig::User(MqttAuthClientUserConfig {
+                username: username.to_string(),
+                password_file: password_file.to_path_buf(),
+            }))
         }
         client_auth
     }
