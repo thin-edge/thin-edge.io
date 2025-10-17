@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::Sender;
+use tedge_api::commands::CmdMetaSyncSignal;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
 
@@ -42,5 +44,31 @@ impl CommandDispatcher {
     /// List the operations for which a builtin handler has been registered
     pub fn capabilities(&self) -> Vec<OperationName> {
         self.senders.keys().cloned().collect()
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct SyncSignalDispatcher {
+    senders: HashMap<OperationType, Vec<DynSender<CmdMetaSyncSignal>>>,
+}
+
+impl SyncSignalDispatcher {
+    /// Register where to send sync signals for the given command type
+    pub(crate) fn register_sync_signal_sender(
+        &mut self,
+        operation: OperationType,
+        sender: DynSender<CmdMetaSyncSignal>,
+    ) {
+        self.senders.entry(operation).or_default().push(sender);
+    }
+
+    pub(crate) async fn send(&mut self, operation: OperationType) -> Result<(), ChannelError> {
+        let Some(senders) = self.senders.get_mut(&operation) else {
+            return Ok(());
+        };
+        for sender in senders {
+            sender.send(()).await?;
+        }
+        Ok(())
     }
 }

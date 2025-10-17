@@ -1,4 +1,5 @@
 use crate::operation_workflows::message_box::CommandDispatcher;
+use crate::operation_workflows::message_box::SyncSignalDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
 use crate::state_repository::state::AgentStateRepository;
 use async_trait::async_trait;
@@ -53,6 +54,7 @@ pub struct WorkflowActor {
     pub(crate) log_dir: Utf8PathBuf,
     pub(crate) input_receiver: UnboundedLoggingReceiver<AgentInput>,
     pub(crate) builtin_command_dispatcher: CommandDispatcher,
+    pub(crate) sync_signal_dispatcher: SyncSignalDispatcher,
     pub(crate) command_sender: DynSender<InternalCommandState>,
     pub(crate) mqtt_publisher: LoggingSender<MqttMessage>,
     pub(crate) script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
@@ -428,7 +430,10 @@ impl WorkflowActor {
         new_state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
         if new_state.is_finished() {
-            self.finalize_builtin_command_update(new_state).await
+            self.sync_dependent_actors(&new_state).await?;
+            self.finalize_builtin_command_update(new_state).await?;
+
+            Ok(())
         } else {
             // As not finalized, the builtin state is sent back
             // to the builtin operation actor for further processing.
@@ -456,6 +461,18 @@ impl WorkflowActor {
             .send(adapted_state.clone().into_message())
             .await?;
         self.process_command_update(adapted_state).await
+    }
+
+    async fn sync_dependent_actors(
+        &mut self,
+        command: &GenericCommandState,
+    ) -> Result<(), RuntimeError> {
+        if let Some(command) = command.operation() {
+            self.sync_signal_dispatcher
+                .send(command.as_str().into())
+                .await?;
+        }
+        Ok(())
     }
 
     fn open_command_log(

@@ -27,6 +27,7 @@ pub struct LogManagerConfig {
     pub plugin_config_path: PathBuf,
     pub logtype_reload_topic: Topic,
     pub logfile_request_topic: TopicFilter,
+    pub log_metadata_sync_topics: TopicFilter,
     pub sudo_enabled: bool,
 }
 
@@ -62,6 +63,11 @@ impl LogManagerConfig {
             ChannelFilter::Command(OperationType::LogUpload),
         );
 
+        let log_metadata_sync_topics = mqtt_schema.topics(
+            EntityFilter::Entity(&mqtt_device_topic_id),
+            ChannelFilter::Command(OperationType::SoftwareUpdate),
+        );
+
         Ok(Self {
             mqtt_schema,
             config_dir,
@@ -72,6 +78,7 @@ impl LogManagerConfig {
             plugin_config_path,
             logtype_reload_topic,
             logfile_request_topic,
+            log_metadata_sync_topics,
             sudo_enabled: true,
         })
     }

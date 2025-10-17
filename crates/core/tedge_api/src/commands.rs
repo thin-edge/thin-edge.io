@@ -298,6 +298,8 @@ pub trait CommandPayload {
     }
 }
 
+pub type CmdMetaSyncSignal = ();
+
 /// All the messages are serialized using json.
 pub trait Jsonify {
     fn from_json(json_str: &str) -> Result<Self, serde_json::Error>
