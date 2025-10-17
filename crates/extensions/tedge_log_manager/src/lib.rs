@@ -24,11 +24,13 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::commands::CmdMetaSyncSignal;
 use tedge_api::commands::LogUploadCmd;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
+use tedge_api::workflow::SyncOnCommand;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::move_file;
@@ -144,31 +146,41 @@ impl LogManagerBuilder {
 
     /// List of MQTT topic filters the log actor has to subscribe to
     fn subscriptions(config: &LogManagerConfig) -> TopicFilter {
-        config.logfile_request_topic.clone()
+        let mut topics = config.logfile_request_topic.clone();
+        topics.add_all(config.log_metadata_sync_topics.clone());
+        topics
     }
 
     /// Extract a log actor request from an MQTT message
     fn mqtt_message_parser(config: &LogManagerConfig) -> impl Fn(MqttMessage) -> Option<LogInput> {
         let logfile_request_topic = config.logfile_request_topic.clone();
+        let log_metadata_sync_topics = config.log_metadata_sync_topics.clone();
         let mqtt_schema = config.mqtt_schema.clone();
         move |message| {
-            if !logfile_request_topic.accept(&message) {
+            if logfile_request_topic.accept(&message) {
+                LogUploadCmd::parse(&mqtt_schema, message)
+                    .map_err(|err| {
+                        error!(
+                            target: "log plugins",
+                            "Incorrect log request payload: {}", err
+                        )
+                    })
+                    .unwrap_or(None)
+                    .map(|cmd| cmd.into())
+            } else if log_metadata_sync_topics.accept(&message) {
+                if let Ok(cmd) = GenericCommandState::from_command_message(&message) {
+                    if cmd.is_finished() {
+                        return Some(LogInput::CmdMetaSyncSignal(()));
+                    }
+                }
+                None
+            } else {
                 error!(
                     target: "log plugins",
                     "Received unexpected message on topic: {}", message.topic.name
                 );
-                return None;
+                None
             }
-
-            LogUploadCmd::parse(&mqtt_schema, message)
-                .map_err(|err| {
-                    error!(
-                        target: "log plugins",
-                        "Incorrect log request payload: {}", err
-                    )
-                })
-                .unwrap_or(None)
-                .map(|cmd| cmd.into())
         }
     }
 
@@ -238,5 +250,18 @@ impl IntoIterator for &LogManagerBuilder {
                 LogUploadCmd::try_from(cmd).map(LogInput::LogUploadCmd).ok()
             });
         vec![(OperationType::LogUpload.to_string(), sender.into())].into_iter()
+    }
+}
+
+impl MessageSink<CmdMetaSyncSignal> for LogManagerBuilder {
+    fn get_sender(&self) -> DynSender<CmdMetaSyncSignal> {
+        self.box_builder.get_sender().sender_clone()
+    }
+}
+
+impl SyncOnCommand for LogManagerBuilder {
+    /// Return the list of operations for which this actor wants to receive sync signals
+    fn sync_on_commands(&self) -> Vec<OperationType> {
+        vec![OperationType::SoftwareUpdate]
     }
 }

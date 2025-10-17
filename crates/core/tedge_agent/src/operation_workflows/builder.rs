@@ -3,6 +3,7 @@ use crate::operation_workflows::actor::InternalCommandState;
 use crate::operation_workflows::actor::WorkflowActor;
 use crate::operation_workflows::config::OperationConfig;
 use crate::operation_workflows::message_box::CommandDispatcher;
+use crate::operation_workflows::message_box::SyncSignalDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
 use crate::state_repository::state::agent_state_dir;
 use crate::state_repository::state::AgentStateRepository;
@@ -22,6 +23,7 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::UnboundedLoggingReceiver;
+use tedge_api::commands::CmdMetaSyncSignal;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -29,6 +31,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
+use tedge_api::workflow::SyncOnCommand;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
@@ -39,6 +42,7 @@ pub struct WorkflowActorBuilder {
     input_sender: DynSender<AgentInput>,
     input_receiver: UnboundedLoggingReceiver<AgentInput>,
     command_dispatcher: CommandDispatcher,
+    sync_signal_dispatcher: SyncSignalDispatcher,
     command_sender: DynSender<InternalCommandState>,
     mqtt_publisher: LoggingSender<MqttMessage>,
     script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
@@ -65,6 +69,8 @@ impl WorkflowActorBuilder {
         let command_dispatcher = CommandDispatcher::default();
         let command_sender = input_sender.sender_clone();
 
+        let sync_signal_dispatcher = SyncSignalDispatcher::default();
+
         let mqtt_publisher = mqtt_actor.get_sender();
         mqtt_actor.connect_sink(
             Self::subscriptions(&config.mqtt_schema, &config.device_topic_id),
@@ -81,6 +87,7 @@ impl WorkflowActorBuilder {
             input_sender,
             input_receiver,
             command_dispatcher,
+            sync_signal_dispatcher,
             command_sender,
             mqtt_publisher,
             signal_sender,
@@ -98,7 +105,19 @@ impl WorkflowActorBuilder {
         actor.connect_sink(NoConfig, &self.input_sender);
         for (operation, sender) in actor.into_iter() {
             self.command_dispatcher
-                .register_operation_handler(operation, sender)
+                .register_operation_handler(operation, sender);
+        }
+    }
+
+    /// Register an actor to receive sync signals on completion of other commands
+    pub fn register_sync_signal_sink<OperationActor>(&mut self, actor: &OperationActor)
+    where
+        OperationActor: MessageSink<CmdMetaSyncSignal> + SyncOnCommand,
+    {
+        let sender = actor.get_sender();
+        for operation in actor.sync_on_commands() {
+            self.sync_signal_dispatcher
+                .register_sync_signal_sender(operation, sender.sender_clone());
         }
     }
 
@@ -136,6 +155,7 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             log_dir: self.config.log_dir,
             input_receiver: self.input_receiver,
             builtin_command_dispatcher: self.command_dispatcher,
+            sync_signal_dispatcher: self.sync_signal_dispatcher,
             mqtt_publisher: self.mqtt_publisher,
             command_sender: self.command_sender,
             script_runner: self.script_runner,
