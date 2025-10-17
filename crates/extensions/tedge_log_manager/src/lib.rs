@@ -262,6 +262,6 @@ impl MessageSink<CmdMetaSyncSignal> for LogManagerBuilder {
 impl SyncOnCommand for LogManagerBuilder {
     /// Return the list of operations for which this actor wants to receive sync signals
     fn sync_on_commands(&self) -> Vec<OperationType> {
-        vec![OperationType::SoftwareUpdate]
+        vec![OperationType::SoftwareUpdate, OperationType::ConfigUpdate]
     }
 }

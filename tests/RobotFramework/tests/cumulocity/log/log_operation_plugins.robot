@@ -37,6 +37,21 @@ Supported log types updated on software update
     ...    message_contains=cron::journald
     Should Support Log File Types    cron::journald    includes=${True}
 
+Supported log types updated on config update
+    [Documentation]    Updating any configuration should trigger supported log types update
+    ${config_url}=    Cumulocity.Create Inventory Binary
+    ...    tedge-configuration-plugin
+    ...    tedge-configuration-plugin
+    ...    contents=files=[]
+    ${start_time}=    Get Unix Timestamp
+    ${operation}=    Cumulocity.Set Configuration    tedge-configuration-plugin    url=${config_url}
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+    Should Have MQTT Messages
+    ...    topic=te/device/main///cmd/log_upload
+    ...    date_from=${start_time}
+    ...    message_contains=software-management
+
 Log operation journald plugin can return logs for all units
     Should Support Log File Types    all-units::journald    includes=${True}
     ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
