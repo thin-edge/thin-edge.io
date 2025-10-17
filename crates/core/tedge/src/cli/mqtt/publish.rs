@@ -1,12 +1,11 @@
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use base64::prelude::*;
-use camino::Utf8PathBuf;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
-use tedge_config::tedge_toml::MqttAuthClientConfig;
 use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeMqttClientAuthConfig;
 use tracing::info;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
@@ -21,9 +20,7 @@ pub struct MqttPublishCommand {
     pub client_id: String,
     pub retain: bool,
     pub base64: bool,
-    pub ca_file: Option<Utf8PathBuf>,
-    pub ca_dir: Option<Utf8PathBuf>,
-    pub client_auth_config: Option<MqttAuthClientConfig>,
+    pub auth_config: TEdgeMqttClientAuthConfig,
     pub count: u32,
     pub sleep: std::time::Duration,
 }
@@ -61,15 +58,7 @@ async fn publish(cmd: &MqttPublishCommand) -> Result<(), anyhow::Error> {
         .with_max_packet_size(MAX_PACKET_SIZE)
         .with_queue_capacity(DEFAULT_QUEUE_CAPACITY);
 
-    if let Some(ca_file) = &cmd.ca_file {
-        config.with_cafile(ca_file)?;
-    }
-    if let Some(ca_dir) = &cmd.ca_dir {
-        config.with_cadir(ca_dir)?;
-    }
-    if let Some(client_auth) = cmd.client_auth_config.as_ref() {
-        config.with_client_auth(&client_auth.cert_file, &client_auth.key_file)?;
-    }
+    config.with_client_auth(cmd.auth_config.clone().try_into()?)?;
 
     let mut mqtt = mqtt_channel::Connection::new(&config).await?;
     let mut signals = tedge_utils::signals::TermSignals::new(None);
