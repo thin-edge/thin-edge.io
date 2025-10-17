@@ -66,8 +66,15 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
     if let Some(ca_dir) = &cmd.ca_dir {
         config.with_cadir(ca_dir)?;
     }
-    if let Some(client_auth) = cmd.client_auth_config.as_ref() {
-        config.with_client_auth(&client_auth.cert_file, &client_auth.key_file)?;
+    if let Some(MqttAuthClientConfig::Cert(client_auth)) = cmd.client_auth_config.as_ref() {
+        config.with_client_auth_cert_key(&client_auth.cert_file, &client_auth.key_file)?;
+    }
+
+    if let Some(MqttAuthClientConfig::User(client_auth_user)) = cmd.client_auth_config.as_ref() {
+        config.with_client_auth_user_pass(
+            &client_auth_user.username,
+            client_auth_user.password_file.clone(),
+        )?;
     }
 
     let mut mqtt = mqtt_channel::Connection::new(&config).await?;

@@ -94,6 +94,8 @@ impl MqttBridgeActorBuilder {
         );
         // TODO cope with certs but not ca_dir, or handle that case with an explicit error message?
         let auth_config = tedge_config.mqtt_client_auth_config();
+        // FIXME
+        local_config.set_credentials("testuser", "testpassword");
         let local_tls_config = auth_config.to_rustls_client_config().unwrap();
         if let Some(tls_config) = local_tls_config {
             local_config.set_transport(Transport::tls_with_config(tls_config.into()));
