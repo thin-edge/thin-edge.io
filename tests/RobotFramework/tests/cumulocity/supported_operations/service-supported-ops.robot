@@ -19,7 +19,7 @@ Services Can Register Supported Operations
     ...    tedge mqtt pub -q 1 --retain te/device/main/service/app1/cmd/log_upload '{"types": ["systemd"]}'
 
     Cumulocity.Should Contain Supported Operations    c8y_Restart    c8y_LogfileRequest
-    Cumulocity.Should Support Log File Types    systemd
+    Cumulocity.Should Have Exact Supported Log Types    systemd
 
 Services Can Receive Operations
     # NOTE: The c8y_Restart operation is used to check the handling of operation status updates because it
