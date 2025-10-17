@@ -213,8 +213,9 @@ impl FlowsMapper {
             WatchEvent::StderrLine { topic, line } => {
                 warn!(target: "flows", "Input command {topic}: {line}");
             }
-            WatchEvent::Error { error, .. } => {
+            WatchEvent::Error { topic, error } => {
                 error!(target: "flows", "Cannot monitor command: {error}");
+                self.on_process_error(&topic, error.into()).await?;
             }
             WatchEvent::EndOfStream { topic } => {
                 error!(target: "flows", "End of input stream: {topic}");
@@ -236,6 +237,39 @@ impl FlowsMapper {
             };
             self.on_message(source, Message::new(topic, line)).await?;
         }
+
+        Ok(())
+    }
+
+    async fn on_process_error(
+        &mut self,
+        flow_name: &str,
+        error: FlowError,
+    ) -> Result<(), RuntimeError> {
+        let Some((info, flow_error)) = self.processor.flows.get(flow_name).map(|flow| {
+            (
+                format!("Reconnecting input: {flow_name}: {}", flow.input),
+                flow.on_error(error),
+            )
+        }) else {
+            return Ok(());
+        };
+        self.publish_result(flow_error).await?;
+
+        let Some(request) = self
+            .processor
+            .flows
+            .get(flow_name)
+            .and_then(|flow| flow.watch_request())
+        else {
+            return Ok(());
+        };
+        let mut watch_request_sender = self.watch_request_sender.sender_clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            info!(target: "flows", info);
+            let _ = watch_request_sender.send(request).await;
+        });
 
         Ok(())
     }

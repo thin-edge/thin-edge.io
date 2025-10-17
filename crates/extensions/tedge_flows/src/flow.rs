@@ -11,6 +11,7 @@ use serde_json::Value;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_watch_ext::WatchError;
 use tedge_watch_ext::WatchRequest;
 use time::OffsetDateTime;
 use tokio::time::Instant;
@@ -107,7 +108,10 @@ pub enum FlowError {
     IncorrectSetting(String),
 
     #[error(transparent)]
-    SourceError(#[from] PollingSourceError),
+    PollingSourceError(#[from] PollingSourceError),
+
+    #[error(transparent)]
+    StreamingSourceError(#[from] WatchError),
 
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
@@ -285,6 +289,10 @@ impl Flow {
             messages = transformed_messages;
         }
         Ok(messages)
+    }
+
+    pub fn on_error(&self, error: FlowError) -> FlowResult {
+        self.publish(Err(error))
     }
 
     fn publish(&self, result: Result<Vec<Message>, FlowError>) -> FlowResult {
