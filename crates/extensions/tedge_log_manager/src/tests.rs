@@ -99,8 +99,9 @@ async fn new_log_manager_builder(
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     UploaderMessageBox,
 ) {
-    let log_metadata_sync_topics =
+    let mut log_metadata_sync_topics =
         TopicFilter::new_unchecked("te/device/main///cmd/software_update/+");
+    log_metadata_sync_topics.add_unchecked("te/device/main///cmd/config_update/+");
 
     let config = LogManagerConfig {
         mqtt_schema: MqttSchema::default(),
@@ -661,6 +662,82 @@ async fn log_types_published_on_software_update_message() -> Result<(), anyhow::
     .await?;
 
     // The log manager should publish the log types again
+    assert_eq!(
+        mqtt.recv().await,
+        Some(
+            MqttMessage::new(&log_reload_topic, r#"{"types":["type_one","type_two"]}"#)
+                .with_retain()
+        )
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn log_types_published_on_config_update_message() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+
+    let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
+    let config_update_topic = Topic::new_unchecked("te/device/main///cmd/config_update/1234");
+
+    // Skip the initial log types message on startup
+    mqtt.skip(1).await;
+
+    mqtt.send(MqttMessage::new(
+        &config_update_topic,
+        r#"
+        {
+            "status": "init",
+            "updateList": []
+        }"#,
+    ))
+    .await?;
+
+    mqtt.send(MqttMessage::new(
+        &config_update_topic,
+        r#"
+        {
+            "status": "executing",
+            "updateList": []
+        }"#,
+    ))
+    .await?;
+
+    // The log manager does not react to `config_update` in state other than "successful" or "failed"
+    assert!(mqtt.recv().await.is_none());
+
+    // Send a config_update message in terminal state that trigger log types reload
+    let config_update_message = r#"
+        {
+            "status": "successful",
+            "updateList": []
+        }"#;
+    mqtt.send(MqttMessage::new(
+        &config_update_topic,
+        config_update_message,
+    ))
+    .await?;
+
+    // The log manager should publish the log types again
+    assert_eq!(
+        mqtt.recv().await,
+        Some(
+            MqttMessage::new(&log_reload_topic, r#"{"types":["type_one","type_two"]}"#)
+                .with_retain()
+        )
+    );
+
+    // Failed config update should also trigger log types reload
+    mqtt.send(MqttMessage::new(
+        &config_update_topic,
+        r#"
+        {
+            "status": "failed",
+            "updateList": []
+        }"#,
+    ))
+    .await?;
     assert_eq!(
         mqtt.recv().await,
         Some(
