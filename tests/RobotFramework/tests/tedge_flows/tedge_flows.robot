@@ -97,14 +97,17 @@ Running tedge-flows
 
 Consuming messages from a process stdout
     # Assuming the flow journalctl-follow.toml has been properly installed
-    Execute Command    (sleep 1; systemctl restart tedge-agent)&
-    Execute Command    tedge mqtt sub log/journalctl-follow --duration 2s | grep 'INFO Runtime: Running'
+    ${test_start}    Get Unix Timestamp
+    Restart Service    tedge-agent
+    ${messages}    Should Have MQTT Messages    topic=log/journalctl-follow    minimum=1    date_from=${test_start}
+    Should Not Be Empty    ${messages[0]}    msg=Output should not be empty lines
 
 Consuming messages from a process stdout, periodically
     # Assuming the flow journalctl-cursor.toml has been properly installed
-    Execute Command    (sleep 1; systemctl restart tedge-agent)&
-    Execute Command    tedge mqtt sub log/journalctl-cursor --duration 2s | grep 'INFO Runtime: Running'
-    Execute Command    tedge mqtt sub log/journalctl-cursor --duration 1s | grep 'No entries'
+    ${test_start}    Get Unix Timestamp
+    Restart Service    tedge-agent
+    ${messages}    Should Have MQTT Messages    topic=log/journalctl-cursor    minimum=10    date_from=${test_start}
+    Should Not Be Empty    ${messages[0]}    msg=Output should not be empty lines
 
 Consuming messages from the tail of file
     # Assuming the flow tail-named-pipe.toml has been properly installed
@@ -118,7 +121,8 @@ Consuming messages from a file, periodically
     Execute Command    echo world >/tmp/file.input
     Execute Command    tedge mqtt sub test/file/input --duration 1s | grep world
     Execute Command    rm /tmp/file.input
-    Execute Command    tedge mqtt sub test/file/input --duration 1s | grep 'Error in /etc/tedge/flows/read-file-periodically.toml'
+    Execute Command
+    ...    tedge mqtt sub test/file/input --duration 1s | grep 'Error in /etc/tedge/flows/read-file-periodically.toml'
     Execute Command    echo 'hello world' >/tmp/file.input
     Execute Command    tedge mqtt sub test/file/input --duration 1s | grep 'hello world'
 
