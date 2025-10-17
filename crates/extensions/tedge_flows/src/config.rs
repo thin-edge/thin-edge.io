@@ -1,6 +1,9 @@
+use crate::database::MeaDb;
 use crate::flow::Flow;
 use crate::flow::FlowInput;
+use crate::flow::FlowOutput;
 use crate::flow::FlowStep;
+use crate::input_source::DatabaseSource;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::LoadError;
@@ -9,13 +12,18 @@ use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde_json::Value;
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_mqtt_ext::TopicFilter;
+use tokio::sync::Mutex;
 
 #[derive(Deserialize)]
 pub struct FlowConfig {
     input: InputConfig,
     steps: Vec<StepConfig>,
+
+    #[serde(default = "default_output")]
+    output: OutputConfig,
 }
 
 #[derive(Deserialize)]
@@ -43,6 +51,35 @@ pub enum ScriptSpec {
 pub enum InputConfig {
     #[serde(rename = "mqtt")]
     Mqtt { topics: Vec<String> },
+    #[serde(rename = "db")]
+    MeaDB {
+        series: String,
+        #[serde(deserialize_with = "parse_human_duration")]
+        frequency: Duration,
+        #[serde(deserialize_with = "parse_human_duration")]
+        max_age: Duration,
+    },
+}
+
+#[derive(Deserialize)]
+pub enum OutputConfig {
+    #[serde(rename = "mqtt")]
+    Mqtt {
+        #[serde(default = "default_output_topics")]
+        topics: Vec<String>,
+    },
+    #[serde(rename = "db")]
+    MeaDB { series: String },
+}
+
+fn default_output() -> OutputConfig {
+    OutputConfig::Mqtt {
+        topics: vec!["#".to_string()],
+    }
+}
+
+fn default_output_topics() -> Vec<String> {
+    vec!["#".to_string()]
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -68,6 +105,7 @@ impl FlowConfig {
                 topics: vec![input_topic],
             },
             steps: vec![step],
+            output: default_output(),
         }
     }
 
@@ -76,8 +114,25 @@ impl FlowConfig {
         js_runtime: &mut JsRuntime,
         config_dir: &Utf8Path,
         source: Utf8PathBuf,
+        database: Arc<Mutex<Box<dyn MeaDb>>>,
     ) -> Result<Flow, ConfigError> {
         let input = self.input.try_into()?;
+
+        // Create input source for MeaDB inputs
+        let input_source = match &input {
+            FlowInput::MeaDB {
+                series,
+                frequency,
+                max_age,
+            } => Some(Box::new(DatabaseSource::new(
+                database.clone(),
+                series.clone(),
+                *frequency,
+                *max_age,
+            )) as Box<dyn crate::input_source::InputSource>),
+            FlowInput::Mqtt { .. } => None,
+        };
+
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
             let mut step = step.compile(config_dir, i, &source).await?;
@@ -87,11 +142,15 @@ impl FlowConfig {
             step.script.init_next_execution();
             steps.push(step);
         }
-        Ok(Flow {
+        let output = self.output.try_into()?;
+        let flow = Flow {
             input,
+            input_source,
             steps,
             source,
-        })
+            output,
+        };
+        Ok(flow)
     }
 }
 
@@ -123,8 +182,32 @@ impl TryFrom<InputConfig> for FlowInput {
 
     fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
         match input {
-            InputConfig::Mqtt { topics } => Ok(FlowInput::MQTT {
+            InputConfig::Mqtt { topics } => Ok(FlowInput::Mqtt {
                 topics: topic_filters(topics)?,
+            }),
+            InputConfig::MeaDB {
+                series,
+                frequency,
+                max_age,
+            } => Ok(FlowInput::MeaDB {
+                series,
+                frequency,
+                max_age,
+            }),
+        }
+    }
+}
+
+impl TryFrom<OutputConfig> for FlowOutput {
+    type Error = ConfigError;
+
+    fn try_from(output: OutputConfig) -> Result<Self, Self::Error> {
+        match output {
+            OutputConfig::Mqtt { topics } => Ok(FlowOutput::Mqtt {
+                output_topics: topic_filters(topics)?,
+            }),
+            OutputConfig::MeaDB { series } => Ok(FlowOutput::MeaDB {
+                output_series: series,
             }),
         }
     }

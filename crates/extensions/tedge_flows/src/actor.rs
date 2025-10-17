@@ -1,5 +1,7 @@
 use crate::flow::DateTime;
+use crate::flow::FlowOutput;
 use crate::flow::Message;
+use crate::flow::MessageSource;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
 use crate::OutputMessage;
@@ -21,6 +23,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tokio::time::sleep_until;
 use tokio::time::Instant;
 use tracing::error;
+use tracing::info;
 
 pub const STATS_DUMP_INTERVAL: Duration = Duration::from_secs(300);
 
@@ -41,10 +44,14 @@ impl Actor for FlowsMapper {
         while let Some(message) = self.next_message().await {
             match message {
                 InputMessage::Tick(_) => {
+                    self.poll_ready_sources().await?;
                     self.on_interval().await?;
                 }
                 InputMessage::MqttMessage(message) => match Message::try_from(message) {
-                    Ok(message) => self.on_message(message).await?,
+                    Ok(message) => {
+                        self.on_message(MessageSource::Mqtt, DateTime::now(), message)
+                            .await?
+                    }
                     Err(err) => {
                         error!(target: "flows", "Cannot process message: {err}");
                     }
@@ -121,26 +128,18 @@ impl FlowsMapper {
         diff
     }
 
-    async fn on_message(&mut self, message: Message) -> Result<(), RuntimeError> {
-        let timestamp = DateTime::now();
-        for (flow_id, flow_messages) in self.processor.on_message(timestamp, &message).await {
+    async fn on_message(
+        &mut self,
+        source: MessageSource,
+        timestamp: DateTime,
+        message: Message,
+    ) -> Result<(), RuntimeError> {
+        for (flow_id, flow_messages) in self.processor.on_message(source, timestamp, &message).await
+        {
             match flow_messages {
-                Ok(messages) => {
-                    for message in messages {
-                        match MqttMessage::try_from(message) {
-                            Ok(message) => {
-                                self.messages
-                                    .send(OutputMessage::MqttMessage(message))
-                                    .await?
-                            }
-                            Err(err) => {
-                                error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
-                            }
-                        }
-                    }
-                }
+                Ok(messages) => self.publish_messages(flow_id, messages).await?,
                 Err(err) => {
-                    error!(target: "flows", "{flow_id}: {err}");
+                    error!(target: "flows", "{flow_id}: {err:#}");
                 }
             }
         }
@@ -159,12 +158,34 @@ impl FlowsMapper {
         for (flow_id, flow_messages) in self.processor.on_interval(timestamp, now).await {
             match flow_messages {
                 Ok(messages) => {
+                    self.publish_messages(flow_id.clone(), messages).await?;
+                }
+                Err(err) => {
+                    error!(target: "flows", "{flow_id}: {err}");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn publish_messages(
+        &mut self,
+        flow_id: String,
+        messages: Vec<Message>,
+    ) -> Result<(), RuntimeError> {
+        if let Some(flow) = self.processor.flows.get(&flow_id) {
+            match &flow.output {
+                FlowOutput::Mqtt { output_topics } => {
                     for message in messages {
                         match MqttMessage::try_from(message) {
-                            Ok(message) => {
+                            Ok(message) if output_topics.accept_topic(&message.topic) => {
                                 self.messages
                                     .send(OutputMessage::MqttMessage(message))
                                     .await?
+                            }
+                            Ok(message) => {
+                                error!(target: "flows", "{flow_id}: reject out-of-scope message: {}", message.topic)
                             }
                             Err(err) => {
                                 error!(target: "flows", "{flow_id}: cannot send transformed message: {err}")
@@ -172,8 +193,64 @@ impl FlowsMapper {
                         }
                     }
                 }
-                Err(err) => {
-                    error!(target: "flows", "{flow_id}: {err}");
+                FlowOutput::MeaDB { output_series } => {
+                    let messages = messages
+                        .into_iter()
+                        .map(|m| (DateTime::now(), m))
+                        .collect::<Vec<_>>();
+                    if let Err(err) = self
+                        .processor
+                        .database
+                        .lock()
+                        .await
+                        .store_many(output_series, messages)
+                        .await
+                    {
+                        error!(target: "flows", "{flow_id}: fail to persist message: {err}");
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn poll_ready_sources(&mut self) -> Result<(), RuntimeError> {
+        let timestamp = DateTime::now();
+
+        // Collect flow IDs with ready sources
+        let ready_flows: Vec<String> = self
+            .processor
+            .flows
+            .iter()
+            .filter_map(|(flow_id, flow)| {
+                flow.input_source
+                    .as_ref()
+                    .filter(|source| source.is_ready(timestamp))
+                    .map(|_| flow_id.clone())
+            })
+            .collect();
+
+        // Poll each ready source and process messages
+        for flow_id in ready_flows {
+            if let Some(flow) = self.processor.flows.get_mut(&flow_id) {
+                if let Some(source) = &mut flow.input_source {
+                    match source.poll(timestamp).await {
+                        Ok(messages) => {
+                            for (t, m) in messages.iter() {
+                                info!(target: "flows", "drained: @{}.{} [{}]", t.seconds, t.nanoseconds, m.topic);
+                            }
+                            source.update_after_poll(timestamp);
+
+                            // Process the messages through the flow
+                            for (msg_timestamp, message) in messages {
+                                self.on_message(MessageSource::MeaDB, msg_timestamp, message)
+                                    .await?;
+                            }
+                        }
+                        Err(err) => {
+                            error!(target: "flows", "{flow_id}: Failed to poll source: {err}");
+                        }
+                    }
                 }
             }
         }

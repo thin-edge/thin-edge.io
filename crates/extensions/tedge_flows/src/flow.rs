@@ -1,3 +1,7 @@
+use std::ops::Sub;
+use std::time::Duration;
+
+use crate::input_source::InputSource;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::stats::Counter;
@@ -17,23 +21,52 @@ pub struct Flow {
     /// The source topics
     pub input: FlowInput,
 
+    /// Input source for polling (e.g., database drains)
+    pub input_source: Option<Box<dyn InputSource>>,
+
     /// Transformation steps to apply in order to the messages
     pub steps: Vec<FlowStep>,
 
     pub source: Utf8PathBuf,
+
+    /// Target of the transformed messages
+    pub output: FlowOutput,
 }
 
 /// A message transformation step
+#[derive(Debug)]
 pub struct FlowStep {
     pub script: JsScript,
     pub config_topics: TopicFilter,
 }
 
+#[derive(Debug)]
 pub enum FlowInput {
-    MQTT { topics: TopicFilter },
+    Mqtt {
+        topics: TopicFilter,
+    },
+    MeaDB {
+        series: String,
+        frequency: std::time::Duration,
+        max_age: std::time::Duration,
+    },
 }
 
-#[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FlowOutput {
+    Mqtt { output_topics: TopicFilter },
+    MeaDB { output_series: String },
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum MessageSource {
+    Mqtt,
+    MeaDB,
+}
+
+#[derive(
+    Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq, Ord, PartialOrd,
+)]
 pub struct DateTime {
     pub seconds: u64,
     pub nanoseconds: u32,
@@ -59,8 +92,17 @@ pub enum FlowError {
 }
 
 impl Flow {
+    pub fn accept(&self, source: MessageSource, message_topic: &str) -> bool {
+        match &self.input {
+            FlowInput::Mqtt {
+                topics: input_topics,
+            } => source == MessageSource::Mqtt && input_topics.accept_topic_name(message_topic),
+            FlowInput::MeaDB { .. } => source == MessageSource::MeaDB,
+        }
+    }
+
     pub fn topics(&self) -> TopicFilter {
-        let mut topics = self.input.topics().clone();
+        let mut topics = self.input.topics();
         for step in self.steps.iter() {
             topics.add_all(step.config_topics.clone())
         }
@@ -83,12 +125,13 @@ impl Flow {
     pub async fn on_message(
         &mut self,
         js_runtime: &JsRuntime,
+        source: MessageSource,
         stats: &mut Counter,
         timestamp: DateTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         self.on_config_update(js_runtime, message).await?;
-        if !self.input.topics().accept_topic_name(&message.topic) {
+        if !self.accept(source, &message.topic) {
             return Ok(vec![]);
         }
 
@@ -185,9 +228,13 @@ impl FlowStep {
 }
 
 impl FlowInput {
-    pub fn topics(&self) -> &TopicFilter {
+    fn topics(&self) -> TopicFilter {
         match self {
-            FlowInput::MQTT { topics } => topics,
+            FlowInput::Mqtt { topics } => topics.clone(),
+            FlowInput::MeaDB { .. } => {
+                // MeaDB inputs don't subscribe to MQTT topics
+                TopicFilter::empty()
+            }
         }
     }
 }
@@ -197,13 +244,33 @@ impl DateTime {
         DateTime::try_from(OffsetDateTime::now_utc()).unwrap()
     }
 
+    pub fn json(&self) -> Value {
+        json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
+    }
+
     pub fn tick_now(&self, tick_every: std::time::Duration) -> bool {
         let tick_every_secs = tick_every.as_secs();
         tick_every_secs != 0 && (self.seconds % tick_every_secs == 0)
     }
+}
 
-    pub fn json(&self) -> Value {
-        json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
+impl Sub<Duration> for DateTime {
+    type Output = DateTime;
+
+    fn sub(self, rhs: Duration) -> Self::Output {
+        if rhs.subsec_nanos() > self.nanoseconds {
+            let seconds = self.seconds - 1;
+            let nanoseconds = self.nanoseconds + 1_000_000_000 - rhs.subsec_nanos();
+            DateTime {
+                seconds: seconds - rhs.as_secs(),
+                nanoseconds,
+            }
+        } else {
+            DateTime {
+                seconds: self.seconds - rhs.as_secs(),
+                nanoseconds: self.nanoseconds - rhs.subsec_nanos(),
+            }
+        }
     }
 }
 

@@ -1,0 +1,9 @@
+input.db.series = "latest-data-points"
+input.db.frequency = "3min" # "15min"
+input.db.max_age = "15min"     # "1h"
+
+steps = [
+    { script = "average.js", interval = "1s" }
+]
+
+output.db.series = "latest-15min-average"
