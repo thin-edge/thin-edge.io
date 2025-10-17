@@ -19,6 +19,11 @@ pub trait StreamingSource {
         TopicFilter::empty()
     }
 
+    /// Topic to be used when messages are not received from MQTT
+    fn enforced_topic(&self) -> Option<&str> {
+        None
+    }
+
     /// Process watched by this source
     fn watch_request(&self) -> Option<WatchRequest> {
         None
@@ -146,6 +151,10 @@ impl PollingSource for CommandFlowInput {
 }
 
 impl StreamingSource for CommandFlowInput {
+    fn enforced_topic(&self) -> Option<&str> {
+        Some(&self.topic)
+    }
+
     fn watch_request(&self) -> Option<WatchRequest> {
         if self.poll.is_polling() {
             None
@@ -222,6 +231,10 @@ impl PollingSource for FileFlowInput {
 }
 
 impl StreamingSource for FileFlowInput {
+    fn enforced_topic(&self) -> Option<&str> {
+        Some(&self.topic)
+    }
+
     fn watch_request(&self) -> Option<WatchRequest> {
         if self.poll.is_polling() {
             None
