@@ -384,6 +384,7 @@ impl Agent {
             )
             .await?;
             converter_actor_builder.register_builtin_operation(&mut log_actor);
+            converter_actor_builder.register_sync_signal_sink(&log_actor);
             Some(log_actor)
         } else {
             None

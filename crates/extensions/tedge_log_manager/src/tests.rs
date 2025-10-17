@@ -2,7 +2,6 @@ use crate::LogManagerBuilder;
 use crate::LogManagerConfig;
 use crate::LogUploadRequest;
 use crate::LogUploadResult;
-use crate::Topic;
 use camino::Utf8Path;
 use std::fs::read_to_string;
 use std::path::Path;
@@ -22,6 +21,7 @@ use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_uploader_ext::UploadResponse;
@@ -99,6 +99,10 @@ async fn new_log_manager_builder(
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     UploaderMessageBox,
 ) {
+    let mut log_metadata_sync_topics =
+        TopicFilter::new_unchecked("te/device/main///cmd/software_update/+");
+    log_metadata_sync_topics.add_unchecked("te/device/main///cmd/config_update/+");
+
     let config = LogManagerConfig {
         mqtt_schema: MqttSchema::default(),
         config_dir: temp_dir.to_path_buf(),
@@ -113,6 +117,7 @@ async fn new_log_manager_builder(
         plugin_config_path: temp_dir.join("tedge-log-plugin.toml"),
         logtype_reload_topic: Topic::new_unchecked("te/device/main///cmd/log_upload"),
         logfile_request_topic: TopicFilter::new_unchecked("te/device/main///cmd/log_upload/+"),
+        log_metadata_sync_topics,
         sudo_enabled: false,
     };
 
@@ -606,6 +611,186 @@ async fn read_log_from_file_that_does_not_exist() -> Result<(), anyhow::Error> {
             r#"{"status":"failed","reason":"Failed to initiate log file upload: Log plugin 'file' error: Get command error: No logs found for log type \"type_three\"\n","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/log_upload/type_three-1234","type":"type_three","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
         ).with_retain())
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn log_types_published_on_software_update_message() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+
+    let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
+    let software_update_topic = Topic::new_unchecked("te/device/main///cmd/software_update/1234");
+
+    // Skip the initial log types message on startup
+    mqtt.skip(1).await;
+
+    mqtt.send(MqttMessage::new(
+        &software_update_topic,
+        r#"
+        {
+            "status": "init",
+            "updateList": []
+        }"#,
+    ))
+    .await?;
+
+    mqtt.send(MqttMessage::new(
+        &software_update_topic,
+        r#"
+        {
+            "status": "executing",
+            "updateList": []
+        }"#,
+    ))
+    .await?;
+
+    // The log manager does not react to `software_update` in state other than "successful" or "failed"
+    assert!(mqtt.recv().await.is_none());
+
+    // Send a software_update message in terminal state that trigger log types reload
+    let software_update_message = r#"
+        {
+            "status": "successful",
+            "updateList": []
+        }"#;
+    mqtt.send(MqttMessage::new(
+        &software_update_topic,
+        software_update_message,
+    ))
+    .await?;
+
+    // The log manager should publish the log types again
+    assert_eq!(
+        mqtt.recv().await,
+        Some(
+            MqttMessage::new(&log_reload_topic, r#"{"types":["type_one","type_two"]}"#)
+                .with_retain()
+        )
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn log_types_published_on_config_update_message() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+
+    let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
+    let config_update_topic = Topic::new_unchecked("te/device/main///cmd/config_update/1234");
+
+    // Skip the initial log types message on startup
+    mqtt.skip(1).await;
+
+    mqtt.send(MqttMessage::new(
+        &config_update_topic,
+        r#"
+        {
+            "status": "init",
+            "updateList": []
+        }"#,
+    ))
+    .await?;
+
+    mqtt.send(MqttMessage::new(
+        &config_update_topic,
+        r#"
+        {
+            "status": "executing",
+            "updateList": []
+        }"#,
+    ))
+    .await?;
+
+    // The log manager does not react to `config_update` in state other than "successful" or "failed"
+    assert!(mqtt.recv().await.is_none());
+
+    // Send a config_update message in terminal state that trigger log types reload
+    let config_update_message = r#"
+        {
+            "status": "successful",
+            "updateList": []
+        }"#;
+    mqtt.send(MqttMessage::new(
+        &config_update_topic,
+        config_update_message,
+    ))
+    .await?;
+
+    // The log manager should publish the log types again
+    assert_eq!(
+        mqtt.recv().await,
+        Some(
+            MqttMessage::new(&log_reload_topic, r#"{"types":["type_one","type_two"]}"#)
+                .with_retain()
+        )
+    );
+
+    // Failed config update should also trigger log types reload
+    mqtt.send(MqttMessage::new(
+        &config_update_topic,
+        r#"
+        {
+            "status": "failed",
+            "updateList": []
+        }"#,
+    ))
+    .await?;
+    assert_eq!(
+        mqtt.recv().await,
+        Some(
+            MqttMessage::new(&log_reload_topic, r#"{"types":["type_one","type_two"]}"#)
+                .with_retain()
+        )
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn log_types_not_published_on_random_command_update() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+
+    let restart_topic = Topic::new_unchecked("te/device/main///cmd/restart/1234");
+
+    // Skip the initial log types message on startup
+    mqtt.skip(1).await;
+
+    mqtt.send(MqttMessage::new(
+        &restart_topic,
+        r#"
+        {
+            "status": "init",
+            "updateList": []
+        }"#,
+    ))
+    .await?;
+
+    mqtt.send(MqttMessage::new(
+        &restart_topic,
+        r#"
+        {
+            "status": "executing",
+            "updateList": []
+        }"#,
+    ))
+    .await?;
+
+    mqtt.send(MqttMessage::new(
+        &restart_topic,
+        r#"
+        {
+            "status": "successful",
+            "updateList": []
+        }"#,
+    ))
+    .await?;
+
+    // The log manager does not react to `restart` command in any state
+    assert!(mqtt.recv().await.is_none());
 
     Ok(())
 }

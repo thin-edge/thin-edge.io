@@ -506,6 +506,12 @@ pub enum IterationError {
     IndexOutOfBounds(usize),
 }
 
+/// An actor builder must implement this if it to receive sync signals on completion of other commands
+pub trait SyncOnCommand {
+    /// Return the list of operations for which this actor wants to receive sync signals
+    fn sync_on_commands(&self) -> Vec<OperationType>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::GenericCommandState;

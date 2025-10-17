@@ -12,6 +12,7 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
+use tedge_api::commands::CmdMetaSyncSignal;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::LogUploadCmd;
 use tedge_api::commands::LogUploadCmdMetadata;
@@ -34,7 +35,7 @@ type MqttTopic = String;
 pub type LogUploadRequest = (MqttTopic, UploadRequest);
 pub type LogUploadResult = (MqttTopic, UploadResult);
 
-fan_in_message_type!(LogInput[LogUploadCmd, FsWatchEvent, LogUploadResult] : Debug);
+fan_in_message_type!(LogInput[LogUploadCmd, CmdMetaSyncSignal, FsWatchEvent, LogUploadResult] : Debug);
 fan_in_message_type!(LogOutput[LogUploadCmd, LogUploadCmdMetadata] : Debug);
 
 impl LogOutput {
@@ -79,6 +80,9 @@ impl Actor for LogManagerActor {
                 }
                 LogInput::LogUploadResult((topic, result)) => {
                     self.process_uploaded_log(&topic, result).await?;
+                }
+                LogInput::CmdMetaSyncSignal(_) => {
+                    self.reload_supported_log_types().await?;
                 }
             }
         }
