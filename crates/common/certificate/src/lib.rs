@@ -521,6 +521,9 @@ pub enum CertificateError {
     #[error(transparent)]
     CertParse2(#[from] rustls::pki_types::pem::Error),
 
+    #[error("File content is empty {path}")]
+    EmptyFile { path: PathBuf },
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

@@ -725,6 +725,14 @@ define_tedge_config! {
                 #[tedge_config(example = "/etc/mosquitto/auth_certificates/key.pem")]
                 #[tedge_config(deprecated_name = "keyfile")]
                 key_file: AbsolutePath,
+
+                /// Client username
+                #[tedge_config(example = "myuser")]
+                username: String,
+
+                /// Path to the client password file
+                #[tedge_config(example = "/etc/tedge/.client_password")]
+                password_file: AbsolutePath,
             }
         },
 
