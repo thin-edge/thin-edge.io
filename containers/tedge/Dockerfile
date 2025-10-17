@@ -5,16 +5,16 @@ ARG TARGETPLATFORM
 # Extract the appropriate thin-edge.io target based on the docker target platform
 COPY packages/ /packages/
 RUN case "${TARGETPLATFORM}" in \
-         "linux/amd64")  RUST_TARGET=x86_64-unknown-linux-musl  ;; \
-         "linux/arm64")  RUST_TARGET=aarch64-unknown-linux-musl ;; \
-         "linux/arm/v7") RUST_TARGET=armv7-unknown-linux-musleabihf  ;; \
-         "linux/arm/v6") RUST_TARGET=arm-unknown-linux-musleabi  ;; \
+         "linux/amd64")  RUST_TARGET=x86_64-unknown-linux-musl; APK_TARGET=x86_64  ;; \
+         "linux/arm64")  RUST_TARGET=aarch64-unknown-linux-musl; APK_TARGET=aarch64 ;; \
+         "linux/arm/v7") RUST_TARGET=armv7-unknown-linux-musleabihf; APK_TARGET=armv7  ;; \
+         "linux/arm/v6") RUST_TARGET=arm-unknown-linux-musleabi; APK_TARGET=armhf  ;; \
          *) echo "Unsupported target platform: TARGETPLATFORM=$TARGETPLATFORM"; exit 1 ;; \
     esac \
-    && mkdir -p /build \
-    && find /packages -name "tedge_${TEDGE_VERSION:-"*"}_${RUST_TARGET}.tar.gz" -exec tar xzvf {} -C /build/ \; \
+    # install via the apk package as it includes additional files, e.g. plugins
+    && find /packages -name "tedge_${TEDGE_VERSION:-"*"}_${APK_TARGET}.apk" -exec apk add --allow-untrusted {} \; \
     # Fail early if matching binaries are not found
-    && ls -l /build/tedge*
+    && ls -l /usr/bin/tedge*
 
 #
 # Output
@@ -49,7 +49,9 @@ RUN apk add --no-cache \
     ca-certificates
 
 # install thin-edge.io
-COPY --from=build build/* /usr/bin/
+COPY --from=build /usr/bin/tedge /usr/bin/
+COPY --from=build /usr/share/tedge/log-plugins/* /usr/share/tedge/log-plugins/
+COPY --from=build /usr/share/tedge/diag-plugins/* /usr/share/tedge/diag-plugins/
 
 # setup thin-edge.io
 RUN addgroup -g "$USER_GID" -S "$USERNAME" \
