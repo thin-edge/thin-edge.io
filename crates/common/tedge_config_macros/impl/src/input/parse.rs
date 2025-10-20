@@ -51,10 +51,6 @@ pub struct ConfigurationGroup {
     pub deprecated_names: Vec<SpannedValue<String>>,
     pub rename: Option<SpannedValue<String>>,
     pub ident: syn::Ident,
-    #[allow(dead_code)] // FIXME: field `colon_token` is never read
-    colon_token: Token![:],
-    #[allow(dead_code)] // FIXME: field `brace` is never read
-    brace: syn::token::Brace,
     pub content: Punctuated<FieldOrGroup, Token![,]>,
 }
 
@@ -63,6 +59,10 @@ impl Parse for ConfigurationGroup {
         let content;
         let attributes = input.call(Attribute::parse_outer)?;
         let known_attributes = ConfigurationAttributes::from_attributes(&attributes)?;
+        let ident = input.parse()?;
+        input.parse::<Token![:]>()?;
+        syn::braced!(content in input);
+        let content = content.parse_terminated(<_>::parse, Token![,])?;
         Ok(ConfigurationGroup {
             attrs: attributes.into_iter().filter(not_tedge_config).collect(),
             dto: known_attributes.dto,
@@ -70,10 +70,8 @@ impl Parse for ConfigurationGroup {
             deprecated_names: known_attributes.deprecated_names,
             rename: known_attributes.rename,
             multi: known_attributes.multi,
-            ident: input.parse()?,
-            colon_token: input.parse()?,
-            brace: syn::braced!(content in input),
-            content: content.parse_terminated(<_>::parse, Token![,])?,
+            ident,
+            content,
         })
     }
 }
