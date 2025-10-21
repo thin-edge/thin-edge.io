@@ -3,7 +3,7 @@ Library             JSONLibrary
 Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
-Suite Teardown      Get Logs
+Test Teardown       Get Logs
 
 Test Tags           theme:tedge_flows
 
@@ -98,17 +98,21 @@ Running tedge-flows
 
 Consuming messages from a process stdout
     # Assuming the flow journalctl-follow.toml has been properly installed
+    Install Journalctl Flow    journalctl-follow.toml
     ${test_start}    Get Unix Timestamp
     Restart Service    tedge-agent
-    ${messages}    Should Have MQTT Messages    topic=log/journalctl-follow    minimum=1    date_from=${test_start}
+    ${messages}    Should Have MQTT Messages    topic=log/journalctl-follow    minimum=10    date_from=${test_start}
     Should Not Be Empty    ${messages[0]}    msg=Output should not be empty lines
+    [Teardown]    Uninstall Journalctl Flow    journalctl-follow.toml
 
 Consuming messages from a process stdout, periodically
     # Assuming the flow journalctl-cursor.toml has been properly installed
+    Install Journalctl Flow    journalctl-cursor.toml
     ${test_start}    Get Unix Timestamp
     Restart Service    tedge-agent
-    ${messages}    Should Have MQTT Messages    topic=log/journalctl-cursor    minimum=10    date_from=${test_start}
+    ${messages}    Should Have MQTT Messages    topic=log/journalctl-cursor    minimum=1    date_from=${test_start}
     Should Not Be Empty    ${messages[0]}    msg=Output should not be empty lines
+    [Teardown]    Uninstall Journalctl Flow    journalctl-cursor.toml
 
 Consuming messages from the tail of file
     # Assuming the flow tail-named-pipe.toml has been properly installed
@@ -175,6 +179,14 @@ Custom Setup
 
 Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*    /etc/tedge/flows/
+
+Install Journalctl Flow
+    [Arguments]    ${definition_file}
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/journalctl-flows/${definition_file}    /etc/tedge/flows/
+
+Uninstall Journalctl Flow
+    [Arguments]    ${definition_file}
+    Execute Command    cmd=rm -f /etc/tedge/flows/${definition_file}
 
 Configure flows
     # Required by tail-named-pipe.toml
