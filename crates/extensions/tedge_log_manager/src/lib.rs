@@ -24,14 +24,14 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::commands::CmdMetaSyncSignal;
 use tedge_api::commands::LogUploadCmd;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
-use tedge_api::Jsonify;
+use tedge_api::workflow::SyncOnCommand;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_mqtt_ext::*;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
@@ -39,6 +39,12 @@ use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
 use tedge_utils::fs::AtomFileError;
 use toml::toml;
+
+#[cfg(test)]
+use tedge_api::Jsonify;
+#[cfg(test)]
+use tedge_mqtt_ext::*;
+#[cfg(test)]
 use tracing::error;
 
 /// This is an actor builder.
@@ -69,22 +75,6 @@ impl LogManagerBuilder {
             box_builder,
             upload_sender,
         })
-    }
-
-    pub fn connect_mqtt(
-        &mut self,
-        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
-    ) {
-        mqtt.connect_mapped_source(
-            NoConfig,
-            &mut self.box_builder,
-            Self::mqtt_message_builder(&self.config),
-        );
-        self.box_builder.connect_mapped_source(
-            Self::subscriptions(&self.config),
-            mqtt,
-            Self::mqtt_message_parser(&self.config),
-        );
     }
 
     pub async fn init(config: &LogManagerConfig) -> Result<(), FileError> {
@@ -124,33 +114,73 @@ impl LogManagerBuilder {
         Ok(())
     }
 
+    /// Directories watched by the log actor
+    /// - for configuration changes
+    /// - for plugin changes
+    fn watched_directories(config: &LogManagerConfig) -> Vec<PathBuf> {
+        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
+        for dir in &config.plugin_dirs {
+            watch_dirs.push(dir.into());
+        }
+        watch_dirs
+    }
+}
+
+#[cfg(test)]
+impl LogManagerBuilder {
+    pub(crate) fn connect_mqtt(
+        &mut self,
+        mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
+    ) {
+        mqtt.connect_mapped_source(
+            NoConfig,
+            &mut self.box_builder,
+            Self::mqtt_message_builder(&self.config),
+        );
+        self.box_builder.connect_mapped_source(
+            Self::subscriptions(&self.config),
+            mqtt,
+            Self::mqtt_message_parser(&self.config),
+        );
+    }
+
     /// List of MQTT topic filters the log actor has to subscribe to
     fn subscriptions(config: &LogManagerConfig) -> TopicFilter {
-        config.logfile_request_topic.clone()
+        let mut topics = config.logfile_request_topic.clone();
+        topics.add_all(config.log_metadata_sync_topics.clone());
+        topics
     }
 
     /// Extract a log actor request from an MQTT message
     fn mqtt_message_parser(config: &LogManagerConfig) -> impl Fn(MqttMessage) -> Option<LogInput> {
         let logfile_request_topic = config.logfile_request_topic.clone();
+        let log_metadata_sync_topics = config.log_metadata_sync_topics.clone();
         let mqtt_schema = config.mqtt_schema.clone();
         move |message| {
-            if !logfile_request_topic.accept(&message) {
+            if logfile_request_topic.accept(&message) {
+                LogUploadCmd::parse(&mqtt_schema, message)
+                    .map_err(|err| {
+                        error!(
+                            target: "log plugins",
+                            "Incorrect log request payload: {}", err
+                        )
+                    })
+                    .unwrap_or(None)
+                    .map(|cmd| cmd.into())
+            } else if log_metadata_sync_topics.accept(&message) {
+                if let Ok(cmd) = GenericCommandState::from_command_message(&message) {
+                    if cmd.is_finished() {
+                        return Some(LogInput::CmdMetaSyncSignal(()));
+                    }
+                }
+                None
+            } else {
                 error!(
                     target: "log plugins",
                     "Received unexpected message on topic: {}", message.topic.name
                 );
-                return None;
+                None
             }
-
-            LogUploadCmd::parse(&mqtt_schema, message)
-                .map_err(|err| {
-                    error!(
-                        target: "log plugins",
-                        "Incorrect log request payload: {}", err
-                    )
-                })
-                .unwrap_or(None)
-                .map(|cmd| cmd.into())
         }
     }
 
@@ -171,17 +201,6 @@ impl LogManagerBuilder {
             };
             Some(msg)
         }
-    }
-
-    /// Directories watched by the log actor
-    /// - for configuration changes
-    /// - for plugin changes
-    fn watched_directories(config: &LogManagerConfig) -> Vec<PathBuf> {
-        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
-        for dir in &config.plugin_dirs {
-            watch_dirs.push(dir.into());
-        }
-        watch_dirs
     }
 }
 
@@ -231,5 +250,18 @@ impl IntoIterator for &LogManagerBuilder {
                 LogUploadCmd::try_from(cmd).map(LogInput::LogUploadCmd).ok()
             });
         vec![(OperationType::LogUpload.to_string(), sender.into())].into_iter()
+    }
+}
+
+impl MessageSink<CmdMetaSyncSignal> for LogManagerBuilder {
+    fn get_sender(&self) -> DynSender<CmdMetaSyncSignal> {
+        self.box_builder.get_sender().sender_clone()
+    }
+}
+
+impl SyncOnCommand for LogManagerBuilder {
+    /// Return the list of operations for which this actor wants to receive sync signals
+    fn sync_on_commands(&self) -> Vec<OperationType> {
+        vec![OperationType::SoftwareUpdate, OperationType::ConfigUpdate]
     }
 }
