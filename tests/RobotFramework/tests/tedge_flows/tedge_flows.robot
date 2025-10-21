@@ -1,4 +1,5 @@
 *** Settings ***
+Library             JSONLibrary
 Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
@@ -111,8 +112,9 @@ Consuming messages from a process stdout, periodically
 
 Consuming messages from the tail of file
     # Assuming the flow tail-named-pipe.toml has been properly installed
-    Execute Command    (for i in $(seq 10); do sleep 1; echo hello>/tmp/events; done)&
-    Execute Command    tedge mqtt sub log/events --duration 2s | grep hello
+    ${start}    Get Unix Timestamp
+    Execute Command    echo hello>/tmp/events
+    Should Have MQTT Messages    topic=log/events    message_contains=hello    minimum=1    date_from=${start}
 
 Consuming messages from a file, periodically
     # Assuming the flow read-file-periodically.toml has been properly installed
@@ -135,12 +137,32 @@ Appending messages to a file
 
 Publishing transformation errors
     # Assuming the flow publish-js-errors.toml has been properly installed
-    Execute Command    (for i in $(seq 3); do sleep 1; tedge mqtt pub collectd/foo 12345:6789; done)&
-    Execute Command    tedge mqtt sub test/errors --duration 2s | grep 'Error: Not a collectd topic'
-    Execute Command    (for i in $(seq 3); do sleep 1; tedge mqtt pub collectd/a/b/c foo,bar; done)&
-    Execute Command    tedge mqtt sub test/errors --duration 2s | grep 'Error: Not a collectd payload'
-    Execute Command    (for i in $(seq 3); do sleep 1; tedge mqtt pub collectd/a/b/c 12345:6789; done)&
-    Execute Command    tedge mqtt sub test/output --duration 2s | grep '{"time": 12345, "b": {"c": 6789}}'
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub collectd/foo 12345:6789
+    Should Have MQTT Messages
+    ...    topic=test/errors
+    ...    minimum=1
+    ...    message_contains=Error: Not a collectd topic
+    ...    date_from=${start}
+
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub collectd/a/b/c foo,bar
+    Should Have MQTT Messages
+    ...    topic=test/errors
+    ...    minimum=1
+    ...    message_contains=Error: Not a collectd payload
+    ...    date_from=${start}
+
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub collectd/a/b/c 12345:6789
+    ${messages}    Should Have MQTT Messages
+    ...    topic=test/output
+    ...    minimum=1
+    ...    message_contains=time
+    ...    date_from=${start}
+    ${message}    JSONLibrary.Convert String To Json    ${messages[0]}
+    Should Be Equal As Integers    ${message["time"]}    12345
+    Should Be Equal As Integers    ${message["b"]["c"]}    6789
 
 
 *** Keywords ***
