@@ -110,7 +110,7 @@ Get Configuration Should Fail
 Update Configuration Should Fail
     [Arguments]    ${failure_reason}    ${external_id}
     Cumulocity.Set Device    ${external_id}
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    harbor-certificate
@@ -124,7 +124,7 @@ Update Configuration Should Fail
     ...    file=${CURDIR}/tedge-configuration-plugin-updated.toml
     ${operation}=    Cumulocity.Set Configuration    tedge-configuration-plugin    ${config_url}
     Operation Should Be FAILED    ${operation}    failure_reason=${failure_reason}    timeout=120
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    harbor-certificate
@@ -136,7 +136,7 @@ Update Configuration Should Fail
 Update Configuration Should Succeed
     [Arguments]    ${external_id}
     Cumulocity.Set Device    ${external_id}
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    harbor-certificate
@@ -150,7 +150,7 @@ Update Configuration Should Succeed
     ...    file=${CURDIR}/tedge-configuration-plugin-updated.toml
     ${operation}=    Cumulocity.Set Configuration    tedge-configuration-plugin    ${config_url}
     Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    Cumulocity.Should Support Configurations
+    Cumulocity.Should Have Exact Supported Configuration Types
     ...    tedge-configuration-plugin
     ...    /etc/tedge/tedge.toml
     ...    system.toml

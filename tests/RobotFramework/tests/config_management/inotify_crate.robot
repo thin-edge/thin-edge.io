@@ -29,14 +29,14 @@ Configuration types should be detected on file change (without restarting servic
     ${DEVICE_SN}=    Setup
     Device Should Exist    ${DEVICE_SN}
 
-    ${supported_configs}=    Should Support Configurations    tedge-configuration-plugin    includes=True
+    ${supported_configs}=    Should Contain Supported Configuration Types    tedge-configuration-plugin
     Should Not Contain    ${supported_configs}    example
 
     Execute Command    sudo rm -f /etc/tedge/plugins/tedge-configuration-plugin.toml
     Execute Command    sudo printf '%s' "${toml}" > tedge-configuration-plugin.toml
     Execute Command    sudo mv tedge-configuration-plugin.toml /etc/tedge/plugins/
 
-    ${supported_configs}=    Should Support Configurations
+    ${supported_configs}=    Should Have Exact Supported Configuration Types
     ...    c8y-bridge.conf
     ...    tedge-configuration-plugin
     ...    mosquitto.conf
