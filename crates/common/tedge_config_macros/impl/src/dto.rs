@@ -1,10 +1,13 @@
+use heck::ToSnakeCase as _;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
+use quote::ToTokens;
 use syn::parse_quote_spanned;
 use syn::spanned::Spanned;
 
 use crate::error::extract_type_from_result;
+use crate::input::EnumEntry;
 use crate::input::FieldOrGroup;
 use crate::prefixed_type_name;
 
@@ -18,14 +21,15 @@ pub fn generate(
     let mut sub_dtos = Vec::new();
     let mut preserved_attrs: Vec<Vec<&syn::Attribute>> = Vec::new();
     let mut extra_attrs = Vec::new();
+    let mut sub_field_enums = Vec::new();
 
     for item in items {
         match item {
             FieldOrGroup::Field(field) => {
                 if field.reader_function().is_some() {
-                    let ty = match extract_type_from_result(field.ty()) {
+                    let ty = match extract_type_from_result(field.dto_ty()) {
                         Some((ok, _err)) => ok,
-                        None => field.ty(),
+                        None => field.dto_ty(),
                     };
                     idents.push(field.ident());
                     tys.push(parse_quote_spanned!(ty.span() => Option<#ty>));
@@ -35,12 +39,43 @@ pub fn generate(
                 } else if !field.dto().skip && field.read_only().is_none() {
                     idents.push(field.ident());
                     tys.push({
-                        let ty = field.ty();
+                        let ty = field.dto_ty();
                         parse_quote_spanned!(ty.span()=> Option<#ty>)
                     });
                     sub_dtos.push(None);
                     preserved_attrs.push(field.attrs().iter().filter(is_preserved).collect());
-                    extra_attrs.push(quote! {});
+                    let mut attrs = TokenStream::new();
+                    if let Some(sub_fields) = field.sub_field_entries() {
+                        let variants = sub_fields.iter().map(|field| -> syn::Variant {
+                            match field {
+                                EnumEntry::NameOnly(name) => syn::parse_quote!(#name),
+                                EnumEntry::NameAndFields(name, inner) => {
+                                    let field_name = syn::Ident::new(
+                                        &name.to_string().to_snake_case(),
+                                        name.span(),
+                                    );
+                                    syn::parse_quote!(#name{ #field_name: Option<#inner> })
+                                }
+                            }
+                        });
+                        let field_ty = field.dto_ty();
+                        let tag_name = field.name();
+                        let ty: syn::ItemEnum = syn::parse_quote_spanned!(sub_fields.span()=>
+                            #[derive(Debug, Clone, ::serde::Deserialize, ::serde::Serialize, PartialEq, ::strum::EnumString, ::strum::Display, ::doku::Document)]
+                            #[serde(rename_all = "snake_case")]
+                            #[strum(serialize_all = "snake_case")]
+                            #[serde(tag = #tag_name)]
+                            pub enum #field_ty {
+                                #(#variants),*
+                            }
+                        );
+                        sub_field_enums.push(ty.to_token_stream());
+                        quote! {
+                            #[serde(flatten)]
+                        }
+                        .to_tokens(&mut attrs);
+                    }
+                    extra_attrs.push(attrs);
                 }
             }
             FieldOrGroup::Group(group) => {
@@ -104,6 +139,7 @@ pub fn generate(
             }
         }
 
+        #(#sub_field_enums)*
         #(#sub_dtos)*
     }
 }
@@ -119,10 +155,12 @@ fn is_preserved(attr: &&syn::Attribute) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use prettyplease::unparse;
     use proc_macro2::Span;
     use syn::parse_quote;
     use syn::Ident;
     use syn::Item;
+    use syn::ItemEnum;
     use syn::ItemStruct;
 
     use super::*;
@@ -266,6 +304,62 @@ mod tests {
         assert_eq(&generated, &expected);
     }
 
+    #[test]
+    fn sub_fields_adopt_rename() {
+        let input: crate::input::Configuration = parse_quote!(
+            mapper: {
+                #[tedge_config(rename = "type")]
+                #[tedge_config(sub_fields = [C8y(C8y), Aws(Aws), Custom])]
+                ty: MapperType,
+            }
+        );
+
+        let mut generated = generate_test_dto(&input);
+        generated.items.retain(only_enum_named("MapperTypeDto"));
+
+        let expected = parse_quote! {
+            #[derive(Debug, Clone, ::serde::Deserialize, ::serde::Serialize, PartialEq, ::strum::EnumString, ::strum::Display, ::doku::Document)]
+            #[serde(rename_all = "snake_case")]
+            #[strum(serialize_all = "snake_case")]
+            #[serde(tag = "type")]
+            pub enum MapperTypeDto {
+                C8y { c8y: Option<C8y> },
+                Aws { aws: Option<Aws> },
+                Custom,
+            }
+        };
+
+        pretty_assertions::assert_eq!(unparse(&generated), unparse(&expected));
+    }
+
+    #[test]
+    fn fields_with_sub_fields_are_serde_flattened() {
+        let input: crate::input::Configuration = parse_quote!(
+            mapper: {
+                #[tedge_config(rename = "type")]
+                #[tedge_config(sub_fields = [C8y(C8y), Aws(Aws), Custom])]
+                ty: MapperType,
+            }
+        );
+
+        let mut generated = generate_test_dto(&input);
+        generated
+            .items
+            .retain(only_struct_named("TEdgeConfigDtoMapper"));
+
+        let expected = parse_quote! {
+            #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+            #[non_exhaustive]
+            pub struct TEdgeConfigDtoMapper {
+                #[serde(rename = "type")]
+                #[serde(flatten)]
+                pub ty: Option<MapperTypeDto>,
+            }
+        };
+
+        pretty_assertions::assert_eq!(unparse(&generated), unparse(&expected));
+    }
+
     fn generate_test_dto(input: &crate::input::Configuration) -> syn::File {
         let tokens = super::generate(
             Ident::new("TEdgeConfigDto", Span::call_site()),
@@ -284,5 +378,9 @@ mod tests {
 
     fn only_struct_named(target: &str) -> impl Fn(&Item) -> bool + '_ {
         move |i| matches!(i, Item::Struct(ItemStruct { ident, .. }) if ident == target)
+    }
+
+    fn only_enum_named(target: &str) -> impl Fn(&Item) -> bool + '_ {
+        move |i| matches!(i, Item::Enum(ItemEnum { ident, .. }) if ident == target)
     }
 }

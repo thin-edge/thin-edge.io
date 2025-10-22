@@ -1,5 +1,6 @@
 use crate::error::extract_type_from_result;
 use crate::input::ConfigurableField;
+use crate::input::EnumEntry;
 use crate::input::FieldOrGroup;
 use crate::namegen::IdGenerator;
 use crate::namegen::SequentialIdGenerator;
@@ -9,6 +10,7 @@ use heck::ToUpperCamelCase;
 use itertools::Itertools;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
+use quote::format_ident;
 use quote::quote;
 use quote::quote_spanned;
 use std::borrow::Cow;
@@ -37,12 +39,12 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
             ))
         })
         .multiunzip();
-    let readable_args = configuration_strings(reader_paths.iter());
+    let readable_args = configuration_strings(reader_paths.iter(), "ReadableKey");
     let readonly_args =
-        configuration_strings(reader_paths.iter().filter(|path| !is_read_write(path)));
+        configuration_strings(reader_paths.iter().filter(|path| !is_read_write(path)), "ReadOnlyKey");
     let writable_args =
-        configuration_strings(reader_paths.iter().filter(|path| is_read_write(path)));
-    let dto_args = configuration_strings(dto_paths.iter());
+        configuration_strings(reader_paths.iter().filter(|path| is_read_write(path)), "WritableKey");
+    let dto_args = configuration_strings(dto_paths.iter(), "DtoKey");
     let readable_keys = keys_enum(parse_quote!(ReadableKey), &readable_args, "read from");
     let readonly_keys = keys_enum(
         parse_quote!(ReadOnlyKey),
@@ -129,6 +131,20 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
             ParseValue(#[from] Box<dyn ::std::error::Error + Send + Sync>),
             #[error(transparent)]
             Multi(#[from] MultiError),
+            #[error("Setting {target} requires {parent} to be set to {parent_expected}, but it is not currently set")]
+            SuperFieldAbsent {
+                target: WritableKey,
+                parent: WritableKey,
+                parent_expected: String,
+                parent_actual: String,
+            },
+            #[error("Setting {target} requires {parent} to be set to {parent_expected}, but it is currently set to {parent_actual}")]
+            SuperFieldWrongValue {
+                target: WritableKey,
+                parent: WritableKey,
+                parent_expected: String,
+                parent_actual: String,
+            },
         }
 
         impl ReadOnlyKey {
@@ -189,20 +205,80 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     }
 }
 
+fn sub_field_enum_variant(
+    parent_segments: &VecDeque<&FieldOrGroup>,
+    sub_field_variant: &syn::Ident,
+    sub_field_type: &syn::Ident,
+    key_type_suffix: &str,
+) -> ConfigurationKey {
+    let base_ident = ident_for(parent_segments);
+    let combined_ident = format_ident!("{base_ident}{sub_field_variant}");
+
+    let parent_multi_count = parent_segments
+        .iter()
+        .filter(|fog| matches!(fog, FieldOrGroup::Multi(_)))
+        .count();
+
+    let parent_opt_strs = std::iter::repeat_n::<syn::Type>(parse_quote!(Option<String>), parent_multi_count);
+    let sub_field_key_ty_ident = format_ident!("{sub_field_type}{key_type_suffix}");
+    let sub_field_key_ty: syn::Type = parse_quote!(#sub_field_key_ty_ident);
+
+    let mut all_types: Vec<syn::Type> = parent_opt_strs.collect();
+    all_types.push(sub_field_key_ty);
+
+    let enum_variant = parse_quote_spanned!(combined_ident.span()=> #combined_ident(#(#all_types),*));
+
+    let parent_field_names = SequentialIdGenerator::default().take(parent_multi_count).collect::<Vec<_>>();
+    let sub_key_ident = syn::Ident::new("sub_key", sub_field_variant.span());
+    let mut all_field_names = parent_field_names;
+    all_field_names.push(sub_key_ident);
+
+    let match_read_write = parse_quote_spanned!(combined_ident.span()=> #combined_ident(#(#all_field_names),*));
+
+    let all_underscores = UnderscoreIdGenerator.take(parent_multi_count + 1);
+    let match_shape = parse_quote_spanned!(combined_ident.span()=> #combined_ident(#(#all_underscores),*));
+
+    ConfigurationKey {
+        enum_variant,
+        iter_field: parse_quote!(unreachable!("sub-field keys are not iterable")),
+        match_shape,
+        match_read_write,
+        regex_parser: None,
+        field_names: all_field_names,
+        formatters: vec![],
+        insert_profiles: vec![],
+        doc_comment: None,
+    }
+}
+
 fn configuration_strings<'a>(
     variants: impl Iterator<Item = &'a VecDeque<&'a FieldOrGroup>>,
+    key_type_suffix: &str,
 ) -> (Vec<String>, Vec<ConfigurationKey>) {
     variants
-        .map(|segments| {
+        .flat_map(|segments| {
             let configuration_key = enum_variant(segments);
-            (
-                segments
-                    .iter()
-                    .map(|variant| variant.name())
-                    .collect::<Vec<_>>()
-                    .join("."),
-                configuration_key,
-            )
+            let base_string = segments
+                .iter()
+                .map(|variant| variant.name())
+                .collect::<Vec<_>>()
+                .join(".");
+
+            let mut results = vec![(base_string.clone(), configuration_key)];
+
+            if let Some(FieldOrGroup::Field(field)) = segments.back() {
+                if let Some(sub_fields) = field.sub_field_entries() {
+                    for entry in sub_fields.iter() {
+                        if let EnumEntry::NameAndFields(variant_name, type_name) = entry {
+                            let sub_config_key = sub_field_enum_variant(segments, variant_name, type_name, key_type_suffix);
+                            let sub_config_str = format!("{}.{}", base_string, variant_name.to_string().to_snek_case());
+                            results.push((sub_config_str, sub_config_key));
+                        }
+                    }
+                }
+            }
+
+            results
         })
         .unzip()
 }
@@ -512,7 +588,11 @@ fn keys_enum(
         None => quote!(None),
     });
 
-    let max_profile_count = configuration_key.iter().map(|k| k.field_names.len()).max();
+    let max_profile_count = configuration_key
+        .iter()
+        .filter(|k| !k.insert_profiles.is_empty())
+        .map(|k| k.field_names.len())
+        .max();
 
     let try_with_profile_impl = match max_profile_count {
         Some(1) => quote! {
@@ -680,10 +760,10 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             let segments = generate_field_accessor(path, "try_get", true);
             let mut parent_segments = generate_field_accessor(path, "try_get", true).collect::<Vec<_>>();
             parent_segments.remove(parent_segments.len() - 1);
-            let to_string = quote_spanned!(field.ty().span()=> .to_string());
+            let to_string = quote_spanned!(field.reader_ty().span()=> .to_string());
             let match_variant = configuration_key.match_read_write;
             if field.read_only().is_some() || field.reader_function().is_some() {
-                if extract_type_from_result(field.ty()).is_some() {
+                if extract_type_from_result(field.reader_ty()).is_some() {
                     parse_quote! {
                         ReadableKey::#match_variant => Ok(self.#(#segments).*()?#to_string),
                     }
@@ -741,17 +821,18 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             let match_variant = configuration_key.match_read_write;
 
             let ty = if field.reader_function().is_some() {
-                extract_type_from_result(field.ty()).map(|tys| tys.0).unwrap_or(field.ty())
+                extract_type_from_result(field.dto_ty()).map(|tys| tys.0).unwrap_or(field.dto_ty())
             } else {
-                field.ty()
+                field.dto_ty()
             };
 
-            let parse_as = field.from().unwrap_or(field.ty());
+            let parse_as = field.from().unwrap_or(field.dto_ty());
             let parse = quote_spanned! {parse_as.span()=> parse::<#parse_as>() };
             let convert_to_field_ty = quote_spanned! {ty.span()=> map(<#ty>::from)};
 
+            // TODO fix current_value type in case of sub fields
             let current_value = if field.read_only().is_some() || field.reader_function().is_some() {
-                if extract_type_from_result(field.ty()).is_some() {
+                if extract_type_from_result(field.reader_ty()).is_some() {
                     quote_spanned! {ty.span()=> reader.#(#read_segments).*().ok().cloned()}
                 } else {
                     quote_spanned! {ty.span()=> Some(reader.#(#read_segments).*())}
@@ -1071,6 +1152,7 @@ fn is_read_write(path: &VecDeque<&FieldOrGroup>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use prettyplease::unparse;
     use syn::ImplItem;
     use syn::ItemImpl;
     use test_case::test_case;
@@ -1099,7 +1181,7 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let c = configuration_strings(paths.iter());
+        let c = configuration_strings(paths.iter(), "ReadableKey");
         let generated = generate_fromstr(
             syn::Ident::new("ReadableKey", Span::call_site()),
             &c,
@@ -1164,7 +1246,7 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let c = configuration_strings(paths.iter());
+        let c = configuration_strings(paths.iter(), "ReadableKey");
         let generated = generate_fromstr(
             syn::Ident::new("ReadableKey", Span::call_site()),
             &c,
@@ -1392,7 +1474,7 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter());
+        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -1424,7 +1506,7 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter());
+        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -1452,7 +1534,7 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter());
+        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -1484,7 +1566,7 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter());
+        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -1523,7 +1605,7 @@ mod tests {
             },
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter());
+        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "try_with_profile");
 
         let expected = parse_quote! {
@@ -1653,7 +1735,7 @@ mod tests {
             },
         );
         let dto_paths = configuration_paths_from(&input.groups, Mode::Dto);
-        let dto_keys = configuration_strings(dto_paths.iter());
+        let dto_keys = configuration_strings(dto_paths.iter(), "DtoKey");
         let writers = generate_fromstr_writable(parse_quote!(DtoKey), &dto_keys);
         let impl_dto_block = syn::parse2(writers).unwrap();
 
@@ -1704,6 +1786,65 @@ mod tests {
         );
     }
 
+    #[test]
+    fn writable_keys_includes_abilty_to_set_sub_fields() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Az(Az), Custom])]
+                #[tedge_config(rename = "type")]
+                ty: MapperType,
+            },
+        );
+        let writers = generate_writable_keys(&input.groups);
+        let mut actual: syn::File = syn::parse2(writers).unwrap();
+        actual.items.retain(|item| matches!(item, syn::Item::Enum(syn::ItemEnum { ident, .. }) if !ident.to_string().ends_with("Error")));
+        actual.items.iter_mut().for_each(|item| {
+            if let syn::Item::Enum(enumm) = item {
+                enumm.attrs.retain(|attr| !is_doc_comment(attr));
+                for variant in &mut enumm.variants {
+                    variant.attrs.retain(|attr| !is_doc_comment(attr));
+                }
+            }
+        });
+
+        let expected = parse_quote! {
+            #[derive(Clone, Debug, PartialEq, Eq)]
+            #[non_exhaustive]
+            #[allow(unused)]
+            pub enum ReadableKey {
+                MapperType(Option<String>),
+                MapperTypeC8y(Option<String>, C8yReadableKey),
+                MapperTypeAz(Option<String>, AzReadableKey),
+            }
+
+            #[derive(Clone, Debug, PartialEq, Eq)]
+            #[non_exhaustive]
+            #[allow(unused)]
+            pub enum ReadOnlyKey {}
+
+            #[derive(Clone, Debug, PartialEq, Eq)]
+            #[non_exhaustive]
+            #[allow(unused)]
+            pub enum WritableKey {
+                MapperType(Option<String>),
+                MapperTypeC8y(Option<String>, C8yWritableKey),
+                MapperTypeAz(Option<String>, AzWritableKey),
+            }
+
+            #[derive(Clone, Debug, PartialEq, Eq)]
+            #[non_exhaustive]
+            #[allow(unused)]
+            pub enum DtoKey {
+                MapperType(Option<String>),
+                MapperTypeC8y(Option<String>, C8yDtoKey),
+                MapperTypeAz(Option<String>, AzDtoKey),
+            }
+        };
+
+        pretty_assertions::assert_eq!(unparse(&actual), unparse(&expected));
+    }
+
     fn keys_enum_impl_block(config_keys: &(Vec<String>, Vec<ConfigurationKey>)) -> ItemImpl {
         let generated = keys_enum(parse_quote!(ReadableKey), config_keys, "DOC FRAGMENT");
         let generated_file: syn::File = syn::parse2(generated).unwrap();
@@ -1747,5 +1888,14 @@ mod tests {
             "{ident:?} did not appear in methods. The valid method names are {all_fn_names:?}"
         );
         impl_block
+    }
+
+    fn is_doc_comment(attr: &syn::Attribute) -> bool {
+        match &attr.meta {
+            syn::Meta::NameValue(nv) => {
+                nv.path.get_ident().map(<_>::to_string) == Some("doc".into())
+            }
+            _ => false,
+        }
     }
 }

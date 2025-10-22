@@ -5,11 +5,14 @@
 use std::iter::once;
 
 use heck::ToPascalCase;
+use heck::ToSnakeCase as _;
 use itertools::Itertools;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
+use quote::format_ident;
 use quote::quote;
 use quote::quote_spanned;
+use quote::ToTokens as _;
 use syn::parse_quote;
 use syn::parse_quote_spanned;
 use syn::punctuated::Punctuated;
@@ -18,6 +21,7 @@ use syn::Token;
 
 use crate::error::extract_type_from_result;
 use crate::input::ConfigurableField;
+use crate::input::EnumEntry;
 use crate::input::FieldDefault;
 use crate::input::FieldOrGroup;
 use crate::namegen::IdGenerator;
@@ -50,35 +54,65 @@ fn generate_structs(
     let mut attrs: Vec<Vec<syn::Attribute>> = Vec::new();
     let mut lazy_readers = Vec::new();
     let mut vis: Vec<syn::Visibility> = Vec::new();
+    let mut sub_field_enums = Vec::new();
 
     for item in items {
         match item {
             FieldOrGroup::Field(field) => {
-                let ty = field.ty();
+                let ty = field.reader_ty();
                 attrs.push(field.attrs().to_vec());
                 idents.push(field.ident());
                 if let Some((function, rw_field)) = field.reader_function() {
                     let name = rw_field.lazy_reader_name(&parents);
                     let parent_ty = rw_field.parent_name(&parents);
                     tys.push(parse_quote_spanned!(ty.span()=> #name));
-                    let dto_ty: syn::Type = match extract_type_from_result(&rw_field.ty) {
+                    let reader_ty: syn::Type = match extract_type_from_result(field.reader_ty()) {
                         Some((ok, _err)) => parse_quote!(OptionalConfig<#ok>),
                         None => {
-                            let ty = &rw_field.ty;
+                            let ty = &field.reader_ty();
                             parse_quote!(OptionalConfig<#ty>)
                         }
                     };
                     lazy_readers.push((
                         name,
-                        &rw_field.ty,
+                        field.reader_ty(),
                         function,
                         parent_ty,
                         rw_field.ident.clone(),
-                        dto_ty.clone(),
+                        reader_ty.clone(),
                         visibility(field),
                     ));
                     vis.push(parse_quote!());
                 } else if field.is_optional() {
+                    if let Some(sub_fields) = field.sub_field_entries() {
+                        let flatten = syn::parse_quote_spanned!(ty.span()=> #[serde(flatten)]);
+                        attrs.last_mut().unwrap().push(flatten);
+                        let variants = sub_fields.iter().map(|field| -> syn::Variant {
+                            match field {
+                                EnumEntry::NameOnly(name) => syn::parse_quote!(#name),
+                                EnumEntry::NameAndFields(name, inner) => {
+                                    let field_name = syn::Ident::new(
+                                        &name.to_string().to_snake_case(),
+                                        name.span(),
+                                    );
+                                    let inner = format_ident!("{inner}Reader");
+                                    syn::parse_quote!(#name{ #field_name: OptionalConfig<#inner> })
+                                }
+                            }
+                        });
+                        let field_ty = field.reader_ty();
+                        let tag_name = field.name();
+                        let ty: syn::ItemEnum = syn::parse_quote_spanned!(sub_fields.span()=>
+                            #[derive(Debug, Clone, ::serde::Serialize, PartialEq, ::strum::EnumString, ::strum::Display, ::doku::Document)]
+                            #[serde(rename_all = "snake_case")]
+                            #[strum(serialize_all = "snake_case")]
+                            #[serde(tag = #tag_name)]
+                            pub enum #field_ty {
+                                #(#variants),*
+                            }
+                        );
+                        sub_field_enums.push(ty.to_token_stream());
+                    }
                     tys.push(parse_quote_spanned!(ty.span()=> OptionalConfig<#ty>));
                     vis.push(match field.reader().private {
                         true => parse_quote!(),
@@ -210,6 +244,7 @@ fn generate_structs(
             #lazy_reader_impls
         )*
 
+        #(#sub_field_enums)*
         #(#sub_readers)*
     })
 }
@@ -344,12 +379,21 @@ fn reader_value_for_field<'a>(
             };
             let read_path = read_field(parents);
             let value = match &rw_field.default {
-                FieldDefault::None => quote_spanned! {rw_field.ident.span()=>
-                    match &dto.#(#read_path).*.#name {
-                        None => OptionalConfig::Empty(#key),
-                        Some(value) => OptionalConfig::Present { value: value.clone(), key: #key },
+                FieldDefault::None => {
+                    let span = rw_field.ident.span();
+                    let ty = field.reader_ty();
+                    let value: syn::Expr = if field.sub_field_entries().is_some() {
+                        parse_quote_spanned!(span=> #ty::from_dto_fragment(&dto.#(#read_path).*.#name, #key))
+                    } else {
+                        parse_quote_spanned!(span=> &dto.#(#read_path).*.#name)
+                    };
+                    quote_spanned! {span=>
+                        match #value {
+                            None => OptionalConfig::Empty(#key),
+                            Some(value) => OptionalConfig::Present { value: value.clone(), key: #key },
+                        }
                     }
-                },
+                }
                 FieldDefault::FromKey(key) if observed_keys.contains(&key) => {
                     let string_paths = observed_keys
                         .iter()
@@ -640,8 +684,10 @@ fn generate_conversions(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use prettyplease::unparse;
     use syn::parse_quote;
     use syn::Item;
+    use syn::ItemEnum;
     use syn::ItemImpl;
     use syn::ItemStruct;
 
@@ -908,6 +954,75 @@ mod tests {
     }
 
     #[test]
+    fn sub_field_enum_adopts_rename_from_original_field() {
+        let input: crate::input::Configuration = parse_quote!(
+            mapper: {
+                #[tedge_config(rename = "type")]
+                #[tedge_config(sub_fields = [C8y(C8y), Aws(Aws), Custom])]
+                ty: MapperType,
+            }
+        );
+
+        let generated = generate_structs(
+            &parse_quote!(TEdgeConfigReader),
+            &input.groups,
+            Vec::new(),
+            "",
+        )
+        .unwrap();
+        let mut actual: syn::File = syn::parse2(generated).unwrap();
+        actual.items.retain(
+            |s| matches!(s, Item::Enum(ItemEnum { ident, ..}) if ident == "MapperTypeReader"),
+        );
+
+        let expected = parse_quote! {
+            #[derive(Debug, Clone, ::serde::Serialize, PartialEq, ::strum::EnumString, ::strum::Display, ::doku::Document)]
+            #[serde(rename_all = "snake_case")]
+            #[strum(serialize_all = "snake_case")]
+            #[serde(tag = "type")]
+            pub enum MapperTypeReader {
+                C8y { c8y: OptionalConfig<C8yReader> },
+                Aws { aws: OptionalConfig<AwsReader> },
+                Custom,
+            }
+        };
+
+        pretty_assertions::assert_eq!(unparse(&actual), unparse(&expected));
+    }
+
+    #[test]
+    fn sub_fields_use_the_reader_variant_in_struct() {
+        let input: crate::input::Configuration = parse_quote!(
+            mapper: {
+                #[tedge_config(rename = "type")]
+                #[tedge_config(sub_fields = [C8y(C8y), Aws(Aws), Az(Az), Custom])]
+                ty: MapperType,
+            },
+        );
+
+        let expected = parse_quote! {
+            #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
+            #[non_exhaustive]
+            pub struct TEdgeConfigReaderMapper {
+                #[serde(rename = "type")]
+                #[serde(flatten)]
+                pub ty: OptionalConfig<MapperTypeReader>,
+            }
+        };
+
+        let actual = generate_structs(
+            &parse_quote!(TEdgeConfigReader),
+            &input.groups,
+            Vec::new(),
+            "",
+        )
+        .unwrap();
+        let mut file: syn::File = syn::parse2(actual).unwrap();
+        file.items.retain(|s| matches!(s, Item::Struct(ItemStruct { ident, ..}) if ident == "TEdgeConfigReaderMapper"));
+        pretty_assertions::assert_eq!(unparse(&file), unparse(&expected))
+    }
+
+    #[test]
     fn default_values_do_stuff() {
         let input: crate::input::Configuration = parse_quote!(
             c8y: {
@@ -976,10 +1091,7 @@ mod tests {
             }
         };
 
-        pretty_assertions::assert_eq!(
-            prettyplease::unparse(&file),
-            prettyplease::unparse(&expected)
-        )
+        pretty_assertions::assert_eq!(unparse(&file), unparse(&expected))
     }
 
     #[test]

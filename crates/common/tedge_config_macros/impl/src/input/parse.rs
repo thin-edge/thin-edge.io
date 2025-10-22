@@ -132,10 +132,54 @@ pub struct ConfigurableField {
     pub note: Option<SpannedValue<String>>,
     #[darling(multiple, rename = "example")]
     pub examples: Vec<SpannedValue<String>>,
+    #[darling(default)]
+    pub sub_fields: Option<SpannedValue<EnumEntries>>,
     pub ident: Option<syn::Ident>,
     pub ty: syn::Type,
     #[darling(default)]
     pub from: Option<syn::Type>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum EnumEntry {
+    NameOnly(syn::Ident),
+    NameAndFields(syn::Ident, syn::Ident),
+}
+
+impl Parse for EnumEntry {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let ident: syn::Ident = input.parse()?;
+
+        if input.peek(syn::token::Paren) {
+            let content;
+            syn::parenthesized!(content in input);
+            let ty: syn::Ident = content.parse()?;
+            Ok(EnumEntry::NameAndFields(ident, ty))
+        } else {
+            Ok(EnumEntry::NameOnly(ident))
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct EnumEntries(pub Vec<EnumEntry>);
+
+impl FromMeta for EnumEntries {
+    fn from_expr(expr: &Expr) -> darling::Result<Self> {
+        match expr {
+            Expr::Array(array) => {
+                let entries: syn::Result<Vec<_>> = array
+                    .elems
+                    .iter()
+                    .map(|elem| syn::parse2(elem.to_token_stream()))
+                    .collect();
+                Ok(EnumEntries(entries?))
+            }
+            _ => Err(darling::Error::custom(
+                "Expected an array of enum entries like [C8y(C8y), Custom]",
+            )),
+        }
+    }
 }
 
 #[derive(Debug, FromMeta, PartialEq, Eq)]
@@ -202,4 +246,32 @@ pub struct ReaderSettings {
 pub struct ReadonlySettings {
     pub write_error: String,
     pub function: syn::Path,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_enum_attribute_parsing() {
+        let field: ConfigurableField = syn::parse_quote! {
+            #[tedge_config(sub_fields = [C8y(C8y), Aws(Aws), Custom])]
+            ty: BridgeType
+        };
+
+        let c8y_ident = syn::parse_quote!(C8y);
+        let c8y_type = syn::parse_quote!(C8y);
+        let aws_ident = syn::parse_quote!(Aws);
+        let aws_type = syn::parse_quote!(Aws);
+        let custom_ident = syn::parse_quote!(Custom);
+
+        let expected = EnumEntries(vec![
+            EnumEntry::NameAndFields(c8y_ident, c8y_type),
+            EnumEntry::NameAndFields(aws_ident, aws_type),
+            EnumEntry::NameOnly(custom_ident),
+        ]);
+
+        assert_eq!(&**field.sub_fields.as_ref().unwrap(), &expected);
+        assert_eq!(field.ident.as_ref().unwrap().to_string(), "ty");
+    }
 }

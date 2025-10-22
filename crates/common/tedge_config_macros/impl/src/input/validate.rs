@@ -18,6 +18,7 @@ use crate::optional_error::OptionalError;
 use crate::optional_error::SynResultExt;
 use crate::reader::PathItem;
 
+pub use super::parse::EnumEntry;
 pub use super::parse::FieldDefault;
 pub use super::parse::FieldDtoSettings;
 pub use super::parse::GroupDtoSettings;
@@ -296,6 +297,13 @@ impl ReadWriteField {
     pub fn rename(&self) -> Option<&str> {
         Some(self.rename.as_ref()?.as_str())
     }
+
+    pub fn dto_ty(&self) -> &syn::Type {
+        self.sub_fields
+            .as_ref()
+            .map(|s| &s.dto_ty)
+            .unwrap_or_else(|| &self.ty)
+    }
 }
 
 #[derive(Debug)]
@@ -306,10 +314,18 @@ pub struct ReadWriteField {
     pub dto: FieldDtoSettings,
     pub reader: ReaderSettings,
     pub examples: Vec<SpannedValue<String>>,
+    sub_fields: Option<SubFields>,
     pub ident: syn::Ident,
-    pub ty: syn::Type,
+    ty: syn::Type,
     pub default: FieldDefault,
     pub from: Option<syn::Type>,
+}
+
+#[derive(Debug)]
+struct SubFields {
+    value: SpannedValue<Vec<EnumEntry>>,
+    dto_ty: syn::Type,
+    reader_ty: syn::Type,
 }
 
 impl ConfigurableField {
@@ -356,7 +372,19 @@ impl ConfigurableField {
         }
     }
 
-    pub fn ty(&self) -> &syn::Type {
+    pub fn dto_ty(&self) -> &syn::Type {
+        self.sub_fields()
+            .map(|s| &s.dto_ty)
+            .unwrap_or_else(|| self.ty())
+    }
+
+    pub fn reader_ty(&self) -> &syn::Type {
+        self.sub_fields()
+            .map(|s| &s.reader_ty)
+            .unwrap_or_else(|| self.ty())
+    }
+
+    fn ty(&self) -> &syn::Type {
         match self {
             Self::ReadOnly(ReadOnlyField { ty, .. })
             | Self::ReadWrite(ReadWriteField { ty, .. }) => ty,
@@ -421,6 +449,15 @@ impl ConfigurableField {
             Self::ReadWrite(field) => &field.from,
         }
         .as_ref()
+    }
+
+    pub fn sub_field_entries(&self) -> Option<&SpannedValue<Vec<EnumEntry>>> {
+        self.read_write()
+            .and_then(|rw| Some(&rw.sub_fields.as_ref()?.value))
+    }
+
+    fn sub_fields(&self) -> Option<&SubFields> {
+        self.read_write().and_then(|rw| rw.sub_fields.as_ref())
     }
 }
 
@@ -516,10 +553,14 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             value.from = Some(parse_quote!(::std::string::String));
         }
 
-        custom_errors.try_throw()?;
-
-        if let Some(readonly) = value.readonly {
-            Ok(Self::ReadOnly(ReadOnlyField {
+        let res = if let Some(readonly) = value.readonly {
+            if let Some(sub_fields) = &value.sub_fields {
+                custom_errors.combine(syn::Error::new(
+                    sub_fields.span(),
+                    "read-only fields cannot have sub-fields",
+                ));
+            }
+            Self::ReadOnly(ReadOnlyField {
                 attrs: value.attrs,
                 deprecated_keys: value.deprecated_keys,
                 rename: value.rename,
@@ -529,21 +570,49 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                 dto: value.dto,
                 reader: value.reader,
                 from: value.from,
-            }))
+            })
         } else {
-            Ok(Self::ReadWrite(ReadWriteField {
+            let sub_fields = match value.sub_fields {
+                Some(sf) => {
+                    let error =
+                        "The type name for a sub-field enum must be an identifier, e.g. C8y";
+                    let syn::Type::Path(syn::TypePath { path, .. }) = &value.ty else {
+                        return Err(syn::Error::new(value.ty.span(), error));
+                    };
+                    let Some(ident) = path.get_ident() else {
+                        return Err(syn::Error::new(value.ty.span(), error));
+                    };
+                    Some(SubFields {
+                        dto_ty: syn::Type::Path(syn::TypePath {
+                            qself: None,
+                            path: format_ident!("{ident}Dto").into(),
+                        }),
+                        reader_ty: syn::Type::Path(syn::TypePath {
+                            qself: None,
+                            path: format_ident!("{ident}Reader").into(),
+                        }),
+                        value: sf.map_ref(|s| s.0.clone()),
+                    })
+                }
+                None => None,
+            };
+            Self::ReadWrite(ReadWriteField {
                 attrs: value.attrs,
                 deprecated_keys: value.deprecated_keys,
                 rename: value.rename,
                 examples: value.examples,
+                sub_fields,
                 ident: value.ident.unwrap(),
                 ty: value.ty,
                 dto: value.dto,
                 reader: value.reader,
                 default: value.default.unwrap_or(FieldDefault::None),
                 from: value.from,
-            }))
-        }
+            })
+        };
+
+        custom_errors.try_throw()?;
+        Ok(res)
     }
 }
 
