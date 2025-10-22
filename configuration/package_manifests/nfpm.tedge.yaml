@@ -114,6 +114,12 @@ contents:
       mode: 0755
     packager: rpm
 
+  # dmesg
+  - src: ./configuration/contrib/log-plugins/dmesg
+    dst: /usr/share/tedge/log-plugins/
+    file_info:
+      mode: 0755
+
   # preset diagnostic plugins
   - src: ./configuration/contrib/diag-plugins/01_tedge.sh
     dst: /usr/share/tedge/diag-plugins/
