@@ -27,6 +27,22 @@ impl Parse for Configuration {
     }
 }
 
+#[derive(Debug)]
+pub struct SubConfigInput {
+    pub name: syn::Ident,
+    pub config: Configuration,
+}
+
+impl Parse for SubConfigInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let name = input.parse()?;
+        let content;
+        syn::braced!(content in input);
+        let config = Configuration::parse(&content)?;
+        Ok(Self { name, config })
+    }
+}
+
 #[derive(FromAttributes)]
 #[darling(attributes(tedge_config))]
 pub struct ConfigurationAttributes {
@@ -273,5 +289,22 @@ mod tests {
 
         assert_eq!(&**field.sub_fields.as_ref().unwrap(), &expected);
         assert_eq!(field.ident.as_ref().unwrap().to_string(), "ty");
+    }
+
+    #[test]
+    fn test_sub_config_input_parsing() {
+        let input: SubConfigInput = syn::parse_quote! {
+            BridgeConfig {
+                bridge_azure: {
+                    url: String,
+                },
+                bridge_aws: {
+                    region: String,
+                },
+            }
+        };
+
+        assert_eq!(input.name.to_string(), "BridgeConfig");
+        assert_eq!(input.config.groups.len(), 2);
     }
 }

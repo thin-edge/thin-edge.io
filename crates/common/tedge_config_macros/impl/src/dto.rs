@@ -10,13 +10,23 @@ use syn::spanned::Spanned;
 use crate::error::extract_type_from_result;
 use crate::input::EnumEntry;
 use crate::input::FieldOrGroup;
-use crate::prefixed_type_name;
+use crate::CodegenContext;
 
 pub fn generate(
-    name: proc_macro2::Ident,
+    ctx: &CodegenContext,
     items: &[FieldOrGroup],
     doc_comment: &str,
 ) -> TokenStream {
+    let ctx = ctx.with_type_name_suffix("Dto");
+    generate_inner(&ctx, items, doc_comment)
+}
+
+fn generate_inner(
+    ctx: &CodegenContext,
+    items: &[FieldOrGroup],
+    doc_comment: &str,
+) -> TokenStream {
+    let name = &ctx.root_type_name;
     let mut idents = Vec::new();
     let mut tys = Vec::<syn::Type>::new();
     let mut sub_dtos = Vec::new();
@@ -86,11 +96,12 @@ pub fn generate(
             }
             FieldOrGroup::Group(group) => {
                 if !group.dto.skip {
-                    let sub_dto_name = prefixed_type_name(&name, group);
+                    let sub_dto_name = ctx.prefixed_type_name(group);
                     let is_default = format!("{sub_dto_name}::is_default");
                     idents.push(&group.ident);
                     tys.push(parse_quote_spanned!(group.ident.span()=> #sub_dto_name));
-                    sub_dtos.push(Some(generate(sub_dto_name, &group.contents, "")));
+                    let sub_ctx = CodegenContext::for_sub_config(sub_dto_name.clone());
+                    sub_dtos.push(Some(generate_inner(&sub_ctx, &group.contents, "")));
                     preserved_attrs.push(group.attrs.iter().filter(is_preserved).collect());
                     extra_attrs.push(quote! {
                         #[serde(default)]
@@ -100,12 +111,13 @@ pub fn generate(
             }
             FieldOrGroup::Multi(group) => {
                 if !group.dto.skip {
-                    let sub_dto_name = prefixed_type_name(&name, group);
+                    let sub_dto_name = ctx.prefixed_type_name(group);
                     idents.push(&group.ident);
                     let field_ty =
                         parse_quote_spanned!(group.ident.span()=> MultiDto<#sub_dto_name>);
                     tys.push(field_ty);
-                    sub_dtos.push(Some(generate(sub_dto_name, &group.contents, "")));
+                    let sub_ctx = CodegenContext::for_sub_config(sub_dto_name.clone());
+                    sub_dtos.push(Some(generate_inner(&sub_ctx, &group.contents, "")));
                     preserved_attrs.push(group.attrs.iter().filter(is_preserved).collect());
                     extra_attrs.push(quote! {
                         #[serde(default)]
@@ -162,9 +174,7 @@ fn is_preserved(attr: &&syn::Attribute) -> bool {
 #[cfg(test)]
 mod tests {
     use prettyplease::unparse;
-    use proc_macro2::Span;
     use syn::parse_quote;
-    use syn::Ident;
     use syn::Item;
     use syn::ItemEnum;
     use syn::ItemStruct;
@@ -368,7 +378,7 @@ mod tests {
 
     fn generate_test_dto(input: &crate::input::Configuration) -> syn::File {
         let tokens = super::generate(
-            Ident::new("TEdgeConfigDto", Span::call_site()),
+            &ctx(),
             &input.groups,
             "",
         );
@@ -388,5 +398,9 @@ mod tests {
 
     fn only_enum_named(target: &str) -> impl Fn(&Item) -> bool + '_ {
         move |i| matches!(i, Item::Enum(ItemEnum { ident, .. }) if ident == target)
+    }
+
+    fn ctx() -> CodegenContext {
+        CodegenContext::default_tedge_config()
     }
 }

@@ -23,6 +23,7 @@ pub use super::parse::FieldDefault;
 pub use super::parse::FieldDtoSettings;
 pub use super::parse::GroupDtoSettings;
 pub use super::parse::ReaderSettings;
+pub use super::parse::SubConfigInput;
 use super::parse::ReadonlySettings;
 
 #[derive(Debug)]
@@ -43,6 +44,34 @@ impl TryFrom<super::parse::Configuration> for Configuration {
         Ok(Self {
             groups: combine_errors(value.groups.into_iter().map(<_>::try_from))?,
         })
+    }
+}
+
+impl Configuration {
+    /// Validate that multi-profile groups are not used in a sub-config
+    pub fn validate_for_sub_config(&self) -> Result<(), syn::Error> {
+        for group in &self.groups {
+            validate_no_multi_in_sub_config(group)?;
+        }
+        Ok(())
+    }
+}
+
+fn validate_no_multi_in_sub_config(field_or_group: &FieldOrGroup) -> Result<(), syn::Error> {
+    match field_or_group {
+        FieldOrGroup::Multi(group) => {
+            Err(syn::Error::new(
+                group.ident.span(),
+                "Multi-profile groups are not supported in `define_sub_config!`",
+            ))
+        }
+        FieldOrGroup::Group(group) => {
+            for content in &group.contents {
+                validate_no_multi_in_sub_config(content)?;
+            }
+            Ok(())
+        }
+        FieldOrGroup::Field(_) => Ok(()),
     }
 }
 
@@ -841,5 +870,53 @@ mod tests {
         let field = FieldOrGroup::Field(ConfigurableField::try_from(input).unwrap());
 
         assert_eq!(field.name(), "type")
+    }
+
+    #[test]
+    fn sub_config_rejects_multi_profile_groups() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            #[tedge_config(multi)]
+            c8y: {
+                url: String,
+            }
+        })
+        .unwrap();
+
+        let config = Configuration::try_from(input).unwrap();
+        let error = config.validate_for_sub_config().unwrap_err();
+        assert!(error.to_string().contains("Multi-profile groups"));
+    }
+
+    #[test]
+    fn sub_config_rejects_nested_multi_profile_groups() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            bridge: {
+                #[tedge_config(multi)]
+                profiles: {
+                    url: String,
+                }
+            }
+        })
+        .unwrap();
+
+        let config = Configuration::try_from(input).unwrap();
+        let error = config.validate_for_sub_config().unwrap_err();
+        assert!(error.to_string().contains("Multi-profile groups"));
+    }
+
+    #[test]
+    fn sub_config_accepts_regular_groups() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            bridge_azure: {
+                url: String,
+            },
+            bridge_aws: {
+                region: String,
+            }
+        })
+        .unwrap();
+
+        let config = Configuration::try_from(input).unwrap();
+        assert!(config.validate_for_sub_config().is_ok());
     }
 }

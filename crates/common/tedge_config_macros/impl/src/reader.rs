@@ -27,15 +27,16 @@ use crate::input::FieldOrGroup;
 use crate::namegen::IdGenerator;
 use crate::namegen::SequentialIdGenerator;
 use crate::optional_error::OptionalError;
-use crate::prefixed_type_name;
+use crate::CodegenContext;
 
 pub fn try_generate(
-    root_name: proc_macro2::Ident,
+    ctx: &CodegenContext,
     items: &[FieldOrGroup],
     doc_comment: &str,
 ) -> syn::Result<TokenStream> {
-    let structs = generate_structs(&root_name, items, Vec::new(), doc_comment)?;
-    let conversions = generate_conversions(&root_name, items, vec![], items)?;
+    let ctx = ctx.with_type_name_suffix("Reader");
+    let structs = generate_structs(&ctx, items, Vec::new(), doc_comment)?;
+    let conversions = generate_conversions(&ctx, items, vec![], items)?;
     Ok(quote! {
         #structs
         #conversions
@@ -43,11 +44,12 @@ pub fn try_generate(
 }
 
 fn generate_structs(
-    name: &proc_macro2::Ident,
+    ctx: &CodegenContext,
     items: &[FieldOrGroup],
     parents: Vec<PathItem>,
     doc_comment: &str,
 ) -> syn::Result<TokenStream> {
+    let name = &ctx.root_type_name;
     let mut idents = Vec::new();
     let mut tys = Vec::<syn::Type>::new();
     let mut sub_readers = Vec::new();
@@ -142,14 +144,15 @@ fn generate_structs(
                 sub_readers.push(None);
             }
             FieldOrGroup::Multi(group) if !group.reader.skip => {
-                let sub_reader_name = prefixed_type_name(name, group);
+                let sub_reader_name = ctx.prefixed_type_name(group);
                 idents.push(&group.ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> MultiReader<#sub_reader_name>));
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone(), item.name().into()));
                 parents.push(PathItem::Dynamic(group.ident.span()));
+                let sub_ctx = CodegenContext::for_sub_config(sub_reader_name.clone());
                 sub_readers.push(Some(generate_structs(
-                    &sub_reader_name,
+                    &sub_ctx,
                     &group.contents,
                     parents,
                     "",
@@ -161,13 +164,14 @@ fn generate_structs(
                 });
             }
             FieldOrGroup::Group(group) if !group.reader.skip => {
-                let sub_reader_name = prefixed_type_name(name, group);
+                let sub_reader_name = ctx.prefixed_type_name(group);
                 idents.push(&group.ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> #sub_reader_name));
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone(), item.name().into()));
+                let sub_ctx = CodegenContext::for_sub_config(sub_reader_name.clone());
                 sub_readers.push(Some(generate_structs(
-                    &sub_reader_name,
+                    &sub_ctx,
                     &group.contents,
                     parents,
                     "",
@@ -573,11 +577,12 @@ fn parents_for(
 
 /// Generate the conversion methods from DTOs to Readers
 fn generate_conversions(
-    name: &proc_macro2::Ident,
+    ctx: &CodegenContext,
     items: &[FieldOrGroup],
     parents: Vec<PathItem>,
     root_fields: &[FieldOrGroup],
 ) -> syn::Result<TokenStream> {
+    let name = &ctx.root_type_name;
     let mut field_conversions = Vec::new();
     let mut rest = Vec::new();
     let mut id_gen = SequentialIdGenerator::default();
@@ -600,7 +605,7 @@ fn generate_conversions(
                 field_conversions.push(quote_spanned!(name.span()=> #name: #value));
             }
             FieldOrGroup::Group(group) if !group.reader.skip => {
-                let sub_reader_name = prefixed_type_name(name, group);
+                let sub_reader_name = ctx.prefixed_type_name(group);
                 let name = &group.ident;
 
                 let mut parents = parents.clone();
@@ -619,12 +624,13 @@ fn generate_conversions(
                 field_conversions.push(
                     quote_spanned!(name.span()=> #name: #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*)),
                 );
+                let sub_ctx = CodegenContext::for_sub_config(sub_reader_name.clone());
                 let sub_conversions =
-                    generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
+                    generate_conversions(&sub_ctx, &group.contents, parents, root_fields)?;
                 rest.push(sub_conversions);
             }
             FieldOrGroup::Multi(group) if !group.reader.skip => {
-                let sub_reader_name = prefixed_type_name(name, group);
+                let sub_reader_name = ctx.prefixed_type_name(group);
                 let name = &group.ident;
 
                 let new_arg = PathItem::Dynamic(group.ident.span());
@@ -655,8 +661,9 @@ fn generate_conversions(
                 let new_arg2 = extra_call_args.last().unwrap().clone();
                 field_conversions.push(quote_spanned!(name.span()=> #name: dto.#(#read_path).*.map_keys(|#new_arg2| #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*), #parent_key)));
                 parents.push(new_arg);
+                let sub_ctx = CodegenContext::for_sub_config(sub_reader_name.clone());
                 let sub_conversions =
-                    generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
+                    generate_conversions(&sub_ctx, &group.contents, parents, root_fields)?;
                 rest.push(sub_conversions);
             }
             FieldOrGroup::Group(_) | FieldOrGroup::Multi(_) => {
@@ -788,7 +795,7 @@ mod tests {
             },
         );
         let actual = generate_conversions(
-            &parse_quote!(TEdgeConfigReader),
+            &ctx(),
             &input.groups,
             Vec::new(),
             &input.groups,
@@ -841,7 +848,7 @@ mod tests {
             },
         );
         let actual = generate_structs(
-            &parse_quote!(TEdgeConfigReader),
+            &ctx(),
             &input.groups,
             Vec::new(),
             "",
@@ -888,7 +895,7 @@ mod tests {
             },
         );
         let actual = generate_structs(
-            &parse_quote!(TEdgeConfigReader),
+            &ctx(),
             &input.groups,
             Vec::new(),
             "",
@@ -927,7 +934,7 @@ mod tests {
             },
         );
         let actual = generate_structs(
-            &parse_quote!(TEdgeConfigReader),
+            &ctx(),
             &input.groups,
             Vec::new(),
             "",
@@ -964,7 +971,7 @@ mod tests {
         );
 
         let generated = generate_structs(
-            &parse_quote!(TEdgeConfigReader),
+            &ctx(),
             &input.groups,
             Vec::new(),
             "",
@@ -1011,7 +1018,7 @@ mod tests {
         };
 
         let actual = generate_structs(
-            &parse_quote!(TEdgeConfigReader),
+            &ctx(),
             &input.groups,
             Vec::new(),
             "",
@@ -1032,7 +1039,7 @@ mod tests {
             },
         );
         let actual = generate_conversions(
-            &parse_quote!(TEdgeConfigReader),
+            &ctx(),
             &input.groups,
             Vec::new(),
             &input.groups,
@@ -1110,7 +1117,7 @@ mod tests {
             },
         );
         let actual = generate_conversions(
-            &parse_quote!(TEdgeConfigReader),
+            &ctx(),
             &input.groups,
             Vec::new(),
             &input.groups,
@@ -1181,7 +1188,7 @@ mod tests {
         );
 
         let actual = generate_conversions(
-            &parse_quote!(TEdgeConfigReader),
+            &ctx(),
             &input.groups,
             Vec::new(),
             &input.groups,
@@ -1216,5 +1223,9 @@ mod tests {
         };
 
         pretty_assertions::assert_eq!(unparse(&file), unparse(&expected))
+    }
+
+    fn ctx() -> CodegenContext {
+        CodegenContext::default_tedge_config().with_type_name_suffix("Reader")
     }
 }

@@ -5,6 +5,7 @@ use crate::input::FieldOrGroup;
 use crate::namegen::IdGenerator;
 use crate::namegen::SequentialIdGenerator;
 use crate::namegen::UnderscoreIdGenerator;
+use crate::CodegenContext;
 use heck::ToSnekCase;
 use heck::ToUpperCamelCase;
 use itertools::Itertools;
@@ -20,7 +21,7 @@ use syn::parse_quote;
 use syn::parse_quote_spanned;
 use syn::spanned::Spanned;
 
-pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
+pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> TokenStream {
     let dto_paths = configuration_paths_from(items, Mode::Dto);
     let mut reader_paths = configuration_paths_from(items, Mode::Reader);
     let (readonly_destr, write_error): (Vec<_>, Vec<_>) = reader_paths
@@ -39,28 +40,32 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
             ))
         })
         .multiunzip();
-    let readable_args = configuration_strings(reader_paths.iter(), "ReadableKey");
+    let readable_args = configuration_strings(reader_paths.iter(), &format!("{}ReadableKey", ctx.enum_prefix));
     let readonly_args = configuration_strings(
         reader_paths.iter().filter(|path| !is_read_write(path)),
-        "ReadOnlyKey",
+        &format!("{}ReadOnlyKey", ctx.enum_prefix),
     );
     let writable_args = configuration_strings(
         reader_paths.iter().filter(|path| is_read_write(path)),
-        "WritableKey",
+        &format!("{}WritableKey", ctx.enum_prefix),
     );
-    let dto_args = configuration_strings(dto_paths.iter(), "DtoKey");
-    let readable_keys = keys_enum(parse_quote!(ReadableKey), &readable_args, "read from");
+    let dto_args = configuration_strings(dto_paths.iter(), &format!("{}DtoKey", ctx.enum_prefix));
+    let readable_key_name = format_ident!("{}ReadableKey", ctx.enum_prefix);
+    let readonly_key_name = format_ident!("{}ReadOnlyKey", ctx.enum_prefix);
+    let writable_key_name = format_ident!("{}WritableKey", ctx.enum_prefix);
+    let dto_key_name = format_ident!("{}DtoKey", ctx.enum_prefix);
+    let readable_keys = keys_enum(readable_key_name.clone(), &readable_args, "read from");
     let readonly_keys = keys_enum(
-        parse_quote!(ReadOnlyKey),
+        readonly_key_name.clone(),
         &readonly_args,
         "read from, but not written to,",
     );
-    let writable_keys = keys_enum(parse_quote!(WritableKey), &writable_args, "written to");
-    let dto_keys = keys_enum(parse_quote!(DtoKey), &dto_args, "written to");
-    let fromstr_readable = generate_fromstr_readable(parse_quote!(ReadableKey), &readable_args);
-    let fromstr_readonly = generate_fromstr_readable(parse_quote!(ReadOnlyKey), &readonly_args);
-    let fromstr_writable = generate_fromstr_writable(parse_quote!(WritableKey), &writable_args);
-    let fromstr_dto = generate_fromstr_writable(parse_quote!(DtoKey), &dto_args);
+    let writable_keys = keys_enum(writable_key_name.clone(), &writable_args, "written to");
+    let dto_keys = keys_enum(dto_key_name.clone(), &dto_args, "written to");
+    let fromstr_readable = generate_fromstr_readable(readable_key_name.clone(), &readable_args);
+    let fromstr_readonly = generate_fromstr_readable(readonly_key_name.clone(), &readonly_args);
+    let fromstr_writable = generate_fromstr_writable(writable_key_name.clone(), &writable_args);
+    let fromstr_dto = generate_fromstr_writable(dto_key_name.clone(), &dto_args);
     let read_string = generate_string_readers(&reader_paths);
     let write_string = generate_string_writers(
         &reader_paths
@@ -1646,7 +1651,7 @@ mod tests {
 
     #[test]
     fn output_parses() {
-        syn::parse2::<syn::File>(generate_writable_keys(&[])).unwrap();
+        syn::parse2::<syn::File>(generate_writable_keys(&ctx(), &[])).unwrap();
     }
 
     #[test]
@@ -1657,7 +1662,7 @@ mod tests {
                 url: String
             }
         };
-        syn::parse2::<syn::File>(generate_writable_keys(&input.groups)).unwrap();
+        syn::parse2::<syn::File>(generate_writable_keys(&ctx(), &input.groups)).unwrap();
     }
 
     #[test]
@@ -2317,7 +2322,7 @@ mod tests {
                 ty: MapperType,
             },
         );
-        let writers = generate_writable_keys(&input.groups);
+        let writers = generate_writable_keys(&ctx(), &input.groups);
         let mut actual: syn::File = syn::parse2(writers).unwrap();
         actual.items.retain(|item| matches!(item, syn::Item::Enum(syn::ItemEnum { ident, .. }) if !ident.to_string().ends_with("Error")));
         actual.items.iter_mut().for_each(|item| {
@@ -2901,7 +2906,7 @@ mod tests {
             },
         );
 
-        let generated = generate_writable_keys(&input.groups);
+        let generated = generate_writable_keys(&ctx(), &input.groups);
         let generated_code = prettyplease::unparse(&syn::parse2(generated).unwrap());
 
         // Extract the WritableKey enum specifically
@@ -3105,5 +3110,9 @@ mod tests {
             }
             _ => false,
         }
+    }
+
+    fn ctx() -> CodegenContext {
+        CodegenContext::default_tedge_config()
     }
 }

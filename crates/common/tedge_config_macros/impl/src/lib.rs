@@ -5,6 +5,7 @@ use heck::ToUpperCamelCase;
 use optional_error::OptionalError;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
+use quote::format_ident;
 use quote::quote;
 use quote::quote_spanned;
 
@@ -15,6 +16,54 @@ mod namegen;
 mod optional_error;
 mod query;
 mod reader;
+
+/// Context for code generation, used to parameterize how types and enums are named
+#[derive(Clone, Debug)]
+struct CodegenContext {
+    /// Root type name (e.g., "TEdgeConfig" for main config, "C8yConfig" for sub-config)
+    /// Used for generating type names like TEdgeConfigDto, C8yConfigReader, etc.
+    root_type_name: proc_macro2::Ident,
+    /// Prefix for enum names (empty string for main config, "C8yConfig" for sub-config)
+    /// Used for generating enum names like ReadableKey vs C8yConfigReadableKey
+    enum_prefix: String,
+}
+
+impl CodegenContext {
+    /// Create context for the main TEdgeConfig
+    fn default_tedge_config() -> Self {
+        Self {
+            root_type_name: proc_macro2::Ident::new("TEdgeConfig", Span::call_site()),
+            enum_prefix: String::new(),
+        }
+    }
+
+    /// Create context for a sub-config with the given name
+    fn for_sub_config(name: proc_macro2::Ident) -> Self {
+        let enum_prefix = name.to_string();
+        Self {
+            root_type_name: name,
+            enum_prefix,
+        }
+    }
+
+    /// Generate a prefixed type name for a configuration group
+    /// Used to create nested struct names like TEdgeConfigBridge, BridgeConfigAzure, etc.
+    fn prefixed_type_name(&self, group: &input::ConfigurationGroup) -> proc_macro2::Ident {
+        quote::format_ident!(
+            "{}{}",
+            self.root_type_name,
+            group.ident.to_string().to_upper_camel_case(),
+            span = group.ident.span()
+        )
+    }
+
+    fn with_type_name_suffix(&self, suffix: &str) -> Self {
+        Self {
+            root_type_name: quote::format_ident!("{}{}", self.root_type_name, suffix),
+            enum_prefix: self.enum_prefix.clone(),
+        }
+    }
+}
 
 #[doc(hidden)]
 pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::Error> {
@@ -91,7 +140,8 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
         })
         .collect::<Vec<_>>();
 
-    let reader_name = proc_macro2::Ident::new("TEdgeConfigReader", Span::call_site());
+    let ctx = CodegenContext::default_tedge_config();
+    let reader_name = format_ident!("{}Reader", ctx.root_type_name);
     let dto_doc_comment = format!(
         "A data-transfer object, designed for reading and writing to
         `tedge.toml`
@@ -107,11 +157,7 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
         serialized output to avoid polluting `tedge.toml`."
     );
 
-    let dto = dto::generate(
-        proc_macro2::Ident::new("TEdgeConfigDto", Span::call_site()),
-        &input.groups,
-        &dto_doc_comment,
-    );
+    let dto = dto::generate(&ctx, &input.groups, &dto_doc_comment);
 
     let reader_doc_comment = "A struct to read configured values from, designed to be accessed only
         via an immutable borrow
@@ -124,9 +170,129 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
         Where fields are optional, they are stored using [OptionalConfig] to
         produce a descriptive error message that directs the user to set the
         relevant key.";
-    let reader = reader::try_generate(reader_name, &input.groups, reader_doc_comment)?;
+    let reader = reader::try_generate(&ctx, &input.groups, reader_doc_comment)?;
 
-    let enums = query::generate_writable_keys(&input.groups);
+    let enums = query::generate_writable_keys(&ctx, &input.groups);
+
+    Ok(quote! {
+        #(#example_tests)*
+        #(#fromstr_default_tests)*
+        #dto
+        #reader
+        #enums
+    })
+}
+
+#[doc(hidden)]
+pub fn generate_sub_configuration(tokens: TokenStream) -> Result<TokenStream, syn::Error> {
+    let parse_input: input::SubConfigInput = syn::parse2(tokens)?;
+
+    // Parse and validate the configuration
+    let validated_config: input::Configuration = parse_input.config.try_into()?;
+
+    // Validate that multi-profile groups are not used in sub-configs
+    validated_config.validate_for_sub_config()?;
+
+    // Create context for this sub-config
+    let ctx = CodegenContext::for_sub_config(parse_input.name);
+
+    let mut error = OptionalError::default();
+    let fields_with_keys = validated_config
+        .groups
+        .iter()
+        .flat_map(|group| match group {
+            input::FieldOrGroup::Group(group) => unfold_group(Vec::new(), group),
+            input::FieldOrGroup::Multi(_) => {
+                unreachable!("Multi-profile groups are disallowed for sub-configs in validation.rs")
+            }
+            input::FieldOrGroup::Field(field) => {
+                error.combine(syn::Error::new(
+                    field.ident().span(),
+                    "top level fields are not supported",
+                ));
+                vec![]
+            }
+        })
+        .collect::<Vec<_>>();
+    error.try_throw()?;
+
+    let example_tests = fields_with_keys
+        .iter()
+        .filter_map(|(key, field)| Some((key, field.read_write()?)))
+        .flat_map(|(key, field)| {
+            let ty = field.from.as_ref().unwrap_or(field.dto_ty());
+            field.examples.iter().enumerate().map(move |(n, example)| {
+                let name = quote::format_ident!(
+                    "example_value_can_be_deserialized_for_{}_example_{n}",
+                    key.join("_").replace('-', "_")
+                );
+                let span = example.span();
+                let example = example.as_ref();
+                let expect_message = format!(
+                    "Example value {example:?} for '{}' could not be deserialized",
+                    key.join(".")
+                );
+                quote_spanned! {span=>
+                    #[test]
+                    fn #name() {
+                        #example.parse::<#ty>().expect(#expect_message);
+                    }
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let fromstr_default_tests = fields_with_keys
+        .iter()
+        .filter_map(|(key, field)| Some((key, field.read_write()?)))
+        .filter_map(|(key, field)| {
+            let ty = field.from.as_ref().unwrap_or(field.dto_ty());
+            if let FieldDefault::FromStr(default) = &field.default {
+                let name = quote::format_ident!(
+                    "default_value_can_be_deserialized_for_{}",
+                    key.join("_").replace('-', "_")
+                );
+                let span = default.span();
+                let expect_message = format!(
+                    "Default value {default:?} for '{}' could not be deserialized",
+                    key.join("."),
+                );
+                Some(quote_spanned! {span=>
+                    #[test]
+                    fn #name() {
+                        #default.parse::<#ty>().expect(#expect_message);
+                    }
+                })
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let dto_doc_comment = format!(
+        "A data-transfer object, designed for reading and writing to the `{}` configuration\n\
+        All the configurations inside this are optional to represent whether \
+        the value is or isn't configured. Any defaults are \
+        populated when this is converted to [{}Reader] (via \
+        [from_dto]({}Reader::from_dto)).\n\
+        For simplicity when using this struct, only the fields are optional. \
+        Any configuration groups are always present. Groups that have no value set \
+        will be omitted in the serialized output to avoid polluting the configuration file.",
+        ctx.root_type_name, ctx.root_type_name, ctx.root_type_name
+    );
+
+    let dto = dto::generate(&ctx, &validated_config.groups, &dto_doc_comment);
+
+    let reader_doc_comment = "A struct to read configured values from, designed to be accessed only \
+        via an immutable borrow\n\
+        The configurations inside this struct are optional only if the field \
+        does not have a default value configured.\n\
+        Where fields are optional, they are stored using [OptionalConfig] to \
+        produce a descriptive error message that directs the user to set the \
+        relevant key.";
+    let reader = reader::try_generate(&ctx, &validated_config.groups, reader_doc_comment)?;
+
+    let enums = query::generate_writable_keys(&ctx, &validated_config.groups);
 
     Ok(quote! {
         #(#example_tests)*
@@ -166,17 +332,6 @@ fn unfold_group(
     }
 
     output
-}
-
-fn prefixed_type_name(
-    start: &proc_macro2::Ident,
-    group: &input::ConfigurationGroup,
-) -> proc_macro2::Ident {
-    quote::format_ident!(
-        "{start}{}",
-        group.ident.to_string().to_upper_camel_case(),
-        span = group.ident.span()
-    )
 }
 
 #[cfg(test)]
@@ -261,5 +416,35 @@ mod tests {
                        .to_string(),
                    "Unexpected expression, `default(value = ...)` expects a literal.\n\
             Perhaps you want to use `#[tedge_config(default(variable = \"Ipv4Addr::LOCALHOST\"))]`?");
+    }
+
+    #[test]
+    fn sub_config_generates_code() {
+        assert!(generate_sub_configuration(quote! {
+            BridgeConfig {
+                bridge_azure: {
+                    url: String,
+                },
+                bridge_aws: {
+                    region: String,
+                }
+            }
+        })
+        .is_ok());
+    }
+
+    #[test]
+    fn sub_config_rejects_multi_profile_groups() {
+        let error = generate_sub_configuration(quote! {
+            BridgeConfig {
+                #[tedge_config(multi)]
+                profiles: {
+                    url: String,
+                }
+            }
+        })
+        .unwrap_err();
+
+        assert!(error.to_string().contains("Multi-profile groups"));
     }
 }
