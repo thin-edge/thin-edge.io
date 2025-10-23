@@ -113,7 +113,7 @@ impl Default for AuthenticationConfig {
 #[derive(Debug, Clone)]
 enum ClientAuthConfig {
     Cert(ClientAuthCertConfig),
-    User(ClientAuthUserConfig),
+    User(ClientAuthPassConfig),
 }
 
 #[derive(Clone)]
@@ -140,9 +140,9 @@ impl zeroize::Zeroize for PrivateKey {
 }
 
 #[derive(Debug, Clone)]
-struct ClientAuthUserConfig {
-    username: String,
-    password: String,
+pub struct ClientAuthPassConfig {
+    pub username: String,
+    pub password: Zeroizing<String>,
 }
 
 #[derive(Clone)]
@@ -351,9 +351,9 @@ impl Config {
 
         let password = read_password(pass_file)?;
 
-        let client_auth_user_config = ClientAuthUserConfig {
+        let client_auth_user_config = ClientAuthPassConfig {
             username: username.to_string(),
-            password,
+            password: password.into(),
         };
 
         let authentication_config = self.broker.authentication.get_or_insert(Default::default());
@@ -385,8 +385,10 @@ impl Config {
 
         if let Some(authentication_config) = &broker_config.authentication {
             if let Some(ClientAuthConfig::User(user_config)) = &authentication_config.client_auth {
-                mqtt_options
-                    .set_credentials(user_config.username.clone(), user_config.password.clone());
+                mqtt_options.set_credentials(
+                    user_config.username.clone(),
+                    user_config.password.clone().to_string(),
+                );
             }
 
             // Set TLS transport if at least one root certificate is provided
@@ -440,10 +442,7 @@ pub fn read_password(path: impl AsRef<Path>) -> Result<String, CertificateError>
             error,
             path: path.as_ref().to_owned(),
         }),
-        None => Err(CertificateError::IoError {
-            path: path.as_ref().to_owned(),
-            error: std::io::Error::other("File content is empty"),
-        }),
+        None => Ok("".to_string()),
     }?;
 
     Ok(first_line)

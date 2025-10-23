@@ -30,7 +30,7 @@
 #![forbid(unsafe_code)]
 
 mod channel;
-mod config;
+pub mod config;
 mod connection;
 mod errors;
 mod messages;

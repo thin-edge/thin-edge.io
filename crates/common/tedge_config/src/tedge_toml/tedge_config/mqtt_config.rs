@@ -19,6 +19,7 @@ use super::TEdgeConfigReaderDevice;
 use certificate::parse_root_certificate::CryptokiConfig;
 use certificate::parse_root_certificate::CryptokiConfigDirect;
 use mqtt_channel::read_password;
+use mqtt_channel::ClientAuthPassConfig;
 
 /// An MQTT authentication configuration for connecting to the remote cloud broker.
 #[derive(Debug, Clone, Default)]
@@ -123,14 +124,17 @@ impl MqttAuthConfig {
     }
 
     // Return username and password if they are set
-    pub fn username_and_password(&self) -> Option<(String, String)> {
+    pub fn username_and_password(&self) -> Option<ClientAuthPassConfig> {
         if let Some(MqttAuthClientConfig::User(MqttAuthClientUserConfig {
             username,
             password_file,
         })) = self.client.clone()
         {
             if let Ok(password) = read_password(&password_file) {
-                return Some((username, password));
+                return Some(ClientAuthPassConfig {
+                    username,
+                    password: password.into(),
+                });
             }
         }
 
