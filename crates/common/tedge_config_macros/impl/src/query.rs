@@ -40,10 +40,14 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         })
         .multiunzip();
     let readable_args = configuration_strings(reader_paths.iter(), "ReadableKey");
-    let readonly_args =
-        configuration_strings(reader_paths.iter().filter(|path| !is_read_write(path)), "ReadOnlyKey");
-    let writable_args =
-        configuration_strings(reader_paths.iter().filter(|path| is_read_write(path)), "WritableKey");
+    let readonly_args = configuration_strings(
+        reader_paths.iter().filter(|path| !is_read_write(path)),
+        "ReadOnlyKey",
+    );
+    let writable_args = configuration_strings(
+        reader_paths.iter().filter(|path| is_read_write(path)),
+        "WritableKey",
+    );
     let dto_args = configuration_strings(dto_paths.iter(), "DtoKey");
     let readable_keys = keys_enum(parse_quote!(ReadableKey), &readable_args, "read from");
     let readonly_keys = keys_enum(
@@ -131,13 +135,6 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
             ParseValue(#[from] Box<dyn ::std::error::Error + Send + Sync>),
             #[error(transparent)]
             Multi(#[from] MultiError),
-            #[error("Setting {target} requires {parent} to be set to {parent_expected}, but it is not currently set")]
-            SuperFieldAbsent {
-                target: WritableKey,
-                parent: WritableKey,
-                parent_expected: String,
-                parent_actual: String,
-            },
             #[error("Setting {target} requires {parent} to be set to {parent_expected}, but it is currently set to {parent_actual}")]
             SuperFieldWrongValue {
                 target: WritableKey,
@@ -219,35 +216,158 @@ fn sub_field_enum_variant(
         .filter(|fog| matches!(fog, FieldOrGroup::Multi(_)))
         .count();
 
-    let parent_opt_strs = std::iter::repeat_n::<syn::Type>(parse_quote!(Option<String>), parent_multi_count);
+    let parent_opt_strs =
+        std::iter::repeat_n::<syn::Type>(parse_quote!(Option<String>), parent_multi_count);
     let sub_field_key_ty_ident = format_ident!("{sub_field_type}{key_type_suffix}");
     let sub_field_key_ty: syn::Type = parse_quote!(#sub_field_key_ty_ident);
 
     let mut all_types: Vec<syn::Type> = parent_opt_strs.collect();
     all_types.push(sub_field_key_ty);
 
-    let enum_variant = parse_quote_spanned!(combined_ident.span()=> #combined_ident(#(#all_types),*));
+    let enum_variant =
+        parse_quote_spanned!(combined_ident.span()=> #combined_ident(#(#all_types),*));
 
-    let parent_field_names = SequentialIdGenerator::default().take(parent_multi_count).collect::<Vec<_>>();
+    let parent_field_names = SequentialIdGenerator::default()
+        .take(parent_multi_count)
+        .collect::<Vec<_>>();
     let sub_key_ident = syn::Ident::new("sub_key", sub_field_variant.span());
-    let mut all_field_names = parent_field_names;
+    let mut all_field_names = parent_field_names.clone();
     all_field_names.push(sub_key_ident);
 
-    let match_read_write = parse_quote_spanned!(combined_ident.span()=> #combined_ident(#(#all_field_names),*));
+    let match_read_write =
+        parse_quote_spanned!(combined_ident.span()=> #combined_ident(#(#all_field_names),*));
 
     let all_underscores = UnderscoreIdGenerator.take(parent_multi_count + 1);
-    let match_shape = parse_quote_spanned!(combined_ident.span()=> #combined_ident(#(#all_underscores),*));
+    let match_shape =
+        parse_quote_spanned!(combined_ident.span()=> #combined_ident(#(#all_underscores),*));
+
+    // Generate formatters for sub-field keys
+    // Sub-field keys generate a match arm that handles all profiles at once
+    let sub_key_name = syn::Ident::new("sub_key", sub_field_variant.span());
+    let sub_field_variant_snake = sub_field_variant.to_string().to_lowercase();
+
+    // Extract parent segments without the field
+    let parent_segments_without_field: Vec<&FieldOrGroup> = parent_segments
+        .iter()
+        .copied()
+        .take(parent_segments.len().saturating_sub(1))
+        .collect();
+
+    let formatters = if parent_multi_count > 0 {
+        // For multi-field parents, generate a single formatter that handles all profiles
+        let pattern = parse_quote_spanned!(combined_ident.span()=> #combined_ident(#(#parent_field_names),*, #sub_key_name));
+
+        // TODO this vec![].join thing that's going on feels pretty complicated
+        let mut multi_field_idx = 0;
+        let base_segments: Vec<TokenStream> = parent_segments_without_field
+            .iter()
+            .map(|segment| match segment {
+                FieldOrGroup::Multi(m) => {
+                    let field_name = &parent_field_names[multi_field_idx];
+                    let m_name = m.ident.to_string();
+                    multi_field_idx += 1;
+                    let profile_fmt = format!("{m_name}.profiles.{{}}");
+                    quote! {
+                        if let Some(profile) = #field_name {
+                            format!(#profile_fmt, profile)
+                        } else {
+                            #m_name.to_string()
+                        }
+                    }
+                }
+                FieldOrGroup::Group(g) => {
+                    let g_name = g.ident.to_string();
+                    quote! { #g_name.to_string() }
+                }
+                FieldOrGroup::Field(f) => {
+                    let f_name = f.ident().to_string();
+                    quote! { #f_name.to_string() }
+                }
+            })
+            .collect();
+
+        let base_expr = quote! {
+            {
+                vec![#(#base_segments),*].join(".")
+            }
+        };
+
+        vec![(
+            pattern,
+            parse_quote!(::std::borrow::Cow::Owned(
+                format!("{}.{}.{}", #base_expr, #sub_field_variant_snake, #sub_key_name.to_cow_str())
+            )),
+        )]
+    } else {
+        // Non-multi parents: just use parent path directly
+        let parent_path_str = parent_segments_without_field
+            .iter()
+            .map(|fog| fog.name())
+            .collect::<Vec<_>>()
+            .join(".");
+
+        vec![(
+            parse_quote_spanned!(combined_ident.span()=> #combined_ident(#sub_key_name)),
+            parse_quote!(::std::borrow::Cow::Owned(
+                format!("{}.{}.{}", #parent_path_str, #sub_field_variant_snake, #sub_key_name.to_cow_str())
+            )),
+        )]
+    };
+
+    // Generate regex parser for sub-field keys with profiles
+    let regex_parser = if parent_multi_count > 0 {
+        // Build a regex pattern for sub-field keys with profiles
+        // Must properly handle multi-fields in the parent path, not just assume first segment is multi
+
+        // Build the pattern for the parent path
+        let mut pattern_parts = Vec::new();
+        for segment in &parent_segments_without_field {
+            match segment {
+                FieldOrGroup::Multi(m) => {
+                    pattern_parts.push(format!("{}(?:[\\._]profiles[\\._]([^\\.]+))?", m.ident));
+                }
+                FieldOrGroup::Group(g) => {
+                    pattern_parts.push(g.ident.to_string());
+                }
+                FieldOrGroup::Field(f) => {
+                    pattern_parts.push(f.ident().to_string());
+                }
+            }
+        }
+        let parent_pattern = pattern_parts.join("[\\._]");
+
+        // Sub-field keys are flat at the parent level, append the sub-field variant
+        let pattern = format!(
+            "^{}[\\._]{}[\\._](.+)$",
+            parent_pattern,
+            sub_field_variant.to_string().to_lowercase()
+        );
+
+        let pattern_lit = syn::LitStr::new(&pattern, sub_field_variant.span());
+        let regex_if: syn::ExprIf = parse_quote! {
+            if let Some(captures) = ::regex::Regex::new(#pattern_lit).unwrap().captures(value) {
+                // Placeholder - will be filled in by generate_fromstr
+            }
+        };
+
+        Some(regex_if)
+    } else {
+        None
+    };
 
     ConfigurationKey {
         enum_variant,
         iter_field: parse_quote!(unreachable!("sub-field keys are not iterable")),
         match_shape,
         match_read_write,
-        regex_parser: None,
+        regex_parser,
         field_names: all_field_names,
-        formatters: vec![],
+        formatters,
         insert_profiles: vec![],
         doc_comment: None,
+        sub_field_info: Some(SubFieldInfo {
+            type_name: sub_field_type.clone(),
+        }),
     }
 }
 
@@ -268,10 +388,33 @@ fn configuration_strings<'a>(
 
             if let Some(FieldOrGroup::Field(field)) = segments.back() {
                 if let Some(sub_fields) = field.sub_field_entries() {
+                    // For sub-fields, use the path without the parent field name
+                    // e.g., mapper.type -> mapper, or mapper.config.type -> mapper.config
+                    let parent_path = segments
+                        .iter()
+                        .take(segments.len() - 1)
+                        .map(|variant| variant.name())
+                        .collect::<Vec<_>>()
+                        .join(".");
+
                     for entry in sub_fields.iter() {
                         if let EnumEntry::NameAndFields(variant_name, type_name) = entry {
-                            let sub_config_key = sub_field_enum_variant(segments, variant_name, type_name, key_type_suffix);
-                            let sub_config_str = format!("{}.{}", base_string, variant_name.to_string().to_snek_case());
+                            // Sub-field keys are flat at the parent level, not nested under the field
+                            let sub_config_str = if parent_path.is_empty() {
+                                variant_name.to_string().to_snek_case()
+                            } else {
+                                format!(
+                                    "{}.{}",
+                                    parent_path,
+                                    variant_name.to_string().to_snek_case()
+                                )
+                            };
+                            let sub_config_key = sub_field_enum_variant(
+                                segments,
+                                variant_name,
+                                type_name,
+                                key_type_suffix,
+                            );
                             results.push((sub_config_str, sub_config_key));
                         }
                     }
@@ -307,15 +450,65 @@ fn generate_fromstr(
     (configuration_string, configuration_key): &(Vec<String>, Vec<ConfigurationKey>),
     error_case: syn::Arm,
 ) -> TokenStream {
-    let simplified_configuration_string = configuration_string
+    // Separate regular keys from sub-field keys
+    let (regular_strings, regular_keys): (Vec<_>, Vec<_>) = configuration_string
         .iter()
-        .map(|s| s.replace('.', "_"))
-        .zip(configuration_key.iter().map(|k| &k.enum_variant))
-        .map(|(s, v)| quote_spanned!(v.span()=> #s));
-    let iter_variant = configuration_key.iter().map(|k| &k.iter_field);
+        .zip(configuration_key.iter())
+        .filter(|(_, k)| k.sub_field_info.is_none())
+        .unzip();
+
+    let sub_fields = configuration_string
+        .iter()
+        .zip(configuration_key.iter())
+        .filter_map(|(s, k)| Some((s, k, k.sub_field_info.as_ref()?)))
+        .collect::<Vec<_>>();
+
+    let simplified_configuration_string = regular_strings
+        .iter()
+        .map(|s| (s.replace('.', "_"), s))
+        .map(|(s, _)| quote_spanned!(Span::call_site()=> #s));
+
+    let iter_variant = regular_keys.iter().map(|k| &k.iter_field);
+
+    // Generate sub-field match cases with prefix matching
+    let sub_field_match_cases =
+        sub_fields
+        .iter()
+            .map(|(config_str, config_key, sub_field_info)| {
+                let enum_variant = &config_key.enum_variant;
+
+                // Construct sub-field type name from identifier and type name (e.g. C8y + ReadableKey)
+                let sub_field_type_name = format_ident!("{}{}", &sub_field_info.type_name, type_name);
+
+                let pattern_str = format!("{}_", config_str.replace('.', "_"));
+                let variant_ident = &enum_variant.ident;
+                let parent_field_count = config_key.field_names.len() - 1; // All except the last (sub_key)
+                let prefix_str = format!("{}.", config_str);
+
+                // For simple pattern matching (non-profiled), use None for each multi-field
+                let match_args = if parent_field_count == 0 {
+                    quote!(sub_key)
+                } else {
+                    // Generate None for each parent field
+                    let nones = std::iter::repeat_n(quote!(None), parent_field_count);
+                    quote!(#(#nones),*, sub_key)
+                };
+
+                let res: syn::Arm = parse_quote_spanned!(enum_variant.span()=>
+                    key if key.starts_with(#pattern_str) => {
+                        let sub_key_str = value.strip_prefix(#prefix_str).unwrap_or(value);
+                        let sub_key: #sub_field_type_name = sub_key_str.parse()?;
+                        return Ok(Self::#variant_ident(#match_args))
+                    }
+                );
+                res
+            });
+
     let regex_patterns =
         configuration_key
             .iter()
+            // Exclude sub-field keys - they're handled separately
+            .filter(|c| c.sub_field_info.is_none())
             .filter_map(|c| Some((c.regex_parser.clone()?, c)))
             .map(|(mut r, c)| {
                 let match_read_write = &c.match_read_write;
@@ -334,6 +527,52 @@ fn generate_fromstr(
                 r
             });
 
+    // Generate regex patterns for sub-field keys with profiles
+    let sub_field_regex_patterns: Vec<_> = sub_fields
+        .iter()
+        .filter_map(|(|_, c, s)| {
+            // Only generate if there's a regex_parser (i.e., has profile fields)
+            c.regex_parser.clone().map(|r| (r, c, *s))
+        })
+        .map(|(mut r, c, s)| {
+            let variant_ident = &c.enum_variant.ident;
+                // Construct sub-field type name from identifier and type name (e.g. C8y + ReadableKey)
+                let sub_field_type_name = format_ident!("{}{}", s.type_name, type_name);
+
+            let all_field_names = &c.field_names;
+            let parent_fields = &all_field_names[..all_field_names.len() - 1];
+            let sub_key_field = &all_field_names[all_field_names.len() - 1];
+            // The sub_key is captured after all parent field captures
+            // Parent fields are at indices 1, 2, ..., parent_fields.len()
+            // Sub_key is at index parent_fields.len() + 1
+            let sub_key_capture_idx = parent_fields.len() + 1;
+
+            // Generate assignments only for parent fields (not the sub_key)
+            let own_branches = parent_fields
+                .iter()
+                .enumerate()
+                .map::<syn::Stmt, _>(|(n, id)| {
+                    let n = n + 1;
+                    parse_quote! {
+                        let #id = captures.get(#n).map(|re_match| re_match.as_str().to_owned());
+                    }
+                });
+
+            // For sub-keys, we need to parse the remainder
+            r.then_branch = parse_quote!({
+                #(#own_branches)*
+                let sub_key_str = captures.get(#sub_key_capture_idx)
+                    .map(|re_match| re_match.as_str())
+                    .unwrap_or("");
+                let #sub_key_field: #sub_field_type_name = sub_key_str.parse()?;
+                return Ok(Self::#variant_ident(#(#parent_fields),*, #sub_key_field));
+            });
+            r
+        })
+        .collect();
+
+    let all_regex_patterns = regex_patterns.chain(sub_field_regex_patterns);
+
     quote! {
         impl ::std::str::FromStr for #type_name {
             type Err = ParseKeyError;
@@ -343,15 +582,18 @@ fn generate_fromstr(
                 let res = match replace_aliases(value.to_owned()).replace(".", "_").as_str() {
                     #(
                         #simplified_configuration_string => {
-                            if value != #configuration_string {
-                                warn_about_deprecated_key(value.to_owned(), #configuration_string);
+                            if value != #regular_strings {
+                                warn_about_deprecated_key(value.to_owned(), #regular_strings);
                             }
                             return Ok(Self::#iter_variant)
                         },
                     )*
+                    #(
+                        #sub_field_match_cases,
+                    )*
                     #error_case
                 };
-                #(#regex_patterns;)*
+                #(#all_regex_patterns;)*
                 res
             }
         }
@@ -563,9 +805,18 @@ fn keys_enum(
         .iter()
         .flat_map(|k| k.formatters.clone())
         .unzip();
+
     let iter_field: Vec<_> = configuration_key
         .iter()
-        .map(|k| k.iter_field.clone())
+        // Exclude sub-field keys: they aren't (statically) iterable
+        // TODO make the keys iterable
+        .filter_map(|k| {
+            if k.sub_field_info.is_none() {
+                Some(k.iter_field.clone())
+            } else {
+                None
+            }
+        })
         .collect();
     let uninhabited_catch_all = configuration_key
         .is_empty()
@@ -654,6 +905,9 @@ fn keys_enum(
 
             #try_with_profile_impl
 
+            // TODO: Replace VALUES with a mechanism that supports all keys, including sub-fields
+            // Currently sub-fields are excluded because the available sub-field keys are generated
+            // by a separate macro invocation, so we can't know them statically here
             const VALUES: &'static [Self] = &[
                 #(Self::#iter_field),*
             ];
@@ -746,45 +1000,109 @@ fn generate_multi_dto_cleanup(fields: &VecDeque<&FieldOrGroup>) -> Vec<syn::Stmt
         .collect()
 }
 
+fn generate_read_arm_for_field(
+    path: &VecDeque<&FieldOrGroup>,
+    configuration_key: ConfigurationKey,
+) -> syn::Arm {
+    let field = path
+        .back()
+        .expect("Path must have a back as it is nonempty")
+        .field()
+        .expect("Back of path is guaranteed to be a field");
+    let segments = generate_field_accessor(path, "try_get", true);
+    let to_string = quote_spanned!(field.reader_ty().span()=> .to_string());
+    let match_variant = configuration_key.match_read_write;
+
+    if field.read_only().is_some() || field.reader_function().is_some() {
+        if extract_type_from_result(field.reader_ty()).is_some() {
+            parse_quote! {
+                ReadableKey::#match_variant => Ok(self.#(#segments).*()?#to_string),
+            }
+        } else {
+            parse_quote! {
+                ReadableKey::#match_variant => Ok(self.#(#segments).*()#to_string),
+            }
+        }
+    } else if field.has_guaranteed_default() {
+        parse_quote! {
+            ReadableKey::#match_variant => Ok(self.#(#segments).*#to_string),
+        }
+    } else {
+        parse_quote! {
+            ReadableKey::#match_variant => Ok(self.#(#segments).*.or_config_not_set()?#to_string),
+        }
+    }
+}
+
+fn generate_read_arms_for_sub_fields(path: &VecDeque<&FieldOrGroup>) -> Vec<syn::Arm> {
+    let Some(field) = path.back().and_then(|f| f.field()) else {
+        return vec![];
+    };
+
+    let Some(sub_fields) = field.sub_field_entries() else {
+        return vec![];
+    };
+
+    let parent_segments = generate_field_accessor(path, "try_get", true).collect::<Vec<_>>();
+    let field_ty = field.reader_ty();
+    let base_ident = ident_for(path);
+    let parent_multi_count = path
+        .iter()
+        .filter(|fog| matches!(fog, FieldOrGroup::Multi(_)))
+        .count();
+
+    sub_fields
+        .iter()
+        .filter_map(|entry| {
+            let EnumEntry::NameAndFields(variant_name, _type_name) = entry else {
+                return None;
+            };
+
+            let combined_ident = format_ident!("{base_ident}{variant_name}");
+            let variant_field_name = syn::Ident::new(
+                &variant_name.to_string().to_snek_case(),
+                variant_name.span(),
+            );
+            let parent_field_names = SequentialIdGenerator::default()
+                .take(parent_multi_count)
+                .collect::<Vec<_>>();
+            let sub_key_ident = syn::Ident::new("sub_key", variant_name.span());
+            let error_msg = format!(
+                "Attempted to read {} sub-field from non-{} variant",
+                variant_name, variant_name
+            );
+
+            let arm: syn::Arm = parse_quote! {
+                ReadableKey::#combined_ident(#(#parent_field_names,)* #sub_key_ident) => {
+                    let mapper_ty = &self.#(#parent_segments).*.or_config_not_set()?;
+                    match mapper_ty {
+                        #field_ty::#variant_name { #variant_field_name } => {
+                            #variant_field_name.read_string(#sub_key_ident)
+                        }
+                        _ => unreachable!(#error_msg),
+                    }
+                }
+            };
+            Some(arm)
+        })
+        .collect()
+}
+
 fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     let enum_variants = paths.iter().map(enum_variant);
     let arms = paths
         .iter()
         .zip(enum_variants)
-        .map(|(path, configuration_key)| -> syn::Arm {
-            let field = path
-                .back()
-                .expect("Path must have a back as it is nonempty")
-                .field()
-                .expect("Back of path is guaranteed to be a field");
-            let segments = generate_field_accessor(path, "try_get", true);
-            let mut parent_segments = generate_field_accessor(path, "try_get", true).collect::<Vec<_>>();
-            parent_segments.remove(parent_segments.len() - 1);
-            let to_string = quote_spanned!(field.reader_ty().span()=> .to_string());
-            let match_variant = configuration_key.match_read_write;
-            if field.read_only().is_some() || field.reader_function().is_some() {
-                if extract_type_from_result(field.reader_ty()).is_some() {
-                    parse_quote! {
-                        ReadableKey::#match_variant => Ok(self.#(#segments).*()?#to_string),
-                    }
-                } else {
-                    parse_quote! {
-                        ReadableKey::#match_variant => Ok(self.#(#segments).*()#to_string),
-                    }
-                }
-            } else if field.has_guaranteed_default() {
-                parse_quote! {
-                    ReadableKey::#match_variant => Ok(self.#(#segments).*#to_string),
-                }
-            } else {
-                parse_quote! {
-                    ReadableKey::#match_variant => Ok(self.#(#segments).*.or_config_not_set()?#to_string),
-                }
-            }
+        .flat_map(|(path, configuration_key)| {
+            let main_arm = generate_read_arm_for_field(path, configuration_key);
+            let sub_field_arms = generate_read_arms_for_sub_fields(path);
+            std::iter::once(main_arm).chain(sub_field_arms)
         });
+
     let fallback_branch: Option<syn::Arm> = paths
         .is_empty()
         .then(|| parse_quote!(_ => unreachable!("ReadableKey is uninhabited")));
+
     quote! {
         impl TEdgeConfigReader {
             pub fn read_string(&self, key: &ReadableKey) -> Result<String, ReadError> {
@@ -797,6 +1115,159 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     }
 }
 
+fn generate_write_arms_for_sub_fields(
+    path: &VecDeque<&FieldOrGroup>,
+) -> Vec<(syn::Arm, syn::Arm, syn::Arm, syn::Arm, syn::Arm)> {
+    let Some(field) = path.back().and_then(|f| f.field()) else {
+        return vec![];
+    };
+
+    let Some(sub_fields) = field.sub_field_entries() else {
+        return vec![];
+    };
+
+    let mut parent_segments =
+        generate_field_accessor(path, "try_get_mut", false).collect::<Vec<_>>();
+    // Remove the last segment (the field itself) to get just the parent
+    parent_segments.pop();
+
+    let field_dto_ty = field.dto_ty();
+    let field_name = field.ident();
+    let base_ident = ident_for(path);
+    let parent_multi_count = path
+        .iter()
+        .filter(|fog| matches!(fog, FieldOrGroup::Multi(_)))
+        .count();
+
+    sub_fields
+        .iter()
+        .filter_map(|entry| {
+            let EnumEntry::NameAndFields(variant_name, type_name) = entry else {
+                return None;
+            };
+
+            let combined_ident = format_ident!("{base_ident}{variant_name}");
+            let variant_field_name = syn::Ident::new(&variant_name.to_string().to_snek_case(), variant_name.span());
+            let parent_field_names = SequentialIdGenerator::default().take(parent_multi_count).collect::<Vec<_>>();
+            let sub_key_ident = syn::Ident::new("sub_key", variant_name.span());
+            let variant_name_str = variant_name.to_string().to_snek_case();
+            let dto_type_ident = format_ident!("{}Dto", type_name);
+
+            // Get the parent variable name from the path
+            let parent_var_name = if parent_segments.is_empty() {
+                // If there are no parent segments, we're working on self directly
+                syn::Ident::new("self_root", field_name.span())
+            } else {
+                // Take the ident from the last element in the path (before the field itself)
+                path.iter()
+                    .rev()
+                    .nth(1)
+                    .expect("Parent must exist since parent_segments is not empty")
+                    .ident()
+                    .clone()
+            };
+
+            // Generate the field variable name as {parent}_{field}
+            let field_var_name = format_ident!("{}_{}", parent_var_name, field_name);
+
+            let update_arm: syn::Arm = parse_quote! {
+                WritableKey::#combined_ident(#(#parent_field_names,)* #sub_key_ident) => {
+                    let #parent_var_name = self.#(#parent_segments).*;
+                    let #field_var_name = #parent_var_name.#field_name.get_or_insert_with(|| #field_dto_ty::#variant_name { #variant_field_name: #dto_type_ident::default() });
+                    if let #field_dto_ty::#variant_name { #variant_field_name } = #field_var_name {
+                        #variant_field_name.try_update_str(#sub_key_ident, value)?;
+                    } else {
+                        return Err(WriteError::SuperFieldWrongValue {
+                            target: key.clone(),
+                            parent: WritableKey::#base_ident(#(#parent_field_names.clone()),*),
+                            parent_expected: #variant_name_str.to_string(),
+                            parent_actual: #field_var_name.to_string(),
+                        });
+                    }
+                }
+            };
+
+            let other_parent_var_name = format_ident!("other_{}", parent_var_name);
+            let other_field_var_name = format_ident!("other_{}", field_var_name);
+            let other_variant_field_name = format_ident!("other_{}", variant_field_name);
+
+            let take_value_arm: syn::Arm = parse_quote! {
+                WritableKey::#combined_ident(#(#parent_field_names,)* #sub_key_ident) => {
+                    let #parent_var_name = self.#(#parent_segments).*;
+                    let #field_var_name = #parent_var_name.#field_name.get_or_insert_with(|| #field_dto_ty::#variant_name { #variant_field_name: #dto_type_ident::default() });
+                    if let #field_dto_ty::#variant_name { #variant_field_name } = #field_var_name {
+                        let #other_parent_var_name = other.#(#parent_segments).*;
+                        let #other_field_var_name = &mut #other_parent_var_name.#field_name;
+                        if let Some(#field_dto_ty::#variant_name { #variant_field_name: ref mut #other_variant_field_name }) = #other_field_var_name {
+                            #variant_field_name.take_value_from(#other_variant_field_name, #sub_key_ident)?;
+                        }
+                    } else {
+                        return Err(WriteError::SuperFieldWrongValue {
+                            target: key.clone(),
+                            parent: WritableKey::#base_ident(#(#parent_field_names.clone()),*),
+                            parent_expected: #variant_name_str.to_string(),
+                            parent_actual: #field_var_name.to_string(),
+                        });
+                    }
+                }
+            };
+
+            let unset_arm: syn::Arm = parse_quote! {
+                WritableKey::#combined_ident(#(#parent_field_names,)* #sub_key_ident) => {
+                    let #parent_var_name = self.#(#parent_segments).*;
+                    let #field_var_name = #parent_var_name.#field_name.get_or_insert_with(|| #field_dto_ty::#variant_name { #variant_field_name: #dto_type_ident::default() });
+                    if let #field_dto_ty::#variant_name { #variant_field_name } = #field_var_name {
+                        #variant_field_name.try_unset_key(#sub_key_ident)?;
+                    } else {
+                        return Err(WriteError::SuperFieldWrongValue {
+                            target: key.clone(),
+                            parent: WritableKey::#base_ident(#(#parent_field_names.clone()),*),
+                            parent_expected: #variant_name_str.to_string(),
+                            parent_actual: #field_var_name.to_string(),
+                        });
+                    }
+                }
+            };
+
+            let append_arm: syn::Arm = parse_quote! {
+                WritableKey::#combined_ident(#(#parent_field_names,)* #sub_key_ident) => {
+                    let #parent_var_name = self.#(#parent_segments).*;
+                    let #field_var_name = #parent_var_name.#field_name.get_or_insert_with(|| #field_dto_ty::#variant_name { #variant_field_name: #dto_type_ident::default() });
+                    if let #field_dto_ty::#variant_name { #variant_field_name } = #field_var_name {
+                        #variant_field_name.try_append_str(reader, #sub_key_ident, value)?;
+                    } else {
+                        return Err(WriteError::SuperFieldWrongValue {
+                            target: key.clone(),
+                            parent: WritableKey::#base_ident(#(#parent_field_names.clone()),*),
+                            parent_expected: #variant_name_str.to_string(),
+                            parent_actual: #field_var_name.to_string(),
+                        });
+                    }
+                }
+            };
+
+            let remove_arm: syn::Arm = parse_quote! {
+                WritableKey::#combined_ident(#(#parent_field_names,)* #sub_key_ident) => {
+                    let #parent_var_name = self.#(#parent_segments).*;
+                    let #field_var_name = #parent_var_name.#field_name.get_or_insert_with(|| #field_dto_ty::#variant_name { #variant_field_name: #dto_type_ident::default() });
+                    if let #field_dto_ty::#variant_name { #variant_field_name } = #field_var_name {
+                        #variant_field_name.try_remove_str(reader, #sub_key_ident, value)?;
+                    } else {
+                        return Err(WriteError::SuperFieldWrongValue {
+                            target: key.clone(),
+                            parent: WritableKey::#base_ident(#(#parent_field_names.clone()),*),
+                            parent_expected: #variant_name_str.to_string(),
+                            parent_actual: #field_var_name.to_string(),
+                        });
+                    }
+                }
+            };
+
+            Some((update_arm, take_value_arm, unset_arm, append_arm, remove_arm))
+        })
+        .collect()
+}
+
 fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     let enum_variants = paths.iter().map(enum_variant);
     type Arms = (
@@ -806,10 +1277,10 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
         Vec<syn::Arm>,
         Vec<syn::Arm>,
     );
-    let (update_arms, copy_arms, unset_arms, append_arms, remove_arms): Arms  = paths
+    let (update_arms, take_value_arms, unset_arms, append_arms, remove_arms): Arms  = paths
         .iter()
         .zip(enum_variants)
-        .map(|(path, configuration_key)| {
+        .flat_map(|(path, configuration_key)| {
             let read_segments = generate_field_accessor(path, "try_get", true);
             let write_segments = generate_field_accessor(path, "try_get_mut", false).collect::<Vec<_>>();
             let cleanup_stmts = generate_multi_dto_cleanup(path);
@@ -830,8 +1301,11 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             let parse = quote_spanned! {parse_as.span()=> parse::<#parse_as>() };
             let convert_to_field_ty = quote_spanned! {ty.span()=> map(<#ty>::from)};
 
-            // TODO fix current_value type in case of sub fields
-            let current_value = if field.read_only().is_some() || field.reader_function().is_some() {
+            // For fields with sub-fields, get current value from self (Dto) instead of reader,
+            // since the reader type is different from the dto type for sub-fields
+            let current_value = if field.sub_field_entries().is_some() {
+                quote_spanned! {ty.span()=> self.#(#write_segments).*.clone()}
+            } else if field.read_only().is_some() || field.reader_function().is_some() {
                 if extract_type_from_result(field.reader_ty()).is_some() {
                     quote_spanned! {ty.span()=> reader.#(#read_segments).*().ok().cloned()}
                 } else {
@@ -843,7 +1317,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 quote_spanned! {ty.span()=> reader.#(#read_segments).*.or_none().cloned()}
             };
 
-            (
+            let main_arms = (
                 parse_quote_spanned! {ty.span()=>
                     #[allow(clippy::useless_conversion)]
                     WritableKey::#match_variant => self.#(#write_segments).* = Some(value
@@ -878,7 +1352,10 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                         .#convert_to_field_ty
                         .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
                 },
-            )
+            );
+
+            let sub_field_arms = generate_write_arms_for_sub_fields(path);
+            std::iter::once(main_arms).chain(sub_field_arms)
         })
         .multiunzip();
     let fallback_branch: Option<syn::Arm> = update_arms
@@ -897,7 +1374,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
 
             pub(crate) fn take_value_from(&mut self, other: &mut TEdgeConfigDto, key: &WritableKey) -> Result<(), WriteError> {
                 match key {
-                    #(#copy_arms)*
+                    #(#take_value_arms)*
                     #fallback_branch
                 };
                 Ok(())
@@ -928,6 +1405,12 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             }
         }
     }
+}
+
+/// Metadata for tracking sub-field information
+#[derive(Clone, Debug)]
+struct SubFieldInfo {
+    type_name: syn::Ident,
 }
 
 /// A configuration key that is stored in an enum variant
@@ -967,6 +1450,8 @@ struct ConfigurationKey {
 
     insert_profiles: Vec<(syn::Pat, syn::Expr)>,
     doc_comment: Option<String>,
+    /// If this is a sub-field key, contains metadata about the sub-field
+    sub_field_info: Option<SubFieldInfo>,
 }
 
 fn ident_for(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
@@ -1082,6 +1567,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             formatters,
             insert_profiles,
             doc_comment: segments.iter().last().unwrap().doc(),
+            sub_field_info: None,
         }
     } else {
         ConfigurationKey {
@@ -1096,7 +1582,8 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                 parse_quote!(::std::borrow::Cow::Borrowed(#key_str)),
             )],
             insert_profiles: vec![],
-            doc_comment: segments.iter().last().unwrap().doc(),
+            doc_comment: segments.back().unwrap().doc(),
+            sub_field_info: None,
         }
     }
 }
@@ -1217,6 +1704,14 @@ mod tests {
     /// and that the regex itself functions as intended
     const C8Y_URL_REGEX: &str = "^c8y(?:[\\._]profiles[\\._]([^\\.]+))?[\\._]url$";
 
+    /// The regex generated for `mapper.ty` with multi-field profiles
+    const MAPPER_TY_REGEX: &str = "^mapper(?:[\\._]profiles[\\._]([^\\.]+))?[\\._]type$";
+
+    /// The regex generated for `mapper.c8y.*` (sub-field with profiles)
+    /// Captures: (1) profile name, (2) remainder after the sub-field prefix
+    const MAPPER_TY_C8Y_REGEX: &str =
+        "^mapper(?:[\\._]profiles[\\._]([^\\.]+))?[\\._]c8y[\\._](.+)$";
+
     #[test_case("c8y.url", None; "with no profile specified")]
     #[test_case("c8y.profiles.name.url", Some("name"); "with profile toml syntax")]
     #[test_case("c8y_profiles_name_url", Some("name"); "with environment variable profile")]
@@ -1234,6 +1729,32 @@ mod tests {
     #[test_case("c8y.profiles.multiple.profile.sections.url"; "with an invalid profile name")]
     fn regex_fails(input: &str) {
         let re = regex::Regex::new(C8Y_URL_REGEX).unwrap();
+        assert!(re.captures(input).is_none());
+    }
+
+    #[test_case("mapper.c8y.instance", (None, "instance"); "with no profile")]
+    #[test_case("mapper.profiles.myprofile.c8y.instance", (Some("myprofile"), "instance"); "with profile toml syntax")]
+    #[test_case("mapper_profiles_myprofile_c8y_instance", (Some("myprofile"), "instance"); "with environment variable syntax")]
+    fn sub_field_regex_matches(input: &str, (profile, remainder): (Option<&str>, &str)) {
+        let re = regex::Regex::new(MAPPER_TY_C8Y_REGEX).unwrap();
+        let captures = re.captures(input).unwrap();
+        assert_eq!(
+            captures.get(1).map(|s| s.as_str()),
+            profile,
+            "Profile capture should match"
+        );
+        assert_eq!(
+            captures.get(2).map(|s| s.as_str()),
+            Some(remainder),
+            "Remainder capture should match"
+        );
+    }
+
+    #[test_case("mapper.type.custom.field"; "with custom sub-field instead of c8y")]
+    #[test_case("mapper.type"; "with no sub-field")]
+    #[test_case("mapper.c8y"; "with sub-field but no remainder")]
+    fn sub_field_regex_fails(input: &str) {
+        let re = regex::Regex::new(MAPPER_TY_C8Y_REGEX).unwrap();
         assert!(re.captures(input).is_none());
     }
 
@@ -1787,7 +2308,7 @@ mod tests {
     }
 
     #[test]
-    fn writable_keys_includes_abilty_to_set_sub_fields() {
+    fn writable_keys_includes_ability_to_set_sub_fields() {
         let input: crate::input::Configuration = parse_quote!(
             #[tedge_config(multi)]
             mapper: {
@@ -1843,6 +2364,693 @@ mod tests {
         };
 
         pretty_assertions::assert_eq!(unparse(&actual), unparse(&expected));
+    }
+
+    #[test]
+    fn sub_fields_dont_trigger_nested_profiles_error() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Az(Az), Custom])]
+                #[tedge_config(rename = "type")]
+                ty: MapperType,
+            },
+        );
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "try_with_profile");
+
+        let expected = parse_quote! {
+            impl ReadableKey {
+                pub fn try_with_profile(self, profile: ProfileName) -> ::anyhow::Result<Self> {
+                    match self {
+                        Self::MapperType(None) => Ok(Self::MapperType(Some(profile.into()))),
+                        c @ Self::MapperType(Some(_)) => ::anyhow::bail!("Multiple profiles selected from the arguments {c} and --profile {profile}"),
+                        other => ::anyhow::bail!("You've supplied a profile, but {other} is not a profiled configuration"),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#impl_block)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn read_string_handles_sub_field_keys() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Custom])]
+                #[tedge_config(rename = "type")]
+                ty: MapperType,
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let readers = generate_string_readers(&paths);
+        let impl_block: syn::ItemImpl = syn::parse2(readers).unwrap();
+        let actual = retain_fn(impl_block, "read_string");
+
+        let expected = parse_quote! {
+            impl TEdgeConfigReader {
+                pub fn read_string(&self, key: &ReadableKey) -> Result<String, ReadError> {
+                    match key {
+                        ReadableKey::MapperType(key0) => Ok(self.mapper.try_get(key0.as_deref())?.ty.or_config_not_set()?.to_string()),
+                        ReadableKey::MapperTypeC8y(key0, sub_key) => {
+                            let mapper_ty = &self.mapper.try_get(key0.as_deref())?.ty.or_config_not_set()?;
+                            match mapper_ty {
+                                MapperTypeReader::C8y { c8y } => {
+                                    c8y.read_string(sub_key)
+                                }
+                                _ => unreachable!("Attempted to read C8y sub-field from non-C8y variant"),
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#actual)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn write_string_handles_sub_field_keys() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Custom])]
+                ty: MapperType,
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let writers = generate_string_writers(&paths);
+        let impl_block: syn::ItemImpl = syn::parse2(writers).unwrap();
+        let actual = retain_fn(impl_block, "try_update_str");
+
+        let expected = parse_quote! {
+            impl TEdgeConfigDto {
+                pub fn try_update_str(&mut self, key: &WritableKey, value: &str) -> Result<(), WriteError> {
+                    match key {
+                        #[allow(clippy::useless_conversion)]
+                        WritableKey::MapperTy(key0) => self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty = Some(value.parse::<MapperTypeDto>().map(<MapperTypeDto>::from).map_err(|e| WriteError::ParseValue(Box::new(e)))?),
+                        WritableKey::MapperTyC8y(key0, sub_key) => {
+                            let mapper = self.mapper.try_get_mut(key0.as_deref(), "mapper")?;
+                            let mapper_ty = mapper.ty.get_or_insert_with(|| MapperTypeDto::C8y { c8y: C8yDto::default() });
+                            if let MapperTypeDto::C8y { c8y } = mapper_ty {
+                                c8y.try_update_str(sub_key, value)?;
+                            } else {
+                                return Err(WriteError::SuperFieldWrongValue {
+                                    target: key.clone(),
+                                    parent: WritableKey::MapperTy(key0.clone()),
+                                    parent_expected: "c8y".to_string(),
+                                    parent_actual: mapper_ty.to_string(),
+                                });
+                            }
+                        }
+                    };
+                    Ok(())
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#actual)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn take_value_from_handles_sub_field_keys() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Custom])]
+                ty: MapperType,
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let writers = generate_string_writers(&paths);
+        let impl_block: syn::ItemImpl = syn::parse2(writers).unwrap();
+        let actual = retain_fn(impl_block, "take_value_from");
+
+        let expected = parse_quote! {
+            impl TEdgeConfigDto {
+                pub(crate) fn take_value_from(&mut self, other: &mut TEdgeConfigDto, key: &WritableKey) -> Result<(), WriteError> {
+                    match key {
+                        WritableKey::MapperTy(key0) => {
+                            self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty = other
+                                .mapper
+                                .try_get_mut(key0.as_deref(), "mapper")?
+                                .ty
+                                .take();
+                        }
+                        WritableKey::MapperTyC8y(key0, sub_key) => {
+                            let mapper = self.mapper.try_get_mut(key0.as_deref(), "mapper")?;
+                            let mapper_ty = mapper.ty.get_or_insert_with(|| MapperTypeDto::C8y { c8y: C8yDto::default() });
+                            if let MapperTypeDto::C8y { c8y } = mapper_ty {
+                                let other_mapper = other.mapper.try_get_mut(key0.as_deref(), "mapper")?;
+                                let other_mapper_ty = &mut other_mapper.ty;
+                                if let Some(MapperTypeDto::C8y { c8y: ref mut other_c8y }) = other_mapper_ty {
+                                    c8y.take_value_from(other_c8y, sub_key)?;
+                                }
+                            } else {
+                                return Err(WriteError::SuperFieldWrongValue {
+                                    target: key.clone(),
+                                    parent: WritableKey::MapperTy(key0.clone()),
+                                    parent_expected: "c8y".to_string(),
+                                    parent_actual: mapper_ty.to_string(),
+                                });
+                            }
+                        }
+                    };
+                    Ok(())
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#actual)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn try_unset_key_handles_sub_field_keys() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Custom])]
+                ty: MapperType,
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let writers = generate_string_writers(&paths);
+        let impl_block: syn::ItemImpl = syn::parse2(writers).unwrap();
+        let actual = retain_fn(impl_block, "try_unset_key");
+
+        let expected = parse_quote! {
+            impl TEdgeConfigDto {
+                pub fn try_unset_key(&mut self, key: &WritableKey) -> Result<(), WriteError> {
+                    match key {
+                        WritableKey::MapperTy(key0) => {
+                            self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty = None;
+                            self.mapper.remove_if_empty(key0.as_deref());
+                        }
+                        WritableKey::MapperTyC8y(key0, sub_key) => {
+                            let mapper = self.mapper.try_get_mut(key0.as_deref(), "mapper")?;
+                            let mapper_ty = mapper.ty.get_or_insert_with(|| MapperTypeDto::C8y { c8y: C8yDto::default() });
+                            if let MapperTypeDto::C8y { c8y } = mapper_ty {
+                                c8y.try_unset_key(sub_key)?;
+                            } else {
+                                return Err(WriteError::SuperFieldWrongValue {
+                                    target: key.clone(),
+                                    parent: WritableKey::MapperTy(key0.clone()),
+                                    parent_expected: "c8y".to_string(),
+                                    parent_actual: mapper_ty.to_string(),
+                                });
+                            }
+                        }
+                    };
+                    Ok(())
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#actual)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn try_append_str_handles_sub_field_keys() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Custom])]
+                ty: MapperType,
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let writers = generate_string_writers(&paths);
+        let impl_block: syn::ItemImpl = syn::parse2(writers).unwrap();
+        let actual = retain_fn(impl_block, "try_append_str");
+
+        let expected = parse_quote! {
+            impl TEdgeConfigDto {
+                pub fn try_append_str(&mut self, reader: &TEdgeConfigReader, key: &WritableKey, value: &str) -> Result<(), WriteError> {
+                    match key {
+                        #[allow(clippy::useless_conversion)]
+                        WritableKey::MapperTy(key0) => {
+                            self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty = <MapperTypeDto as AppendRemoveItem>::append(
+                                self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty.clone(),
+                                value
+                                    .parse::<MapperTypeDto>()
+                                    .map(<MapperTypeDto>::from)
+                                    .map_err(|e| WriteError::ParseValue(Box::new(e)))?,
+                            );
+                        }
+                        WritableKey::MapperTyC8y(key0, sub_key) => {
+                            let mapper = self.mapper.try_get_mut(key0.as_deref(), "mapper")?;
+                            let mapper_ty = mapper.ty.get_or_insert_with(|| MapperTypeDto::C8y { c8y: C8yDto::default() });
+                            if let MapperTypeDto::C8y { c8y } = mapper_ty {
+                                c8y.try_append_str(reader, sub_key, value)?;
+                            } else {
+                                return Err(WriteError::SuperFieldWrongValue {
+                                    target: key.clone(),
+                                    parent: WritableKey::MapperTy(key0.clone()),
+                                    parent_expected: "c8y".to_string(),
+                                    parent_actual: mapper_ty.to_string(),
+                                });
+                            }
+                        }
+                    };
+                    Ok(())
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#actual)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn try_remove_str_handles_sub_field_keys() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Custom])]
+                #[tedge_config(rename = "type")]
+                ty: MapperType,
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let writers = generate_string_writers(&paths);
+        let impl_block: syn::ItemImpl = syn::parse2(writers).unwrap();
+        let actual = retain_fn(impl_block, "try_remove_str");
+
+        let expected = parse_quote! {
+            impl TEdgeConfigDto {
+                pub fn try_remove_str(&mut self, reader: &TEdgeConfigReader, key: &WritableKey, value: &str) -> Result<(), WriteError> {
+                    match key {
+                        #[allow(clippy::useless_conversion)]
+                        WritableKey::MapperType(key0) => {
+                            self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty = <MapperTypeDto as AppendRemoveItem>::remove(
+                                self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty.clone(),
+                                value
+                                    .parse::<MapperTypeDto>()
+                                    .map(<MapperTypeDto>::from)
+                                    .map_err(|e| WriteError::ParseValue(Box::new(e)))?,
+                            );
+                        }
+                        WritableKey::MapperTypeC8y(key0, sub_key) => {
+                            let mapper = self.mapper.try_get_mut(key0.as_deref(), "mapper")?;
+                            let mapper_ty = mapper.ty.get_or_insert_with(|| MapperTypeDto::C8y { c8y: C8yDto::default() });
+                            if let MapperTypeDto::C8y { c8y } = mapper_ty {
+                                c8y.try_remove_str(reader, sub_key, value)?;
+                            } else {
+                                return Err(WriteError::SuperFieldWrongValue {
+                                    target: key.clone(),
+                                    parent: WritableKey::MapperType(key0.clone()),
+                                    parent_expected: "c8y".to_string(),
+                                    parent_actual: mapper_ty.to_string(),
+                                });
+                            }
+                        }
+                    };
+                    Ok(())
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#actual)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn sub_field_keys_are_excluded_from_values_array() {
+        // Regression test: ensure sub-field keys don't cause "Self is only available in impls" error
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Custom])]
+                ty: MapperType,
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let generated = keys_enum(parse_quote!(ReadableKey), &config_keys, "read from");
+
+        // Should parse successfully without "Self is only available" errors
+        let generated_file: syn::File = syn::parse2(generated).unwrap();
+
+        // Find the VALUES constant
+        let impl_block = generated_file
+            .items
+            .iter()
+            .find_map(|item| {
+                if let syn::Item::Impl(r#impl @ syn::ItemImpl { trait_: None, .. }) = item {
+                    Some(r#impl)
+                } else {
+                    None
+                }
+            })
+            .expect("Should have impl block");
+
+        let values_const = impl_block
+            .items
+            .iter()
+            .find_map(|item| {
+                if let syn::ImplItem::Const(c) = item {
+                    if c.ident == "VALUES" {
+                        return Some(c);
+                    }
+                }
+                None
+            })
+            .expect("Should have VALUES const");
+
+        // The VALUES array should only contain MapperType(None), not the sub-field variants
+        let values_str = quote!(#values_const).to_string();
+        assert!(
+            values_str.contains("MapperTy"),
+            "Should contain MapperTy (rename applied), got: {}",
+            values_str
+        );
+        assert!(
+            !values_str.contains("MapperTyC8y"),
+            "Should not contain sub-field key MapperTyC8y"
+        );
+        assert!(
+            !values_str.contains("unreachable"),
+            "Should not contain unreachable! macro calls"
+        );
+    }
+
+    #[test]
+    fn sub_field_keys_are_excluded_from_fromstr() {
+        // Regression test: ensure sub-field keys don't cause "Self is only available" error in FromStr
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Custom])]
+                ty: MapperType,
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let fromstr_impl = generate_fromstr_readable(parse_quote!(ReadableKey), &config_keys);
+
+        // Should parse successfully without "Self is only available" errors
+        let _: syn::File =
+            syn::parse2(fromstr_impl).expect("FromStr impl should parse without errors");
+    }
+
+    #[test]
+    fn fromstr_parses_sub_field_keys() {
+        // Test that FromStr properly parses sub-field keys
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y)])]
+                #[tedge_config(rename = "type")]
+                ty: MapperType,
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let generated = generate_fromstr(
+            parse_quote!(ReadableKey),
+            &config_keys,
+            parse_quote!(_ => unimplemented!("just a test, no error handling")),
+        );
+
+        let expected = parse_quote!(
+            impl ::std::str::FromStr for ReadableKey {
+                type Err = ParseKeyError;
+                fn from_str(value: &str) -> Result<Self, Self::Err> {
+                    #[deny(unreachable_patterns)]
+                    let res = match replace_aliases(value.to_owned()).replace(".", "_").as_str() {
+                        "mapper_type" => {
+                            if value != "mapper.type" {
+                                warn_about_deprecated_key(value.to_owned(), "mapper.type");
+                            }
+                            return Ok(Self::MapperType(None));
+                        },
+                        key if key.starts_with("mapper_c8y_") => {
+                            // Sub-field keys start with the prefix and parse the remainder with the sub-key type
+                            let sub_key_str = value.strip_prefix("mapper.c8y.").unwrap_or(value);
+                            let sub_key: C8yReadableKey = sub_key_str.parse()?;
+                            return Ok(Self::MapperTypeC8y(None, sub_key));
+                        },
+                        _ => unimplemented!("just a test, no error handling"),
+                    };
+                    if let Some(captures) = ::regex::Regex::new(#MAPPER_TY_REGEX).unwrap().captures(value) {
+                        let key0 = captures.get(1usize).map(|re_match| re_match.as_str().to_owned());
+                        return Ok(Self::MapperType(key0));
+                    };
+                    if let Some(captures) = ::regex::Regex::new(#MAPPER_TY_C8Y_REGEX).unwrap().captures(value) {
+                        let key0 = captures.get(1usize).map(|re_match| re_match.as_str().to_owned());
+                        let sub_key_str = captures.get(2usize).map(|re_match| re_match.as_str()).unwrap_or("");
+                        let sub_key: C8yReadableKey = sub_key_str.parse()?;
+                        return Ok(Self::MapperTypeC8y(key0, sub_key));
+                    };
+                    res
+                }
+            }
+        );
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&syn::parse2(generated).unwrap()),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn fromstr_parses_sub_field_keys_with_intermediary_group() {
+        // Test that sub-field keys with an intermediary group still use correct capture indices
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                config: {
+                    #[tedge_config(sub_fields = [C8y(C8y)])]
+                    ty: MapperType,
+                }
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let generated = generate_fromstr(
+            parse_quote!(ReadableKey),
+            &config_keys,
+            parse_quote!(_ => unimplemented!("just a test, no error handling")),
+        );
+
+        let generated_code = prettyplease::unparse(&syn::parse2(generated).unwrap());
+
+        // Find all capture.get(...) calls to see what indices are being used
+        // Note: The pattern must account for potential whitespace/newlines between 'captures' and '.get'
+        let capture_pattern =
+            regex::Regex::new(r"captures\s*\.get\s*\(\s*(\d+)\s*usize\s*\)").unwrap();
+        let capture_indices: Vec<usize> = capture_pattern
+            .captures_iter(&generated_code)
+            .filter_map(|cap| cap.get(1).and_then(|m| m.as_str().parse().ok()))
+            .collect();
+
+        // We should have exactly three capture groups: 1 for profile on mapper.config.ty, 1 for profile on mapper.config.ty.c8y.*, 2 for sub-key remainder
+        if capture_indices != vec![1, 1, 2] {
+            eprintln!("Expected [1, 1, 2] but found {:?}", capture_indices);
+            eprintln!("Generated code:\n{}", generated_code);
+            panic!(
+                "Capture indices mismatch: expected [1, 1, 2], got {:?}",
+                capture_indices
+            );
+        }
+    }
+
+    #[test]
+    fn sub_field_variants_in_writable_key_use_writable_subkey_type() {
+        // Test that WritableKey sub-field enum variants use WritableKey sub-field types,
+        // not ReadableKey sub-field types
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                config: {
+                    #[tedge_config(sub_fields = [C8y(C8y)])]
+                    ty: MapperType,
+                }
+            },
+        );
+
+        let generated = generate_writable_keys(&input.groups);
+        let generated_code = prettyplease::unparse(&syn::parse2(generated).unwrap());
+
+        // Extract the WritableKey enum specifically
+        let start_idx = generated_code
+            .find("pub enum WritableKey")
+            .expect("WritableKey enum not found");
+        let end_idx = generated_code[start_idx..]
+            .find("}\n")
+            .expect("End of WritableKey enum not found")
+            + start_idx;
+        let writable_key_enum = &generated_code[start_idx..end_idx];
+
+        // Should contain C8yWritableKey, not C8yReadableKey
+        assert!(
+            writable_key_enum.contains("C8yWritableKey"),
+            "WritableKey should use C8yWritableKey. Found:\n{}",
+            writable_key_enum
+        );
+
+        assert!(
+            !writable_key_enum.contains("C8yReadableKey"),
+            "WritableKey should NOT use C8yReadableKey. Found:\n{}",
+            writable_key_enum
+        );
+    }
+
+    #[test]
+    fn sub_field_append_remove_uses_dto_type_not_reader_type() {
+        // Regression test: ensure try_append_str and try_remove_str use the Dto type
+        // for current_value when the field has sub-fields, not the Reader type.
+        // Also tests that sub-field arms properly delegate to the sub-field DTO methods.
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Custom])]
+                ty: MapperType,
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let writers = generate_string_writers(&paths);
+
+        let generated_file: syn::File = syn::parse2(writers).unwrap();
+
+        // Find try_append_str method
+        let try_append_method = generated_file
+            .items
+            .iter()
+            .find_map(|item| {
+                if let syn::Item::Impl(impl_block) = item {
+                    impl_block.items.iter().find_map(|impl_item| {
+                        if let syn::ImplItem::Fn(method) = impl_item {
+                            if method.sig.ident == "try_append_str" {
+                                return Some(method.clone());
+                            }
+                        }
+                        None
+                    })
+                } else {
+                    None
+                }
+            })
+            .expect("Should have try_append_str method");
+
+        let expected: syn::File = parse_quote! {
+            pub fn try_append_str(
+                &mut self,
+                reader: &TEdgeConfigReader,
+                key: &WritableKey,
+                value: &str,
+            ) -> Result<(), WriteError> {
+                match key {
+                    #[allow(clippy::useless_conversion)]
+                    WritableKey::MapperTy(key0) => {
+                        self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty = <MapperTypeDto as AppendRemoveItem>::append(
+                            self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty.clone(),
+                            value
+                                .parse::<MapperTypeDto>()
+                                .map(<MapperTypeDto>::from)
+                                .map_err(|e| WriteError::ParseValue(Box::new(e)))?,
+                        );
+                    }
+                    WritableKey::MapperTyC8y(key0, sub_key) => {
+                        let mapper = self.mapper.try_get_mut(key0.as_deref(), "mapper")?;
+                        let mapper_ty = mapper.ty.get_or_insert_with(|| MapperTypeDto::C8y { c8y: C8yDto::default() });
+                        if let MapperTypeDto::C8y { c8y } = mapper_ty {
+                            c8y.try_append_str(reader, sub_key, value)?;
+                        } else {
+                            return Err(WriteError::SuperFieldWrongValue {
+                                target: key.clone(),
+                                parent: WritableKey::MapperTy(key0.clone()),
+                                parent_expected: "c8y".to_string(),
+                                parent_actual: mapper_ty.to_string(),
+                            });
+                        }
+                    }
+                };
+                Ok(())
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#try_append_method)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn to_cow_str_handles_sub_field_keys() {
+        // Test that to_cow_str generates match arms for sub-field keys
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Custom])]
+                ty: MapperType,
+            },
+        );
+
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let impl_block = keys_enum_impl_block(&config_keys);
+        let actual = retain_fn(impl_block, "to_cow_str");
+
+        let expected = parse_quote! {
+            impl ReadableKey {
+                pub fn to_cow_str(&self) -> ::std::borrow::Cow<'static, str> {
+                    match self {
+                        Self::MapperTy(None) => ::std::borrow::Cow::Borrowed("mapper.ty"),
+                        Self::MapperTy(Some(key0)) => {
+                            ::std::borrow::Cow::Owned(format!("mapper.profiles.{key0}.ty"))
+                        }
+                        Self::MapperTyC8y(key0, sub_key) => {
+                            ::std::borrow::Cow::Owned(format!("{}.{}.{}", {
+                                vec![if let Some(profile) = key0 {
+                                    format!("mapper.profiles.{}", profile)
+                                } else {
+                                    "mapper".to_string()
+                                }].join(".")
+                            }, "c8y", sub_key.to_cow_str()))
+                        }
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#actual)),
+            prettyplease::unparse(&expected)
+        );
     }
 
     fn keys_enum_impl_block(config_keys: &(Vec<String>, Vec<ConfigurationKey>)) -> ItemImpl {

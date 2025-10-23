@@ -1,5 +1,6 @@
 use heck::ToSnakeCase as _;
 use proc_macro2::TokenStream;
+use quote::format_ident;
 use quote::quote;
 use quote::quote_spanned;
 use quote::ToTokens;
@@ -54,7 +55,12 @@ pub fn generate(
                                         &name.to_string().to_snake_case(),
                                         name.span(),
                                     );
-                                    syn::parse_quote!(#name{ #field_name: Option<#inner> })
+                                    let ty = format_ident!("{inner}Dto");
+                                    // TODO do I need serde(default) here?
+                                    syn::parse_quote!(#name{
+                                        #[serde(default)]
+                                        #field_name: #ty
+                                    })
                                 }
                             }
                         });
@@ -323,8 +329,8 @@ mod tests {
             #[strum(serialize_all = "snake_case")]
             #[serde(tag = "type")]
             pub enum MapperTypeDto {
-                C8y { c8y: Option<C8y> },
-                Aws { aws: Option<Aws> },
+                C8y { #[serde(default)] c8y: C8yDto },
+                Aws { #[serde(default)] aws: AwsDto },
                 Custom,
             }
         };

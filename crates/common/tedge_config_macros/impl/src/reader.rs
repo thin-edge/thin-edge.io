@@ -96,14 +96,14 @@ fn generate_structs(
                                         name.span(),
                                     );
                                     let inner = format_ident!("{inner}Reader");
-                                    syn::parse_quote!(#name{ #field_name: OptionalConfig<#inner> })
+                                    syn::parse_quote!(#name{ #field_name: #inner })
                                 }
                             }
                         });
                         let field_ty = field.reader_ty();
                         let tag_name = field.name();
                         let ty: syn::ItemEnum = syn::parse_quote_spanned!(sub_fields.span()=>
-                            #[derive(Debug, Clone, ::serde::Serialize, PartialEq, ::strum::EnumString, ::strum::Display, ::doku::Document)]
+                            #[derive(Debug, Clone, ::serde::Serialize, PartialEq, ::strum::Display, ::doku::Document)]
                             #[serde(rename_all = "snake_case")]
                             #[strum(serialize_all = "snake_case")]
                             #[serde(tag = #tag_name)]
@@ -383,14 +383,14 @@ fn reader_value_for_field<'a>(
                     let span = rw_field.ident.span();
                     let ty = field.reader_ty();
                     let value: syn::Expr = if field.sub_field_entries().is_some() {
-                        parse_quote_spanned!(span=> #ty::from_dto_fragment(&dto.#(#read_path).*.#name, #key))
+                        parse_quote_spanned!(span=> #ty::from_dto_fragment(value, #key))
                     } else {
-                        parse_quote_spanned!(span=> &dto.#(#read_path).*.#name)
+                        parse_quote_spanned!(span=> value.clone())
                     };
                     quote_spanned! {span=>
-                        match #value {
+                        match &dto.#(#read_path).*.#name {
                             None => OptionalConfig::Empty(#key),
-                            Some(value) => OptionalConfig::Present { value: value.clone(), key: #key },
+                            Some(value) => OptionalConfig::Present { value: #value, key: #key },
                         }
                     }
                 }
@@ -976,13 +976,13 @@ mod tests {
         );
 
         let expected = parse_quote! {
-            #[derive(Debug, Clone, ::serde::Serialize, PartialEq, ::strum::EnumString, ::strum::Display, ::doku::Document)]
+            #[derive(Debug, Clone, ::serde::Serialize, PartialEq, ::strum::Display, ::doku::Document)]
             #[serde(rename_all = "snake_case")]
             #[strum(serialize_all = "snake_case")]
             #[serde(tag = "type")]
             pub enum MapperTypeReader {
-                C8y { c8y: OptionalConfig<C8yReader> },
-                Aws { aws: OptionalConfig<AwsReader> },
+                C8y { c8y: C8yReader },
+                Aws { aws: AwsReader },
                 Custom,
             }
         };
@@ -1166,5 +1166,55 @@ mod tests {
             prettyplease::unparse(&file),
             prettyplease::unparse(&expected)
         )
+    }
+
+    #[test]
+    fn sub_fields_call_from_dto_fragment_on_inner_value() {
+        // Regression test: ensure from_dto_fragment is called on the unwrapped value,
+        // not on Option<T>
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Custom])]
+                ty: MapperType,
+            },
+        );
+
+        let actual = generate_conversions(
+            &parse_quote!(TEdgeConfigReader),
+            &input.groups,
+            Vec::new(),
+            &input.groups,
+        )
+        .unwrap();
+        let mut file: syn::File = syn::parse2(actual).unwrap();
+        let target: syn::Type = parse_quote!(TEdgeConfigReaderMapper);
+        file.items
+            .retain(|i| matches!(i, Item::Impl(ItemImpl { self_ty, ..}) if **self_ty == target));
+
+        let expected = parse_quote! {
+            impl TEdgeConfigReaderMapper {
+                #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
+                #[automatically_derived]
+                /// Converts the provided [TEdgeConfigDto] into a reader
+                pub(crate) fn from_dto(
+                    dto: &TEdgeConfigDto,
+                    location: &TEdgeConfigLocation,
+                    key0: Option<&str>,
+                ) -> Self {
+                    Self {
+                        ty: match &dto.mapper.try_get(key0, "mapper").unwrap().ty {
+                            None => OptionalConfig::Empty(ReadableKey::MapperTy(key0.map(<_>::to_owned)).to_cow_str()),
+                            Some(value) => OptionalConfig::Present {
+                                value: MapperTypeReader::from_dto_fragment(value, ReadableKey::MapperTy(key0.map(<_>::to_owned)).to_cow_str()),
+                                key: ReadableKey::MapperTy(key0.map(<_>::to_owned)).to_cow_str(),
+                            },
+                        },
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(unparse(&file), unparse(&expected))
     }
 }
