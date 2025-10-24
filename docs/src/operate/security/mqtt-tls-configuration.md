@@ -11,6 +11,8 @@ an MQTT broker. Three levels of security are supported:
 2. Server authentication
 3. Server + client authentication
 
+In addition, authentication with username and password is supported. See [here](#username-password-authentication) for details.
+
 ## MQTT Configuration
 
 The `tedge config` command provides MQTT specific settings
@@ -225,6 +227,33 @@ openssl x509 -req \
     -out client.crt \
     -days 365
 ```
+
+## Username/Password authentication {#username-password-authentication}
+
+When a local MQTT broker requires username/password authentication,
+the %%te%% components also need to know this username and password.
+
+Configure the username and the path to the password file using `tedge config`:
+
+```sh
+sudo tedge config set mqtt.client.auth.username "USERNAME"
+sudo tedge config set mqtt.client.auth.password_file "PATH_TO_PASSWORD_FILE"
+```
+
+In the password file, write the password on the first line. The second line and any subsequent lines will be ignored.
+
+```sh title="file: <file_path>"
+YOUR_PASSWORD
+```
+
+In addition, if TLS is enabled on the broker, configure the secure port (8883 is the standard port) and provide the path to the trusted CA certificate file using `tedge config`:
+```sh
+sudo tedge config set mqtt.client.port 8883
+sudo tedge config set mqtt.client.auth.ca_file "PATH_TO_CA_CERTIFICATE"
+```
+
+If any %%te%% services (e.g. tedge-agent) are already running, they must be restarted for the changes to take effect.
+
 
 ## Next steps
 
