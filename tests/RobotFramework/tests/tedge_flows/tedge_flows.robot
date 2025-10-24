@@ -97,7 +97,6 @@ Running tedge-flows
     Execute Command    tedge mqtt sub test/count/e --duration 2s | grep '{}'
 
 Consuming messages from a process stdout
-    # Assuming the flow journalctl-follow.toml has been properly installed
     Install Journalctl Flow    journalctl-follow.toml
     ${test_start}    Get Unix Timestamp
     Restart Service    tedge-agent
@@ -106,7 +105,6 @@ Consuming messages from a process stdout
     [Teardown]    Uninstall Journalctl Flow    journalctl-follow.toml
 
 Consuming messages from a process stdout, periodically
-    # Assuming the flow journalctl-cursor.toml has been properly installed
     Install Journalctl Flow    journalctl-cursor.toml
     ${test_start}    Get Unix Timestamp
     Restart Service    tedge-agent
@@ -115,32 +113,35 @@ Consuming messages from a process stdout, periodically
     [Teardown]    Uninstall Journalctl Flow    journalctl-cursor.toml
 
 Consuming messages from the tail of file
-    # Assuming the flow tail-named-pipe.toml has been properly installed
+    Install Flow    tail-named-pipe.toml
     ${start}    Get Unix Timestamp
     Execute Command    echo hello>/tmp/events
     Should Have MQTT Messages    topic=log/events    message_contains=hello    minimum=1    date_from=${start}
+    [Teardown]    Uninstall Flow    tail-named-pipe.toml
 
 Consuming messages from a file, periodically
-    # Assuming the flow read-file-periodically.toml has been properly installed
+    Install Flow    read-file-periodically.toml
     Execute Command    echo hello >/tmp/file.input
     Execute Command    tedge mqtt sub test/file/input --duration 1s | grep hello
     Execute Command    echo world >/tmp/file.input
     Execute Command    tedge mqtt sub test/file/input --duration 1s | grep world
     Execute Command    rm /tmp/file.input
     Execute Command
-    ...    tedge mqtt sub test/file/input --duration 1s | grep 'Error in /etc/tedge/flows/read-file-periodically.toml'
+    ...    tedge mqtt sub test/file/input --duration 1s | grep 'Fail to poll /tmp/file.input'
     Execute Command    echo 'hello world' >/tmp/file.input
     Execute Command    tedge mqtt sub test/file/input --duration 1s | grep 'hello world'
+    [Teardown]    Uninstall Flow    read-file-periodically.toml
 
 Appending messages to a file
-    # Assuming the flow append-to-file.toml has been properly installed
+    Install Flow    append-to-file.toml
     Execute Command    for i in $(seq 3); do tedge mqtt pub seq/events "$i"; done
     Execute Command    grep '\\[seq/events\\] 1' /tmp/events.log
     Execute Command    grep '\\[seq/events\\] 2' /tmp/events.log
     Execute Command    grep '\\[seq/events\\] 3' /tmp/events.log
+    [Teardown]    Uninstall Flow    append-to-file.toml
 
 Publishing transformation errors
-    # Assuming the flow publish-js-errors.toml has been properly installed
+    Install Flow    publish-js-errors.toml
     ${start}    Get Unix Timestamp
     Execute Command    tedge mqtt pub collectd/foo 12345:6789
     Should Have MQTT Messages
@@ -167,6 +168,7 @@ Publishing transformation errors
     ${message}    JSONLibrary.Convert String To Json    ${messages[0]}
     Should Be Equal As Integers    ${message["time"]}    12345
     Should Be Equal As Integers    ${message["b"]["c"]}    6789
+    [Teardown]    Uninstall Flow    publish-js-errors.toml
 
 
 *** Keywords ***
@@ -185,6 +187,14 @@ Install Journalctl Flow
     ThinEdgeIO.Transfer To Device    ${CURDIR}/journalctl-flows/${definition_file}    /etc/tedge/flows/
 
 Uninstall Journalctl Flow
+    [Arguments]    ${definition_file}
+    Execute Command    cmd=rm -f /etc/tedge/flows/${definition_file}
+
+Install Flow
+    [Arguments]    ${definition_file}
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/input-ext/${definition_file}    /etc/tedge/flows/
+
+Uninstall Flow
     [Arguments]    ${definition_file}
     Execute Command    cmd=rm -f /etc/tedge/flows/${definition_file}
 
