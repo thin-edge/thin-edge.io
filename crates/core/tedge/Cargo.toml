@@ -55,7 +55,7 @@ tedge-watchdog = { workspace = true }
 tedge-write = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
-tedge_flows = { workspace = true, optional = true }
+tedge_flows = { workspace = true, optional = true, default-features = false }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
@@ -85,11 +85,13 @@ x509-parser = { workspace = true }
 
 
 [features]
-default = ["aws", "azure", "c8y", "tedge-flows"]
+default = ["aws", "azure", "c8y", "tedge-flows-fjall"]
 aws = ["tedge-mapper/aws"]
 azure = ["tedge-mapper/azure"]
 c8y = ["tedge-mapper/c8y"]
 tedge-flows = ["dep:tedge_flows", "tedge-mapper/tedge-flows"]
+tedge-flows-fjall = ["tedge-flows", "tedge_flows/fjall-db"]
+tedge-flows-sqlite = ["tedge-flows", "tedge_flows/sqlite-db"]
 integration-test = []
 
 

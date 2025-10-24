@@ -75,7 +75,7 @@ impl TestCommand {
             }
         };
         processor
-            .on_message(timestamp, &message)
+            .on_message(MessageSource::Mqtt, timestamp, &message)
             .await
             .into_iter()
             .for_each(|msg| self.print_messages(msg))
