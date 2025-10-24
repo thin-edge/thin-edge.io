@@ -8,6 +8,7 @@ use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
 use quote::quote_spanned;
+use syn::parse_quote;
 
 mod dto;
 mod error;
@@ -20,9 +21,8 @@ mod reader;
 /// Context for code generation, used to parameterize how types and enums are named
 #[derive(Clone, Debug)]
 struct CodegenContext {
-    /// Root type name (e.g., "TEdgeConfig" for main config, "C8yConfig" for sub-config)
-    /// Used for generating type names like TEdgeConfigDto, C8yConfigReader, etc.
-    root_type_name: proc_macro2::Ident,
+    dto_type_name: proc_macro2::Ident,
+    reader_type_name: proc_macro2::Ident,
     /// Prefix for enum names (empty string for main config, "C8yConfig" for sub-config)
     /// Used for generating enum names like ReadableKey vs C8yConfigReadableKey
     enum_prefix: String,
@@ -32,7 +32,8 @@ impl CodegenContext {
     /// Create context for the main TEdgeConfig
     fn default_tedge_config() -> Self {
         Self {
-            root_type_name: proc_macro2::Ident::new("TEdgeConfig", Span::call_site()),
+            dto_type_name: parse_quote!(TEdgeConfigDto),
+            reader_type_name: parse_quote!(TEdgeConfigReader),
             enum_prefix: String::new(),
         }
     }
@@ -41,27 +42,30 @@ impl CodegenContext {
     fn for_sub_config(name: proc_macro2::Ident) -> Self {
         let enum_prefix = name.to_string();
         Self {
-            root_type_name: name,
+            dto_type_name: format_ident!("{name}Dto"),
+            reader_type_name: format_ident!("{name}Reader"),
             enum_prefix,
+        }
+    }
+
+    fn suffixed_config(&self, group: &input::ConfigurationGroup) -> Self {
+        let group = group.ident.to_string().to_upper_camel_case();
+        Self {
+            dto_type_name: format_ident!("{}{}", self.dto_type_name, group),
+            reader_type_name: format_ident!("{}{}", self.reader_type_name, group),
+            enum_prefix: self.enum_prefix.clone(),
         }
     }
 
     /// Generate a prefixed type name for a configuration group
     /// Used to create nested struct names like TEdgeConfigBridge, BridgeConfigAzure, etc.
-    fn prefixed_type_name(&self, group: &input::ConfigurationGroup) -> proc_macro2::Ident {
+    fn prefixed_reader_name(&self, group: &input::ConfigurationGroup) -> proc_macro2::Ident {
         quote::format_ident!(
             "{}{}",
-            self.root_type_name,
+            self.reader_type_name,
             group.ident.to_string().to_upper_camel_case(),
             span = group.ident.span()
         )
-    }
-
-    fn with_type_name_suffix(&self, suffix: &str) -> Self {
-        Self {
-            root_type_name: quote::format_ident!("{}{}", self.root_type_name, suffix),
-            enum_prefix: self.enum_prefix.clone(),
-        }
     }
 }
 
@@ -141,7 +145,7 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
         .collect::<Vec<_>>();
 
     let ctx = CodegenContext::default_tedge_config();
-    let reader_name = format_ident!("{}Reader", ctx.root_type_name);
+    let reader_name = &ctx.reader_type_name;
     let dto_doc_comment = format!(
         "A data-transfer object, designed for reading and writing to
         `tedge.toml`
@@ -196,7 +200,6 @@ pub fn generate_sub_configuration(tokens: TokenStream) -> Result<TokenStream, sy
     // Create context for this sub-config
     let ctx = CodegenContext::for_sub_config(parse_input.name);
 
-    let mut error = OptionalError::default();
     let fields_with_keys = validated_config
         .groups
         .iter()
@@ -206,15 +209,12 @@ pub fn generate_sub_configuration(tokens: TokenStream) -> Result<TokenStream, sy
                 unreachable!("Multi-profile groups are disallowed for sub-configs in validation.rs")
             }
             input::FieldOrGroup::Field(field) => {
-                error.combine(syn::Error::new(
-                    field.ident().span(),
-                    "top level fields are not supported",
-                ));
-                vec![]
+                // Top-level fields are allowed in sub-configs
+                // Treat them as if they're directly at the top level
+                vec![(vec![], field)]
             }
         })
         .collect::<Vec<_>>();
-    error.try_throw()?;
 
     let example_tests = fields_with_keys
         .iter()
@@ -269,21 +269,22 @@ pub fn generate_sub_configuration(tokens: TokenStream) -> Result<TokenStream, sy
         })
         .collect::<Vec<_>>();
 
+    let reader_name = &ctx.reader_type_name;
     let dto_doc_comment = format!(
-        "A data-transfer object, designed for reading and writing to the `{}` configuration\n\
+        "A data-transfer object, designed for reading and writing to the `{reader_name}` configuration\n\
         All the configurations inside this are optional to represent whether \
         the value is or isn't configured. Any defaults are \
-        populated when this is converted to [{}Reader] (via \
-        [from_dto]({}Reader::from_dto)).\n\
+        populated when this is converted to [{reader_name}] (via \
+        [from_dto]({reader_name}::from_dto)).\n\
         For simplicity when using this struct, only the fields are optional. \
         Any configuration groups are always present. Groups that have no value set \
         will be omitted in the serialized output to avoid polluting the configuration file.",
-        ctx.root_type_name, ctx.root_type_name, ctx.root_type_name
     );
 
     let dto = dto::generate(&ctx, &validated_config.groups, &dto_doc_comment);
 
-    let reader_doc_comment = "A struct to read configured values from, designed to be accessed only \
+    let reader_doc_comment =
+        "A struct to read configured values from, designed to be accessed only \
         via an immutable borrow\n\
         The configurations inside this struct are optional only if the field \
         does not have a default value configured.\n\

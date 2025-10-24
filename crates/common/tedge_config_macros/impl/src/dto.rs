@@ -12,21 +12,8 @@ use crate::input::EnumEntry;
 use crate::input::FieldOrGroup;
 use crate::CodegenContext;
 
-pub fn generate(
-    ctx: &CodegenContext,
-    items: &[FieldOrGroup],
-    doc_comment: &str,
-) -> TokenStream {
-    let ctx = ctx.with_type_name_suffix("Dto");
-    generate_inner(&ctx, items, doc_comment)
-}
-
-fn generate_inner(
-    ctx: &CodegenContext,
-    items: &[FieldOrGroup],
-    doc_comment: &str,
-) -> TokenStream {
-    let name = &ctx.root_type_name;
+pub fn generate(ctx: &CodegenContext, items: &[FieldOrGroup], doc_comment: &str) -> TokenStream {
+    let name = &ctx.dto_type_name;
     let mut idents = Vec::new();
     let mut tys = Vec::<syn::Type>::new();
     let mut sub_dtos = Vec::new();
@@ -96,12 +83,12 @@ fn generate_inner(
             }
             FieldOrGroup::Group(group) => {
                 if !group.dto.skip {
-                    let sub_dto_name = ctx.prefixed_type_name(group);
+                    let sub_ctx = ctx.suffixed_config(group);
+                    let sub_dto_name = &sub_ctx.dto_type_name;
                     let is_default = format!("{sub_dto_name}::is_default");
                     idents.push(&group.ident);
                     tys.push(parse_quote_spanned!(group.ident.span()=> #sub_dto_name));
-                    let sub_ctx = CodegenContext::for_sub_config(sub_dto_name.clone());
-                    sub_dtos.push(Some(generate_inner(&sub_ctx, &group.contents, "")));
+                    sub_dtos.push(Some(generate(&sub_ctx, &group.contents, "")));
                     preserved_attrs.push(group.attrs.iter().filter(is_preserved).collect());
                     extra_attrs.push(quote! {
                         #[serde(default)]
@@ -111,13 +98,13 @@ fn generate_inner(
             }
             FieldOrGroup::Multi(group) => {
                 if !group.dto.skip {
-                    let sub_dto_name = ctx.prefixed_type_name(group);
+                    let sub_ctx = ctx.suffixed_config(group);
+                    let sub_dto_name = &sub_ctx.dto_type_name;
                     idents.push(&group.ident);
                     let field_ty =
                         parse_quote_spanned!(group.ident.span()=> MultiDto<#sub_dto_name>);
                     tys.push(field_ty);
-                    let sub_ctx = CodegenContext::for_sub_config(sub_dto_name.clone());
-                    sub_dtos.push(Some(generate_inner(&sub_ctx, &group.contents, "")));
+                    sub_dtos.push(Some(generate(&sub_ctx, &group.contents, "")));
                     preserved_attrs.push(group.attrs.iter().filter(is_preserved).collect());
                     extra_attrs.push(quote! {
                         #[serde(default)]
@@ -377,11 +364,7 @@ mod tests {
     }
 
     fn generate_test_dto(input: &crate::input::Configuration) -> syn::File {
-        let tokens = super::generate(
-            &ctx(),
-            &input.groups,
-            "",
-        );
+        let tokens = super::generate(&ctx(), &input.groups, "");
         syn::parse2(tokens).unwrap()
     }
 

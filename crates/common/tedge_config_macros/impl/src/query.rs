@@ -21,6 +21,41 @@ use syn::parse_quote;
 use syn::parse_quote_spanned;
 use syn::spanned::Spanned;
 
+/// Context for code generation containing all namespaced type and function names
+#[derive(Clone)]
+struct GenerationContext {
+    readable_key_name: syn::Ident,
+    readonly_key_name: syn::Ident,
+    writable_key_name: syn::Ident,
+    dto_key_name: syn::Ident,
+    write_error_name: syn::Ident,
+    parse_key_error_name: syn::Ident,
+    replace_aliases_fn_name: syn::Ident,
+    warn_about_deprecated_key_fn_name: syn::Ident,
+    dto_name: syn::Ident,
+    reader_name: syn::Ident,
+}
+
+impl From<&CodegenContext> for GenerationContext {
+    fn from(ctx: &CodegenContext) -> Self {
+        GenerationContext {
+            readable_key_name: format_ident!("{}ReadableKey", ctx.enum_prefix),
+            readonly_key_name: format_ident!("{}ReadOnlyKey", ctx.enum_prefix),
+            writable_key_name: format_ident!("{}WritableKey", ctx.enum_prefix),
+            dto_key_name: format_ident!("{}DtoKey", ctx.enum_prefix),
+            write_error_name: format_ident!("{}WriteError", ctx.enum_prefix),
+            parse_key_error_name: format_ident!("{}ParseKeyError", ctx.enum_prefix),
+            replace_aliases_fn_name: format_ident!("{}replace_aliases", ctx.enum_prefix),
+            warn_about_deprecated_key_fn_name: format_ident!(
+                "{}warn_about_deprecated_key",
+                ctx.enum_prefix
+            ),
+            dto_name: ctx.dto_type_name.clone(),
+            reader_name: ctx.reader_type_name.clone(),
+        }
+    }
+}
+
 pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> TokenStream {
     let dto_paths = configuration_paths_from(items, Mode::Dto);
     let mut reader_paths = configuration_paths_from(items, Mode::Reader);
@@ -40,39 +75,48 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
             ))
         })
         .multiunzip();
-    let readable_args = configuration_strings(reader_paths.iter(), &format!("{}ReadableKey", ctx.enum_prefix));
+    let gen_ctx = GenerationContext::from(ctx);
+    let readable_args = configuration_strings(reader_paths.iter(), &gen_ctx.readable_key_name);
     let readonly_args = configuration_strings(
         reader_paths.iter().filter(|path| !is_read_write(path)),
-        &format!("{}ReadOnlyKey", ctx.enum_prefix),
+        &gen_ctx.readonly_key_name,
     );
     let writable_args = configuration_strings(
         reader_paths.iter().filter(|path| is_read_write(path)),
-        &format!("{}WritableKey", ctx.enum_prefix),
+        &gen_ctx.writable_key_name,
     );
-    let dto_args = configuration_strings(dto_paths.iter(), &format!("{}DtoKey", ctx.enum_prefix));
-    let readable_key_name = format_ident!("{}ReadableKey", ctx.enum_prefix);
-    let readonly_key_name = format_ident!("{}ReadOnlyKey", ctx.enum_prefix);
-    let writable_key_name = format_ident!("{}WritableKey", ctx.enum_prefix);
-    let dto_key_name = format_ident!("{}DtoKey", ctx.enum_prefix);
-    let readable_keys = keys_enum(readable_key_name.clone(), &readable_args, "read from");
+    let dto_args = configuration_strings(dto_paths.iter(), &gen_ctx.dto_key_name);
+    let readable_keys = keys_enum(
+        gen_ctx.readable_key_name.clone(),
+        &readable_args,
+        "read from",
+    );
     let readonly_keys = keys_enum(
-        readonly_key_name.clone(),
+        gen_ctx.readonly_key_name.clone(),
         &readonly_args,
         "read from, but not written to,",
     );
-    let writable_keys = keys_enum(writable_key_name.clone(), &writable_args, "written to");
-    let dto_keys = keys_enum(dto_key_name.clone(), &dto_args, "written to");
-    let fromstr_readable = generate_fromstr_readable(readable_key_name.clone(), &readable_args);
-    let fromstr_readonly = generate_fromstr_readable(readonly_key_name.clone(), &readonly_args);
-    let fromstr_writable = generate_fromstr_writable(writable_key_name.clone(), &writable_args);
-    let fromstr_dto = generate_fromstr_writable(dto_key_name.clone(), &dto_args);
-    let read_string = generate_string_readers(&reader_paths);
+    let writable_keys = keys_enum(
+        gen_ctx.writable_key_name.clone(),
+        &writable_args,
+        "written to",
+    );
+    let dto_keys = keys_enum(gen_ctx.dto_key_name.clone(), &dto_args, "written to");
+    let fromstr_readable =
+        generate_fromstr_readable(gen_ctx.readable_key_name.clone(), &readable_args, &gen_ctx);
+    let fromstr_readonly =
+        generate_fromstr_readable(gen_ctx.readonly_key_name.clone(), &readonly_args, &gen_ctx);
+    let fromstr_writable =
+        generate_fromstr_writable(gen_ctx.writable_key_name.clone(), &writable_args, &gen_ctx);
+    let fromstr_dto = generate_fromstr_writable(gen_ctx.dto_key_name.clone(), &dto_args, &gen_ctx);
+    let read_string = generate_string_readers(&reader_paths, &gen_ctx);
     let write_string = generate_string_writers(
         &reader_paths
             .iter()
             .filter(|path| is_read_write(path))
             .cloned()
             .collect::<Vec<_>>(),
+        &gen_ctx,
     );
 
     let reader_paths_vec = reader_paths
@@ -80,15 +124,15 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
         .map(|vd| &*vd.make_contiguous())
         .collect::<Vec<_>>();
     let readable_keys_iter = key_iterators(
-        parse_quote!(TEdgeConfigReader),
-        parse_quote!(ReadableKey),
+        &ctx.reader_type_name,
+        &gen_ctx.readable_key_name,
         &reader_paths_vec,
         "",
         &[],
     );
     let readonly_keys_iter = key_iterators(
-        parse_quote!(TEdgeConfigReader),
-        parse_quote!(ReadOnlyKey),
+        &ctx.reader_type_name,
+        &gen_ctx.readonly_key_name,
         &reader_paths_vec
             .iter()
             .copied()
@@ -98,8 +142,8 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
         &[],
     );
     let writable_keys_iter = key_iterators(
-        parse_quote!(TEdgeConfigReader),
-        parse_quote!(WritableKey),
+        &ctx.reader_type_name,
+        &gen_ctx.writable_key_name,
         &reader_paths_vec
             .iter()
             .copied()
@@ -116,6 +160,14 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
         .0
         .is_empty()
         .then(|| parse_quote!(_ => unreachable!("ReadOnlyKey is uninhabited")));
+
+    // Extract generation context fields for use in quote! block
+    let write_error_name = &gen_ctx.write_error_name;
+    let writable_key_name = &gen_ctx.writable_key_name;
+    let readonly_key_name = &gen_ctx.readonly_key_name;
+    let parse_key_error_name = &gen_ctx.parse_key_error_name;
+    let reader_type_name = &ctx.reader_type_name;
+    let readable_key_name = &gen_ctx.readable_key_name;
 
     quote! {
         #readable_keys
@@ -135,21 +187,21 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
         #[derive(::thiserror::Error, Debug)]
         /// An error encountered when writing to a configuration value from a
         /// string
-        pub enum WriteError {
+        pub enum #write_error_name {
             #[error("Failed to parse input")]
             ParseValue(#[from] Box<dyn ::std::error::Error + Send + Sync>),
             #[error(transparent)]
             Multi(#[from] MultiError),
             #[error("Setting {target} requires {parent} to be set to {parent_expected}, but it is currently set to {parent_actual}")]
             SuperFieldWrongValue {
-                target: WritableKey,
-                parent: WritableKey,
+                target: #writable_key_name,
+                parent: #writable_key_name,
                 parent_expected: String,
                 parent_actual: String,
             },
         }
 
-        impl ReadOnlyKey {
+        impl #readonly_key_name {
             fn write_error(&self) -> &'static str {
                 match self {
                     #(Self::#readonly_destr => #write_error,)*
@@ -160,9 +212,9 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
 
         #[derive(Debug, ::thiserror::Error)]
         /// An error encountered when parsing a configuration key from a string
-        pub enum ParseKeyError {
+        pub enum #parse_key_error_name {
             #[error("{}", .0.write_error())]
-            ReadOnly(ReadOnlyKey),
+            ReadOnly(#readonly_key_name),
             #[error("Unknown key: '{0}'")]
             Unrecognised(String),
         }
@@ -174,13 +226,13 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
             use ::doku::*;
 
             static ALIASES: Lazy<HashMap<Cow<'static, str>, Cow<'static, str>>> = Lazy::new(|| {
-                let ty = TEdgeConfigReader::ty();
+                let ty = #reader_type_name::ty();
                 let TypeKind::Struct { fields, transparent: false } = ty.kind else { panic!("Expected struct but got {:?}", ty.kind) };
                 let Fields::Named { fields } = fields else { panic!("Expected named fields but got {:?}", fields)};
                 let mut aliases = struct_field_aliases(None, &fields);
                 #(
-                    if let Some(alias) = aliases.insert(Cow::Borrowed(#static_alias), ReadableKey::#iter_updated.to_cow_str()) {
-                        panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `deprecated_key` for one of these configurations?", #static_alias, alias, ReadableKey::#iter_updated.to_cow_str());
+                    if let Some(alias) = aliases.insert(Cow::Borrowed(#static_alias), #readable_key_name::#iter_updated.to_cow_str()) {
+                        panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `deprecated_key` for one of these configurations?", #static_alias, alias, #readable_key_name::#iter_updated.to_cow_str());
                     }
                 )*
                 aliases
@@ -211,7 +263,7 @@ fn sub_field_enum_variant(
     parent_segments: &VecDeque<&FieldOrGroup>,
     sub_field_variant: &syn::Ident,
     sub_field_type: &syn::Ident,
-    key_type_suffix: &str,
+    key_type_suffix: &syn::Ident,
 ) -> ConfigurationKey {
     let base_ident = ident_for(parent_segments);
     let combined_ident = format_ident!("{base_ident}{sub_field_variant}");
@@ -378,7 +430,7 @@ fn sub_field_enum_variant(
 
 fn configuration_strings<'a>(
     variants: impl Iterator<Item = &'a VecDeque<&'a FieldOrGroup>>,
-    key_type_suffix: &str,
+    key_type_suffix: &syn::Ident,
 ) -> (Vec<String>, Vec<ConfigurationKey>) {
     variants
         .flat_map(|segments| {
@@ -454,6 +506,7 @@ fn generate_fromstr(
     type_name: syn::Ident,
     (configuration_string, configuration_key): &(Vec<String>, Vec<ConfigurationKey>),
     error_case: syn::Arm,
+    gen_ctx: &GenerationContext,
 ) -> TokenStream {
     // Separate regular keys from sub-field keys
     let (regular_strings, regular_keys): (Vec<_>, Vec<_>) = configuration_string
@@ -478,12 +531,13 @@ fn generate_fromstr(
     // Generate sub-field match cases with prefix matching
     let sub_field_match_cases =
         sub_fields
-        .iter()
+            .iter()
             .map(|(config_str, config_key, sub_field_info)| {
                 let enum_variant = &config_key.enum_variant;
 
                 // Construct sub-field type name from identifier and type name (e.g. C8y + ReadableKey)
-                let sub_field_type_name = format_ident!("{}{}", &sub_field_info.type_name, type_name);
+                let sub_field_type_name =
+                    format_ident!("{}{}", &sub_field_info.type_name, type_name);
 
                 let pattern_str = format!("{}_", config_str.replace('.', "_"));
                 let variant_ident = &enum_variant.ident;
@@ -535,14 +589,14 @@ fn generate_fromstr(
     // Generate regex patterns for sub-field keys with profiles
     let sub_field_regex_patterns: Vec<_> = sub_fields
         .iter()
-        .filter_map(|(|_, c, s)| {
+        .filter_map(|(_, c, s)| {
             // Only generate if there's a regex_parser (i.e., has profile fields)
             c.regex_parser.clone().map(|r| (r, c, *s))
         })
         .map(|(mut r, c, s)| {
             let variant_ident = &c.enum_variant.ident;
-                // Construct sub-field type name from identifier and type name (e.g. C8y + ReadableKey)
-                let sub_field_type_name = format_ident!("{}{}", s.type_name, type_name);
+            // Construct sub-field type name from identifier and type name (e.g. C8y + ReadableKey)
+            let sub_field_type_name = format_ident!("{}{}", s.type_name, type_name);
 
             let all_field_names = &c.field_names;
             let parent_fields = &all_field_names[..all_field_names.len() - 1];
@@ -577,10 +631,11 @@ fn generate_fromstr(
         .collect();
 
     let all_regex_patterns = regex_patterns.chain(sub_field_regex_patterns);
+    let parse_key_error = &gen_ctx.parse_key_error_name;
 
     quote! {
         impl ::std::str::FromStr for #type_name {
-            type Err = ParseKeyError;
+            type Err = #parse_key_error;
             fn from_str(value: &str) -> Result<Self, Self::Err> {
                 // If we get an unreachable pattern, it means we have the same key twice
                 #[deny(unreachable_patterns)]
@@ -608,11 +663,14 @@ fn generate_fromstr(
 fn generate_fromstr_readable(
     type_name: syn::Ident,
     fields: &(Vec<String>, Vec<ConfigurationKey>),
+    gen_ctx: &GenerationContext,
 ) -> TokenStream {
+    let parse_key_error_name = &gen_ctx.parse_key_error_name;
     generate_fromstr(
         type_name,
         fields,
-        parse_quote! { _ => Err(ParseKeyError::Unrecognised(value.to_owned())) },
+        parse_quote! { _ => Err(#parse_key_error_name::Unrecognised(value.to_owned())) },
+        gen_ctx,
     )
 }
 
@@ -620,23 +678,30 @@ fn generate_fromstr_readable(
 fn generate_fromstr_writable(
     type_name: syn::Ident,
     fields: &(Vec<String>, Vec<ConfigurationKey>),
+    gen_ctx: &GenerationContext,
 ) -> TokenStream {
+    let GenerationContext {
+        readonly_key_name,
+        parse_key_error_name,
+        ..
+    } = gen_ctx;
     generate_fromstr(
         type_name,
         fields,
         parse_quote! {
-            _ => if let Ok(key) = <ReadOnlyKey as ::std::str::FromStr>::from_str(value) {
-                Err(ParseKeyError::ReadOnly(key))
+            _ => if let Ok(key) = <#readonly_key_name as ::std::str::FromStr>::from_str(value) {
+                Err(#parse_key_error_name::ReadOnly(key))
             } else {
-                Err(ParseKeyError::Unrecognised(value.to_owned()))
+                Err(#parse_key_error_name::Unrecognised(value.to_owned()))
             },
         },
+        gen_ctx,
     )
 }
 
 fn key_iterators(
-    reader_ty: syn::Ident,
-    type_name: syn::Ident,
+    reader_ty: &syn::Ident,
+    type_name: &syn::Ident,
     fields: &[&[&FieldOrGroup]],
     prefix: &str,
     args: &[syn::Ident],
@@ -698,8 +763,8 @@ fn key_iterators(
                 let mut args = args.to_owned();
                 args.push(m.ident.clone());
                 global.push(key_iterators(
-                    sub_type_name,
-                    type_name.clone(),
+                    &sub_type_name,
+                    type_name,
                     &remaining_fields,
                     &prefix,
                     &args,
@@ -712,8 +777,8 @@ fn key_iterators(
                 let prefix = format!("{prefix}{upper_ident}");
                 let remaining_fields = fields.iter().map(|fs| &fs[1..]).collect::<Vec<_>>();
                 global.push(key_iterators(
-                    sub_type_name,
-                    type_name.clone(),
+                    &sub_type_name,
+                    type_name,
                     &remaining_fields,
                     &prefix,
                     args,
@@ -1008,6 +1073,7 @@ fn generate_multi_dto_cleanup(fields: &VecDeque<&FieldOrGroup>) -> Vec<syn::Stmt
 fn generate_read_arm_for_field(
     path: &VecDeque<&FieldOrGroup>,
     configuration_key: ConfigurationKey,
+    gen_ctx: &GenerationContext,
 ) -> syn::Arm {
     let field = path
         .back()
@@ -1017,24 +1083,25 @@ fn generate_read_arm_for_field(
     let segments = generate_field_accessor(path, "try_get", true);
     let to_string = quote_spanned!(field.reader_ty().span()=> .to_string());
     let match_variant = configuration_key.match_read_write;
+    let readable_key_name = &gen_ctx.readable_key_name;
 
     if field.read_only().is_some() || field.reader_function().is_some() {
         if extract_type_from_result(field.reader_ty()).is_some() {
             parse_quote! {
-                ReadableKey::#match_variant => Ok(self.#(#segments).*()?#to_string),
+                #readable_key_name::#match_variant => Ok(self.#(#segments).*()?#to_string),
             }
         } else {
             parse_quote! {
-                ReadableKey::#match_variant => Ok(self.#(#segments).*()#to_string),
+                #readable_key_name::#match_variant => Ok(self.#(#segments).*()#to_string),
             }
         }
     } else if field.has_guaranteed_default() {
         parse_quote! {
-            ReadableKey::#match_variant => Ok(self.#(#segments).*#to_string),
+            #readable_key_name::#match_variant => Ok(self.#(#segments).*#to_string),
         }
     } else {
         parse_quote! {
-            ReadableKey::#match_variant => Ok(self.#(#segments).*.or_config_not_set()?#to_string),
+            #readable_key_name::#match_variant => Ok(self.#(#segments).*.or_config_not_set()?#to_string),
         }
     }
 }
@@ -1093,13 +1160,16 @@ fn generate_read_arms_for_sub_fields(path: &VecDeque<&FieldOrGroup>) -> Vec<syn:
         .collect()
 }
 
-fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
+fn generate_string_readers(
+    paths: &[VecDeque<&FieldOrGroup>],
+    gen_ctx: &GenerationContext,
+) -> TokenStream {
     let enum_variants = paths.iter().map(enum_variant);
     let arms = paths
         .iter()
         .zip(enum_variants)
         .flat_map(|(path, configuration_key)| {
-            let main_arm = generate_read_arm_for_field(path, configuration_key);
+            let main_arm = generate_read_arm_for_field(path, configuration_key, gen_ctx);
             let sub_field_arms = generate_read_arms_for_sub_fields(path);
             std::iter::once(main_arm).chain(sub_field_arms)
         });
@@ -1107,10 +1177,12 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     let fallback_branch: Option<syn::Arm> = paths
         .is_empty()
         .then(|| parse_quote!(_ => unreachable!("ReadableKey is uninhabited")));
+    let reader_name = &gen_ctx.reader_name;
+    let readable_key_name = &gen_ctx.readable_key_name;
 
     quote! {
-        impl TEdgeConfigReader {
-            pub fn read_string(&self, key: &ReadableKey) -> Result<String, ReadError> {
+        impl #reader_name {
+            pub fn read_string(&self, key: &#readable_key_name) -> Result<String, ReadError> {
                 match key {
                     #(#arms)*
                     #fallback_branch
@@ -1273,7 +1345,14 @@ fn generate_write_arms_for_sub_fields(
         .collect()
 }
 
-fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
+fn generate_string_writers(
+    paths: &[VecDeque<&FieldOrGroup>],
+    gen_ctx: &GenerationContext,
+) -> TokenStream {
+    let writable_key_name = &gen_ctx.writable_key_name;
+    let dto_name = &gen_ctx.dto_name;
+    let reader_name = &gen_ctx.reader_name;
+    let write_error_name = &gen_ctx.write_error_name;
     let enum_variants = paths.iter().map(enum_variant);
     type Arms = (
         Vec<syn::Arm>,
@@ -1325,37 +1404,37 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
             let main_arms = (
                 parse_quote_spanned! {ty.span()=>
                     #[allow(clippy::useless_conversion)]
-                    WritableKey::#match_variant => self.#(#write_segments).* = Some(value
+                    #writable_key_name::#match_variant => self.#(#write_segments).* = Some(value
                         .#parse
                         .#convert_to_field_ty
-                        .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
+                        .map_err(|e| #write_error_name::ParseValue(Box::new(e)))?),
                 },
                 parse_quote_spanned! {ty.span()=>
-                    WritableKey::#match_variant => self.#(#write_segments).* = other.#(#write_segments).*.take(),
+                    #writable_key_name::#match_variant => self.#(#write_segments).* = other.#(#write_segments).*.take(),
                 },
                 parse_quote_spanned! {ty.span()=>
-                    WritableKey::#match_variant => {
+                    #writable_key_name::#match_variant => {
                         self.#(#write_segments).* = None;
                         #(#cleanup_stmts)*
                     },
                 },
                 parse_quote_spanned! {ty.span()=>
                     #[allow(clippy::useless_conversion)]
-                    WritableKey::#match_variant => self.#(#write_segments).* = <#ty as AppendRemoveItem>::append(
+                    #writable_key_name::#match_variant => self.#(#write_segments).* = <#ty as AppendRemoveItem>::append(
                         #current_value,
                         value
                         .#parse
                         .#convert_to_field_ty
-                        .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
+                        .map_err(|e| #write_error_name::ParseValue(Box::new(e)))?),
                 },
                 parse_quote_spanned! {ty.span()=>
                     #[allow(clippy::useless_conversion)]
-                    WritableKey::#match_variant => self.#(#write_segments).* = <#ty as AppendRemoveItem>::remove(
+                    #writable_key_name::#match_variant => self.#(#write_segments).* = <#ty as AppendRemoveItem>::remove(
                         #current_value,
                         value
                         .#parse
                         .#convert_to_field_ty
-                        .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
+                        .map_err(|e| #write_error_name::ParseValue(Box::new(e)))?),
                 },
             );
 
@@ -1368,8 +1447,8 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
         .then(|| parse_quote!(_ => unreachable!("WritableKey is uninhabited")));
 
     quote! {
-        impl TEdgeConfigDto {
-            pub fn try_update_str(&mut self, key: &WritableKey, value: &str) -> Result<(), WriteError> {
+        impl #dto_name {
+            pub fn try_update_str(&mut self, key: &#writable_key_name, value: &str) -> Result<(), #write_error_name> {
                 match key {
                     #(#update_arms)*
                     #fallback_branch
@@ -1377,7 +1456,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 Ok(())
             }
 
-            pub(crate) fn take_value_from(&mut self, other: &mut TEdgeConfigDto, key: &WritableKey) -> Result<(), WriteError> {
+            pub(crate) fn take_value_from(&mut self, other: &mut #dto_name, key: &#writable_key_name) -> Result<(), #write_error_name> {
                 match key {
                     #(#take_value_arms)*
                     #fallback_branch
@@ -1385,7 +1464,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 Ok(())
             }
 
-            pub fn try_unset_key(&mut self, key: &WritableKey) -> Result<(), WriteError> {
+            pub fn try_unset_key(&mut self, key: &#writable_key_name) -> Result<(), #write_error_name> {
                 match key {
                     #(#unset_arms)*
                     #fallback_branch
@@ -1393,7 +1472,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 Ok(())
             }
 
-            pub fn try_append_str(&mut self, reader: &TEdgeConfigReader, key: &WritableKey, value: &str) -> Result<(), WriteError> {
+            pub fn try_append_str(&mut self, reader: &#reader_name, key: &#writable_key_name, value: &str) -> Result<(), #write_error_name> {
                 match key {
                     #(#append_arms)*
                     #fallback_branch
@@ -1401,7 +1480,7 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 Ok(())
             }
 
-            pub fn try_remove_str(&mut self, reader: &TEdgeConfigReader, key: &WritableKey, value: &str) -> Result<(), WriteError> {
+            pub fn try_remove_str(&mut self, reader: &#reader_name, key: &#writable_key_name, value: &str) -> Result<(), #write_error_name> {
                 match key {
                     #(#remove_arms)*
                     #fallback_branch
@@ -1672,12 +1751,14 @@ mod tests {
                 url: String,
             }
         );
+        let gen_ctx = gen_ctx();
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let c = configuration_strings(paths.iter(), "ReadableKey");
+        let c = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
         let generated = generate_fromstr(
-            syn::Ident::new("ReadableKey", Span::call_site()),
+            gen_ctx.readable_key_name.clone(),
             &c,
             parse_quote!(_ => unimplemented!("just a test, no error handling")),
+            &gen_ctx,
         );
         let expected = parse_quote!(
             impl ::std::str::FromStr for ReadableKey {
@@ -1771,12 +1852,14 @@ mod tests {
                 url: String,
             }
         );
+        let gen_ctx = gen_ctx();
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let c = configuration_strings(paths.iter(), "ReadableKey");
+        let c = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
         let generated = generate_fromstr(
-            syn::Ident::new("ReadableKey", Span::call_site()),
+            gen_ctx.readable_key_name.clone(),
             &c,
             parse_quote!(_ => unimplemented!("just a test, no error handling")),
+            &gen_ctx,
         );
         let expected = parse_quote!(
             impl ::std::str::FromStr for ReadableKey {
@@ -1821,8 +1904,8 @@ mod tests {
         let mut paths = configuration_paths_from(&input.groups, Mode::Reader);
         let paths = paths.iter_mut().map(|vd| &*vd.make_contiguous());
         let generated = key_iterators(
-            parse_quote!(TEdgeConfigReader),
-            parse_quote!(ReadableKey),
+            &parse_quote!(TEdgeConfigReader),
+            &parse_quote!(ReadableKey),
             &paths.collect::<Vec<_>>(),
             "",
             &[],
@@ -1887,8 +1970,8 @@ mod tests {
         let mut paths = configuration_paths_from(&input.groups, Mode::Reader);
         let paths = paths.iter_mut().map(|vd| &*vd.make_contiguous());
         let generated = key_iterators(
-            parse_quote!(TEdgeConfigReader),
-            parse_quote!(ReadableKey),
+            &parse_quote!(TEdgeConfigReader),
+            &parse_quote!(ReadableKey),
             &paths.collect::<Vec<_>>(),
             "",
             &[],
@@ -1916,8 +1999,8 @@ mod tests {
     #[test]
     fn iteration_of_empty_field_enum_is_an_empty_iterator() {
         let generated = key_iterators(
-            parse_quote!(TEdgeConfigReader),
-            parse_quote!(ReadableKey),
+            &parse_quote!(TEdgeConfigReader),
+            &parse_quote!(ReadableKey),
             &[],
             "",
             &[],
@@ -1949,8 +2032,8 @@ mod tests {
         let mut paths = configuration_paths_from(&input.groups, Mode::Reader);
         let paths = paths.iter_mut().map(|vd| &*vd.make_contiguous());
         let generated = key_iterators(
-            parse_quote!(TEdgeConfigReader),
-            parse_quote!(ReadableKey),
+            &parse_quote!(TEdgeConfigReader),
+            &parse_quote!(ReadableKey),
             &paths.collect::<Vec<_>>(),
             "",
             &[],
@@ -2000,7 +2083,7 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let config_keys = configuration_strings(paths.iter(), &gen_ctx().readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -2032,7 +2115,7 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let config_keys = configuration_strings(paths.iter(), &gen_ctx().readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -2060,7 +2143,7 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let config_keys = configuration_strings(paths.iter(), &gen_ctx().readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -2092,7 +2175,7 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let config_keys = configuration_strings(paths.iter(), &gen_ctx().readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -2130,8 +2213,9 @@ mod tests {
                 enable: bool,
             },
         );
+        let gen_ctx = gen_ctx();
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "try_with_profile");
 
         let expected = parse_quote! {
@@ -2172,7 +2256,7 @@ mod tests {
             },
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let writers = generate_string_writers(&paths);
+        let writers = generate_string_writers(&paths, &gen_ctx());
         let impl_dto_block = syn::parse2(writers).unwrap();
         let impl_dto_block = retain_fn(impl_dto_block, "try_unset_key");
 
@@ -2217,7 +2301,7 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let writers = generate_string_writers(&paths);
+        let writers = generate_string_writers(&paths, &gen_ctx());
         let impl_dto_block = syn::parse2(writers).unwrap();
         let impl_dto_block = retain_fn(impl_dto_block, "try_append_str");
 
@@ -2260,9 +2344,10 @@ mod tests {
                 ty: String,
             },
         );
+        let gen_ctx = gen_ctx();
         let dto_paths = configuration_paths_from(&input.groups, Mode::Dto);
-        let dto_keys = configuration_strings(dto_paths.iter(), "DtoKey");
-        let writers = generate_fromstr_writable(parse_quote!(DtoKey), &dto_keys);
+        let dto_keys = configuration_strings(dto_paths.iter(), &gen_ctx.dto_key_name);
+        let writers = generate_fromstr_writable(parse_quote!(DtoKey), &dto_keys, &gen_ctx);
         let impl_dto_block = syn::parse2(writers).unwrap();
 
         let expected = parse_quote! {
@@ -2381,8 +2466,9 @@ mod tests {
                 ty: MapperType,
             },
         );
+        let gen_ctx = gen_ctx();
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "try_with_profile");
 
         let expected = parse_quote! {
@@ -2415,7 +2501,7 @@ mod tests {
         );
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let readers = generate_string_readers(&paths);
+        let readers = generate_string_readers(&paths, &gen_ctx());
         let impl_block: syn::ItemImpl = syn::parse2(readers).unwrap();
         let actual = retain_fn(impl_block, "read_string");
 
@@ -2455,7 +2541,7 @@ mod tests {
         );
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let writers = generate_string_writers(&paths);
+        let writers = generate_string_writers(&paths, &gen_ctx());
         let impl_block: syn::ItemImpl = syn::parse2(writers).unwrap();
         let actual = retain_fn(impl_block, "try_update_str");
 
@@ -2502,7 +2588,7 @@ mod tests {
         );
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let writers = generate_string_writers(&paths);
+        let writers = generate_string_writers(&paths, &gen_ctx());
         let impl_block: syn::ItemImpl = syn::parse2(writers).unwrap();
         let actual = retain_fn(impl_block, "take_value_from");
 
@@ -2558,7 +2644,7 @@ mod tests {
         );
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let writers = generate_string_writers(&paths);
+        let writers = generate_string_writers(&paths, &gen_ctx());
         let impl_block: syn::ItemImpl = syn::parse2(writers).unwrap();
         let actual = retain_fn(impl_block, "try_unset_key");
 
@@ -2605,9 +2691,10 @@ mod tests {
                 ty: MapperType,
             },
         );
+        let gen_ctx = gen_ctx();
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let writers = generate_string_writers(&paths);
+        let writers = generate_string_writers(&paths, &gen_ctx);
         let impl_block: syn::ItemImpl = syn::parse2(writers).unwrap();
         let actual = retain_fn(impl_block, "try_append_str");
 
@@ -2663,7 +2750,7 @@ mod tests {
         );
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let writers = generate_string_writers(&paths);
+        let writers = generate_string_writers(&paths, &gen_ctx());
         let impl_block: syn::ItemImpl = syn::parse2(writers).unwrap();
         let actual = retain_fn(impl_block, "try_remove_str");
 
@@ -2717,9 +2804,10 @@ mod tests {
                 ty: MapperType,
             },
         );
+        let gen_ctx = gen_ctx();
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
         let generated = keys_enum(parse_quote!(ReadableKey), &config_keys, "read from");
 
         // Should parse successfully without "Self is only available" errors
@@ -2778,10 +2866,12 @@ mod tests {
                 ty: MapperType,
             },
         );
+        let gen_ctx = gen_ctx();
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
-        let fromstr_impl = generate_fromstr_readable(parse_quote!(ReadableKey), &config_keys);
+        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
+        let fromstr_impl =
+            generate_fromstr_readable(gen_ctx.readable_key_name.clone(), &config_keys, &gen_ctx);
 
         // Should parse successfully without "Self is only available" errors
         let _: syn::File =
@@ -2799,13 +2889,15 @@ mod tests {
                 ty: MapperType,
             },
         );
+        let gen_ctx = gen_ctx();
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
         let generated = generate_fromstr(
-            parse_quote!(ReadableKey),
+            gen_ctx.readable_key_name.clone(),
             &config_keys,
             parse_quote!(_ => unimplemented!("just a test, no error handling")),
+            &gen_ctx,
         );
 
         let expected = parse_quote!(
@@ -2861,13 +2953,15 @@ mod tests {
                 }
             },
         );
+        let gen_ctx = &gen_ctx();
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
         let generated = generate_fromstr(
             parse_quote!(ReadableKey),
             &config_keys,
             parse_quote!(_ => unimplemented!("just a test, no error handling")),
+            &gen_ctx,
         );
 
         let generated_code = prettyplease::unparse(&syn::parse2(generated).unwrap());
@@ -2947,7 +3041,7 @@ mod tests {
         );
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let writers = generate_string_writers(&paths);
+        let writers = generate_string_writers(&paths, &gen_ctx());
 
         let generated_file: syn::File = syn::parse2(writers).unwrap();
 
@@ -3024,9 +3118,10 @@ mod tests {
                 ty: MapperType,
             },
         );
+        let gen_ctx = gen_ctx();
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), "ReadableKey");
+        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
         let impl_block = keys_enum_impl_block(&config_keys);
         let actual = retain_fn(impl_block, "to_cow_str");
 
@@ -3114,5 +3209,9 @@ mod tests {
 
     fn ctx() -> CodegenContext {
         CodegenContext::default_tedge_config()
+    }
+
+    fn gen_ctx() -> GenerationContext {
+        GenerationContext::from(&ctx())
     }
 }

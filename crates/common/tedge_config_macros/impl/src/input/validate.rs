@@ -23,8 +23,8 @@ pub use super::parse::FieldDefault;
 pub use super::parse::FieldDtoSettings;
 pub use super::parse::GroupDtoSettings;
 pub use super::parse::ReaderSettings;
-pub use super::parse::SubConfigInput;
 use super::parse::ReadonlySettings;
+pub use super::parse::SubConfigInput;
 
 #[derive(Debug)]
 pub struct Configuration {
@@ -59,12 +59,10 @@ impl Configuration {
 
 fn validate_no_multi_in_sub_config(field_or_group: &FieldOrGroup) -> Result<(), syn::Error> {
     match field_or_group {
-        FieldOrGroup::Multi(group) => {
-            Err(syn::Error::new(
-                group.ident.span(),
-                "Multi-profile groups are not supported in `define_sub_config!`",
-            ))
-        }
+        FieldOrGroup::Multi(group) => Err(syn::Error::new(
+            group.ident.span(),
+            "Multi-profile groups are not supported in `define_sub_config!`",
+        )),
         FieldOrGroup::Group(group) => {
             for content in &group.contents {
                 validate_no_multi_in_sub_config(content)?;

@@ -34,9 +34,8 @@ pub fn try_generate(
     items: &[FieldOrGroup],
     doc_comment: &str,
 ) -> syn::Result<TokenStream> {
-    let ctx = ctx.with_type_name_suffix("Reader");
-    let structs = generate_structs(&ctx, items, Vec::new(), doc_comment)?;
-    let conversions = generate_conversions(&ctx, items, vec![], items)?;
+    let structs = generate_structs(ctx, items, Vec::new(), doc_comment)?;
+    let conversions = generate_conversions(ctx, items, vec![], items, &ctx.dto_type_name)?;
     Ok(quote! {
         #structs
         #conversions
@@ -49,7 +48,7 @@ fn generate_structs(
     parents: Vec<PathItem>,
     doc_comment: &str,
 ) -> syn::Result<TokenStream> {
-    let name = &ctx.root_type_name;
+    let name = &ctx.reader_type_name;
     let mut idents = Vec::new();
     let mut tys = Vec::<syn::Type>::new();
     let mut sub_readers = Vec::new();
@@ -144,13 +143,13 @@ fn generate_structs(
                 sub_readers.push(None);
             }
             FieldOrGroup::Multi(group) if !group.reader.skip => {
-                let sub_reader_name = ctx.prefixed_type_name(group);
+                let sub_ctx = ctx.suffixed_config(group);
+                let sub_reader_name = &sub_ctx.reader_type_name;
                 idents.push(&group.ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> MultiReader<#sub_reader_name>));
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone(), item.name().into()));
                 parents.push(PathItem::Dynamic(group.ident.span()));
-                let sub_ctx = CodegenContext::for_sub_config(sub_reader_name.clone());
                 sub_readers.push(Some(generate_structs(
                     &sub_ctx,
                     &group.contents,
@@ -164,12 +163,12 @@ fn generate_structs(
                 });
             }
             FieldOrGroup::Group(group) if !group.reader.skip => {
-                let sub_reader_name = ctx.prefixed_type_name(group);
+                let sub_ctx = ctx.suffixed_config(group);
+                let sub_reader_name = &sub_ctx.reader_type_name;
                 idents.push(&group.ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> #sub_reader_name));
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone(), item.name().into()));
-                let sub_ctx = CodegenContext::for_sub_config(sub_reader_name.clone());
                 sub_readers.push(Some(generate_structs(
                     &sub_ctx,
                     &group.contents,
@@ -392,7 +391,7 @@ fn reader_value_for_field<'a>(
                         parse_quote_spanned!(span=> value.clone())
                     };
                     quote_spanned! {span=>
-                        match &dto.#(#read_path).*.#name {
+                        match &dto.#(#read_path.)*#name {
                             None => OptionalConfig::Empty(#key),
                             Some(value) => OptionalConfig::Present { value: #value, key: #key },
                         }
@@ -448,32 +447,32 @@ fn reader_value_for_field<'a>(
                     };
 
                     quote_spanned! {name.span()=>
-                        match &dto.#(#read_path).*.#name {
+                        match &dto.#(#read_path.)*#name {
                             Some(value) => #value,
                             None => #default,
                         }
                     }
                 }
                 FieldDefault::Function(function) => quote_spanned! {function.span()=>
-                    match &dto.#(#read_path).*.#name {
+                    match &dto.#(#read_path.)*#name {
                         None => TEdgeConfigDefault::<TEdgeConfigDto, _>::call(#function, dto, location),
                         Some(value) => value.clone(),
                     }
                 },
                 FieldDefault::Value(default) => quote_spanned! {name.span()=>
-                    match &dto.#(#read_path).*.#name {
+                    match &dto.#(#read_path.)*#name {
                         None => #default.into(),
                         Some(value) => value.clone(),
                     }
                 },
                 FieldDefault::Variable(default) => quote_spanned! {name.span()=>
-                    match &dto.#(#read_path).*.#name {
+                    match &dto.#(#read_path.)*#name {
                         None => #default.into(),
                         Some(value) => value.clone(),
                     }
                 },
                 FieldDefault::FromStr(default) => quote_spanned! {name.span()=>
-                    match &dto.#(#read_path).*.#name {
+                    match &dto.#(#read_path.)*#name {
                         None => #default.parse().unwrap(),
                         Some(value) => value.clone(),
                     }
@@ -581,8 +580,9 @@ fn generate_conversions(
     items: &[FieldOrGroup],
     parents: Vec<PathItem>,
     root_fields: &[FieldOrGroup],
+    root_dto_name: &syn::Ident,
 ) -> syn::Result<TokenStream> {
-    let name = &ctx.root_type_name;
+    let name = &ctx.reader_type_name;
     let mut field_conversions = Vec::new();
     let mut rest = Vec::new();
     let mut id_gen = SequentialIdGenerator::default();
@@ -605,7 +605,8 @@ fn generate_conversions(
                 field_conversions.push(quote_spanned!(name.span()=> #name: #value));
             }
             FieldOrGroup::Group(group) if !group.reader.skip => {
-                let sub_reader_name = ctx.prefixed_type_name(group);
+                let sub_ctx = ctx.suffixed_config(group);
+                let sub_reader_name = &sub_ctx.reader_type_name;
                 let name = &group.ident;
 
                 let mut parents = parents.clone();
@@ -624,13 +625,13 @@ fn generate_conversions(
                 field_conversions.push(
                     quote_spanned!(name.span()=> #name: #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*)),
                 );
-                let sub_ctx = CodegenContext::for_sub_config(sub_reader_name.clone());
                 let sub_conversions =
-                    generate_conversions(&sub_ctx, &group.contents, parents, root_fields)?;
+                    generate_conversions(&sub_ctx, &group.contents, parents, root_fields, root_dto_name)?;
                 rest.push(sub_conversions);
             }
             FieldOrGroup::Multi(group) if !group.reader.skip => {
-                let sub_reader_name = ctx.prefixed_type_name(group);
+                let sub_ctx = ctx.suffixed_config(group);
+                let sub_reader_name = &sub_ctx.reader_type_name;
                 let name = &group.ident;
 
                 let new_arg = PathItem::Dynamic(group.ident.span());
@@ -661,9 +662,8 @@ fn generate_conversions(
                 let new_arg2 = extra_call_args.last().unwrap().clone();
                 field_conversions.push(quote_spanned!(name.span()=> #name: dto.#(#read_path).*.map_keys(|#new_arg2| #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*), #parent_key)));
                 parents.push(new_arg);
-                let sub_ctx = CodegenContext::for_sub_config(sub_reader_name.clone());
                 let sub_conversions =
-                    generate_conversions(&sub_ctx, &group.contents, parents, root_fields)?;
+                    generate_conversions(&sub_ctx, &group.contents, parents, root_fields, root_dto_name)?;
                 rest.push(sub_conversions);
             }
             FieldOrGroup::Group(_) | FieldOrGroup::Multi(_) => {
@@ -677,7 +677,7 @@ fn generate_conversions(
             #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
             #[automatically_derived]
             /// Converts the provided [TEdgeConfigDto] into a reader
-            pub(crate) fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation, #(#extra_args,)*) -> Self {
+            pub(crate) fn from_dto(dto: &#root_dto_name, location: &TEdgeConfigLocation, #(#extra_args,)*) -> Self {
                 Self {
                     #(#field_conversions),*
                 }
@@ -794,13 +794,8 @@ mod tests {
                 }
             },
         );
-        let actual = generate_conversions(
-            &ctx(),
-            &input.groups,
-            Vec::new(),
-            &input.groups,
-        )
-        .unwrap();
+        let actual =
+            generate_conversions(&ctx(), &input.groups, Vec::new(), &input.groups, &parse_quote!(TEdgeConfigDto)).unwrap();
         let file: syn::File = syn::parse2(actual).unwrap();
         let r#impl = file
             .items
@@ -847,13 +842,7 @@ mod tests {
                 id: String,
             },
         );
-        let actual = generate_structs(
-            &ctx(),
-            &input.groups,
-            Vec::new(),
-            "",
-        )
-        .unwrap();
+        let actual = generate_structs(&ctx(), &input.groups, Vec::new(), "").unwrap();
         let file: syn::File = syn::parse2(actual).unwrap();
 
         let expected = parse_quote! {
@@ -894,13 +883,7 @@ mod tests {
                 id: String,
             },
         );
-        let actual = generate_structs(
-            &ctx(),
-            &input.groups,
-            Vec::new(),
-            "",
-        )
-        .unwrap();
+        let actual = generate_structs(&ctx(), &input.groups, Vec::new(), "").unwrap();
         let mut file: syn::File = syn::parse2(actual).unwrap();
         let target: syn::Type = parse_quote!(TEdgeConfigReaderDevice);
         file.items
@@ -933,13 +916,7 @@ mod tests {
                 optional: String,
             },
         );
-        let actual = generate_structs(
-            &ctx(),
-            &input.groups,
-            Vec::new(),
-            "",
-        )
-        .unwrap();
+        let actual = generate_structs(&ctx(), &input.groups, Vec::new(), "").unwrap();
         let mut file: syn::File = syn::parse2(actual).unwrap();
         file.items.retain(|s| matches!(s, Item::Struct(ItemStruct { ident, ..}) if ident == "TEdgeConfigReaderTest"));
 
@@ -970,13 +947,7 @@ mod tests {
             }
         );
 
-        let generated = generate_structs(
-            &ctx(),
-            &input.groups,
-            Vec::new(),
-            "",
-        )
-        .unwrap();
+        let generated = generate_structs(&ctx(), &input.groups, Vec::new(), "").unwrap();
         let mut actual: syn::File = syn::parse2(generated).unwrap();
         actual.items.retain(
             |s| matches!(s, Item::Enum(ItemEnum { ident, ..}) if ident == "MapperTypeReader"),
@@ -1017,13 +988,7 @@ mod tests {
             }
         };
 
-        let actual = generate_structs(
-            &ctx(),
-            &input.groups,
-            Vec::new(),
-            "",
-        )
-        .unwrap();
+        let actual = generate_structs(&ctx(), &input.groups, Vec::new(), "").unwrap();
         let mut file: syn::File = syn::parse2(actual).unwrap();
         file.items.retain(|s| matches!(s, Item::Struct(ItemStruct { ident, ..}) if ident == "TEdgeConfigReaderMapper"));
         pretty_assertions::assert_eq!(unparse(&file), unparse(&expected))
@@ -1038,13 +1003,8 @@ mod tests {
                 url: String,
             },
         );
-        let actual = generate_conversions(
-            &ctx(),
-            &input.groups,
-            Vec::new(),
-            &input.groups,
-        )
-        .unwrap();
+        let actual =
+            generate_conversions(&ctx(), &input.groups, Vec::new(), &input.groups, &parse_quote!(TEdgeConfigDto)).unwrap();
         let file: syn::File = syn::parse2(actual).unwrap();
 
         let expected = parse_quote! {
@@ -1116,13 +1076,8 @@ mod tests {
                 },
             },
         );
-        let actual = generate_conversions(
-            &ctx(),
-            &input.groups,
-            Vec::new(),
-            &input.groups,
-        )
-        .unwrap();
+        let actual =
+            generate_conversions(&ctx(), &input.groups, Vec::new(), &input.groups, &parse_quote!(TEdgeConfigDto)).unwrap();
         let mut file: syn::File = syn::parse2(actual).unwrap();
         let target: syn::Type = parse_quote!(TEdgeConfigReaderC8yDevice);
         file.items
@@ -1187,13 +1142,8 @@ mod tests {
             },
         );
 
-        let actual = generate_conversions(
-            &ctx(),
-            &input.groups,
-            Vec::new(),
-            &input.groups,
-        )
-        .unwrap();
+        let actual =
+            generate_conversions(&ctx(), &input.groups, Vec::new(), &input.groups, &parse_quote!(TEdgeConfigDto)).unwrap();
         let mut file: syn::File = syn::parse2(actual).unwrap();
         let target: syn::Type = parse_quote!(TEdgeConfigReaderMapper);
         file.items
@@ -1225,7 +1175,44 @@ mod tests {
         pretty_assertions::assert_eq!(unparse(&file), unparse(&expected))
     }
 
+    #[test]
+    fn top_level_fields_on_sub_configs_are_handled_correctly() {
+        let input: crate::input::SubConfigInput = parse_quote! {
+            C8y {
+                enable_feature: bool,
+            }
+        };
+        let config: crate::input::Configuration = input.config.try_into().unwrap();
+        let ctx = CodegenContext::for_sub_config(parse_quote!(C8y));
+
+        let actual =
+            generate_conversions(&ctx, &config.groups, Vec::new(), &config.groups, &parse_quote!(TEdgeConfigDto)).unwrap();
+        let actual = syn::parse2(actual).unwrap();
+        let expected: syn::File = parse_quote! {
+            impl C8yReader {
+                #[allow(unused,clippy::clone_on_copy,clippy::useless_conversion)]
+                #[automatically_derived]
+                #[doc = r" Converts the provided [TEdgeConfigDto] into a reader"]
+                pub(crate)fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation,) -> Self {
+                    Self {
+                        enable_feature: match &dto.enable_feature {
+                            None => OptionalConfig::Empty(ReadableKey::EnableFeature.to_cow_str()),
+                            Some(value) => OptionalConfig::Present {
+                                value:value.clone(),key:ReadableKey::EnableFeature.to_cow_str()
+                            },
+                        }
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&actual),
+            prettyplease::unparse(&expected)
+        )
+    }
+
     fn ctx() -> CodegenContext {
-        CodegenContext::default_tedge_config().with_type_name_suffix("Reader")
+        CodegenContext::default_tedge_config()
     }
 }
