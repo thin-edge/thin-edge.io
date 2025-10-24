@@ -95,10 +95,18 @@ impl MessageProcessor {
     }
 
     fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + '_ {
-        self.flows
+        let script_deadlines = self
+            .flows
             .values()
             .flat_map(|flow| &flow.steps)
-            .filter_map(|step| step.script.next_execution)
+            .filter_map(|step| step.script.next_execution);
+
+        let source_deadlines = self
+            .flows
+            .values()
+            .filter_map(|flow| flow.input.next_deadline());
+
+        script_deadlines.chain(source_deadlines)
     }
 
     /// Get the next deadline for interval execution across all scripts
