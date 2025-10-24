@@ -1,0 +1,3 @@
+[input.process]
+command = "sudo journalctl --no-pager --follow --unit tedge-agent"
+topic = "log/journalctl-follow"

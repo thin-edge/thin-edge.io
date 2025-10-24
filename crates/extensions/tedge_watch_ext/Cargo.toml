@@ -1,0 +1,24 @@
+[package]
+name = "tedge_watch_ext"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+camino = { workspace = true }
+shell-words = { workspace = true }
+tedge_actors = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, default_features = false, features = [
+    "io-util",
+    "process",
+    "rt",
+] }
+
+[lints]
+workspace = true

@@ -1,8 +1,9 @@
 use crate::config::FlowConfig;
 use crate::flow::DateTime;
 use crate::flow::Flow;
-use crate::flow::FlowError;
+use crate::flow::FlowResult;
 use crate::flow::Message;
+use crate::flow::SourceTag;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
 use crate::LoadError;
@@ -115,42 +116,60 @@ impl MessageProcessor {
         self.deadlines().max()
     }
 
+    pub async fn on_source_poll(&mut self, timestamp: DateTime, now: Instant) -> Vec<FlowResult> {
+        let mut out_messages = vec![];
+        for flow in self.flows.values_mut() {
+            let messages = match flow.on_source_poll(timestamp, now).await {
+                FlowResult::Ok { messages, .. } => messages,
+                error => {
+                    out_messages.push(error);
+                    continue;
+                }
+            };
+            for message in messages {
+                let flow_output = flow
+                    .on_message(&self.js_runtime, &mut self.stats, timestamp, &message)
+                    .await;
+                out_messages.push(flow_output);
+            }
+        }
+        out_messages
+    }
+
     pub async fn on_message(
         &mut self,
         timestamp: DateTime,
+        source: &SourceTag,
         message: &Message,
-    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
+    ) -> Vec<FlowResult> {
         let started_at = self.stats.runtime_on_message_start();
 
         let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter_mut() {
-            let flow_output = flow
-                .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
-                .await;
-            if flow_output.is_err() {
-                self.stats.flow_on_message_failed(flow_id);
+        for flow in self.flows.values_mut() {
+            let config_result = flow.on_config_update(&self.js_runtime, message).await;
+            if config_result.is_err() {
+                out_messages.push(config_result);
+                continue;
             }
-            out_messages.push((flow_id.clone(), flow_output));
+            if flow.accept_message(source, message) {
+                let flow_output = flow
+                    .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
+                    .await;
+                out_messages.push(flow_output);
+            }
         }
 
         self.stats.runtime_on_message_done(started_at);
         out_messages
     }
 
-    pub async fn on_interval(
-        &mut self,
-        timestamp: DateTime,
-        now: Instant,
-    ) -> Vec<(String, Result<Vec<Message>, FlowError>)> {
+    pub async fn on_interval(&mut self, timestamp: DateTime, now: Instant) -> Vec<FlowResult> {
         let mut out_messages = vec![];
-        for (flow_id, flow) in self.flows.iter_mut() {
+        for flow in self.flows.values_mut() {
             let flow_output = flow
                 .on_interval(&self.js_runtime, &mut self.stats, timestamp, now)
                 .await;
-            if flow_output.is_err() {
-                self.stats.flow_on_interval_failed(flow_id);
-            }
-            out_messages.push((flow_id.clone(), flow_output));
+            out_messages.push(flow_output);
         }
         out_messages
     }

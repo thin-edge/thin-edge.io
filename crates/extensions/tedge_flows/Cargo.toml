@@ -27,6 +27,7 @@ serde_json = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_file_system_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
+tedge_watch_ext = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = ["fs", "macros", "time", "sync"] }
