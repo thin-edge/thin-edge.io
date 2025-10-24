@@ -6,6 +6,10 @@ use super::show::ShowCertCmd;
 use crate::certificate_is_self_signed;
 use crate::cli::certificate::c8y;
 use crate::cli::certificate::create_csr::Key;
+use crate::cli::certificate::create_key::CreateKeyPkcs11Cmd;
+use crate::cli::certificate::create_key::EcCurve;
+use crate::cli::certificate::create_key::KeyType;
+use crate::cli::certificate::create_key::RsaBits;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::BuildCommand;
@@ -13,6 +17,7 @@ use crate::command::Command;
 use crate::CertificateShift;
 use crate::ConfigError;
 use anyhow::anyhow;
+use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
@@ -49,6 +54,54 @@ pub enum TEdgeCertCli {
 
         #[clap(subcommand)]
         cloud: Option<CloudArg>,
+    },
+
+    /// Generate a new keypair on the PKCS11 token and select it to be used.
+    ///
+    /// Can be used to generate an RSA or an ECDSA keypair. When using RSA, `--bits` is used to set
+    /// the size of the key, when using ECDSA, `--curve` is used.
+    ///
+    /// After the key is generated, tedge config is updated to use the new key using
+    /// `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting
+    /// for that cloud, e.g. `create-key-pkcs11 c8y` will write to `c8y.device.key_uri`.
+    CreateKeyPkcs11 {
+        /// Human readable description (CKA_LABEL attribute) for the key.
+        #[arg(long, default_value = "tedge")]
+        label: String,
+
+        /// Key identifier for the keypair (CKA_ID attribute).
+        ///
+        /// If provided and no object exists on the token with the same ID, this will be the ID of
+        /// the new keypair. If an object with this ID already exists, the operation will return an
+        /// error. If not provided, a random ID will be generated and used by the keypair.
+        ///
+        /// The id shall be provided as a sequence of hex digits without `0x` prefix, optionally
+        /// separated by spaces, e.g. `--id 010203` or `-id "01 02 03"`.
+        #[arg(long)]
+        id: Option<String>,
+
+        /// The type of the key.
+        #[arg(long, default_value = "ecdsa")]
+        r#type: KeyType,
+
+        /// The size of the RSA keys in bits. Should only be used with --type rsa.
+        #[arg(long, default_value = "2048", group = "key_params")]
+        bits: RsaBits,
+
+        /// The curve (size) of the ECSA key. Should only be used with --type ecdsa.
+        #[arg(long, default_value = "p256", group = "key_params")]
+        curve: EcCurve,
+
+        // can't document subcommands here because one would have to document variants of the enum
+        // but this type is used in other places
+        #[clap(subcommand)]
+        cloud: Option<CloudArg>,
+
+        /// The URI of the token where the keypair should be created.
+        ///
+        /// If this argument is missing, a list of available initialized tokens will be shown. The
+        /// token needs to be initialized to be able to generate keys.
+        token: Option<String>,
     },
 
     /// Renew the device certificate
@@ -214,6 +267,38 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
+            TEdgeCertCli::CreateKeyPkcs11 {
+                bits,
+                label,
+                r#type,
+                curve,
+                id,
+
+                cloud,
+                token,
+            } => {
+                let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
+                let cloud_config = cloud
+                    .as_ref()
+                    .map(|c| config.as_cloud_config((c).into()))
+                    .transpose()?;
+                let cryptoki_config = config
+                    .device
+                    .cryptoki_config(cloud_config)?
+                    .context("Cryptoki config is not enabled")?;
+
+                CreateKeyPkcs11Cmd {
+                    cryptoki_config,
+                    label,
+                    r#type,
+                    bits,
+                    curve,
+                    id,
+                    cloud,
+                    token,
+                }
+                .into_boxed()
+            }
             TEdgeCertCli::Show {
                 cloud,
                 cert_path,

@@ -11,6 +11,7 @@ use tedge_p11_server::service::ChooseSchemeRequest;
 use tedge_p11_server::CryptokiConfig;
 use time::Duration;
 use time::OffsetDateTime;
+use tracing::trace;
 use x509_parser::public_key::PublicKey;
 pub use zeroize::Zeroizing;
 #[cfg(feature = "reqwest")]
@@ -274,6 +275,7 @@ impl rcgen::SigningKey for RemoteKeyPair {
         // the error here is not PEM-related, but we need to return a foreign error type, and there
         // are no other better variants that could let us return context, so we'll have to use this
         // until `rcgen::Error::RemoteKeyError` can take a parameter
+        trace!(?self.cryptoki_config, msg = %String::from_utf8_lossy(msg), "sign");
         let signer = tedge_p11_server::signing_key(self.cryptoki_config.clone())
             .map_err(|e| rcgen::Error::PemError(e.to_string()))?;
         signer
@@ -284,7 +286,7 @@ impl rcgen::SigningKey for RemoteKeyPair {
 
 /// Signature algorithms that can be used for generating a CSR
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SignatureAlgorithm {
+pub enum SignatureAlgorithm {
     RsaPkcs1Sha256,
     EcdsaP256Sha256,
     EcdsaP384Sha384,
