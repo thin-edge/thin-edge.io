@@ -73,7 +73,7 @@ impl Actor for FlowsMapper {
                     if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
                         self.processor.reload_script(path).await;
                     } else if path.extension() == Some("toml") {
-                        self.processor.reload_flow(path).await;
+                        self.processor.add_flow(path).await;
                         self.send_updated_subscriptions().await?;
                     }
                 }

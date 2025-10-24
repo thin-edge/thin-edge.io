@@ -249,22 +249,15 @@ impl MessageProcessor {
 
     pub async fn add_flow(&mut self, path: Utf8PathBuf) {
         let flow_id = Self::flow_id(&path);
-        if !self.flows.contains_key(&flow_id) && self.load_flow(flow_id, path.clone()).await {
-            info!(target: "flows", "Loaded new flow {path}");
-        }
-    }
-
-    pub async fn reload_flow(&mut self, path: Utf8PathBuf) {
-        let flow_id = Self::flow_id(&path);
-        if self.flows.contains_key(&flow_id) && self.load_flow(flow_id, path.clone()).await {
-            info!(target: "flows", "Reloaded updated flow {path}");
+        if self.load_flow(flow_id, path.clone()).await {
+            info!(target: "flows", "Loading flow {path}");
         }
     }
 
     pub async fn remove_flow(&mut self, path: Utf8PathBuf) {
         let flow_id = Self::flow_id(&path);
         self.flows.remove(&flow_id);
-        info!(target: "flows", "Removed deleted flow {path}");
+        info!(target: "flows", "Removing flow {path}");
     }
 }
 
