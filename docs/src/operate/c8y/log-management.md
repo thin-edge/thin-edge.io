@@ -33,3 +33,12 @@ Cumulocity UI:
 <p align="center">
     <img width="40%" src={require('../../images/tedge-log-plugin_log-types.png').default} alt="Log request dropdown" />
 </p>
+
+## Plugin support for non-file sources
+
+The log management capabilities of %%te%% can be extended using custom log plugins,
+to fetch logs from other sources like systemd journal, Docker containers etc.
+A `journald` plugin is even provided out-of-the-box for systemd based distributions (e.g: Debian, RHEL etc).
+
+Instructions on how to write and install a new plugin are documented [here](../../extend/log-management.md).
+
