@@ -1,0 +1,138 @@
+#!/bin/sh
+set -eu
+
+NOT_SUPPORTED=2
+
+usage() {
+    cat <<EOT
+dmesg log plugin for thin-edge.io
+
+IMPORTANT: Some dmesg implementations don't support date/time filters, so it will fallback to
+calling dmesg without any filtering should the datetime filters fail for any reason.
+
+The log plugin allows users to access kernel messages from dmesg.
+
+Usage:
+  $0 list
+      List all log types supported by this plugin
+
+  $0 get <log-type> [options]
+      Fetch logs for the given facility (<log-type>)
+
+Options for "get":
+  --since <timestamp>   Show logs since the given timestamp (seconds since epoch)
+  --until <timestamp>   Show logs up to the given timestamp  (seconds since epoch)
+  --help                Show this help message and exit
+
+Examples:
+  $0 list
+  $0 get all --since 1696250000 --until 1696260000
+EOT
+}
+
+is_busy_box() {
+    if dmesg --help 2>&1 | grep -q "facility"; then
+        return 1
+    fi
+    return 0
+}
+
+list_log_types() {
+    if ! command -V dmesg >/dev/null 2>&1; then
+        exit "$NOT_SUPPORTED"
+    fi
+
+    # Note: The dmesg implementations vary a lot on different
+    # operating systems, so facility filtering is difficult to provide
+    printf 'all\n'      # Default type
+}
+
+format_timestamp() {
+    value="$1"
+    case "$value" in
+        ''|*[!0-9]*)
+            echo "$value"
+            ;;
+        *)
+            # convert unix timestamp to iso date, as dmesg does not support unix timestamps
+            date -d @"$value" +%Y-%m-%d\ %H:%M:%S
+            ;;
+    esac
+}
+
+get_logs() {
+    # Note: the log type is unused, but still enforce the cli contract
+    if [ $# -lt 1 ]; then
+        echo "Error: 'get' command expects a mandatory <log-type> arguments" >&2
+        usage
+        exit 1
+    fi
+    _log_type="$1"
+    shift
+
+    # default to a large time period as kernel messages aren't published so frequently
+    since="90 day ago"
+    until="0 second ago"
+
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --since)
+                since=$(format_timestamp "$2")
+                shift
+                ;;
+
+            --until)
+                until=$(format_timestamp "$2")
+                shift
+                ;;
+
+            --help)
+                usage
+                exit 0
+                ;;
+            *)
+                echo "Unknown option: $1" >&2
+                exit 1
+                ;;
+        esac
+        shift
+    done
+
+    # try calling with all filters, and fallback to a plain dmesg command
+    if ! dmesg \
+        --nopager \
+        --time-format=iso \
+        --color=never \
+        --since "$since" \
+        --until "$until" 2>/dev/null; then
+
+        echo "WARNING: dmesg version does not advanced flags, so calling using 'dmesg' instead" >&2
+        dmesg
+    fi
+}
+
+main() {
+    if [ $# -lt 1 ]; then
+        usage
+        exit 1
+    fi
+    
+    SUBCOMMAND="$1"
+    shift
+    
+    case "$SUBCOMMAND" in
+        "list")
+            list_log_types
+            ;;
+        "get")
+            get_logs "$@"
+            ;;
+        *)
+            echo "Error: Unknown subcommand '$SUBCOMMAND'" >&2
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
