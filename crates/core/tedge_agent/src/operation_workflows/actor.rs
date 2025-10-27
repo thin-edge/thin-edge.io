@@ -22,6 +22,7 @@ use tedge_api::mqtt_topics::EntityTopicError;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::mqtt_topics::SignalType;
 use tedge_api::workflow::extract_json_output;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::CommandId;
@@ -139,11 +140,49 @@ impl WorkflowActor {
     /// but also from *this* actor as all its state transitions are published over MQTT.
     /// Only the former will be actually processed with [Self::process_command_update].
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
-        let Ok((operation, cmd_id)) = self.extract_command_identifiers(&message.topic.name) else {
-            log::error!("Unknown command channel: {}", &message.topic.name);
+        let Ok((_, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) else {
+            log::error!("Unknown topic: {}", &message.topic.name);
             return Ok(());
         };
+        match channel {
+            Channel::Command { operation, cmd_id } => {
+                self.process_command_message(message, operation, cmd_id)
+                    .await
+            }
+            Channel::Signal { signal_type } => {
+                self.process_signal_message(message, signal_type).await
+            }
+            _ => {
+                error!("Unsupported channel: {}", channel);
+                return Ok(());
+            }
+        }
+    }
 
+    async fn process_signal_message(
+        &mut self,
+        _message: MqttMessage,
+        signal_type: SignalType,
+    ) -> Result<(), RuntimeError> {
+        match signal_type {
+            SignalType::Sync => {
+                info!("Received sync signal, requesting all builtin actors to sync");
+                self.sync_signal_dispatcher.sync_all().await?;
+                Ok(())
+            }
+            SignalType::Custom(_) => {
+                // Custom signal types are not handled yet
+                Ok(())
+            }
+        }
+    }
+
+    async fn process_command_message(
+        &mut self,
+        message: MqttMessage,
+        operation: OperationType,
+        cmd_id: String,
+    ) -> Result<(), RuntimeError> {
         let Ok(state) = GenericCommandState::from_command_message(&message) else {
             log::error!("Invalid command payload: {}", &message.topic.name);
             return Ok(());

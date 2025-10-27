@@ -24,10 +24,11 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::UnboundedLoggingReceiver;
 use tedge_api::commands::CmdMetaSyncSignal;
-use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
+use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::SignalType;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
@@ -122,7 +123,15 @@ impl WorkflowActorBuilder {
     }
 
     pub fn subscriptions(mqtt_schema: &MqttSchema, device_topic_id: &EntityTopicId) -> TopicFilter {
-        mqtt_schema.topics(EntityFilter::Entity(device_topic_id), AnyCommand)
+        let mut topics = mqtt_schema.topics(
+            EntityFilter::Entity(device_topic_id),
+            ChannelFilter::AnyCommand,
+        );
+        topics.add_all(mqtt_schema.topics(
+            EntityFilter::Entity(device_topic_id),
+            ChannelFilter::Signal(SignalType::Sync),
+        ));
+        topics
     }
 }
 

@@ -71,4 +71,14 @@ impl SyncSignalDispatcher {
         }
         Ok(())
     }
+
+    /// Send sync signal to all registered actors
+    pub(crate) async fn sync_all(&mut self) -> Result<(), ChannelError> {
+        for senders in self.senders.values_mut() {
+            for sender in senders {
+                sender.send(()).await?;
+            }
+        }
+        Ok(())
+    }
 }

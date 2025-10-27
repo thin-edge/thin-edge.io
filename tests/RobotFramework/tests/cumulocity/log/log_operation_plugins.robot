@@ -52,6 +52,17 @@ Supported log types updated on config update
     ...    date_from=${start_time}
     ...    message_contains=software-management
 
+Supported log types updated on sync signal
+    Install Package Using APT    haveged
+
+    ${start_time}=    Get Unix Timestamp
+    Execute Command    tedge mqtt pub te/device/main///signal/sync '{}'
+
+    Should Have MQTT Messages
+    ...    topic=te/device/main///cmd/log_upload
+    ...    date_from=${start_time}
+    ...    message_contains=haveged::journald
+
 Log operation journald plugin can return logs for all units
     Should Contain Supported Log Types    all-units::journald
     ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
