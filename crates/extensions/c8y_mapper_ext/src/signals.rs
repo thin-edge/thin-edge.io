@@ -26,7 +26,7 @@ impl CumulocityConverter {
                     }
                 }
             }
-            SignalType::Custom(_) => {}
+            SignalType::SyncOperation(_) | SignalType::Custom(_) => {}
         }
 
         Ok(messages)

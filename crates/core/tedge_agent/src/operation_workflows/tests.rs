@@ -361,9 +361,16 @@ async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHan
 
     let tmp_dir = tempfile::TempDir::new().unwrap();
     let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
+    let device_topic_id = device_topic_id
+        .parse::<EntityTopicId>()
+        .expect("Invalid topic id");
+    let service_topic_id = device_topic_id
+        .default_service_for_device("tedge-agent")
+        .expect("Invalid service topic id");
     let config = OperationConfig {
         mqtt_schema: MqttSchema::new(),
-        device_topic_id: device_topic_id.parse().expect("Invalid topic id"),
+        device_topic_id,
+        service_topic_id,
         log_dir: tmp_path.into(),
         config_dir: tmp_path.into(),
         state_dir: tmp_path.join("running-operations"),

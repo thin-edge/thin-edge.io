@@ -56,12 +56,23 @@ Supported log types updated on sync signal
     Install Package Using APT    haveged
 
     ${start_time}=    Get Unix Timestamp
-    Execute Command    tedge mqtt pub te/device/main///signal/sync '{}'
+    Execute Command    tedge mqtt pub te/device/main/service/tedge-agent/signal/sync '{}'
 
     Should Have MQTT Messages
     ...    topic=te/device/main///cmd/log_upload
     ...    date_from=${start_time}
     ...    message_contains=haveged::journald
+
+Supported log types updated on sync log_upload signal
+    Install Package Using APT    anacron
+
+    ${start_time}=    Get Unix Timestamp
+    Execute Command    tedge mqtt pub te/device/main/service/tedge-agent/signal/sync_log_upload '{}'
+
+    Should Have MQTT Messages
+    ...    topic=te/device/main///cmd/log_upload
+    ...    date_from=${start_time}
+    ...    message_contains=anacron::journald
 
 Log operation journald plugin can return logs for all units
     Should Contain Supported Log Types    all-units::journald

@@ -798,6 +798,7 @@ impl OperationType {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SignalType {
     Sync,
+    SyncOperation(OperationType),
     Custom(String),
 }
 
@@ -833,6 +834,14 @@ impl<'a> From<&'a str> for SignalType {
     fn from(s: &'a str) -> SignalType {
         match s {
             "sync" => SignalType::Sync,
+            "sync_restart" => SignalType::SyncOperation(OperationType::Restart),
+            "sync_firmware_update" => SignalType::SyncOperation(OperationType::FirmwareUpdate),
+            "sync_software_update" => SignalType::SyncOperation(OperationType::SoftwareUpdate),
+            "sync_software_list" => SignalType::SyncOperation(OperationType::SoftwareList),
+            "sync_config_update" => SignalType::SyncOperation(OperationType::ConfigUpdate),
+            "sync_config_snapshot" => SignalType::SyncOperation(OperationType::ConfigSnapshot),
+            "sync_log_upload" => SignalType::SyncOperation(OperationType::LogUpload),
+            "sync_device_profile" => SignalType::SyncOperation(OperationType::DeviceProfile),
             custom => SignalType::Custom(custom.to_string()),
         }
     }
@@ -842,6 +851,7 @@ impl Display for SignalType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SignalType::Sync => write!(f, "sync"),
+            SignalType::SyncOperation(operation) => write!(f, "sync_{}", operation),
             SignalType::Custom(custom) => write!(f, "{custom}"),
         }
     }

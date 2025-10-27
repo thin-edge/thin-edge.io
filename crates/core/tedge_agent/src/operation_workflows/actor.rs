@@ -154,7 +154,7 @@ impl WorkflowActor {
             }
             _ => {
                 error!("Unsupported channel: {}", channel);
-                return Ok(());
+                Ok(())
             }
         }
     }
@@ -168,13 +168,19 @@ impl WorkflowActor {
             SignalType::Sync => {
                 info!("Received sync signal, requesting all builtin actors to sync");
                 self.sync_signal_dispatcher.sync_all().await?;
-                Ok(())
+            }
+            SignalType::SyncOperation(operation) => {
+                info!(
+                    "Received sync signal for {}, requesting the corresponding actor to sync",
+                    operation
+                );
+                self.sync_signal_dispatcher.sync(operation).await?;
             }
             SignalType::Custom(_) => {
                 // Custom signal types are not handled yet
-                Ok(())
             }
         }
+        Ok(())
     }
 
     async fn process_command_message(
@@ -469,7 +475,7 @@ impl WorkflowActor {
         new_state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
         if new_state.is_finished() {
-            self.sync_dependent_actors(&new_state).await?;
+            self.sync_listener_actors(&new_state).await?;
             self.finalize_builtin_command_update(new_state).await?;
 
             Ok(())
@@ -502,13 +508,13 @@ impl WorkflowActor {
         self.process_command_update(adapted_state).await
     }
 
-    async fn sync_dependent_actors(
+    async fn sync_listener_actors(
         &mut self,
         command: &GenericCommandState,
     ) -> Result<(), RuntimeError> {
         if let Some(command) = command.operation() {
             self.sync_signal_dispatcher
-                .send(command.as_str().into())
+                .sync_listener(command.as_str().into())
                 .await?;
         }
         Ok(())
