@@ -153,7 +153,7 @@ async fn save_key_uri_to_config(
     Ok(())
 }
 
-/// Parses id provided as a sequence of hex digits without `0x` prefix, optionally separated by spaces.
+/// Parses id provided as a sequence of bytes encoded as pair of hex digits without `0x` prefix, optionally separated by spaces.
 fn parse_id(id_hexstr: &str) -> anyhow::Result<Vec<u8>> {
     let id_hexstr = id_hexstr.trim();
 
