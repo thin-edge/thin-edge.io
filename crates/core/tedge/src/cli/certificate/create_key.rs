@@ -90,7 +90,7 @@ impl Command for CreateKeyPkcs11Cmd {
             for token_uri in tokens {
                 eprintln!("{token_uri}");
             }
-            return Ok(());
+            std::process::exit(1);
         };
 
         let params = CreateKeyParams {

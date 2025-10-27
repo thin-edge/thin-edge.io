@@ -206,7 +206,7 @@ tedge cert create-key-pkcs11 should ask where to create keypair if multiple toke
 
     # unset key_uri so there there's no hint where to generate the keypair
     Execute Command    cmd=tedge config unset device.key_uri
-    ${stderr}=    Execute Command    cmd=tedge cert create-key-pkcs11 --type ecdsa --label my-key    strip=True    stdout=False    stderr=True
+    ${stderr}=    Execute Command    cmd=tedge cert create-key-pkcs11 --type ecdsa --label my-key    strip=True    stdout=False    stderr=True    exp_exit_code=1
     Should Contain    ${stderr}    No token URL was provided for this operation; the available tokens are:
     Should Contain    ${stderr}    token=create-key-token1
     Should Contain    ${stderr}    token=create-key-token2
