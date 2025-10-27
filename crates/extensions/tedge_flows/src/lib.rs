@@ -6,6 +6,7 @@ mod js_lib;
 mod js_runtime;
 mod js_script;
 mod js_value;
+mod registry;
 mod runtime;
 mod stats;
 
@@ -51,10 +52,13 @@ pub struct FlowsMapperBuilder {
 
 impl FlowsMapperBuilder {
     pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
-        let processor = MessageProcessor::try_new(config_dir).await?;
+        let mut processor = MessageProcessor::try_new(config_dir).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
         let mqtt_sender = NullSender.into();
         let watch_request_sender = NullSender.into();
+
+        processor.load_all_flows().await;
+
         Ok(FlowsMapperBuilder {
             message_box,
             mqtt_sender,
@@ -81,7 +85,7 @@ impl FlowsMapperBuilder {
 
     pub fn connect_fs(&mut self, fs: &mut impl MessageSource<FsWatchEvent, PathBuf>) {
         fs.connect_mapped_sink(
-            self.processor.config_dir.clone().into(),
+            self.processor.registry.config_dir().into(),
             &self.message_box,
             |msg| Some(InputMessage::FsWatchEvent(msg)),
         );
