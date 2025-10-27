@@ -111,23 +111,26 @@ impl TEdgeFlowsCli {
     }
 
     pub async fn load_flows(flows_dir: &Utf8PathBuf) -> Result<MessageProcessor, Error> {
-        MessageProcessor::try_new(flows_dir)
+        let mut processor = MessageProcessor::try_new(flows_dir)
             .await
-            .with_context(|| format!("loading flows and steps from {flows_dir}"))
+            .with_context(|| format!("loading flows and steps from {flows_dir}"))?;
+        processor.load_all_flows().await;
+        Ok(processor)
     }
 
     pub async fn load_file(
         flows_dir: &Utf8PathBuf,
         path: &Utf8PathBuf,
     ) -> Result<MessageProcessor, Error> {
+        let mut processor = MessageProcessor::try_new(flows_dir)
+            .await
+            .with_context(|| format!("loading flow {path}"))?;
+
         if let Some("toml") = path.extension() {
-            MessageProcessor::try_new_single_flow(flows_dir, path)
-                .await
-                .with_context(|| format!("loading flow {path}"))
+            processor.load_single_flow(path).await;
         } else {
-            MessageProcessor::try_new_single_step_flow(flows_dir, path)
-                .await
-                .with_context(|| format!("loading flow script {path}"))
+            processor.load_single_script(path).await;
         }
+        Ok(processor)
     }
 }

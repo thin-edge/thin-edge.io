@@ -143,7 +143,7 @@ impl FlowsMapper {
     fn update_watched_commands(&mut self) -> Vec<WatchRequest> {
         let mut watch_requests = Vec::new();
         let mut new_watched_commands = HashSet::new();
-        for flow in self.processor.flows.values() {
+        for flow in self.processor.registry.flows() {
             let topic = flow.name();
             let Some(request) = flow.watch_request() else {
                 continue;
@@ -230,7 +230,7 @@ impl FlowsMapper {
         flow_name: String,
         line: String,
     ) -> Result<(), RuntimeError> {
-        if let Some(flow) = self.processor.flows.get(&flow_name) {
+        if let Some(flow) = self.processor.registry.get(&flow_name) {
             let topic = flow.input.enforced_topic().unwrap_or_default();
             let source = SourceTag::Process {
                 flow: flow_name.clone(),
@@ -246,7 +246,7 @@ impl FlowsMapper {
         flow_name: &str,
         error: FlowError,
     ) -> Result<(), RuntimeError> {
-        let Some((info, flow_error)) = self.processor.flows.get(flow_name).map(|flow| {
+        let Some((info, flow_error)) = self.processor.registry.get(flow_name).map(|flow| {
             (
                 format!("Reconnecting input: {flow_name}: {}", flow.input),
                 flow.on_error(error),
@@ -258,7 +258,7 @@ impl FlowsMapper {
 
         let Some(request) = self
             .processor
-            .flows
+            .registry
             .get(flow_name)
             .and_then(|flow| flow.watch_request())
         else {
@@ -275,7 +275,7 @@ impl FlowsMapper {
     }
 
     async fn on_process_eos(&mut self, flow_name: &str) -> Result<(), RuntimeError> {
-        if let Some(flow) = self.processor.flows.get(flow_name) {
+        if let Some(flow) = self.processor.registry.get(flow_name) {
             if let Some(request) = flow.watch_request() {
                 info!(target: "flows", "Reconnecting input: {flow_name}: {}", flow.input);
                 self.watch_request_sender.send(request).await?
