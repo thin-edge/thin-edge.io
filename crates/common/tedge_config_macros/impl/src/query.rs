@@ -30,8 +30,6 @@ struct GenerationContext {
     dto_key_name: syn::Ident,
     write_error_name: syn::Ident,
     parse_key_error_name: syn::Ident,
-    replace_aliases_fn_name: syn::Ident,
-    warn_about_deprecated_key_fn_name: syn::Ident,
     dto_name: syn::Ident,
     reader_name: syn::Ident,
 }
@@ -45,13 +43,25 @@ impl From<&CodegenContext> for GenerationContext {
             dto_key_name: format_ident!("{}DtoKey", ctx.enum_prefix),
             write_error_name: format_ident!("{}WriteError", ctx.enum_prefix),
             parse_key_error_name: format_ident!("{}ParseKeyError", ctx.enum_prefix),
-            replace_aliases_fn_name: format_ident!("{}replace_aliases", ctx.enum_prefix),
-            warn_about_deprecated_key_fn_name: format_ident!(
-                "{}warn_about_deprecated_key",
-                ctx.enum_prefix
-            ),
             dto_name: ctx.dto_type_name.clone(),
             reader_name: ctx.reader_type_name.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum FilterRule {
+    ReadOnly,
+    ReadWrite,
+    None,
+}
+
+impl FilterRule {
+    fn matches(self, segments: &VecDeque<&FieldOrGroup>) -> bool {
+        match self {
+            Self::ReadOnly => !is_read_write(segments),
+            Self::ReadWrite => is_read_write(segments),
+            Self::None => true,
         }
     }
 }
@@ -59,56 +69,58 @@ impl From<&CodegenContext> for GenerationContext {
 pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> TokenStream {
     let dto_paths = configuration_paths_from(items, Mode::Dto);
     let mut reader_paths = configuration_paths_from(items, Mode::Reader);
-    let (readonly_destr, write_error): (Vec<_>, Vec<_>) = reader_paths
-        .iter()
-        .filter_map(|field| {
-            let configuration = enum_variant(field);
-            Some((
-                configuration.match_shape,
-                field
-                    .back()?
-                    .field()?
-                    .read_only()?
-                    .readonly
-                    .write_error
-                    .as_str(),
-            ))
-        })
-        .multiunzip();
     let gen_ctx = GenerationContext::from(ctx);
-    let readable_args = configuration_strings(reader_paths.iter(), &gen_ctx.readable_key_name);
+    let readable_args = configuration_strings(
+        reader_paths.iter(),
+        FilterRule::None,
+        &gen_ctx.readable_key_name,
+    );
     let readonly_args = configuration_strings(
-        reader_paths.iter().filter(|path| !is_read_write(path)),
+        reader_paths.iter(),
+        FilterRule::ReadOnly,
         &gen_ctx.readonly_key_name,
     );
     let writable_args = configuration_strings(
-        reader_paths.iter().filter(|path| is_read_write(path)),
+        reader_paths.iter(),
+        FilterRule::ReadWrite,
         &gen_ctx.writable_key_name,
     );
-    let dto_args = configuration_strings(dto_paths.iter(), &gen_ctx.dto_key_name);
-    let readable_keys = keys_enum(
-        gen_ctx.readable_key_name.clone(),
-        &readable_args,
-        "read from",
-    );
+    let dto_args = configuration_strings(dto_paths.iter(), FilterRule::None, &gen_ctx.dto_key_name);
+    let readable_keys = keys_enum(&gen_ctx.readable_key_name, &readable_args, "read from");
     let readonly_keys = keys_enum(
-        gen_ctx.readonly_key_name.clone(),
+        &gen_ctx.readonly_key_name,
         &readonly_args,
         "read from, but not written to,",
     );
-    let writable_keys = keys_enum(
-        gen_ctx.writable_key_name.clone(),
-        &writable_args,
-        "written to",
-    );
-    let dto_keys = keys_enum(gen_ctx.dto_key_name.clone(), &dto_args, "written to");
+    let write_error_branches: Vec<syn::Arm> = readonly_args
+        .1
+        .iter()
+        .map(|key| {
+            if let Some(error) = &key.write_error {
+                let pattern = &key.match_shape;
+                parse_quote!(
+                    Self::#pattern => #error
+                )
+            } else if key.sub_field_info.is_some() {
+                let pattern = &key.match_read_write;
+                parse_quote!(
+                    #[allow(unused)]
+                    Self::#pattern => sub_key.write_error()
+                )
+            } else {
+                unreachable!()
+            }
+        })
+        .collect();
+    let writable_keys = keys_enum(&gen_ctx.writable_key_name, &writable_args, "written to");
+    let dto_keys = keys_enum(&gen_ctx.dto_key_name, &dto_args, "written to");
     let fromstr_readable =
-        generate_fromstr_readable(gen_ctx.readable_key_name.clone(), &readable_args, &gen_ctx);
+        generate_fromstr_readable(&gen_ctx.readable_key_name, &readable_args, &gen_ctx);
     let fromstr_readonly =
-        generate_fromstr_readable(gen_ctx.readonly_key_name.clone(), &readonly_args, &gen_ctx);
+        generate_fromstr_readable(&gen_ctx.readonly_key_name, &readonly_args, &gen_ctx);
     let fromstr_writable =
-        generate_fromstr_writable(gen_ctx.writable_key_name.clone(), &writable_args, &gen_ctx);
-    let fromstr_dto = generate_fromstr_writable(gen_ctx.dto_key_name.clone(), &dto_args, &gen_ctx);
+        generate_fromstr_writable(&gen_ctx.writable_key_name, &writable_args, &gen_ctx);
+    let fromstr_dto = generate_fromstr_writable(&gen_ctx.dto_key_name, &dto_args, &gen_ctx);
     let read_string = generate_string_readers(&reader_paths, &gen_ctx);
     let write_string = generate_string_writers(
         &reader_paths
@@ -168,6 +180,91 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
     let parse_key_error_name = &gen_ctx.parse_key_error_name;
     let reader_type_name = &ctx.reader_type_name;
     let readable_key_name = &gen_ctx.readable_key_name;
+    let utility_functions = if ctx.enum_prefix.is_empty() {
+        quote! {
+            fn replace_aliases(key: String) -> String {
+                use ::once_cell::sync::Lazy;
+                use ::std::borrow::Cow;
+                use ::std::collections::HashMap;
+                use ::doku::*;
+
+                static ALIASES: Lazy<HashMap<Cow<'static, str>, Cow<'static, str>>> = Lazy::new(|| {
+                    let ty = #reader_type_name::ty();
+                    let TypeKind::Struct { fields, transparent: false } = ty.kind else { panic!("Expected struct but got {:?}", ty.kind) };
+                    let Fields::Named { fields } = fields else { panic!("Expected named fields but got {:?}", fields)};
+                    let mut aliases = struct_field_aliases(None, &fields);
+                    #(
+                        if let Some(alias) = aliases.insert(Cow::Borrowed(#static_alias), #readable_key_name::#iter_updated.to_cow_str()) {
+                            panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `deprecated_key` for one of these configurations?", #static_alias, alias, #readable_key_name::#iter_updated.to_cow_str());
+                        }
+                    )*
+                    aliases
+                });
+
+                ALIASES
+                    .get(&Cow::Borrowed(key.as_str()))
+                    .map(|c| c.clone().into_owned())
+                    .unwrap_or(key)
+            }
+
+            fn warn_about_deprecated_key(deprecated_key: String, updated_key: &'static str) {
+                use ::once_cell::sync::Lazy;
+                use ::std::sync::Mutex;
+                use ::std::collections::HashSet;
+
+                static WARNINGS: Lazy<Mutex<HashSet<String>>> = Lazy::new(<_>::default);
+
+                let warning = format!("The key '{}' is deprecated. Use '{}' instead.", deprecated_key, updated_key);
+                if WARNINGS.lock().unwrap().insert(deprecated_key) {
+                    ::tracing::warn!("{}", warning);
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let write_error = if ctx.enum_prefix.is_empty() {
+        quote! {
+            #[derive(::thiserror::Error, Debug)]
+            /// An error encountered when writing to a configuration value from a
+            /// string
+            pub enum #write_error_name {
+                #[error("Failed to parse input")]
+                ParseValue(#[from] Box<dyn ::std::error::Error + Send + Sync>),
+                #[error(transparent)]
+                Multi(#[from] MultiError),
+                #[error("Setting {target} requires {parent} to be set to {parent_expected}, but it is currently set to {parent_actual}")]
+                SuperFieldWrongValue {
+                    target: #writable_key_name,
+                    parent: #writable_key_name,
+                    parent_expected: String,
+                    parent_actual: String,
+                },
+            }
+        }
+    } else {
+        quote! {
+            #[derive(::thiserror::Error, Debug)]
+            /// An error encountered when writing to a configuration value from a
+            /// string
+            pub enum #write_error_name {
+                #[error("Failed to parse input")]
+                ParseValue(#[from] Box<dyn ::std::error::Error + Send + Sync>),
+                #[error(transparent)]
+                Multi(#[from] MultiError),
+            }
+
+            impl From<#write_error_name> for WriteError {
+                fn from(inner: #write_error_name) -> WriteError {
+                    match inner {
+                        #write_error_name::ParseValue(e) => WriteError::ParseValue(e),
+                        #write_error_name::Multi(e) => WriteError::Multi(e),
+                    }
+                }
+            }
+        }
+    };
 
     quote! {
         #readable_keys
@@ -183,28 +280,12 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
         #readable_keys_iter
         #readonly_keys_iter
         #writable_keys_iter
-
-        #[derive(::thiserror::Error, Debug)]
-        /// An error encountered when writing to a configuration value from a
-        /// string
-        pub enum #write_error_name {
-            #[error("Failed to parse input")]
-            ParseValue(#[from] Box<dyn ::std::error::Error + Send + Sync>),
-            #[error(transparent)]
-            Multi(#[from] MultiError),
-            #[error("Setting {target} requires {parent} to be set to {parent_expected}, but it is currently set to {parent_actual}")]
-            SuperFieldWrongValue {
-                target: #writable_key_name,
-                parent: #writable_key_name,
-                parent_expected: String,
-                parent_actual: String,
-            },
-        }
+        #write_error
 
         impl #readonly_key_name {
             fn write_error(&self) -> &'static str {
                 match self {
-                    #(Self::#readonly_destr => #write_error,)*
+                    #(#write_error_branches,)*
                     #fallback_branch
                 }
             }
@@ -219,43 +300,7 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
             Unrecognised(String),
         }
 
-        fn replace_aliases(key: String) -> String {
-            use ::once_cell::sync::Lazy;
-            use ::std::borrow::Cow;
-            use ::std::collections::HashMap;
-            use ::doku::*;
-
-            static ALIASES: Lazy<HashMap<Cow<'static, str>, Cow<'static, str>>> = Lazy::new(|| {
-                let ty = #reader_type_name::ty();
-                let TypeKind::Struct { fields, transparent: false } = ty.kind else { panic!("Expected struct but got {:?}", ty.kind) };
-                let Fields::Named { fields } = fields else { panic!("Expected named fields but got {:?}", fields)};
-                let mut aliases = struct_field_aliases(None, &fields);
-                #(
-                    if let Some(alias) = aliases.insert(Cow::Borrowed(#static_alias), #readable_key_name::#iter_updated.to_cow_str()) {
-                        panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `deprecated_key` for one of these configurations?", #static_alias, alias, #readable_key_name::#iter_updated.to_cow_str());
-                    }
-                )*
-                aliases
-            });
-
-            ALIASES
-                .get(&Cow::Borrowed(key.as_str()))
-                .map(|c| c.clone().into_owned())
-                .unwrap_or(key)
-        }
-
-        fn warn_about_deprecated_key(deprecated_key: String, updated_key: &'static str) {
-            use ::once_cell::sync::Lazy;
-            use ::std::sync::Mutex;
-            use ::std::collections::HashSet;
-
-            static WARNINGS: Lazy<Mutex<HashSet<String>>> = Lazy::new(<_>::default);
-
-            let warning = format!("The key '{}' is deprecated. Use '{}' instead.", deprecated_key, updated_key);
-            if WARNINGS.lock().unwrap().insert(deprecated_key) {
-                ::tracing::warn!("{}", warning);
-            }
-        }
+        #utility_functions
     }
 }
 
@@ -425,11 +470,13 @@ fn sub_field_enum_variant(
         sub_field_info: Some(SubFieldInfo {
             type_name: sub_field_type.clone(),
         }),
+        write_error: None,
     }
 }
 
 fn configuration_strings<'a>(
     variants: impl Iterator<Item = &'a VecDeque<&'a FieldOrGroup>>,
+    filter_rule: FilterRule,
     key_type_suffix: &syn::Ident,
 ) -> (Vec<String>, Vec<ConfigurationKey>) {
     variants
@@ -441,7 +488,11 @@ fn configuration_strings<'a>(
                 .collect::<Vec<_>>()
                 .join(".");
 
-            let mut results = vec![(base_string.clone(), configuration_key)];
+            let mut results = if filter_rule.matches(segments) {
+                vec![(base_string.clone(), configuration_key)]
+            } else {
+                vec![]
+            };
 
             if let Some(FieldOrGroup::Field(field)) = segments.back() {
                 if let Some(sub_fields) = field.sub_field_entries() {
@@ -503,7 +554,7 @@ fn deprecated_keys<'a>(
 }
 
 fn generate_fromstr(
-    type_name: syn::Ident,
+    type_name: &syn::Ident,
     (configuration_string, configuration_key): &(Vec<String>, Vec<ConfigurationKey>),
     error_case: syn::Arm,
     gen_ctx: &GenerationContext,
@@ -528,6 +579,9 @@ fn generate_fromstr(
 
     let iter_variant = regular_keys.iter().map(|k| &k.iter_field);
 
+    let main_parse_err = &gen_ctx.parse_key_error_name;
+    let readonly_key_name = &gen_ctx.readonly_key_name;
+
     // Generate sub-field match cases with prefix matching
     let sub_field_match_cases =
         sub_fields
@@ -543,6 +597,8 @@ fn generate_fromstr(
                 let variant_ident = &enum_variant.ident;
                 let parent_field_count = config_key.field_names.len() - 1; // All except the last (sub_key)
                 let prefix_str = format!("{}.", config_str);
+                let sub_field_parse_err = format_ident!("{}{}", sub_field_info.type_name, main_parse_err);
+                let unrecognised_sub_key_fmt = format!("{prefix_str}{{sub_key}}");
 
                 // For simple pattern matching (non-profiled), use None for each multi-field
                 let match_args = if parent_field_count == 0 {
@@ -556,7 +612,14 @@ fn generate_fromstr(
                 let res: syn::Arm = parse_quote_spanned!(enum_variant.span()=>
                     key if key.starts_with(#pattern_str) => {
                         let sub_key_str = value.strip_prefix(#prefix_str).unwrap_or(value);
-                        let sub_key: #sub_field_type_name = sub_key_str.parse()?;
+                        let sub_key: #sub_field_type_name = sub_key_str.parse().map_err(|err| match err {
+                            #sub_field_parse_err::ReadOnly(sub_key) => {
+                                #main_parse_err::ReadOnly(#readonly_key_name::#variant_ident(#match_args))
+                            }
+                            #sub_field_parse_err::Unrecognised(sub_key) => {
+                                #main_parse_err::Unrecognised(format!(#unrecognised_sub_key_fmt))
+                            }
+                        })?;
                         return Ok(Self::#variant_ident(#match_args))
                     }
                 );
@@ -589,22 +652,24 @@ fn generate_fromstr(
     // Generate regex patterns for sub-field keys with profiles
     let sub_field_regex_patterns: Vec<_> = sub_fields
         .iter()
-        .filter_map(|(_, c, s)| {
+        .filter_map(|(config_str, c, s)| {
             // Only generate if there's a regex_parser (i.e., has profile fields)
-            c.regex_parser.clone().map(|r| (r, c, *s))
+            c.regex_parser.clone().map(|r| (r, *config_str, c, *s))
         })
-        .map(|(mut r, c, s)| {
-            let variant_ident = &c.enum_variant.ident;
+        .map(|(mut r, config_str, key, sub_field_info)| {
+            let variant_ident = &key.enum_variant.ident;
             // Construct sub-field type name from identifier and type name (e.g. C8y + ReadableKey)
-            let sub_field_type_name = format_ident!("{}{}", s.type_name, type_name);
+            let sub_field_type_name = format_ident!("{}{}", sub_field_info.type_name, type_name);
 
-            let all_field_names = &c.field_names;
+            let all_field_names = &key.field_names;
             let parent_fields = &all_field_names[..all_field_names.len() - 1];
-            let sub_key_field = &all_field_names[all_field_names.len() - 1];
             // The sub_key is captured after all parent field captures
             // Parent fields are at indices 1, 2, ..., parent_fields.len()
             // Sub_key is at index parent_fields.len() + 1
             let sub_key_capture_idx = parent_fields.len() + 1;
+            let sub_field_parse_err =
+                format_ident!("{}{}", sub_field_info.type_name, main_parse_err);
+            let unrecognised_sub_key_fmt = format!("{config_str}.{{sub_key}}");
 
             // Generate assignments only for parent fields (not the sub_key)
             let own_branches = parent_fields
@@ -623,8 +688,18 @@ fn generate_fromstr(
                 let sub_key_str = captures.get(#sub_key_capture_idx)
                     .map(|re_match| re_match.as_str())
                     .unwrap_or("");
-                let #sub_key_field: #sub_field_type_name = sub_key_str.parse()?;
-                return Ok(Self::#variant_ident(#(#parent_fields),*, #sub_key_field));
+                let sub_key: #sub_field_type_name = sub_key_str.parse().map_err({
+                    #(let #parent_fields = #parent_fields.clone();)*
+                    |err| match err {
+                        #sub_field_parse_err::ReadOnly(sub_key) => {
+                            #main_parse_err::ReadOnly(#readonly_key_name::#variant_ident(#(#parent_fields),*, sub_key))
+                        }
+                        #sub_field_parse_err::Unrecognised(sub_key) => {
+                            #main_parse_err::Unrecognised(format!(#unrecognised_sub_key_fmt))
+                        }
+                    }
+                })?;
+                return Ok(Self::#variant_ident(#(#parent_fields),*, sub_key));
             });
             r
         })
@@ -661,7 +736,7 @@ fn generate_fromstr(
 }
 
 fn generate_fromstr_readable(
-    type_name: syn::Ident,
+    type_name: &syn::Ident,
     fields: &(Vec<String>, Vec<ConfigurationKey>),
     gen_ctx: &GenerationContext,
 ) -> TokenStream {
@@ -676,7 +751,7 @@ fn generate_fromstr_readable(
 
 // TODO test the error messages actually appear
 fn generate_fromstr_writable(
-    type_name: syn::Ident,
+    type_name: &syn::Ident,
     fields: &(Vec<String>, Vec<ConfigurationKey>),
     gen_ctx: &GenerationContext,
 ) -> TokenStream {
@@ -842,7 +917,7 @@ fn key_iterators(
 }
 
 fn keys_enum(
-    type_name: syn::Ident,
+    type_name: &syn::Ident,
     (configuration_string, configuration_key): &(Vec<String>, Vec<ConfigurationKey>),
     doc_fragment: &'static str,
 ) -> TokenStream {
@@ -1207,8 +1282,10 @@ fn generate_write_arms_for_sub_fields(
         generate_field_accessor(path, "try_get_mut", false).collect::<Vec<_>>();
     // Remove the last segment (the field itself) to get just the parent
     parent_segments.pop();
+    let reader_segments = generate_field_accessor(path, "try_get", true).collect::<Vec<_>>();
 
     let field_dto_ty = field.dto_ty();
+    let field_reader_ty = field.reader_ty();
     let field_name = field.ident();
     let base_ident = ident_for(path);
     let parent_multi_count = path
@@ -1225,10 +1302,12 @@ fn generate_write_arms_for_sub_fields(
 
             let combined_ident = format_ident!("{base_ident}{variant_name}");
             let variant_field_name = syn::Ident::new(&variant_name.to_string().to_snek_case(), variant_name.span());
+            let variant_reader_field_name = format_ident!("{variant_field_name}_reader");
             let parent_field_names = SequentialIdGenerator::default().take(parent_multi_count).collect::<Vec<_>>();
             let sub_key_ident = syn::Ident::new("sub_key", variant_name.span());
             let variant_name_str = variant_name.to_string().to_snek_case();
             let dto_type_ident = format_ident!("{}Dto", type_name);
+            let reader_type_ident = format_ident!("{}Reader", type_name);
 
             // Get the parent variable name from the path
             let parent_var_name = if parent_segments.is_empty() {
@@ -1247,7 +1326,7 @@ fn generate_write_arms_for_sub_fields(
             // Generate the field variable name as {parent}_{field}
             let field_var_name = format_ident!("{}_{}", parent_var_name, field_name);
 
-            let update_arm: syn::Arm = parse_quote! {
+            let update_arm: syn::Arm = parse_quote_spanned! {entry.span()=>
                 WritableKey::#combined_ident(#(#parent_field_names,)* #sub_key_ident) => {
                     let #parent_var_name = self.#(#parent_segments).*;
                     let #field_var_name = #parent_var_name.#field_name.get_or_insert_with(|| #field_dto_ty::#variant_name { #variant_field_name: #dto_type_ident::default() });
@@ -1267,6 +1346,7 @@ fn generate_write_arms_for_sub_fields(
             let other_parent_var_name = format_ident!("other_{}", parent_var_name);
             let other_field_var_name = format_ident!("other_{}", field_var_name);
             let other_variant_field_name = format_ident!("other_{}", variant_field_name);
+            let reader_var_name = format_ident!("{}_reader", field_var_name);
 
             let take_value_arm: syn::Arm = parse_quote! {
                 WritableKey::#combined_ident(#(#parent_field_names,)* #sub_key_ident) => {
@@ -1310,8 +1390,20 @@ fn generate_write_arms_for_sub_fields(
                 WritableKey::#combined_ident(#(#parent_field_names,)* #sub_key_ident) => {
                     let #parent_var_name = self.#(#parent_segments).*;
                     let #field_var_name = #parent_var_name.#field_name.get_or_insert_with(|| #field_dto_ty::#variant_name { #variant_field_name: #dto_type_ident::default() });
+                    let #reader_var_name = reader.#(#reader_segments).*.or_none().map(::std::borrow::Cow::Borrowed).unwrap_or_else(|| {
+                        ::std::borrow::Cow::Owned(#field_reader_ty::#variant_name {
+                            #variant_field_name: #reader_type_ident::from_dto(
+                                &#dto_type_ident::default(),
+                                &TEdgeConfigLocation::default(),
+                            )
+                        })
+                    });
                     if let #field_dto_ty::#variant_name { #variant_field_name } = #field_var_name {
-                        #variant_field_name.try_append_str(reader, #sub_key_ident, value)?;
+                        if let #field_reader_ty::#variant_name { #variant_field_name: #variant_reader_field_name } = #reader_var_name.as_ref() {
+                            #variant_field_name.try_append_str(#variant_reader_field_name, #sub_key_ident, value)?;
+                        } else {
+                            unreachable!("Shape of reader should match shape of DTO")
+                        }
                     } else {
                         return Err(WriteError::SuperFieldWrongValue {
                             target: key.clone(),
@@ -1327,8 +1419,20 @@ fn generate_write_arms_for_sub_fields(
                 WritableKey::#combined_ident(#(#parent_field_names,)* #sub_key_ident) => {
                     let #parent_var_name = self.#(#parent_segments).*;
                     let #field_var_name = #parent_var_name.#field_name.get_or_insert_with(|| #field_dto_ty::#variant_name { #variant_field_name: #dto_type_ident::default() });
+                    let #reader_var_name = reader.#(#reader_segments).*.or_none().map(::std::borrow::Cow::Borrowed).unwrap_or_else(|| {
+                        ::std::borrow::Cow::Owned(#field_reader_ty::#variant_name {
+                            #variant_field_name: #reader_type_ident::from_dto(
+                                &#dto_type_ident::default(),
+                                &TEdgeConfigLocation::default(),
+                            )
+                        })
+                    });
                     if let #field_dto_ty::#variant_name { #variant_field_name } = #field_var_name {
-                        #variant_field_name.try_remove_str(reader, #sub_key_ident, value)?;
+                        if let #field_reader_ty::#variant_name { #variant_field_name: #variant_reader_field_name } = #reader_var_name.as_ref() {
+                            #variant_field_name.try_remove_str(#variant_reader_field_name, #sub_key_ident, value)?;
+                        } else {
+                            unreachable!("Shape of reader should match shape of DTO")
+                        }
                     } else {
                         return Err(WriteError::SuperFieldWrongValue {
                             target: key.clone(),
@@ -1388,7 +1492,7 @@ fn generate_string_writers(
             // For fields with sub-fields, get current value from self (Dto) instead of reader,
             // since the reader type is different from the dto type for sub-fields
             let current_value = if field.sub_field_entries().is_some() {
-                quote_spanned! {ty.span()=> self.#(#write_segments).*.clone()}
+                quote_spanned! {ty.span()=> self.#(#write_segments).*.take()}
             } else if field.read_only().is_some() || field.reader_function().is_some() {
                 if extract_type_from_result(field.reader_ty()).is_some() {
                     quote_spanned! {ty.span()=> reader.#(#read_segments).*().ok().cloned()}
@@ -1536,6 +1640,7 @@ struct ConfigurationKey {
     doc_comment: Option<String>,
     /// If this is a sub-field key, contains metadata about the sub-field
     sub_field_info: Option<SubFieldInfo>,
+    write_error: Option<String>,
 }
 
 fn ident_for(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
@@ -1652,6 +1757,17 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             insert_profiles,
             doc_comment: segments.iter().last().unwrap().doc(),
             sub_field_info: None,
+            write_error: (|| {
+                Some(
+                    segments
+                        .back()?
+                        .field()?
+                        .read_only()?
+                        .readonly
+                        .write_error
+                        .clone(),
+                )
+            })(),
         }
     } else {
         ConfigurationKey {
@@ -1668,6 +1784,17 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             insert_profiles: vec![],
             doc_comment: segments.back().unwrap().doc(),
             sub_field_info: None,
+            write_error: (|| {
+                Some(
+                    segments
+                        .back()?
+                        .field()?
+                        .read_only()?
+                        .readonly
+                        .write_error
+                        .clone(),
+                )
+            })(),
         }
     }
 }
@@ -1753,9 +1880,9 @@ mod tests {
         );
         let gen_ctx = gen_ctx();
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let c = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
+        let c = configuration_strings(paths.iter(), FilterRule::None, &gen_ctx.readable_key_name);
         let generated = generate_fromstr(
-            gen_ctx.readable_key_name.clone(),
+            &gen_ctx.readable_key_name,
             &c,
             parse_quote!(_ => unimplemented!("just a test, no error handling")),
             &gen_ctx,
@@ -1854,9 +1981,9 @@ mod tests {
         );
         let gen_ctx = gen_ctx();
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let c = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
+        let c = configuration_strings(paths.iter(), FilterRule::None, &gen_ctx.readable_key_name);
         let generated = generate_fromstr(
-            gen_ctx.readable_key_name.clone(),
+            &gen_ctx.readable_key_name,
             &c,
             parse_quote!(_ => unimplemented!("just a test, no error handling")),
             &gen_ctx,
@@ -2083,7 +2210,8 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), &gen_ctx().readable_key_name);
+        let config_keys =
+            configuration_strings(paths.iter(), FilterRule::None, &gen_ctx().readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -2115,7 +2243,8 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), &gen_ctx().readable_key_name);
+        let config_keys =
+            configuration_strings(paths.iter(), FilterRule::None, &gen_ctx().readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -2143,7 +2272,8 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), &gen_ctx().readable_key_name);
+        let config_keys =
+            configuration_strings(paths.iter(), FilterRule::None, &gen_ctx().readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -2175,7 +2305,8 @@ mod tests {
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), &gen_ctx().readable_key_name);
+        let config_keys =
+            configuration_strings(paths.iter(), FilterRule::None, &gen_ctx().readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "to_cow_str");
 
         let expected = parse_quote! {
@@ -2215,7 +2346,8 @@ mod tests {
         );
         let gen_ctx = gen_ctx();
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
+        let config_keys =
+            configuration_strings(paths.iter(), FilterRule::None, &gen_ctx.readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "try_with_profile");
 
         let expected = parse_quote! {
@@ -2346,8 +2478,9 @@ mod tests {
         );
         let gen_ctx = gen_ctx();
         let dto_paths = configuration_paths_from(&input.groups, Mode::Dto);
-        let dto_keys = configuration_strings(dto_paths.iter(), &gen_ctx.dto_key_name);
-        let writers = generate_fromstr_writable(parse_quote!(DtoKey), &dto_keys, &gen_ctx);
+        let dto_keys =
+            configuration_strings(dto_paths.iter(), FilterRule::None, &gen_ctx.dto_key_name);
+        let writers = generate_fromstr_writable(&parse_quote!(DtoKey), &dto_keys, &gen_ctx);
         let impl_dto_block = syn::parse2(writers).unwrap();
 
         let expected = parse_quote! {
@@ -2432,7 +2565,10 @@ mod tests {
             #[derive(Clone, Debug, PartialEq, Eq)]
             #[non_exhaustive]
             #[allow(unused)]
-            pub enum ReadOnlyKey {}
+            pub enum ReadOnlyKey {
+                MapperTypeC8y(Option<String>, C8yReadOnlyKey),
+                MapperTypeAz(Option<String>, AzReadOnlyKey),
+            }
 
             #[derive(Clone, Debug, PartialEq, Eq)]
             #[non_exhaustive]
@@ -2457,6 +2593,57 @@ mod tests {
     }
 
     #[test]
+    fn write_error_method_recurses_to_sub_fields() {
+        let input: crate::input::Configuration = parse_quote!(
+            device: {
+                #[tedge_config(readonly(write_error = "An example error message", function = "device_id"))]
+                id: String
+            },
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(sub_fields = [C8y(C8y), Az(Az), Custom])]
+                #[tedge_config(rename = "type")]
+                ty: MapperType,
+            },
+        );
+        let actual = generate_writable_keys(&ctx(), &input.groups);
+        let mut actual: syn::File = syn::parse2(actual).unwrap();
+        actual.items = actual
+            .items
+            .into_iter()
+            .filter_map(|mut item| {
+                if let syn::Item::Impl(i) = &mut item {
+                    i.items.retain(
+                        |item| matches!(item, syn::ImplItem::Fn(f) if f.sig.ident == "write_error"),
+                    );
+                    if !i.items.is_empty() {
+                        Some(item)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let expected: syn::File = parse_quote!(
+            impl ReadOnlyKey {
+                fn write_error(&self) -> &'static str {
+                    match self {
+                        Self::DeviceId => "An example error message",
+                        #[allow(unused)]
+                        Self::MapperTypeC8y(key0, sub_key) => sub_key.write_error(),
+                        #[allow(unused)]
+                        Self::MapperTypeAz(key0, sub_key) => sub_key.write_error(),
+                    }
+                }
+            }
+        );
+
+        pretty_assertions::assert_eq!(unparse(&actual), unparse(&expected));
+    }
+
+    #[test]
     fn sub_fields_dont_trigger_nested_profiles_error() {
         let input: crate::input::Configuration = parse_quote!(
             #[tedge_config(multi)]
@@ -2468,7 +2655,8 @@ mod tests {
         );
         let gen_ctx = gen_ctx();
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
+        let config_keys =
+            configuration_strings(paths.iter(), FilterRule::None, &gen_ctx.readable_key_name);
         let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "try_with_profile");
 
         let expected = parse_quote! {
@@ -2705,7 +2893,7 @@ mod tests {
                         #[allow(clippy::useless_conversion)]
                         WritableKey::MapperTy(key0) => {
                             self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty = <MapperTypeDto as AppendRemoveItem>::append(
-                                self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty.clone(),
+                                self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty.take(),
                                 value
                                     .parse::<MapperTypeDto>()
                                     .map(<MapperTypeDto>::from)
@@ -2715,8 +2903,23 @@ mod tests {
                         WritableKey::MapperTyC8y(key0, sub_key) => {
                             let mapper = self.mapper.try_get_mut(key0.as_deref(), "mapper")?;
                             let mapper_ty = mapper.ty.get_or_insert_with(|| MapperTypeDto::C8y { c8y: C8yDto::default() });
+                            let mapper_ty_reader = reader
+                                .mapper
+                                .try_get(key0.as_deref())?
+                                .ty
+                                .or_none()
+                                .map(::std::borrow::Cow::Borrowed)
+                                .unwrap_or_else(|| {
+                                    ::std::borrow::Cow::Owned(MapperTypeReader::C8y {
+                                        c8y: C8yReader::from_dto(&C8yDto::default(), &TEdgeConfigLocation::default()),
+                                    })
+                                });
                             if let MapperTypeDto::C8y { c8y } = mapper_ty {
-                                c8y.try_append_str(reader, sub_key, value)?;
+                                if let MapperTypeReader::C8y { c8y: c8y_reader } = mapper_ty_reader.as_ref() {
+                                    c8y.try_append_str(c8y_reader, sub_key, value)?;
+                                } else {
+                                    unreachable!("Shape of reader should match shape of DTO")
+                                }
                             } else {
                                 return Err(WriteError::SuperFieldWrongValue {
                                     target: key.clone(),
@@ -2761,7 +2964,7 @@ mod tests {
                         #[allow(clippy::useless_conversion)]
                         WritableKey::MapperType(key0) => {
                             self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty = <MapperTypeDto as AppendRemoveItem>::remove(
-                                self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty.clone(),
+                                self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty.take(),
                                 value
                                     .parse::<MapperTypeDto>()
                                     .map(<MapperTypeDto>::from)
@@ -2771,8 +2974,23 @@ mod tests {
                         WritableKey::MapperTypeC8y(key0, sub_key) => {
                             let mapper = self.mapper.try_get_mut(key0.as_deref(), "mapper")?;
                             let mapper_ty = mapper.ty.get_or_insert_with(|| MapperTypeDto::C8y { c8y: C8yDto::default() });
+                            let mapper_ty_reader = reader
+                                .mapper
+                                .try_get(key0.as_deref())?
+                                .ty
+                                .or_none()
+                                .map(::std::borrow::Cow::Borrowed)
+                                .unwrap_or_else(|| {
+                                    ::std::borrow::Cow::Owned(MapperTypeReader::C8y {
+                                        c8y: C8yReader::from_dto(&C8yDto::default(), &TEdgeConfigLocation::default()),
+                                    })
+                                });
                             if let MapperTypeDto::C8y { c8y } = mapper_ty {
-                                c8y.try_remove_str(reader, sub_key, value)?;
+                                if let MapperTypeReader::C8y { c8y: c8y_reader } = mapper_ty_reader.as_ref() {
+                                    c8y.try_remove_str(c8y_reader, sub_key, value)?;
+                                } else {
+                                    unreachable!("Shape of reader should match shape of DTO")
+                                }
                             } else {
                                 return Err(WriteError::SuperFieldWrongValue {
                                     target: key.clone(),
@@ -2807,8 +3025,9 @@ mod tests {
         let gen_ctx = gen_ctx();
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
-        let generated = keys_enum(parse_quote!(ReadableKey), &config_keys, "read from");
+        let config_keys =
+            configuration_strings(paths.iter(), FilterRule::None, &gen_ctx.readable_key_name);
+        let generated = keys_enum(&parse_quote!(ReadableKey), &config_keys, "read from");
 
         // Should parse successfully without "Self is only available" errors
         let generated_file: syn::File = syn::parse2(generated).unwrap();
@@ -2869,9 +3088,10 @@ mod tests {
         let gen_ctx = gen_ctx();
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
+        let config_keys =
+            configuration_strings(paths.iter(), FilterRule::None, &gen_ctx.readable_key_name);
         let fromstr_impl =
-            generate_fromstr_readable(gen_ctx.readable_key_name.clone(), &config_keys, &gen_ctx);
+            generate_fromstr_readable(&gen_ctx.readable_key_name.clone(), &config_keys, &gen_ctx);
 
         // Should parse successfully without "Self is only available" errors
         let _: syn::File =
@@ -2892,9 +3112,10 @@ mod tests {
         let gen_ctx = gen_ctx();
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
+        let config_keys =
+            configuration_strings(paths.iter(), FilterRule::None, &gen_ctx.readable_key_name);
         let generated = generate_fromstr(
-            gen_ctx.readable_key_name.clone(),
+            &gen_ctx.readable_key_name,
             &config_keys,
             parse_quote!(_ => unimplemented!("just a test, no error handling")),
             &gen_ctx,
@@ -2915,7 +3136,10 @@ mod tests {
                         key if key.starts_with("mapper_c8y_") => {
                             // Sub-field keys start with the prefix and parse the remainder with the sub-key type
                             let sub_key_str = value.strip_prefix("mapper.c8y.").unwrap_or(value);
-                            let sub_key: C8yReadableKey = sub_key_str.parse()?;
+                            let sub_key: C8yReadableKey = sub_key_str.parse().map_err(|err| match err {
+                                C8yParseKeyError::ReadOnly(sub_key) => ParseKeyError::ReadOnly(ReadOnlyKey::MapperTypeC8y(None, sub_key)),
+                                C8yParseKeyError::Unrecognised(sub_key) => ParseKeyError::Unrecognised(format!("mapper.c8y.{sub_key}")),
+                            })?;
                             return Ok(Self::MapperTypeC8y(None, sub_key));
                         },
                         _ => unimplemented!("just a test, no error handling"),
@@ -2927,7 +3151,13 @@ mod tests {
                     if let Some(captures) = ::regex::Regex::new(#MAPPER_TY_C8Y_REGEX).unwrap().captures(value) {
                         let key0 = captures.get(1usize).map(|re_match| re_match.as_str().to_owned());
                         let sub_key_str = captures.get(2usize).map(|re_match| re_match.as_str()).unwrap_or("");
-                        let sub_key: C8yReadableKey = sub_key_str.parse()?;
+                        let sub_key: C8yReadableKey = sub_key_str.parse().map_err({
+                            let key0 = key0.clone();
+                            |err| match err {
+                                C8yParseKeyError::ReadOnly(sub_key) => ParseKeyError::ReadOnly(ReadOnlyKey::MapperTypeC8y(key0, sub_key)),
+                                C8yParseKeyError::Unrecognised(sub_key) => ParseKeyError::Unrecognised(format!("mapper.c8y.{sub_key}")),
+                            }
+                        })?;
                         return Ok(Self::MapperTypeC8y(key0, sub_key));
                     };
                     res
@@ -2956,12 +3186,13 @@ mod tests {
         let gen_ctx = &gen_ctx();
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
+        let config_keys =
+            configuration_strings(paths.iter(), FilterRule::None, &gen_ctx.readable_key_name);
         let generated = generate_fromstr(
-            parse_quote!(ReadableKey),
+            &parse_quote!(ReadableKey),
             &config_keys,
             parse_quote!(_ => unimplemented!("just a test, no error handling")),
-            &gen_ctx,
+            gen_ctx,
         );
 
         let generated_code = prettyplease::unparse(&syn::parse2(generated).unwrap());
@@ -3076,7 +3307,7 @@ mod tests {
                     #[allow(clippy::useless_conversion)]
                     WritableKey::MapperTy(key0) => {
                         self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty = <MapperTypeDto as AppendRemoveItem>::append(
-                            self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty.clone(),
+                            self.mapper.try_get_mut(key0.as_deref(), "mapper")?.ty.take(),
                             value
                                 .parse::<MapperTypeDto>()
                                 .map(<MapperTypeDto>::from)
@@ -3086,8 +3317,23 @@ mod tests {
                     WritableKey::MapperTyC8y(key0, sub_key) => {
                         let mapper = self.mapper.try_get_mut(key0.as_deref(), "mapper")?;
                         let mapper_ty = mapper.ty.get_or_insert_with(|| MapperTypeDto::C8y { c8y: C8yDto::default() });
+                        let mapper_ty_reader = reader
+                            .mapper
+                            .try_get(key0.as_deref())?
+                            .ty
+                            .or_none()
+                            .map(::std::borrow::Cow::Borrowed)
+                            .unwrap_or_else(|| {
+                                ::std::borrow::Cow::Owned(MapperTypeReader::C8y {
+                                    c8y: C8yReader::from_dto(&C8yDto::default(), &TEdgeConfigLocation::default()),
+                                })
+                            });
                         if let MapperTypeDto::C8y { c8y } = mapper_ty {
-                            c8y.try_append_str(reader, sub_key, value)?;
+                            if let MapperTypeReader::C8y { c8y: c8y_reader } = mapper_ty_reader.as_ref() {
+                                c8y.try_append_str(c8y_reader, sub_key, value)?;
+                            } else {
+                                unreachable!("Shape of reader should match shape of DTO")
+                            }
                         } else {
                             return Err(WriteError::SuperFieldWrongValue {
                                 target: key.clone(),
@@ -3121,7 +3367,8 @@ mod tests {
         let gen_ctx = gen_ctx();
 
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
-        let config_keys = configuration_strings(paths.iter(), &gen_ctx.readable_key_name);
+        let config_keys =
+            configuration_strings(paths.iter(), FilterRule::None, &gen_ctx.readable_key_name);
         let impl_block = keys_enum_impl_block(&config_keys);
         let actual = retain_fn(impl_block, "to_cow_str");
 
@@ -3154,7 +3401,7 @@ mod tests {
     }
 
     fn keys_enum_impl_block(config_keys: &(Vec<String>, Vec<ConfigurationKey>)) -> ItemImpl {
-        let generated = keys_enum(parse_quote!(ReadableKey), config_keys, "DOC FRAGMENT");
+        let generated = keys_enum(&parse_quote!(ReadableKey), config_keys, "DOC FRAGMENT");
         let generated_file: syn::File = syn::parse2(generated).unwrap();
         let mut impl_block = generated_file
             .items

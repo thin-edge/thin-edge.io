@@ -3,7 +3,6 @@
 use crate::input::FieldDefault;
 use heck::ToUpperCamelCase;
 use optional_error::OptionalError;
-use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
@@ -55,17 +54,6 @@ impl CodegenContext {
             reader_type_name: format_ident!("{}{}", self.reader_type_name, group),
             enum_prefix: self.enum_prefix.clone(),
         }
-    }
-
-    /// Generate a prefixed type name for a configuration group
-    /// Used to create nested struct names like TEdgeConfigBridge, BridgeConfigAzure, etc.
-    fn prefixed_reader_name(&self, group: &input::ConfigurationGroup) -> proc_macro2::Ident {
-        quote::format_ident!(
-            "{}{}",
-            self.reader_type_name,
-            group.ident.to_string().to_upper_camel_case(),
-            span = group.ident.span()
-        )
     }
 }
 

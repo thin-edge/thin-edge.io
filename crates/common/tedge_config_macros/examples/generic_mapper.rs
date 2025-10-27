@@ -47,6 +47,10 @@ impl<T> AppendRemoveItem for T {
 }
 
 define_tedge_config! {
+    device: {
+        #[tedge_config(rename = "type")]
+        ty: String,
+    },
     #[tedge_config(multi)]
     mapper: {
         #[tedge_config(sub_fields = [C8y(C8y), Custom])]
@@ -78,9 +82,7 @@ impl BridgeTypeReader {
 
 fn main() {
     // Test that we can create the main config type
-    let mut config = TEdgeConfigDto {
-        mapper: MultiDto::default(),
-    };
+    let mut config = TEdgeConfigDto::default();
     println!("Created config: {config:?}");
 
     // Test that the key enums exist with sub-fields

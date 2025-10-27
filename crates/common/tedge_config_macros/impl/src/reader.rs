@@ -104,7 +104,7 @@ fn generate_structs(
                         let field_ty = field.reader_ty();
                         let tag_name = field.name();
                         let ty: syn::ItemEnum = syn::parse_quote_spanned!(sub_fields.span()=>
-                            #[derive(Debug, Clone, ::serde::Serialize, PartialEq, ::strum::Display, ::doku::Document)]
+                            #[derive(Debug, Clone, ::serde::Serialize, ::strum::Display, ::doku::Document)]
                             #[serde(rename_all = "snake_case")]
                             #[strum(serialize_all = "snake_case")]
                             #[serde(tag = #tag_name)]
@@ -353,12 +353,14 @@ fn read_field(parents: &[PathItem]) -> impl Iterator<Item = TokenStream> + '_ {
 }
 
 fn reader_value_for_field<'a>(
+    ctx: &CodegenContext,
     field: &'a ConfigurableField,
     parents: &[PathItem],
     root_fields: &[FieldOrGroup],
     mut observed_keys: Vec<&'a Punctuated<syn::Ident, Token![.]>>,
 ) -> syn::Result<TokenStream> {
     let name = field.ident();
+    let readable_key_name = format_ident!("{}ReadableKey", ctx.enum_prefix);
     Ok(match field {
         ConfigurableField::ReadWrite(rw_field) => {
             let mut ident: String = parents
@@ -376,9 +378,9 @@ fn reader_value_for_field<'a>(
                 args
             });
             let key: syn::Expr = if args.is_empty() {
-                parse_quote!(ReadableKey::#ident.to_cow_str())
+                parse_quote!(#readable_key_name::#ident.to_cow_str())
             } else {
-                parse_quote!(ReadableKey::#ident(#(#args.map(<_>::to_owned)),*).to_cow_str())
+                parse_quote!(#readable_key_name::#ident(#(#args.map(<_>::to_owned)),*).to_cow_str())
             };
             let read_path = read_field(parents);
             let value = match &rw_field.default {
@@ -423,6 +425,7 @@ fn reader_value_for_field<'a>(
                 FieldDefault::FromKey(default_key) | FieldDefault::FromOptionalKey(default_key) => {
                     observed_keys.push(default_key);
                     let default = reader_value_for_field(
+                        ctx,
                         find_field(root_fields, default_key)?,
                         &parents_for(default_key, parents, root_fields)?,
                         root_fields,
@@ -601,7 +604,7 @@ fn generate_conversions(
         match item {
             FieldOrGroup::Field(field) => {
                 let name = field.ident();
-                let value = reader_value_for_field(field, &parents, root_fields, Vec::new())?;
+                let value = reader_value_for_field(ctx, field, &parents, root_fields, Vec::new())?;
                 field_conversions.push(quote_spanned!(name.span()=> #name: #value));
             }
             FieldOrGroup::Group(group) if !group.reader.skip => {
@@ -625,8 +628,13 @@ fn generate_conversions(
                 field_conversions.push(
                     quote_spanned!(name.span()=> #name: #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*)),
                 );
-                let sub_conversions =
-                    generate_conversions(&sub_ctx, &group.contents, parents, root_fields, root_dto_name)?;
+                let sub_conversions = generate_conversions(
+                    &sub_ctx,
+                    &group.contents,
+                    parents,
+                    root_fields,
+                    root_dto_name,
+                )?;
                 rest.push(sub_conversions);
             }
             FieldOrGroup::Multi(group) if !group.reader.skip => {
@@ -662,8 +670,13 @@ fn generate_conversions(
                 let new_arg2 = extra_call_args.last().unwrap().clone();
                 field_conversions.push(quote_spanned!(name.span()=> #name: dto.#(#read_path).*.map_keys(|#new_arg2| #sub_reader_name::from_dto(dto, location, #(#extra_call_args),*), #parent_key)));
                 parents.push(new_arg);
-                let sub_conversions =
-                    generate_conversions(&sub_ctx, &group.contents, parents, root_fields, root_dto_name)?;
+                let sub_conversions = generate_conversions(
+                    &sub_ctx,
+                    &group.contents,
+                    parents,
+                    root_fields,
+                    root_dto_name,
+                )?;
                 rest.push(sub_conversions);
             }
             FieldOrGroup::Group(_) | FieldOrGroup::Multi(_) => {
@@ -714,6 +727,7 @@ mod tests {
         };
         let http = m.contents[1].field().unwrap();
         let actual = reader_value_for_field(
+            &ctx(),
             http,
             &[
                 PathItem::Static(parse_quote!(c8y), "c8y".into()),
@@ -774,6 +788,7 @@ mod tests {
         };
         let az_url = g.contents[0].field().unwrap();
         let error = reader_value_for_field(
+            &ctx(),
             az_url,
             &[PathItem::Static(parse_quote!(az), "az".into())],
             &input.groups,
@@ -794,8 +809,14 @@ mod tests {
                 }
             },
         );
-        let actual =
-            generate_conversions(&ctx(), &input.groups, Vec::new(), &input.groups, &parse_quote!(TEdgeConfigDto)).unwrap();
+        let actual = generate_conversions(
+            &ctx(),
+            &input.groups,
+            Vec::new(),
+            &input.groups,
+            &parse_quote!(TEdgeConfigDto),
+        )
+        .unwrap();
         let file: syn::File = syn::parse2(actual).unwrap();
         let r#impl = file
             .items
@@ -954,7 +975,7 @@ mod tests {
         );
 
         let expected = parse_quote! {
-            #[derive(Debug, Clone, ::serde::Serialize, PartialEq, ::strum::Display, ::doku::Document)]
+            #[derive(Debug, Clone, ::serde::Serialize, ::strum::Display, ::doku::Document)]
             #[serde(rename_all = "snake_case")]
             #[strum(serialize_all = "snake_case")]
             #[serde(tag = "type")]
@@ -1003,8 +1024,14 @@ mod tests {
                 url: String,
             },
         );
-        let actual =
-            generate_conversions(&ctx(), &input.groups, Vec::new(), &input.groups, &parse_quote!(TEdgeConfigDto)).unwrap();
+        let actual = generate_conversions(
+            &ctx(),
+            &input.groups,
+            Vec::new(),
+            &input.groups,
+            &parse_quote!(TEdgeConfigDto),
+        )
+        .unwrap();
         let file: syn::File = syn::parse2(actual).unwrap();
 
         let expected = parse_quote! {
@@ -1076,8 +1103,14 @@ mod tests {
                 },
             },
         );
-        let actual =
-            generate_conversions(&ctx(), &input.groups, Vec::new(), &input.groups, &parse_quote!(TEdgeConfigDto)).unwrap();
+        let actual = generate_conversions(
+            &ctx(),
+            &input.groups,
+            Vec::new(),
+            &input.groups,
+            &parse_quote!(TEdgeConfigDto),
+        )
+        .unwrap();
         let mut file: syn::File = syn::parse2(actual).unwrap();
         let target: syn::Type = parse_quote!(TEdgeConfigReaderC8yDevice);
         file.items
@@ -1142,8 +1175,14 @@ mod tests {
             },
         );
 
-        let actual =
-            generate_conversions(&ctx(), &input.groups, Vec::new(), &input.groups, &parse_quote!(TEdgeConfigDto)).unwrap();
+        let actual = generate_conversions(
+            &ctx(),
+            &input.groups,
+            Vec::new(),
+            &input.groups,
+            &parse_quote!(TEdgeConfigDto),
+        )
+        .unwrap();
         let mut file: syn::File = syn::parse2(actual).unwrap();
         let target: syn::Type = parse_quote!(TEdgeConfigReaderMapper);
         file.items
@@ -1185,8 +1224,14 @@ mod tests {
         let config: crate::input::Configuration = input.config.try_into().unwrap();
         let ctx = CodegenContext::for_sub_config(parse_quote!(C8y));
 
-        let actual =
-            generate_conversions(&ctx, &config.groups, Vec::new(), &config.groups, &parse_quote!(TEdgeConfigDto)).unwrap();
+        let actual = generate_conversions(
+            &ctx,
+            &config.groups,
+            Vec::new(),
+            &config.groups,
+            &parse_quote!(TEdgeConfigDto),
+        )
+        .unwrap();
         let actual = syn::parse2(actual).unwrap();
         let expected: syn::File = parse_quote! {
             impl C8yReader {
@@ -1196,9 +1241,10 @@ mod tests {
                 pub(crate)fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation,) -> Self {
                     Self {
                         enable_feature: match &dto.enable_feature {
-                            None => OptionalConfig::Empty(ReadableKey::EnableFeature.to_cow_str()),
+                            None => OptionalConfig::Empty(C8yReadableKey::EnableFeature.to_cow_str()),
                             Some(value) => OptionalConfig::Present {
-                                value:value.clone(),key:ReadableKey::EnableFeature.to_cow_str()
+                                value: value.clone(),
+                                key: C8yReadableKey::EnableFeature.to_cow_str()
                             },
                         }
                     }

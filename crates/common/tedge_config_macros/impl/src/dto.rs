@@ -64,7 +64,7 @@ pub fn generate(ctx: &CodegenContext, items: &[FieldOrGroup], doc_comment: &str)
                         let field_ty = field.dto_ty();
                         let tag_name = field.name();
                         let ty: syn::ItemEnum = syn::parse_quote_spanned!(sub_fields.span()=>
-                            #[derive(Debug, Clone, ::serde::Deserialize, ::serde::Serialize, PartialEq, ::strum::EnumString, ::strum::Display, ::doku::Document)]
+                            #[derive(Debug, ::serde::Deserialize, ::serde::Serialize, PartialEq, ::strum::EnumString, ::strum::Display)]
                             #[serde(rename_all = "snake_case")]
                             #[strum(serialize_all = "snake_case")]
                             #[serde(tag = #tag_name)]
@@ -321,7 +321,7 @@ mod tests {
         generated.items.retain(only_enum_named("MapperTypeDto"));
 
         let expected = parse_quote! {
-            #[derive(Debug, Clone, ::serde::Deserialize, ::serde::Serialize, PartialEq, ::strum::EnumString, ::strum::Display, ::doku::Document)]
+            #[derive(Debug, ::serde::Deserialize, ::serde::Serialize, PartialEq, ::strum::EnumString, ::strum::Display)]
             #[serde(rename_all = "snake_case")]
             #[strum(serialize_all = "snake_case")]
             #[serde(tag = "type")]

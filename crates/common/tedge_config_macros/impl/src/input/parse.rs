@@ -162,6 +162,14 @@ pub enum EnumEntry {
     NameAndFields(syn::Ident, syn::Ident),
 }
 
+impl EnumEntry {
+    pub fn span(&self) -> proc_macro2::Span {
+        match self {
+            Self::NameOnly(name) | Self::NameAndFields(name, _) => name.span(),
+        }
+    }
+}
+
 impl Parse for EnumEntry {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let ident: syn::Ident = input.parse()?;
