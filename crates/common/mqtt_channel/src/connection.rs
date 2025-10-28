@@ -83,7 +83,7 @@ impl SubscriberOps for SubscriberHandle {
         {
             let mut subs = self.subscriptions.lock().unwrap();
             for topic in &topics {
-                subs.add(topic)?;
+                subs.try_add(topic)?;
             }
         }
         self.client

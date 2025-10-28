@@ -281,7 +281,7 @@ fn topic_filters(patterns: Vec<String>) -> Result<TopicFilter, ConfigError> {
     let mut topics = TopicFilter::empty();
     for pattern in patterns {
         topics
-            .add(pattern.as_str())
+            .try_add(pattern.as_str())
             .map_err(|_| ConfigError::IncorrectTopicFilter(pattern.clone()))?;
     }
     Ok(topics)

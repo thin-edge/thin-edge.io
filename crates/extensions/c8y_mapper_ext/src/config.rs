@@ -221,7 +221,7 @@ impl C8yMapperConfig {
 
         // Add user configurable external topic filters
         for topic in c8y_config.topics.0.clone() {
-            if topics.add(&topic).is_err() {
+            if topics.try_add(&topic).is_err() {
                 warn!("The configured topic '{topic}' is invalid and ignored.");
             }
         }
@@ -293,7 +293,7 @@ impl C8yMapperConfig {
             bridge_config,
         ) {
             for topic in operations.topics_for_operations() {
-                topic_filter.add(&topic)?;
+                topic_filter.try_add(&topic)?;
             }
         }
 
