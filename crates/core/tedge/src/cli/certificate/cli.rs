@@ -80,7 +80,7 @@ pub enum TEdgeCertCli {
         /// error. If not provided, a random ID will be generated and used by the keypair.
         ///
         /// The id shall be provided as a sequence of hex digits without `0x` prefix, optionally
-        /// separated by spaces, e.g. `--id 010203` or `-id "01 02 03"`.
+        /// separated by spaces, e.g. `--id 010203` or `--id "01 02 03"`.
         #[arg(long)]
         id: Option<String>,
 
