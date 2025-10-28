@@ -9,7 +9,6 @@ use tracing::trace;
 
 use super::connection::Connection;
 use super::connection::Frame1;
-use crate::pkcs11::CreateKeyParams;
 use crate::pkcs11::SigScheme;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
@@ -66,10 +65,9 @@ impl TedgeP11Service for TedgeP11Client {
 
     fn create_key(
         &self,
-        uri: &str,
-        params: CreateKeyParams,
+        _request: CreateKeyRequest,
     ) -> anyhow::Result<crate::service::CreateKeyResponse> {
-        self.create_key(uri.to_string(), params)
+        self.create_key(_request)
     }
 
     fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
@@ -231,10 +229,9 @@ impl TedgeP11Client {
 
     pub fn create_key(
         &self,
-        uri: String,
-        params: CreateKeyParams,
+        request: CreateKeyRequest,
     ) -> anyhow::Result<crate::service::CreateKeyResponse> {
-        let request = Frame1::CreateKeyRequest(CreateKeyRequest { uri, params });
+        let request = Frame1::CreateKeyRequest(request);
         let response = self.do_request(request)?;
 
         let Frame1::CreateKeyResponse(pubkey) = response else {

@@ -92,6 +92,18 @@ pub enum TEdgeCertCli {
         #[arg(long, default_value = "p256", group = "key_params")]
         curve: EcCurve,
 
+        /// User PIN value for logging into the PKCS#11 token.
+        ///
+        /// This flag can be used to provide a PIN when creating a new key without needing to update
+        /// tedge-config, which can be helpful when initializing keys on new tokens.
+        ///
+        /// Note that in contrast to the URI of the key, which will be written to tedge-config
+        /// automatically when the keypair is created, PIN will not be written automatically and may
+        /// be needed to written manually using tedge config set (if not using tedge-p11-server with
+        /// the correct default PIN).
+        #[arg(long)]
+        pin: Option<String>,
+
         // can't document subcommands here because one would have to document variants of the enum
         // but this type is used in other places
         #[clap(subcommand)]
@@ -273,6 +285,7 @@ impl BuildCommand for TEdgeCertCli {
                 r#type,
                 curve,
                 id,
+                pin,
 
                 cloud,
                 token,
@@ -294,6 +307,7 @@ impl BuildCommand for TEdgeCertCli {
                     bits,
                     curve,
                     id,
+                    pin,
                     cloud,
                     token,
                 }

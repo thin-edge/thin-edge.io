@@ -218,6 +218,10 @@ tedge cert create-key-pkcs11 can set chosen id and returns error if object with 
     ${output}=    Execute Command    cmd=tedge cert create-key-pkcs11 --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
     Should Contain    ${output}    Object with this id already exists on the token
 
+tedge cert create-key-pkcs11 can set pin per request
+    ${output}=    Execute Command    cmd=tedge cert create-key-pkcs11 --label my-key --pin 000000 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
+    Should Contain    ${output}    The specified PIN is incorrect
+
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
     ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0

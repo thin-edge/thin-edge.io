@@ -131,7 +131,7 @@ impl TedgeP11Server {
             Frame1::Ping => Frame1::Pong,
 
             Frame1::CreateKeyRequest(request) => {
-                let response = self.service.create_key(&request.uri, request.params);
+                let response = self.service.create_key(request);
                 match response {
                     Ok(pubkey_der) => Frame1::CreateKeyResponse(pubkey_der),
                     Err(err) => {
@@ -171,7 +171,6 @@ mod tests {
 
     use super::super::client::TedgeP11Client;
     use crate::pkcs11;
-    use crate::pkcs11::CreateKeyParams;
     use crate::service::*;
     use std::io::Read;
     use std::os::unix::net::UnixStream;
@@ -201,11 +200,7 @@ mod tests {
             todo!()
         }
 
-        fn create_key(
-            &self,
-            _uri: &str,
-            _params: CreateKeyParams,
-        ) -> anyhow::Result<CreateKeyResponse> {
+        fn create_key(&self, _request: CreateKeyRequest) -> anyhow::Result<CreateKeyResponse> {
             todo!()
         }
 

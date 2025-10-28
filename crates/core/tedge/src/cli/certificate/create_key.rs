@@ -3,7 +3,9 @@ use clap::ValueEnum;
 use tedge_config::TEdgeConfig;
 use tedge_p11_server::pkcs11::CreateKeyParams;
 use tedge_p11_server::pkcs11::KeyTypeParams;
+use tedge_p11_server::service::CreateKeyRequest;
 use tedge_p11_server::CryptokiConfig;
+use tedge_p11_server::SecretString;
 
 use crate::cli::common::Cloud;
 use crate::command::Command;
@@ -16,6 +18,7 @@ pub struct CreateKeyPkcs11Cmd {
     pub label: String,
     pub r#type: KeyType,
     pub id: Option<String>,
+    pub pin: Option<String>,
     pub cloud: Option<Cloud>,
     pub token: Option<String>,
 }
@@ -101,10 +104,14 @@ impl Command for CreateKeyPkcs11Cmd {
 
         // generate a keypair
         // should probably verify the keys before using them
-        let key = cryptoki.create_key(&token, params)?;
+        let key = cryptoki.create_key(CreateKeyRequest {
+            uri: token,
+            params,
+            pin: self.pin.clone().map(SecretString::from),
+        })?;
+
         let pubkey_pem = key.pem;
         let uri = key.uri;
-
         eprintln!("New keypair was successfully created.");
         eprintln!("Key URI: {uri}");
         eprintln!("Public key:\n{pubkey_pem}\n");
