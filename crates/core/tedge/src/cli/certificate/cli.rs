@@ -88,7 +88,7 @@ pub enum TEdgeCertCli {
         #[arg(long, default_value = "2048", group = "key_params")]
         bits: RsaBits,
 
-        /// The curve (size) of the ECSA key. Should only be used with --type ecdsa.
+        /// The curve (size) of the ECDSA key. Should only be used with --type ecdsa.
         #[arg(long, default_value = "p256", group = "key_params")]
         curve: EcCurve,
 
