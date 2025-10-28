@@ -1,4 +1,5 @@
 use anyhow::Context;
+use camino::Utf8Path;
 use clap::ValueEnum;
 use tedge_config::TEdgeConfig;
 use tedge_p11_server::pkcs11::CreateKeyParams;
@@ -6,6 +7,7 @@ use tedge_p11_server::pkcs11::KeyTypeParams;
 use tedge_p11_server::service::CreateKeyRequest;
 use tedge_p11_server::CryptokiConfig;
 use tedge_p11_server::SecretString;
+use tracing::warn;
 
 use crate::cli::common::Cloud;
 use crate::command::Command;
@@ -19,6 +21,7 @@ pub struct CreateKeyHsmCmd {
     pub r#type: KeyType,
     pub id: Option<String>,
     pub pin: Option<String>,
+    pub outfile_pubkey: Option<Box<Utf8Path>>,
     pub cloud: Option<Cloud>,
     pub token: Option<String>,
 }
@@ -115,6 +118,13 @@ impl Command for CreateKeyHsmCmd {
         eprintln!("New keypair was successfully created.");
         eprintln!("Key URI: {uri}");
         eprintln!("Public key:\n{pubkey_pem}\n");
+
+        if let Some(outfile) = &self.outfile_pubkey {
+            let r = std::fs::write(outfile.as_ref(), pubkey_pem);
+            if let Err(e) = r {
+                warn!(?e, path=%outfile, "failed to save the public key");
+            }
+        }
 
         save_key_uri_to_config(config, self.cloud.as_ref(), &uri).await?;
 

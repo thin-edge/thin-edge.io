@@ -284,16 +284,14 @@ selected, even if another token contains the intended key.
 
 ## Key generation
 
-```sh command="tedge cert create-key-hsm -h" title="tedge cert create-key-hsm -h"
+```sh command="tedge cert create-key-hsm --help" title="tedge cert create-key-hsm --help"
 Generate a new keypair on the PKCS11 token and select it to be used.
 
 Can be used to generate an RSA or an ECDSA keypair. When using RSA, `--bits` is used to set the size of the key, when using ECDSA, `--curve` is used.
 
 After the key is generated, tedge config is updated to use the new key using `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting for that cloud, e.g. `create-key-hsm c8y` will write to `c8y.device.key_uri`.
 
-When multiple tokens are connected, if `device.key_uri` setting is present, the token identified by this URI will be used. Otherwise, the first token returned by the system will be used.
-
-Usage: tedge cert create-key-hsm [OPTIONS] --label <LABEL> --type <TYPE> [COMMAND]
+Usage: tedge cert create-key-hsm [OPTIONS] [TOKEN] [COMMAND]
 
 Commands:
   c8y   
@@ -301,28 +299,32 @@ Commands:
   aws   
   help  Print this message or the help of the given subcommand(s)
 
+Arguments:
+  [TOKEN]
+          The URI of the token where the keypair should be created.
+          
+          If this argument is missing, a list of available initialized tokens will be shown. The token needs to be initialized to be able to generate keys.
+
 Options:
       --config-dir <CONFIG_DIR>
           [env: TEDGE_CONFIG_DIR, default: /etc/tedge]
 
       --label <LABEL>
           Human readable description (CKA_LABEL attribute) for the key
+          
+          [default: tedge]
 
       --debug
           Turn-on the DEBUG log level.
           
           If off only reports ERROR, WARN, and INFO, if on also reports DEBUG
 
-      --type <TYPE>
-          The type of the key
+      --id <ID>
+          Key identifier for the keypair (CKA_ID attribute).
           
-          [possible values: rsa, ecdsa]
-
-      --bits <BITS>
-          The size of the RSA keys in bits. Should only be used with --type rsa
+          If provided and no object exists on the token with the same ID, this will be the ID of the new keypair. If an object with this ID already exists, the operation will return an error. If not provided, a random ID will be generated and used by the keypair.
           
-          [default: 2048]
-          [possible values: 2048, 3072, 4096]
+          The id shall be provided as a sequence of hex digits without `0x` prefix, optionally separated by spaces, e.g. `--id 010203` or `-id "01 02 03"`.
 
       --log-level <LOG_LEVEL>
           Configures the logging level.
@@ -331,11 +333,33 @@ Options:
           
           Overrides `--debug`
 
+      --type <TYPE>
+          The type of the key
+          
+          [default: ecdsa]
+          [possible values: rsa, ecdsa]
+
+      --bits <BITS>
+          The size of the RSA keys in bits. Should only be used with --type rsa
+          
+          [default: 2048]
+          [possible values: 2048, 3072, 4096]
+
       --curve <CURVE>
-          The curve (size) of the ECSA key. Should only be used with --type ecdsa
+          The curve (size) of the ECDSA key. Should only be used with --type ecdsa
           
           [default: p256]
           [possible values: p256, p384]
+
+      --pin <PIN>
+          User PIN value for logging into the PKCS#11 token.
+          
+          This flag can be used to provide a PIN when creating a new key without needing to update tedge-config, which can be helpful when initializing keys on new tokens.
+          
+          Note that in contrast to the URI of the key, which will be written to tedge-config automatically when the keypair is created, PIN will not be written automatically and may be needed to written manually using tedge config set (if not using tedge-p11-server with the correct default PIN).
+
+      --outfile-pubkey <OUTFILE_PUBKEY>
+          Path where public key will be saved when a keypair is generated
 
   -h, --help
           Print help (see a summary with '-h')

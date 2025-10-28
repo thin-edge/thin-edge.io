@@ -222,6 +222,11 @@ tedge cert create-key-hsm can set pin per request
     ${output}=    Execute Command    cmd=tedge cert create-key-hsm --label my-key --pin 000000 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
     Should Contain    ${output}    The specified PIN is incorrect
 
+tedge cert create-key-hsm can save public key to file
+    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --label my-key --outfile-pubkey pubkey.pem "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True
+    ${pubkey}=    Execute Command    cat pubkey.pem    strip=True
+    Should Contain    ${output}    ${pubkey}
+
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
     ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0

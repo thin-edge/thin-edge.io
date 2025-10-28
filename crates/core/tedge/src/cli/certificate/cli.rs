@@ -19,6 +19,7 @@ use crate::ConfigError;
 use anyhow::anyhow;
 use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
 use clap::ValueHint;
@@ -103,6 +104,10 @@ pub enum TEdgeCertCli {
         /// the correct default PIN).
         #[arg(long)]
         pin: Option<String>,
+
+        /// Path where public key will be saved when a keypair is generated.
+        #[arg(long)]
+        outfile_pubkey: Option<Box<Utf8Path>>,
 
         // can't document subcommands here because one would have to document variants of the enum
         // but this type is used in other places
@@ -286,6 +291,7 @@ impl BuildCommand for TEdgeCertCli {
                 curve,
                 id,
                 pin,
+                outfile_pubkey,
 
                 cloud,
                 token,
@@ -308,6 +314,7 @@ impl BuildCommand for TEdgeCertCli {
                     curve,
                     id,
                     pin,
+                    outfile_pubkey,
                     cloud,
                     token,
                 }
