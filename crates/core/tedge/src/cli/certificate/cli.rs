@@ -57,10 +57,13 @@ pub enum TEdgeCertCli {
         cloud: Option<CloudArg>,
     },
 
-    /// Generate a new keypair on the PKCS11 token and select it to be used.
+    /// Generate a new keypair on the PKCS #11 token and select it to be used.
     ///
-    /// Can be used to generate an RSA or an ECDSA keypair. When using RSA, `--bits` is used to set
-    /// the size of the key, when using ECDSA, `--curve` is used.
+    /// Can be used to generate a keypair on the TOKEN. If TOKEN argument is not provided, the
+    /// command prints the available tokens.
+    ///
+    /// If TOKEN is provided, the command generates an RSA or an ECDSA keypair on the token. When
+    /// using RSA, `--bits` is used to set the size of the key, when using ECDSA, `--curve` is used.
     ///
     /// After the key is generated, tedge config is updated to use the new key using
     /// `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting
@@ -93,7 +96,7 @@ pub enum TEdgeCertCli {
         #[arg(long, default_value = "p256", group = "key_params")]
         curve: EcCurve,
 
-        /// User PIN value for logging into the PKCS#11 token.
+        /// User PIN value for logging into the PKCS #11 token.
         ///
         /// This flag can be used to provide a PIN when creating a new key without needing to update
         /// tedge-config, which can be helpful when initializing keys on new tokens.
