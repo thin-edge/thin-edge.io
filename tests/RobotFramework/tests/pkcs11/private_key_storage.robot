@@ -199,27 +199,27 @@ Can create a private key on the PKCS11 token
 
     [Teardown]    Set tedge-p11-server Uri    value=
 
-tedge cert create-key-pkcs11 should ask where to create keypair if multiple tokens available
+tedge cert create-key-hsm should ask where to create keypair if multiple tokens available
     # setup multiple tokens
     Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token1 --pin=123456 --so-pin=123456
     Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token2 --pin=123456 --so-pin=123456
 
     # unset key_uri so there there's no hint where to generate the keypair
     Execute Command    cmd=tedge config unset device.key_uri
-    ${stderr}=    Execute Command    cmd=tedge cert create-key-pkcs11 --type ecdsa --label my-key    strip=True    stdout=False    stderr=True    exp_exit_code=1
+    ${stderr}=    Execute Command    cmd=tedge cert create-key-hsm --type ecdsa --label my-key    strip=True    stdout=False    stderr=True    exp_exit_code=1
     Should Contain    ${stderr}    No token URL was provided for this operation; the available tokens are:
     Should Contain    ${stderr}    token=create-key-token1
     Should Contain    ${stderr}    token=create-key-token2
 
-tedge cert create-key-pkcs11 can set chosen id and returns error if object with this id already exists
-    ${output}=    Execute Command    cmd=tedge cert create-key-pkcs11 --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True
+tedge cert create-key-hsm can set chosen id and returns error if object with this id already exists
+    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True
     Should Contain    ${output}    id=%01%02%03
 
-    ${output}=    Execute Command    cmd=tedge cert create-key-pkcs11 --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
+    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
     Should Contain    ${output}    Object with this id already exists on the token
 
-tedge cert create-key-pkcs11 can set pin per request
-    ${output}=    Execute Command    cmd=tedge cert create-key-pkcs11 --label my-key --pin 000000 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
+tedge cert create-key-hsm can set pin per request
+    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --label my-key --pin 000000 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
     Should Contain    ${output}    The specified PIN is incorrect
 
 Ignore tedge.toml if missing
@@ -292,7 +292,7 @@ Warn the user if tedge.toml cannot be parsed
 Create private key
     [Arguments]    ${type}    ${label}    ${bits}=${EMPTY}    ${curve}=${EMPTY}    ${p11tool_keytype}=${EMPTY}
     # create the private key on token and write CSR to device.csr_path
-    VAR    ${command}=    tedge cert create-key-pkcs11 --label ${label} --type ${type} "pkcs11:token=create-key-token"
+    VAR    ${command}=    tedge cert create-key-hsm --label ${label} --type ${type} "pkcs11:token=create-key-token"
     IF    $bits
         VAR    ${command}=    ${command} --bits ${bits}
     END

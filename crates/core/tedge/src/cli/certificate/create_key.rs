@@ -11,7 +11,7 @@ use crate::cli::common::Cloud;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 
-pub struct CreateKeyPkcs11Cmd {
+pub struct CreateKeyHsmCmd {
     pub cryptoki_config: CryptokiConfig,
     pub bits: RsaBits,
     pub curve: EcCurve,
@@ -65,7 +65,7 @@ impl From<EcCurve> for u16 {
 }
 
 #[async_trait::async_trait]
-impl Command for CreateKeyPkcs11Cmd {
+impl Command for CreateKeyHsmCmd {
     fn description(&self) -> String {
         "Generate a keypair.".into()
     }

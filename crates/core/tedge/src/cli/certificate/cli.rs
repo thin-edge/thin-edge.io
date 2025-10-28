@@ -6,7 +6,7 @@ use super::show::ShowCertCmd;
 use crate::certificate_is_self_signed;
 use crate::cli::certificate::c8y;
 use crate::cli::certificate::create_csr::Key;
-use crate::cli::certificate::create_key::CreateKeyPkcs11Cmd;
+use crate::cli::certificate::create_key::CreateKeyHsmCmd;
 use crate::cli::certificate::create_key::EcCurve;
 use crate::cli::certificate::create_key::KeyType;
 use crate::cli::certificate::create_key::RsaBits;
@@ -63,8 +63,8 @@ pub enum TEdgeCertCli {
     ///
     /// After the key is generated, tedge config is updated to use the new key using
     /// `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting
-    /// for that cloud, e.g. `create-key-pkcs11 c8y` will write to `c8y.device.key_uri`.
-    CreateKeyPkcs11 {
+    /// for that cloud, e.g. `create-key-hsm c8y` will write to `c8y.device.key_uri`.
+    CreateKeyHsm {
         /// Human readable description (CKA_LABEL attribute) for the key.
         #[arg(long, default_value = "tedge")]
         label: String,
@@ -279,7 +279,7 @@ impl BuildCommand for TEdgeCertCli {
                 cmd.into_boxed()
             }
 
-            TEdgeCertCli::CreateKeyPkcs11 {
+            TEdgeCertCli::CreateKeyHsm {
                 bits,
                 label,
                 r#type,
@@ -300,7 +300,7 @@ impl BuildCommand for TEdgeCertCli {
                     .cryptoki_config(cloud_config)?
                     .context("Cryptoki config is not enabled")?;
 
-                CreateKeyPkcs11Cmd {
+                CreateKeyHsmCmd {
                     cryptoki_config,
                     label,
                     r#type,
