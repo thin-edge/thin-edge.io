@@ -103,7 +103,7 @@ impl TEdgeComponent for AwsMapper {
 fn get_topic_filter(aws_config: &TEdgeConfigReaderAws) -> TopicFilter {
     let mut topics = TopicFilter::empty();
     for topic in aws_config.topics.0.clone() {
-        if topics.add(&topic).is_err() {
+        if topics.try_add(&topic).is_err() {
             warn!("The configured topic '{topic}' is invalid and ignored.");
         }
     }

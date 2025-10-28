@@ -111,7 +111,7 @@ impl TEdgeComponent for AzureMapper {
 fn get_topic_filter(az_config: &TEdgeConfigReaderAz) -> TopicFilter {
     let mut topics = TopicFilter::empty();
     for topic in az_config.topics.0.clone() {
-        if topics.add(&topic).is_err() {
+        if topics.try_add(&topic).is_err() {
             warn!("The configured topic '{topic}' is invalid and ignored.");
         }
     }
