@@ -95,10 +95,18 @@ impl MessageProcessor {
     }
 
     fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + '_ {
-        self.flows
+        let script_deadlines = self
+            .flows
             .values()
             .flat_map(|flow| &flow.steps)
-            .filter_map(|step| step.script.next_execution)
+            .filter_map(|step| step.script.next_execution);
+
+        let source_deadlines = self
+            .flows
+            .values()
+            .filter_map(|flow| flow.input.next_deadline());
+
+        script_deadlines.chain(source_deadlines)
     }
 
     /// Get the next deadline for interval execution across all scripts
@@ -241,22 +249,15 @@ impl MessageProcessor {
 
     pub async fn add_flow(&mut self, path: Utf8PathBuf) {
         let flow_id = Self::flow_id(&path);
-        if !self.flows.contains_key(&flow_id) && self.load_flow(flow_id, path.clone()).await {
-            info!(target: "flows", "Loaded new flow {path}");
-        }
-    }
-
-    pub async fn reload_flow(&mut self, path: Utf8PathBuf) {
-        let flow_id = Self::flow_id(&path);
-        if self.flows.contains_key(&flow_id) && self.load_flow(flow_id, path.clone()).await {
-            info!(target: "flows", "Reloaded updated flow {path}");
+        if self.load_flow(flow_id, path.clone()).await {
+            info!(target: "flows", "Loading flow {path}");
         }
     }
 
     pub async fn remove_flow(&mut self, path: Utf8PathBuf) {
         let flow_id = Self::flow_id(&path);
         self.flows.remove(&flow_id);
-        info!(target: "flows", "Removed deleted flow {path}");
+        info!(target: "flows", "Removing flow {path}");
     }
 }
 
