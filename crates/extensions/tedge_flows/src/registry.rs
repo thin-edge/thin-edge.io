@@ -1,71 +1,149 @@
+use crate::config::ConfigError;
 use crate::config::FlowConfig;
 use crate::flow::Flow;
 use crate::js_runtime::JsRuntime;
-use crate::LoadError;
+use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
-use std::path::Path;
-use tokio::fs::read_dir;
-use tokio::fs::read_to_string;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-pub struct FlowRegistry {
-    config_dir: Utf8PathBuf,
-    flows: HashMap<String, Flow>,
+#[async_trait]
+pub trait FlowRegistry {
+    type Flow: Send + AsRef<Flow> + AsMut<Flow>;
+
+    fn compile(flow: Flow) -> Result<Self::Flow, ConfigError>;
+
+    fn store(&self) -> &FlowStore<Self::Flow>;
+    fn store_mut(&mut self) -> &mut FlowStore<Self::Flow>;
 }
 
-impl FlowRegistry {
+pub struct BaseFlowRegistry {
+    flows: FlowStore<Flow>,
+}
+
+impl BaseFlowRegistry {
     pub fn new(config_dir: impl AsRef<Utf8Path>) -> Self {
-        FlowRegistry {
-            config_dir: config_dir.as_ref().to_owned(),
-            flows: HashMap::new(),
+        BaseFlowRegistry {
+            flows: FlowStore::new(config_dir),
         }
     }
 
-    pub async fn load_all_flows(&mut self, js_runtime: &mut JsRuntime) {
-        let mut flow_specs = FlowSpecs::default();
-        flow_specs.load(&self.config_dir).await;
-        self.flows = flow_specs.compile(js_runtime, &self.config_dir).await
+    pub fn config_dir(&self) -> &Utf8Path {
+        &self.flows.config_dir
+    }
+}
+
+#[async_trait]
+impl FlowRegistry for BaseFlowRegistry {
+    type Flow = Flow;
+
+    fn compile(flow: Flow) -> Result<Flow, ConfigError> {
+        Ok(flow)
     }
 
-    pub async fn load_single_flow(&mut self, js_runtime: &mut JsRuntime, flow: impl AsRef<Path>) {
-        let mut flow_specs = FlowSpecs::default();
-        flow_specs.load_single_flow(flow.as_ref()).await;
-        self.flows = flow_specs.compile(js_runtime, &self.config_dir).await
+    fn store(&self) -> &FlowStore<Self::Flow> {
+        &self.flows
     }
 
-    pub async fn load_single_script(
+    fn store_mut(&mut self) -> &mut FlowStore<Self::Flow> {
+        &mut self.flows
+    }
+}
+
+#[async_trait]
+pub trait FlowRegistryExt: FlowRegistry {
+    fn config_dir(&self) -> Utf8PathBuf;
+
+    fn contains_flow(&self, flow: &str) -> bool;
+    fn flow(&self, name: &str) -> Option<&Self::Flow>;
+    fn flow_mut(&mut self, name: &str) -> Option<&mut Self::Flow>;
+
+    fn flows(&self) -> impl Iterator<Item = &Self::Flow>;
+    fn flows_mut(&mut self) -> impl Iterator<Item = &mut Self::Flow>;
+
+    async fn load_all_flows(&mut self, js_runtime: &mut JsRuntime);
+    async fn load_single_flow(&mut self, js_runtime: &mut JsRuntime, flow: &Utf8Path);
+    async fn load_single_script(&mut self, js_runtime: &mut JsRuntime, script: &Utf8Path);
+
+    async fn add_flow(&mut self, js_runtime: &mut JsRuntime, path: &Utf8Path);
+    async fn remove_flow(&mut self, path: &Utf8Path);
+    async fn reload_script(&mut self, js_runtime: &mut JsRuntime, path: Utf8PathBuf);
+    async fn remove_script(&mut self, path: Utf8PathBuf);
+
+    async fn load_config(
         &mut self,
         js_runtime: &mut JsRuntime,
-        script: impl AsRef<Path>,
-    ) {
-        let mut flow_specs = FlowSpecs::default();
-        flow_specs.load_single_script(script.as_ref()).await;
-        self.flows = flow_specs.compile(js_runtime, &self.config_dir).await
+        path: &Utf8Path,
+        config: FlowConfig,
+    );
+}
+
+#[async_trait]
+impl<T: FlowRegistry + Send> FlowRegistryExt for T {
+    fn config_dir(&self) -> Utf8PathBuf {
+        self.store().config_dir.clone()
     }
 
-    pub fn config_dir(&self) -> &Utf8Path {
-        &self.config_dir
+    fn contains_flow(&self, flow: &str) -> bool {
+        self.store().contains_flow(flow)
     }
 
-    pub fn get(&self, name: &str) -> Option<&Flow> {
-        self.flows.get(name)
+    fn flow(&self, name: &str) -> Option<&Self::Flow> {
+        self.store().flow(name)
     }
 
-    pub fn flows(&self) -> impl Iterator<Item = &Flow> {
-        self.flows.values()
+    fn flow_mut(&mut self, name: &str) -> Option<&mut Self::Flow> {
+        self.store_mut().flow_mut(name)
     }
 
-    pub fn flows_mut(&mut self) -> impl Iterator<Item = &mut Flow> {
-        self.flows.values_mut()
+    fn flows(&self) -> impl Iterator<Item = &Self::Flow> {
+        self.store().flows()
     }
 
-    pub async fn reload_script(&mut self, js_runtime: &mut JsRuntime, path: Utf8PathBuf) {
-        for flow in self.flows.values_mut() {
-            for step in &mut flow.steps {
+    fn flows_mut(&mut self) -> impl Iterator<Item = &mut Self::Flow> {
+        self.store_mut().flows_mut()
+    }
+
+    async fn load_all_flows(&mut self, js_runtime: &mut JsRuntime) {
+        let config_dir = self.config_dir().to_owned();
+        for (path, config) in FlowConfig::load_all_flows(&config_dir).await.into_iter() {
+            self.load_config(js_runtime, &path, config).await;
+        }
+    }
+
+    async fn load_single_flow(&mut self, js_runtime: &mut JsRuntime, flow: &Utf8Path) {
+        if let Some(config) = FlowConfig::load_single_flow(flow).await {
+            self.load_config(js_runtime, flow, config).await;
+        }
+    }
+
+    async fn load_single_script(&mut self, js_runtime: &mut JsRuntime, script: &Utf8Path) {
+        let config = FlowConfig::wrap_script_into_flow(script);
+        self.load_config(js_runtime, script, config).await;
+    }
+
+    async fn add_flow(&mut self, js_runtime: &mut JsRuntime, path: &Utf8Path) {
+        if tokio::fs::read_to_string(&path).await.is_err() {
+            self.remove_flow(path).await;
+            return;
+        };
+        info!(target: "flows", "Loading flow {path}");
+        if let Some(config) = FlowConfig::load_single_flow(path).await {
+            self.load_config(js_runtime, path, config).await;
+        }
+    }
+
+    async fn remove_flow(&mut self, path: &Utf8Path) {
+        self.store_mut().remove(path.as_str());
+        info!(target: "flows", "Removing flow {path}");
+    }
+
+    async fn reload_script(&mut self, js_runtime: &mut JsRuntime, path: Utf8PathBuf) {
+        for flow in self.store_mut().flows_mut() {
+            for step in &mut flow.as_mut().steps {
                 if step.script.path() == path {
                     match js_runtime.load_script(&mut step.script).await {
                         Ok(()) => {
@@ -82,9 +160,10 @@ impl FlowRegistry {
         }
     }
 
-    pub async fn remove_script(&mut self, path: Utf8PathBuf) {
-        for (flow_id, flow) in self.flows.iter() {
-            for step in flow.steps.iter() {
+    async fn remove_script(&mut self, path: Utf8PathBuf) {
+        for flow in self.store().flows() {
+            let flow_id = flow.as_ref().name();
+            for step in flow.as_ref().steps.iter() {
                 if step.script.path() == path {
                     warn!(target: "flows", "Removing a script used by a flow {flow_id}: {path}");
                     return;
@@ -93,134 +172,71 @@ impl FlowRegistry {
         }
     }
 
-    async fn load_flow(
+    async fn load_config(
         &mut self,
         js_runtime: &mut JsRuntime,
-        flow_id: String,
-        path: Utf8PathBuf,
-    ) -> bool {
-        let Ok(source) = tokio::fs::read_to_string(&path).await else {
-            self.remove_flow(path).await;
-            return false;
-        };
-        let config: FlowConfig = match toml::from_str(&source) {
-            Ok(config) => config,
-            Err(e) => {
-                error!(target: "flows", "Failed to parse toml for flow {path}: {e}");
-                return false;
-            }
-        };
+        path: &Utf8Path,
+        config: FlowConfig,
+    ) {
         match config
-            .compile(js_runtime, &self.config_dir, path.clone())
+            .compile(js_runtime, self.store().config_dir(), path.to_owned())
             .await
+            .and_then(Self::compile)
         {
             Ok(flow) => {
-                self.flows.insert(flow_id, flow);
-                true
+                self.store_mut().insert(flow);
             }
-            Err(e) => {
-                error!(target: "flows", "Failed to compile flow {path}: {e}");
-                false
+            Err(err) => {
+                error!(target: "flows", "Failed to compile flow {path}: {err}")
             }
         }
-    }
-
-    pub fn flow_id(path: impl AsRef<Path>) -> String {
-        format!("{}", path.as_ref().display())
-    }
-
-    pub async fn add_flow(&mut self, js_runtime: &mut JsRuntime, path: Utf8PathBuf) {
-        let flow_id = Self::flow_id(&path);
-        if self.load_flow(js_runtime, flow_id, path.clone()).await {
-            info!(target: "flows", "Loading flow {path}");
-        }
-    }
-
-    pub async fn remove_flow(&mut self, path: Utf8PathBuf) {
-        let flow_id = Self::flow_id(&path);
-        self.flows.remove(&flow_id);
-        info!(target: "flows", "Removing flow {path}");
     }
 }
 
-#[derive(Default)]
-struct FlowSpecs {
-    flow_specs: HashMap<String, (Utf8PathBuf, FlowConfig)>,
+pub struct FlowStore<F> {
+    config_dir: Utf8PathBuf,
+    flows: HashMap<String, F>,
 }
 
-impl FlowSpecs {
-    pub async fn load(&mut self, config_dir: &Utf8Path) {
-        let Ok(mut entries) = read_dir(config_dir).await.map_err(
-            |err| error!(target: "flows", "Failed to read flows from {config_dir}: {err}"),
-        ) else {
-            return;
-        };
-
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let Some(path) = Utf8Path::from_path(&entry.path()).map(|p| p.to_path_buf()) else {
-                error!(target: "flows", "Skipping non UTF8 path: {}", entry.path().display());
-                continue;
-            };
-            if let Ok(file_type) = entry.file_type().await {
-                if file_type.is_file() {
-                    if let Some("toml") = path.extension() {
-                        info!(target: "flows", "Loading flow: {path}");
-                        if let Err(err) = self.load_flow(path).await {
-                            error!(target: "flows", "Failed to load flow: {err}");
-                        }
-                    }
-                }
-            }
+impl<F> FlowStore<F> {
+    pub fn new(config_dir: impl AsRef<Utf8Path>) -> Self {
+        FlowStore {
+            config_dir: config_dir.as_ref().to_owned(),
+            flows: HashMap::new(),
         }
     }
 
-    pub async fn load_single_flow(&mut self, flow: &Path) {
-        let Some(path) = Utf8Path::from_path(flow).map(|p| p.to_path_buf()) else {
-            error!(target: "flows", "Skipping non UTF8 path: {}", flow.display());
-            return;
-        };
-        if let Err(err) = self.load_flow(&path).await {
-            error!(target: "flows", "Failed to load flow {path}: {err}");
-        }
+    pub fn config_dir(&self) -> &Utf8Path {
+        &self.config_dir
     }
 
-    pub async fn load_single_script(&mut self, script: impl AsRef<Path>) {
-        let script = script.as_ref();
-        let Some(path) = Utf8Path::from_path(script).map(|p| p.to_path_buf()) else {
-            error!(target: "flows", "Skipping non UTF8 path: {}", script.display());
-            return;
-        };
-        let flow_id = FlowRegistry::flow_id(&path);
-        let flow = FlowConfig::from_step(path.to_owned());
-        self.flow_specs.insert(flow_id, (path.to_owned(), flow));
+    pub fn contains_flow(&self, flow: &str) -> bool {
+        self.flows.contains_key(flow)
     }
 
-    async fn load_flow(&mut self, file: impl AsRef<Utf8Path>) -> Result<(), LoadError> {
-        let path = file.as_ref();
-        let flow_id = FlowRegistry::flow_id(path);
-        let specs = read_to_string(path).await?;
-        let flow: FlowConfig = toml::from_str(&specs)?;
-        self.flow_specs.insert(flow_id, (path.to_owned(), flow));
-
-        Ok(())
+    pub fn flow(&self, name: &str) -> Option<&F> {
+        self.flows.get(name)
     }
 
-    async fn compile(
-        mut self,
-        js_runtime: &mut JsRuntime,
-        config_dir: &Utf8Path,
-    ) -> HashMap<String, Flow> {
-        let mut flows = HashMap::new();
-        for (name, (source, specs)) in self.flow_specs.drain() {
-            match specs.compile(js_runtime, config_dir, source).await {
-                Ok(flow) => {
-                    let _ = flows.insert(name, flow);
-                }
-                Err(err) => {
-                    error!(target: "flows", "Failed to compile flow {name}: {err}")
-                }
-            }
-        }
-        flows
+    pub fn flow_mut(&mut self, name: &str) -> Option<&mut F> {
+        self.flows.get_mut(name)
+    }
+
+    pub fn flows(&self) -> impl Iterator<Item = &F> {
+        self.flows.values()
+    }
+
+    pub fn flows_mut(&mut self) -> impl Iterator<Item = &mut F> {
+        self.flows.values_mut()
+    }
+}
+
+impl<F: AsRef<Flow>> FlowStore<F> {
+    pub fn insert(&mut self, flow: F) {
+        self.flows.insert(flow.as_ref().name().to_owned(), flow);
+    }
+
+    pub fn remove(&mut self, name: &str) -> Option<F> {
+        self.flows.remove(name)
     }
 }

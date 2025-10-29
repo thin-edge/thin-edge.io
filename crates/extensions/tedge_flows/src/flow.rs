@@ -117,6 +117,18 @@ pub enum FlowError {
     Anyhow(#[from] anyhow::Error),
 }
 
+impl AsRef<Flow> for Flow {
+    fn as_ref(&self) -> &Flow {
+        self
+    }
+}
+
+impl AsMut<Flow> for Flow {
+    fn as_mut(&mut self) -> &mut Flow {
+        self
+    }
+}
+
 impl Flow {
     pub fn name(&self) -> &str {
         self.source.as_str()
@@ -176,7 +188,7 @@ impl Flow {
         Ok(messages)
     }
 
-    pub fn accept_message(&mut self, source: &SourceTag, message: &Message) -> bool {
+    pub fn accept_message(&self, source: &SourceTag, message: &Message) -> bool {
         self.input.accept_message(source, message)
     }
 

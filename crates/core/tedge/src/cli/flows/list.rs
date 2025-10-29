@@ -4,7 +4,8 @@ use crate::log::MaybeFancy;
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_flows::flow::Flow;
+use tedge_flows::Flow;
+use tedge_flows::FlowRegistryExt;
 
 pub struct ListCommand {
     pub flows_dir: Utf8PathBuf,

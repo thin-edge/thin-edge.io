@@ -4,6 +4,8 @@ use crate::flow::FlowOutput;
 use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::flow::SourceTag;
+use crate::registry::BaseFlowRegistry;
+use crate::registry::FlowRegistryExt;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
 use crate::Tick;
@@ -44,7 +46,7 @@ pub struct FlowsMapper {
     pub(super) watch_request_sender: DynSender<WatchRequest>,
     pub(super) subscriptions: TopicFilter,
     pub(super) watched_commands: HashSet<String>,
-    pub(super) processor: MessageProcessor,
+    pub(super) processor: MessageProcessor<BaseFlowRegistry>,
     pub(super) next_dump: Instant,
 }
 
@@ -174,8 +176,8 @@ impl FlowsMapper {
     async fn notify_flows_status(&mut self) -> Result<(), RuntimeError> {
         let status = "enabled";
         let now = OffsetDateTime::now_utc();
-        for flow in self.processor.flows.keys() {
-            let status = Self::flow_status(flow, status, &now);
+        for flow in self.processor.registry.flows() {
+            let status = Self::flow_status(flow.name(), status, &now);
             self.mqtt_sender.send(status).await?;
         }
         Ok(())
@@ -183,7 +185,7 @@ impl FlowsMapper {
 
     async fn update_flow_status(&mut self, flow: &str) -> Result<(), RuntimeError> {
         let now = OffsetDateTime::now_utc();
-        let status = if self.processor.flows.contains_key(flow) {
+        let status = if self.processor.registry.contains_flow(flow) {
             "updated"
         } else {
             "removed"
@@ -270,7 +272,7 @@ impl FlowsMapper {
         flow_name: String,
         line: String,
     ) -> Result<(), RuntimeError> {
-        if let Some(flow) = self.processor.registry.get(&flow_name) {
+        if let Some(flow) = self.processor.registry.flow(&flow_name) {
             let topic = flow.input.enforced_topic().unwrap_or_default();
             let source = SourceTag::Process {
                 flow: flow_name.clone(),
@@ -286,7 +288,7 @@ impl FlowsMapper {
         flow_name: &str,
         error: FlowError,
     ) -> Result<(), RuntimeError> {
-        let Some((info, flow_error)) = self.processor.registry.get(flow_name).map(|flow| {
+        let Some((info, flow_error)) = self.processor.registry.flow(flow_name).map(|flow| {
             (
                 format!("Reconnecting input: {flow_name}: {}", flow.input),
                 flow.on_error(error),
@@ -299,7 +301,7 @@ impl FlowsMapper {
         let Some(request) = self
             .processor
             .registry
-            .get(flow_name)
+            .flow(flow_name)
             .and_then(|flow| flow.watch_request())
         else {
             return Ok(());
@@ -315,7 +317,7 @@ impl FlowsMapper {
     }
 
     async fn on_process_eos(&mut self, flow_name: &str) -> Result<(), RuntimeError> {
-        if let Some(flow) = self.processor.registry.get(flow_name) {
+        if let Some(flow) = self.processor.registry.flow(flow_name) {
             if let Some(request) = flow.watch_request() {
                 info!(target: "flows", "Reconnecting input: {flow_name}: {}", flow.input);
                 self.watch_request_sender.send(request).await?
