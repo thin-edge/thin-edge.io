@@ -37,7 +37,7 @@ list_log_types() {
         exit 1
     fi
     status=0
-    { systemctl list-units --type=service --no-legend --no-pager --plain || status=$?; } | awk '!/^systemd/ { sub(/\.service$/, "", $1); print $1 }' || status=$?
+    { systemctl list-units --type=service --no-legend --no-pager --plain || status=$?; } | awk '{ sub(/\.service$/, "", $1); print $1 }' || status=$?
     if [ "$status" -ne 0 ]; then
         echo "Pipeline failed with $status" >&2
         exit "$status"

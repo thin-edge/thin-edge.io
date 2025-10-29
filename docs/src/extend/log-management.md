@@ -69,6 +69,81 @@ then sudoers entries must be created for those directories as well.
 
 Additionally, ensure your plugin has appropriate permissions to access the log sources it needs.
 
+## Factory Plugins
+
+* The default `file` plugin is included in the `tedge` installation package itself on all distributions.
+* A `journald` plugin that can gather systemd service logs using the `journalctl` command is also included
+  in the `tedge` packages for systemd based distributions like Debian, Ubuntu, RHEL etc.
+
+## Filtering Plugin Log Types
+
+When a plugin is listing too many log types that the user is not interested in,
+the irrelevant entries can be filtered out by specifying `include` and `exclude` filter patterns
+in the `tedge-log-plugin.toml` configuration file.
+
+### Configuration Format
+
+Use the `[[plugins.<plugin-name>.filters]]` sections to define the filters.
+Both `include` and `exclude` support regex patterns.
+Multiple `[[plugins.<plugin-name>.filters]]` sections can be defined for the same plugin
+so that it is easier to extend by just appending new entries.
+
+```toml title="file: /etc/tedge/plugins/tedge-log-plugin.toml"
+[[plugins.journald.filters]]
+include = "tedge-.*"
+
+[[plugins.docker.filters]]
+exclude = "kube-.*"
+```
+
+### Filtering Rules
+
+- If no filters are defined for a plugin, all log types listed by that plugin are accepted.
+- When only `include` patterns are defined, the log types matching any one `include` pattern are accepted.
+- When only `exclude` patterns are defined, the log types that doesn't match any exclude pattern are accepted.
+- When both `include` and `exclude` patterns are provided, the log types that doesn't match any exclude pattern
+  and also those that match the `include` patterns are accepted.
+  This means include patterns can selectively override types that would otherwise have been excluded.
+
+### Examples
+
+The `journald` plugin is used in all the subsequent examples.
+
+#### Include only the tedge services
+
+```toml
+[[plugins.journald.filters]]
+include = "tedge-*"
+```
+
+#### Exclude all services starting with systemd
+
+```toml
+[[plugins.journald.filters]]
+exclude = "systemd-*"
+```
+
+#### Exclude all systemd services except systemd-logind
+
+```toml
+[[plugins.journald.filters]]
+include = "systemd-logind"
+
+[[plugins.journald.filters]]
+exclude = "systemd-*"
+```
+
+### Reloading After Configuration Changes
+
+Whenever the plugin filters in `tedge-log-plugin.toml` are modified,
+the agent automatically reloads the plugins and applies the new filters.
+You can verify the filtered log types by checking the published `log_upload` command metadata.
+For example, on the main device, subscribe to:
+
+```sh
+tedge mqtt sub 'te/device/main///cmd/log_upload'
+```
+
 ## Creating a Custom Log Plugin
 
 ### Example: docker plugin
@@ -199,9 +274,3 @@ a refresh can be triggered by just touching the plugin configuration file:
 ```
 touch /etc/tedge/plugins/tedge-log-plugin.toml
 ```
-
-## Factory Plugins
-
-* The default `file` plugin is included in the `tedge` installation package itself on all distributions.
-* A `journald` plugin that can gather systemd service logs using the `journalctl` command is also included
-  in the `tedge` packages for systemd based distributions like Debian, Ubuntu, RHEL etc.

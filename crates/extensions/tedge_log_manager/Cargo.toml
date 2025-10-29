@@ -13,6 +13,8 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 camino = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
@@ -30,6 +32,7 @@ tracing = { workspace = true }
 [dev-dependencies]
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
+tempfile = { workspace = true }
 time = { workspace = true, features = ["macros"] }
 
 [lints]

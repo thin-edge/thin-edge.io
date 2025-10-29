@@ -50,6 +50,7 @@ use tracing::error;
 /// This is an actor builder.
 pub struct LogManagerBuilder {
     config: LogManagerConfig,
+    plugin_config: PluginConfig,
     box_builder: SimpleMessageBoxBuilder<LogInput, LogOutput>,
     upload_sender: DynSender<LogUploadRequest>,
 }
@@ -57,6 +58,7 @@ pub struct LogManagerBuilder {
 impl LogManagerBuilder {
     pub async fn try_new(
         config: LogManagerConfig,
+        plugin_config: PluginConfig,
         fs_notify: &mut impl MessageSource<FsWatchEvent, Vec<PathBuf>>,
         uploader_actor: &mut impl Service<LogUploadRequest, LogUploadResult>,
     ) -> Result<Self, FileError> {
@@ -72,6 +74,7 @@ impl LogManagerBuilder {
 
         Ok(Self {
             config,
+            plugin_config,
             box_builder,
             upload_sender,
         })
@@ -224,6 +227,7 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
 
         Ok(LogManagerActor::new(
             self.config,
+            self.plugin_config,
             message_box,
             self.upload_sender,
             external_plugins,

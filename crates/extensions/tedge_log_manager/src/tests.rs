@@ -2,6 +2,7 @@ use crate::LogManagerBuilder;
 use crate::LogManagerConfig;
 use crate::LogUploadRequest;
 use crate::LogUploadResult;
+use crate::PluginConfig;
 use camino::Utf8Path;
 use std::fs::read_to_string;
 use std::path::Path;
@@ -103,6 +104,7 @@ async fn new_log_manager_builder(
         TopicFilter::new_unchecked("te/device/main///cmd/software_update/+");
     log_metadata_sync_topics.add_unchecked("te/device/main///cmd/config_update/+");
 
+    let plugin_config_path = temp_dir.join("tedge-log-plugin.toml");
     let config = LogManagerConfig {
         mqtt_schema: MqttSchema::default(),
         config_dir: temp_dir.to_path_buf(),
@@ -114,13 +116,14 @@ async fn new_log_manager_builder(
             .try_into()
             .unwrap()],
         plugin_config_dir: temp_dir.to_path_buf(),
-        plugin_config_path: temp_dir.join("tedge-log-plugin.toml"),
+        plugin_config_path: plugin_config_path.clone(),
         logtype_reload_topic: Topic::new_unchecked("te/device/main///cmd/log_upload"),
         logfile_request_topic: TopicFilter::new_unchecked("te/device/main///cmd/log_upload/+"),
         log_metadata_sync_topics,
         sudo_enabled: false,
     };
 
+    let plugin_config = PluginConfig::from_file(plugin_config_path.as_path()).await;
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
@@ -128,10 +131,14 @@ async fn new_log_manager_builder(
     let mut uploader_builder: FakeServerBoxBuilder<LogUploadRequest, LogUploadResult> =
         FakeServerBoxBuilder::default();
 
-    let mut log_builder =
-        LogManagerBuilder::try_new(config, &mut fs_watcher_builder, &mut uploader_builder)
-            .await
-            .unwrap();
+    let mut log_builder = LogManagerBuilder::try_new(
+        config,
+        plugin_config,
+        &mut fs_watcher_builder,
+        &mut uploader_builder,
+    )
+    .await
+    .unwrap();
 
     log_builder.connect_mqtt(&mut mqtt_builder);
 

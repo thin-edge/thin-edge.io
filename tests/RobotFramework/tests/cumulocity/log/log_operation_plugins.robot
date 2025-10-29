@@ -6,7 +6,7 @@ Library             String
 Library             Cumulocity
 Library             ThinEdgeIO
 
-Suite Setup         Custom Setup
+Test Setup          Custom Setup
 Test Teardown       Get Logs
 
 Test Tags           theme:c8y    theme:log
@@ -196,7 +196,7 @@ Overriding a log plugin
     Should Contain Supported Log Types    fake_log::fake_plugin
     # Override the fake plugin with a dummy plugin
     ThinEdgeIO.Transfer To Device
-    ...    ${CURDIR}/plugins/dummy_plugin
+    ...    ${CURDIR}/plugins/fake_plugin_v2
     ...    /usr/local/tedge/log-plugins/fake_plugin
     Execute Command    chmod a+x /usr/local/tedge/log-plugins/fake_plugin
     ${dummy_types}=    Execute Command    /usr/local/tedge/log-plugins/fake_plugin list
@@ -242,11 +242,82 @@ Agent resilient to plugin dirs removal
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
     Should Have MQTT Messages    c8y/s/us    date_from=${date_from}    message_pattern=118,
 
+Plugin include filter
+    # Clean up any existing plugins for test isolation
+    Uninstall Factory Plugins
+
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/configs/tedge-log-plugin-include.toml
+    ...    /etc/tedge/plugins/tedge-log-plugin.toml
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/dummy_plugin
+    ...    /usr/share/tedge/log-plugins/dummy_plugin
+    Execute Command    chmod +x /usr/share/tedge/log-plugins/dummy_plugin
+
+    Should Have Exact Supported Log Types
+    ...    abb_log::dummy_plugin
+    ...    abc_log::dummy_plugin
+
+Plugin exclude filter
+    # Clean up any existing plugins for test isolation
+    Uninstall Factory Plugins
+
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/configs/tedge-log-plugin-exclude.toml
+    ...    /etc/tedge/plugins/tedge-log-plugin.toml
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/dummy_plugin
+    ...    /usr/share/tedge/log-plugins/dummy_plugin
+    Execute Command    chmod +x /usr/share/tedge/log-plugins/dummy_plugin
+
+    Should Have Exact Supported Log Types
+    ...    def_log::dummy_plugin
+    ...    xyz_log::dummy_plugin
+
+Plugin include exclude combined filter
+    # Clean up any existing plugins for test isolation
+    Uninstall Factory Plugins
+
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/configs/tedge-log-plugin-combined.toml
+    ...    /etc/tedge/plugins/tedge-log-plugin.toml
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/dummy_plugin
+    ...    /usr/share/tedge/log-plugins/dummy_plugin
+    Execute Command    chmod +x /usr/share/tedge/log-plugins/dummy_plugin
+
+    Should Have Exact Supported Log Types
+    ...    abc_log::dummy_plugin
+    ...    def_log::dummy_plugin
+    ...    xyz_log::dummy_plugin
+
+Plugin dynamic filter addition
+    # Clean up any existing plugins for test isolation
+    Uninstall Factory Plugins
+
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/configs/tedge-log-plugin-exclude.toml
+    ...    /etc/tedge/plugins/tedge-log-plugin.toml
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/dummy_plugin
+    ...    /usr/share/tedge/log-plugins/dummy_plugin
+    Execute Command    chmod +x /usr/share/tedge/log-plugins/dummy_plugin
+
+    Should Have Exact Supported Log Types
+    ...    def_log::dummy_plugin
+    ...    xyz_log::dummy_plugin
+
+    Execute Command
+    ...    echo '[[plugins.dummy_plugin]]\ninclude\="a*"' >> /etc/tedge/plugins/tedge-log-plugin.toml
+    Should Have Exact Supported Log Types
+    ...    abc_log::dummy_plugin
+    ...    def_log::dummy_plugin
+    ...    xyz_log::dummy_plugin
+
 
 *** Keywords ***
 Custom Setup
     ${DEVICE_SN}=    Setup
-    Set Suite Variable    $DEVICE_SN
     Device Should Exist    ${DEVICE_SN}
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
@@ -287,3 +358,8 @@ Log File Contents Should Be Equal
     ${event}=    Cumulocity.Event Attachment Should Have File Info
     ...    ${event_id}
     RETURN    ${contents}
+
+Uninstall Factory Plugins
+    Execute Command    rm /usr/share/tedge/log-plugins/file
+    Execute Command    rm /usr/share/tedge/log-plugins/journald
+    Execute Command    rm /usr/share/tedge/log-plugins/dmesg

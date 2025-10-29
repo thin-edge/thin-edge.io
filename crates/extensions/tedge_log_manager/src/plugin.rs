@@ -1,5 +1,6 @@
 use crate::error::LogManagementError;
 use camino::Utf8Path;
+use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::Write;
@@ -69,7 +70,7 @@ impl ExternalPluginCommand {
     pub(crate) async fn list(
         &self,
         command_log: Option<&mut CommandLog>,
-    ) -> Result<Vec<String>, LogManagementError> {
+    ) -> Result<BTreeSet<String>, LogManagementError> {
         let command = self.command(LIST)?;
         debug!(
             target: "log plugins",
@@ -87,9 +88,9 @@ impl ExternalPluginCommand {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
 
-        let mut log_types = vec![];
+        let mut log_types = BTreeSet::new();
         for line in stdout.lines() {
-            log_types.push(line.trim().to_string())
+            log_types.insert(line.trim().to_string());
         }
 
         Ok(log_types)

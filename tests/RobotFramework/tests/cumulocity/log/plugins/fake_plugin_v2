@@ -2,10 +2,6 @@
 case "$1" in
     "list")
         echo "dummy_log"
-        echo "abb_log"
-        echo "abc_log"
-        echo "def_log"
-        echo "xyz_log"
         ;;
     "get")
         case "$2" in
