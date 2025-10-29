@@ -8,7 +8,8 @@ use anyhow::Context;
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_flows::flow::Message;
+use tedge_flows::BaseFlowRegistry;
+use tedge_flows::Message;
 use tedge_flows::MessageProcessor;
 
 #[derive(clap::Subcommand, Debug)]
@@ -110,8 +111,10 @@ impl TEdgeFlowsCli {
         config.root_dir().join("flows")
     }
 
-    pub async fn load_flows(flows_dir: &Utf8PathBuf) -> Result<MessageProcessor, Error> {
-        let mut processor = MessageProcessor::try_new(flows_dir)
+    pub async fn load_flows(
+        flows_dir: &Utf8PathBuf,
+    ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
+        let mut processor = MessageProcessor::with_base_registry(flows_dir)
             .await
             .with_context(|| format!("loading flows and steps from {flows_dir}"))?;
         processor.load_all_flows().await;
@@ -121,8 +124,8 @@ impl TEdgeFlowsCli {
     pub async fn load_file(
         flows_dir: &Utf8PathBuf,
         path: &Utf8PathBuf,
-    ) -> Result<MessageProcessor, Error> {
-        let mut processor = MessageProcessor::try_new(flows_dir)
+    ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
+        let mut processor = MessageProcessor::with_base_registry(flows_dir)
             .await
             .with_context(|| format!("loading flow {path}"))?;
 

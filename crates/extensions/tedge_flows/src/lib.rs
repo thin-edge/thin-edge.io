@@ -1,6 +1,6 @@
 mod actor;
 mod config;
-pub mod flow;
+mod flow;
 mod input_source;
 mod js_lib;
 mod js_runtime;
@@ -12,6 +12,9 @@ mod stats;
 
 use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
+pub use crate::flow::*;
+pub use crate::registry::BaseFlowRegistry;
+pub use crate::registry::FlowRegistryExt;
 pub use crate::runtime::MessageProcessor;
 use camino::Utf8Path;
 use std::collections::HashSet;
@@ -38,6 +41,7 @@ use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 use tracing::error;
+
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,12 +51,13 @@ pub struct FlowsMapperBuilder {
     message_box: SimpleMessageBoxBuilder<InputMessage, SubscriptionDiff>,
     mqtt_sender: DynSender<MqttMessage>,
     watch_request_sender: DynSender<WatchRequest>,
-    processor: MessageProcessor,
+    processor: MessageProcessor<BaseFlowRegistry>,
 }
 
 impl FlowsMapperBuilder {
     pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
-        let mut processor = MessageProcessor::try_new(config_dir).await?;
+        let registry = BaseFlowRegistry::new(config_dir);
+        let mut processor = MessageProcessor::try_new(registry).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
         let mqtt_sender = NullSender.into();
         let watch_request_sender = NullSender.into();

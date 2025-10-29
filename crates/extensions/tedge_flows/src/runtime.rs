@@ -3,24 +3,30 @@ use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::flow::SourceTag;
 use crate::js_runtime::JsRuntime;
-use crate::registry::FlowRegistry;
+use crate::registry::FlowRegistryExt;
 use crate::stats::Counter;
+use crate::BaseFlowRegistry;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use std::path::Path;
 use tedge_mqtt_ext::TopicFilter;
 use tokio::time::Instant;
 
-pub struct MessageProcessor {
-    pub registry: FlowRegistry,
+pub struct MessageProcessor<Registry> {
+    pub registry: Registry,
     pub js_runtime: JsRuntime,
     pub stats: Counter,
 }
 
-impl MessageProcessor {
-    pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
-        let registry = FlowRegistry::new(config_dir);
+impl MessageProcessor<BaseFlowRegistry> {
+    pub async fn with_base_registry(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
+        let registry = BaseFlowRegistry::new(config_dir);
+        Self::try_new(registry).await
+    }
+}
+
+impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
+    pub async fn try_new(registry: Registry) -> Result<Self, LoadError> {
         let js_runtime = JsRuntime::try_new().await?;
         let stats = Counter::default();
 
@@ -35,22 +41,22 @@ impl MessageProcessor {
         self.registry.load_all_flows(&mut self.js_runtime).await;
     }
 
-    pub async fn load_single_flow(&mut self, flow: impl AsRef<Path>) {
+    pub async fn load_single_flow(&mut self, flow: impl AsRef<Utf8Path>) {
         self.registry
-            .load_single_flow(&mut self.js_runtime, flow)
+            .load_single_flow(&mut self.js_runtime, flow.as_ref())
             .await;
     }
 
-    pub async fn load_single_script(&mut self, script: impl AsRef<Path>) {
+    pub async fn load_single_script(&mut self, script: impl AsRef<Utf8Path>) {
         self.registry
-            .load_single_script(&mut self.js_runtime, script)
+            .load_single_script(&mut self.js_runtime, script.as_ref())
             .await;
     }
 
     pub fn subscriptions(&self) -> TopicFilter {
         let mut topics = TopicFilter::empty();
         for flow in self.registry.flows() {
-            topics.add_all(flow.topics())
+            topics.add_all(flow.as_ref().topics())
         }
         topics
     }
@@ -59,13 +65,13 @@ impl MessageProcessor {
         let script_deadlines = self
             .registry
             .flows()
-            .flat_map(|flow| &flow.steps)
+            .flat_map(|flow| &flow.as_ref().steps)
             .filter_map(|step| step.script.next_execution);
 
         let source_deadlines = self
             .registry
             .flows()
-            .filter_map(|flow| flow.input.next_deadline());
+            .filter_map(|flow| flow.as_ref().input.next_deadline());
 
         script_deadlines.chain(source_deadlines)
     }
@@ -88,7 +94,7 @@ impl MessageProcessor {
     pub async fn on_source_poll(&mut self, timestamp: DateTime, now: Instant) -> Vec<FlowResult> {
         let mut out_messages = vec![];
         for flow in self.registry.flows_mut() {
-            let messages = match flow.on_source_poll(timestamp, now).await {
+            let messages = match flow.as_mut().on_source_poll(timestamp, now).await {
                 FlowResult::Ok { messages, .. } => messages,
                 error => {
                     out_messages.push(error);
@@ -97,6 +103,7 @@ impl MessageProcessor {
             };
             for message in messages {
                 let flow_output = flow
+                    .as_mut()
                     .on_message(&self.js_runtime, &mut self.stats, timestamp, &message)
                     .await;
                 out_messages.push(flow_output);
@@ -115,13 +122,17 @@ impl MessageProcessor {
 
         let mut out_messages = vec![];
         for flow in self.registry.flows_mut() {
-            let config_result = flow.on_config_update(&self.js_runtime, message).await;
+            let config_result = flow
+                .as_mut()
+                .on_config_update(&self.js_runtime, message)
+                .await;
             if config_result.is_err() {
                 out_messages.push(config_result);
                 continue;
             }
-            if flow.accept_message(source, message) {
+            if flow.as_ref().accept_message(source, message) {
                 let flow_output = flow
+                    .as_mut()
                     .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
                     .await;
                 out_messages.push(flow_output);
@@ -136,6 +147,7 @@ impl MessageProcessor {
         let mut out_messages = vec![];
         for flow in self.registry.flows_mut() {
             let flow_output = flow
+                .as_mut()
                 .on_interval(&self.js_runtime, &mut self.stats, timestamp, now)
                 .await;
             out_messages.push(flow_output);
@@ -158,14 +170,14 @@ impl MessageProcessor {
     }
 
     pub async fn remove_script(&mut self, path: Utf8PathBuf) {
-        self.load_single_script(path).await;
+        self.registry.remove_script(path).await;
     }
 
     pub async fn add_flow(&mut self, path: Utf8PathBuf) {
-        self.registry.add_flow(&mut self.js_runtime, path).await;
+        self.registry.add_flow(&mut self.js_runtime, &path).await;
     }
 
     pub async fn remove_flow(&mut self, path: Utf8PathBuf) {
-        self.registry.remove_script(path).await;
+        self.registry.remove_flow(&path).await;
     }
 }
