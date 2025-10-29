@@ -1,10 +1,7 @@
 use crate::flow::Flow;
+use crate::flow::FlowInput;
 use crate::flow::FlowOutput;
 use crate::flow::FlowStep;
-use crate::input_source::CommandFlowInput;
-use crate::input_source::FileFlowInput;
-use crate::input_source::FlowInput;
-use crate::input_source::MqttFlowInput;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::LoadError;
@@ -177,8 +174,7 @@ impl FlowConfig {
         config_dir: &Utf8Path,
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
-        let flow_name = source.clone().to_string();
-        let input = self.input.compile(flow_name)?;
+        let input = self.input.try_into()?;
         let output = self.output.try_into()?;
         let errors = self.errors.try_into()?;
         let mut steps = vec![];
@@ -223,19 +219,27 @@ impl StepConfig {
     }
 }
 
-impl InputConfig {
-    pub fn compile(self, flow_name: String) -> Result<Box<dyn FlowInput>, ConfigError> {
-        Ok(match self {
-            InputConfig::Mqtt { topics } => Box::new(MqttFlowInput {
+impl TryFrom<InputConfig> for FlowInput {
+    type Error = ConfigError;
+    fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
+        Ok(match input {
+            InputConfig::Mqtt { topics } => FlowInput::Mqtt {
                 topics: topic_filters(topics)?,
-            }),
+            },
             InputConfig::File {
                 topic,
                 path,
                 interval,
             } => {
                 let topic = topic.unwrap_or_else(|| path.clone().to_string());
-                Box::new(FileFlowInput::new(flow_name, topic, path, interval))
+                match interval {
+                    Some(interval) if !interval.is_zero() => FlowInput::PollFile {
+                        topic,
+                        path,
+                        interval,
+                    },
+                    _ => FlowInput::StreamFile { topic, path },
+                }
             }
             InputConfig::Process {
                 topic,
@@ -243,7 +247,14 @@ impl InputConfig {
                 interval,
             } => {
                 let topic = topic.unwrap_or_else(|| command.clone());
-                Box::new(CommandFlowInput::new(flow_name, topic, command, interval))
+                match interval {
+                    Some(interval) if !interval.is_zero() => FlowInput::PollCommand {
+                        topic,
+                        command,
+                        interval,
+                    },
+                    _ => FlowInput::StreamCommand { topic, command },
+                }
             }
         })
     }

@@ -1,5 +1,6 @@
 mod actor;
 mod config;
+mod connected_flow;
 mod flow;
 mod input_source;
 mod js_lib;
@@ -12,6 +13,7 @@ mod stats;
 
 use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
+use crate::connected_flow::ConnectedFlowRegistry;
 pub use crate::flow::*;
 pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
@@ -51,12 +53,12 @@ pub struct FlowsMapperBuilder {
     message_box: SimpleMessageBoxBuilder<InputMessage, SubscriptionDiff>,
     mqtt_sender: DynSender<MqttMessage>,
     watch_request_sender: DynSender<WatchRequest>,
-    processor: MessageProcessor<BaseFlowRegistry>,
+    processor: MessageProcessor<ConnectedFlowRegistry>,
 }
 
 impl FlowsMapperBuilder {
     pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
-        let registry = BaseFlowRegistry::new(config_dir);
+        let registry = ConnectedFlowRegistry::new(config_dir);
         let mut processor = MessageProcessor::try_new(registry).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
         let mqtt_sender = NullSender.into();

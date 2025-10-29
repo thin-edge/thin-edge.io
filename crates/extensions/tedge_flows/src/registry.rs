@@ -18,6 +18,8 @@ pub trait FlowRegistry {
 
     fn store(&self) -> &FlowStore<Self::Flow>;
     fn store_mut(&mut self) -> &mut FlowStore<Self::Flow>;
+
+    fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + '_;
 }
 
 pub struct BaseFlowRegistry {
@@ -29,10 +31,6 @@ impl BaseFlowRegistry {
         BaseFlowRegistry {
             flows: FlowStore::new(config_dir),
         }
-    }
-
-    pub fn config_dir(&self) -> &Utf8Path {
-        &self.flows.config_dir
     }
 }
 
@@ -50,6 +48,12 @@ impl FlowRegistry for BaseFlowRegistry {
 
     fn store_mut(&mut self) -> &mut FlowStore<Self::Flow> {
         &mut self.flows
+    }
+
+    fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + '_ {
+        self.flows()
+            .flat_map(|flow| &flow.steps)
+            .filter_map(|step| step.script.next_execution)
     }
 }
 
