@@ -1,6 +1,7 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use clap::ValueEnum;
+use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfig;
 use tedge_p11_server::pkcs11::CreateKeyParams;
 use tedge_p11_server::pkcs11::KeyTypeParams;
@@ -119,14 +120,18 @@ impl Command for CreateKeyHsmCmd {
         eprintln!("Key URI: {uri}");
         eprintln!("Public key:\n{pubkey_pem}\n");
 
+        // Operations below may fail for some reason (e.g. no permissions to write to outfile), but
+        // the key was still created, so we still consider the operation succeeded.
         if let Some(outfile) = &self.outfile_pubkey {
             let r = std::fs::write(outfile.as_ref(), pubkey_pem);
             if let Err(e) = r {
-                warn!(?e, path=%outfile, "failed to save the public key");
+                warn!(?e, path=%outfile, "Failed to save the public key to file");
             }
         }
 
-        save_key_uri_to_config(config, self.cloud.as_ref(), &uri).await?;
+        if let Err(e) = save_key_uri_to_config(config, self.cloud.as_ref(), &uri).await {
+            warn!(?e, "Failed to save public key URI to tedge-config. You may need to enter key URI in tedge-config manually to use the new key.")
+        }
 
         Ok(())
     }
@@ -137,27 +142,9 @@ async fn save_key_uri_to_config(
     cloud: Option<&Cloud>,
     uri: &str,
 ) -> anyhow::Result<()> {
+    let key = extract_device_id_for_cloud(cloud)?;
     config
         .update_toml(&|dto, _reader| {
-            // XXX: can break if the keys ever change and having to use strings sucks
-            let profile = cloud.as_ref().and_then(|c| c.profile_name());
-            // XXX: this should be elsewhere!
-            let cloud = cloud.map(|c| match c {
-                crate::cli::common::MaybeBorrowedCloud::Aws(_) => "aws",
-                crate::cli::common::MaybeBorrowedCloud::Azure(_) => "az",
-                crate::cli::common::MaybeBorrowedCloud::C8y(_) => "c8y",
-            });
-            let mut key = "device.key_uri".to_string();
-
-            if let Some(profile) = profile {
-                key = format!("profiles.{profile}.{key}");
-            }
-
-            if let Some(cloud) = cloud {
-                key = format!("{cloud}.{key}");
-            }
-
-            let key = key.parse().expect("should be valid WritableKeys");
             let r = dto.try_update_str(&key, uri).map_err(|e| e.into());
             eprintln!(
                 "The `{key}` configuration setting was updated with the newly created key's URI"
@@ -170,7 +157,43 @@ async fn save_key_uri_to_config(
     Ok(())
 }
 
-/// Parses id provided as a sequence of bytes encoded as pair of hex digits without `0x` prefix, optionally separated by spaces.
+/// Given a cloud (and possibly profile) return the correct `device.key_uri` key under the correct table.
+///
+/// - `device.key_uri` if cloud is `None`
+/// - `{cloud_name}.device.key_uri` if cloud is `Some(Cloud{profile: None})`
+/// - `{cloud_name}.profiles.{profile}.device.key_uri` if cloud is `Some(Cloud{profile: Some("profile")})`
+fn extract_device_id_for_cloud(
+    cloud: Option<&crate::cli::common::MaybeBorrowedCloud<'static>>,
+) -> anyhow::Result<tedge_config::tedge_toml::WritableKey> {
+    // XXX: can break if the keys ever change and having to use strings sucks
+
+    // Additionally, these kind of config transformation should probably live somewhere in tedge-config, but it's
+    // currently (#3835) being rewritten to support generic mapper configurations which will make using per-profile
+    // settings (which device.key_uri is) much simpler and so the cleaner implementation of this would have to be
+    // updated anyway. As such, it's left as is and when generic mapping configurations are merged, it will have to be
+    // revised.
+    let mut key = "device.key_uri".to_string();
+    let profile = cloud.as_ref().and_then(|c| c.profile_name());
+    if let Some(profile) = profile {
+        key = format!("profiles.{profile}.{key}");
+    }
+
+    let cloud = cloud.map(|c| match c {
+        crate::cli::common::MaybeBorrowedCloud::Aws(_) => "aws",
+        crate::cli::common::MaybeBorrowedCloud::Azure(_) => "az",
+        crate::cli::common::MaybeBorrowedCloud::C8y(_) => "c8y",
+    });
+
+    if let Some(cloud) = cloud {
+        key = format!("{cloud}.{key}");
+    }
+
+    key.parse::<WritableKey>()
+        .with_context(|| format!("failed to parse '{key}' as a WritableKey"))
+}
+
+/// Parses id provided as a sequence of bytes encoded as pair of hex digits without `0x` prefix, optionally separated by
+/// spaces.
 fn parse_id(id_hexstr: &str) -> anyhow::Result<Vec<u8>> {
     let id_hexstr = id_hexstr.trim();
 
