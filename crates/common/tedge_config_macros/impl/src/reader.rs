@@ -357,6 +357,7 @@ fn reader_value_for_field<'a>(
     field: &'a ConfigurableField,
     parents: &[PathItem],
     root_fields: &[FieldOrGroup],
+    root_dto_name: &syn::Ident,
     mut observed_keys: Vec<&'a Punctuated<syn::Ident, Token![.]>>,
 ) -> syn::Result<TokenStream> {
     let name = field.ident();
@@ -429,6 +430,7 @@ fn reader_value_for_field<'a>(
                         find_field(root_fields, default_key)?,
                         &parents_for(default_key, parents, root_fields)?,
                         root_fields,
+                        root_dto_name,
                         observed_keys,
                     )?;
 
@@ -458,7 +460,7 @@ fn reader_value_for_field<'a>(
                 }
                 FieldDefault::Function(function) => quote_spanned! {function.span()=>
                     match &dto.#(#read_path.)*#name {
-                        None => TEdgeConfigDefault::<TEdgeConfigDto, _>::call(#function, dto, location),
+                        None => TEdgeConfigDefault::<#root_dto_name, _>::call(#function, dto, location),
                         Some(value) => value.clone(),
                     }
                 },
@@ -604,7 +606,7 @@ fn generate_conversions(
         match item {
             FieldOrGroup::Field(field) => {
                 let name = field.ident();
-                let value = reader_value_for_field(ctx, field, &parents, root_fields, Vec::new())?;
+                let value = reader_value_for_field(ctx, field, &parents, root_fields, &root_dto_name, Vec::new())?;
                 field_conversions.push(quote_spanned!(name.span()=> #name: #value));
             }
             FieldOrGroup::Group(group) if !group.reader.skip => {
@@ -734,6 +736,7 @@ mod tests {
                 PathItem::Dynamic(Span::call_site()),
             ],
             &input.groups,
+            &parse_quote!(TEdgeConfigDto),
             vec![],
         )
         .unwrap();
@@ -792,6 +795,7 @@ mod tests {
             az_url,
             &[PathItem::Static(parse_quote!(az), "az".into())],
             &input.groups,
+            &parse_quote!(TEdgeConfigDto),
             vec![],
         )
         .unwrap_err();
@@ -1246,6 +1250,48 @@ mod tests {
                                 value: value.clone(),
                                 key: C8yReadableKey::EnableFeature.to_cow_str()
                             },
+                        }
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&actual),
+            prettyplease::unparse(&expected)
+        )
+    }
+
+    #[test]
+    fn default_functions_on_sub_configs_use_correct_dto_type() {
+        let input: crate::input::SubConfigInput = parse_quote! {
+            C8y {
+                #[tedge_config(default(function = "default_enable_feature"))]
+                enable_feature: bool,
+            }
+        };
+        let config: crate::input::Configuration = input.config.try_into().unwrap();
+        let ctx = CodegenContext::for_sub_config(parse_quote!(C8y));
+
+        let actual = generate_conversions(
+            &ctx,
+            &config.groups,
+            Vec::new(),
+            &config.groups,
+            &parse_quote!(C8yDto),
+        )
+        .unwrap();
+        let actual = syn::parse2(actual).unwrap();
+        let expected: syn::File = parse_quote! {
+            impl C8yReader {
+                #[allow(unused,clippy::clone_on_copy,clippy::useless_conversion)]
+                #[automatically_derived]
+                #[doc = r" Converts the provided [TEdgeConfigDto] into a reader"]
+                pub(crate)fn from_dto(dto: &C8yDto, location: &TEdgeConfigLocation,) -> Self {
+                    Self {
+                        enable_feature: match &dto.enable_feature {
+                            None => TEdgeConfigDefault::<C8yDto, _>::call(default_enable_feature, dto, location),
+                            Some(value) => value.clone(),
                         }
                     }
                 }
