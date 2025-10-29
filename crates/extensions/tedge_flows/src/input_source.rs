@@ -1,6 +1,5 @@
 use crate::flow::DateTime;
 use crate::flow::Message;
-use crate::flow::SourceTag;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use std::fmt::Display;
@@ -9,16 +8,11 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 
-pub trait FlowInput: Display + StreamingSource + PollingSource {}
-impl<T: Display + StreamingSource + PollingSource> FlowInput for T {}
+pub trait FlowSource: Display + StreamingSource + PollingSource {}
+impl<T: Display + StreamingSource + PollingSource> FlowSource for T {}
 
 /// Trait for input sources that stream messages out of continuously running processes
 pub trait StreamingSource {
-    /// MQTT topics subscribed by this source
-    fn topics(&self) -> TopicFilter {
-        TopicFilter::empty()
-    }
-
     /// Topic to be used when messages are not received from MQTT
     fn enforced_topic(&self) -> Option<&str> {
         None
@@ -28,8 +22,6 @@ pub trait StreamingSource {
     fn watch_request(&self) -> Option<WatchRequest> {
         None
     }
-
-    fn accept_message(&self, source: &SourceTag, message: &Message) -> bool;
 }
 
 /// Trait for input sources that can be polled for messages
@@ -82,18 +74,7 @@ impl PollingSource for MqttFlowInput {
     fn update_after_poll(&mut self, _now: Instant) {}
 }
 
-impl StreamingSource for MqttFlowInput {
-    fn topics(&self) -> TopicFilter {
-        self.topics.clone()
-    }
-
-    fn accept_message(&self, source: &SourceTag, message: &Message) -> bool {
-        match source {
-            SourceTag::Mqtt => self.topics.accept_topic_name(&message.topic),
-            _ => false,
-        }
-    }
-}
+impl StreamingSource for MqttFlowInput {}
 
 pub struct CommandFlowInput {
     flow: String,
@@ -165,16 +146,6 @@ impl StreamingSource for CommandFlowInput {
             })
         }
     }
-
-    fn accept_message(&self, source: &SourceTag, _message: &Message) -> bool {
-        match source {
-            SourceTag::Mqtt => false,
-            SourceTag::Process { .. } if self.poll.is_polling() => false,
-            SourceTag::Process { flow } => flow == &self.flow,
-            SourceTag::Poll { flow } if self.poll.is_polling() => flow == &self.flow,
-            SourceTag::Poll { .. } => false,
-        }
-    }
 }
 
 pub struct FileFlowInput {
@@ -243,16 +214,6 @@ impl StreamingSource for FileFlowInput {
                 topic: self.flow.clone(),
                 file: self.path.clone(),
             })
-        }
-    }
-
-    fn accept_message(&self, source: &SourceTag, _message: &Message) -> bool {
-        match source {
-            SourceTag::Mqtt => false,
-            SourceTag::Process { .. } if self.poll.is_polling() => false,
-            SourceTag::Process { flow } => flow == &self.flow,
-            SourceTag::Poll { flow } if self.poll.is_polling() => flow == &self.flow,
-            SourceTag::Poll { .. } => false,
         }
     }
 }

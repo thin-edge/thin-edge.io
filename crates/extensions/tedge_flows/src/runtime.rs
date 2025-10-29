@@ -3,9 +3,9 @@ use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::flow::SourceTag;
 use crate::js_runtime::JsRuntime;
+use crate::registry::BaseFlowRegistry;
 use crate::registry::FlowRegistryExt;
 use crate::stats::Counter;
-use crate::BaseFlowRegistry;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -61,25 +61,10 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
         topics
     }
 
-    fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + '_ {
-        let script_deadlines = self
-            .registry
-            .flows()
-            .flat_map(|flow| &flow.as_ref().steps)
-            .filter_map(|step| step.script.next_execution);
-
-        let source_deadlines = self
-            .registry
-            .flows()
-            .filter_map(|flow| flow.as_ref().input.next_deadline());
-
-        script_deadlines.chain(source_deadlines)
-    }
-
     /// Get the next deadline for interval execution across all scripts
     /// Returns None if no scripts have intervals configured
     pub fn next_interval_deadline(&self) -> Option<tokio::time::Instant> {
-        self.deadlines().min()
+        self.registry.deadlines().min()
     }
 
     /// Get the last deadline for interval execution across all scripts Returns
@@ -88,28 +73,23 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
     /// This is intended for `tedge flows test` to ensure it processes all
     /// intervals
     pub fn last_interval_deadline(&self) -> Option<tokio::time::Instant> {
-        self.deadlines().max()
+        self.registry.deadlines().max()
     }
 
-    pub async fn on_source_poll(&mut self, timestamp: DateTime, now: Instant) -> Vec<FlowResult> {
-        let mut out_messages = vec![];
-        for flow in self.registry.flows_mut() {
-            let messages = match flow.as_mut().on_source_poll(timestamp, now).await {
-                FlowResult::Ok { messages, .. } => messages,
-                error => {
-                    out_messages.push(error);
-                    continue;
-                }
-            };
-            for message in messages {
-                let flow_output = flow
-                    .as_mut()
-                    .on_message(&self.js_runtime, &mut self.stats, timestamp, &message)
-                    .await;
-                out_messages.push(flow_output);
-            }
-        }
-        out_messages
+    pub async fn on_flow_input(
+        &mut self,
+        flow_name: &str,
+        timestamp: DateTime,
+        message: &Message,
+    ) -> Option<FlowResult> {
+        let flow = self.registry.flow_mut(flow_name)?;
+        let started_at = self.stats.runtime_on_message_start();
+        let flow_output = flow
+            .as_mut()
+            .on_message(&self.js_runtime, &mut self.stats, timestamp, message)
+            .await;
+        self.stats.runtime_on_message_done(started_at);
+        Some(flow_output)
     }
 
     pub async fn on_message(

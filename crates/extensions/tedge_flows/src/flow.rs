@@ -1,4 +1,3 @@
-use crate::input_source::FlowInput;
 use crate::input_source::PollingSourceError;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
@@ -8,11 +7,11 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
+use std::time::Duration;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchError;
-use tedge_watch_ext::WatchRequest;
 use time::OffsetDateTime;
 use tokio::time::Instant;
 use tracing::error;
@@ -25,7 +24,7 @@ use tracing::warn;
 /// and finally produces the derived messages to a sink of type [FlowOutput].
 pub struct Flow {
     /// The message source
-    pub input: Box<dyn FlowInput>,
+    pub input: FlowInput,
 
     /// Transformation steps to apply in order to the messages
     pub steps: Vec<FlowStep>,
@@ -55,6 +54,31 @@ pub enum SourceTag {
 
     /// The message has been poll by the flow
     Poll { flow: String },
+}
+
+#[derive(Clone)]
+pub enum FlowInput {
+    Mqtt {
+        topics: TopicFilter,
+    },
+    PollFile {
+        topic: String,
+        path: Utf8PathBuf,
+        interval: Duration,
+    },
+    PollCommand {
+        topic: String,
+        command: String,
+        interval: Duration,
+    },
+    StreamFile {
+        topic: String,
+        path: Utf8PathBuf,
+    },
+    StreamCommand {
+        topic: String,
+        command: String,
+    },
 }
 
 #[derive(Clone)]
@@ -142,10 +166,6 @@ impl Flow {
         topics
     }
 
-    pub fn watch_request(&self) -> Option<WatchRequest> {
-        self.input.watch_request()
-    }
-
     pub async fn on_config_update(
         &mut self,
         js_runtime: &JsRuntime,
@@ -168,28 +188,8 @@ impl Flow {
         Ok(vec![])
     }
 
-    pub async fn on_source_poll(&mut self, timestamp: DateTime, now: Instant) -> FlowResult {
-        let result = self.on_source_poll_steps(timestamp, now).await;
-        self.publish(result)
-    }
-
-    async fn on_source_poll_steps(
-        &mut self,
-        timestamp: DateTime,
-        now: Instant,
-    ) -> Result<Vec<Message>, FlowError> {
-        let source = &mut self.input;
-        if !source.is_ready(now) {
-            return Ok(vec![]);
-        };
-
-        let messages = source.poll(timestamp).await?;
-        source.update_after_poll(now);
-        Ok(messages)
-    }
-
-    pub fn accept_message(&self, source: &SourceTag, message: &Message) -> bool {
-        self.input.accept_message(source, message)
+    pub fn accept_message(&self, _source: &SourceTag, message: &Message) -> bool {
+        self.input.accept_message(message)
     }
 
     pub async fn on_message(
@@ -307,7 +307,7 @@ impl Flow {
         self.publish(Err(error))
     }
 
-    fn publish(&self, result: Result<Vec<Message>, FlowError>) -> FlowResult {
+    pub fn publish(&self, result: Result<Vec<Message>, FlowError>) -> FlowResult {
         match result {
             Ok(messages) => FlowResult::Ok {
                 flow: self.name().to_string(),
@@ -319,6 +319,25 @@ impl Flow {
                 error,
                 output: self.errors.clone(),
             },
+        }
+    }
+}
+
+impl FlowInput {
+    pub fn topics(&self) -> TopicFilter {
+        match self {
+            FlowInput::Mqtt { topics } => topics.clone(),
+            _ => TopicFilter::empty(),
+        }
+    }
+
+    pub fn accept_message(&self, message: &Message) -> bool {
+        match self {
+            FlowInput::Mqtt { topics } => topics.accept_topic_name(&message.topic),
+            FlowInput::PollFile { topic, .. }
+            | FlowInput::PollCommand { topic, .. }
+            | FlowInput::StreamFile { topic, .. }
+            | FlowInput::StreamCommand { topic, .. } => topic == &message.topic,
         }
     }
 }
