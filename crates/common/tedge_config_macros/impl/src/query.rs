@@ -378,11 +378,11 @@ fn sub_field_enum_variant(
                     }
                 }
                 FieldOrGroup::Group(g) => {
-                    let g_name = g.ident.to_string();
+                    let g_name = g.name().to_string();
                     quote! { #g_name.to_string() }
                 }
                 FieldOrGroup::Field(f) => {
-                    let f_name = f.ident().to_string();
+                    let f_name = f.name().to_string();
                     quote! { #f_name.to_string() }
                 }
             })
@@ -426,13 +426,13 @@ fn sub_field_enum_variant(
         for segment in &parent_segments_without_field {
             match segment {
                 FieldOrGroup::Multi(m) => {
-                    pattern_parts.push(format!("{}(?:[\\._]profiles[\\._]([^\\.]+))?", m.ident));
+                    pattern_parts.push(format!("{}(?:[\\._]profiles[\\._]([^\\.]+))?", m.name()));
                 }
                 FieldOrGroup::Group(g) => {
-                    pattern_parts.push(g.ident.to_string());
+                    pattern_parts.push(g.name().to_string());
                 }
                 FieldOrGroup::Field(f) => {
-                    pattern_parts.push(f.ident().to_string());
+                    pattern_parts.push(f.name().to_string());
                 }
             }
         }
@@ -1679,7 +1679,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             .iter()
             .map(|fog| match fog {
                 FieldOrGroup::Multi(m) => {
-                    format!("{}(?:[\\._]profiles[\\._]([^\\.]+))?", m.ident)
+                    format!("{}(?:[\\._]profiles[\\._]([^\\.]+))?", m.name())
                 }
                 FieldOrGroup::Field(f) => f.name().to_string(),
                 FieldOrGroup::Group(g) => g.name().to_string(),
@@ -1713,8 +1713,8 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
                                     format!("{}.profiles.{{{}}}", m.ident, binding)
                                 }
                             }
-                            FieldOrGroup::Group(g) => g.ident.to_string(),
-                            FieldOrGroup::Field(f) => f.ident().to_string(),
+                            FieldOrGroup::Group(g) => g.name().to_string(),
+                            FieldOrGroup::Field(f) => f.name().to_string(),
                         })
                         .interleave(std::iter::repeat_n(".".to_owned(), segments.len() - 1))
                         .collect::<String>();
@@ -2269,6 +2269,8 @@ mod tests {
             #[tedge_config(multi)]
             c8y: {
                 url: String,
+                #[tedge_config(rename = "type")]
+                ty: String,
             }
         );
         let paths = configuration_paths_from(&input.groups, Mode::Reader);
@@ -2282,6 +2284,8 @@ mod tests {
                     match self {
                         Self::C8yUrl(None) => ::std::borrow::Cow::Borrowed("c8y.url"),
                         Self::C8yUrl(Some(key0)) => ::std::borrow::Cow::Owned(format!("c8y.profiles.{key0}.url")),
+                        Self::C8yType(None) => ::std::borrow::Cow::Borrowed("c8y.type"),
+                        Self::C8yType(Some(key0)) => ::std::borrow::Cow::Owned(format!("c8y.profiles.{key0}.type")),
                     }
                 }
             }
