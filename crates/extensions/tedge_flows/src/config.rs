@@ -140,7 +140,7 @@ impl FlowConfig {
         }
     }
 
-    pub async fn load_single_script(script: &Utf8Path) -> FlowConfig {
+    pub fn wrap_script_into_flow(script: &Utf8Path) -> FlowConfig {
         FlowConfig::from_step(script.to_owned())
     }
 

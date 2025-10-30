@@ -120,7 +120,7 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
     }
 
     async fn load_single_script(&mut self, js_runtime: &mut JsRuntime, script: &Utf8Path) {
-        let config = FlowConfig::load_single_script(script).await;
+        let config = FlowConfig::wrap_script_into_flow(script);
         self.load_config(js_runtime, script, config).await;
     }
 
