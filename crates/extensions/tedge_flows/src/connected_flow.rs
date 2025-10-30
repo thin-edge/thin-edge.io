@@ -5,10 +5,12 @@ use crate::flow::FlowError;
 use crate::flow::FlowInput;
 use crate::flow::FlowResult;
 use crate::flow::Message;
-use crate::input_source::CommandFlowInput;
-use crate::input_source::FileFlowInput;
-use crate::input_source::FlowSource;
-use crate::input_source::MqttFlowInput;
+use crate::input_source::CommandPollingSource;
+use crate::input_source::CommandStreamingSource;
+use crate::input_source::FilePollingSource;
+use crate::input_source::FileStreamingSource;
+use crate::input_source::PollingSource;
+use crate::input_source::StreamingSource;
 use crate::registry::FlowRegistry;
 use crate::registry::FlowStore;
 use camino::Utf8Path;
@@ -18,7 +20,8 @@ use tokio::time::Instant;
 /// A flow connected to a source of messages
 pub struct ConnectedFlow {
     flow: Flow,
-    pub(crate) input: Box<dyn FlowSource>,
+    streaming_source: Option<Box<dyn StreamingSource>>,
+    polling_source: Option<Box<dyn PollingSource>>,
 }
 
 impl AsRef<Flow> for ConnectedFlow {
@@ -35,9 +38,13 @@ impl AsMut<Flow> for ConnectedFlow {
 
 impl ConnectedFlow {
     pub fn new(flow: Flow) -> Self {
-        let name = flow.name().to_string();
-        let input = connect(name, flow.input.clone());
-        ConnectedFlow { flow, input }
+        let streaming_source = streaming_source(flow.name().to_owned(), flow.input.clone());
+        let polling_source = polling_source(flow.input.clone());
+        ConnectedFlow {
+            flow,
+            streaming_source,
+            polling_source,
+        }
     }
 
     pub fn name(&self) -> &str {
@@ -45,11 +52,17 @@ impl ConnectedFlow {
     }
 
     pub fn input_topic(&self) -> &str {
-        self.input.enforced_topic().unwrap_or_default()
+        self.flow.input.enforced_topic().unwrap_or_default()
     }
 
     pub fn watch_request(&self) -> Option<WatchRequest> {
-        self.input.watch_request()
+        self.streaming_source
+            .as_ref()
+            .and_then(|source| source.watch_request())
+    }
+
+    pub fn next_deadline(&self) -> Option<Instant> {
+        self.polling_source.as_ref().and_then(|p| p.next_deadline())
     }
 
     pub async fn on_source_poll(&mut self, timestamp: DateTime, now: Instant) -> FlowResult {
@@ -62,7 +75,9 @@ impl ConnectedFlow {
         timestamp: DateTime,
         now: Instant,
     ) -> Result<Vec<Message>, FlowError> {
-        let source = &mut self.input;
+        let Some(source) = &mut self.polling_source.as_mut() else {
+            return Ok(vec![]);
+        };
         if !source.is_ready(now) {
             return Ok(vec![]);
         };
@@ -77,30 +92,37 @@ impl ConnectedFlow {
     }
 }
 
-fn connect(flow_name: String, input: FlowInput) -> Box<dyn FlowSource> {
+fn streaming_source(flow_name: String, input: FlowInput) -> Option<Box<dyn StreamingSource>> {
     match input {
-        FlowInput::Mqtt { topics } => Box::new(MqttFlowInput { topics }),
+        FlowInput::StreamFile { topic: _, path } => {
+            Some(Box::new(FileStreamingSource::new(flow_name, path)))
+        }
+
+        FlowInput::StreamCommand { topic: _, command } => {
+            Some(Box::new(CommandStreamingSource::new(flow_name, command)))
+        }
+
+        _ => None,
+    }
+}
+
+fn polling_source(input: FlowInput) -> Option<Box<dyn PollingSource>> {
+    match input {
         FlowInput::PollFile {
             topic,
             path,
             interval,
-        } => Box::new(FileFlowInput::new(flow_name, topic, path, Some(interval))),
+        } => Some(Box::new(FilePollingSource::new(topic, path, interval))),
+
         FlowInput::PollCommand {
             topic,
             command,
             interval,
-        } => Box::new(CommandFlowInput::new(
-            flow_name,
-            topic,
-            command,
-            Some(interval),
-        )),
-        FlowInput::StreamFile { topic, path } => {
-            Box::new(FileFlowInput::new(flow_name, topic, path, None))
-        }
-        FlowInput::StreamCommand { topic, command } => {
-            Box::new(CommandFlowInput::new(flow_name, topic, command, None))
-        }
+        } => Some(Box::new(CommandPollingSource::new(
+            topic, command, interval,
+        ))),
+
+        _ => None,
     }
 }
 
@@ -139,10 +161,7 @@ impl FlowRegistry for ConnectedFlowRegistry {
             .flat_map(|flow| &flow.as_ref().steps)
             .filter_map(|step| step.script.next_execution);
 
-        let source_deadlines = self
-            .flows
-            .flows()
-            .filter_map(|flow| flow.input.next_deadline());
+        let source_deadlines = self.flows.flows().filter_map(|flow| flow.next_deadline());
 
         script_deadlines.chain(source_deadlines)
     }

@@ -7,6 +7,8 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::time::Duration;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -323,11 +325,43 @@ impl Flow {
     }
 }
 
+impl Display for FlowInput {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FlowInput::Mqtt { topics } => {
+                write!(f, "MQTT topics: {:?}", topics)
+            }
+            FlowInput::PollFile { path, .. } => {
+                write!(f, "Polling file: {path}")
+            }
+            FlowInput::PollCommand { command, .. } => {
+                write!(f, "Polling command: {command}")
+            }
+            FlowInput::StreamFile { path, .. } => {
+                write!(f, "Streaming file: {path}")
+            }
+            FlowInput::StreamCommand { command, .. } => {
+                write!(f, "Streaming command: {command}")
+            }
+        }
+    }
+}
+
 impl FlowInput {
     pub fn topics(&self) -> TopicFilter {
         match self {
             FlowInput::Mqtt { topics } => topics.clone(),
             _ => TopicFilter::empty(),
+        }
+    }
+
+    pub fn enforced_topic(&self) -> Option<&str> {
+        match self {
+            FlowInput::Mqtt { .. } => None,
+            FlowInput::PollFile { topic, .. }
+            | FlowInput::PollCommand { topic, .. }
+            | FlowInput::StreamFile { topic, .. }
+            | FlowInput::StreamCommand { topic, .. } => Some(topic),
         }
     }
 

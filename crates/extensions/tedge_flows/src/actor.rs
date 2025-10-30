@@ -159,7 +159,7 @@ impl FlowsMapper {
                 continue;
             };
             if !self.watched_commands.contains(topic) {
-                info!(target: "flows", "Adding input: {}", flow.input);
+                info!(target: "flows", "Adding input: {}", flow.as_ref().input);
                 watch_requests.push(request);
             }
             self.watched_commands.remove(topic);
@@ -316,7 +316,7 @@ impl FlowsMapper {
     ) -> Result<(), RuntimeError> {
         let Some((info, flow_error)) = self.processor.registry.flow(flow_name).map(|flow| {
             (
-                format!("Reconnecting input: {flow_name}: {}", flow.input),
+                format!("Reconnecting input: {flow_name}: {}", flow.as_ref().input),
                 flow.on_error(error),
             )
         }) else {
@@ -345,7 +345,7 @@ impl FlowsMapper {
     async fn on_input_eos(&mut self, flow_name: &str) -> Result<(), RuntimeError> {
         if let Some(flow) = self.processor.registry.flow(flow_name) {
             if let Some(request) = flow.watch_request() {
-                info!(target: "flows", "Reconnecting input: {flow_name}: {}", flow.input);
+                info!(target: "flows", "Reconnecting input: {flow_name}: {}", flow.as_ref().input);
                 self.watch_request_sender.send(request).await?
             };
         }
