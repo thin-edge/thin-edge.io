@@ -6,6 +6,7 @@ use crate::flow::Message;
 use crate::flow::SourceTag;
 use crate::registry::FlowRegistryExt;
 use crate::runtime::MessageProcessor;
+use crate::stats::MqttStatsPublisher;
 use crate::InputMessage;
 use crate::Tick;
 use async_trait::async_trait;
@@ -48,6 +49,7 @@ pub struct FlowsMapper {
     pub(super) watched_commands: HashSet<String>,
     pub(super) processor: MessageProcessor<ConnectedFlowRegistry>,
     pub(super) next_dump: Instant,
+    pub(super) stats_publisher: MqttStatsPublisher,
 }
 
 #[async_trait]
@@ -248,7 +250,13 @@ impl FlowsMapper {
         let timestamp = SystemTime::now();
         if self.next_dump <= now {
             self.processor.dump_memory_stats().await;
-            self.processor.dump_processing_stats().await;
+            for record in self
+                .processor
+                .dump_processing_stats(&self.stats_publisher)
+                .await
+            {
+                self.mqtt_sender.send(record).await?;
+            }
             self.next_dump = now + STATS_DUMP_INTERVAL;
         }
         for messages in self.processor.on_interval(timestamp, now).await {
