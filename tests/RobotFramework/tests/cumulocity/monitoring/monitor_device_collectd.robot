@@ -22,6 +22,7 @@ Library             Cumulocity
 
 Suite Setup         Custom Setup
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 
 Test Tags           theme:monitoring    theme:c8y    theme:collectd
 

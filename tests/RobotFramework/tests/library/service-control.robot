@@ -3,6 +3,8 @@ Resource        ../../resources/common.resource
 Library         Cumulocity
 Library         ThinEdgeIO
 
+Test Timeout    5 minutes
+
 Test Tags       theme:testing
 
 

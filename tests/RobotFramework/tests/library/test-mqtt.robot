@@ -5,6 +5,7 @@ Library             ThinEdgeIO    adapter=docker
 
 Test Setup          Setup
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 
 Test Tags           theme:testing
 

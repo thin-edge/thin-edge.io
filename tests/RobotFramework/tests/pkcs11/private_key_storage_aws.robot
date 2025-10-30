@@ -12,6 +12,7 @@ Library             AWS
 
 Suite Setup         Custom Setup
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 
 Test Tags           adapter:docker    theme:cryptoki    theme:aws    test:on_demand
 

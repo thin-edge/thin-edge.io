@@ -24,6 +24,7 @@ Library             ThinEdgeIO
 Suite Setup         Custom Setup
 Suite Teardown      Get Suite Logs
 Test Teardown       Remove temporary test directories
+Test Timeout        5 minutes
 
 Test Tags           adapter:docker    theme:tedge-write
 

@@ -3,6 +3,7 @@ Resource        ../../../resources/common.resource
 Library         ThinEdgeIO
 
 Suite Setup     Suite Setup
+Test Timeout    5 minutes
 #
 # Testing against older mosquitto versions is difficult as the there is not
 # an easy way to installed older versions without changing the whole operating system

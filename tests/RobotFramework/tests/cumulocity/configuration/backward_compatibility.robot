@@ -4,6 +4,7 @@ Library             ThinEdgeIO
 Library             Cumulocity
 
 Test Teardown       Get Logs    name=${DEVICE_SN}
+Test Timeout        5 minutes
 
 Test Tags           theme:configuration    theme:installation
 

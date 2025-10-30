@@ -5,6 +5,7 @@ Library         ThinEdgeIO
 
 Suite Setup     Suite Setup
 Test Setup      Test Setup
+Test Timeout    5 minutes
 
 Test Tags       theme:c8y    theme:benchmarks    \#2326
 # Note: Don't get logs at the end of each test as the benchmarks cause too much noise

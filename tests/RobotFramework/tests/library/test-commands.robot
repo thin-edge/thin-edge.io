@@ -4,6 +4,7 @@ Library             Cumulocity
 Library             ThinEdgeIO    adapter=docker
 
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 
 Test Tags           theme:testing
 

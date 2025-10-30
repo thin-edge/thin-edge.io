@@ -5,6 +5,7 @@ Library             Cumulocity
 
 Test Setup          Custom Setup
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 
 Test Tags           theme:telemetry    theme:c8y    theme:alarms
 

@@ -7,6 +7,7 @@ Library             Cumulocity
 Suite Setup         Suite Setup
 Suite Teardown      Get Suite Logs    name=${PARENT_SN}
 Test Setup          Test Setup
+Test Timeout        5 minutes
 
 Test Tags           theme:configuration    theme:childdevices
 

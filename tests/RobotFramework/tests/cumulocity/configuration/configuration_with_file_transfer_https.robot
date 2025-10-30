@@ -12,6 +12,7 @@ Library             Cumulocity
 Suite Setup         Suite Setup
 Suite Teardown      Suite Teardown
 Test Setup          Test Setup
+Test Timeout        5 minutes
 
 Test Tags           theme:configuration    theme:childdevices
 

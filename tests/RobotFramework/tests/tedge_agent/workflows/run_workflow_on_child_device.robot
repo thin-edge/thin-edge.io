@@ -4,6 +4,7 @@ Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
 Suite Teardown      Get Suite Logs    name=${PARENT_SN}
+Test Timeout        5 minutes
 
 Test Tags           theme:tedge_agent
 

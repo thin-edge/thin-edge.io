@@ -5,6 +5,7 @@ Library             String
 Library             ThinEdgeIO
 
 Suite Teardown      Get Suite Logs
+Test Timeout        5 minutes
 
 Test Tags           theme:mqtt
 

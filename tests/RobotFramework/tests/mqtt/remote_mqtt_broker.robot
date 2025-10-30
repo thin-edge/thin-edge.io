@@ -5,6 +5,7 @@ Library             Cumulocity
 
 Test Setup          Custom Setup
 Test Teardown       Custom Teardown
+Test Timeout        5 minutes
 
 Test Tags           theme:mqtt    theme:c8y    adapter:docker
 

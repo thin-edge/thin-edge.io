@@ -5,6 +5,7 @@ Library             ThinEdgeIO
 Suite Setup         Custom Suite Setup
 Suite Teardown      Get Suite Logs
 Test Teardown       Custom Test Teardown
+Test Timeout        5 minutes
 
 Test Tags           theme:troubleshooting    theme:cli    theme:plugins
 

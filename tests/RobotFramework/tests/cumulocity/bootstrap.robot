@@ -5,6 +5,7 @@ Library             Cumulocity
 Library             ThinEdgeIO
 
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 
 
 *** Test Cases ***

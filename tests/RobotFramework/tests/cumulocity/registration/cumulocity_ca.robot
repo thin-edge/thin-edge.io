@@ -4,6 +4,8 @@ Library         String
 Library         Cumulocity
 Library         ThinEdgeIO
 
+Test Timeout    5 minutes
+
 Test Tags       theme:c8y
 
 

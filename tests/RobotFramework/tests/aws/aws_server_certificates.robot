@@ -7,6 +7,7 @@ Library             AWS
 
 Suite Setup         Custom Setup
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 
 Test Tags           theme:mqtt    theme:aws    test:on_demand
 

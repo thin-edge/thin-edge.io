@@ -6,6 +6,7 @@ Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
 Test Teardown       Get Logs    ${DEVICE_SN}
+Test Timeout        5 minutes
 
 Test Tags           theme:tedge_agent
 
