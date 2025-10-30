@@ -118,12 +118,18 @@ impl TryFrom<BTreeMap<String, JsonValue>> for Message {
 
     fn try_from(value: BTreeMap<String, JsonValue>) -> Result<Self, Self::Error> {
         let Some(JsonValue::String(topic)) = value.get("topic") else {
-            return Err(anyhow::anyhow!("Missing message topic").into());
+            return Err(anyhow::anyhow!("Message is missing the 'topic' property").into());
         };
         let payload = match value.get("payload") {
             Some(JsonValue::String(payload)) => payload.to_owned().into_bytes(),
             Some(JsonValue::Bytes(payload)) => payload.to_owned(),
-            _ => return Err(anyhow::anyhow!("Missing message payload").into()),
+            None => return Err(anyhow::anyhow!("Message is missing the 'payload' property").into()),
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Unexpected payload format. Expected either a string or an ArrayBuffer"
+                )
+                .into())
+            }
         };
         let timestamp = value
             .get("timestamp")
