@@ -6,6 +6,7 @@ use crate::flow::Message;
 use crate::flow::SourceTag;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
+use crate::stats::StatsPublisher;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -182,8 +183,8 @@ impl MessageProcessor {
         out_messages
     }
 
-    pub async fn dump_processing_stats(&self) {
-        self.stats.dump_processing_stats();
+    pub async fn dump_processing_stats<P: StatsPublisher>(&self, publisher: &P) -> Vec<P::Record> {
+        self.stats.dump_processing_stats(publisher)
     }
 
     pub async fn dump_memory_stats(&self) {

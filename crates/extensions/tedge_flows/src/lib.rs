@@ -12,6 +12,7 @@ mod stats;
 use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
 pub use crate::runtime::MessageProcessor;
+use crate::stats::MqttStatsPublisher;
 use camino::Utf8Path;
 use std::collections::HashSet;
 use std::convert::Infallible;
@@ -37,6 +38,7 @@ use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 use tracing::error;
+
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,6 +122,9 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
     fn build(self) -> FlowsMapper {
         let subscriptions = self.topics().clone();
         let watched_commands = HashSet::new();
+        let stats_publisher = MqttStatsPublisher {
+            topic_prefix: "te/device/main/service/tedge-flows/stats".to_string(),
+        };
         FlowsMapper {
             messages: self.message_box.build(),
             mqtt_sender: self.mqtt_sender,
@@ -128,6 +133,7 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
             watched_commands,
             processor: self.processor,
             next_dump: Instant::now() + STATS_DUMP_INTERVAL,
+            stats_publisher,
         }
     }
 }
