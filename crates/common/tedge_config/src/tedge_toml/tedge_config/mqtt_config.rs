@@ -9,15 +9,19 @@ use crate::models::Cryptoki;
 use crate::TEdgeConfig;
 use anyhow::Context;
 use camino::Utf8PathBuf;
+use certificate::parse_root_certificate;
 use certificate::parse_root_certificate::SecretString;
 use certificate::CertificateError;
 use tedge_config_macros::all_or_nothing;
+use tracing::log::debug;
 
 use super::CloudConfig;
 use super::TEdgeConfigReaderDevice;
 
 use certificate::parse_root_certificate::CryptokiConfig;
 use certificate::parse_root_certificate::CryptokiConfigDirect;
+use mqtt_channel::read_password;
+use mqtt_channel::AuthenticationConfig;
 
 /// An MQTT authentication configuration for connecting to the remote cloud broker.
 #[derive(Debug, Clone, Default)]
@@ -74,39 +78,61 @@ impl MqttAuthConfigCloudBroker {
 ///
 /// If ca_dir and ca_file are both not set, then server authentication isn't used.
 #[derive(Debug, Clone, Default)]
-pub struct MqttAuthConfig {
+pub struct TEdgeMqttClientAuthConfig {
     pub ca_dir: Option<Utf8PathBuf>,
     pub ca_file: Option<Utf8PathBuf>,
-    pub client: Option<MqttAuthClientConfig>,
+    pub client_cert: Option<MqttAuthClientCertConfig>,
+    pub username: Option<String>,
+    pub password_file: Option<Utf8PathBuf>,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct MqttAuthClientConfig {
+pub struct MqttAuthClientCertConfig {
     pub cert_file: Utf8PathBuf,
     pub key_file: Utf8PathBuf,
 }
 
-impl MqttAuthConfig {
-    pub fn to_rustls_client_config(self) -> anyhow::Result<Option<rustls::ClientConfig>> {
-        let Some(ca) = self.ca_dir.or(self.ca_file) else {
-            return Ok(None);
-        };
+impl TryFrom<TEdgeMqttClientAuthConfig> for mqtt_channel::AuthenticationConfig {
+    type Error = anyhow::Error;
 
-        let Some(MqttAuthClientConfig {
-            cert_file,
-            key_file,
-        }) = self.client
-        else {
-            let client_config =
-                certificate::parse_root_certificate::create_tls_config_without_client_cert(ca)?;
-            return Ok(Some(client_config));
-        };
+    fn try_from(config: TEdgeMqttClientAuthConfig) -> Result<Self, Self::Error> {
+        let mut authentication_config = AuthenticationConfig::default();
+        // Adds all certificates present in `ca_file` file to the trust store.
+        if let Some(ca_file) = config.ca_file {
+            debug!(target: "MQTT", "Using CA certificate file: {}", ca_file);
+            let cert_store = &mut authentication_config.get_cert_store_mut();
+            parse_root_certificate::add_certs_from_file(cert_store, ca_file)?;
+        }
 
-        let client_config =
-            certificate::parse_root_certificate::create_tls_config(ca, key_file, cert_file)
-                .context("Failed to create TLS client config")?;
+        // Adds all certificate from all files in the directory `ca_dir` to the trust store.
+        if let Some(ca_dir) = config.ca_dir {
+            debug!(target: "MQTT", "Using CA certificate directory: {}", ca_dir);
+            let cert_store = &mut authentication_config.get_cert_store_mut();
+            parse_root_certificate::add_certs_from_directory(cert_store, ca_dir)?;
+        }
 
-        Ok(Some(client_config))
+        // Provides client certificate and private key for authentication.
+        if let Some(client_cert) = config.client_cert {
+            debug!(target: "MQTT", "Using client certificate file: {}", client_cert.cert_file);
+            debug!(target: "MQTT", "Using client private key file: {}", client_cert.key_file);
+            authentication_config.set_cert_config(client_cert.cert_file, client_cert.key_file)?;
+        }
+
+        // Provides client username/password for authentication.
+        if let Some(username) = config.username {
+            debug!(target: "MQTT", "Using client username: {username}");
+            authentication_config.set_username(username);
+
+            // Password can be set only when username is set.
+            if let Some(password_file) = config.password_file {
+                debug!(target: "MQTT", "Using client password file: {}", password_file);
+                if let Ok(password) = read_password(&password_file) {
+                    authentication_config.set_password(password);
+                }
+            }
+        }
+
+        Ok(authentication_config)
     }
 }
 
@@ -132,23 +158,8 @@ impl TEdgeConfig {
             .with_host(host)
             .with_port(port);
 
-        // If these options are not set, just don't use them
-        // Configure certificate authentication
-        if let Some(ca_file) = self.mqtt.client.auth.ca_file.or_none() {
-            mqtt_config.with_cafile(ca_file)?;
-        }
-        if let Some(ca_path) = self.mqtt.client.auth.ca_dir.or_none() {
-            mqtt_config.with_cadir(ca_path)?;
-        }
-
-        // Both these options have to either be set or not set, so we keep
-        // original error to rethrow when only one is set
-        if let Ok(Some((client_cert, client_key))) = all_or_nothing((
-            self.mqtt.client.auth.cert_file.as_ref(),
-            self.mqtt.client.auth.key_file.as_ref(),
-        )) {
-            mqtt_config.with_client_auth(client_cert, client_key)?;
-        }
+        let mqtt_client_auth_config = self.mqtt_client_auth_config();
+        mqtt_config.with_client_auth(mqtt_client_auth_config.try_into()?)?;
 
         Ok(mqtt_config)
     }
@@ -178,8 +189,8 @@ impl TEdgeConfig {
     }
 
     /// Returns an authentication configuration for an MQTT client that will connect to the local MQTT broker.
-    pub fn mqtt_client_auth_config(&self) -> MqttAuthConfig {
-        let mut client_auth = MqttAuthConfig {
+    pub fn mqtt_client_auth_config(&self) -> TEdgeMqttClientAuthConfig {
+        let mut client_auth = TEdgeMqttClientAuthConfig {
             ca_dir: self
                 .mqtt
                 .client
@@ -196,18 +207,29 @@ impl TEdgeConfig {
                 .or_none()
                 .cloned()
                 .map(Utf8PathBuf::from),
-            client: None,
+            client_cert: None,
+            username: self.mqtt.client.auth.username.or_none().cloned(),
+            password_file: self
+                .mqtt
+                .client
+                .auth
+                .password_file
+                .or_none()
+                .cloned()
+                .map(Utf8PathBuf::from),
         };
+
         // Both these options have to either be set or not set
         if let Ok(Some((client_cert, client_key))) = all_or_nothing((
             self.mqtt.client.auth.cert_file.as_ref(),
             self.mqtt.client.auth.key_file.as_ref(),
         )) {
-            client_auth.client = Some(MqttAuthClientConfig {
+            client_auth.client_cert = Some(MqttAuthClientCertConfig {
                 cert_file: client_cert.clone().into(),
                 key_file: client_key.clone().into(),
             })
         }
+
         client_auth
     }
 }

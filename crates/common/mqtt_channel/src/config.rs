@@ -2,12 +2,14 @@ use crate::MqttMessage;
 use crate::TopicFilter;
 use certificate::parse_root_certificate;
 use certificate::CertificateError;
-use log::debug;
 use rumqttc::tokio_rustls::rustls;
 use rumqttc::tokio_rustls::rustls::pki_types::CertificateDer;
 use rumqttc::LastWill;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
@@ -74,7 +76,7 @@ pub struct BrokerConfig {
     /// Default: 1883
     pub port: u16,
 
-    /// Certificate authentication configuration
+    /// Authentication configuration
     pub authentication: Option<AuthenticationConfig>,
 }
 
@@ -88,35 +90,114 @@ pub struct BrokerConfig {
 /// 3. server and client authentication - clients will verify MQTT broker
 ///    certificate and broker will verify client certificates
 ///
+/// In addition, supporting username/password authentication with any combinations.
+///
 /// [mosquitto]: https://mosquitto.org/man/mosquitto-conf-5.html#authentication
 #[derive(Debug, Clone)]
 pub struct AuthenticationConfig {
     /// Trusted root certificate store used to verify broker certificate
     cert_store: rustls::RootCertStore,
 
-    /// Client authentication configuration
-    client_auth: Option<ClientAuthConfig>,
+    /// Client certificate and key
+    cert_config: Option<ClientAuthCertConfig>,
+
+    /// Client username
+    username: Option<String>,
+
+    /// Client password: it can be set only when username is set due to the MQTT specification.
+    /// Therefore, the value can be read only via API.
+    password: Option<Zeroizing<String>>,
 }
 
 impl Default for AuthenticationConfig {
     fn default() -> Self {
         AuthenticationConfig {
             cert_store: rustls::RootCertStore::empty(),
-            client_auth: None,
+            cert_config: None,
+            username: None,
+            password: None,
+        }
+    }
+}
+
+impl AuthenticationConfig {
+    pub fn get_cert_store_mut(&mut self) -> &mut rustls::RootCertStore {
+        &mut self.cert_store
+    }
+
+    pub fn set_cert_config(
+        &mut self,
+        cert_path: impl AsRef<Path>,
+        key_path: impl AsRef<Path>,
+    ) -> Result<(), CertificateError> {
+        let cert_config = ClientAuthCertConfig::new(cert_path.as_ref(), key_path.as_ref())?;
+        self.cert_config = Some(cert_config);
+        Ok(())
+    }
+
+    pub fn set_username(&mut self, username: String) {
+        self.username = Some(username);
+    }
+
+    pub fn set_password(&mut self, password: Zeroizing<String>) {
+        self.password = Some(password);
+    }
+
+    pub fn to_rustls_client_config(&self) -> Result<Option<rustls::ClientConfig>, rustls::Error> {
+        if self.cert_store.is_empty() {
+            return Ok(None);
+        }
+
+        let tls_config =
+            rustls::ClientConfig::builder().with_root_certificates(self.cert_store.clone());
+
+        let tls_config = match &self.cert_config {
+            Some(cert_config) => tls_config.with_client_auth_cert(
+                cert_config.cert_chain.clone(),
+                cert_config.key.deref().0.clone_key(),
+            )?,
+            None => tls_config.with_no_client_auth(),
+        };
+        Ok(Some(tls_config))
+    }
+
+    /// When the password is empty, this returns an empty string.
+    /// This is because `rumqttc::MqttOptions::set_credentials()` always requires a value for password.
+    pub fn get_credentials(&self) -> Option<(String, Zeroizing<String>)> {
+        match &self.username {
+            Some(username) => {
+                let password = self.password.clone().unwrap_or_default();
+                Some((username.to_string(), password))
+            }
+            None => None,
         }
     }
 }
 
 #[derive(Clone)]
-struct ClientAuthConfig {
+struct ClientAuthCertConfig {
     cert_chain: Vec<CertificateDer<'static>>,
     key: Arc<Zeroizing<PrivateKey>>,
 }
 
-impl Debug for ClientAuthConfig {
+impl ClientAuthCertConfig {
+    pub fn new(
+        cert_path: impl AsRef<Path>,
+        key_path: impl AsRef<Path>,
+    ) -> Result<Self, CertificateError> {
+        let cert_chain = parse_root_certificate::read_cert_chain(cert_path)?;
+        let key = parse_root_certificate::read_pvt_key(key_path)?;
+        Ok(ClientAuthCertConfig {
+            cert_chain,
+            key: Arc::new(Zeroizing::new(PrivateKey(key))),
+        })
+    }
+}
+
+impl Debug for ClientAuthCertConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ClientAuthConfig")
-            .field("cert_chain", &self.cert_chain)
+        f.debug_struct("ClientAuthCertConfig")
+            .field("cert_chain", &self)
             .finish()
     }
 }
@@ -270,58 +351,11 @@ impl Config {
         }
     }
 
-    /// Adds all certificates present in `ca_file` file to the trust store.
-    /// Enables server authentication.
-    pub fn with_cafile(
+    pub fn with_client_auth(
         &mut self,
-        ca_file: impl AsRef<Path>,
+        config: AuthenticationConfig,
     ) -> Result<&mut Self, certificate::CertificateError> {
-        debug!(target: "MQTT", "Using CA certificate: {}", ca_file.as_ref().display());
-        let authentication_config = self.broker.authentication.get_or_insert(Default::default());
-        let cert_store = &mut authentication_config.cert_store;
-
-        parse_root_certificate::add_certs_from_file(cert_store, ca_file)?;
-
-        Ok(self)
-    }
-
-    /// Adds all certificate from all files in the directory `ca_dir` to the
-    /// trust store. Enables server authentication.
-    pub fn with_cadir(
-        &mut self,
-        ca_dir: impl AsRef<Path>,
-    ) -> Result<&mut Self, certificate::CertificateError> {
-        debug!(target: "MQTT", "Using CA directory: {}", ca_dir.as_ref().display());
-        let authentication_config = self.broker.authentication.get_or_insert(Default::default());
-        let cert_store = &mut authentication_config.cert_store;
-
-        parse_root_certificate::add_certs_from_directory(cert_store, ca_dir)?;
-
-        Ok(self)
-    }
-
-    /// Provide client certificate and private key for authentication. If server
-    /// authentication was not enabled by previously calling
-    /// [`Config::with_cafile`] or [`Config::with_cadir`], this method also
-    /// enables it but initializes an empty root cert store.
-    pub fn with_client_auth<P: AsRef<Path>>(
-        &mut self,
-        cert_file: P,
-        key_file: P,
-    ) -> Result<&mut Self, CertificateError> {
-        debug!(target: "MQTT", "Using client certificate: {}", cert_file.as_ref().display());
-        debug!(target: "MQTT", "Using client private key: {}", key_file.as_ref().display());
-        let cert_chain = parse_root_certificate::read_cert_chain(cert_file)?;
-        let key = parse_root_certificate::read_pvt_key(key_file)?;
-
-        let client_auth_config = ClientAuthConfig {
-            cert_chain,
-            key: Arc::new(Zeroizing::new(PrivateKey(key))),
-        };
-
-        let authentication_config = self.broker.authentication.get_or_insert(Default::default());
-        authentication_config.client_auth = Some(client_auth_config);
-
+        self.broker.authentication.get_or_insert(config);
         Ok(self)
     }
 
@@ -347,18 +381,12 @@ impl Config {
         }
 
         if let Some(authentication_config) = &broker_config.authentication {
-            let tls_config = rustls::ClientConfig::builder()
-                .with_root_certificates(authentication_config.cert_store.clone());
-
-            let tls_config = match authentication_config.client_auth.clone() {
-                Some(client_auth_config) => tls_config.with_client_auth_cert(
-                    client_auth_config.cert_chain,
-                    client_auth_config.key.deref().0.clone_key(),
-                )?,
-                None => tls_config.with_no_client_auth(),
-            };
-
-            mqtt_options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
+            if let Some((username, password)) = authentication_config.get_credentials() {
+                mqtt_options.set_credentials(username, password.clone().to_string());
+            }
+            if let Some(tls_config) = authentication_config.to_rustls_client_config()? {
+                mqtt_options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
+            }
         }
 
         mqtt_options.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
@@ -374,5 +402,23 @@ impl Config {
         }
 
         Ok(mqtt_options)
+    }
+}
+
+/// Read the first line of the given file and return it.
+pub fn read_password(path: impl AsRef<Path>) -> Result<Zeroizing<String>, CertificateError> {
+    let f = File::open(&path).map_err(|error| CertificateError::IoError {
+        error,
+        path: path.as_ref().to_owned(),
+    })?;
+    let reader = BufReader::new(f);
+
+    match reader.lines().next() {
+        Some(Ok(password)) => Ok(Zeroizing::new(password)),
+        Some(Err(error)) => Err(CertificateError::IoError {
+            error,
+            path: path.as_ref().to_owned(),
+        }),
+        None => Ok(Zeroizing::new("".to_string())),
     }
 }

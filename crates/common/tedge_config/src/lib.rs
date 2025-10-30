@@ -11,6 +11,7 @@ pub use tedge_toml::models;
 pub use tedge_toml::tedge_config::TEdgeConfig;
 pub use tedge_toml::tedge_config::TEdgeConfigDto;
 pub use tedge_toml::tedge_config::TEdgeConfigReader;
+pub use tedge_toml::tedge_config::TEdgeMqttClientAuthConfig;
 pub use tedge_toml::tedge_config_location::*;
 
 pub use camino::Utf8Path as Path;

@@ -5,11 +5,17 @@ description: Setting up TLS for secure local MQTT communication
 ---
 
 %%te%% supports certificate-based authentication when communicating with
-an MQTT broker. Three levels of security are supported:
+an MQTT broker. Four levels of security are supported:
 
 1. No authentication (default)
 2. Server authentication
 3. Server + client authentication
+4. Username and password authentication
+
+:::note
+Username and password authentication can be used as the sole authentication method, or it can be layered on top of server or server + client authentication for enhanced security.
+See [here](#username-password-authentication) for details.
+:::
 
 ## MQTT Configuration
 
@@ -225,6 +231,42 @@ openssl x509 -req \
     -out client.crt \
     -days 365
 ```
+
+## Username/Password authentication {#username-password-authentication}
+
+When a local MQTT broker requires username/password authentication,
+the %%te%% components need to provide this username and password.
+
+Configure the username and the path to the password file using `tedge config`:
+
+```sh
+sudo tedge config set mqtt.client.auth.username "USERNAME"
+sudo tedge config set mqtt.client.auth.password_file "PATH_TO_PASSWORD_FILE"
+```
+
+In the password file, write the password on the first line. The second line and any subsequent lines will be ignored.
+
+```sh title="file: PATH_TO_PASSWORD_FILE"
+YOUR_PASSWORD
+```
+
+For security reasons, we recommend changing the password file's ownership to `tedge:tedge`
+and setting the permissions to `600`.
+This ensures that only %%te%% services can read the password.
+
+```sh
+sudo chown tedge:tedge "PATH_TO_PASSWORD_FILE"
+sudo chmod 600 "PATH_TO_PASSWORD_FILE"
+```
+
+In addition, if TLS is enabled on the broker, configure the secure port (8883 is the standard port) and provide the path to the trusted CA certificate file using `tedge config`:
+```sh
+sudo tedge config set mqtt.client.port 8883
+sudo tedge config set mqtt.client.auth.ca_file "PATH_TO_CA_CERTIFICATE"
+```
+
+If any %%te%% services (e.g. tedge-agent) are already running, they must be restarted for the changes to take effect.
+
 
 ## Next steps
 

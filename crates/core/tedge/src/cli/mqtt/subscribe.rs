@@ -1,13 +1,12 @@
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use base64::prelude::*;
-use camino::Utf8PathBuf;
 use mqtt_channel::QoS;
 use mqtt_channel::StreamExt;
 use mqtt_channel::TopicFilter;
 use std::time::Duration;
-use tedge_config::tedge_toml::MqttAuthClientConfig;
 use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeMqttClientAuthConfig;
 use tokio::io::AsyncWriteExt;
 use tracing::info;
 
@@ -22,9 +21,7 @@ pub struct MqttSubscribeCommand {
     pub hide_topic: bool,
     pub base64: bool,
     pub client_id: String,
-    pub ca_file: Option<Utf8PathBuf>,
-    pub ca_dir: Option<Utf8PathBuf>,
-    pub client_auth_config: Option<MqttAuthClientConfig>,
+    pub auth_config: TEdgeMqttClientAuthConfig,
     pub duration: Option<Duration>,
     pub count: Option<u32>,
     pub retained_only: bool,
@@ -60,15 +57,7 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
         .with_max_packet_size(MAX_PACKET_SIZE)
         .with_queue_capacity(DEFAULT_QUEUE_CAPACITY);
 
-    if let Some(ca_file) = &cmd.ca_file {
-        config.with_cafile(ca_file)?;
-    }
-    if let Some(ca_dir) = &cmd.ca_dir {
-        config.with_cadir(ca_dir)?;
-    }
-    if let Some(client_auth) = cmd.client_auth_config.as_ref() {
-        config.with_client_auth(&client_auth.cert_file, &client_auth.key_file)?;
-    }
+    config.with_client_auth(cmd.auth_config.clone().try_into()?)?;
 
     let mut mqtt = mqtt_channel::Connection::new(&config).await?;
     let mut signals = tedge_utils::signals::TermSignals::new(cmd.duration);
