@@ -18,6 +18,7 @@ pub use crate::flow::*;
 pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
 pub use crate::runtime::MessageProcessor;
+use crate::stats::MqttStatsPublisher;
 use camino::Utf8Path;
 use std::collections::HashSet;
 use std::convert::Infallible;
@@ -131,6 +132,9 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
     fn build(self) -> FlowsMapper {
         let subscriptions = self.topics().clone();
         let watched_commands = HashSet::new();
+        let stats_publisher = MqttStatsPublisher {
+            topic_prefix: "te/device/main/service/tedge-flows/stats".to_string(),
+        };
         FlowsMapper {
             messages: self.message_box.build(),
             mqtt_sender: self.mqtt_sender,
@@ -139,6 +143,7 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
             watched_commands,
             processor: self.processor,
             next_dump: Instant::now() + STATS_DUMP_INTERVAL,
+            stats_publisher,
         }
     }
 }
