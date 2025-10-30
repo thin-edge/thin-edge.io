@@ -240,6 +240,7 @@ impl TryFrom<super::parse::FieldOrGroup> for FieldOrGroup {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum ConfigurableField {
     ReadOnly(ReadOnlyField),
     ReadWrite(ReadWriteField),

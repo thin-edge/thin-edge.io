@@ -611,7 +611,7 @@ fn generate_conversions(
                     field,
                     &parents,
                     root_fields,
-                    &root_dto_name,
+                    root_dto_name,
                     Vec::new(),
                 )?;
                 field_conversions.push(quote_spanned!(name.span()=> #name: #value));
