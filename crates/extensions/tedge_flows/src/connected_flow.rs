@@ -94,21 +94,9 @@ impl ConnectedFlow {
 
 fn streaming_source(flow_name: String, input: FlowInput) -> Option<Box<dyn StreamingSource>> {
     match input {
-        FlowInput::PollFile {
-            topic: _,
-            path,
-            interval,
-        } if interval.is_zero() => Some(Box::new(FileStreamingSource::new(flow_name, path))),
-
         FlowInput::StreamFile { topic: _, path } => {
             Some(Box::new(FileStreamingSource::new(flow_name, path)))
         }
-
-        FlowInput::PollCommand {
-            topic: _,
-            command,
-            interval,
-        } if interval.is_zero() => Some(Box::new(CommandStreamingSource::new(flow_name, command))),
 
         FlowInput::StreamCommand { topic: _, command } => {
             Some(Box::new(CommandStreamingSource::new(flow_name, command)))
@@ -124,13 +112,13 @@ fn polling_source(input: FlowInput) -> Option<Box<dyn PollingSource>> {
             topic,
             path,
             interval,
-        } if !interval.is_zero() => Some(Box::new(FilePollingSource::new(topic, path, interval))),
+        } => Some(Box::new(FilePollingSource::new(topic, path, interval))),
 
         FlowInput::PollCommand {
             topic,
             command,
             interval,
-        } if !interval.is_zero() => Some(Box::new(CommandPollingSource::new(
+        } => Some(Box::new(CommandPollingSource::new(
             topic, command, interval,
         ))),
 
