@@ -2,26 +2,14 @@ use crate::flow::DateTime;
 use crate::flow::Message;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
-use std::fmt::Display;
 use std::time::Duration;
-use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 
-pub trait FlowSource: Display + StreamingSource + PollingSource {}
-impl<T: Display + StreamingSource + PollingSource> FlowSource for T {}
-
 /// Trait for input sources that stream messages out of continuously running processes
-pub trait StreamingSource {
-    /// Topic to be used when messages are not received from MQTT
-    fn enforced_topic(&self) -> Option<&str> {
-        None
-    }
-
+pub trait StreamingSource: Send + Sync {
     /// Process watched by this source
-    fn watch_request(&self) -> Option<WatchRequest> {
-        None
-    }
+    fn watch_request(&self) -> Option<WatchRequest>;
 }
 
 /// Trait for input sources that can be polled for messages
@@ -47,52 +35,15 @@ pub enum PollingSourceError {
     CannotPoll { resource: String, error: String },
 }
 
-pub struct MqttFlowInput {
-    pub topics: TopicFilter,
-}
-
-impl Display for MqttFlowInput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MQTT topics: {:?}", self.topics)
-    }
-}
-
-#[async_trait]
-impl PollingSource for MqttFlowInput {
-    async fn poll(&mut self, _timestamp: DateTime) -> Result<Vec<Message>, PollingSourceError> {
-        Ok(vec![])
-    }
-
-    fn next_deadline(&self) -> Option<Instant> {
-        None
-    }
-
-    fn is_ready(&self, _now: Instant) -> bool {
-        false
-    }
-
-    fn update_after_poll(&mut self, _now: Instant) {}
-}
-
-impl StreamingSource for MqttFlowInput {}
-
-pub struct CommandFlowInput {
-    flow: String,
+pub struct CommandPollingSource {
     topic: String,
     command: String,
     poll: PollInterval,
 }
 
-impl Display for CommandFlowInput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Command output: {}", self.command)
-    }
-}
-
-impl CommandFlowInput {
-    pub fn new(flow: String, topic: String, command: String, interval: Option<Duration>) -> Self {
-        CommandFlowInput {
-            flow,
+impl CommandPollingSource {
+    pub fn new(topic: String, command: String, interval: Duration) -> Self {
+        CommandPollingSource {
             topic,
             command,
             poll: PollInterval::new(interval),
@@ -100,9 +51,8 @@ impl CommandFlowInput {
     }
 }
 
-/// A CommandFlowInput works as a polling source when a polling interval as been set.
 #[async_trait]
-impl PollingSource for CommandFlowInput {
+impl PollingSource for CommandPollingSource {
     async fn poll(&mut self, timestamp: DateTime) -> Result<Vec<Message>, PollingSourceError> {
         let output = tedge_watch_ext::command_output(&self.command)
             .await
@@ -119,7 +69,7 @@ impl PollingSource for CommandFlowInput {
     }
 
     fn next_deadline(&self) -> Option<Instant> {
-        self.poll.next_deadline()
+        self.poll.next_deadline
     }
 
     fn is_ready(&self, now: Instant) -> bool {
@@ -131,40 +81,35 @@ impl PollingSource for CommandFlowInput {
     }
 }
 
-impl StreamingSource for CommandFlowInput {
-    fn enforced_topic(&self) -> Option<&str> {
-        Some(&self.topic)
-    }
+pub struct CommandStreamingSource {
+    flow: String,
+    command: String,
+}
 
-    fn watch_request(&self) -> Option<WatchRequest> {
-        if self.poll.is_polling() {
-            None
-        } else {
-            Some(WatchRequest::WatchCommand {
-                topic: self.flow.clone(),
-                command: self.command.clone(),
-            })
-        }
+impl CommandStreamingSource {
+    pub fn new(flow: String, command: String) -> Self {
+        CommandStreamingSource { flow, command }
     }
 }
 
-pub struct FileFlowInput {
-    flow: String,
+impl StreamingSource for CommandStreamingSource {
+    fn watch_request(&self) -> Option<WatchRequest> {
+        Some(WatchRequest::WatchCommand {
+            topic: self.flow.clone(),
+            command: self.command.clone(),
+        })
+    }
+}
+
+pub struct FilePollingSource {
     topic: String,
     path: Utf8PathBuf,
     poll: PollInterval,
 }
 
-impl Display for FileFlowInput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "File content: {}", self.path)
-    }
-}
-
-impl FileFlowInput {
-    pub fn new(flow: String, topic: String, path: Utf8PathBuf, interval: Option<Duration>) -> Self {
-        FileFlowInput {
-            flow,
+impl FilePollingSource {
+    pub fn new(topic: String, path: Utf8PathBuf, interval: Duration) -> Self {
+        FilePollingSource {
             topic,
             path,
             poll: PollInterval::new(interval),
@@ -173,7 +118,7 @@ impl FileFlowInput {
 }
 
 #[async_trait]
-impl PollingSource for FileFlowInput {
+impl PollingSource for FilePollingSource {
     async fn poll(&mut self, timestamp: DateTime) -> Result<Vec<Message>, PollingSourceError> {
         let output = tokio::fs::read_to_string(&self.path).await.map_err(|err| {
             PollingSourceError::CannotPoll {
@@ -189,7 +134,7 @@ impl PollingSource for FileFlowInput {
     }
 
     fn next_deadline(&self) -> Option<Instant> {
-        self.poll.next_deadline()
+        self.poll.next_deadline
     }
 
     fn is_ready(&self, now: Instant) -> bool {
@@ -201,57 +146,48 @@ impl PollingSource for FileFlowInput {
     }
 }
 
-impl StreamingSource for FileFlowInput {
-    fn enforced_topic(&self) -> Option<&str> {
-        Some(&self.topic)
-    }
+pub struct FileStreamingSource {
+    flow: String,
+    path: Utf8PathBuf,
+}
 
+impl FileStreamingSource {
+    pub fn new(flow: String, path: Utf8PathBuf) -> Self {
+        FileStreamingSource { flow, path }
+    }
+}
+
+impl StreamingSource for FileStreamingSource {
     fn watch_request(&self) -> Option<WatchRequest> {
-        if self.poll.is_polling() {
-            None
-        } else {
-            Some(WatchRequest::WatchFile {
-                topic: self.flow.clone(),
-                file: self.path.clone(),
-            })
-        }
+        Some(WatchRequest::WatchFile {
+            topic: self.flow.clone(),
+            file: self.path.clone(),
+        })
     }
 }
 
 struct PollInterval {
-    polling_interval: Option<Duration>,
+    polling_interval: Duration,
     next_deadline: Option<Instant>,
 }
 
 impl PollInterval {
-    fn new(interval: Option<Duration>) -> Self {
-        let polling_interval = match interval {
-            Some(interval) if !interval.is_zero() => Some(interval),
-            _ => None,
-        };
+    fn new(polling_interval: Duration) -> Self {
+        assert!(
+            !polling_interval.is_zero(),
+            "A polling interval must be non-zero"
+        );
         PollInterval {
             polling_interval,
             next_deadline: None,
         }
     }
 
-    fn is_polling(&self) -> bool {
-        self.polling_interval.is_some()
-    }
-
-    fn next_deadline(&self) -> Option<Instant> {
-        self.polling_interval?;
-        self.next_deadline
-    }
-
     fn is_ready(&self, now: Instant) -> bool {
-        self.polling_interval.is_some()
-            && (self.next_deadline.is_none() || self.next_deadline.unwrap() < now)
+        self.next_deadline.is_none() || self.next_deadline.unwrap() < now
     }
 
     fn update_after_poll(&mut self, now: Instant) {
-        if let Some(interval) = self.polling_interval {
-            self.next_deadline = Some(now + interval);
-        }
+        self.next_deadline = Some(now + self.polling_interval);
     }
 }
