@@ -606,7 +606,14 @@ fn generate_conversions(
         match item {
             FieldOrGroup::Field(field) => {
                 let name = field.ident();
-                let value = reader_value_for_field(ctx, field, &parents, root_fields, &root_dto_name, Vec::new())?;
+                let value = reader_value_for_field(
+                    ctx,
+                    field,
+                    &parents,
+                    root_fields,
+                    &root_dto_name,
+                    Vec::new(),
+                )?;
                 field_conversions.push(quote_spanned!(name.span()=> #name: #value));
             }
             FieldOrGroup::Group(group) if !group.reader.skip => {

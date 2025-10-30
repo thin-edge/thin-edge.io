@@ -138,6 +138,7 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
     let readable_keys_iter = key_iterators(
         &ctx.reader_type_name,
         &gen_ctx.readable_key_name,
+        &parse_quote_spanned!(ctx.reader_type_name.span()=> readable_keys),
         &reader_paths_vec,
         "",
         &[],
@@ -145,6 +146,7 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
     let readonly_keys_iter = key_iterators(
         &ctx.reader_type_name,
         &gen_ctx.readonly_key_name,
+        &parse_quote_spanned!(ctx.reader_type_name.span()=> readonly_keys),
         &reader_paths_vec
             .iter()
             .copied()
@@ -156,6 +158,7 @@ pub fn generate_writable_keys(ctx: &CodegenContext, items: &[FieldOrGroup]) -> T
     let writable_keys_iter = key_iterators(
         &ctx.reader_type_name,
         &gen_ctx.writable_key_name,
+        &parse_quote_spanned!(ctx.reader_type_name.span()=> writable_keys),
         &reader_paths_vec
             .iter()
             .copied()
@@ -777,15 +780,11 @@ fn generate_fromstr_writable(
 fn key_iterators(
     reader_ty: &syn::Ident,
     type_name: &syn::Ident,
+    function_name: &syn::Ident,
     fields: &[&[&FieldOrGroup]],
     prefix: &str,
     args: &[syn::Ident],
 ) -> TokenStream {
-    let mut function_name = type_name.to_string().to_snek_case();
-    // Pluralise the name
-    function_name += "s";
-    let function_name = syn::Ident::new(&function_name, type_name.span());
-
     let mut stmts: Vec<syn::Stmt> = Vec::new();
     let mut exprs: VecDeque<syn::Expr> = VecDeque::new();
     let mut complete_fields: Vec<syn::Expr> = Vec::new();
@@ -840,6 +839,7 @@ fn key_iterators(
                 global.push(key_iterators(
                     &sub_type_name,
                     type_name,
+                    function_name,
                     &remaining_fields,
                     &prefix,
                     &args,
@@ -854,6 +854,7 @@ fn key_iterators(
                 global.push(key_iterators(
                     &sub_type_name,
                     type_name,
+                    function_name,
                     &remaining_fields,
                     &prefix,
                     args,
@@ -865,23 +866,53 @@ fn key_iterators(
             }
             Some(FieldOrGroup::Field(f)) => {
                 let ident = f.ident();
-                let field_name = syn::Ident::new(
-                    &format!(
-                        "{}{}",
-                        prefix,
-                        f.rename()
-                            .map(<_>::to_upper_camel_case)
-                            .unwrap_or_else(|| ident.to_string().to_upper_camel_case())
-                    ),
-                    ident.span(),
+                let field_name = format_ident!(
+                    "{}{}",
+                    prefix,
+                    f.name().to_upper_camel_case(),
+                    span = ident.span(),
                 );
-                let args = match args.len() {
+                let arg_tokens = match args.len() {
                     0 => TokenStream::new(),
                     _ => {
                         quote!((#(#args.clone()),*))
                     }
                 };
-                complete_fields.push(parse_quote!(#type_name::#field_name #args))
+                complete_fields
+                    .push(parse_quote_spanned!(ident.span()=> #type_name::#field_name #arg_tokens));
+                if let Some(entries) = f.sub_field_entries() {
+                    exprs.push_back(parse_quote_spanned!(ident.span()=> {
+                        #(let #args = #args.clone();)*
+                        self.#ident.or_none().into_iter().flat_map(move |#ident| #ident.#function_name(#(#args.clone()),*))
+                    }));
+                    let arms = entries.iter().map::<syn::Arm, _>(|entry|
+                        match entry {
+                            EnumEntry::NameAndFields(name, _inner) => {
+                                let field_name = format_ident!("{field_name}{name}");
+                                let sub_field_name = name.to_string().to_snek_case();
+                                let sub_field_name = format_ident!("{}", sub_field_name, span = name.span());
+                                parse_quote!(Self::#name { #sub_field_name } => #sub_field_name.
+                                    #function_name()
+                                    .map(|inner_key| #type_name::#field_name(#(#args.clone(),)* inner_key))
+                                    .collect(),
+                                )
+                            }
+                            EnumEntry::NameOnly(name) => {
+                                parse_quote!(Self::#name => Vec::new(),)
+                            }
+                        }
+                    );
+                    let impl_for = f.reader_ty();
+                    global.push(quote! {
+                        impl #impl_for {
+                            pub fn #function_name(&self #(, #args: Option<String>)*) -> Vec<#type_name> {
+                                match self {
+                                    #(#arms)*
+                                }
+                            }
+                        }
+                    })
+                }
             }
             None => panic!("Expected FieldOrGroup list te be nonempty"),
         };
@@ -898,13 +929,13 @@ fn key_iterators(
     }
     let exprs = exprs.into_iter().enumerate().map(|(i, expr)| {
         if i > 0 {
-            parse_quote!(chain(#expr))
+            parse_quote_spanned!(function_name.span()=> chain(#expr))
         } else {
             expr
         }
     });
 
-    quote! {
+    quote_spanned! {function_name.span()=>
         impl #reader_ty {
             pub fn #function_name(&self #(, #args: Option<String>)*) -> impl Iterator<Item = #type_name> + '_ {
                 #(#stmts)*
@@ -2033,6 +2064,7 @@ mod tests {
         let generated = key_iterators(
             &parse_quote!(TEdgeConfigReader),
             &parse_quote!(ReadableKey),
+            &parse_quote!(readable_keys),
             &paths.collect::<Vec<_>>(),
             "",
             &[],
@@ -2099,6 +2131,7 @@ mod tests {
         let generated = key_iterators(
             &parse_quote!(TEdgeConfigReader),
             &parse_quote!(ReadableKey),
+            &parse_quote!(readable_keys),
             &paths.collect::<Vec<_>>(),
             "",
             &[],
@@ -2124,10 +2157,109 @@ mod tests {
     }
 
     #[test]
+    fn iteration_of_sub_fields_recurses_to_sub_config() {
+        let input: crate::input::Configuration = parse_quote!(
+            mapper: {
+                enable: bool,
+
+                #[tedge_config(rename = "type")]
+                #[tedge_config(sub_fields = [C8y(C8y), Az(Az), Custom])]
+                ty: MapperType,
+
+                url: String,
+            }
+        );
+        let mut paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let paths = paths.iter_mut().map(|vd| &*vd.make_contiguous());
+        let generated = key_iterators(
+            &parse_quote!(TEdgeConfigReader),
+            &parse_quote!(ReadableKey),
+            &parse_quote!(readable_keys),
+            &paths.collect::<Vec<_>>(),
+            "",
+            &[],
+        );
+        let expected = parse_quote! {
+            impl TEdgeConfigReader {
+                pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
+                    self.mapper.readable_keys()
+                }
+            }
+
+            impl TEdgeConfigReaderMapper {
+                pub fn readable_keys(&self) -> impl Iterator<Item = ReadableKey> + '_ {
+                    [ReadableKey::MapperEnable, ReadableKey::MapperType, ReadableKey::MapperUrl]
+                        .into_iter()
+                        .chain({
+                            self.ty.or_none().into_iter().flat_map(move |ty| ty.readable_keys())
+                        })
+                }
+            }
+
+            impl MapperTypeReader {
+                pub fn readable_keys(&self) -> Vec<ReadableKey> {
+                    match self {
+                        Self::C8y { c8y } => c8y.readable_keys().map(|inner_key| ReadableKey::MapperTypeC8y(inner_key)).collect(),
+                        Self::Az { az } => az.readable_keys().map(|inner_key| ReadableKey::MapperTypeAz(inner_key)).collect(),
+                        Self::Custom => Vec::new(),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&syn::parse2(generated).unwrap()),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn iteration_of_multi_profile_sub_fields() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            mapper: {
+                #[tedge_config(rename = "type")]
+                #[tedge_config(sub_fields = [C8y(C8y), Az(Az), Custom])]
+                ty: MapperType,
+            }
+        );
+        let mut paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let paths = paths.iter_mut().map(|vd| &*vd.make_contiguous());
+        let generated = key_iterators(
+            &parse_quote!(TEdgeConfigReader),
+            &parse_quote!(ReadableKey),
+            &parse_quote!(readable_keys),
+            &paths.collect::<Vec<_>>(),
+            "",
+            &[],
+        );
+        let mut actual: syn::File = syn::parse2(generated).unwrap();
+        actual.items.retain(|item| matches!(item, syn::Item::Impl(syn::ItemImpl { self_ty, .. }) if **self_ty == parse_quote!(TEdgeConfigReaderMapper)));
+        let expected = parse_quote! {
+            impl TEdgeConfigReaderMapper {
+                pub fn readable_keys(&self, mapper: Option<String>) -> impl Iterator<Item = ReadableKey> + '_ {
+                    [ReadableKey::MapperType(mapper.clone())]
+                        .into_iter()
+                        .chain({
+                            let mapper = mapper.clone();
+                            self.ty.or_none().into_iter().flat_map(move |ty| ty.readable_keys(mapper.clone()))
+                        })
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&actual),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
     fn iteration_of_empty_field_enum_is_an_empty_iterator() {
         let generated = key_iterators(
             &parse_quote!(TEdgeConfigReader),
             &parse_quote!(ReadableKey),
+            &parse_quote!(readable_keys),
             &[],
             "",
             &[],
@@ -2161,6 +2293,7 @@ mod tests {
         let generated = key_iterators(
             &parse_quote!(TEdgeConfigReader),
             &parse_quote!(ReadableKey),
+            &parse_quote!(readable_keys),
             &paths.collect::<Vec<_>>(),
             "",
             &[],
