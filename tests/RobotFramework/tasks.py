@@ -533,6 +533,8 @@ def test(
             "pabot.pabot",
             "--processes",
             str(processes),
+            "--processtimeout",
+            "600",
             "--outputdir",
             str(outputdir),
             # Support optional retry on failed (for tests with specific Tags, e.g. "test:retry(2)")
