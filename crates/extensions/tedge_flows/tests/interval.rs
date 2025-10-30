@@ -372,6 +372,7 @@ async fn interval_executes_when_time_exceeds_interval() {
     let count = || {
         captured_messages
             .retain(|msg| !msg.topic.as_ref().contains("status"))
+            .retain(|msg| !msg.topic.as_ref().contains("stats"))
             .count()
     };
 

@@ -22,6 +22,7 @@ pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
 pub use crate::registry::UpdateFlowRegistryError;
 pub use crate::runtime::MessageProcessor;
+use crate::stats::MqttStatsPublisher;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 pub use js_value::JsonValue;
@@ -163,6 +164,9 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
         let subscriptions = self.topics();
         let watched_commands = HashSet::new();
         let status_topic = self.status_topic;
+        let stats_publisher = MqttStatsPublisher {
+            topic_prefix: "te/device/main/service/tedge-flows/stats".to_string(),
+        };
         FlowsMapper {
             messages: self.message_box.build(),
             mqtt_sender: self.mqtt_sender,
@@ -172,6 +176,7 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
             processor: self.processor,
             next_dump: Instant::now() + STATS_DUMP_INTERVAL,
             status_topic,
+            stats_publisher,
         }
     }
 }
