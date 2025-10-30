@@ -1,7 +1,10 @@
+use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::time::Duration;
 use std::time::Instant;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 
 #[derive(Default)]
 pub struct Counter {
@@ -112,11 +115,12 @@ impl Counter {
         self.from_start.entry(dim).or_default().add(sample);
     }
 
-    pub fn dump_processing_stats(&self) {
+    pub fn dump_processing_stats<P: StatsPublisher>(&self, publisher: &P) -> Vec<P::Record> {
         tracing::info!(target: "flows", "Processing statistics:");
-        for (dim, stats) in &self.from_start {
-            stats.dump_statistics(dim)
-        }
+        self.from_start
+            .iter()
+            .filter_map(|(dim, stats)| stats.dump_statistics(dim, publisher))
+            .collect()
     }
 }
 
@@ -139,15 +143,27 @@ impl Stats {
         }
     }
 
-    pub fn dump_statistics(&self, dim: &Dimension) {
-        tracing::info!(target: "flows", "    - {dim}");
-        tracing::info!(target: "flows", "         - input count: {}", self.messages_in);
-        tracing::info!(target: "flows", "         - output count: {}", self.messages_out);
-        tracing::info!(target: "flows", "         - error count: {}", self.error_raised);
-        if let Some(duration_stats) = &self.processing_time {
-            tracing::info!(target: "flows", "         - min processing time: {:?}", duration_stats.min);
-            tracing::info!(target: "flows", "         - max processing time: {:?}", duration_stats.max);
-        }
+    pub fn dump_statistics<P: StatsPublisher>(
+        &self,
+        dim: &Dimension,
+        publisher: &P,
+    ) -> Option<P::Record> {
+        let stats = match self.processing_time.as_ref() {
+            None => serde_json::json!({
+                "input": self.messages_in,
+                "output": self.messages_out,
+                "error": self.error_raised,
+            }),
+            Some(duration_stats) => serde_json::json!({
+                "input": self.messages_in,
+                "output": self.messages_out,
+                "error": self.error_raised,
+                "cpu-min": format!("{:?}", duration_stats.min),
+                "cpu-max": format!("{:?}", duration_stats.max),
+            }),
+        };
+
+        publisher.publish(dim, stats)
     }
 }
 
@@ -187,5 +203,61 @@ impl Dimension {
             "onInterval" => Some(Dimension::OnInterval(js.to_owned())),
             _ => None,
         }
+    }
+}
+
+pub trait StatsPublisher {
+    type Record;
+
+    fn publish(&self, dim: &Dimension, stats: serde_json::Value) -> Option<Self::Record>;
+}
+
+pub struct TracingStatsPublisher;
+
+impl StatsPublisher for TracingStatsPublisher {
+    type Record = ();
+
+    fn publish(&self, dim: &Dimension, stats: Value) -> Option<()> {
+        tracing::info!(target: "flows", "  - {dim}");
+        if let Some(stats) = stats.as_object() {
+            for (k, v) in stats {
+                tracing::info!(target: "flows", "    - {k}: {v}");
+            }
+        }
+        None
+    }
+}
+
+pub struct MqttStatsPublisher {
+    pub topic_prefix: String,
+}
+
+impl StatsPublisher for MqttStatsPublisher {
+    type Record = MqttMessage;
+
+    fn publish(&self, dim: &Dimension, stats: Value) -> Option<Self::Record> {
+        match dim {
+            Dimension::Flow(path) | Dimension::OnMessage(path) => {
+                self.topic_for(path).map(|topic| {
+                    let payload = stats.to_string();
+                    MqttMessage::new(&topic, payload)
+                })
+            }
+
+            Dimension::Runtime => self.topic_for("runtime").map(|topic| {
+                let payload = stats.to_string();
+                MqttMessage::new(&topic, payload)
+            }),
+
+            _ => None,
+        }
+    }
+}
+
+impl MqttStatsPublisher {
+    pub fn topic_for(&self, path: &str) -> Option<Topic> {
+        let name = path.split('/').next_back().unwrap_or(path);
+        let topic = format!("{}/{}", self.topic_prefix, name);
+        Topic::new(&topic).ok()
     }
 }
