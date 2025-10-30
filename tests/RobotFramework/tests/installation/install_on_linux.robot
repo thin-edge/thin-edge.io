@@ -3,6 +3,8 @@ Resource        ../../resources/common.resource
 Library         Collections
 Library         ThinEdgeIO
 
+Test Timeout    5 minutes
+
 Test Tags       theme:installation    test:on_demand
 
 

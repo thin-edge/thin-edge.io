@@ -4,6 +4,7 @@ Library             ThinEdgeIO
 
 Suite Setup         Setup
 Suite Teardown      Get Suite Logs
+Test Timeout        5 minutes
 
 Test Tags           theme:cli    theme:mqtt
 

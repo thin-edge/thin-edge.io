@@ -4,6 +4,7 @@ Library             ThinEdgeIO
 
 Test Setup          Custom Setup
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 
 Test Tags           theme:tedge_agent
 

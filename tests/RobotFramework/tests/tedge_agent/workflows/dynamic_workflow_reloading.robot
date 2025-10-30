@@ -8,6 +8,7 @@ Library             Cumulocity
 Suite Setup         Custom Setup
 Test Setup          Custom Test Setup
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 
 Test Tags           theme:tedge_agent
 

@@ -5,6 +5,7 @@ Library             ThinEdgeIO
 
 Test Setup          Custom Setup
 Test Teardown       Get Logs    ${DEVICE_SN}
+Test Timeout        5 minutes
 
 Test Tags           theme:c8y    theme:registration    theme:deregistration
 

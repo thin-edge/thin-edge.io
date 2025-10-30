@@ -6,6 +6,7 @@ Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
 Suite Teardown      Custom Teardown
+Test Timeout        5 minutes
 
 Test Tags           theme:mqtt    theme:az
 

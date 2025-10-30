@@ -8,6 +8,7 @@ Library             AWS
 
 Test Setup          Custom Setup
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 Test Template       Connect to AWS
 
 Test Tags           theme:mqtt    theme:aws    test:on_demand

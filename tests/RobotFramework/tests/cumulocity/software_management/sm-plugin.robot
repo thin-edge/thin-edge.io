@@ -6,6 +6,7 @@ Library             Cumulocity
 
 Test Setup          Custom Setup
 Test Teardown       Custom Teardown
+Test Timeout        5 minutes
 
 Test Tags           theme:software
 

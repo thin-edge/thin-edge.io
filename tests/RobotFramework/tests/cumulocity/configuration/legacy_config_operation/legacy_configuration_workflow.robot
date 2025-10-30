@@ -6,6 +6,7 @@ Library             ThinEdgeIO
 
 Test Setup          Custom Setup
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 
 Test Tags           theme:c8y    theme:configuration
 

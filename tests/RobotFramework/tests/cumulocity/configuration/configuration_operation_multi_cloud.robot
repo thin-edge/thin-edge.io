@@ -6,6 +6,7 @@ Library             Cumulocity
 
 Suite Setup         Suite Setup
 Suite Teardown      Get Suite Logs    name=${DEVICE_SN}
+Test Timeout        5 minutes
 
 Test Tags           theme:configuration
 

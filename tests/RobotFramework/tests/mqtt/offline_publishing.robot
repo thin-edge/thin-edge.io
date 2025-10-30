@@ -5,6 +5,7 @@ Library             Cumulocity
 
 Test Setup          Setup Test
 Test Teardown       Get Logs
+Test Timeout        5 minutes
 
 
 *** Test Cases ***

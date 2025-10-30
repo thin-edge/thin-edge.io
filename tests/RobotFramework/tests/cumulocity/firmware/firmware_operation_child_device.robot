@@ -7,6 +7,7 @@ Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
 Test Teardown       Get Logs    name=${PARENT_SN}
+Test Timeout        5 minutes
 
 Test Tags           theme:firmware    theme:childdevices
 
