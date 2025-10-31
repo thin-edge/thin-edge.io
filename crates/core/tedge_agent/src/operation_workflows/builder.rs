@@ -24,10 +24,11 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::UnboundedLoggingReceiver;
 use tedge_api::commands::CmdMetaSyncSignal;
-use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
+use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
@@ -73,7 +74,11 @@ impl WorkflowActorBuilder {
 
         let mqtt_publisher = mqtt_actor.get_sender();
         mqtt_actor.connect_sink(
-            Self::subscriptions(&config.mqtt_schema, &config.device_topic_id),
+            Self::subscriptions(
+                &config.mqtt_schema,
+                &config.device_topic_id,
+                &config.service_topic_id,
+            ),
             &input_sender,
         );
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_publisher);
@@ -110,19 +115,36 @@ impl WorkflowActorBuilder {
     }
 
     /// Register an actor to receive sync signals on completion of other commands
-    pub fn register_sync_signal_sink<OperationActor>(&mut self, actor: &OperationActor)
-    where
+    pub fn register_sync_signal_sink<OperationActor>(
+        &mut self,
+        op_type: OperationType,
+        actor: &OperationActor,
+    ) where
         OperationActor: MessageSink<CmdMetaSyncSignal> + SyncOnCommand,
     {
         let sender = actor.get_sender();
+        self.sync_signal_dispatcher
+            .register_operation_handler(op_type, sender.sender_clone());
         for operation in actor.sync_on_commands() {
             self.sync_signal_dispatcher
-                .register_sync_signal_sender(operation, sender.sender_clone());
+                .register_operation_listener(operation, sender.sender_clone());
         }
     }
 
-    pub fn subscriptions(mqtt_schema: &MqttSchema, device_topic_id: &EntityTopicId) -> TopicFilter {
-        mqtt_schema.topics(EntityFilter::Entity(device_topic_id), AnyCommand)
+    pub fn subscriptions(
+        mqtt_schema: &MqttSchema,
+        device_topic_id: &EntityTopicId,
+        service_topic_id: &EntityTopicId,
+    ) -> TopicFilter {
+        let mut topics = mqtt_schema.topics(
+            EntityFilter::Entity(device_topic_id),
+            ChannelFilter::AnyCommand,
+        );
+        topics.add_all(mqtt_schema.topics(
+            EntityFilter::Entity(service_topic_id),
+            ChannelFilter::AnySignal,
+        ));
+        topics
     }
 }
 

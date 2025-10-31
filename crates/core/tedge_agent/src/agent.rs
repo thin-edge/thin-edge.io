@@ -47,7 +47,9 @@ use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::Service;
+use tedge_api::mqtt_topics::ServiceTopicId;
 use tedge_api::path::DataDir;
 use tedge_api::EntityStore;
 use tedge_config::tedge_toml::TEdgeConfigReaderService;
@@ -90,6 +92,7 @@ pub(crate) struct AgentConfig {
     pub state_dir: Utf8PathBuf,
     pub operations_dir: Utf8PathBuf,
     pub mqtt_device_topic_id: EntityTopicId,
+    pub service_topic_id: ServiceTopicId,
     pub mqtt_topic_root: Arc<str>,
     pub tedge_http_host: Arc<str>,
     pub service: TEdgeConfigReaderService,
@@ -116,11 +119,13 @@ impl AgentConfig {
             .mqtt_topic_root
             .unwrap_or(tedge_config.mqtt.topic_root.clone().into());
 
-        let mqtt_device_topic_id = cliopts
+        let mqtt_device_topic_id: EntityTopicId = cliopts
             .mqtt_device_topic_id
             .unwrap_or(tedge_config.mqtt.device_topic_id.clone().into())
             .parse()
             .context("Could not parse the device MQTT topic")?;
+        let service_topic_id = mqtt_device_topic_id.to_default_service_topic_id("tedge-agent")
+            .with_context(|| format!("Device topic id {} currently needs default scheme, e.g: 'device/DEVICE_NAME//'", mqtt_device_topic_id))?;
 
         let mqtt_session_name = format!("{TEDGE_AGENT}#{mqtt_topic_root}/{mqtt_device_topic_id}");
 
@@ -157,6 +162,7 @@ impl AgentConfig {
         let operation_config = OperationConfig::from_tedge_config(
             mqtt_topic_root.to_string(),
             &mqtt_device_topic_id,
+            service_topic_id.clone().into(),
             &tedge_config,
         )
         .await?;
@@ -213,6 +219,7 @@ impl AgentConfig {
             state_dir,
             mqtt_topic_root,
             mqtt_device_topic_id,
+            service_topic_id,
             tedge_http_host,
             identity,
             cloud_root_certs,
@@ -307,8 +314,7 @@ impl Agent {
         // Health actor
         // TODO: take a user-configurable service topic id
         let device_topic_id = self.config.mqtt_device_topic_id.clone();
-        let service_topic_id = device_topic_id.to_default_service_topic_id("tedge-agent")
-            .with_context(|| format!("Device topic id {} currently needs default scheme, e.g: 'device/DEVICE_NAME//'", device_topic_id))?;
+        let service_topic_id = self.config.service_topic_id.clone();
         let service = Service {
             service_topic_id: service_topic_id.clone(),
             device_topic_id: DeviceTopicId::new(device_topic_id.clone()),
@@ -384,7 +390,7 @@ impl Agent {
             )
             .await?;
             converter_actor_builder.register_builtin_operation(&mut log_actor);
-            converter_actor_builder.register_sync_signal_sink(&log_actor);
+            converter_actor_builder.register_sync_signal_sink(OperationType::LogUpload, &log_actor);
             Some(log_actor)
         } else {
             None

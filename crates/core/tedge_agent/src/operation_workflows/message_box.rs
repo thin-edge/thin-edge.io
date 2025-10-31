@@ -49,24 +49,57 @@ impl CommandDispatcher {
 
 #[derive(Default)]
 pub(crate) struct SyncSignalDispatcher {
-    senders: HashMap<OperationType, Vec<DynSender<CmdMetaSyncSignal>>>,
+    op_handler_senders: HashMap<OperationType, DynSender<CmdMetaSyncSignal>>,
+    op_listener_senders: HashMap<OperationType, Vec<DynSender<CmdMetaSyncSignal>>>,
 }
 
 impl SyncSignalDispatcher {
-    /// Register where to send sync signals for the given command type
-    pub(crate) fn register_sync_signal_sender(
+    /// Register sender for the operation handler to receive sync signals for that operation
+    pub(crate) fn register_operation_handler(
         &mut self,
         operation: OperationType,
         sender: DynSender<CmdMetaSyncSignal>,
     ) {
-        self.senders.entry(operation).or_default().push(sender);
+        self.op_handler_senders.insert(operation, sender);
     }
 
-    pub(crate) async fn send(&mut self, operation: OperationType) -> Result<(), ChannelError> {
-        let Some(senders) = self.senders.get_mut(&operation) else {
+    /// Register senders for operation listeners that must be notified when the given operation completes
+    pub(crate) fn register_operation_listener(
+        &mut self,
+        operation: OperationType,
+        sender: DynSender<CmdMetaSyncSignal>,
+    ) {
+        self.op_listener_senders
+            .entry(operation)
+            .or_default()
+            .push(sender);
+    }
+
+    /// Send sync signal to all registered listeners for the given operation
+    pub(crate) async fn sync_listener(
+        &mut self,
+        operation: OperationType,
+    ) -> Result<(), ChannelError> {
+        let Some(senders) = self.op_listener_senders.get_mut(&operation) else {
             return Ok(());
         };
         for sender in senders {
+            sender.send(()).await?;
+        }
+        Ok(())
+    }
+
+    /// Send sync signal to the operation handler actor registered for the given operation
+    pub(crate) async fn sync(&mut self, operation: OperationType) -> Result<(), ChannelError> {
+        if let Some(sender) = self.op_handler_senders.get_mut(&operation) {
+            sender.send(()).await?;
+        };
+        Ok(())
+    }
+
+    /// Send sync signal to all registered operation handler actors
+    pub(crate) async fn sync_all(&mut self) -> Result<(), ChannelError> {
+        for sender in self.op_handler_senders.values_mut() {
             sender.send(()).await?;
         }
         Ok(())
