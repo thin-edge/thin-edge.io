@@ -49,22 +49,23 @@ async fn interval_executes_at_configured_frequency() {
     let captured_messages = CapturedMessages::default();
     let mut mqtt = MockMqtt::new(captured_messages.clone());
     let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
+    let count = || {
+        captured_messages
+            .retain(|msg| !msg.topic.as_ref().contains("status"))
+            .count()
+    };
 
     tick(Duration::from_millis(500)).await;
-    assert_eq!(captured_messages.count(), 0, "Should not execute before 1s");
+    assert_eq!(count(), 0, "Should not execute before 1s");
 
     tick(Duration::from_millis(600)).await;
-    assert_eq!(captured_messages.count(), 1, "Should execute once at 1s");
+    assert_eq!(count(), 1, "Should execute once at 1s");
 
     tick(Duration::from_secs(1)).await;
-    assert_eq!(captured_messages.count(), 2, "Should execute twice at 2s");
+    assert_eq!(count(), 2, "Should execute twice at 2s");
 
     tick(Duration::from_secs(1)).await;
-    assert_eq!(
-        captured_messages.count(),
-        3,
-        "Should execute three times at 3s"
-    );
+    assert_eq!(count(), 3, "Should execute three times at 3s");
 
     actor_handle.abort();
     let _ = actor_handle.await;
@@ -123,7 +124,11 @@ async fn multiple_scripts_execute_at_independent_frequencies() {
     let captured_messages = CapturedMessages::default();
     let mut mqtt = MockMqtt::new(captured_messages.clone());
     let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
-    let count = |topic: &str| captured_messages.count_topic(topic);
+    let count = |topic: &str| {
+        captured_messages
+            .retain(|msg| !msg.topic.as_ref().contains("status"))
+            .count_topic(topic)
+    };
 
     tick(Duration::from_millis(500)).await;
     assert_eq!(count("test/fast"), 1, "Fast should execute once at 500ms");
@@ -177,7 +182,11 @@ async fn script_with_oninterval_but_no_config_gets_default_1s_interval() {
     let captured_messages = CapturedMessages::default();
     let mut mqtt = MockMqtt::new(captured_messages.clone());
     let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
-    let count = || captured_messages.count();
+    let count = || {
+        captured_messages
+            .retain(|msg| !msg.topic.as_ref().contains("status"))
+            .count()
+    };
 
     tick(Duration::from_millis(500)).await;
     assert_eq!(count(), 0, "Shouldn't execute before default 1s interval");
@@ -228,7 +237,11 @@ async fn interval_executes_independently_from_message_processing() {
     let captured_messages = CapturedMessages::default();
     let mut mqtt = MockMqtt::new(captured_messages.clone());
     let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
-    let count = |topic: &str| captured_messages.count_topic(topic);
+    let count = |topic: &str| {
+        captured_messages
+            .retain(|msg| !msg.topic.as_ref().contains("status"))
+            .count_topic(topic)
+    };
 
     tick(Duration::from_millis(1000)).await;
     assert_eq!(
@@ -303,7 +316,11 @@ async fn very_short_intervals_execute_correctly() {
     let captured_messages = CapturedMessages::default();
     let mut mqtt = MockMqtt::new(captured_messages.clone());
     let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
-    let count = || captured_messages.count();
+    let count = || {
+        captured_messages
+            .retain(|msg| !msg.topic.as_ref().contains("status"))
+            .count()
+    };
 
     tick(Duration::from_millis(100)).await;
     assert_eq!(count(), 1, "Should execute once by 100ms");
@@ -350,7 +367,11 @@ async fn interval_executes_when_time_exceeds_interval() {
     let captured_messages = CapturedMessages::default();
     let mut mqtt = MockMqtt::new(captured_messages.clone());
     let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
-    let count = || captured_messages.count();
+    let count = || {
+        captured_messages
+            .retain(|msg| !msg.topic.as_ref().contains("status"))
+            .count()
+    };
 
     tick(Duration::from_secs(60)).await;
     assert_eq!(count(), 0, "Should not execute before 2 minutes");
@@ -493,5 +514,11 @@ impl CapturedMessages {
     pub fn count_topic(&self, topic: &str) -> usize {
         let msgs = self.messages.lock().unwrap();
         msgs.iter().filter(|m| m.topic.name == topic).count()
+    }
+
+    pub fn retain(&self, predicate: impl Fn(&MqttMessage) -> bool) -> &Self {
+        let mut messages = self.messages.lock().unwrap();
+        messages.retain(predicate);
+        self
     }
 }
