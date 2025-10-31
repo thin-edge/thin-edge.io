@@ -13,3 +13,13 @@ pub fn define_tedge_config(item: TokenStream) -> TokenStream {
         Err(err) => TokenStream::from(err.to_compile_error()),
     }
 }
+
+#[proc_macro]
+pub fn define_sub_config(item: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(item as proc_macro2::TokenStream);
+
+    match tedge_config_macros_impl::generate_sub_configuration(item) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => TokenStream::from(err.to_compile_error()),
+    }
+}

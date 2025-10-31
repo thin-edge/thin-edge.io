@@ -1,3 +1,4 @@
+pub use tedge_config_macros_macro::define_sub_config;
 #[doc(inline)]
 #[doc = include_str!("define_tedge_config_docs.md")]
 pub use tedge_config_macros_macro::define_tedge_config;
