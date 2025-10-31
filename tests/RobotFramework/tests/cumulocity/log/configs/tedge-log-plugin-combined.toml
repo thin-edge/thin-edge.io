@@ -1,0 +1,5 @@
+[[plugins.dummy_plugin]]
+exclude = "a*"
+
+[[plugins.dummy_plugin]]
+include = "ab*"
