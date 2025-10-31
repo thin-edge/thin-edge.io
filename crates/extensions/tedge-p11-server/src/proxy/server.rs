@@ -56,7 +56,9 @@ impl TedgeP11Server {
             | Frame1::ChooseSchemeResponse { .. }
             | Frame1::SignResponse { .. }
             | Frame1::GetPublicKeyPemResponse(_)
-            | Frame1::Pong => {
+            | Frame1::Pong
+            | Frame1::CreateKeyResponse { .. }
+            | Frame1::GetTokensUrisResponse(_) => {
                 let error = ProtocolError("invalid request".to_string());
                 let _ = connection.write_frame(&Frame1::Error(error));
                 anyhow::bail!("protocol error: invalid request")
@@ -106,7 +108,6 @@ impl TedgeP11Server {
                     }
                 }
             }
-
             Frame1::GetPublicKeyPemRequest(uri) => {
                 let response = self.service.get_public_key_pem(uri.as_deref());
                 match response {
@@ -128,6 +129,34 @@ impl TedgeP11Server {
             // ensures the PKCS11 library is loaded and ready to serve signing requests. In
             // practice, this only occurs with a client calls TedgeP11Client::with_ready_check.
             Frame1::Ping => Frame1::Pong,
+
+            Frame1::CreateKeyRequest(request) => {
+                let response = self.service.create_key(request);
+                match response {
+                    Ok(pubkey_der) => Frame1::CreateKeyResponse(pubkey_der),
+                    Err(err) => {
+                        let response = Frame1::Error(ProtocolError(format!(
+                            "PKCS #11 service failed: {err:#}"
+                        )));
+                        connection.write_frame(&response)?;
+                        anyhow::bail!(err);
+                    }
+                }
+            }
+
+            Frame1::GetTokensUrisRequest => {
+                let response = self.service.get_tokens_uris();
+                match response {
+                    Ok(response) => Frame1::GetTokensUrisResponse(response),
+                    Err(err) => {
+                        let response = Frame1::Error(ProtocolError(format!(
+                            "PKCS #11 service failed: {err:#}"
+                        )));
+                        connection.write_frame(&response)?;
+                        anyhow::bail!(err);
+                    }
+                }
+            }
         };
 
         connection.write_frame(&response).context("write")?;
@@ -168,6 +197,14 @@ mod tests {
         }
 
         fn get_public_key_pem(&self, _uri: Option<&str>) -> anyhow::Result<String> {
+            todo!()
+        }
+
+        fn create_key(&self, _request: CreateKeyRequest) -> anyhow::Result<CreateKeyResponse> {
+            todo!()
+        }
+
+        fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
             todo!()
         }
     }

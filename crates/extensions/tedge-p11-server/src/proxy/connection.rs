@@ -15,6 +15,8 @@ use tracing::warn;
 
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
+use crate::service::CreateKeyRequest;
+use crate::service::CreateKeyResponse;
 use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::SignResponse;
@@ -95,6 +97,10 @@ pub enum Frame1 {
     GetPublicKeyPemResponse(String),
     Ping,
     Pong,
+    CreateKeyRequest(CreateKeyRequest),
+    CreateKeyResponse(CreateKeyResponse),
+    GetTokensUrisRequest,
+    GetTokensUrisResponse(Vec<String>),
 }
 
 /// An error that can be returned to the client by the server.
