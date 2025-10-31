@@ -10,6 +10,7 @@ use crate::Tick;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use futures::FutureExt;
+use serde_json::json;
 use std::cmp::min;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -21,10 +22,13 @@ use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::SubscriptionDiff;
+use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
+use time::OffsetDateTime;
 use tokio::io::AsyncWriteExt;
 use tokio::time::sleep_until;
 use tokio::time::Instant;
@@ -52,6 +56,7 @@ impl Actor for FlowsMapper {
 
     async fn run(mut self) -> Result<(), RuntimeError> {
         self.send_updated_subscriptions().await?;
+        self.notify_flows_status().await?;
 
         while let Some(message) = self.next_message().await {
             match message {
@@ -73,8 +78,9 @@ impl Actor for FlowsMapper {
                     if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
                         self.processor.reload_script(path).await;
                     } else if path.extension() == Some("toml") {
-                        self.processor.add_flow(path).await;
+                        self.processor.add_flow(path.clone()).await;
                         self.send_updated_subscriptions().await?;
+                        self.update_flow_status(path.as_str()).await?;
                     }
                 }
                 InputMessage::FsWatchEvent(FsWatchEvent::FileCreated(path)) => {
@@ -82,8 +88,9 @@ impl Actor for FlowsMapper {
                         continue;
                     };
                     if matches!(path.extension(), Some("toml")) {
-                        self.processor.add_flow(path).await;
+                        self.processor.add_flow(path.clone()).await;
                         self.send_updated_subscriptions().await?;
+                        self.update_flow_status(path.as_str()).await?;
                     }
                 }
                 InputMessage::FsWatchEvent(FsWatchEvent::FileDeleted(path)) => {
@@ -93,8 +100,9 @@ impl Actor for FlowsMapper {
                     if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
                         self.processor.remove_script(path).await;
                     } else if path.extension() == Some("toml") {
-                        self.processor.remove_flow(path).await;
+                        self.processor.remove_flow(path.clone()).await;
                         self.send_updated_subscriptions().await?;
+                        self.update_flow_status(path.as_str()).await?;
                     }
                 }
                 _ => continue,
@@ -161,6 +169,38 @@ impl FlowsMapper {
         }
         self.watched_commands = new_watched_commands;
         watch_requests
+    }
+
+    async fn notify_flows_status(&mut self) -> Result<(), RuntimeError> {
+        let status = "enabled";
+        let now = OffsetDateTime::now_utc();
+        for flow in self.processor.flows.keys() {
+            let status = Self::flow_status(flow, status, &now);
+            self.mqtt_sender.send(status).await?;
+        }
+        Ok(())
+    }
+
+    async fn update_flow_status(&mut self, flow: &str) -> Result<(), RuntimeError> {
+        let now = OffsetDateTime::now_utc();
+        let status = if self.processor.flows.contains_key(flow) {
+            "updated"
+        } else {
+            "removed"
+        };
+        let status = Self::flow_status(flow, status, &now);
+        self.mqtt_sender.send(status).await?;
+        Ok(())
+    }
+
+    fn flow_status(flow: &str, status: &str, time: &OffsetDateTime) -> MqttMessage {
+        let topic = Topic::new_unchecked("te/device/main/service/tedge-flows/status/flows");
+        let payload = json!({
+            "flow": flow,
+            "status": status,
+            "time": time.unix_timestamp(),
+        });
+        MqttMessage::new(&topic, payload.to_string()).with_qos(QoS::AtLeastOnce)
     }
 
     async fn on_source_poll(&mut self) -> Result<(), RuntimeError> {
