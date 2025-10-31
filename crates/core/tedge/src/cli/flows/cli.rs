@@ -8,7 +8,8 @@ use anyhow::Context;
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_flows::flow::Message;
+use tedge_flows::BaseFlowRegistry;
+use tedge_flows::Message;
 use tedge_flows::MessageProcessor;
 
 #[derive(clap::Subcommand, Debug)]
@@ -110,24 +111,29 @@ impl TEdgeFlowsCli {
         config.root_dir().join("flows")
     }
 
-    pub async fn load_flows(flows_dir: &Utf8PathBuf) -> Result<MessageProcessor, Error> {
-        MessageProcessor::try_new(flows_dir)
+    pub async fn load_flows(
+        flows_dir: &Utf8PathBuf,
+    ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
+        let mut processor = MessageProcessor::with_base_registry(flows_dir)
             .await
-            .with_context(|| format!("loading flows and steps from {flows_dir}"))
+            .with_context(|| format!("loading flows and steps from {flows_dir}"))?;
+        processor.load_all_flows().await;
+        Ok(processor)
     }
 
     pub async fn load_file(
         flows_dir: &Utf8PathBuf,
         path: &Utf8PathBuf,
-    ) -> Result<MessageProcessor, Error> {
+    ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
+        let mut processor = MessageProcessor::with_base_registry(flows_dir)
+            .await
+            .with_context(|| format!("loading flow {path}"))?;
+
         if let Some("toml") = path.extension() {
-            MessageProcessor::try_new_single_flow(flows_dir, path)
-                .await
-                .with_context(|| format!("loading flow {path}"))
+            processor.load_single_flow(path).await;
         } else {
-            MessageProcessor::try_new_single_step_flow(flows_dir, path)
-                .await
-                .with_context(|| format!("loading flow script {path}"))
+            processor.load_single_script(path).await;
         }
+        Ok(processor)
     }
 }

@@ -6,8 +6,12 @@ use base64::prelude::BASE64_STANDARD;
 use base64::prelude::*;
 use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_flows::flow::*;
+use tedge_flows::BaseFlowRegistry;
+use tedge_flows::DateTime;
+use tedge_flows::FlowResult;
+use tedge_flows::Message;
 use tedge_flows::MessageProcessor;
+use tedge_flows::SourceTag;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::io::Stdin;
@@ -61,7 +65,7 @@ impl Command for TestCommand {
 impl TestCommand {
     async fn process(
         &self,
-        processor: &mut MessageProcessor,
+        processor: &mut MessageProcessor<BaseFlowRegistry>,
         mut message: Message,
         timestamp: DateTime,
     ) {
@@ -82,7 +86,12 @@ impl TestCommand {
             .for_each(|msg| self.print_messages(msg))
     }
 
-    async fn tick(&self, processor: &mut MessageProcessor, timestamp: DateTime, now: Instant) {
+    async fn tick(
+        &self,
+        processor: &mut MessageProcessor<BaseFlowRegistry>,
+        timestamp: DateTime,
+        now: Instant,
+    ) {
         processor
             .on_interval(timestamp, now)
             .await

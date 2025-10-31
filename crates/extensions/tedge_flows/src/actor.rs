@@ -1,9 +1,11 @@
+use crate::connected_flow::ConnectedFlowRegistry;
 use crate::flow::DateTime;
 use crate::flow::FlowError;
 use crate::flow::FlowOutput;
 use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::flow::SourceTag;
+use crate::registry::FlowRegistryExt;
 use crate::runtime::MessageProcessor;
 use crate::InputMessage;
 use crate::Tick;
@@ -40,7 +42,7 @@ pub struct FlowsMapper {
     pub(super) watch_request_sender: DynSender<WatchRequest>,
     pub(super) subscriptions: TopicFilter,
     pub(super) watched_commands: HashSet<String>,
-    pub(super) processor: MessageProcessor,
+    pub(super) processor: MessageProcessor<ConnectedFlowRegistry>,
     pub(super) next_dump: Instant,
 }
 
@@ -64,7 +66,7 @@ impl Actor for FlowsMapper {
                     self.on_message(source, Message::from(message)).await?
                 }
                 InputMessage::WatchEvent(event) => {
-                    self.on_process_event(event).await?;
+                    self.on_input_event(event).await?;
                 }
                 InputMessage::FsWatchEvent(FsWatchEvent::Modified(path)) => {
                     let Ok(path) = Utf8PathBuf::try_from(path) else {
@@ -143,20 +145,20 @@ impl FlowsMapper {
     fn update_watched_commands(&mut self) -> Vec<WatchRequest> {
         let mut watch_requests = Vec::new();
         let mut new_watched_commands = HashSet::new();
-        for flow in self.processor.flows.values() {
+        for flow in self.processor.registry.flows() {
             let topic = flow.name();
             let Some(request) = flow.watch_request() else {
                 continue;
             };
             if !self.watched_commands.contains(topic) {
-                info!(target: "flows", "Adding input: {}", flow.input);
+                info!(target: "flows", "Adding input: {}", flow.as_ref().input);
                 watch_requests.push(request);
             }
             self.watched_commands.remove(topic);
             new_watched_commands.insert(topic.to_owned());
         }
         for old_command in self.watched_commands.drain() {
-            info!(target: "flows", "removing input: {}", old_command);
+            info!(target: "flows", "Removing input: {}", old_command);
             watch_requests.push(WatchRequest::UnWatch { topic: old_command });
         }
         self.watched_commands = new_watched_commands;
@@ -166,8 +168,29 @@ impl FlowsMapper {
     async fn on_source_poll(&mut self) -> Result<(), RuntimeError> {
         let now = Instant::now();
         let timestamp = DateTime::now();
-        for messages in self.processor.on_source_poll(timestamp, now).await {
-            self.publish_result(messages).await?;
+
+        let mut in_messages = vec![];
+        for flow in self.processor.registry.flows_mut() {
+            in_messages.push(flow.on_source_poll(timestamp, now).await);
+        }
+
+        for messages in in_messages {
+            match messages {
+                FlowResult::Ok { flow, messages, .. } => {
+                    for message in messages {
+                        if let Some(flow_output) = self
+                            .processor
+                            .on_flow_input(&flow, timestamp, &message)
+                            .await
+                        {
+                            self.publish_result(flow_output).await?;
+                        }
+                    }
+                }
+                poll_error => {
+                    self.publish_result(poll_error).await?;
+                }
+            }
         }
 
         Ok(())
@@ -205,50 +228,55 @@ impl FlowsMapper {
         Ok(())
     }
 
-    async fn on_process_event(&mut self, event: WatchEvent) -> Result<(), RuntimeError> {
+    async fn on_input_event(&mut self, event: WatchEvent) -> Result<(), RuntimeError> {
         match event {
             WatchEvent::StdoutLine { topic, line } => {
-                self.on_process_message(topic, line).await?;
+                self.on_input_message(topic, line).await?;
             }
             WatchEvent::StderrLine { topic, line } => {
                 warn!(target: "flows", "Input command {topic}: {line}");
             }
             WatchEvent::Error { topic, error } => {
                 error!(target: "flows", "Cannot monitor command: {error}");
-                self.on_process_error(&topic, error.into()).await?;
+                self.on_input_error(&topic, error.into()).await?;
             }
             WatchEvent::EndOfStream { topic } => {
                 error!(target: "flows", "End of input stream: {topic}");
-                self.on_process_eos(&topic).await?
+                self.on_input_eos(&topic).await?
             }
         }
         Ok(())
     }
 
-    async fn on_process_message(
+    async fn on_input_message(
         &mut self,
         flow_name: String,
         line: String,
     ) -> Result<(), RuntimeError> {
-        if let Some(flow) = self.processor.flows.get(&flow_name) {
-            let topic = flow.input.enforced_topic().unwrap_or_default();
-            let source = SourceTag::Process {
-                flow: flow_name.clone(),
-            };
-            self.on_message(source, Message::new(topic, line)).await?;
+        if let Some(flow) = self.processor.registry.flow(&flow_name) {
+            let topic = flow.input_topic().to_string();
+            let timestamp = DateTime::now();
+            let message = Message::new(topic, line);
+            if let Some(result) = self
+                .processor
+                .on_flow_input(&flow_name, timestamp, &message)
+                .await
+            {
+                self.publish_result(result).await?;
+            }
         }
 
         Ok(())
     }
 
-    async fn on_process_error(
+    async fn on_input_error(
         &mut self,
         flow_name: &str,
         error: FlowError,
     ) -> Result<(), RuntimeError> {
-        let Some((info, flow_error)) = self.processor.flows.get(flow_name).map(|flow| {
+        let Some((info, flow_error)) = self.processor.registry.flow(flow_name).map(|flow| {
             (
-                format!("Reconnecting input: {flow_name}: {}", flow.input),
+                format!("Reconnecting input: {flow_name}: {}", flow.as_ref().input),
                 flow.on_error(error),
             )
         }) else {
@@ -258,8 +286,8 @@ impl FlowsMapper {
 
         let Some(request) = self
             .processor
-            .flows
-            .get(flow_name)
+            .registry
+            .flow(flow_name)
             .and_then(|flow| flow.watch_request())
         else {
             return Ok(());
@@ -274,10 +302,10 @@ impl FlowsMapper {
         Ok(())
     }
 
-    async fn on_process_eos(&mut self, flow_name: &str) -> Result<(), RuntimeError> {
-        if let Some(flow) = self.processor.flows.get(flow_name) {
+    async fn on_input_eos(&mut self, flow_name: &str) -> Result<(), RuntimeError> {
+        if let Some(flow) = self.processor.registry.flow(flow_name) {
             if let Some(request) = flow.watch_request() {
-                info!(target: "flows", "Reconnecting input: {flow_name}: {}", flow.input);
+                info!(target: "flows", "Reconnecting input: {flow_name}: {}", flow.as_ref().input);
                 self.watch_request_sender.send(request).await?
             };
         }
