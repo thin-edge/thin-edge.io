@@ -61,10 +61,10 @@ Using base64 to encode tedge flows output
 
 Units are configured using topic metadata
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/flows/measurements.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test
+    ...    cat /etc/tedge/data/measurements.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test
     ...    strip=True
     ${expected_msg}    Execute Command
-    ...    cat /etc/tedge/flows/measurements.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
+    ...    cat /etc/tedge/data/measurements.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
     ...    strip=True
     Should Be Equal
     ...    ${transformed_msg}
@@ -72,10 +72,10 @@ Units are configured using topic metadata
 
 Computing average over a time window
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/flows/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval --flow /etc/tedge/flows/average.js
+    ...    cat /etc/tedge/data/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval --flow /etc/tedge/flows/average.js
     ...    strip=True
     ${expected_msg}    Execute Command
-    ...    cat /etc/tedge/flows/average.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
+    ...    cat /etc/tedge/data/average.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
     ...    strip=True
     Should Be Equal
     ...    ${transformed_msg}
@@ -83,10 +83,10 @@ Computing average over a time window
 
 Each instance of a script must have its own static state
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/flows/count-messages.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval | sort
+    ...    cat /etc/tedge/data/count-messages.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval | sort
     ...    strip=True
     ${expected_msg}    Execute Command
-    ...    cat /etc/tedge/flows/count-messages.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: ' | sort
+    ...    cat /etc/tedge/data/count-messages.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: ' | sort
     ...    strip=True
     Should Be Equal
     ...    ${transformed_msg}
@@ -180,11 +180,18 @@ Custom Setup
     Start Service    tedge-flows
 
 Copy Configuration Files
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*    /etc/tedge/flows/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*.js    /etc/tedge/flows/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*.toml    /etc/tedge/flows/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*.samples    /etc/tedge/data/
 
 Install Journalctl Flow
     [Arguments]    ${definition_file}
+    ${start}    Get Unix Timestamp
     ThinEdgeIO.Transfer To Device    ${CURDIR}/journalctl-flows/${definition_file}    /etc/tedge/flows/
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    date_from=${start}
+    ...    message_contains=${definition_file}
 
 Uninstall Journalctl Flow
     [Arguments]    ${definition_file}
@@ -192,7 +199,12 @@ Uninstall Journalctl Flow
 
 Install Flow
     [Arguments]    ${definition_file}
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/input-ext/${definition_file}    /etc/tedge/flows/
+    ${start}    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/input-flows/${definition_file}    /etc/tedge/flows/
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    date_from=${start}
+    ...    message_contains=${definition_file}
 
 Uninstall Flow
     [Arguments]    ${definition_file}
