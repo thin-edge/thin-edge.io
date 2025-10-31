@@ -350,7 +350,11 @@ async fn interval_executes_when_time_exceeds_interval() {
     let captured_messages = CapturedMessages::default();
     let mut mqtt = MockMqtt::new(captured_messages.clone());
     let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
-    let count = || captured_messages.count();
+    let count = || {
+        captured_messages
+            .retain(|msg| !msg.topic.as_ref().contains("stats"))
+            .count()
+    };
 
     tick(Duration::from_secs(60)).await;
     assert_eq!(count(), 0, "Should not execute before 2 minutes");
@@ -493,5 +497,11 @@ impl CapturedMessages {
     pub fn count_topic(&self, topic: &str) -> usize {
         let msgs = self.messages.lock().unwrap();
         msgs.iter().filter(|m| m.topic.name == topic).count()
+    }
+
+    pub fn retain(&self, predicate: impl Fn(&MqttMessage) -> bool) -> &Self {
+        let mut messages = self.messages.lock().unwrap();
+        messages.retain(predicate);
+        self
     }
 }
