@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use std::convert::TryInto;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::ops::Add;
 
 /// An MQTT topic
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
@@ -93,7 +94,7 @@ impl TopicFilter {
     }
 
     /// Check if the pattern is valid and add it to this topic filter.
-    pub fn add(&mut self, pattern: &str) -> Result<(), MqttError> {
+    pub fn try_add(&mut self, pattern: &str) -> Result<(), MqttError> {
         let pattern = String::from(pattern);
         if rumqttc::valid_filter(&pattern) {
             self.patterns.push(pattern);
@@ -240,7 +241,7 @@ impl TryInto<TopicFilter> for Vec<&str> {
     fn try_into(self) -> Result<TopicFilter, Self::Error> {
         let mut filter = TopicFilter::empty();
         for pattern in self.into_iter() {
-            filter.add(pattern)?
+            filter.try_add(pattern)?
         }
         Ok(filter)
     }
@@ -258,7 +259,7 @@ impl TryInto<TopicFilter> for Vec<String> {
     fn try_into(self) -> Result<TopicFilter, Self::Error> {
         let mut filter = TopicFilter::empty();
         for pattern in self.into_iter() {
-            filter.add(pattern.as_str())?
+            filter.try_add(pattern.as_str())?
         }
         Ok(filter)
     }
@@ -270,13 +271,22 @@ impl AsRef<str> for Topic {
     }
 }
 
+impl Add for TopicFilter {
+    type Output = TopicFilter;
+
+    fn add(mut self, other: TopicFilter) -> TopicFilter {
+        self.add_all(other);
+        self
+    }
+}
+
 impl TryInto<TopicFilter> for HashSet<String> {
     type Error = MqttError;
 
     fn try_into(self) -> Result<TopicFilter, Self::Error> {
         let mut filter = TopicFilter::empty();
         for pattern in self.into_iter() {
-            filter.add(pattern.as_str())?
+            filter.try_add(pattern.as_str())?
         }
         Ok(filter)
     }
@@ -344,5 +354,15 @@ mod tests {
         topics.add_unchecked("te/+/xxx");
         let removed = topics.remove_overlapping_patterns();
         assert!(removed.is_empty());
+    }
+
+    #[test]
+    fn test_adding_topic_filters() {
+        let filter1 = TopicFilter::new_unchecked("a/b/c");
+        let filter2 = TopicFilter::new_unchecked("d/e/f");
+
+        let combined = filter1.clone() + filter2.clone();
+        assert!(combined.accept_topic_name("a/b/c"));
+        assert!(combined.accept_topic_name("d/e/f"));
     }
 }
