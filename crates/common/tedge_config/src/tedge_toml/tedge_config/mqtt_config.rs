@@ -120,7 +120,7 @@ impl TryFrom<TEdgeMqttClientAuthConfig> for mqtt_channel::AuthenticationConfig {
 
         // Provides client username/password for authentication.
         if let Some(username) = config.username {
-            debug!(target: "MQTT", "Using client username: {username}");
+            debug!(target: "MQTT", "Using client username authentication, configured via 'mqtt.client.auth.username')");
             authentication_config.set_username(username);
 
             // Password can be set only when username is set.
