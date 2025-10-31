@@ -6,18 +6,13 @@ use toml::Table;
 
 use super::WritableKey;
 
-#[derive(serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[serde(into = "&'static str", try_from = "String")]
 /// A version of tedge.toml, used to manage migrations (see [Self::migrations])
 pub enum TEdgeTomlVersion {
+    #[default]
     One,
     Two,
-}
-
-impl Default for TEdgeTomlVersion {
-    fn default() -> Self {
-        Self::One
-    }
 }
 
 impl TryFrom<String> for TEdgeTomlVersion {
