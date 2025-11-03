@@ -155,7 +155,7 @@ pub enum KeyKind {
 }
 
 impl KeyKind {
-    pub fn from_cryptoki_and_existing_cert(
+    fn from_cryptoki_and_existing_cert(
         cryptoki_config: CryptokiConfig,
         current_cert: &Utf8Path,
     ) -> Result<Self, CertificateError> {
@@ -193,9 +193,29 @@ impl KeyKind {
         }))
     }
 
-    pub fn from_cryptoki(cryptoki_config: CryptokiConfig) -> Result<Self, CertificateError> {
+    pub fn from_cryptoki(
+        cryptoki_config: CryptokiConfig,
+        current_cert: Option<&Utf8Path>,
+    ) -> Result<Self, CertificateError> {
         let cryptoki = tedge_p11_server::tedge_p11_service(cryptoki_config.clone())?;
-        let pubkey_pem = cryptoki.get_public_key_pem(None)?;
+
+        let pubkey_pem = cryptoki.get_public_key_pem(None);
+        let pubkey_pem = match pubkey_pem {
+            Ok(p) => p,
+            Err(err) => {
+                let e = format!("{err:#}");
+                if e.contains("Failed to parse the received frame") {
+                    // server doesn't understand the request, too old, fallback to the older method of just resigning existing certificate
+                    let Some(current_cert) = current_cert else {
+                        return Err(CertificateError::Other(
+                            anyhow::anyhow!("tedge-p11-server can only renew existing certificates but there's no existing certificate; upgrade tedge-p11-server or generate a self-signed certificate first")));
+                    };
+                    return Self::from_cryptoki_and_existing_cert(cryptoki_config, current_cert);
+                }
+                return Err(err.into());
+            }
+        };
+
         let public_key = pem::parse(&pubkey_pem).unwrap();
         let public_key_raw = public_key.into_contents();
 

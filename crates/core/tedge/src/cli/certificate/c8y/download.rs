@@ -85,6 +85,7 @@ impl DownloadCertCmd {
             create_device_csr(
                 common_name.clone(),
                 self.key.clone(),
+                None,
                 self.csr_path.clone(),
                 self.csr_template.clone(),
             )

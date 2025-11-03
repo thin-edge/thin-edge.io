@@ -197,6 +197,11 @@ impl BuildCommand for TEdgeCertCli {
                         config.device_key_path(cloud.as_ref())?.to_owned(),
                     ));
                 debug!(?key);
+                let current_cert = config
+                    .device_cert_path(cloud.as_ref())
+                    .map(|c| c.to_owned())
+                    .ok();
+                debug!(?current_cert);
 
                 let cmd = CreateCsrCmd {
                     id: get_device_id(id, config, &cloud)?,
@@ -207,6 +212,7 @@ impl BuildCommand for TEdgeCertCli {
                     } else {
                         config.device_csr_path(cloud.as_ref())?.to_owned()
                     },
+                    current_cert,
                     user: user.to_owned(),
                     group: group.to_owned(),
                     csr_template,
