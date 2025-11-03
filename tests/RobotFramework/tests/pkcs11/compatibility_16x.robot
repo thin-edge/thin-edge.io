@@ -27,6 +27,7 @@ Renew certificate
     Execute Command    tedge cert renew c8y
     Tedge Reconnect Should Succeed
 
+
 *** Keywords ***
 Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
