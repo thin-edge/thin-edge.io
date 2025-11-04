@@ -253,6 +253,22 @@ The max log file count can be configured per operation
     Should Contain    ${log_files}    workflow-lite_software_update-n205.log
     Should Contain    ${log_files}    workflow-lite_software_update-n206.log
 
+Trigger wrapped workflow without an intermediate state
+    [Documentation]    A sub-operation awaiting the agent restart and moving on success directly to a
+    ...    final state, must be seen as successful by the operation awaiting its completion.
+    ${pid_before}    Get Service PID    tedge-agent
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/restart-tedge-agent-wrapper/robot-4 '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/restart-tedge-agent-wrapper/robot-4
+    ...    message_pattern=.*successful.*
+    ...    timeout=120
+    ${pid_after}    Get Service PID    tedge-agent
+    Should Not Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should have been restarted
+    [Teardown]    Run Keywords
+    ...    Execute Command    tedge mqtt pub --retain te/device/main///cmd/restart-tedge-agent-wrapper/robot-4 ''
+    ...    AND    Get Logs
+
 
 *** Keywords ***
 Custom Test Setup
@@ -277,6 +293,8 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/restart-tedge-agent.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-agent-pid.sh    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/native-reboot.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/restart-tedge-agent-wrapper.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/restart-tedge-agent-internal.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/gp_command.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/super_command.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/sub_command.toml    /etc/tedge/operations/
