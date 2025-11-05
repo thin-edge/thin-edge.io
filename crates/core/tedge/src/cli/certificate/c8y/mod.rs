@@ -18,6 +18,7 @@ pub use upload::UploadCertCmd;
 async fn create_device_csr(
     common_name: String,
     key: super::create_csr::Key,
+    current_cert: Option<Utf8PathBuf>,
     csr_path: Utf8PathBuf,
     csr_template: CsrTemplate,
 ) -> Result<(), CertError> {
@@ -25,6 +26,7 @@ async fn create_device_csr(
         id: common_name,
         csr_path: csr_path.clone(),
         key,
+        current_cert,
         user: "tedge".to_string(),
         group: "tedge".to_string(),
         csr_template,
