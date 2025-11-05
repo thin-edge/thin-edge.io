@@ -14,6 +14,10 @@ Suite Teardown      Get Suite Logs
 Test Tags           adapter:docker    theme:cryptoki
 
 
+*** Variables ***
+${KEY_URI}      ${EMPTY}
+
+
 *** Test Cases ***
 Use Private Key in SoftHSM2 using tedge-p11-server
     Tedge Reconnect Should Succeed
@@ -87,10 +91,23 @@ Connects to C8y supporting all TLS13 ECDSA signature algorithms
     [Documentation]    Check that we support all ECDSA sigschemes used in TLS1.3, i.e: ecdsa_secp256r1_sha256,
     ...    ecdsa_secp384r1_sha384, ecdsa_secp521r1_sha512.
     [Setup]    Unset tedge-p11-server Uri
-    [Template]    Connect to C8y using new keypair
-    type=ecdsa    curve=secp256r1
-    type=ecdsa    curve=secp384r1
-    type=ecdsa    curve=secp521r1
+
+    Connect to C8y using new keypair    type=ecdsa    curve=secp256r1
+    Connect to C8y using new keypair    type=ecdsa    curve=secp384r1
+    Connect to C8y using new keypair    type=ecdsa    curve=secp521r1
+
+    Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
+    Command Should Fail With
+    ...    tedge cert renew c8y
+    ...    error=Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
+
+    Execute Command    systemctl start tedge-p11-server.socket
+
+    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
+    Command Should Fail With
+    ...    tedge cert renew c8y
+    ...    error=PKCS #11 service failed: Failed to find a key
+    Execute Command    cmd=tedge config unset c8y.device.key_uri
 
 Can use PKCS11 key to renew the public certificate
     [Documentation]    Test that `tedge cert renew c8y` works with all supported keys. We do renew 2 times to see if we
@@ -106,19 +123,6 @@ Can use PKCS11 key to renew the public certificate
     Test tedge cert renew    type=rsa    bits=2048
     Test tedge cert renew    type=rsa    bits=3072
     Test tedge cert renew    type=rsa    bits=4096
-
-    Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
-    Command Should Fail With
-    ...    tedge cert renew c8y
-    ...    error=Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
-
-    Execute Command    systemctl start tedge-p11-server.socket
-
-    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
-    Command Should Fail With
-    ...    tedge cert renew c8y
-    ...    error=PKCS #11 service failed: Failed to find a key
-    Execute Command    cmd=tedge config unset c8y.device.key_uri
 
 Can use tedge cert download c8y to download a certificate
     [Documentation]    Download a certificate using CSR generated with PKCS11 without a prior certificate.
@@ -155,6 +159,73 @@ Can pass PIN in the request using device.key_pin
     Tedge Reconnect Should Fail With    The specified PIN is incorrect
 
     [Teardown]    Execute Command    tedge config unset device.key_pin
+
+Can create a private key on the PKCS11 token
+    Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token --pin=123456 --so-pin=123456
+
+    ${output}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=create-key-token"
+    ...    exp_exit_code=!0
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Be Equal    ${output}    No matching objects found
+
+    Set tedge-p11-server Uri    value=pkcs11:token=create-key-token
+
+    Create private key    label=rsa-2048    type=rsa    p11tool_keytype=RSA-2048
+    Create private key
+    ...    label=rsa-3072
+    ...    type=rsa
+    ...    bits=3072
+    ...    p11tool_keytype=RSA-3072
+    Create private key
+    ...    label=rsa-4096
+    ...    type=rsa
+    ...    bits=4096
+    ...    p11tool_keytype=RSA-4096
+
+    Create private key
+    ...    label=ec-256
+    ...    type=ecdsa
+    ...    curve=p256
+    ...    p11tool_keytype=EC/ECDSA-SECP256R1
+    Create private key
+    ...    label=ec-384
+    ...    type=ecdsa
+    ...    curve=p384
+    ...    p11tool_keytype=EC/ECDSA-SECP384R1
+    # ECDSA P521 not supported by rcgen
+
+    [Teardown]    Set tedge-p11-server Uri    value=
+
+tedge cert create-key-hsm should ask where to create keypair if multiple tokens available
+    # setup multiple tokens
+    Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token1 --pin=123456 --so-pin=123456
+    Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token2 --pin=123456 --so-pin=123456
+
+    # unset key_uri so there there's no hint where to generate the keypair
+    Execute Command    cmd=tedge config unset device.key_uri
+    ${stderr}=    Execute Command    cmd=tedge cert create-key-hsm --type ecdsa --label my-key    strip=True    stdout=False    stderr=True    exp_exit_code=1
+    Should Contain    ${stderr}    No token URL was provided for this operation; the available tokens are:
+    Should Contain    ${stderr}    token=create-key-token1
+    Should Contain    ${stderr}    token=create-key-token2
+
+tedge cert create-key-hsm can set chosen id and returns error if object with this id already exists
+    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True
+    Should Contain    ${output}    id=%01%02%03
+
+    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
+    Should Contain    ${output}    Object with this id already exists on the token
+
+tedge cert create-key-hsm can set pin per request
+    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --label my-key --pin 000000 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
+    Should Contain    ${output}    The specified PIN is incorrect
+
+tedge cert create-key-hsm can save public key to file
+    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --label my-key --outfile-pubkey pubkey.pem "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True
+    ${pubkey}=    Execute Command    cat pubkey.pem    strip=True
+    Should Contain    ${output}    ${pubkey}
 
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
@@ -223,6 +294,31 @@ Warn the user if tedge.toml cannot be parsed
 
 
 *** Keywords ***
+Create private key
+    [Arguments]    ${type}    ${label}    ${bits}=${EMPTY}    ${curve}=${EMPTY}    ${p11tool_keytype}=${EMPTY}
+    # create the private key on token and write CSR to device.csr_path
+    VAR    ${command}=    tedge cert create-key-hsm --label ${label} --type ${type} "pkcs11:token=create-key-token"
+    IF    $bits
+        VAR    ${command}=    ${command} --bits ${bits}
+    END
+    IF    $curve
+        VAR    ${command}=    ${command} --curve ${curve}
+    END
+    ${create_key_output}=    Execute Command    ${command}    strip=True    stderr=True    stdout=False
+
+    # check if key is created
+    ${output}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=create-key-token"
+    IF    $p11tool_keytype
+        Should Contain    ${output}    Type: Private key (${p11tool_keytype})
+    ELSE
+        Should Contain    ${output}    Type: Private key
+    END
+    Should Contain    ${output}    Label: ${label}
+
+    ${key_uri}=    Execute Command    tedge config get device.key_uri    strip=True
+    Should Contain    ${create_key_output}    ${key_uri}
+
 Test tedge cert renew
     [Arguments]    ${type}    ${bits}=${EMPTY}    ${curve}=${EMPTY}
 
