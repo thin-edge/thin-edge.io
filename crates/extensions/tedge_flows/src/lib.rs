@@ -1,16 +1,22 @@
 mod actor;
 mod config;
-pub mod flow;
+mod connected_flow;
+mod flow;
 mod input_source;
 mod js_lib;
 mod js_runtime;
 mod js_script;
 mod js_value;
+mod registry;
 mod runtime;
 mod stats;
 
 use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
+use crate::connected_flow::ConnectedFlowRegistry;
+pub use crate::flow::*;
+pub use crate::registry::BaseFlowRegistry;
+pub use crate::registry::FlowRegistryExt;
 pub use crate::runtime::MessageProcessor;
 use camino::Utf8Path;
 use std::collections::HashSet;
@@ -37,6 +43,7 @@ use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 use tracing::error;
+
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,15 +53,19 @@ pub struct FlowsMapperBuilder {
     message_box: SimpleMessageBoxBuilder<InputMessage, SubscriptionDiff>,
     mqtt_sender: DynSender<MqttMessage>,
     watch_request_sender: DynSender<WatchRequest>,
-    processor: MessageProcessor,
+    processor: MessageProcessor<ConnectedFlowRegistry>,
 }
 
 impl FlowsMapperBuilder {
     pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
-        let processor = MessageProcessor::try_new(config_dir).await?;
+        let registry = ConnectedFlowRegistry::new(config_dir);
+        let mut processor = MessageProcessor::try_new(registry).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
         let mqtt_sender = NullSender.into();
         let watch_request_sender = NullSender.into();
+
+        processor.load_all_flows().await;
+
         Ok(FlowsMapperBuilder {
             message_box,
             mqtt_sender,
@@ -81,7 +92,7 @@ impl FlowsMapperBuilder {
 
     pub fn connect_fs(&mut self, fs: &mut impl MessageSource<FsWatchEvent, PathBuf>) {
         fs.connect_mapped_sink(
-            self.processor.config_dir.clone().into(),
+            self.processor.registry.config_dir().into(),
             &self.message_box,
             |msg| Some(InputMessage::FsWatchEvent(msg)),
         );

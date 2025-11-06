@@ -4,7 +4,8 @@ use crate::log::MaybeFancy;
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_flows::flow::Flow;
+use tedge_flows::Flow;
+use tedge_flows::FlowRegistryExt;
 
 pub struct ListCommand {
     pub flows_dir: Utf8PathBuf,
@@ -22,12 +23,12 @@ impl Command for ListCommand {
 
         match &self.topic {
             Some(topic) => processor
-                .flows
-                .iter()
-                .filter(|(_, flow)| flow.topics().accept_topic_name(topic))
+                .registry
+                .flows()
+                .filter(|flow| flow.topics().accept_topic_name(topic))
                 .for_each(Self::display),
 
-            None => processor.flows.iter().for_each(Self::display),
+            None => processor.registry.flows().for_each(Self::display),
         }
 
         Ok(())
@@ -35,7 +36,8 @@ impl Command for ListCommand {
 }
 
 impl ListCommand {
-    fn display((flow_id, flow): (&String, &Flow)) {
+    fn display(flow: &Flow) {
+        let flow_id = flow.name();
         println!("{flow_id}");
         for step in flow.steps.iter() {
             println!("\t{}", step.script.path);
