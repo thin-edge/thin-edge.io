@@ -1,3 +1,5 @@
+pub mod compat;
+
 use crate::tedge_toml::tedge_config::default_credentials_path;
 use crate::TEdgeConfig;
 
@@ -17,6 +19,7 @@ use super::super::models::HTTPS_PORT;
 use super::super::models::MQTT_SVC_TLS_PORT;
 use super::super::models::MQTT_TLS_PORT;
 use super::MultiError;
+use super::OptionalConfig;
 use super::ReadError;
 use camino::Utf8Path;
 use certificate::PemCertificate;
@@ -26,6 +29,9 @@ use serde::Deserialize;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
+
+pub use compat::FromCloudConfig;
+pub use compat::load_cloud_mapper_config;
 
 /// Device-specific configuration fields shared across all cloud types
 #[derive(Debug, Clone, Deserialize, Document)]
