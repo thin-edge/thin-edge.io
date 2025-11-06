@@ -34,7 +34,7 @@ tedge_api = { workspace = true }
 tedge_config_macros = { workspace = true }
 tedge_utils = { workspace = true, features = ["timestamp"] }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
 toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

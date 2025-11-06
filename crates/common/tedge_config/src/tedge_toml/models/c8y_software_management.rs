@@ -6,6 +6,7 @@ use strum::Display;
 #[derive(
     Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Eq, PartialEq, doku::Document, Display,
 )]
+#[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "camelCase")]
 pub enum SoftwareManagementApiFlag {
     Legacy,

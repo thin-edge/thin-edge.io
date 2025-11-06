@@ -5,12 +5,15 @@ use version::TEdgeTomlVersion;
 mod append_remove;
 pub use append_remove::AppendRemoveItem;
 
+pub mod mapper_config;
+
 use super::models::auth_method::AuthMethod;
 use super::models::proxy_url::ProxyUrl;
 use super::models::timestamp::TimeFormat;
 use super::models::AptConfig;
 use super::models::AutoFlag;
 use super::models::AutoLogUpload;
+use super::models::CloudType;
 use super::models::ConnectUrl;
 use super::models::Cryptoki;
 use super::models::HostPort;
@@ -23,6 +26,7 @@ use super::models::HTTPS_PORT;
 use super::models::MQTT_TLS_PORT;
 use super::tedge_config_location::TEdgeConfigLocation;
 use crate::models::AbsolutePath;
+use crate::tedge_toml::mapper_config::MapperConfig;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
@@ -655,6 +659,18 @@ define_tedge_config! {
         topics: TemplatesSet,
     },
 
+    #[tedge_config(multi)]
+    mapper: {
+        /// Path to the external mapper configuration file
+        #[tedge_config(example = "/etc/tedge/mapper-configs/my-mapper.toml")]
+        config_path: AbsolutePath,
+
+        /// The cloud type this mapper connects to
+        #[tedge_config(example = "c8y", example = "az", example = "aws")]
+        #[tedge_config(rename = "type")]
+        ty: CloudType,
+    },
+
     mqtt: {
         /// MQTT topic root
         #[tedge_config(default(value = "te"))]
@@ -1208,6 +1224,28 @@ impl CloudConfig for TEdgeConfigReaderAws {
 
     fn key_pin(&self) -> Option<Arc<str>> {
         self.device.key_pin.or_none().cloned()
+    }
+}
+
+impl<T> CloudConfig for MapperConfig<T> {
+    fn device_key_path(&self) -> &Utf8Path {
+        &self.device.key_path
+    }
+
+    fn device_cert_path(&self) -> &Utf8Path {
+        &self.device.cert_path
+    }
+
+    fn root_cert_path(&self) -> &Utf8Path {
+        &self.root_cert_path
+    }
+
+    fn key_uri(&self) -> Option<Arc<str>> {
+        self.device.key_uri.clone()
+    }
+
+    fn key_pin(&self) -> Option<Arc<str>> {
+        self.device.key_pin.clone()
     }
 }
 

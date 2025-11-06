@@ -17,8 +17,10 @@ use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::models::MQTT_CORE_TLS_PORT;
 use tedge_config::models::MQTT_SERVICE_TLS_PORT;
+use tedge_config::models::CloudType;
+use tedge_config::tedge_toml::mapper_config;
+use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
-use tedge_config::tedge_toml::TEdgeConfigReaderC8y;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
@@ -49,18 +51,25 @@ impl TEdgeComponent for CumulocityMapper {
         cfg_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
         let c8y_profile = self.profile.as_deref();
-        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+        let mapper_config = tedge_config.mapper.try_get(c8y_profile)?;
+        assert_eq!(mapper_config.ty.or_none(), Some(&CloudType::C8y));
+        let c8y_config =
+            tedge_config::tedge_toml::mapper_config::load_mapper_config::<C8yMapperSpecificConfig>(
+                mapper_config.config_path.or_config_not_set()?,
+                &tedge_config,
+            )
+            .await?;
         let prefix = &c8y_config.bridge.topic_prefix;
         let c8y_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&c8y_mapper_name, &tedge_config).await?;
 
         let c8y_mapper_config =
-            C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, c8y_profile)?;
+            C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, &c8y_config)?;
         if tedge_config.mqtt.bridge.built_in {
             let (tc, cloud_config, reconnect_message_mapper) = mqtt_bridge_config(
                 &tedge_config,
-                c8y_config,
+                &c8y_config,
                 &c8y_mapper_config,
                 &c8y_mapper_name,
             )?;
@@ -121,7 +130,7 @@ impl TEdgeComponent for CumulocityMapper {
         // and translating the responses received on tedge/commands/res/+/+ to te/device/main///cmd/+/+
         let old_to_new_agent_adapter = OldAgentAdapter::builder(c8y_prefix, &mut mqtt_actor);
 
-        let availability_actor = if c8y_config.availability.enable {
+        let availability_actor = if c8y_config.cloud_specific.availability.enable {
             Some(AvailabilityBuilder::new(
                 AvailabilityConfig::try_new(&tedge_config, c8y_profile)?,
                 &mut c8y_mapper_actor,
@@ -197,11 +206,12 @@ pub fn service_monitor_client_config(
 
 fn mqtt_bridge_config(
     tedge_config: &TEdgeConfig,
-    c8y_config: &TEdgeConfigReaderC8y,
+    c8y_config: &mapper_config::C8yMapperConfig,
     c8y_mapper_config: &C8yMapperConfig,
     c8y_mapper_name: &str,
 ) -> Result<(BridgeConfig, MqttOptions, Publish), anyhow::Error> {
     let smartrest_1_topics = c8y_config
+        .cloud_specific
         .smartrest1
         .templates
         .0
@@ -209,6 +219,7 @@ fn mqtt_bridge_config(
         .map(|id| Cow::Owned(format!("s/dl/{id}")));
 
     let smartrest_2_topics = c8y_config
+        .cloud_specific
         .smartrest
         .templates
         .0
@@ -216,8 +227,9 @@ fn mqtt_bridge_config(
         .map(|id| Cow::Owned(format!("s/dc/{id}")));
 
     let use_certificate = c8y_config
+        .cloud_specific
         .auth_method
-        .is_certificate(&c8y_config.credentials_path);
+        .is_certificate(&c8y_config.cloud_specific.credentials_path);
     let cloud_topics = [
         ("s/dt", true),
         ("s/ds", true),
@@ -293,20 +305,20 @@ fn mqtt_bridge_config(
         tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
     }
 
-    let use_mqtt_service = c8y_config.mqtt_service.enabled;
+    let use_mqtt_service = c8y_config.cloud_specific.mqtt_service.enabled;
 
     let custom_out_prefix = format!("{}mqtt/out/", local_prefix);
     let custom_in_prefix = format!("{}mqtt/in/", local_prefix);
-    if c8y_config.mqtt_service.enabled {
+    if c8y_config.cloud_specific.mqtt_service.enabled {
         tc.forward_from_local("#", custom_out_prefix, "")?;
 
-        let sub_topics = c8y_config.mqtt_service.topics.clone();
+        let sub_topics = c8y_config.cloud_specific.mqtt_service.topics.clone();
         for topic in sub_topics.0.into_iter() {
             tc.forward_from_remote(topic, custom_in_prefix.clone(), "")?;
         }
     }
 
-    let c8y = c8y_config.mqtt.or_config_not_set()?;
+    let c8y = &c8y_config.cloud_specific.mqtt;
     let mut c8y_port = c8y.port().into();
     if use_mqtt_service && c8y_port == MQTT_CORE_TLS_PORT {
         c8y_port = MQTT_SERVICE_TLS_PORT;
@@ -327,7 +339,8 @@ fn mqtt_bridge_config(
         cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
     } else {
         // TODO(marcel): integrate credentials auth into MqttAuthConfig?
-        let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
+        let (username, password) =
+            read_c8y_credentials(&c8y_config.cloud_specific.credentials_path)?;
         use_credentials(
             &mut cloud_config,
             &c8y_config.root_cert_path,
