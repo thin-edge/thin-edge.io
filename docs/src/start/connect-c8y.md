@@ -68,8 +68,8 @@ sudo tedge config set c8y.root_cert_path /etc/ssl/certs
 ```
 
 This will set the root certificate path of the Cumulocity.
-In most of the Linux flavors, the certificate will be present in `/etc/ssl/certs`.
-If not found download it from [here](https://www.identrust.com/dst-root-ca-x3).
+In most of the Linux flavors, the certificate will be present in `/etc/ssl/certs`. If you are having problems with
+getting %%te%% to communicate with your cloud, then checkout our [guide](../operate/security/cloud-authentication.md) on managing root certificates on your operating system.
 
 ### Custom domain
 
