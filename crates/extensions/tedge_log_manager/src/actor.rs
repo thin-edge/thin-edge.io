@@ -1,6 +1,7 @@
 use super::error::LogManagementError;
 use super::LogManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
+use crate::config::PluginConfig;
 use crate::plugin_manager::ExternalPlugins;
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -59,6 +60,7 @@ pub struct LogManagerActor {
     messages: SimpleMessageBox<LogInput, LogOutput>,
     upload_sender: DynSender<LogUploadRequest>,
     external_plugins: ExternalPlugins,
+    plugin_config: PluginConfig,
 }
 
 #[async_trait]
@@ -93,6 +95,7 @@ impl Actor for LogManagerActor {
 impl LogManagerActor {
     pub fn new(
         config: LogManagerConfig,
+        plugin_config: PluginConfig,
         messages: SimpleMessageBox<LogInput, LogOutput>,
         upload_sender: DynSender<LogUploadRequest>,
         external_plugins: ExternalPlugins,
@@ -103,6 +106,7 @@ impl LogManagerActor {
             messages,
             upload_sender,
             external_plugins,
+            plugin_config,
         }
     }
 
@@ -280,6 +284,9 @@ impl LogManagerActor {
     async fn reload_supported_log_types(&mut self) -> Result<(), RuntimeError> {
         info!(target: "log plugins", "Reloading supported log types");
 
+        // Reload plugin configuration for up-to-date filtering rules
+        self.plugin_config = PluginConfig::from_file(&self.config.plugin_config_path).await;
+
         // Note: The log manager now only handles external plugins.
         // The file-based plugin configuration is handled by the standalone plugin.
         self.external_plugins.load().await?;
@@ -305,7 +312,21 @@ impl LogManagerActor {
                             target: "log plugins",
                             "Plugin {} supports log types: {:?}", plugin_type, log_types
                         );
-                        for log_type in log_types {
+
+                        // Apply filtering from plugin config
+                        let filtered_log_types =
+                            self.plugin_config.filter_log_types(&plugin_type, log_types);
+
+                        if !filtered_log_types.is_empty() {
+                            info!(
+                                target: "log plugins",
+                                "Log types from {} plugin after filtering: {:?}",
+                                plugin_type,
+                                filtered_log_types
+                            );
+                        }
+
+                        for log_type in filtered_log_types {
                             if plugin_type == "file" {
                                 // For the file plugin, add log types without suffix (default behavior)
                                 types.push(log_type);

@@ -62,6 +62,7 @@ use tedge_health_ext::HealthMonitorBuilder;
 use tedge_log_manager::LogManagerBuilder;
 use tedge_log_manager::LogManagerConfig;
 use tedge_log_manager::LogManagerOptions;
+use tedge_log_manager::PluginConfig;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::TopicFilter;
@@ -383,8 +384,12 @@ impl Agent {
                 mqtt_device_topic_id: device_topic_id.clone(),
                 plugin_dirs: self.config.log_plugin_dirs,
             })?;
+
+            let plugin_config =
+                PluginConfig::from_file(&log_manager_config.plugin_config_path).await;
             let mut log_actor = LogManagerBuilder::try_new(
                 log_manager_config,
+                plugin_config,
                 &mut fs_watch_actor_builder,
                 &mut uploader_actor_builder,
             )

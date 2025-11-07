@@ -1,0 +1,5 @@
+[[plugins.dummy_plugin.filters]]
+exclude = "a.*"
+
+[[plugins.dummy_plugin.filters]]
+include = "ab.*"
