@@ -206,24 +206,47 @@ tedge cert create-key-hsm should ask where to create keypair if multiple tokens 
 
     # unset key_uri so there there's no hint where to generate the keypair
     Execute Command    cmd=tedge config unset device.key_uri
-    ${stderr}=    Execute Command    cmd=tedge cert create-key-hsm --type ecdsa --label my-key    strip=True    stdout=False    stderr=True    exp_exit_code=1
+    ${stderr}=    Execute Command
+    ...    cmd=tedge cert create-key-hsm --type ecdsa --label my-key
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    ...    exp_exit_code=1
     Should Contain    ${stderr}    No token URL was provided for this operation; the available tokens are:
     Should Contain    ${stderr}    token=create-key-token1
     Should Contain    ${stderr}    token=create-key-token2
 
 tedge cert create-key-hsm can set chosen id and returns error if object with this id already exists
-    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True
+    ${output}=    Execute Command
+    ...    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
     Should Contain    ${output}    id=%01%02%03
 
-    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
+    ${output}=    Execute Command
+    ...    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    ...    exp_exit_code=!0
     Should Contain    ${output}    Object with this id already exists on the token
 
 tedge cert create-key-hsm can set pin per request
-    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --label my-key --pin 000000 "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True    exp_exit_code=!0
+    ${output}=    Execute Command
+    ...    cmd=tedge cert create-key-hsm --label my-key --pin 000000 "pkcs11:token=tedge"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    ...    exp_exit_code=!0
     Should Contain    ${output}    The specified PIN is incorrect
 
 tedge cert create-key-hsm can save public key to file
-    ${output}=    Execute Command    cmd=tedge cert create-key-hsm --label my-key --outfile-pubkey pubkey.pem "pkcs11:token=tedge"    strip=True    stdout=False    stderr=True
+    ${output}=    Execute Command
+    ...    cmd=tedge cert create-key-hsm --label my-key --outfile-pubkey pubkey.pem "pkcs11:token=tedge"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
     ${pubkey}=    Execute Command    cat pubkey.pem    strip=True
     Should Contain    ${output}    ${pubkey}
 
