@@ -86,7 +86,7 @@ def strip_scheme(url: Optional[str]) -> Optional[str]:
     """Strip the scheme from a URL"""
     if isinstance(url, str):
         # strip any scheme if present
-        return url.split("://", 1)[-1]
+        return url.strip().split("://", 1)[-1]
     return url
 
 
