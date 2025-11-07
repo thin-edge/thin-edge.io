@@ -59,7 +59,8 @@ Create c8y_Firmware operation
     [Arguments]    ${firmware_url}
     ${operation}=    Cumulocity.Install Firmware    firmware1    1.0    ${firmware_url}
     Set Suite Variable    $operation
-    Cumulocity.Operation Should Be DELIVERED    ${operation}
+    Set Device Context    ${PARENT_SN}
+    Should Have MQTT Messages    c8y/devicecontrol/notifications    message_contains=${operation.id}
 
 Validate tedge firmware update request sent
     [Arguments]    ${date_from}

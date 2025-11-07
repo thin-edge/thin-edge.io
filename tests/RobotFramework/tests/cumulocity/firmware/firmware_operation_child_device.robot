@@ -120,7 +120,8 @@ Upload binary to Cumulocity
 Create c8y_Firmware operation
     ${operation}=    Cumulocity.Install Firmware    firmware1    1.0    ${file_url}
     Set Suite Variable    $operation
-    Cumulocity.Operation Should Be DELIVERED    ${operation}
+    Set Device Context    ${PARENT_SN}
+    Should Have MQTT Messages    c8y/devicecontrol/notifications    message_contains=${operation.id}
 
 Validate if file is not newly downloaded
     Set Device Context    ${PARENT_SN}
