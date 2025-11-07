@@ -109,8 +109,7 @@ Measurement units can be cleared
     ...    type=t6
     ...    value=temperature
     ...    series=temperature
-    ...    reverse=${True}
-    ...    after=1970-01-01
+    ...    sort_newest=${True}
     Should Be Equal    ${measurements[0]["temperature"]["temperature"]["unit"]}    °C
     # Execute Command    sleep 1
     Execute Command    tedge mqtt pub -r te/device/main///m/t6/meta ''
@@ -122,8 +121,7 @@ Measurement units can be cleared
     ...    type=t6
     ...    value=temperature
     ...    series=temperature
-    ...    after=1970-01-01
-    ...    reverse=${True}
+    ...    sort_newest=${True}
     Log    ${measurements}
     Should Not Contain    ${measurements[0]["temperature"]["temperature"]}    unit
 
