@@ -82,7 +82,7 @@ class MQTTMessage:
     # {"tst":"2022-12-27T16:55:44.923776Z+0000","topic":"c8y/s/us","qos":0,"retain":0,"payloadlen":99,"payload":"119,c8y-bridge.conf,c8y-configuration-plugin,example,mosquitto.conf,tedge-mosquitto.conf,tedge.toml"}
 
 
-def strip_scheme(url: str | None) -> str | None:
+def strip_scheme(url: Optional[str]) -> Optional[str]:
     """Strip the scheme from a URL"""
     if isinstance(url, str):
         # strip any scheme if present
@@ -127,7 +127,7 @@ class ThinEdgeIO(DeviceLibrary):
         return c8y_lib.get_domain()
 
     @property
-    def c8y_mqtt(self) -> str | None:
+    def c8y_mqtt(self) -> Optional[str]:
         """Get the Cumulocity MQTT broker URL"""
         return strip_scheme(self.c8y_config.get("mqtt"))
 
