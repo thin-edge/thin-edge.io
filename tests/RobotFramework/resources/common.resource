@@ -20,6 +20,7 @@ ${DEVICE_ADAPTER}       %{DEVICE_ADAPTER=docker}
 # Cumulocity settings
 &{C8Y_CONFIG}
 ...                     host=%{C8Y_BASEURL= }
+...                     mqtt=%{C8Y_MQTT= }
 ...                     tenant=%{C8Y_TENANT= }
 ...                     username=%{C8Y_USER= }
 ...                     password=%{C8Y_PASSWORD= }

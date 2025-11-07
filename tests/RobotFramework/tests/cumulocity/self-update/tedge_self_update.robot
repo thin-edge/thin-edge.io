@@ -160,7 +160,9 @@ Update tedge Using a Custom Software Update Workflow
 
     # Register device (using already installed version)
     # Use self-signed certificate as the older thin-edge.io version does not support Cumulocity CA
-    Register Device With Self-Signed Certificate    external_id=${DEVICE_SN}
+    # and don't explicitly set the mqtt url so that the default value is used (e.g. Core MQTT)
+    Register Device With Self-Signed Certificate    external_id=${DEVICE_SN}    mqtt=${EMPTY}
+
     Execute Command    cmd=tedge connect c8y
     Device Should Exist    ${DEVICE_SN}
 
@@ -231,8 +233,10 @@ Unpin thin-edge.io APT Packages
 
 Register Legacy thin-edge.io
     [Arguments]    ${external_id}
+    # Don't explicitly set the mqtt url so that the default value is used (e.g. Core MQTT)
+    # as older versions of thin-edge.io don't support the mqtt service
     ${domain}=    Cumulocity.Get Domain
-    Execute Command    cmd=tedge config set c8y.url ${domain}
+    ThinEdgeIO.Set Cumulocity URLs    http=${domain}    mqtt=${EMPTY}
     Execute Command    cmd=tedge cert create --device-id '${external_id}'
     ${pem_contents}=    Execute Command    cmd=cat "$(tedge config get device.cert.path)"    strip=${True}
     Cumulocity.Upload Certificate
