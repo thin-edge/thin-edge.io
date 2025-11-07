@@ -22,6 +22,7 @@ from pathlib import Path
 
 from paho.mqtt import matcher
 from robot.api.deco import keyword, library
+from robot.libraries.BuiltIn import BuiltIn
 from DeviceLibrary import DeviceLibrary, DeviceAdapter
 from DeviceLibrary.DeviceLibrary import timestamp
 from Cumulocity import Cumulocity, retry
@@ -81,6 +82,14 @@ class MQTTMessage:
     # {"tst":"2022-12-27T16:55:44.923776Z+0000","topic":"c8y/s/us","qos":0,"retain":0,"payloadlen":99,"payload":"119,c8y-bridge.conf,c8y-configuration-plugin,example,mosquitto.conf,tedge-mosquitto.conf,tedge.toml"}
 
 
+def strip_scheme(url: Optional[str]) -> Optional[str]:
+    """Strip the scheme from a URL"""
+    if isinstance(url, str):
+        # strip any scheme if present
+        return url.strip().split("://", 1)[-1]
+    return url
+
+
 @library(scope="SUITE", auto_keywords=False)
 class ThinEdgeIO(DeviceLibrary):
     """ThinEdgeIO Library"""
@@ -101,6 +110,26 @@ class ThinEdgeIO(DeviceLibrary):
 
         # Configure retries
         retry.configure_retry_on_members(self, "^_assert_")
+
+        # Cumulocity configuration cache
+        self._c8y_config = {}
+
+    @property
+    def c8y_config(self) -> Dict[str, Any]:
+        """Get the Cumulocity configuration"""
+        if not self._c8y_config:
+            self._c8y_config = BuiltIn().get_variable_value(r"&{C8Y_CONFIG}", {}) or {}
+        return self._c8y_config
+
+    @property
+    def c8y_host(self) -> str:
+        """Get the Cumulocity domain/host"""
+        return c8y_lib.get_domain()
+
+    @property
+    def c8y_mqtt(self) -> Optional[str]:
+        """Get the Cumulocity MQTT broker URL"""
+        return strip_scheme(self.c8y_config.get("mqtt"))
 
     def end_suite(self, _data: Any, result: Any):
         """End suite hook which is called by Robot Framework
@@ -201,6 +230,8 @@ class ThinEdgeIO(DeviceLibrary):
         device_type: str = "thin-edge.io",
         device_name: Optional[str] = None,
         csr_path: Optional[str] = None,
+        http: Optional[str] = None,
+        mqtt: Optional[str] = None,
         **kwargs,
     ):
         """Register a device with Cumulocity using the Cumulocity Certificate Authority feature
@@ -217,10 +248,55 @@ class ThinEdgeIO(DeviceLibrary):
             device_type=device_type,
         )
 
-        cmd = f"""tedge config set c8y.url '{credentials.url}' && tedge cert download c8y --device-id '{external_id}' --one-time-password '{credentials.one_time_password}' --retry-every 5s --max-timeout 60s"""
+        self.set_cumulocity_urls(http=http, mqtt=mqtt, device_name=device_name)
+
+        cmd = f"tedge cert download c8y --device-id '{external_id}' --one-time-password '{credentials.one_time_password}' --retry-every 5s --max-timeout 60s"
         if csr_path:
             cmd += f" --csr-path '{csr_path}'"
 
+        self.execute_command(
+            cmd,
+            device_name=device_name,
+        )
+
+    @keyword("Set Cumulocity URLs")
+    def set_cumulocity_urls(
+        self,
+        http: Optional[str] = None,
+        mqtt: Optional[str] = None,
+        profile: Optional[str] = None,
+        device_name: Optional[str] = None,
+    ):
+        """Set the Cumulocity URLs. If an mqtt url is defined then the individual urls will be set
+        otherwise only the single c8y.url will be set.
+
+        Args:
+            http (Optional[str]): The HTTP URL to set. If set to None, then the default host will be used.
+            mqtt (Optional[str]): The MQTT URL to set. If set to None, then the default mqtt broker will be used (based on the host).
+            device_name (Optional[str]): The device name to set.
+            profile (Optional[str]): Cloud profile. Defaults to None.
+        """
+
+        if mqtt is None:
+            mqtt = self.c8y_mqtt
+
+        if http is None:
+            http = self.c8y_host
+
+        def _append_command(cmd):
+            if profile:
+                commands.append(f"{cmd} --profile {profile}")
+            else:
+                commands.append(cmd)
+
+        commands = []
+        if not mqtt:
+            _append_command(f"tedge config set c8y.url '{http}'")
+        else:
+            _append_command(f"tedge config set c8y.mqtt '{mqtt}'")
+            _append_command(f"tedge config set c8y.http '{http}'")
+
+        cmd = " && ".join(commands)
         self.execute_command(
             cmd,
             device_name=device_name,
@@ -232,6 +308,8 @@ class ThinEdgeIO(DeviceLibrary):
         external_id: str,
         device_name: Optional[str] = None,
         auto_registration_enabled: bool = True,
+        http: Optional[str] = None,
+        mqtt: Optional[str] = None,
         **kwargs,
     ):
         """Register a device with Cumulocity using a self-signed certificate. The self-signed
@@ -241,10 +319,8 @@ class ThinEdgeIO(DeviceLibrary):
 
         | Register Device With Self-Signed Certificate | external_id=tedge001 |
         """
-        domain = c8y_lib.get_domain()
-        self.execute_command(
-            f"tedge config set c8y.url '{domain}' && tedge cert create --device-id '{external_id}'"
-        )
+        self.set_cumulocity_urls(http=http, mqtt=mqtt, device_name=device_name)
+        self.execute_command(f"tedge cert create --device-id '{external_id}'")
         pem_contents = self.execute_command(
             'cat "$(tedge config get device.cert_path)"'
         )
