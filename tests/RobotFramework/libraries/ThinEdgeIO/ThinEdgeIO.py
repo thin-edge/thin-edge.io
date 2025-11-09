@@ -264,6 +264,7 @@ class ThinEdgeIO(DeviceLibrary):
         self,
         http: Optional[str] = None,
         mqtt: Optional[str] = None,
+        profile: Optional[str] = None,
         device_name: Optional[str] = None,
     ):
         """Set the Cumulocity URLs. If an mqtt url is defined then the individual urls will be set
@@ -273,6 +274,7 @@ class ThinEdgeIO(DeviceLibrary):
             http (Optional[str]): The HTTP URL to set. If set to None, then the default host will be used.
             mqtt (Optional[str]): The MQTT URL to set. If set to None, then the default mqtt broker will be used (based on the host).
             device_name (Optional[str]): The device name to set.
+            profile (Optional[str]): Cloud profile. Defaults to None.
         """
 
         if mqtt is None:
@@ -281,14 +283,20 @@ class ThinEdgeIO(DeviceLibrary):
         if http is None:
             http = self.c8y_host
 
+        def _append_command(cmd):
+            if profile:
+                commands.append(f"{cmd} --profile {profile}")
+            else:
+                commands.append(cmd)
+
         commands = []
         self.c8y_config["mqtt"] = mqtt
         if not mqtt:
-            commands.append(f"tedge config set c8y.url '{http}'")
+            _append_command(f"tedge config set c8y.url '{http}'")
         else:
-            commands.append(f"tedge config set c8y.url '{http}'")
-            commands.append(f"tedge config set c8y.mqtt '{mqtt}'")
-            commands.append(f"tedge config set c8y.http '{http}'")
+            _append_command(f"tedge config set c8y.url '{http}'")
+            _append_command(f"tedge config set c8y.mqtt '{mqtt}'")
+            _append_command(f"tedge config set c8y.http '{http}'")
 
         cmd = " && ".join(commands)
         self.execute_command(
