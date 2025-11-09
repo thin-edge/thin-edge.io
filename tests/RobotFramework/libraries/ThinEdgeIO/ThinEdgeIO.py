@@ -290,11 +290,9 @@ class ThinEdgeIO(DeviceLibrary):
                 commands.append(cmd)
 
         commands = []
-        self.c8y_config["mqtt"] = mqtt
         if not mqtt:
             _append_command(f"tedge config set c8y.url '{http}'")
         else:
-            _append_command(f"tedge config set c8y.url '{http}'")
             _append_command(f"tedge config set c8y.mqtt '{mqtt}'")
             _append_command(f"tedge config set c8y.http '{http}'")
 
