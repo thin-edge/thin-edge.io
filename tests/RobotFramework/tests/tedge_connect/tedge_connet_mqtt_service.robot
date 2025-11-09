@@ -26,7 +26,7 @@ Connect to Cumulocity MQTT Service endpoint basic auth
     ${DEVICE_SN}=    Setup    register=${False}
 
     Execute Command    tedge config set device.id ${DEVICE_SN}
-    Execute Command    tedge config set c8y.url "${C8Y_CONFIG.host}"
+    Set Cumulocity URLs
     Execute Command    tedge config set c8y.mqtt_service.enabled true
 
     Execute Command

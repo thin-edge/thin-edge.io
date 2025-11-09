@@ -62,8 +62,7 @@ Setup Device Without thin-edge.io
     Start Service    gost-http-proxy
 
 Configure and Connect to Cumulocity
-    ${domain}=    Cumulocity.Get Domain
-    Execute Command    tedge config set c8y.url "${domain}"
+    Set Cumulocity URLs
     Execute Command    tedge cert create --device-id "${DEVICE_SN}"
     Execute Command
     ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
