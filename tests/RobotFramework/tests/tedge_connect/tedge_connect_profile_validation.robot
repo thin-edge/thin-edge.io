@@ -21,7 +21,10 @@ Bridge topic prefix must be unique to test connection
 
 Device ID must be unique if cloud URLs are the same
     ThinEdgeIO.Execute Command
-    ...    sudo tedge config set c8y.url --profile second "$(tedge config get c8y.url)"
+    ...    sudo tedge config set c8y.mqtt --profile second "$(tedge config get c8y.mqtt)"
+    ...    timeout=0
+    ThinEdgeIO.Execute Command
+    ...    sudo tedge config set c8y.http --profile second "$(tedge config get c8y.http)"
     ...    timeout=0
     # Just assert the command fails, we have unit tests that assert the correct error message appears
     ThinEdgeIO.Execute Command
