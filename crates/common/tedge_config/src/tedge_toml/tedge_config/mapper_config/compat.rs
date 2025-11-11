@@ -13,7 +13,10 @@ pub trait FromCloudConfig: Sized {
     type CloudConfigReader;
 
     /// Returns the cloud type for this configuration
-    fn load_cloud_mapper_config(profile: Option<&str>, tedge_config: &TEdgeConfig) -> Result<MapperConfig<Self>, MapperConfigError>; 
+    fn load_cloud_mapper_config(
+        profile: Option<&str>,
+        tedge_config: &TEdgeConfig,
+    ) -> Result<MapperConfig<Self>, MapperConfigError>;
 
     /// Create from the cloud-specific configuration reader
     fn from_cloud_config(config: &Self::CloudConfigReader) -> Self;
@@ -39,12 +42,10 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
     fn load_cloud_mapper_config(
         profile: Option<&str>,
         tedge_config: &TEdgeConfig,
-    ) -> Result<MapperConfig<Self>, MapperConfigError>
-    {
-        let c8y_config = tedge_config
-            .c8y
-            .try_get(profile)
-            .map_err(|_| MapperConfigError::ConfigRead(format!("C8y profile '{}' not found", profile.unwrap())))?;
+    ) -> Result<MapperConfig<Self>, MapperConfigError> {
+        let c8y_config = tedge_config.c8y.try_get(profile).map_err(|_| {
+            MapperConfigError::ConfigRead(format!("C8y profile '{}' not found", profile.unwrap()))
+        })?;
 
         build_mapper_config(c8y_config, tedge_config)
     }
@@ -63,8 +64,16 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
             smartrest1: Smartrest1Config {
                 templates: c8y.smartrest1.templates.clone(),
             },
-            http: c8y.http.or_config_not_set().expect("http endpoint should be set").clone(),
-            mqtt: c8y.mqtt.or_config_not_set().expect("mqtt endpoint should be set").clone(),
+            http: c8y
+                .http
+                .or_config_not_set()
+                .expect("http endpoint should be set")
+                .clone(),
+            mqtt: c8y
+                .mqtt
+                .or_config_not_set()
+                .expect("mqtt endpoint should be set")
+                .clone(),
             proxy: ProxyConfig {
                 bind: ProxyBindConfig {
                     address: c8y.proxy.bind.address,
@@ -74,9 +83,9 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
                     host: c8y.proxy.client.host.clone(),
                     port: c8y.proxy.client.port,
                 },
-                cert_path: c8y.proxy.cert_path.or_none().cloned(),
-                key_path: c8y.proxy.key_path.or_none().cloned(),
-                ca_path: c8y.proxy.ca_path.or_none().cloned(),
+                cert_path: c8y.proxy.cert_path.clone(),
+                key_path: c8y.proxy.key_path.clone(),
+                ca_path: c8y.proxy.ca_path.clone(),
             },
             bridge_include: BridgeIncludeConfig {
                 local_cleansession: c8y.bridge.include.local_cleansession.clone(),
@@ -105,8 +114,6 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
             },
             mqtt_service: MqttServiceConfig {
                 enabled: c8y.mqtt_service.enabled,
-                url: c8y.mqtt_service.url.or_config_not_set().expect("mqtt_service url should be set").clone(),
-                topic_prefix: c8y.mqtt_service.topic_prefix.clone(),
                 topics: c8y.mqtt_service.topics.clone(),
             },
         }
@@ -119,12 +126,10 @@ impl FromCloudConfig for AzMapperSpecificConfig {
     fn load_cloud_mapper_config(
         profile: Option<&str>,
         tedge_config: &TEdgeConfig,
-    ) -> Result<MapperConfig<Self>, MapperConfigError>
-    {
-        let az_config = tedge_config
-            .az
-            .try_get(profile)
-            .map_err(|_| MapperConfigError::ConfigRead(format!("Azure profile '{}' not found", profile.unwrap())))?;
+    ) -> Result<MapperConfig<Self>, MapperConfigError> {
+        let az_config = tedge_config.az.try_get(profile).map_err(|_| {
+            MapperConfigError::ConfigRead(format!("Azure profile '{}' not found", profile.unwrap()))
+        })?;
 
         build_mapper_config(az_config, tedge_config)
     }
@@ -143,12 +148,10 @@ impl FromCloudConfig for AwsMapperSpecificConfig {
     fn load_cloud_mapper_config(
         profile: Option<&str>,
         tedge_config: &TEdgeConfig,
-    ) -> Result<MapperConfig<Self>, MapperConfigError>
-    {
-        let aws_config = tedge_config
-            .aws
-            .try_get(profile)
-            .map_err(|_| MapperConfigError::ConfigRead(format!("AWS profile '{}' not found", profile.unwrap())))?;
+    ) -> Result<MapperConfig<Self>, MapperConfigError> {
+        let aws_config = tedge_config.aws.try_get(profile).map_err(|_| {
+            MapperConfigError::ConfigRead(format!("AWS profile '{}' not found", profile.unwrap()))
+        })?;
 
         build_mapper_config(aws_config, tedge_config)
     }
@@ -198,7 +201,12 @@ where
 
     let mut cloud_specific = T::from_cloud_config(cloud_config);
 
-    cloud_specific.apply_runtime_defaults(&url, tedge_config);
+    cloud_specific.apply_runtime_defaults(
+        &url,
+        tedge_config,
+        &AbsolutePath::try_new(tedge_config.location.tedge_config_root_path().as_str())
+            .expect("valid absolute path"),
+    );
 
     Ok(MapperConfig {
         url,
@@ -449,10 +457,7 @@ mod tests {
 
         assert_eq!(config.url.as_str(), "mydevice.azure-devices.net");
         assert!(config.cloud_specific.timestamp);
-        assert_eq!(
-            config.cloud_specific.timestamp_format,
-            TimeFormat::Unix
-        );
+        assert_eq!(config.cloud_specific.timestamp_format, TimeFormat::Unix);
     }
 
     #[test]
@@ -471,10 +476,7 @@ mod tests {
 
         assert_eq!(config.url.as_str(), "mydevice.amazonaws.com");
         assert!(config.cloud_specific.timestamp);
-        assert_eq!(
-            config.cloud_specific.timestamp_format,
-            TimeFormat::Unix
-        );
+        assert_eq!(config.cloud_specific.timestamp_format, TimeFormat::Unix);
     }
 
     #[test]
@@ -591,5 +593,27 @@ mod tests {
         assert!(config.device.key_path.as_str().contains("tedge"));
         assert!(config.device.cert_path.as_str().contains("tedge"));
     }
-}
 
+    #[test]
+    fn empty_c8y_proxy_cert_path_preserves_original_key() {
+        let tedge_toml = r#"
+            [device]
+            id = "my-device-123"
+
+            [c8y]
+            url = "tenant.cumulocity.com"
+        "#;
+
+        let tedge_config = TEdgeConfig::from_dto(
+            &toml::from_str(tedge_toml).unwrap(),
+            TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
+        );
+
+        let config: C8yMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
+
+        assert_eq!(
+            config.cloud_specific.proxy.cert_path.key(),
+            "c8y.proxy.cert_path"
+        )
+    }
+}

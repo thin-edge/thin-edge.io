@@ -1,5 +1,6 @@
 mod version;
 use reqwest::NoProxy;
+use serde::de::DeserializeOwned;
 use version::TEdgeTomlVersion;
 
 mod append_remove;
@@ -26,7 +27,9 @@ use super::models::HTTPS_PORT;
 use super::models::MQTT_TLS_PORT;
 use super::tedge_config_location::TEdgeConfigLocation;
 use crate::models::AbsolutePath;
-use crate::tedge_toml::mapper_config::MapperConfig;
+use crate::tedge_toml::mapper_config::load_mapper_config_sync;
+use crate::tedge_toml::mapper_config::FromCloudConfig;
+use crate::tedge_toml::mapper_config::MapperConfigError;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
@@ -39,8 +42,13 @@ use certificate::CertificateError;
 use certificate::CloudHttpConfig;
 use certificate::PemCertificate;
 use doku::Document;
+use mapper_config::load_mapper_config;
+use mapper_config::ApplyRuntimeDefaults;
+use mapper_config::ExpectedCloudType;
+use mapper_config::MapperConfig;
 use once_cell::sync::Lazy;
 use reqwest::Certificate;
+use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::io::Read;
 use std::net::IpAddr;
@@ -103,6 +111,65 @@ impl TEdgeConfig {
 
     pub fn root_dir(&self) -> &Utf8Path {
         self.location.tedge_config_root_path()
+    }
+
+    pub fn mapper_config_sync<T>(
+        &self,
+        profile: &Option<impl Borrow<ProfileName>>,
+    ) -> anyhow::Result<MapperConfig<T>>
+    where
+        T: DeserializeOwned + ApplyRuntimeDefaults + ExpectedCloudType,
+    {
+        let profile = profile.as_ref().map(|p| p.borrow());
+        let mapper_reader = self.mapper.try_get(profile)?;
+        let field = &mapper_reader.ty;
+        let value = *field.or_config_not_set()?;
+        anyhow::ensure!(
+            T::expected_cloud_type() == value,
+            "Expected {} to be set to {}, but it is set to {}",
+            field.key(),
+            T::expected_cloud_type(),
+            value
+        );
+        Ok(load_mapper_config_sync::<T>(
+            mapper_reader.config_path.or_config_not_set()?,
+            self,
+        )?)
+    }
+
+    pub async fn mapper_config<T>(
+        &self,
+        profile: &Option<impl Borrow<ProfileName>>,
+    ) -> anyhow::Result<MapperConfig<T>>
+    where
+        T: DeserializeOwned + ApplyRuntimeDefaults + ExpectedCloudType + FromCloudConfig,
+    {
+        let profile = profile.as_ref().map(|p| p.borrow());
+        if self
+            .mapper
+            .entries()
+            .all(|(_, config)| config.config_path.or_none().is_none())
+        {
+            Ok(mapper_config::compat::load_cloud_mapper_config(
+                profile.map(|p| p.as_ref()),
+                self,
+            )?)
+        } else {
+            let mapper_reader = self.mapper.try_get(profile)?;
+            let field = &mapper_reader.ty;
+            let value = *field.or_config_not_set()?;
+            anyhow::ensure!(
+                T::expected_cloud_type() == value,
+                "Expected {} to be set to {}, but it is set to {}",
+                field.key(),
+                T::expected_cloud_type(),
+                value
+            );
+            Ok(
+                load_mapper_config::<T>(mapper_reader.config_path.or_config_not_set()?, self)
+                    .await?,
+            )
+        }
     }
 }
 
@@ -247,7 +314,7 @@ define_tedge_config! {
         organization_unit: Arc<str>,
     },
 
-    #[tedge_config(multi)]
+    #[tedge_config(multi, reader(private))]
     c8y: {
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
@@ -1023,6 +1090,18 @@ define_tedge_config! {
 static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();
 
 impl TEdgeConfigReader {
+    pub fn c8y_keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
+        self.c8y.keys()
+    }
+
+    pub fn c8y_keys_str(&self) -> impl Iterator<Item = Option<&str>> {
+        self.c8y.keys_str()
+    }
+
+    pub fn c8y_entries(&self) -> impl Iterator<Item = (Option<&str>, &TEdgeConfigReaderC8y)> {
+        self.c8y.entries()
+    }
+
     pub fn cloud_root_certs(&self) -> anyhow::Result<CloudHttpConfig> {
         let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
             let c8y_roots = self.c8y.entries().flat_map(|(key, c8y)| {
@@ -1425,6 +1504,9 @@ pub enum ReadError {
 
     #[error(transparent)]
     Multi(#[from] MultiError),
+
+    #[error(transparent)]
+    MapperConfig(#[from] MapperConfigError),
 
     #[error("Config value {key}, cannot be read: {message} ")]
     ReadOnlyNotFound {

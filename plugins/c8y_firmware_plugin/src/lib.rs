@@ -7,6 +7,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
+use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
@@ -55,19 +56,20 @@ pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::E
     )?;
 
     let tedge_config = tedge_config::TEdgeConfig::load(config_dir).await?;
-    let c8y_profile = firmware_plugin_opt.profile.as_deref();
+    let c8y_profile = firmware_plugin_opt.profile;
+    let c8y_config = tedge_config.mapper_config(&c8y_profile).await?;
 
     if firmware_plugin_opt.init {
         warn!("This --init option has been deprecated and will be removed in a future release");
         Ok(())
     } else {
-        run_with(tedge_config, c8y_profile).await
+        run_with(&tedge_config, &c8y_config).await
     }
 }
 
 async fn run_with(
-    tedge_config: TEdgeConfig,
-    c8y_profile: Option<&str>,
+    tedge_config: &TEdgeConfig,
+    c8y_config: &C8yMapperConfig,
 ) -> Result<(), anyhow::Error> {
     let mut runtime = Runtime::new();
 
@@ -103,7 +105,7 @@ async fn run_with(
 
     // Instantiate firmware manager actor
     let firmware_manager_config =
-        FirmwareManagerConfig::from_tedge_config(&tedge_config, c8y_profile)?;
+        FirmwareManagerConfig::from_tedge_config(tedge_config, c8y_config)?;
     FirmwareManagerBuilder::init(&firmware_manager_config.data_dir).await?;
     let firmware_actor = FirmwareManagerBuilder::try_new(
         firmware_manager_config,

@@ -1,6 +1,7 @@
 use c8y_api::http_proxy::C8yAuthRetriever;
 use http::HeaderValue;
 use miette::IntoDiagnostic;
+use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
 use tedge_config::TEdgeConfig;
 
 pub struct Auth(HeaderValue);
@@ -10,9 +11,12 @@ impl Auth {
         self.0.clone()
     }
 
-    pub async fn retrieve(config: &TEdgeConfig, c8y_profile: Option<&str>) -> miette::Result<Auth> {
+    pub async fn retrieve(
+        config: &TEdgeConfig,
+        c8y_config: &C8yMapperConfig,
+    ) -> miette::Result<Auth> {
         let retriever =
-            C8yAuthRetriever::from_tedge_config(config, c8y_profile).into_diagnostic()?;
+            C8yAuthRetriever::from_tedge_config(config, c8y_config).into_diagnostic()?;
 
         retriever
             .get_auth_header_value()

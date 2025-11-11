@@ -94,7 +94,7 @@ async fn established_bridges(tedge_config: &TEdgeConfig) -> Vec<CloudBorrow<'_>>
 fn possible_clouds(config: &TEdgeConfig) -> impl Iterator<Item = CloudBorrow<'_>> {
     let iter = ::std::iter::empty();
     #[cfg(feature = "c8y")]
-    let iter = iter.chain(config.c8y.keys().map(CloudBorrow::c8y_borrowed));
+    let iter = iter.chain(config.c8y_keys().map(CloudBorrow::c8y_borrowed));
     #[cfg(feature = "azure")]
     let iter = iter.chain(config.az.keys().map(CloudBorrow::az_borrowed));
     #[cfg(feature = "aws")]

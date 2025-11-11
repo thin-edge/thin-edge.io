@@ -536,12 +536,12 @@ type = "a-service-type""#;
 
     #[tokio::test]
     async fn toml_values_can_be_overridden_with_environment() {
-        let (_dir, t) = create_temp_tedge_config("c8y.root_cert_path = \"/toml/path\"").unwrap();
+        let (_dir, t) = create_temp_tedge_config("az.root_cert_path = \"/toml/path\"").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_ROOT_CERT_PATH", "/env/path");
+        env.set_var("TEDGE_AZ_ROOT_CERT_PATH", "/env/path");
         let config = t.load().await.unwrap();
         assert_eq!(
-            config.c8y.try_get::<&str>(None).unwrap().root_cert_path,
+            config.az.try_get::<&str>(None).unwrap().root_cert_path,
             AbsolutePath::try_new("/env/path").unwrap()
         );
     }
@@ -550,10 +550,10 @@ type = "a-service-type""#;
     async fn environment_variables_can_contain_toml_syntax_strings() {
         let (_dir, t) = create_temp_tedge_config("").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_ROOT_CERT_PATH", "\"/env/path\"");
+        env.set_var("TEDGE_AZ_ROOT_CERT_PATH", "\"/env/path\"");
         let config = t.load().await.unwrap();
         assert_eq!(
-            config.c8y.try_get::<&str>(None).unwrap().root_cert_path,
+            config.az.try_get::<&str>(None).unwrap().root_cert_path,
             AbsolutePath::try_new("/env/path").unwrap()
         );
     }
@@ -562,44 +562,28 @@ type = "a-service-type""#;
     async fn environment_variables_are_parsed_using_custom_fromstr_implementations() {
         let (_dir, t) = create_temp_tedge_config("").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_SMARTREST_TEMPLATES", "test,values");
+        env.set_var("TEDGE_DIAG_PLUGIN_PATHS", "test,values");
         let config = t.load().await.unwrap();
-        assert_eq!(
-            config
-                .c8y
-                .try_get::<&str>(None)
-                .unwrap()
-                .smartrest
-                .templates,
-            ["test", "values"]
-        );
+        assert_eq!(config.diag.plugin_paths, ["test", "values"]);
     }
 
     #[tokio::test]
     async fn environment_variables_can_contain_toml_format_arrays() {
         let (_dir, t) = create_temp_tedge_config("").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_SMARTREST_TEMPLATES", "[\"test\",\"values\"]");
+        env.set_var("TEDGE_DIAG_PLUGIN_PATHS", "[\"test\",\"values\"]");
         let config = t.load().await.unwrap();
-        assert_eq!(
-            config
-                .c8y
-                .try_get::<&str>(None)
-                .unwrap()
-                .smartrest
-                .templates,
-            ["test", "values"]
-        );
+        assert_eq!(config.diag.plugin_paths, ["test", "values"]);
     }
 
     #[tokio::test]
     async fn empty_environment_variables_reset_configuration_parameters() {
-        let (_dir, t) = create_temp_tedge_config("c8y.root_cert_path = \"/toml/path\"").unwrap();
+        let (_dir, t) = create_temp_tedge_config("az.root_cert_path = \"/toml/path\"").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_ROOT_CERT_PATH", "");
+        env.set_var("TEDGE_AZ_ROOT_CERT_PATH", "");
         let config = t.load().await.unwrap();
         assert_eq!(
-            config.c8y.try_get::<&str>(None).unwrap().root_cert_path,
+            config.az.try_get::<&str>(None).unwrap().root_cert_path,
             AbsolutePath::try_new("/etc/ssl/certs").unwrap()
         );
     }
@@ -607,12 +591,12 @@ type = "a-service-type""#;
     #[tokio::test]
     async fn environment_variables_can_override_profiled_configurations() {
         let (_dir, t) =
-            create_temp_tedge_config("c8y.profiles.test.root_cert_path = \"/toml/path\"").unwrap();
+            create_temp_tedge_config("az.profiles.test.root_cert_path = \"/toml/path\"").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_PROFILES_TEST_ROOT_CERT_PATH", "/env/path");
+        env.set_var("TEDGE_AZ_PROFILES_TEST_ROOT_CERT_PATH", "/env/path");
         let config = t.load().await.unwrap();
         assert_eq!(
-            config.c8y.try_get(Some("test")).unwrap().root_cert_path,
+            config.az.try_get(Some("test")).unwrap().root_cert_path,
             AbsolutePath::try_new("/env/path").unwrap()
         );
     }

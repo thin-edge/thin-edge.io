@@ -182,7 +182,7 @@ impl C8yMapperConfig {
             .cloud_specific
             .proxy
             .cert_path
-            .as_ref()
+            .or_none()
             .map_or(Protocol::Http, |_| Protocol::Https);
 
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
