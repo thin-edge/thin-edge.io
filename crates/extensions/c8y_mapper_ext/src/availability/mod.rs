@@ -11,6 +11,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::HealthStatus;
 use tedge_config::models::TopicPrefix;
+use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
 use tedge_config::tedge_toml::ReadError;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::MqttMessage;
@@ -55,16 +56,15 @@ pub struct AvailabilityConfig {
 impl AvailabilityConfig {
     pub fn try_new(
         tedge_config: &TEdgeConfig,
-        c8y_profile: Option<&str>,
+        c8y_config: &C8yMapperConfig,
     ) -> Result<Self, ReadError> {
-        let c8y = tedge_config.c8y.try_get(c8y_profile)?;
-        let xid = c8y.device.id()?;
+        let xid = c8y_config.device.id()?;
         Ok(Self {
             main_device_id: xid.into(),
             mqtt_schema: MqttSchema::with_root(tedge_config.mqtt.topic_root.clone()),
-            c8y_prefix: c8y.bridge.topic_prefix.clone(),
-            enable: c8y.availability.enable,
-            interval: c8y.availability.interval.duration(),
+            c8y_prefix: c8y_config.bridge.topic_prefix.clone(),
+            enable: c8y_config.cloud_specific.availability.enable,
+            interval: c8y_config.cloud_specific.availability.interval.duration(),
         })
     }
 }

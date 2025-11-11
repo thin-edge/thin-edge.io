@@ -1,5 +1,6 @@
 pub mod compat;
 
+use crate::models::CloudType;
 use crate::tedge_toml::tedge_config::default_credentials_path;
 use crate::TEdgeConfig;
 
@@ -26,12 +27,13 @@ use certificate::PemCertificate;
 use doku::Document;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use std::borrow::Cow;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 
-pub use compat::FromCloudConfig;
 pub use compat::load_cloud_mapper_config;
+pub use compat::FromCloudConfig;
 
 /// Device-specific configuration fields shared across all cloud types
 #[derive(Debug, Clone, Deserialize, Document)]
@@ -166,6 +168,18 @@ pub struct ProxyClientConfig {
     pub port: u16,
 }
 
+/// Helper function to deserialize OptionalConfig<T> from Option<T>
+fn deserialize_optional_config<'de, D, T>(deserializer: D) -> Result<OptionalConfig<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(|opt| {
+        opt.map(|v| OptionalConfig::present(v, ""))
+            .unwrap_or_else(|| OptionalConfig::empty(""))
+    })
+}
+
 /// HTTP proxy configuration for Cumulocity
 #[derive(Debug, Clone, Deserialize, Document)]
 #[serde(default)]
@@ -179,16 +193,25 @@ pub struct ProxyConfig {
     pub client: ProxyClientConfig,
 
     /// Server certificate path for the proxy
-    #[serde(default)]
-    pub cert_path: Option<AbsolutePath>,
+    #[serde(
+        default = "default_optional_path",
+        deserialize_with = "deserialize_optional_config"
+    )]
+    pub cert_path: OptionalConfig<AbsolutePath>,
 
     /// Server private key path for the proxy
-    #[serde(default)]
-    pub key_path: Option<AbsolutePath>,
+    #[serde(
+        default = "default_optional_path",
+        deserialize_with = "deserialize_optional_config"
+    )]
+    pub key_path: OptionalConfig<AbsolutePath>,
 
     /// CA certificates path for the proxy
-    #[serde(default)]
-    pub ca_path: Option<AbsolutePath>,
+    #[serde(
+        default = "default_optional_path",
+        deserialize_with = "deserialize_optional_config"
+    )]
+    pub ca_path: OptionalConfig<AbsolutePath>,
 }
 
 /// Entity store configuration
@@ -467,21 +490,32 @@ struct PartialMapperConfig<T> {
 /// * `Ok(MapperConfig<T>)` - Fully populated mapper configuration
 /// * `Err(MapperConfigError)` - If file cannot be read, parsed, or required fields are missing
 /// ```
-pub async fn load_mapper_config<T>(
+pub(crate) async fn load_mapper_config<T>(
     config_path: &AbsolutePath,
     tedge_config: &TEdgeConfig,
 ) -> Result<MapperConfig<T>, MapperConfigError>
 where
     T: DeserializeOwned + ApplyRuntimeDefaults,
 {
-    // Read the TOML file
     let toml_content = tokio::fs::read_to_string(config_path.as_std_path()).await?;
-    load_mapper_config_from_string(&toml_content, tedge_config)
+    load_mapper_config_from_string(&toml_content, tedge_config, config_path)
 }
 
-pub fn load_mapper_config_from_string<T>(
+pub(crate) fn load_mapper_config_sync<T>(
+    config_path: &AbsolutePath,
+    tedge_config: &TEdgeConfig,
+) -> Result<MapperConfig<T>, MapperConfigError>
+where
+    T: DeserializeOwned + ApplyRuntimeDefaults,
+{
+    let toml_content = std::fs::read_to_string(config_path.as_std_path())?;
+    load_mapper_config_from_string(&toml_content, tedge_config, config_path)
+}
+
+fn load_mapper_config_from_string<T>(
     toml_content: &str,
     tedge_config: &TEdgeConfig,
+    config_path: &AbsolutePath,
 ) -> Result<MapperConfig<T>, MapperConfigError>
 where
     T: DeserializeOwned + ApplyRuntimeDefaults,
@@ -563,7 +597,7 @@ where
     let mut cloud_specific = partial.cloud_specific;
 
     // Apply runtime defaults to cloud_specific
-    cloud_specific.apply_runtime_defaults(&url, tedge_config);
+    cloud_specific.apply_runtime_defaults(&url, tedge_config, config_path);
 
     // Construct the final configuration
     Ok(MapperConfig {
@@ -577,9 +611,36 @@ where
     })
 }
 
+pub trait ExpectedCloudType {
+    fn expected_cloud_type() -> CloudType;
+}
+
+impl ExpectedCloudType for C8yMapperSpecificConfig {
+    fn expected_cloud_type() -> CloudType {
+        CloudType::C8y
+    }
+}
+
+impl ExpectedCloudType for AzMapperSpecificConfig {
+    fn expected_cloud_type() -> CloudType {
+        CloudType::Az
+    }
+}
+
+impl ExpectedCloudType for AwsMapperSpecificConfig {
+    fn expected_cloud_type() -> CloudType {
+        CloudType::Aws
+    }
+}
+
 /// Trait for applying runtime defaults to cloud-specific configurations
 pub trait ApplyRuntimeDefaults {
-    fn apply_runtime_defaults(&mut self, url: &ConnectUrl, tedge_config: &TEdgeConfig);
+    fn apply_runtime_defaults(
+        &mut self,
+        url: &ConnectUrl,
+        tedge_config: &TEdgeConfig,
+        config_path: &AbsolutePath,
+    );
 
     /// Returns the default bridge topic prefix for this cloud type
     fn default_bridge_topic_prefix() -> TopicPrefix;
@@ -647,6 +708,10 @@ fn default_proxy_client_port() -> u16 {
     8001 // Will be overridden at runtime if bind.port differs
 }
 
+fn default_optional_path() -> OptionalConfig<AbsolutePath> {
+    OptionalConfig::empty("")
+}
+
 fn default_proxy_config() -> ProxyConfig {
     ProxyConfig {
         bind: ProxyBindConfig {
@@ -657,9 +722,9 @@ fn default_proxy_config() -> ProxyConfig {
             host: default_proxy_client_host(),
             port: default_proxy_client_port(),
         },
-        cert_path: None,
-        key_path: None,
-        ca_path: None,
+        cert_path: default_optional_path(),
+        key_path: default_optional_path(),
+        ca_path: default_optional_path(),
     }
 }
 
@@ -909,8 +974,21 @@ impl Default for AwsMapperSpecificConfig {
     }
 }
 
+fn set_key_if_blank<T>(field: &mut OptionalConfig<T>, value: Cow<'static, str>) {
+    use OptionalConfig as OC;
+    match field {
+        OC::Present { ref mut key, .. } | OC::Empty(ref mut key) if key.is_empty() => *key = value,
+        _ => (),
+    }
+}
+
 impl ApplyRuntimeDefaults for C8yMapperSpecificConfig {
-    fn apply_runtime_defaults(&mut self, url: &ConnectUrl, tedge_config: &TEdgeConfig) {
+    fn apply_runtime_defaults(
+        &mut self,
+        url: &ConnectUrl,
+        tedge_config: &TEdgeConfig,
+        config_path: &AbsolutePath,
+    ) {
         // Derive http endpoint from url if it's still the placeholder
         if self.http.to_string() == "localhost:443" {
             self.http = url.as_str().parse().expect("Valid URL");
@@ -934,6 +1012,19 @@ impl ApplyRuntimeDefaults for C8yMapperSpecificConfig {
         if self.credentials_path == serde_placeholder_credentials_path() {
             self.credentials_path = default_credentials_path(&tedge_config.location)
         }
+
+        set_key_if_blank(
+            &mut self.proxy.cert_path,
+            format!("{}: proxy.cert_path", config_path).into(),
+        );
+        set_key_if_blank(
+            &mut self.proxy.key_path,
+            format!("{}: proxy.key_path", config_path).into(),
+        );
+        set_key_if_blank(
+            &mut self.proxy.ca_path,
+            format!("{}: proxy.ca_path", config_path).into(),
+        );
     }
 
     fn default_bridge_topic_prefix() -> TopicPrefix {
@@ -950,7 +1041,12 @@ impl ApplyRuntimeDefaults for C8yMapperSpecificConfig {
 }
 
 impl ApplyRuntimeDefaults for AzMapperSpecificConfig {
-    fn apply_runtime_defaults(&mut self, _url: &ConnectUrl, _tedge_config: &TEdgeConfig) {
+    fn apply_runtime_defaults(
+        &mut self,
+        _url: &ConnectUrl,
+        _tedge_config: &TEdgeConfig,
+        _config_path: &AbsolutePath,
+    ) {
         // Azure config has no runtime defaults currently
     }
 
@@ -970,7 +1066,12 @@ impl ApplyRuntimeDefaults for AzMapperSpecificConfig {
 }
 
 impl ApplyRuntimeDefaults for AwsMapperSpecificConfig {
-    fn apply_runtime_defaults(&mut self, _url: &ConnectUrl, _tedge_config: &TEdgeConfig) {
+    fn apply_runtime_defaults(
+        &mut self,
+        _url: &ConnectUrl,
+        _tedge_config: &TEdgeConfig,
+        _config_path: &AbsolutePath,
+    ) {
         // AWS config has no runtime defaults currently
     }
 
@@ -1158,7 +1259,7 @@ mod tests {
             TEdgeConfigLocation::from_custom_root("/not/a/real/directory"),
         );
         let config: C8yMapperConfig =
-            load_mapper_config_from_string(mapper_toml, &tedge_config).unwrap();
+            load_mapper_config_from_string(mapper_toml, &tedge_config, &AbsolutePath::try_new("notondisk.toml").unwrap()).unwrap();
 
         // Device fields should come from tedge_config defaults
         // Call the id() method to get the device ID (which should be set from tedge_toml)
@@ -1370,12 +1471,27 @@ mod tests {
         assert_eq!(config.bridge.topic_prefix.as_str(), "aws");
     }
 
+    #[test]
+    fn empty_proxy_cert_path_has_file_in_empty_key_name() {
+        let toml = r#"
+            url = "tenant.cumulocity.com"
+        "#;
+
+        let config = deserialize_from_str::<C8yMapperSpecificConfig>(toml).unwrap();
+
+        assert_eq!(config.cloud_specific.proxy.cert_path.key(), "/not/on/disk.toml: proxy.cert_path")
+    }
+
     fn deserialize_from_str<T>(toml: &str) -> Result<MapperConfig<T>, MapperConfigError>
     where
         T: DeserializeOwned + ApplyRuntimeDefaults,
     {
         let tedge_config =
             TEdgeConfig::from_dto(&TEdgeConfigDto::default(), TEdgeConfigLocation::default());
-        load_mapper_config_from_string(toml, &tedge_config)
+        load_mapper_config_from_string(
+            toml,
+            &tedge_config,
+            &AbsolutePath::try_new("/not/on/disk.toml").unwrap(),
+        )
     }
 }

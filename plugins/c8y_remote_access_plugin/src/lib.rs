@@ -9,6 +9,7 @@ use miette::IntoDiagnostic;
 use std::io;
 use std::process::Stdio;
 use tedge_config::log_init;
+use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::change_user_and_group;
 use tedge_utils::file::create_directory_with_user_group;
@@ -65,7 +66,11 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
             Ok(())
         }
         Command::Connect((command, p)) => {
-            proxy(command, tedge_config, c8y_profile.or(p.as_deref())).await
+            let c8y_config = tedge_config
+                .mapper_config(&p)
+                .await
+                .map_err(|e| miette!("{e}"))?;
+            proxy(command, &tedge_config, &c8y_config).await
         }
         Command::SpawnChild(command) => {
             spawn_child(command, tedge_config.root_dir(), c8y_profile).await
@@ -311,19 +316,12 @@ async fn read_from_stream(unix_stream: &mut UnixStream) -> miette::Result<()> {
 
 async fn proxy(
     command: RemoteAccessConnect,
-    config: TEdgeConfig,
-    c8y_profile: Option<&str>,
+    config: &TEdgeConfig,
+    c8y_config: &C8yMapperConfig,
 ) -> miette::Result<()> {
-    let host = config
-        .c8y
-        .try_get(c8y_profile)
-        .into_diagnostic()?
-        .http
-        .or_config_not_set()
-        .into_diagnostic()?
-        .to_string();
+    let host = c8y_config.cloud_specific.http.to_string();
     let url = build_proxy_url(host.as_str(), command.key())?;
-    let auth = Auth::retrieve(&config, c8y_profile)
+    let auth = Auth::retrieve(config, c8y_config)
         .await.context("Failed when requesting JWT from Cumulocity or invalid username/password credentials are given")?;
     let client_config = config.cloud_client_tls_config();
 

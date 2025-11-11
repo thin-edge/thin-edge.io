@@ -17,6 +17,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tedge_config::models::auth_method::AuthType;
 use tedge_config::models::TopicPrefix;
+use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
 use tedge_config::tedge_toml::ConfigNotSet;
 use tedge_config::tedge_toml::MultiError;
 use tedge_config::tedge_toml::ReadError;
@@ -41,13 +42,10 @@ pub struct C8yEndPoint {
 }
 
 impl C8yEndPoint {
-    pub fn from_config(
-        tedge_config: &TEdgeConfig,
-        c8y_profile: Option<&str>,
-    ) -> Result<Self, C8yEndPointConfigError> {
-        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
-        let c8y_host = c8y_config.http.or_config_not_set()?.to_string();
-        let c8y_mqtt_host = c8y_config.mqtt.or_config_not_set()?.to_string();
+    pub fn from_config(c8y_config: &C8yMapperConfig) -> Result<Self, C8yEndPointConfigError> {
+        let c8y_config = &c8y_config.cloud_specific;
+        let c8y_host = c8y_config.http.to_string();
+        let c8y_mqtt_host = c8y_config.mqtt.to_string();
         let auth_proxy_addr = c8y_config.proxy.client.host.clone();
         let auth_proxy_port = c8y_config.proxy.client.port;
         let auth_proxy_protocol = c8y_config
@@ -64,11 +62,8 @@ impl C8yEndPoint {
         })
     }
 
-    pub fn local_proxy(
-        tedge_config: &TEdgeConfig,
-        c8y_profile: Option<&str>,
-    ) -> Result<Self, C8yEndPointConfigError> {
-        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
+    pub fn local_proxy(c8y_config: &C8yMapperConfig) -> Result<Self, C8yEndPointConfigError> {
+        let c8y_config = &c8y_config.cloud_specific;
         let auth_proxy_addr = c8y_config.proxy.client.host.clone();
         let auth_proxy_port = c8y_config.proxy.client.port;
         let auth_proxy_protocol = c8y_config
@@ -334,10 +329,10 @@ pub enum C8yAuthRetrieverError {
 impl C8yAuthRetriever {
     pub fn from_tedge_config(
         tedge_config: &TEdgeConfig,
-        c8y_profile: Option<&str>,
+        c8y_config: &C8yMapperConfig,
     ) -> Result<Self, C8yAuthRetrieverError> {
-        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
         let topic_prefix = c8y_config.bridge.topic_prefix.clone();
+        let c8y_config = &c8y_config.cloud_specific;
 
         match c8y_config.auth_method.to_type(&c8y_config.credentials_path) {
             AuthType::Basic => Ok(Self::Basic {

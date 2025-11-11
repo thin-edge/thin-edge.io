@@ -1,5 +1,6 @@
 mod version;
 use reqwest::NoProxy;
+use serde::de::DeserializeOwned;
 use version::TEdgeTomlVersion;
 
 mod append_remove;
@@ -27,7 +28,8 @@ use super::models::MQTT_SVC_TLS_PORT;
 use super::models::MQTT_TLS_PORT;
 use super::tedge_config_location::TEdgeConfigLocation;
 use crate::models::AbsolutePath;
-use crate::tedge_toml::mapper_config::MapperConfig;
+use crate::tedge_toml::mapper_config::load_mapper_config_sync;
+use crate::tedge_toml::mapper_config::MapperConfigError;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
@@ -40,8 +42,13 @@ use certificate::CertificateError;
 use certificate::CloudHttpConfig;
 use certificate::PemCertificate;
 use doku::Document;
+use mapper_config::load_mapper_config;
+use mapper_config::ApplyRuntimeDefaults;
+use mapper_config::ExpectedCloudType;
+use mapper_config::MapperConfig;
 use once_cell::sync::Lazy;
 use reqwest::Certificate;
+use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::io::Read;
 use std::net::IpAddr;
@@ -103,6 +110,51 @@ impl TEdgeConfig {
 
     pub fn root_dir(&self) -> &Utf8Path {
         self.location.tedge_config_root_path()
+    }
+
+    pub fn mapper_config_sync<T>(
+        &self,
+        profile: &Option<impl Borrow<ProfileName>>,
+    ) -> anyhow::Result<MapperConfig<T>>
+    where
+        T: DeserializeOwned + ApplyRuntimeDefaults + ExpectedCloudType,
+    {
+        let profile = profile.as_ref().map(|p| p.borrow());
+        let mapper_reader = self.mapper.try_get(profile)?;
+        let field = &mapper_reader.ty;
+        let value = *field.or_config_not_set()?;
+        anyhow::ensure!(
+            T::expected_cloud_type() == value,
+            "Expected {} to be set to {}, but it is set to {}",
+            field.key(),
+            T::expected_cloud_type(),
+            value
+        );
+        Ok(load_mapper_config_sync::<T>(
+            mapper_reader.config_path.or_config_not_set()?,
+            self,
+        )?)
+    }
+
+    pub async fn mapper_config<T>(
+        &self,
+        profile: &Option<impl Borrow<ProfileName>>,
+    ) -> anyhow::Result<MapperConfig<T>>
+    where
+        T: DeserializeOwned + ApplyRuntimeDefaults + ExpectedCloudType,
+    {
+        let profile = profile.as_ref().map(|p| p.borrow());
+        let mapper_reader = self.mapper.try_get(profile)?;
+        let field = &mapper_reader.ty;
+        let value = *field.or_config_not_set()?;
+        anyhow::ensure!(
+            T::expected_cloud_type() == value,
+            "Expected {} to be set to {}, but it is set to {}",
+            field.key(),
+            T::expected_cloud_type(),
+            value
+        );
+        Ok(load_mapper_config::<T>(mapper_reader.config_path.or_config_not_set()?, self).await?)
     }
 }
 
@@ -1438,6 +1490,9 @@ pub enum ReadError {
 
     #[error(transparent)]
     Multi(#[from] MultiError),
+
+    #[error(transparent)]
+    MapperConfig(#[from] MapperConfigError),
 
     #[error("Config value {key}, cannot be read: {message} ")]
     ReadOnlyNotFound {

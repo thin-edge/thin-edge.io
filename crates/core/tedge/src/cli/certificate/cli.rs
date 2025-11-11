@@ -369,12 +369,15 @@ impl BuildCommand for TEdgeCertCli {
                         Some(csr_path) => (csr_path, false),
                     };
                     let c8y = match &cloud {
-                        None => C8yEndPoint::local_proxy(config, None)?,
+                        None => {
+                            let c8y_config = config.mapper_config_sync(&None::<ProfileName>)?;
+                            C8yEndPoint::local_proxy(&c8y_config)?
+                        }
                         #[cfg(feature = "c8y")]
-                        Some(Cloud::C8y(profile)) => C8yEndPoint::local_proxy(
-                            config,
-                            profile.as_deref().map(|p| p.as_ref()),
-                        )?,
+                        Some(Cloud::C8y(profile)) => {
+                            let c8y_config = config.mapper_config_sync(profile)?;
+                            C8yEndPoint::local_proxy(&c8y_config)?
+                        }
                         #[cfg(any(feature = "aws", feature = "azure"))]
                         Some(cloud) => {
                             return Err(

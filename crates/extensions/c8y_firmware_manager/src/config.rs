@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tedge_api::path::DataDir;
 use tedge_config::models::TopicPrefix;
+use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::TopicFilter;
 
@@ -61,9 +62,8 @@ impl FirmwareManagerConfig {
 
     pub fn from_tedge_config(
         tedge_config: &TEdgeConfig,
-        c8y_profile: Option<&str>,
+        c8y_config: &C8yMapperConfig,
     ) -> Result<Self, FirmwareManagementConfigBuildError> {
-        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
         let tedge_device_id = c8y_config.device.id()?.to_string();
         let local_http_address = tedge_config.http.client.host.clone();
         let local_http_port = tedge_config.http.client.port;
@@ -72,7 +72,7 @@ impl FirmwareManagerConfig {
         let timeout_sec = tedge_config.firmware.child.update.timeout.duration();
 
         let c8y_prefix = c8y_config.bridge.topic_prefix.clone();
-        let c8y_end_point = C8yEndPoint::from_config(tedge_config, c8y_profile)?;
+        let c8y_end_point = C8yEndPoint::from_config(c8y_config)?;
 
         Ok(Self::new(
             tedge_device_id,

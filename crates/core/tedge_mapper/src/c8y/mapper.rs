@@ -18,9 +18,7 @@ use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
-use tedge_config::models::CloudType;
 use tedge_config::tedge_toml::mapper_config;
-use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
@@ -51,15 +49,7 @@ impl TEdgeComponent for CumulocityMapper {
         tedge_config: TEdgeConfig,
         cfg_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
-        let c8y_profile = self.profile.as_deref();
-        let mapper_config = tedge_config.mapper.try_get(c8y_profile)?;
-        assert_eq!(mapper_config.ty.or_none(), Some(&CloudType::C8y));
-        let c8y_config =
-            tedge_config::tedge_toml::mapper_config::load_mapper_config::<C8yMapperSpecificConfig>(
-                mapper_config.config_path.or_config_not_set()?,
-                &tedge_config,
-            )
-            .await?;
+        let c8y_config = tedge_config.mapper_config(&self.profile).await?;
         let prefix = &c8y_config.bridge.topic_prefix;
         let c8y_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
@@ -112,7 +102,7 @@ impl TEdgeComponent for CumulocityMapper {
 
         let mut http_actor = HttpActor::new(tedge_config.http.client_tls_config()?).builder();
         let c8y_auth_proxy_actor =
-            C8yAuthProxyBuilder::try_from_config(&tedge_config, c8y_profile)?;
+            C8yAuthProxyBuilder::try_from_config(&tedge_config, &c8y_config)?;
 
         let mut fs_watch_actor = FsWatchActorBuilder::new();
         let mut timer_actor = TimerActor::builder();
@@ -130,7 +120,7 @@ impl TEdgeComponent for CumulocityMapper {
         let mut service_monitor_actor = MqttActorBuilder::new(service_monitor_client_config(
             &c8y_mapper_name,
             &tedge_config,
-            c8y_profile,
+            &c8y_config,
         )?);
 
         C8yMapperBuilder::init(&c8y_mapper_config).await?;
@@ -152,7 +142,7 @@ impl TEdgeComponent for CumulocityMapper {
 
         let availability_actor = if c8y_config.cloud_specific.availability.enable {
             Some(AvailabilityBuilder::new(
-                AvailabilityConfig::try_new(&tedge_config, c8y_profile)?,
+                AvailabilityConfig::try_new(&tedge_config, &c8y_config)?,
                 &mut c8y_mapper_actor,
                 &mut timer_actor,
             ))
@@ -182,9 +172,8 @@ impl TEdgeComponent for CumulocityMapper {
 pub fn service_monitor_client_config(
     c8y_mapper_name: &str,
     tedge_config: &TEdgeConfig,
-    c8y_profile: Option<&str>,
+    c8y_config: &mapper_config::C8yMapperConfig,
 ) -> Result<Config, anyhow::Error> {
-    let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
     let main_device_xid: EntityExternalId = c8y_config.device.id()?.into();
     let service_type = &tedge_config.service.ty;
     let service_type = if service_type.is_empty() {
