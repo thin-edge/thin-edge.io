@@ -11,8 +11,7 @@ Test Tags       theme:c8y
 Register Device Using Cumulocity CA
     [Setup]    Custom Setup
     ${credentials}=    Bulk Register Device With Cumulocity CA    ${DEVICE_SN}
-    ${DOMAIN}=    Cumulocity.Get Domain
-    Execute Command    tedge config set c8y.url "${DOMAIN}"
+    Set Cumulocity URLs
     Execute Command
     ...    tedge cert download c8y --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --retry-every 5s --max-timeout 30s
     Execute Command    tedge connect c8y
@@ -23,7 +22,7 @@ Register Device Using Cumulocity CA with url flag
     ${DOMAIN}=    Cumulocity.Get Domain
     Execute Command
     ...    tedge cert download c8y --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --url ${DOMAIN} --retry-every 5s --max-timeout 30s
-    Execute Command    tedge config set c8y.url "${DOMAIN}"
+    Set Cumulocity URLs
     Execute Command    tedge connect c8y
 
 Certificate Renewal Service Using Cumulocity Certificate Authority
@@ -52,9 +51,8 @@ Certificate Renewal with Cloud Profiles
     ${DEVICE_SN_2}=    Set Variable    ${DEVICE_SN}_2
     ThinEdgeIO.Register Device With Cumulocity CA    external_id
     ${credentials}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN_2}
-    ${DOMAIN}=    Cumulocity.Get Domain
 
-    Execute Command    tedge config set c8y.url "${DOMAIN}" --profile customer
+    Set Cumulocity URLs    profile=customer
     Execute Command
     ...    tedge config set c8y.device.cert_path /etc/tedge/device-certs/tedge-certificate-customer.pem --profile customer
     Execute Command    tedge config set c8y.bridge.topic_prefix c8y-customer --profile customer

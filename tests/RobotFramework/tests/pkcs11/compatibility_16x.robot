@@ -49,8 +49,7 @@ Custom Setup
     Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --device-id "${DEVICE_SN}" --pin 123456
 
     # configure tedge
-    ${domain}=    Cumulocity.Get Domain
-    Execute Command    tedge config set c8y.url "${domain}"
+    Set Cumulocity URLs
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge config set device.cryptoki.mode socket
 

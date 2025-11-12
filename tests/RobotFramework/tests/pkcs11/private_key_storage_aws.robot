@@ -41,7 +41,7 @@ Connect to AWS and Cumulocity using different keys
 
     # c8y setup: create a new token and cert/key and upload it
     Execute Command    tedge cert create --device-id ${DEVICE_SN}
-    Execute Command    tedge config set c8y.url ${C8Y_CONFIG.host}
+    Set Cumulocity URLs
     Execute Command
     ...    cmd=sudo env C8Y_USER='${C8Y_CONFIG.username}' C8Y_PASSWORD='${C8Y_CONFIG.password}' tedge cert upload c8y
     ...    log_output=${False}

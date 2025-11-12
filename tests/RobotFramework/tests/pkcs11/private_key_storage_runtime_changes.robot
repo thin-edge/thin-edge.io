@@ -42,7 +42,6 @@ Setup Unregistered Device
     Restart Service    tedge-p11-server
 
     # configure tedge
-    ${domain}=    Cumulocity.Get Domain
-    Execute Command    tedge config set c8y.url "${domain}"
+    Set Cumulocity URLs
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge config set device.cryptoki.mode socket

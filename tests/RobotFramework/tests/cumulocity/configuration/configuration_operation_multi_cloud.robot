@@ -81,7 +81,8 @@ Setup Second Device
     ...    tedge config set c8y.device.key_path --profile second /etc/tedge/device-certs/tedge@second-key.pem
     Execute Command    tedge config set c8y.proxy.bind.port --profile second 8002
     Execute Command    tedge config set c8y.bridge.topic_prefix --profile second c8y-second
-    Execute Command    tedge config set c8y.url --profile second "$(tedge config get c8y.url)"
+
+    Set Cumulocity URLs    profile=second
 
     Execute Command    tedge cert create --device-id ${second_device_sn} c8y --profile second
     Register Certificate For Cleanup    cloud_profile=second    common_name=${second_device_sn}
