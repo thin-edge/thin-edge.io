@@ -51,6 +51,7 @@ use once_cell::sync::Lazy;
 use reqwest::Certificate;
 use std::borrow::Borrow;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::io::Read;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -87,6 +88,8 @@ impl<T> OptionalConfigError<T> for OptionalConfig<T> {
 pub struct TEdgeConfig {
     reader: TEdgeConfigReader,
     location: TEdgeConfigLocation,
+    cached_mapper_configs:
+        tokio::sync::Mutex<anymap3::Map<dyn std::any::Any + Send + Sync + 'static>>,
 }
 
 impl std::ops::Deref for TEdgeConfig {
@@ -102,6 +105,7 @@ impl TEdgeConfig {
         Self {
             reader: TEdgeConfigReader::from_dto(dto, &location),
             location,
+            cached_mapper_configs: <_>::default(),
         }
     }
 
@@ -116,46 +120,28 @@ impl TEdgeConfig {
     pub fn mapper_config_sync<T>(
         &self,
         profile: &Option<impl Borrow<ProfileName>>,
-    ) -> anyhow::Result<MapperConfig<T>>
+    ) -> anyhow::Result<Arc<MapperConfig<T>>>
     where
-        T: DeserializeOwned + ApplyRuntimeDefaults + ExpectedCloudType,
+        T: DeserializeOwned
+            + ApplyRuntimeDefaults
+            + ExpectedCloudType
+            + FromCloudConfig
+            + Send
+            + Sync
+            + 'static,
     {
-        let profile = profile.as_ref().map(|p| p.borrow());
-        let mapper_reader = self.mapper.try_get(profile)?;
-        let field = &mapper_reader.ty;
-        let value = *field.or_config_not_set()?;
-        anyhow::ensure!(
-            T::expected_cloud_type() == value,
-            "Expected {} to be set to {}, but it is set to {}",
-            field.key(),
-            T::expected_cloud_type(),
-            value
-        );
-        Ok(load_mapper_config_sync::<T>(
-            mapper_reader.config_path.or_config_not_set()?,
-            self,
-        )?)
-    }
-
-    pub async fn mapper_config<T>(
-        &self,
-        profile: &Option<impl Borrow<ProfileName>>,
-    ) -> anyhow::Result<MapperConfig<T>>
-    where
-        T: DeserializeOwned + ApplyRuntimeDefaults + ExpectedCloudType + FromCloudConfig,
-    {
-        let profile = profile.as_ref().map(|p| p.borrow());
+        let profile = profile.as_ref().map(|p| p.borrow().to_owned());
         if self
             .mapper
             .entries()
             .all(|(_, config)| config.config_path.or_none().is_none())
         {
-            Ok(mapper_config::compat::load_cloud_mapper_config(
-                profile.map(|p| p.as_ref()),
+            Ok(Arc::new(mapper_config::compat::load_cloud_mapper_config(
+                profile.as_deref(),
                 self,
-            )?)
+            )?))
         } else {
-            let mapper_reader = self.mapper.try_get(profile)?;
+            let mapper_reader = self.reader.mapper.try_get(profile.as_ref())?;
             let field = &mapper_reader.ty;
             let value = *field.or_config_not_set()?;
             anyhow::ensure!(
@@ -165,10 +151,77 @@ impl TEdgeConfig {
                 T::expected_cloud_type(),
                 value
             );
-            Ok(
-                load_mapper_config::<T>(mapper_reader.config_path.or_config_not_set()?, self)
-                    .await?,
-            )
+            let mut cached_configs = self.cached_mapper_configs.blocking_lock();
+            let configs_for_cloud = cached_configs
+                .entry::<HashMap<Option<ProfileName>, Arc<MapperConfig<T>>>>()
+                .or_default();
+
+            if let Some(cached_config) = configs_for_cloud.get(&profile) {
+                Ok(cached_config.clone())
+            } else {
+                let map = load_mapper_config_sync::<T>(
+                    mapper_reader.config_path.or_config_not_set()?,
+                    self,
+                )?;
+
+                configs_for_cloud.insert(profile.clone(), Arc::new(map));
+
+                Ok(configs_for_cloud.get(&profile).unwrap().clone())
+            }
+        }
+    }
+
+    pub async fn mapper_config<T>(
+        &self,
+        profile: &Option<impl Borrow<ProfileName>>,
+    ) -> anyhow::Result<Arc<MapperConfig<T>>>
+    where
+        T: DeserializeOwned
+            + ApplyRuntimeDefaults
+            + ExpectedCloudType
+            + FromCloudConfig
+            + Send
+            + Sync
+            + 'static,
+    {
+        let profile = profile.as_ref().map(|p| p.borrow().to_owned());
+        if self
+            .mapper
+            .entries()
+            .all(|(_, config)| config.config_path.or_none().is_none())
+        {
+            Ok(Arc::new(mapper_config::compat::load_cloud_mapper_config(
+                profile.as_deref(),
+                self,
+            )?))
+        } else {
+            let mapper_reader = self.mapper.try_get(profile.as_ref())?;
+            let field = &mapper_reader.ty;
+            let value = *field.or_config_not_set()?;
+            anyhow::ensure!(
+                T::expected_cloud_type() == value,
+                "Expected {} to be set to {}, but it is set to {}",
+                field.key(),
+                T::expected_cloud_type(),
+                value
+            );
+
+            let mut cached_configs = self.cached_mapper_configs.lock().await;
+            let configs_for_cloud = cached_configs
+                .entry::<HashMap<Option<ProfileName>, Arc<MapperConfig<T>>>>()
+                .or_default();
+
+            if let Some(cached_config) = configs_for_cloud.get(&profile) {
+                Ok(cached_config.clone())
+            } else {
+                let map =
+                    load_mapper_config::<T>(mapper_reader.config_path.or_config_not_set()?, self)
+                        .await?;
+
+                configs_for_cloud.insert(profile.clone(), Arc::new(map));
+
+                Ok(configs_for_cloud.get(&profile).unwrap().clone())
+            }
         }
     }
 }

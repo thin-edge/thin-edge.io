@@ -370,7 +370,7 @@ impl ConnectCommand {
                     .mapper_config::<C8yMapperSpecificConfig>(profile_name)
                     .await?;
                 let mut mqtt_auth_config =
-                    tedge_config.mqtt_auth_config_cloud_broker(&c8y_config)?;
+                    tedge_config.mqtt_auth_config_cloud_broker(&*c8y_config)?;
                 if let Some(client_config) = mqtt_auth_config.client.as_mut() {
                     _certificate_shift
                         .new_cert_path
@@ -849,7 +849,7 @@ impl ConnectCommand {
                         .mapper_config::<C8yMapperSpecificConfig>(profile_name)
                         .await?;
                     let mqtt_auth_config =
-                        tedge_config.mqtt_auth_config_cloud_broker(&c8y_config)?;
+                        tedge_config.mqtt_auth_config_cloud_broker(&*c8y_config)?;
                     let spinner = Spinner::start("Creating device in Cumulocity cloud");
                     let res = create_device_with_direct_connection(
                         bridge_config,

@@ -299,7 +299,7 @@ impl BuildCommand for TEdgeCertCli {
                     None => c8y_config.cloud_specific.http.to_owned(),
                 };
 
-                let cryptoki = config.device.cryptoki_config(Some(&c8y_config))?;
+                let cryptoki = config.device.cryptoki_config(Some(&*c8y_config))?;
                 let key = cryptoki
                     .map(super::create_csr::Key::Cryptoki)
                     .unwrap_or(Key::Local(
