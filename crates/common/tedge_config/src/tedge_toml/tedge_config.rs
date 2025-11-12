@@ -27,7 +27,7 @@ use super::models::HTTPS_PORT;
 use super::models::MQTT_TLS_PORT;
 use super::tedge_config_location::TEdgeConfigLocation;
 use crate::models::AbsolutePath;
-use crate::tedge_toml::mapper_config::load_mapper_config_sync;
+use crate::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use crate::tedge_toml::mapper_config::FromCloudConfig;
 use crate::tedge_toml::mapper_config::MapperConfigError;
 use anyhow::anyhow;
@@ -50,6 +50,7 @@ use once_cell::sync::Lazy;
 use reqwest::Certificate;
 use std::borrow::Borrow;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::io::Read;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -87,6 +88,8 @@ impl<T> OptionalConfigError<T> for OptionalConfig<T> {
 pub struct TEdgeConfig {
     reader: TEdgeConfigReader,
     location: TEdgeConfigLocation,
+    cached_mapper_configs:
+        tokio::sync::Mutex<anymap3::Map<dyn std::any::Any + Send + Sync + 'static>>,
 }
 
 impl std::ops::Deref for TEdgeConfig {
@@ -102,6 +105,7 @@ impl TEdgeConfig {
         Self {
             reader: TEdgeConfigReader::from_dto(dto, &location),
             location,
+            cached_mapper_configs: <_>::default(),
         }
     }
 
@@ -113,62 +117,101 @@ impl TEdgeConfig {
         self.location.tedge_config_root_path()
     }
 
-    pub fn mapper_config_sync<T>(
-        &self,
-        profile: &Option<impl Borrow<ProfileName>>,
-    ) -> anyhow::Result<MapperConfig<T>>
-    where
-        T: DeserializeOwned + ApplyRuntimeDefaults + ExpectedCloudType,
-    {
-        let profile = profile.as_ref().map(|p| p.borrow());
-        let mapper_reader = self.mapper.try_get(profile)?;
-        let field = &mapper_reader.ty;
-        let value = *field.or_config_not_set()?;
-        anyhow::ensure!(
-            T::expected_cloud_type() == value,
-            "Expected {} to be set to {}, but it is set to {}",
-            field.key(),
-            T::expected_cloud_type(),
-            value
-        );
-        Ok(load_mapper_config_sync::<T>(
-            mapper_reader.config_path.or_config_not_set()?,
-            self,
-        )?)
-    }
-
     pub async fn mapper_config<T>(
         &self,
         profile: &Option<impl Borrow<ProfileName>>,
-    ) -> anyhow::Result<MapperConfig<T>>
+    ) -> anyhow::Result<Arc<MapperConfig<T>>>
     where
-        T: DeserializeOwned + ApplyRuntimeDefaults + ExpectedCloudType + FromCloudConfig,
+        T: DeserializeOwned
+            + ApplyRuntimeDefaults
+            + ExpectedCloudType
+            + FromCloudConfig
+            + Send
+            + Sync
+            + 'static,
     {
-        let profile = profile.as_ref().map(|p| p.borrow());
-        if self
-            .mapper
-            .entries()
-            .all(|(_, config)| config.config_path.or_none().is_none())
-        {
-            Ok(mapper_config::compat::load_cloud_mapper_config(
-                profile.map(|p| p.as_ref()),
-                self,
-            )?)
+        let profile = profile.as_ref().map(|p| p.borrow().to_owned());
+        let mapper_config_dir = self.location.tedge_config_root_path().join("mappers");
+        let filename = profile
+            .as_ref()
+            .map_or("c8y.toml".to_owned(), |p| format!("c8y.d/{p}.toml"));
+        let path = mapper_config_dir.join(filename);
+        // TODO if containing directory doesn't exist, fallback to tedge toml
+        // config, but if permissions error, don't fall-back
+        if tokio::fs::try_exists(&path).await.ok() == Some(true) {
+            let mut cached_configs = self.cached_mapper_configs.lock().await;
+            let configs_for_cloud = cached_configs
+                .entry::<HashMap<Option<ProfileName>, Arc<MapperConfig<T>>>>()
+                .or_default();
+
+            if let Some(cached_config) = configs_for_cloud.get(&profile) {
+                Ok(cached_config.clone())
+            } else {
+                let map =
+                    load_mapper_config::<T>(&AbsolutePath::try_new(path.as_str()).unwrap(), self)
+                        .await?;
+
+                configs_for_cloud.insert(profile.clone(), Arc::new(map));
+
+                Ok(configs_for_cloud.get(&profile).unwrap().clone())
+            }
         } else {
-            let mapper_reader = self.mapper.try_get(profile)?;
-            let field = &mapper_reader.ty;
-            let value = *field.or_config_not_set()?;
-            anyhow::ensure!(
-                T::expected_cloud_type() == value,
-                "Expected {} to be set to {}, but it is set to {}",
-                field.key(),
-                T::expected_cloud_type(),
-                value
-            );
-            Ok(
-                load_mapper_config::<T>(mapper_reader.config_path.or_config_not_set()?, self)
-                    .await?,
-            )
+            Ok(Arc::new(mapper_config::compat::load_cloud_mapper_config(
+                profile.as_deref(),
+                self,
+            )?))
+        }
+    }
+
+    pub async fn as_cloud_config(
+        &self,
+        cloud: Cloud<'_>,
+    ) -> Result<DynCloudConfig<'_>, MultiError> {
+        Ok(match cloud {
+            Cloud::C8y(profile) => self
+                .mapper_config::<C8yMapperSpecificConfig>(&profile)
+                .await
+                .map(|config| DynCloudConfig::Arc(config as Arc<_>))?,
+            Cloud::Az(profile) => DynCloudConfig::Borrow(self.az.try_get(profile)?),
+            Cloud::Aws(profile) => DynCloudConfig::Borrow(self.aws.try_get(profile)?),
+        })
+    }
+}
+
+pub enum DynCloudConfig<'a> {
+    Arc(Arc<dyn CloudConfig + Send + Sync>),
+    Borrow(&'a (dyn CloudConfig + Send + Sync)),
+}
+
+impl CloudConfig for DynCloudConfig<'_> {
+    fn device_key_path(&self) -> &Utf8Path {
+        match self {
+            Self::Arc(config) => config.device_key_path(),
+            Self::Borrow(config) => config.device_key_path(),
+        }
+    }
+    fn device_cert_path(&self) -> &Utf8Path {
+        match self {
+            Self::Arc(config) => config.device_cert_path(),
+            Self::Borrow(config) => config.device_cert_path(),
+        }
+    }
+    fn root_cert_path(&self) -> &Utf8Path {
+        match self {
+            Self::Arc(config) => config.root_cert_path(),
+            Self::Borrow(config) => config.root_cert_path(),
+        }
+    }
+    fn key_uri(&self) -> Option<Arc<str>> {
+        match self {
+            Self::Arc(config) => config.key_uri(),
+            Self::Borrow(config) => config.key_uri(),
+        }
+    }
+    fn key_pin(&self) -> Option<Arc<str>> {
+        match self {
+            Self::Arc(config) => config.key_pin(),
+            Self::Borrow(config) => config.key_pin(),
         }
     }
 }
@@ -726,18 +769,6 @@ define_tedge_config! {
         topics: TemplatesSet,
     },
 
-    #[tedge_config(multi)]
-    mapper: {
-        /// Path to the external mapper configuration file
-        #[tedge_config(example = "/etc/tedge/mapper-configs/my-mapper.toml")]
-        config_path: AbsolutePath,
-
-        /// The cloud type this mapper connects to
-        #[tedge_config(example = "c8y", example = "az", example = "aws")]
-        #[tedge_config(rename = "type")]
-        ty: CloudType,
-    },
-
     mqtt: {
         /// MQTT topic root
         #[tedge_config(default(value = "te"))]
@@ -1171,14 +1202,6 @@ impl TEdgeConfigReader {
         .unwrap()
     }
 
-    pub fn as_cloud_config(&self, cloud: Cloud<'_>) -> Result<&dyn CloudConfig, MultiError> {
-        Ok(match cloud {
-            Cloud::C8y(profile) => self.c8y.try_get(profile)?,
-            Cloud::Az(profile) => self.az.try_get(profile)?,
-            Cloud::Aws(profile) => self.aws.try_get(profile)?,
-        })
-    }
-
     pub fn device_key_path<'a>(
         &self,
         cloud: Option<impl Into<Cloud<'a>>>,
@@ -1216,6 +1239,7 @@ impl TEdgeConfigReader {
     }
 
     pub fn device_id<'a>(&self, cloud: Option<impl Into<Cloud<'a>>>) -> Result<&str, ReadError> {
+        println!("device_id");
         Ok(match cloud.map(<_>::into) {
             None => self.device.id()?,
             Some(Cloud::C8y(profile)) => self.c8y.try_get(profile)?.device.id()?,

@@ -27,6 +27,7 @@ use std::time::Duration;
 use tedge_config::models::HostPort;
 use tedge_config::models::HTTPS_PORT;
 use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+use tedge_config::tedge_toml::CloudConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tracing::debug;
@@ -216,8 +217,9 @@ pub enum CA {
     C8y,
 }
 
+#[async_trait::async_trait]
 impl BuildCommand for TEdgeCertCli {
-    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let (user, group) = if config.mqtt.bridge.built_in {
             ("tedge", "tedge")
         } else {
@@ -259,11 +261,13 @@ impl BuildCommand for TEdgeCertCli {
             } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 debug!(?cloud);
-                let cloud_config = cloud
-                    .as_ref()
-                    .map(|c| config.as_cloud_config((c).into()))
-                    .transpose()?;
-                let cryptoki = config.device.cryptoki_config(cloud_config)?;
+                let cloud_config = match cloud.as_ref() {
+                    Some(c) => Some(config.as_cloud_config(c.into()).await?),
+                    None => None,
+                };
+                let cryptoki = config
+                    .device
+                    .cryptoki_config(cloud_config.as_ref().map(|c| c as &dyn CloudConfig))?;
                 let key = cryptoki
                     .map(super::create_csr::Key::Cryptoki)
                     .unwrap_or(Key::Local(
@@ -306,13 +310,13 @@ impl BuildCommand for TEdgeCertCli {
                 token,
             } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
-                let cloud_config = cloud
-                    .as_ref()
-                    .map(|c| config.as_cloud_config((c).into()))
-                    .transpose()?;
+                let cloud_config = match cloud.as_ref() {
+                    Some(c) => Some(config.as_cloud_config(c.into()).await?),
+                    None => None,
+                };
                 let cryptoki_config = config
                     .device
-                    .cryptoki_config(cloud_config)?
+                    .cryptoki_config(cloud_config.as_ref().map(|c| c as &dyn CloudConfig))?
                     .context("Cryptoki config is not enabled")?;
 
                 CreateKeyHsmCmd {
@@ -375,7 +379,9 @@ impl BuildCommand for TEdgeCertCli {
                 password,
                 profile,
             }) => {
-                let c8y = config.mapper_config_sync::<C8yMapperSpecificConfig>(&profile)?;
+                let c8y = config
+                    .mapper_config::<C8yMapperSpecificConfig>(&profile)
+                    .await?;
                 let cmd = c8y::UploadCertCmd {
                     device_id: c8y.device.id()?.clone(),
                     path: c8y.device.cert_path.clone().into(),
@@ -396,7 +402,9 @@ impl BuildCommand for TEdgeCertCli {
                 retry_every,
                 max_timeout,
             }) => {
-                let c8y_config = config.mapper_config_sync::<C8yMapperSpecificConfig>(&profile)?;
+                let c8y_config = config
+                    .mapper_config::<C8yMapperSpecificConfig>(&profile)
+                    .await?;
 
                 let (csr_path, generate_csr) = match csr_path {
                     None => (c8y_config.device.csr_path.clone().into(), true),
@@ -408,7 +416,7 @@ impl BuildCommand for TEdgeCertCli {
                     None => c8y_config.cloud_specific.http.to_owned(),
                 };
 
-                let cryptoki = config.device.cryptoki_config(Some(&c8y_config))?;
+                let cryptoki = config.device.cryptoki_config(Some(&*c8y_config))?;
                 let key = cryptoki
                     .map(super::create_csr::Key::Cryptoki)
                     .unwrap_or(Key::Local(
@@ -479,12 +487,12 @@ impl BuildCommand for TEdgeCertCli {
                     };
                     let c8y = match &cloud {
                         None => {
-                            let c8y_config = config.mapper_config_sync(&None::<ProfileName>)?;
+                            let c8y_config = config.mapper_config(&None::<ProfileName>).await?;
                             C8yEndPoint::local_proxy(&c8y_config)?
                         }
                         #[cfg(feature = "c8y")]
                         Some(Cloud::C8y(profile)) => {
-                            let c8y_config = config.mapper_config_sync(profile)?;
+                            let c8y_config = config.mapper_config(profile).await?;
                             C8yEndPoint::local_proxy(&c8y_config)?
                         }
                         #[cfg(any(feature = "aws", feature = "azure"))]
@@ -495,11 +503,13 @@ impl BuildCommand for TEdgeCertCli {
                         }
                     };
 
-                    let cloud_config = cloud
-                        .as_ref()
-                        .map(|c| config.as_cloud_config((c).into()))
-                        .transpose()?;
-                    let cryptoki = config.device.cryptoki_config(cloud_config)?;
+                    let cloud_config = match cloud.as_ref() {
+                        Some(c) => Some(config.as_cloud_config(c.into()).await?),
+                        None => None,
+                    };
+                    let cryptoki = config
+                        .device
+                        .cryptoki_config(cloud_config.as_ref().map(|c| c as &dyn CloudConfig))?;
                     let key = cryptoki
                         .map(super::create_csr::Key::Cryptoki)
                         .unwrap_or(Key::Local(

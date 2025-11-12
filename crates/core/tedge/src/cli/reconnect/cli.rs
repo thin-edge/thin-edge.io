@@ -14,8 +14,12 @@ pub struct TEdgeReconnectCli {
     cloud: CloudArg,
 }
 
+#[async_trait::async_trait]
 impl BuildCommand for TEdgeReconnectCli {
-    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
+    async fn build_command(
+        self,
+        config: &TEdgeConfig,
+    ) -> Result<Box<dyn Command>, crate::ConfigError> {
         Ok(ReconnectBridgeCommand {
             config_dir: config.root_dir().to_owned(),
             service_manager: service_manager(config.root_dir())?,

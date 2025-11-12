@@ -493,17 +493,6 @@ where
     load_mapper_config_from_string(&toml_content, tedge_config, config_path)
 }
 
-pub(crate) fn load_mapper_config_sync<T>(
-    config_path: &AbsolutePath,
-    tedge_config: &TEdgeConfig,
-) -> Result<MapperConfig<T>, MapperConfigError>
-where
-    T: DeserializeOwned + ApplyRuntimeDefaults,
-{
-    let toml_content = std::fs::read_to_string(config_path.as_std_path())?;
-    load_mapper_config_from_string(&toml_content, tedge_config, config_path)
-}
-
 fn load_mapper_config_from_string<T>(
     toml_content: &str,
     tedge_config: &TEdgeConfig,

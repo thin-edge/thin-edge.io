@@ -135,6 +135,8 @@ pub enum MultiError {
     MultiKeyNotFound(String, String),
     #[error("Invalid profile name `{1}` for the multi-profile property {0}")]
     InvalidProfileName(String, String, #[source] anyhow::Error),
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
 }
 
 fn parse_profile_name(name: &str, parent: &str) -> Result<ProfileName, MultiError> {

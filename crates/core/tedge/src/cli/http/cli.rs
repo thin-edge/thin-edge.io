@@ -194,13 +194,15 @@ impl Content {
     }
 }
 
+#[async_trait::async_trait]
 impl BuildCommand for TEdgeHttpCli {
-    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let uri = self.uri();
 
         let (protocol, host, port) = if uri.starts_with("/c8y") {
-            let c8y_config =
-                config.mapper_config_sync::<C8yMapperSpecificConfig>(&self.c8y_profile())?;
+            let c8y_config = config
+                .mapper_config::<C8yMapperSpecificConfig>(&self.c8y_profile())
+                .await?;
             let client = &c8y_config.cloud_specific.proxy.client;
             let protocol = https_if_some(&c8y_config.cloud_specific.proxy.cert_path);
             (protocol, client.host.clone(), client.port)

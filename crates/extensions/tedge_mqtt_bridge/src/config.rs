@@ -267,7 +267,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            use_key_and_cert(&mut opts, &c8y_config).unwrap();
+            use_key_and_cert(&mut opts, &*c8y_config).unwrap();
 
             let Transport::Tls(tls) = opts.transport() else {
                 panic!("Transport should be type TLS")
