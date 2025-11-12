@@ -149,9 +149,7 @@ impl LogManagerBuilder {
 
     /// List of MQTT topic filters the log actor has to subscribe to
     fn subscriptions(config: &LogManagerConfig) -> TopicFilter {
-        let mut topics = config.logfile_request_topic.clone();
-        topics.add_all(config.log_metadata_sync_topics.clone());
-        topics
+        config.logfile_request_topic.clone() + config.log_metadata_sync_topics.clone()
     }
 
     /// Extract a log actor request from an MQTT message

@@ -148,10 +148,9 @@ impl ConfigManagerBuilder {
 
     /// List of MQTT topic filters the log actor has to subscribe to
     fn subscriptions(config: &ConfigManagerConfig) -> TopicFilter {
-        let mut topic_filter = TopicFilter::empty();
-        topic_filter.add_all(config.config_snapshot_topic.clone());
+        let mut topic_filter = config.config_snapshot_topic.clone();
         if config.config_update_enabled {
-            topic_filter.add_all(config.config_update_topic.clone());
+            topic_filter += config.config_update_topic.clone();
         }
         topic_filter
     }

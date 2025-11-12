@@ -70,14 +70,13 @@ impl LogManagerConfig {
             ChannelFilter::Command(OperationType::LogUpload),
         );
 
-        let mut log_metadata_sync_topics = mqtt_schema.topics(
+        let log_metadata_sync_topics = mqtt_schema.topics(
             EntityFilter::Entity(&mqtt_device_topic_id),
             ChannelFilter::Command(OperationType::SoftwareUpdate),
-        );
-        log_metadata_sync_topics.add_all(mqtt_schema.topics(
+        ) + mqtt_schema.topics(
             EntityFilter::Entity(&mqtt_device_topic_id),
             ChannelFilter::Command(OperationType::ConfigUpdate),
-        ));
+        );
 
         Ok(Self {
             mqtt_schema,

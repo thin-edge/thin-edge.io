@@ -272,7 +272,7 @@ impl MqttActorBuilder {
     pub(crate) fn build_actor(self) -> MqttActor {
         let mut topic_filter = TopicFilter::empty();
         for pattern in &self.subscription_diff.subscribe {
-            topic_filter.add(pattern).unwrap();
+            topic_filter.try_add(pattern).unwrap();
             tracing::info!(target: "MQTT sub", "{pattern}");
         }
 
