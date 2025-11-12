@@ -258,7 +258,7 @@ Retrieve logs with time filters (timestamps in seconds since epoch):
 sudo /usr/share/tedge/log-plugins/docker get tedge-agent --since 1696250000 --until 1696260000
 ```
 
-## Dynamic log type discovery
+## Refresh Supported Log Types
 
 To ensure that any newly installed services or log sources are immediately available for log collection,
 `tedge-agent` automatically reloads the plugins and refreshes the supported log types on the following events:
@@ -268,9 +268,12 @@ To ensure that any newly installed services or log sources are immediately avail
 * A new software is installed with the agent (via the `software_update` command)
 * A new configuration is installed or updated with the agent (via the `config_update` command)
 
-If the new software or configuration is installed/updated externally, and not via `tedge-agent`,
-a refresh can be triggered by just touching the plugin configuration file:
+A refresh can also be triggered manually by sending a sync signal to the agent as follows:
 
 ```
-touch /etc/tedge/plugins/tedge-log-plugin.toml
+tedge mqtt pub te/device/main/service/tedge-agent/signal/sync_log_upload '{}'
 ```
+
+The agent reacts to all these events by gathering the latest supported log types from all the installed plugins
+by invoking the `list` command on them,
+and publishes the aggregated types to the `te/device/main///cmd/log_upload` meta topic.

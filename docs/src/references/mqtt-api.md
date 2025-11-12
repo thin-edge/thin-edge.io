@@ -712,9 +712,10 @@ Where the signal segments are describe as follows:
 
 The following table details some example signal types which are supported by %%te%%.
 
-| Signal Type | Example Topic                 |
-|-------------|-------------------------------|
-| sync        | `te/<identifier>/signal/sync` |
+| Signal Type     | Example Topic                            |
+|-----------------|------------------------------------------|
+| sync            | `te/<identifier>/signal/sync`            |
+| sync_log_upload | `te/<identifier>/signal/sync_log_upload` |
 
 The signal would be interpreted differently based on the target entity.
 
@@ -725,12 +726,20 @@ We plan to add support for more signal types in the future.
 
 ### Examples: With default device/service topic semantics
 
-#### Signal to a service
+#### Signal to the Cumulocity mapper service
 
 Signal to request the supported operations of the `tedge-mapper-c8y` service:
 
 ```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main/service/tedge-mapper-c8y/signal/sync '{}'
+```
+
+#### Signal to the agent service
+
+Signal to refresh the `log_upload` command metadata (supported log types) of the `tedge-agent` service:
+
+```sh te2mqtt formats=v1
+tedge mqtt pub te/device/main/service/tedge-agent/signal/sync_log_upload '{}'
 ```
 
 ## Health check
