@@ -233,6 +233,8 @@ mod tests {
         use super::use_key_and_cert;
         use rumqttc::MqttOptions;
         use rumqttc::Transport;
+        use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+        use tedge_config::tedge_toml::ProfileName;
         use tedge_config::TEdgeConfig;
 
         #[tokio::test]
@@ -258,10 +260,14 @@ mod tests {
             let root_cert_path = ttd.path().join("cloud-certs/c8y.pem");
             std::fs::create_dir(root_cert_path.parent().unwrap()).unwrap();
             std::fs::write(&root_cert_path, c8y_cert.cert.pem()).unwrap();
+            std::fs::write(ttd.path().join("tedge.toml"), "c8y.url = \"example.com\"").unwrap();
             let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
-            let c8y_config = tedge_config.c8y.try_get::<str>(None).unwrap();
+            let c8y_config = tedge_config
+                .mapper_config::<C8yMapperSpecificConfig>(&None::<ProfileName>)
+                .await
+                .unwrap();
 
-            use_key_and_cert(&mut opts, c8y_config).unwrap();
+            use_key_and_cert(&mut opts, &c8y_config).unwrap();
 
             let Transport::Tls(tls) = opts.transport() else {
                 panic!("Transport should be type TLS")

@@ -217,11 +217,11 @@ pub fn profile_completions() -> Vec<CompletionCandidate> {
     let Ok(tc) = TEdgeConfig::load_sync(get_config_dir()) else {
         return vec![];
     };
-    tc.c8y
-        .keys_str()
+    tc.c8y_keys_str()
         .flatten()
         .map(CompletionCandidate::new)
         .chain(tc.az.keys_str().flatten().map(CompletionCandidate::new))
         .chain(tc.aws.keys_str().flatten().map(CompletionCandidate::new))
+        .chain(tc.mapper.keys_str().flatten().map(CompletionCandidate::new))
         .collect()
 }

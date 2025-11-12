@@ -20,7 +20,7 @@ use clap::ValueHint;
 use std::time::Duration;
 use tedge_config::models::HostPort;
 use tedge_config::models::HTTPS_PORT;
-use tedge_config::tedge_toml::OptionalConfigError;
+use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tracing::debug;
@@ -266,11 +266,11 @@ impl BuildCommand for TEdgeCertCli {
                 password,
                 profile,
             }) => {
-                let c8y = config.c8y.try_get(profile.as_deref())?;
+                let c8y = config.mapper_config_sync::<C8yMapperSpecificConfig>(&profile)?;
                 let cmd = c8y::UploadCertCmd {
                     device_id: c8y.device.id()?.clone(),
                     path: c8y.device.cert_path.clone().into(),
-                    host: c8y.http.or_err()?.to_owned(),
+                    host: c8y.cloud_specific.http.to_owned(),
                     cloud_root_certs: config.cloud_root_certs()?,
                     username,
                     password,
@@ -287,7 +287,7 @@ impl BuildCommand for TEdgeCertCli {
                 retry_every,
                 max_timeout,
             }) => {
-                let c8y_config = config.c8y.try_get(profile.as_deref())?;
+                let c8y_config = config.mapper_config_sync::<C8yMapperSpecificConfig>(&profile)?;
 
                 let (csr_path, generate_csr) = match csr_path {
                     None => (c8y_config.device.csr_path.clone().into(), true),
@@ -296,10 +296,10 @@ impl BuildCommand for TEdgeCertCli {
 
                 let c8y_url = match url {
                     Some(v) => v,
-                    None => c8y_config.http.or_err()?.to_owned(),
+                    None => c8y_config.cloud_specific.http.to_owned(),
                 };
 
-                let cryptoki = config.device.cryptoki_config(Some(c8y_config))?;
+                let cryptoki = config.device.cryptoki_config(Some(&c8y_config))?;
                 let key = cryptoki
                     .map(super::create_csr::Key::Cryptoki)
                     .unwrap_or(Key::Local(

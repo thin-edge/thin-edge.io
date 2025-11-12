@@ -349,6 +349,7 @@ pub struct C8yMapperSpecificConfig {
     #[serde(default)]
     pub proxy: ProxyConfig,
 
+    // TODO this shouldn't work like this -> should be bridge.include not bridge_include
     /// Bridge include configuration
     #[serde(default)]
     pub bridge_include: BridgeIncludeConfig,
@@ -1258,8 +1259,12 @@ mod tests {
             &toml::from_str(tedge_toml).unwrap(),
             TEdgeConfigLocation::from_custom_root("/not/a/real/directory"),
         );
-        let config: C8yMapperConfig =
-            load_mapper_config_from_string(mapper_toml, &tedge_config, &AbsolutePath::try_new("notondisk.toml").unwrap()).unwrap();
+        let config: C8yMapperConfig = load_mapper_config_from_string(
+            mapper_toml,
+            &tedge_config,
+            &AbsolutePath::try_new("notondisk.toml").unwrap(),
+        )
+        .unwrap();
 
         // Device fields should come from tedge_config defaults
         // Call the id() method to get the device ID (which should be set from tedge_toml)
@@ -1479,7 +1484,10 @@ mod tests {
 
         let config = deserialize_from_str::<C8yMapperSpecificConfig>(toml).unwrap();
 
-        assert_eq!(config.cloud_specific.proxy.cert_path.key(), "/not/on/disk.toml: proxy.cert_path")
+        assert_eq!(
+            config.cloud_specific.proxy.cert_path.key(),
+            "/not/on/disk.toml: proxy.cert_path"
+        )
     }
 
     fn deserialize_from_str<T>(toml: &str) -> Result<MapperConfig<T>, MapperConfigError>

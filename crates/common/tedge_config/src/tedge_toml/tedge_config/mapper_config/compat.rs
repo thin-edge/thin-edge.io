@@ -618,6 +618,9 @@ mod tests {
 
         let config: C8yMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
 
-        assert_eq!(config.cloud_specific.proxy.cert_path.key(), "c8y.proxy.cert_path")
+        assert_eq!(
+            config.cloud_specific.proxy.cert_path.key(),
+            "c8y.proxy.cert_path"
+        )
     }
 }
