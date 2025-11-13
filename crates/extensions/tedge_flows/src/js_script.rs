@@ -181,7 +181,7 @@ mod tests {
         let js = "export function onMessage(msg) { return [msg]; };";
         let (runtime, script) = runtime_with(js).await;
 
-        let input = Message::new("te/main/device///m/", "hello world").sent_now();
+        let input = Message::new("te/main/device///m/", "hello world");
         let output = input.clone();
         assert_eq!(
             script
@@ -197,7 +197,7 @@ mod tests {
         let js = "export function onMessage(msg) { return msg; };";
         let (runtime, script) = runtime_with(js).await;
 
-        let input = Message::new("te/main/device///m/", "hello world").sent_now();
+        let input = Message::new("te/main/device///m/", "hello world");
         let output = input.clone();
         assert_eq!(
             script
@@ -310,6 +310,37 @@ export async function onMessage(message, config) {
                 .on_message(&runtime, DateTime::now(), &input)
                 .await
                 .unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn using_date() {
+        let js = r#"
+export function onMessage(message, config) {
+    let time = message.timestamp;
+    return {
+        "topic": message.topic,
+        "payload": JSON.stringify({
+            "milliseconds": time.getTime(),
+            "date": time.toUTCString(),
+        })
+    }
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let datetime = DateTime {
+            seconds: 1763050414,
+            nanoseconds: 0,
+        };
+        let input = Message::new("clock", "");
+        let output = Message::new(
+            "clock",
+            r#"{"milliseconds":1763050414000,"date":"Thu, 13 Nov 2025 16:13:34 GMT"}"#.to_string(),
+        );
+        assert_eq!(
+            script.on_message(&runtime, datetime, &input).await.unwrap(),
             vec![output]
         );
     }
