@@ -14,13 +14,7 @@ Connect to Cumulocity MQTT Service endpoint
     Execute Command    tedge config set c8y.mqtt_service.topics 'sub/topic,demo/topic'
     Execute Command    tedge connect c8y
 
-    External Identity Should Exist    ${DEVICE_SN}:device:main:service:mosquitto-c8y-mqtt-bridge    show_info=False
-    Device Should Have Fragment Values    status\=up
-
-    Execute Command    tedge mqtt pub c8y-mqtt/test/topic '"hello"'
-    # TODO: Validate message received on test/topic on C8Y
-
-    Sleep    1s
+    Verify Custom Topic Publish and Subscribe
 
 Connect to Cumulocity MQTT Service endpoint basic auth
     ${DEVICE_SN}=    Setup    register=${False}
@@ -28,6 +22,7 @@ Connect to Cumulocity MQTT Service endpoint basic auth
     Execute Command    tedge config set device.id ${DEVICE_SN}
     Set Cumulocity URLs
     Execute Command    tedge config set c8y.mqtt_service.enabled true
+    Execute Command    tedge config set c8y.mqtt_service.topics 'sub/topic,demo/topic'
 
     Execute Command
     ...    cmd=printf '[c8y]\nusername = "%s"\npassword = "%s"\n' '${C8Y_CONFIG.tenant}/${C8Y_CONFIG.username}' '${C8Y_CONFIG.password}' > /etc/tedge/credentials.toml
@@ -35,11 +30,7 @@ Connect to Cumulocity MQTT Service endpoint basic auth
 
     Execute Command    tedge connect c8y
 
-    # TODO: Subscribing to test/topic from another client
-    Execute Command    tedge mqtt pub c8y-mqtt/test/topic '"hello"'
-    # TODO: Validate message received on test/topic on the other client
-
-    Sleep    1s
+    Verify Custom Topic Publish and Subscribe
 
 Connect to Cumulocity MQTT Service endpoint builtin bridge
     ${DEVICE_SN}=    Setup    connect=${False}
@@ -48,10 +39,16 @@ Connect to Cumulocity MQTT Service endpoint builtin bridge
     Execute Command    tedge config set c8y.mqtt_service.topics 'sub/topic,demo/topic'
     Execute Command    tedge connect c8y
 
-    External Identity Should Exist    ${DEVICE_SN}:device:main:service:tedge-mapper-bridge-c8y-mqtt    show_info=False
-    Device Should Have Fragment Values    status\=up
+    Verify Custom Topic Publish and Subscribe
 
-    Execute Command    tedge mqtt pub c8y-mqtt/test/topic '"hello"'
-    # TODO: Validate message received on test/topic on C8Y
 
-    Sleep    1s
+*** Keywords ***
+Verify Custom Topic Publish and Subscribe
+    ${timestamp}=    Get Unix Timestamp
+    # Publish a message to a topic that the device is subscribed to
+    Execute Command    tedge mqtt pub c8y/mqtt/out/sub/topic '"hello"'
+    # Assert that the message is looped back on the inbound subscribed topic
+    Should Have MQTT Messages
+    ...    c8y/mqtt/in/sub/topic
+    ...    message_contains="hello"
+    ...    date_from=${timestamp}

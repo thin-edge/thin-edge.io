@@ -12,12 +12,11 @@ use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
-use mqtt_channel::Topic;
 use std::borrow::Cow;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::service_health_topic;
+use tedge_config::models::MQTT_CORE_TLS_PORT;
+use tedge_config::models::MQTT_SERVICE_TLS_PORT;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::TEdgeConfigReaderC8y;
 use tedge_config::TEdgeConfig;
@@ -59,7 +58,7 @@ impl TEdgeComponent for CumulocityMapper {
         let c8y_mapper_config =
             C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, c8y_profile)?;
         if tedge_config.mqtt.bridge.built_in {
-            let (tc, cloud_config, reconnect_message_mapper) = core_mqtt_bridge_config(
+            let (tc, cloud_config, reconnect_message_mapper) = mqtt_bridge_config(
                 &tedge_config,
                 c8y_config,
                 &c8y_mapper_config,
@@ -78,25 +77,6 @@ impl TEdgeComponent for CumulocityMapper {
                     .await,
                 )
                 .await?;
-
-            if c8y_config.mqtt_service.enabled {
-                let (bridge_config, bridge_service_name, bridge_health_topic, cloud_config) =
-                    mqtt_service_bridge_config(&tedge_config, c8y_config)?;
-
-                runtime
-                    .spawn(
-                        MqttBridgeActorBuilder::new(
-                            &tedge_config,
-                            &bridge_service_name,
-                            &bridge_health_topic,
-                            bridge_config,
-                            cloud_config,
-                            None,
-                        )
-                        .await,
-                    )
-                    .await?;
-            }
         } else if tedge_config.proxy.address.or_none().is_some() {
             warn!("`proxy.address` is configured without the built-in bridge enabled. The bridge MQTT connection to the cloud will {} communicate via the configured proxy.", "not".bold())
         }
@@ -215,7 +195,7 @@ pub fn service_monitor_client_config(
     Ok(mqtt_config)
 }
 
-fn core_mqtt_bridge_config(
+fn mqtt_bridge_config(
     tedge_config: &TEdgeConfig,
     c8y_config: &TEdgeConfigReaderC8y,
     c8y_mapper_config: &C8yMapperConfig,
@@ -313,11 +293,28 @@ fn core_mqtt_bridge_config(
         tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
     }
 
+    let use_mqtt_service = c8y_config.mqtt_service.enabled;
+
+    let custom_out_prefix = format!("{}mqtt/out/", local_prefix);
+    let custom_in_prefix = format!("{}mqtt/in/", local_prefix);
+    if c8y_config.mqtt_service.enabled {
+        tc.forward_from_local("#", custom_out_prefix, "")?;
+
+        let sub_topics = c8y_config.mqtt_service.topics.clone();
+        for topic in sub_topics.0.into_iter() {
+            tc.forward_from_remote(topic, custom_in_prefix.clone(), "")?;
+        }
+    }
+
     let c8y = c8y_config.mqtt.or_config_not_set()?;
+    let mut c8y_port = c8y.port().into();
+    if use_mqtt_service && c8y_port == MQTT_CORE_TLS_PORT {
+        c8y_port = MQTT_SERVICE_TLS_PORT;
+    }
     let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
         c8y_config.device.id()?,
         c8y.host().to_string(),
-        c8y.port().into(),
+        c8y_port,
     );
     // Cumulocity tells us not to not set clean session to false, so don't
     // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
@@ -401,63 +398,4 @@ fn core_mqtt_bridge_config(
 
     configure_proxy(tedge_config, &mut cloud_config)?;
     Ok((tc, cloud_config, reconnect_message_mapper))
-}
-
-fn mqtt_service_bridge_config(
-    tedge_config: &TEdgeConfig,
-    c8y_config: &TEdgeConfigReaderC8y,
-) -> Result<(BridgeConfig, String, Topic, MqttOptions), anyhow::Error> {
-    let use_certificate = c8y_config
-        .auth_method
-        .is_certificate(&c8y_config.credentials_path);
-    let sub_topics = c8y_config.mqtt_service.topics.clone();
-    let cloud_topics = sub_topics.0.into_iter().map(Cow::Owned);
-
-    let mut tc = BridgeConfig::new();
-    let local_prefix = format!("{}/", c8y_config.mqtt_service.topic_prefix.as_str());
-
-    for topic in cloud_topics {
-        tc.forward_bidirectionally(topic, local_prefix.clone(), "")?;
-    }
-
-    // Templates
-    tc.forward_from_local("#", local_prefix.clone(), "")?;
-
-    let c8y = c8y_config.mqtt_service.url.or_config_not_set()?;
-    let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
-        c8y_config.device.id()?,
-        c8y.host().to_string(),
-        c8y.port().into(),
-    );
-    // Cumulocity tells us not to not set clean session to false, so don't
-    // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
-    cloud_config.set_clean_session(true);
-
-    if use_certificate {
-        let tls_config = tedge_config
-            .mqtt_client_config_rustls(c8y_config)
-            .context("Failed to create MQTT TLS config")?;
-        cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
-    } else {
-        // TODO(marcel): integrate credentials auth into MqttAuthConfig?
-        let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
-        use_credentials(
-            &mut cloud_config,
-            &c8y_config.root_cert_path,
-            username,
-            password,
-        )?;
-    }
-
-    let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
-    let bridge_service_name = format!(
-        "tedge-mapper-bridge-{}",
-        c8y_config.mqtt_service.topic_prefix.as_str()
-    );
-    let device_topic_id: EntityTopicId = tedge_config.mqtt.device_topic_id.clone();
-
-    let bridge_health_topic =
-        service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
-
-    Ok((tc, bridge_service_name, bridge_health_topic, cloud_config))
 }

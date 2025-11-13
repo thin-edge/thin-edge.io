@@ -1,0 +1,2 @@
+pub const MQTT_CORE_TLS_PORT: u16 = 8883;
+pub const MQTT_SERVICE_TLS_PORT: u16 = 9883;

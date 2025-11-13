@@ -41,7 +41,6 @@ impl_append_remove_for_single_value!(
     EntityTopicId,
     HostPort<HTTPS_PORT>,
     HostPort<MQTT_TLS_PORT>,
-    HostPort<MQTT_SVC_TLS_PORT>,
     bool,
     IpAddr,
     u16,
