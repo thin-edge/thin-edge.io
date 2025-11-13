@@ -225,18 +225,19 @@ pub struct BridgeConfigC8yMqttServiceParams {
     pub sub_topics: TemplatesSet,
 }
 
-impl TryFrom<(&TEdgeConfig, Option<&ProfileName>)> for BridgeConfigC8yMqttServiceParams {
-    type Error = ConfigError;
-
-    fn try_from(value: (&TEdgeConfig, Option<&ProfileName>)) -> Result<Self, Self::Error> {
-        let (config, profile) = value;
-
+impl BridgeConfigC8yMqttServiceParams {
+    pub async fn try_new(
+        config: &TEdgeConfig,
+        profile: Option<&ProfileName>,
+    ) -> Result<Self, ConfigError> {
         let bridge_location = match config.mqtt.bridge.built_in {
             true => BridgeLocation::BuiltIn,
             false => BridgeLocation::Mosquitto,
         };
         let mqtt_schema = MqttSchema::with_root(config.mqtt.topic_root.clone());
-        let c8y_config = config.mapper_config_sync::<C8yMapperSpecificConfig>(&profile)?;
+        let c8y_config = config
+            .mapper_config::<C8yMapperSpecificConfig>(&profile)
+            .await?;
 
         let (remote_username, remote_password) = match c8y_config
             .cloud_specific

@@ -200,31 +200,35 @@ fn styles() -> clap::builder::Styles {
         )
 }
 
+#[async_trait::async_trait]
 impl BuildCommand for TEdgeOpt {
-    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
+    async fn build_command(
+        self,
+        config: &TEdgeConfig,
+    ) -> Result<Box<dyn Command>, crate::ConfigError> {
         match self {
             TEdgeOpt::Init {
                 user,
                 group,
                 relative_links,
             } => Ok(Box::new(TEdgeInitCmd::new(user, group, relative_links))),
-            TEdgeOpt::Upload(opt) => opt.build_command(config),
-            TEdgeOpt::Cert(opt) => opt.build_command(config),
-            TEdgeOpt::Config(opt) => opt.build_command(config),
-            TEdgeOpt::Connect(opt) => opt.build_command(config),
-            TEdgeOpt::Diag(opt) => opt.build_command(config),
-            TEdgeOpt::Disconnect(opt) => opt.build_command(config),
+            TEdgeOpt::Upload(opt) => opt.build_command(config).await,
+            TEdgeOpt::Cert(opt) => opt.build_command(config).await,
+            TEdgeOpt::Config(opt) => opt.build_command(config).await,
+            TEdgeOpt::Connect(opt) => opt.build_command(config).await,
+            TEdgeOpt::Diag(opt) => opt.build_command(config).await,
+            TEdgeOpt::Disconnect(opt) => opt.build_command(config).await,
             TEdgeOpt::RefreshBridges => RefreshBridgesCmd::new(config).map(Command::into_boxed),
-            TEdgeOpt::Mqtt(opt) => opt.build_command(config),
-            TEdgeOpt::Http(opt) => opt.build_command(config),
-            TEdgeOpt::Reconnect(opt) => opt.build_command(config),
+            TEdgeOpt::Mqtt(opt) => opt.build_command(config).await,
+            TEdgeOpt::Http(opt) => opt.build_command(config).await,
+            TEdgeOpt::Reconnect(opt) => opt.build_command(config).await,
             #[cfg(feature = "tedge-flows")]
-            TEdgeOpt::Flows(opt) => opt.build_command(config),
+            TEdgeOpt::Flows(opt) => opt.build_command(config).await,
             TEdgeOpt::Run(_) => {
                 // This method has to be kept in sync with tedge::redirect_if_multicall()
                 panic!("tedge mapper|agent|write commands are launched as multicall")
             }
-            TEdgeOpt::Completions { shell } => shell.build_command(config),
+            TEdgeOpt::Completions { shell } => shell.build_command(config).await,
         }
     }
 }

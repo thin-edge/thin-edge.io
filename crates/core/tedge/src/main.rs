@@ -85,6 +85,7 @@ async fn main() -> anyhow::Result<()> {
 
             let cmd = cmd
                 .build_command(&tedge_config)
+                .await
                 .with_context(|| "missing configuration parameter")?;
 
             if !std::io::stdout().is_terminal() {

@@ -45,8 +45,6 @@ use tedge_config::all_or_nothing;
 use tedge_config::models::auth_method::AuthType;
 use tedge_config::models::proxy_scheme::ProxyScheme;
 use tedge_config::models::AbsolutePath;
-#[cfg(feature = "c8y")]
-use tedge_config::models::CloudType;
 #[cfg(any(feature = "aws", feature = "azure"))]
 use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
@@ -99,21 +97,24 @@ impl Command for ConnectCommand {
     }
 
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let bridge_config =
-            bridge_config(&tedge_config, &self.cloud).await.map_err(anyhow::Error::new)?;
+        let bridge_config = bridge_config(&tedge_config, &self.cloud)
+            .await
+            .map_err(anyhow::Error::new)?;
         let credentials_path = credentials_path_for(&tedge_config, &self.cloud).await?;
 
         let cloud = tedge_config
             .as_cloud_config((&self.cloud).into())
+            .await
             .map_err(anyhow::Error::new)?;
 
-        let cryptoki_key_uri = tedge_config
-            .device
-            .cryptoki_config(Some(cloud))?
-            .map(|c| match c {
-                CryptokiConfig::Direct(d) => d.uri,
-                CryptokiConfig::SocketService { uri, .. } => uri,
-            });
+        let cryptoki_key_uri =
+            tedge_config
+                .device
+                .cryptoki_config(Some(&cloud))?
+                .map(|c| match c {
+                    CryptokiConfig::Direct(d) => d.uri,
+                    CryptokiConfig::SocketService { uri, .. } => uri,
+                });
         let cryptoki_mode = tedge_config.device.cryptoki.mode.clone();
         let cryptoki_status = match cryptoki_key_uri {
             None => "off".to_string(),
@@ -548,14 +549,15 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
                 .filter(|(_, config)| config.http.or_none().is_some())
                 .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
-            if profiles.is_empty() {
-                profiles = config
-                    .mapper
-                    .entries()
-                    .filter(|(_, config)| config.ty.or_none() == Some(&CloudType::C8y))
-                    .map(|(s, _)| Some(s?.to_string()))
-                    .collect();
-            }
+            // TODO handle generalised mapper config
+            // if profiles.is_empty() {
+            //     profiles = config
+            //         .mapper
+            //         .entries()
+            //         .filter(|(_, config)| config.ty.or_none() == Some(&CloudType::C8y))
+            //         .map(|(s, _)| Some(s?.to_string()))
+            //         .collect();
+            // }
             disallow_matching_url_device_id(
                 config,
                 ReadableKey::C8yUrl,
@@ -744,7 +746,9 @@ pub async fn bridge_config(
         }
         #[cfg(feature = "c8y")]
         MaybeBorrowedCloud::C8y(profile) => {
-            let c8y_config = config.mapper_config::<C8yMapperSpecificConfig>(profile).await?;
+            let c8y_config = config
+                .mapper_config::<C8yMapperSpecificConfig>(profile)
+                .await?;
 
             let (remote_username, remote_password) = match c8y_config
                 .cloud_specific
@@ -884,10 +888,11 @@ impl ConnectCommand {
                     .mapper_config::<C8yMapperSpecificConfig>(profile_name)
                     .await?;
                 if c8y_config.cloud_specific.mqtt_service.enabled {
-                    let config_params = BridgeConfigC8yMqttServiceParams::try_from((
+                    let config_params = BridgeConfigC8yMqttServiceParams::try_new(
                         tedge_config,
                         profile_name.as_deref(),
-                    ))?;
+                    )
+                    .await?;
                     let mqtt_svc_bridge_config = BridgeConfig::from(config_params);
                     let spinner = Spinner::start("Creating mosquitto bridge to MQTT service");
                     let res =
