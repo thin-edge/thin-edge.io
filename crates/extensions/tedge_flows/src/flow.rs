@@ -404,11 +404,6 @@ impl DateTime {
         DateTime::try_from(OffsetDateTime::now_utc()).unwrap()
     }
 
-    pub fn tick_now(&self, tick_every: std::time::Duration) -> bool {
-        let tick_every_secs = tick_every.as_secs();
-        tick_every_secs != 0 && (self.seconds % tick_every_secs == 0)
-    }
-
     pub fn json(&self) -> Value {
         json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
     }
@@ -448,12 +443,6 @@ impl Message {
             payload: payload.into(),
             timestamp: Some(timestamp),
         }
-    }
-
-    #[cfg(test)]
-    pub fn sent_now(mut self) -> Self {
-        self.timestamp = Some(DateTime::now());
-        self
     }
 
     pub fn json(&self) -> Value {

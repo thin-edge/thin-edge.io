@@ -79,12 +79,7 @@ type Message = {
   topic: string,
   payload: string,
   raw_payload: Uint8Array,
-  timestamp: Timestamp
-}
-
-type Timestamp = {
-  seconds: number,
-  nanoseconds: number
+  timestamp: Date
 }
 ```
 
@@ -93,7 +88,7 @@ These values are configured by the flow and can be dynamically updated on recept
 
 The `onMessage` function is called for each message to be transformed
   - The arguments passed to the function are:
-    - The message `{ topic: string, payload: string, raw_payload: Uint8Array, timestamp: { seconds: u64, nanoseconds: u32 } }`
+    - The message `{ topic: string, payload: string, raw_payload: Uint8Array, timestamp: Date }`
     - The config as read from the flow config or updated by the script
   - The function is expected to return zero, one or many transformed messages `[{ topic: string, payload: string }]`
   - An exception can be thrown if the input message cannot be transformed.

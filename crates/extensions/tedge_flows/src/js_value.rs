@@ -5,16 +5,18 @@ use rquickjs::Ctx;
 use rquickjs::FromJs;
 use rquickjs::IntoJs;
 use rquickjs::Value;
+use serde_json::json;
 use std::collections::BTreeMap;
 
-/// Akin to serde_json::Value with an extra case for binary data
-#[derive(Clone, Debug)]
+/// Akin to serde_json::Value with extra cases for date and binary data
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum JsonValue {
     Null,
     Bool(bool),
     Number(serde_json::Number),
     String(String),
     Bytes(Vec<u8>), // <= This case motivates the use of JsonValue vs serde_json::Value
+    DateTime(DateTime),
     Array(Vec<JsonValue>),
     Object(BTreeMap<String, JsonValue>),
 }
@@ -28,10 +30,6 @@ impl Default for JsonValue {
 impl JsonValue {
     fn string(value: impl ToString) -> Self {
         JsonValue::String(value.to_string())
-    }
-
-    fn number(value: impl Into<serde_json::Number>) -> Self {
-        JsonValue::Number(value.into())
     }
 
     fn option(value: Option<impl Into<JsonValue>>) -> Self {
@@ -69,10 +67,7 @@ impl From<Message> for JsonValue {
 
 impl From<DateTime> for JsonValue {
     fn from(value: DateTime) -> Self {
-        JsonValue::object([
-            ("seconds", JsonValue::number(value.seconds)),
-            ("nanoseconds", JsonValue::number(value.nanoseconds)),
-        ])
+        JsonValue::DateTime(value)
     }
 }
 
@@ -101,6 +96,7 @@ impl From<JsonValue> for serde_json::Value {
             JsonValue::Number(n) => serde_json::Value::Number(n),
             JsonValue::String(s) => serde_json::Value::String(s),
             JsonValue::Bytes(b) => serde_json::Value::String(format!("0x {b:?}")),
+            JsonValue::DateTime(t) => json!({ "seconds": t.seconds, "nanos": t.nanoseconds }),
             JsonValue::Array(a) => {
                 serde_json::Value::Array(a.into_iter().map(serde_json::Value::from).collect())
             }
@@ -131,15 +127,11 @@ impl TryFrom<BTreeMap<String, JsonValue>> for Message {
                 .into())
             }
         };
-        let timestamp = value
-            .get("timestamp")
-            .map(|t| DateTime::try_from(t.clone()))
-            .transpose()?;
 
         Ok(Message {
             topic: topic.to_owned(),
             payload,
-            timestamp,
+            timestamp: None,
         })
     }
 }
@@ -154,37 +146,6 @@ impl TryFrom<JsonValue> for Message {
             );
         };
         Message::try_from(object)
-    }
-}
-
-impl TryFrom<JsonValue> for DateTime {
-    type Error = FlowError;
-
-    fn try_from(value: JsonValue) -> Result<Self, Self::Error> {
-        let JsonValue::Object(object) = value else {
-            return Err(
-                anyhow::anyhow!("Expect a timestamp object with seconds and nanoseconds").into(),
-            );
-        };
-        DateTime::try_from(object)
-    }
-}
-
-impl TryFrom<BTreeMap<String, JsonValue>> for DateTime {
-    type Error = FlowError;
-
-    fn try_from(value: BTreeMap<String, JsonValue>) -> Result<Self, Self::Error> {
-        let Some(JsonValue::Number(seconds)) = value.get("seconds") else {
-            return Err(anyhow::anyhow!("Missing timestamp seconds").into());
-        };
-        let Some(JsonValue::Number(nanoseconds)) = value.get("nanoseconds") else {
-            return Err(anyhow::anyhow!("Missing timestamp nanoseconds").into());
-        };
-
-        Ok(DateTime {
-            seconds: seconds.as_u64().unwrap_or_default(),
-            nanoseconds: nanoseconds.as_u64().unwrap_or_default() as u32,
-        })
     }
 }
 
@@ -241,6 +202,12 @@ impl<'js> IntoJs<'js> for JsonValueRef<'_> {
             JsonValue::Bytes(value) => {
                 let bytes = rquickjs::TypedArray::new(ctx.clone(), value.clone())?;
                 Ok(bytes.into_value())
+            }
+            JsonValue::DateTime(value) => {
+                let seconds = value.seconds;
+                let milliseconds = value.nanoseconds / 1_000_000;
+                let time: Value<'js> = ctx.eval(format!("new Date({seconds}{milliseconds:03})"))?;
+                Ok(time)
             }
             JsonValue::Array(values) => {
                 let array = rquickjs::Array::new(ctx.clone())?;
