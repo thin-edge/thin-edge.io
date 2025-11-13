@@ -7,7 +7,6 @@ use clap::CommandFactory;
 use clap::FromArgMatches;
 use std::alloc;
 use std::ffi::OsString;
-use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge::command::BuildCommand;
@@ -23,6 +22,11 @@ use tedge_config::unconfigured_logger;
 use tedge_file_log_plugin::bin::TEdgeConfigView;
 use tracing::log;
 
+// Control when to use console colors (`stdout` and `stderr` is a TTY, `NO_COLOR` is not set)
+static USE_COLOR: yansi::Condition = yansi::Condition::from(|| {
+    yansi::Condition::stdouterr_are_tty() && yansi::Condition::no_color()
+});
+
 #[global_allocator]
 static ALLOCATOR: Cap<alloc::System> = Cap::new(alloc::System, usize::MAX);
 
@@ -34,6 +38,8 @@ async fn main() -> anyhow::Result<()> {
         parse_multicall(&executable_name(), std::env::args_os())
     })
     .unwrap_or_else(|code| std::process::exit(code));
+
+    yansi::whenever(USE_COLOR);
 
     match opt {
         TEdgeOptMulticall::Component(Component::TedgeMapper(opt)) => {
@@ -86,10 +92,6 @@ async fn main() -> anyhow::Result<()> {
             let cmd = cmd
                 .build_command(&tedge_config)
                 .with_context(|| "missing configuration parameter")?;
-
-            if !std::io::stdout().is_terminal() {
-                yansi::disable();
-            }
 
             match cmd.execute(tedge_config).await {
                 Ok(()) => Ok(()),

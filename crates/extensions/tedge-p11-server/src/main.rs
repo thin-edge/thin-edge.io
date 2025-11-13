@@ -218,6 +218,11 @@ async fn try_read_config(args: Args) -> anyhow::Result<ValidConfig> {
     })
 }
 
+// Control when to use console colors (`stdout` and `stderr` is a TTY, `NO_COLOR` is not set)
+static USE_COLOR: yansi::Condition = yansi::Condition::from(|| {
+    yansi::Condition::stdouterr_are_tty() && yansi::Condition::no_color()
+});
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -233,6 +238,8 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap(),
         )
         .init();
+
+    yansi::whenever(USE_COLOR);
 
     let args = Args::parse();
     let config = try_read_config(args).await?;
