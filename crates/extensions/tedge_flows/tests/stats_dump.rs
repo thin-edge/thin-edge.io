@@ -86,7 +86,7 @@ async fn stats_are_dumped_when_no_interval_handlers_registered() {
     let config = r#"
         input.mqtt.topics = ["te/device/main///m/test"]
         steps = [{ script = "passthrough.js" }]
-        output.mqtt.topics = ["te/device/main///m/output"]
+        output.mqtt.topic = "te/device/main///m/output"
     "#;
     std::fs::write(config_dir.join("mqtt_only_flow.toml"), config).expect("Failed to write config");
 
@@ -151,7 +151,7 @@ async fn stats_dumped_when_interval_handlers_present() {
     let config = r#"
         input.mqtt.topics = ["te/device/main///m/test"]
         steps = [{ script = "interval_script.js", interval = "37s" }]
-        output.mqtt.topics = ["te/device/main///m/output"]
+        output.mqtt.topic = "te/device/main///m/output"
     "#;
     std::fs::write(config_dir.join("interval_flow.toml"), config).expect("Failed to write config");
 
@@ -211,7 +211,7 @@ async fn stats_not_dumped_before_300_seconds() {
     let config = r#"
         input.mqtt.topics = ["te/device/main///m/test"]
         steps = [{ script = "passthrough.js" }]
-        output.mqtt.topics = ["te/device/main///m/output"]
+        output.mqtt.topic = "te/device/main///m/output"
     "#;
     std::fs::write(config_dir.join("mqtt_only_flow.toml"), config).expect("Failed to write config");
 
