@@ -100,7 +100,7 @@ impl Command for ConnectCommand {
 
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         let bridge_config =
-            bridge_config(&tedge_config, &self.cloud).map_err(anyhow::Error::new)?;
+            bridge_config(&tedge_config, &self.cloud).await.map_err(anyhow::Error::new)?;
         let credentials_path = credentials_path_for(&tedge_config, &self.cloud).await?;
 
         let cloud = tedge_config
@@ -656,7 +656,7 @@ fn find_all_matching<K, V: Hash + Eq>(entries: impl Iterator<Item = (K, V)>) -> 
     match_map.into_values().filter(|t| t.len() > 1).collect()
 }
 
-pub fn bridge_config(
+pub async fn bridge_config(
     config: &TEdgeConfig,
     cloud: &MaybeBorrowedCloud<'_>,
 ) -> Result<BridgeConfig, ConfigError> {
@@ -744,7 +744,7 @@ pub fn bridge_config(
         }
         #[cfg(feature = "c8y")]
         MaybeBorrowedCloud::C8y(profile) => {
-            let c8y_config = config.mapper_config_sync::<C8yMapperSpecificConfig>(profile)?;
+            let c8y_config = config.mapper_config::<C8yMapperSpecificConfig>(profile).await?;
 
             let (remote_username, remote_password) = match c8y_config
                 .cloud_specific
