@@ -1,4 +1,4 @@
-use crate::flow::DateTime;
+use crate::flow::epoch_ms;
 use crate::flow::FlowError;
 use crate::flow::Message;
 use rquickjs::Ctx;
@@ -7,6 +7,7 @@ use rquickjs::IntoJs;
 use rquickjs::Value;
 use serde_json::json;
 use std::collections::BTreeMap;
+use std::time::SystemTime;
 
 /// Akin to serde_json::Value with extra cases for date and binary data
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -16,7 +17,7 @@ pub enum JsonValue {
     Number(serde_json::Number),
     String(String),
     Bytes(Vec<u8>), // <= This case motivates the use of JsonValue vs serde_json::Value
-    DateTime(DateTime),
+    Time(SystemTime),
     Array(Vec<JsonValue>),
     Object(BTreeMap<String, JsonValue>),
 }
@@ -65,9 +66,9 @@ impl From<Message> for JsonValue {
     }
 }
 
-impl From<DateTime> for JsonValue {
-    fn from(value: DateTime) -> Self {
-        JsonValue::DateTime(value)
+impl From<SystemTime> for JsonValue {
+    fn from(value: SystemTime) -> Self {
+        JsonValue::Time(value)
     }
 }
 
@@ -96,7 +97,7 @@ impl From<JsonValue> for serde_json::Value {
             JsonValue::Number(n) => serde_json::Value::Number(n),
             JsonValue::String(s) => serde_json::Value::String(s),
             JsonValue::Bytes(b) => serde_json::Value::String(format!("0x {b:?}")),
-            JsonValue::DateTime(t) => json!({ "seconds": t.seconds, "nanos": t.nanoseconds }),
+            JsonValue::Time(t) => json!({ "epoch_ms": epoch_ms(&t) }),
             JsonValue::Array(a) => {
                 serde_json::Value::Array(a.into_iter().map(serde_json::Value::from).collect())
             }
@@ -203,10 +204,9 @@ impl<'js> IntoJs<'js> for JsonValueRef<'_> {
                 let bytes = rquickjs::TypedArray::new(ctx.clone(), value.clone())?;
                 Ok(bytes.into_value())
             }
-            JsonValue::DateTime(value) => {
-                let seconds = value.seconds;
-                let milliseconds = value.nanoseconds / 1_000_000;
-                let time: Value<'js> = ctx.eval(format!("new Date({seconds}{milliseconds:03})"))?;
+            JsonValue::Time(value) => {
+                let milliseconds = epoch_ms(value);
+                let time: Value<'js> = ctx.eval(format!("new Date({milliseconds})"))?;
                 Ok(time)
             }
             JsonValue::Array(values) => {

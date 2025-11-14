@@ -1,5 +1,4 @@
 use crate::connected_flow::ConnectedFlowRegistry;
-use crate::flow::DateTime;
 use crate::flow::FlowError;
 use crate::flow::FlowOutput;
 use crate::flow::FlowResult;
@@ -16,6 +15,7 @@ use serde_json::json;
 use std::cmp::min;
 use std::collections::HashSet;
 use std::time::Duration;
+use std::time::SystemTime;
 use tedge_actors::Actor;
 use tedge_actors::DynSender;
 use tedge_actors::MessageReceiver;
@@ -207,7 +207,7 @@ impl FlowsMapper {
 
     async fn on_source_poll(&mut self) -> Result<(), RuntimeError> {
         let now = Instant::now();
-        let timestamp = DateTime::now();
+        let timestamp = SystemTime::now();
 
         let mut in_messages = vec![];
         for flow in self.processor.registry.flows_mut() {
@@ -241,7 +241,7 @@ impl FlowsMapper {
         source: SourceTag,
         message: Message,
     ) -> Result<(), RuntimeError> {
-        let timestamp = DateTime::now();
+        let timestamp = SystemTime::now();
         for messages in self
             .processor
             .on_message(timestamp, &source, &message)
@@ -255,7 +255,7 @@ impl FlowsMapper {
 
     async fn on_interval(&mut self) -> Result<(), RuntimeError> {
         let now = Instant::now();
-        let timestamp = DateTime::now();
+        let timestamp = SystemTime::now();
         if self.next_dump <= now {
             self.processor.dump_memory_stats().await;
             self.processor.dump_processing_stats().await;
@@ -295,7 +295,7 @@ impl FlowsMapper {
     ) -> Result<(), RuntimeError> {
         if let Some(flow) = self.processor.registry.flow(&flow_name) {
             let topic = flow.input_topic().to_string();
-            let timestamp = DateTime::now();
+            let timestamp = SystemTime::now();
             let message = Message::new(topic, line);
             if let Some(result) = self
                 .processor
