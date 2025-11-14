@@ -9,20 +9,19 @@ Test Teardown       Get Logs
 
 *** Test Cases ***
 Connect to Cumulocity MQTT Service endpoint
+    Skip    Until SmartREST proxy for MQTT service is enabled on thin-edge-io.eu-latest tenant
     ${DEVICE_SN}=    Setup    connect=${False}
     Execute Command    tedge config set c8y.mqtt_service.enabled true
     Execute Command    tedge config set c8y.mqtt_service.topics 'sub/topic,demo/topic'
     Execute Command    tedge connect c8y
 
-    External Identity Should Exist    ${DEVICE_SN}:device:main:service:mosquitto-c8y-mqtt-bridge    show_info=False
-    Device Should Have Fragment Values    status\=up
-
-    Execute Command    tedge mqtt pub c8y-mqtt/test/topic '"hello"'
+    Execute Command    tedge mqtt pub c8y/custom/out/test/topic '"hello"'
     # TODO: Validate message received on test/topic on C8Y
 
     Sleep    1s
 
 Connect to Cumulocity MQTT Service endpoint basic auth
+    Skip    Until SmartREST proxy for MQTT service is enabled on thin-edge-io.eu-latest tenant
     ${DEVICE_SN}=    Setup    register=${False}
 
     Execute Command    tedge config set device.id ${DEVICE_SN}
@@ -42,16 +41,14 @@ Connect to Cumulocity MQTT Service endpoint basic auth
     Sleep    1s
 
 Connect to Cumulocity MQTT Service endpoint builtin bridge
+    Skip    Until SmartREST proxy for MQTT service is enabled on thin-edge-io.eu-latest tenant
     ${DEVICE_SN}=    Setup    connect=${False}
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge config set c8y.mqtt_service.enabled true
     Execute Command    tedge config set c8y.mqtt_service.topics 'sub/topic,demo/topic'
     Execute Command    tedge connect c8y
 
-    External Identity Should Exist    ${DEVICE_SN}:device:main:service:tedge-mapper-bridge-c8y-mqtt    show_info=False
-    Device Should Have Fragment Values    status\=up
-
-    Execute Command    tedge mqtt pub c8y-mqtt/test/topic '"hello"'
+    Execute Command    tedge mqtt pub c8y/custom/out/test/topic '"hello"'
     # TODO: Validate message received on test/topic on C8Y
 
     Sleep    1s

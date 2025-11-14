@@ -1,6 +1,7 @@
 pub mod apt_config;
 pub mod auth_method;
 pub mod auto;
+pub mod c8y;
 pub mod c8y_software_management;
 pub mod connect_url;
 pub mod cryptoki;
@@ -24,10 +25,10 @@ use strum::Display;
 
 pub const HTTPS_PORT: u16 = 443;
 pub const MQTT_TLS_PORT: u16 = 8883;
-pub const MQTT_SVC_TLS_PORT: u16 = 9883;
 
 pub use self::apt_config::*;
 pub use self::auto::*;
+pub use self::c8y::*;
 pub use self::c8y_software_management::*;
 pub use self::connect_url::*;
 pub use self::cryptoki::Cryptoki;

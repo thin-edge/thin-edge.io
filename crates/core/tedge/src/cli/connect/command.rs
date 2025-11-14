@@ -2,7 +2,6 @@
 use crate::bridge::aws::BridgeConfigAwsParams;
 #[cfg(feature = "azure")]
 use crate::bridge::azure::BridgeConfigAzureParams;
-use crate::bridge::c8y::BridgeConfigC8yMqttServiceParams;
 #[cfg(feature = "c8y")]
 use crate::bridge::c8y::BridgeConfigC8yParams;
 use crate::bridge::BridgeConfig;
@@ -48,6 +47,8 @@ use tedge_config::models::proxy_scheme::ProxyScheme;
 #[cfg(any(feature = "aws", feature = "azure"))]
 use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
+#[cfg(feature = "c8y")]
+use tedge_config::models::MQTT_SVC_TLS_PORT;
 use tedge_config::tedge_toml::MultiError;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::TEdgeConfigReaderMqtt;
@@ -735,6 +736,8 @@ pub fn bridge_config(
         }
         #[cfg(feature = "c8y")]
         MaybeBorrowedCloud::C8y(profile) => {
+            use tedge_config::models::MQTT_CORE_TLS_PORT;
+
             let c8y_config = config.c8y.try_get(profile.as_deref())?;
 
             let (remote_username, remote_password) =
@@ -747,8 +750,21 @@ pub fn bridge_config(
                     }
                 };
 
+            let use_mqtt_service = c8y_config.mqtt_service.enabled;
+            let mut mqtt_host = c8y_config.mqtt.or_config_not_set()?.clone();
+
+            // If the MQTT URL is still pointing to the default core MQTT port, when MQTT service is enabled
+            // implicitly switch to the MQTT service port.
+            // When the port is not the default one,
+            // we assume that the user has explicitly configured it to point to the MQTT service endpoint.
+            if use_mqtt_service && mqtt_host.port().0 == MQTT_CORE_TLS_PORT {
+                let mqtt_svc_host = format!("{}:{}", mqtt_host.host(), MQTT_SVC_TLS_PORT);
+                mqtt_host = HostPort::<MQTT_TLS_PORT>::try_from(mqtt_svc_host)
+                    .map_err(TEdgeConfigError::from)?;
+            }
+
             let params = BridgeConfigC8yParams {
-                mqtt_host: c8y_config.mqtt.or_config_not_set()?.clone(),
+                mqtt_host,
                 config_file: cloud.bridge_config_filename(),
                 bridge_root_cert_path: c8y_config.root_cert_path.clone().into(),
                 remote_clientid: c8y_config.device.id()?.clone(),
@@ -765,6 +781,8 @@ pub fn bridge_config(
                 mqtt_schema,
                 keepalive_interval: c8y_config.bridge.keepalive_interval.duration(),
                 proxy,
+                use_mqtt_service,
+                custom_topics: c8y_config.mqtt_service.topics.clone(),
             };
 
             Ok(BridgeConfig::from(params))
@@ -860,22 +878,6 @@ impl ConnectCommand {
             let spinner = Spinner::start("Creating mosquitto bridge");
             let res = write_mosquitto_bridge_config_file(tedge_config, bridge_config).await;
             spinner.finish(res)?;
-
-            if let Cloud::C8y(profile_name) = &self.cloud {
-                let c8y_config = tedge_config.c8y.try_get(profile_name.as_deref())?;
-                if c8y_config.mqtt_service.enabled {
-                    let config_params = BridgeConfigC8yMqttServiceParams::try_from((
-                        tedge_config,
-                        profile_name.as_deref(),
-                    ))?;
-                    let mqtt_svc_bridge_config = BridgeConfig::from(config_params);
-                    let spinner = Spinner::start("Creating mosquitto bridge to MQTT service");
-                    let res =
-                        write_mosquitto_bridge_config_file(tedge_config, &mqtt_svc_bridge_config)
-                            .await;
-                    spinner.finish(res)?;
-                }
-            }
         } else {
             use_built_in_bridge(tedge_config, bridge_config).await?;
         }

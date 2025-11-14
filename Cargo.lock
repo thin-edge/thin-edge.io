@@ -4731,6 +4731,7 @@ dependencies = [
  "pad",
  "pem",
  "predicates 2.1.5",
+ "pretty_assertions",
  "rasn",
  "rasn-cms",
  "rcgen",

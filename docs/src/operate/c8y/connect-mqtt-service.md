@@ -29,7 +29,9 @@ to use it in production systems, then expect to have to do run some migration ac
 and modify interfaces, configuration, and update the %%te%% version, once the feature goes into General Availability.
 :::
 
-The [Cumulocity MQTT service](https://cumulocity.com/docs/device-integration/mqtt-service) is the next-gen MQTT broker offered by Cumulocity. In contrast to the existing [Cumulocity Core MQTT](https://cumulocity.com/docs/device-integration/mqtt/), the [Cumulocity MQTT service](https://cumulocity.com/docs/device-integration/mqtt-service) allows devices to publish and receive data using user-defined topics and payloads. The feature is currently in [Public Preview](https://cumulocity.com/docs/2024/glossary/p/#public-preview) which means that the interface is subject to change and some of the functionality is not yet implemented.
+The [Cumulocity MQTT service](https://cumulocity.com/docs/device-integration/mqtt-service) is the next-gen MQTT broker offered by Cumulocity.
+In contrast to the existing [Cumulocity Core MQTT](https://cumulocity.com/docs/device-integration/mqtt/), the [Cumulocity MQTT service](https://cumulocity.com/docs/device-integration/mqtt-service) allows devices to publish and receive data using user-defined topics and payloads.
+The feature is currently in [Public Preview](https://cumulocity.com/docs/2024/glossary/p/#public-preview) which means that the interface is subject to change and some of the functionality is not yet implemented.
 
 %%te%% currently uses [Cumulocity's Core MQTT](https://cumulocity.com/docs/device-integration/mqtt/) to establish a connection to the cloud, however it is planned that once the
 MQTT Service reaches the [General Availability](https://cumulocity.com/docs/2024/glossary/g/#ga) status, it will support both the required subset of functionality currently provided
@@ -92,14 +94,17 @@ the ones used to connect to the Cumulocity Core MQTT endpoint.
 
    This step establishes the bridge connection to both the core endpoint as well as the mqtt service endpoints simultaneously.
 
-1. Once connected, all messages published to `c8y-mqtt/#` topics are forwarded to the MQTT service endpoint.
+1. Once connected, all messages published to `c8y/custom/out/#` topics are forwarded to the MQTT service endpoint,
+   without the `c8y/custom/out/` prefix.
 
    ```sh
-   tedge mqtt pub c8y-mqtt/test/topic '{ "hello": "world" }'
+   tedge mqtt pub c8y/custom/out/test/topic '{ "hello": "world" }'
    ```
 
-   The receipt of the published message can be validated on Cumulocity.
+   The receipt of the published message on `test/topic` can be validated on Cumulocity.
+2. Similarly any messages published to the subscribed `demo/topic` on Cumulocity
+   are published to the corresponding local bridge topic with a `c8y/custom/in/` topic prefix.
 
-   :::note
-   The bridge topic prefix `c8y-mqtt` can be changed using the tedge configuration: `c8y.mqtt_service.topic_prefix`.
-   :::
+   ```sh
+   tedge mqtt sub c8y/custom/in/demo/topic
+   ```
