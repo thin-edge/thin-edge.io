@@ -9,6 +9,7 @@ use anyhow::Error;
 use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
 use tedge_flows::BaseFlowRegistry;
+use tedge_flows::DateTime;
 use tedge_flows::Message;
 use tedge_flows::MessageProcessor;
 
@@ -47,6 +48,11 @@ pub enum TEdgeFlowsCli {
         #[clap(long = "final-on-interval")]
         final_on_interval: bool,
 
+        /// Processing time to be used for the test
+        #[clap(long = "processing-time")]
+        #[arg(value_parser = parse_date)]
+        processing_time: Option<DateTime>,
+
         /// The input payloads are base64 encoded and have to be decoded first
         #[clap(long = "base64-input")]
         base64_input: bool,
@@ -80,6 +86,7 @@ impl BuildCommand for TEdgeFlowsCli {
                 flows_dir,
                 flow,
                 final_on_interval,
+                processing_time,
                 base64_input,
                 base64_output,
                 topic,
@@ -97,6 +104,7 @@ impl BuildCommand for TEdgeFlowsCli {
                     flow,
                     message,
                     final_on_interval,
+                    processing_time,
                     base64_input,
                     base64_output,
                 }
@@ -136,4 +144,10 @@ impl TEdgeFlowsCli {
         }
         Ok(processor)
     }
+}
+
+fn parse_date(src: &str) -> Result<DateTime, String> {
+    let time = humantime::parse_rfc3339_weak(src)
+        .map_err(|e| format!("Unable to parse RFC3339 date: {e}"))?;
+    time.try_into()
 }

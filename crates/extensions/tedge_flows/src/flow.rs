@@ -10,6 +10,7 @@ use serde_json::Value;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
+use std::time::SystemTime;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
@@ -406,6 +407,20 @@ impl DateTime {
 
     pub fn json(&self) -> Value {
         json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
+    }
+}
+
+impl TryFrom<SystemTime> for DateTime {
+    type Error = String;
+
+    fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
+        match time.duration_since(SystemTime::UNIX_EPOCH) {
+            Ok(elapsed) => Ok(DateTime {
+                seconds: elapsed.as_secs(),
+                nanoseconds: 0,
+            }),
+            Err(_) => Err("SystemTime before UNIX EPOCH!".to_string()),
+        }
     }
 }
 
