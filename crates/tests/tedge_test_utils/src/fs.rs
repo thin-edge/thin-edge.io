@@ -2,7 +2,9 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::fs;
 use std::fs::OpenOptions;
+use std::fs::Permissions;
 use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::prelude::OpenOptionsExt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -94,6 +96,10 @@ impl TempTedgeDir {
 
     pub fn to_path_buf(&self) -> PathBuf {
         self.current_file_path.clone().into_std_path_buf()
+    }
+
+    pub fn set_mode(&self, mode: u32) {
+        std::fs::set_permissions(&self.current_file_path, Permissions::from_mode(mode)).unwrap();
     }
 }
 
