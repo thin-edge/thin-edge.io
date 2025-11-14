@@ -5,9 +5,9 @@ use anyhow::Error;
 use base64::prelude::BASE64_STANDARD;
 use base64::prelude::*;
 use camino::Utf8PathBuf;
+use std::time::SystemTime;
 use tedge_config::TEdgeConfig;
 use tedge_flows::BaseFlowRegistry;
-use tedge_flows::DateTime;
 use tedge_flows::FlowResult;
 use tedge_flows::Message;
 use tedge_flows::MessageProcessor;
@@ -22,7 +22,7 @@ pub struct TestCommand {
     pub flow: Option<Utf8PathBuf>,
     pub message: Option<Message>,
     pub final_on_interval: bool,
-    pub processing_time: Option<DateTime>,
+    pub processing_time: Option<SystemTime>,
     pub base64_input: bool,
     pub base64_output: bool,
 }
@@ -42,18 +42,18 @@ impl Command for TestCommand {
             Some(flow) => TEdgeFlowsCli::load_file(&self.flows_dir, flow).await?,
         };
         if let Some(message) = &self.message {
-            let timestamp = self.processing_time.unwrap_or_else(|| DateTime::now());
+            let timestamp = self.processing_time.unwrap_or_else(SystemTime::now);
             self.process(&mut processor, message.clone(), timestamp)
                 .await;
         } else {
             let mut stdin = BufReader::new(tokio::io::stdin());
             while let Some(message) = next_message(&mut stdin).await {
-                let timestamp = self.processing_time.unwrap_or_else(|| DateTime::now());
+                let timestamp = self.processing_time.unwrap_or_else(SystemTime::now);
                 self.process(&mut processor, message, timestamp).await;
             }
         }
         if self.final_on_interval {
-            let timestamp = DateTime::now();
+            let timestamp = SystemTime::now();
             let now = processor
                 .last_interval_deadline()
                 .unwrap_or_else(Instant::now);
@@ -68,7 +68,7 @@ impl TestCommand {
         &self,
         processor: &mut MessageProcessor<BaseFlowRegistry>,
         mut message: Message,
-        timestamp: DateTime,
+        timestamp: SystemTime,
     ) {
         if self.base64_input {
             match BASE64_STANDARD.decode(message.payload) {
@@ -90,7 +90,7 @@ impl TestCommand {
     async fn tick(
         &self,
         processor: &mut MessageProcessor<BaseFlowRegistry>,
-        timestamp: DateTime,
+        timestamp: SystemTime,
         now: Instant,
     ) {
         processor

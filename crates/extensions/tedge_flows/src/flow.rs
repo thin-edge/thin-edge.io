@@ -15,7 +15,6 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchError;
-use time::OffsetDateTime;
 use tokio::time::Instant;
 use tracing::error;
 use tracing::warn;
@@ -113,17 +112,11 @@ impl FlowResult {
     }
 }
 
-#[derive(Copy, Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
-pub struct DateTime {
-    pub seconds: u64,
-    pub nanoseconds: u32,
-}
-
 #[derive(Clone, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
 pub struct Message {
     pub topic: String,
     pub payload: Vec<u8>,
-    pub timestamp: Option<DateTime>,
+    pub timestamp: Option<SystemTime>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -199,7 +192,7 @@ impl Flow {
         &mut self,
         js_runtime: &JsRuntime,
         stats: &mut Counter,
-        timestamp: DateTime,
+        timestamp: SystemTime,
         message: &Message,
     ) -> FlowResult {
         let stated_at = stats.flow_on_message_start(self.name());
@@ -219,7 +212,7 @@ impl Flow {
         &mut self,
         js_runtime: &JsRuntime,
         stats: &mut Counter,
-        timestamp: DateTime,
+        timestamp: SystemTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         let mut messages = vec![message.clone()];
@@ -247,7 +240,7 @@ impl Flow {
         &mut self,
         js_runtime: &JsRuntime,
         stats: &mut Counter,
-        timestamp: DateTime,
+        timestamp: SystemTime,
         now: Instant,
     ) -> FlowResult {
         let stated_at = stats.flow_on_interval_start(self.name());
@@ -267,7 +260,7 @@ impl Flow {
         &mut self,
         js_runtime: &JsRuntime,
         stats: &mut Counter,
-        timestamp: DateTime,
+        timestamp: SystemTime,
         now: Instant,
     ) -> Result<Vec<Message>, FlowError> {
         let mut messages = vec![];
@@ -400,45 +393,6 @@ impl FlowStep {
     }
 }
 
-impl DateTime {
-    pub fn now() -> Self {
-        DateTime::try_from(OffsetDateTime::now_utc()).unwrap()
-    }
-
-    pub fn json(&self) -> Value {
-        json!({"seconds": self.seconds, "nanoseconds": self.nanoseconds})
-    }
-}
-
-impl TryFrom<SystemTime> for DateTime {
-    type Error = String;
-
-    fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
-        match time.duration_since(SystemTime::UNIX_EPOCH) {
-            Ok(elapsed) => Ok(DateTime {
-                seconds: elapsed.as_secs(),
-                nanoseconds: 0,
-            }),
-            Err(_) => Err("SystemTime before UNIX EPOCH!".to_string()),
-        }
-    }
-}
-
-impl TryFrom<OffsetDateTime> for DateTime {
-    type Error = FlowError;
-
-    fn try_from(value: OffsetDateTime) -> Result<Self, Self::Error> {
-        let seconds = u64::try_from(value.unix_timestamp()).map_err(|err| {
-            FlowError::UnsupportedMessage(format!("failed to convert timestamp: {}", err))
-        })?;
-
-        Ok(DateTime {
-            seconds,
-            nanoseconds: value.nanosecond(),
-        })
-    }
-}
-
 impl Message {
     pub fn new(topic: impl ToString, payload: impl Into<Vec<u8>>) -> Self {
         Message {
@@ -451,7 +405,7 @@ impl Message {
     pub fn with_timestamp(
         topic: impl ToString,
         payload: impl Into<Vec<u8>>,
-        timestamp: DateTime,
+        timestamp: SystemTime,
     ) -> Self {
         Message {
             topic: topic.to_string(),
@@ -462,7 +416,7 @@ impl Message {
 
     pub fn json(&self) -> Value {
         if let Some(timestamp) = &self.timestamp {
-            json!({"topic": self.topic, "payload": self.payload, "timestamp": timestamp.json()})
+            json!({"topic": self.topic, "payload": self.payload, "timestamp": epoch_ms(timestamp)})
         } else {
             json!({"topic": self.topic, "payload": self.payload, "timestamp": null})
         }
@@ -510,6 +464,13 @@ impl TryFrom<Message> for MqttMessage {
         })?;
         Ok(MqttMessage::new(&topic, message.payload))
     }
+}
+
+pub(crate) fn epoch_ms(time: &SystemTime) -> u128 {
+    let duration = time
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("SystemTime after UNIX EPOCH");
+    duration.as_millis()
 }
 
 pub fn error_from_js(err: LoadError) -> FlowError {
