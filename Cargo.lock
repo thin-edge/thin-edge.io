@@ -5035,6 +5035,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "which",
+ "yansi",
 ]
 
 [[package]]
