@@ -10,8 +10,8 @@ Test Tags           theme:tedge_flows
 
 *** Test Cases ***
 Add missing timestamps
-    ${transformed_msg}    Execute Command    tedge flows test te/device/main///m/ '{}'
-    Should Contain    ${transformed_msg}    item=time
+    ${transformed_msg}    Execute Command    tedge flows test --processing-time "2025-06-27 11:31:02" te/device/main///m/ '{}'
+    Should Contain    ${transformed_msg}    item="time":"2025-06-27T11:31:02.000Z"
 
 Convert timestamps to ISO
     ${transformed_msg}    Execute Command    tedge flows test te/device/main///m/ '{"time": 1751023862.000}'

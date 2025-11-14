@@ -1,8 +1,8 @@
-use crate::flow::DateTime;
 use crate::flow::Message;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use std::time::Duration;
+use std::time::SystemTime;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 
@@ -16,7 +16,7 @@ pub trait StreamingSource: Send + Sync {
 #[async_trait]
 pub trait PollingSource: Send + Sync {
     /// Poll the source for any available messages at the given timestamp
-    async fn poll(&mut self, timestamp: DateTime) -> Result<Vec<Message>, PollingSourceError>;
+    async fn poll(&mut self, timestamp: SystemTime) -> Result<Vec<Message>, PollingSourceError>;
 
     /// Get the next deadline when this source should be polled
     /// Returns None if the source doesn't have scheduled polling
@@ -53,7 +53,7 @@ impl CommandPollingSource {
 
 #[async_trait]
 impl PollingSource for CommandPollingSource {
-    async fn poll(&mut self, timestamp: DateTime) -> Result<Vec<Message>, PollingSourceError> {
+    async fn poll(&mut self, timestamp: SystemTime) -> Result<Vec<Message>, PollingSourceError> {
         let output = tedge_watch_ext::command_output(&self.command)
             .await
             .map_err(|err| PollingSourceError::CannotPoll {
@@ -119,7 +119,7 @@ impl FilePollingSource {
 
 #[async_trait]
 impl PollingSource for FilePollingSource {
-    async fn poll(&mut self, timestamp: DateTime) -> Result<Vec<Message>, PollingSourceError> {
+    async fn poll(&mut self, timestamp: SystemTime) -> Result<Vec<Message>, PollingSourceError> {
         let output = tokio::fs::read_to_string(&self.path).await.map_err(|err| {
             PollingSourceError::CannotPoll {
                 resource: self.path.clone().to_string(),

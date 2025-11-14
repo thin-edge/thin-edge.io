@@ -1,4 +1,3 @@
-use crate::flow::DateTime;
 use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::flow::SourceTag;
@@ -9,6 +8,7 @@ use crate::stats::Counter;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use std::time::SystemTime;
 use tedge_mqtt_ext::TopicFilter;
 use tokio::time::Instant;
 
@@ -79,7 +79,7 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
     pub async fn on_flow_input(
         &mut self,
         flow_name: &str,
-        timestamp: DateTime,
+        timestamp: SystemTime,
         message: &Message,
     ) -> Option<FlowResult> {
         let flow = self.registry.flow_mut(flow_name)?;
@@ -94,7 +94,7 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
 
     pub async fn on_message(
         &mut self,
-        timestamp: DateTime,
+        timestamp: SystemTime,
         source: &SourceTag,
         message: &Message,
     ) -> Vec<FlowResult> {
@@ -123,7 +123,7 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
         out_messages
     }
 
-    pub async fn on_interval(&mut self, timestamp: DateTime, now: Instant) -> Vec<FlowResult> {
+    pub async fn on_interval(&mut self, timestamp: SystemTime, now: Instant) -> Vec<FlowResult> {
         let mut out_messages = vec![];
         for flow in self.registry.flows_mut() {
             let flow_output = flow

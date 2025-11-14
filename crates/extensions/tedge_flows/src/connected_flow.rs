@@ -1,5 +1,4 @@
 use crate::config::ConfigError;
-use crate::flow::DateTime;
 use crate::flow::Flow;
 use crate::flow::FlowError;
 use crate::flow::FlowInput;
@@ -14,6 +13,7 @@ use crate::input_source::StreamingSource;
 use crate::registry::FlowRegistry;
 use crate::registry::FlowStore;
 use camino::Utf8Path;
+use std::time::SystemTime;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 
@@ -65,14 +65,14 @@ impl ConnectedFlow {
         self.polling_source.as_ref().and_then(|p| p.next_deadline())
     }
 
-    pub async fn on_source_poll(&mut self, timestamp: DateTime, now: Instant) -> FlowResult {
+    pub async fn on_source_poll(&mut self, timestamp: SystemTime, now: Instant) -> FlowResult {
         let result = self.on_source_poll_steps(timestamp, now).await;
         self.flow.publish(result)
     }
 
     async fn on_source_poll_steps(
         &mut self,
-        timestamp: DateTime,
+        timestamp: SystemTime,
         now: Instant,
     ) -> Result<Vec<Message>, FlowError> {
         let Some(source) = &mut self.polling_source.as_mut() else {
