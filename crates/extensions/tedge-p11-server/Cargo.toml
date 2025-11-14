@@ -33,6 +33,7 @@ tokio = { workspace = true, features = [
 toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+yansi.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
