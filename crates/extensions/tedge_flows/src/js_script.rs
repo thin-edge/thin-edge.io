@@ -323,7 +323,7 @@ export function onMessage(message, config) {
         "topic": message.topic,
         "payload": JSON.stringify({
             "milliseconds": time.getTime(),
-            "date": time.toString(),
+            "date": time.toUTCString(),
         })
     }
 }
@@ -337,8 +337,7 @@ export function onMessage(message, config) {
         let input = Message::new("clock", "");
         let output = Message::new(
             "clock",
-            r#"{"milliseconds":1763050414000,"date":"Thu Nov 13 2025 17:13:34 GMT+0100"}"#
-                .to_string(),
+            r#"{"milliseconds":1763050414000,"date":"Thu, 13 Nov 2025 16:13:34 GMT"}"#.to_string(),
         );
         assert_eq!(
             script.on_message(&runtime, datetime, &input).await.unwrap(),
