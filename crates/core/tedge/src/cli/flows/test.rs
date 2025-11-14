@@ -22,6 +22,7 @@ pub struct TestCommand {
     pub flow: Option<Utf8PathBuf>,
     pub message: Option<Message>,
     pub final_on_interval: bool,
+    pub processing_time: Option<DateTime>,
     pub base64_input: bool,
     pub base64_output: bool,
 }
@@ -41,13 +42,13 @@ impl Command for TestCommand {
             Some(flow) => TEdgeFlowsCli::load_file(&self.flows_dir, flow).await?,
         };
         if let Some(message) = &self.message {
-            let timestamp = DateTime::now();
+            let timestamp = self.processing_time.unwrap_or_else(|| DateTime::now());
             self.process(&mut processor, message.clone(), timestamp)
                 .await;
         } else {
             let mut stdin = BufReader::new(tokio::io::stdin());
             while let Some(message) = next_message(&mut stdin).await {
-                let timestamp = DateTime::now();
+                let timestamp = self.processing_time.unwrap_or_else(|| DateTime::now());
                 self.process(&mut processor, message, timestamp).await;
             }
         }

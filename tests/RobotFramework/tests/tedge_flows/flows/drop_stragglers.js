@@ -12,7 +12,6 @@ export function onMessage (message, config) {
     }
 
     let timestamp = message.timestamp
-    let time = timestamp.seconds + (timestamp.nanoseconds / 1e9)
     let max = time + (config.max_advance || 1);
     let min = time - (config.max_delay || 10);
 
