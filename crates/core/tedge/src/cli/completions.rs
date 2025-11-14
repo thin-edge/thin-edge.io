@@ -35,8 +35,9 @@ impl From<Shell> for Box<dyn clap_complete::env::EnvCompleter> {
     }
 }
 
+#[async_trait::async_trait]
 impl BuildCommand for Shell {
-    fn build_command(self, _: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    async fn build_command(self, _: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         Ok(Box::new(CompletionsCmd { shell: self }))
     }
 }

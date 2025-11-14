@@ -14,6 +14,7 @@ use tedge_actors::DynSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
 use tedge_config::TEdgeConfig;
 use tedge_config_macros::OptionalConfig;
 use tracing::info;
@@ -32,16 +33,13 @@ pub struct C8yAuthProxyBuilder {
 }
 
 impl C8yAuthProxyBuilder {
-    pub fn try_from_config(
-        config: &TEdgeConfig,
-        c8y_profile: Option<&str>,
-    ) -> anyhow::Result<Self> {
+    pub fn try_from_config(config: &TEdgeConfig, c8y: &C8yMapperConfig) -> anyhow::Result<Self> {
         let reqwest_client = config.cloud_root_certs()?.client();
-        let c8y = config.c8y.try_get(c8y_profile)?;
-        let auth_retriever = C8yAuthRetriever::from_tedge_config(config, c8y_profile)?;
+        let auth_retriever = C8yAuthRetriever::from_tedge_config(config, c8y)?;
+        let c8y = &c8y.cloud_specific;
         let app_data = AppData {
             is_https: true,
-            host: c8y.http.or_config_not_set()?.to_string(),
+            host: c8y.http.to_string(),
             token_manager: C8yTokenManager::new(auth_retriever).shared(),
             client: reqwest_client,
         };

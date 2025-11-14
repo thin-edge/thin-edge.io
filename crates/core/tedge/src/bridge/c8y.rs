@@ -17,6 +17,7 @@ use tedge_config::models::TemplatesSet;
 use tedge_config::models::TopicPrefix;
 use tedge_config::models::MQTT_SVC_TLS_PORT;
 use tedge_config::models::MQTT_TLS_PORT;
+use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use which::which;
@@ -224,27 +225,32 @@ pub struct BridgeConfigC8yMqttServiceParams {
     pub sub_topics: TemplatesSet,
 }
 
-impl TryFrom<(&TEdgeConfig, Option<&ProfileName>)> for BridgeConfigC8yMqttServiceParams {
-    type Error = ConfigError;
-
-    fn try_from(value: (&TEdgeConfig, Option<&ProfileName>)) -> Result<Self, Self::Error> {
-        let (config, profile) = value;
-
+impl BridgeConfigC8yMqttServiceParams {
+    pub async fn try_new(
+        config: &TEdgeConfig,
+        profile: Option<&ProfileName>,
+    ) -> Result<Self, ConfigError> {
         let bridge_location = match config.mqtt.bridge.built_in {
             true => BridgeLocation::BuiltIn,
             false => BridgeLocation::Mosquitto,
         };
         let mqtt_schema = MqttSchema::with_root(config.mqtt.topic_root.clone());
-        let c8y_config = config.c8y.try_get(profile)?;
+        let c8y_config = config
+            .mapper_config::<C8yMapperSpecificConfig>(&profile)
+            .await?;
 
-        let (remote_username, remote_password) =
-            match c8y_config.auth_method.to_type(&c8y_config.credentials_path) {
-                AuthType::Certificate => (None, None),
-                AuthType::Basic => {
-                    let (username, password) = read_c8y_credentials(&c8y_config.credentials_path)?;
-                    (Some(username), Some(password))
-                }
-            };
+        let (remote_username, remote_password) = match c8y_config
+            .cloud_specific
+            .auth_method
+            .to_type(&c8y_config.cloud_specific.credentials_path)
+        {
+            AuthType::Certificate => (None, None),
+            AuthType::Basic => {
+                let (username, password) =
+                    read_c8y_credentials(&c8y_config.cloud_specific.credentials_path)?;
+                (Some(username), Some(password))
+            }
+        };
 
         let config_file = if let Some(profile_name) = &profile {
             format!("c8y-mqtt-svc@{profile_name}-bridge.conf")
@@ -253,7 +259,7 @@ impl TryFrom<(&TEdgeConfig, Option<&ProfileName>)> for BridgeConfigC8yMqttServic
         };
 
         let params = BridgeConfigC8yMqttServiceParams {
-            mqtt_host: c8y_config.mqtt_service.url.or_config_not_set()?.clone(),
+            mqtt_host: c8y_config.cloud_specific.mqtt_service.url.clone(),
             config_file: config_file.into(),
             bridge_root_cert_path: c8y_config.root_cert_path.clone().into(),
             remote_clientid: c8y_config.device.id()?.clone(),
@@ -261,13 +267,17 @@ impl TryFrom<(&TEdgeConfig, Option<&ProfileName>)> for BridgeConfigC8yMqttServic
             remote_password,
             bridge_certfile: c8y_config.device.cert_path.clone().into(),
             bridge_keyfile: c8y_config.device.key_path.clone().into(),
-            include_local_clean_session: c8y_config.bridge.include.local_cleansession.clone(),
+            include_local_clean_session: c8y_config
+                .cloud_specific
+                .bridge_include
+                .local_cleansession
+                .clone(),
             bridge_location,
-            topic_prefix: c8y_config.mqtt_service.topic_prefix.clone(),
+            topic_prefix: c8y_config.cloud_specific.mqtt_service.topic_prefix.clone(),
             profile_name: profile.cloned(),
             mqtt_schema,
             keepalive_interval: c8y_config.bridge.keepalive_interval.duration(),
-            sub_topics: c8y_config.mqtt_service.topics.clone(),
+            sub_topics: c8y_config.cloud_specific.mqtt_service.topics.clone(),
         };
 
         Ok(params)
