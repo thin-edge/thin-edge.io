@@ -63,19 +63,12 @@ impl TedgeP11Server {
                 let _ = connection.write_frame(&Frame1::Error(error));
                 anyhow::bail!("protocol error: invalid request")
             }
-            Frame1::ChooseSchemeRequest(request) => {
-                let response = self.service.choose_scheme(request);
-                match response {
-                    Ok(response) => Frame1::ChooseSchemeResponse(response),
-                    Err(err) => {
-                        let response = Frame1::Error(ProtocolError(format!(
-                            "PKCS #11 service failed: {err:#}"
-                        )));
-                        connection.write_frame(&response)?;
-                        anyhow::bail!(err);
-                    }
-                }
-            }
+
+            Frame1::ChooseSchemeRequest(request) => self
+                .service
+                .choose_scheme(request)
+                .map(Frame1::ChooseSchemeResponse),
+
             Frame1::SignRequest(request) => {
                 let sign_request_2 = SignRequestWithSigScheme {
                     to_sign: request.to_sign,
@@ -83,44 +76,17 @@ impl TedgeP11Server {
                     sigscheme: None,
                     pin: request.pin,
                 };
-                let response = self.service.sign(sign_request_2);
-                match response {
-                    Ok(response) => Frame1::SignResponse(response),
-                    Err(err) => {
-                        let response = Frame1::Error(ProtocolError(format!(
-                            "PKCS #11 service failed: {err:#}"
-                        )));
-                        connection.write_frame(&response)?;
-                        anyhow::bail!(err);
-                    }
-                }
+                self.service.sign(sign_request_2).map(Frame1::SignResponse)
             }
+
             Frame1::SignRequestWithSigScheme(request) => {
-                let response = self.service.sign(request);
-                match response {
-                    Ok(response) => Frame1::SignResponse(response),
-                    Err(err) => {
-                        let response = Frame1::Error(ProtocolError(format!(
-                            "PKCS #11 service failed: {err:#}"
-                        )));
-                        connection.write_frame(&response)?;
-                        anyhow::bail!(err);
-                    }
-                }
+                self.service.sign(request).map(Frame1::SignResponse)
             }
-            Frame1::GetPublicKeyPemRequest(uri) => {
-                let response = self.service.get_public_key_pem(uri.as_deref());
-                match response {
-                    Ok(pubkey_pem) => Frame1::GetPublicKeyPemResponse(pubkey_pem),
-                    Err(err) => {
-                        let response = Frame1::Error(ProtocolError(format!(
-                            "PKCS #11 service failed: {err:#}"
-                        )));
-                        connection.write_frame(&response)?;
-                        anyhow::bail!(err);
-                    }
-                }
-            }
+
+            Frame1::GetPublicKeyPemRequest(uri) => self
+                .service
+                .get_public_key_pem(uri.as_deref())
+                .map(Frame1::GetPublicKeyPemResponse),
 
             // The Ping/Pong request does no PKCS11/cryptographic operations and is there only so a
             // client can confirm that tedge-p11-server is running and is ready to serve requests.
@@ -128,38 +94,32 @@ impl TedgeP11Server {
             // received on the associated socket, a Ping/Pong request triggers a service start and
             // ensures the PKCS11 library is loaded and ready to serve signing requests. In
             // practice, this only occurs with a client calls TedgeP11Client::with_ready_check.
-            Frame1::Ping => Frame1::Pong,
+            Frame1::Ping => Ok(Frame1::Pong),
 
-            Frame1::CreateKeyRequest(request) => {
-                let response = self.service.create_key(request);
-                match response {
-                    Ok(pubkey_der) => Frame1::CreateKeyResponse(pubkey_der),
-                    Err(err) => {
-                        let response = Frame1::Error(ProtocolError(format!(
-                            "PKCS #11 service failed: {err:#}"
-                        )));
-                        connection.write_frame(&response)?;
-                        anyhow::bail!(err);
-                    }
-                }
-            }
+            Frame1::CreateKeyRequest(request) => self
+                .service
+                .create_key(request)
+                .map(Frame1::CreateKeyResponse),
 
-            Frame1::GetTokensUrisRequest => {
-                let response = self.service.get_tokens_uris();
-                match response {
-                    Ok(response) => Frame1::GetTokensUrisResponse(response),
-                    Err(err) => {
-                        let response = Frame1::Error(ProtocolError(format!(
-                            "PKCS #11 service failed: {err:#}"
-                        )));
-                        connection.write_frame(&response)?;
-                        anyhow::bail!(err);
-                    }
-                }
-            }
+            Frame1::GetTokensUrisRequest => self
+                .service
+                .get_tokens_uris()
+                .map(Frame1::GetTokensUrisResponse),
         };
 
-        connection.write_frame(&response).context("write")?;
+        match response {
+            Ok(response) => connection
+                .write_frame(&response)
+                .context("failed to write response")?,
+            Err(err) => {
+                let response =
+                    Frame1::Error(ProtocolError(format!("PKCS #11 service failed: {err:#}")));
+                connection
+                    .write_frame(&response)
+                    .context("failed to write response")?;
+                anyhow::bail!(err);
+            }
+        }
 
         Ok(())
     }
