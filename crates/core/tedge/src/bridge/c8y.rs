@@ -259,7 +259,12 @@ impl BridgeConfigC8yMqttServiceParams {
         };
 
         let params = BridgeConfigC8yMqttServiceParams {
-            mqtt_host: c8y_config.cloud_specific.mqtt_service.url.clone(),
+            mqtt_host: c8y_config
+                .cloud_specific
+                .mqtt_service
+                .url
+                .or_config_not_set()?
+                .clone(),
             config_file: config_file.into(),
             bridge_root_cert_path: c8y_config.root_cert_path.clone().into(),
             remote_clientid: c8y_config.device.id()?.clone(),

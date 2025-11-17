@@ -39,7 +39,7 @@ impl C8yAuthProxyBuilder {
         let c8y = &c8y.cloud_specific;
         let app_data = AppData {
             is_https: true,
-            host: c8y.http.to_string(),
+            host: c8y.http.or_config_not_set()?.to_string(),
             token_manager: C8yTokenManager::new(auth_retriever).shared(),
             client: reqwest_client,
         };

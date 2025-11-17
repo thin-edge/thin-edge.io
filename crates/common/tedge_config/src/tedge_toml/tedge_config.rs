@@ -187,6 +187,32 @@ impl TEdgeConfig {
         }
     }
 
+    pub async fn all_mapper_configs<T>(&self) -> Vec<(Arc<MapperConfig<T>>, Option<ProfileName>)>
+    where
+        T: DeserializeOwned
+            + ApplyRuntimeDefaults
+            + ExpectedCloudType
+            + FromCloudConfig
+            + Send
+            + Sync
+            + 'static,
+    {
+        let ty = T::expected_cloud_type();
+        let generalised_profiles =
+            std::fs::read_dir(self.root_dir().join(format!("mappers/{ty}.d")))
+                .into_iter()
+                .flatten()
+                .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+                .filter_map(|s| ProfileName::try_from(s.strip_suffix(".toml")?.to_owned()).ok());
+        let mut configs = Vec::new();
+        for profile in std::iter::once(None).chain(generalised_profiles.map(Some)) {
+            if let Ok(config) = self.mapper_config(&profile).await {
+                configs.push((config, profile));
+            }
+        }
+        configs
+    }
+
     pub async fn as_cloud_config(
         &self,
         cloud: Cloud<'_>,
@@ -1779,7 +1805,7 @@ mod tests {
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(None))
             .await
             .unwrap();
-        assert_eq!(mapper_config.url.input, "example.com");
+        assert_eq!(mapper_config.url.or_none().unwrap().input, "example.com");
         assert_eq!(mapper_config.cloud_specific.proxy.bind.port, 8123);
     }
 
@@ -1800,7 +1826,7 @@ mod tests {
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("myprofile")))
             .await
             .unwrap();
-        assert_eq!(mapper_config.url.input, "example.com");
+        assert_eq!(mapper_config.url.or_none().unwrap().input, "example.com");
         assert_eq!(mapper_config.cloud_specific.proxy.bind.port, 8123);
     }
 
@@ -1861,7 +1887,7 @@ mod tests {
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("myprofile")))
             .await
             .unwrap();
-        assert_eq!(config.url.input, "from.tedge.toml");
+        assert_eq!(config.url.or_none().unwrap().input, "from.tedge.toml");
     }
 
     #[tokio::test]
@@ -1876,7 +1902,7 @@ mod tests {
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(None))
             .await
             .unwrap();
-        assert_eq!(config.url.input, "from.tedge.toml");
+        assert_eq!(config.url.or_none().unwrap().input, "from.tedge.toml");
     }
 
     #[tokio::test]
@@ -1893,7 +1919,7 @@ mod tests {
             .mapper_config::<AzMapperSpecificConfig>(&profile_name(None))
             .await
             .unwrap();
-        assert_eq!(config.url.input, "az.url");
+        assert_eq!(config.url.or_none().unwrap().input, "az.url");
     }
 
     #[tokio::test]

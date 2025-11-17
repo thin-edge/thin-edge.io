@@ -51,7 +51,10 @@ impl TEdgeConfig {
     /// assert_eq!(config.sudo.enable, true);
     /// ```
     pub fn load_toml_str(toml: &str) -> TEdgeConfig {
-        TEdgeConfigLocation::load_toml_str(toml, TEdgeConfigLocation::default())
+        TEdgeConfigLocation::load_toml_str(
+            toml,
+            TEdgeConfigLocation::from_custom_root("/dont/read/system/etc/tedge"),
+        )
     }
 
     #[cfg(feature = "test")]

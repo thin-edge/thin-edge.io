@@ -50,6 +50,7 @@ use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
 #[cfg(feature = "c8y")]
 use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+use tedge_config::tedge_toml::mapper_config::MapperConfig;
 #[cfg(feature = "c8y")]
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadableKey;
@@ -122,8 +123,16 @@ impl Command for ConnectCommand {
             Some(Some(key)) => format!("{cryptoki_mode} (key: {key})"),
         };
 
+        let log_msg = if self.is_test_connection {
+            format!("Testing connection to {}", self.cloud)
+        } else if self.is_reconnect {
+            format!("Reconnecting to {}", self.cloud)
+        } else {
+            format!("Connecting to {}", self.cloud)
+        };
+
         ConfigLogger::log(
-            self.description(),
+            log_msg,
             &bridge_config,
             &*self.service_manager,
             &self.cloud,
@@ -133,7 +142,7 @@ impl Command for ConnectCommand {
             tedge_config.proxy.username.or_none().map(|u| u.as_str()),
         );
 
-        validate_config(&tedge_config, &self.cloud)?;
+        validate_config(&tedge_config, &self.cloud).await?;
 
         if self.is_test_connection {
             self.check_bridge(&tedge_config, &bridge_config)
@@ -425,8 +434,18 @@ impl ConnectCommand {
                     tenant_matches_configured_url(
                         tedge_config,
                         profile.as_deref(),
-                        &c8y_config.cloud_specific.mqtt.host().to_string(),
-                        &c8y_config.cloud_specific.http.host().to_string(),
+                        &c8y_config
+                            .cloud_specific
+                            .mqtt
+                            .or_none()
+                            .map(|u| u.host().to_string())
+                            .unwrap_or_default(),
+                        &c8y_config
+                            .cloud_specific
+                            .http
+                            .or_none()
+                            .map(|u| u.host().to_string())
+                            .unwrap_or_default(),
                     )
                     .await
                     .map(Some)
@@ -505,7 +524,10 @@ impl ConnectCommand {
     }
 }
 
-fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyhow::Result<()> {
+async fn validate_config(
+    config: &TEdgeConfig,
+    cloud: &MaybeBorrowedCloud<'_>,
+) -> anyhow::Result<()> {
     if !config.mqtt.bridge.built_in && config.proxy.address.or_none().is_some() {
         warn!("`proxy.address` is configured without the built-in bridge enabled. The bridge MQTT connection to the cloud will {} communicate via the configured proxy.", "not".bold())
     }
@@ -544,20 +566,11 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
         }
         #[cfg(feature = "c8y")]
         MaybeBorrowedCloud::C8y(_) => {
-            let mut profiles = config
+            let profiles = config
                 .c8y_entries()
                 .filter(|(_, config)| config.http.or_none().is_some())
                 .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
-            // TODO handle generalised mapper config
-            // if profiles.is_empty() {
-            //     profiles = config
-            //         .mapper
-            //         .entries()
-            //         .filter(|(_, config)| config.ty.or_none() == Some(&CloudType::C8y))
-            //         .map(|(s, _)| Some(s?.to_string()))
-            //         .collect();
-            // }
             disallow_matching_url_device_id(
                 config,
                 ReadableKey::C8yUrl,
@@ -566,6 +579,9 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
             )?;
             disallow_matching_configurations(config, ReadableKey::C8yBridgeTopicPrefix, &profiles)?;
             disallow_matching_configurations(config, ReadableKey::C8yProxyBindPort, &profiles)?;
+
+            let configs = config.all_mapper_configs::<C8yMapperSpecificConfig>().await;
+            disallow_matching_url_device_id_new(&configs)?;
         }
     }
     Ok(())
@@ -599,6 +615,46 @@ fn disallow_matching_url_device_id(
             let device_id_keys: String = matches
                 .iter()
                 .map(|(_, key)| format!("{}", key.yellow().bold()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            bail!(
+                "You have matching URLs and device IDs for different profiles.
+
+{url_keys} are set to the same value, but so are {device_id_keys}.
+
+Each cloud profile requires either a unique URL or unique device ID, \
+so it corresponds to a unique device in the associated cloud."
+            );
+        }
+    }
+    Ok(())
+}
+
+type MapperConfigData<T> = (Arc<MapperConfig<T>>, Option<ProfileName>);
+
+fn disallow_matching_url_device_id_new<T>(
+    mapper_configs: &[MapperConfigData<T>],
+) -> anyhow::Result<()> {
+    let url_entries = mapper_configs.iter().map(|(config, profile)| {
+        let value = &config.url;
+        ((profile, value.key()), value.or_none())
+    });
+
+    for url_matches in find_all_matching(url_entries) {
+        let device_id_entries = mapper_configs.iter().filter_map(|(config, profile)| {
+            let (_, url_key) = url_matches.iter().find(|(p, _)| *p == profile)?;
+            let value = config.device.id().ok();
+            Some(((profile, config.device.id_key(), *url_key), value))
+        });
+        if let Some(matches) = find_matching(device_id_entries) {
+            let url_keys: String = matches
+                .iter()
+                .map(|(_, _key, url_key)| format!("{}", url_key.yellow().bold()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let device_id_keys: String = matches
+                .iter()
+                .map(|(_, key, _)| format!("{}", key.yellow().bold()))
                 .collect::<Vec<_>>()
                 .join(", ");
             bail!(
@@ -764,7 +820,7 @@ pub async fn bridge_config(
             };
 
             let params = BridgeConfigC8yParams {
-                mqtt_host: c8y_config.cloud_specific.mqtt.clone(),
+                mqtt_host: c8y_config.cloud_specific.mqtt.or_config_not_set()?.clone(),
                 config_file: cloud.bridge_config_filename(),
                 bridge_root_cert_path: c8y_config.root_cert_path.clone().into(),
                 remote_clientid: c8y_config.device.id()?.clone(),
@@ -1217,7 +1273,7 @@ mod tests {
             let cloud = Cloud::C8y(None);
             let config = TEdgeConfig::load_toml_str("");
 
-            validate_config(&config, &cloud).unwrap();
+            validate_config(&config, &cloud).await.unwrap();
         }
 
         #[tokio::test]
@@ -1225,7 +1281,7 @@ mod tests {
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let config = TEdgeConfig::load_toml_str("c8y.profiles.new.url = \"example.com\"");
 
-            validate_config(&config, &cloud).unwrap();
+            validate_config(&config, &cloud).await.unwrap();
         }
 
         #[tokio::test]
@@ -1237,12 +1293,54 @@ mod tests {
             c8y.profiles.new.url = \"example.com\"",
             );
 
-            let err = validate_config(&config, &cloud).unwrap_err();
+            let err = validate_config(&config, &cloud).await.unwrap_err();
             assert_eq!(err.to_string(), "You have matching URLs and device IDs for different profiles.
 
 c8y.url, c8y.profiles.new.url are set to the same value, but so are c8y.device.id, c8y.profiles.new.device.id.
 
 Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud.")
+        }
+
+        #[tokio::test]
+        async fn disallows_matching_device_id_with_separate_mapper_configs() {
+            yansi::disable();
+            let cloud = Cloud::c8y(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            ttd.dir("mappers")
+                .file("c8y.toml")
+                .with_raw_content("url = \"example.com\"");
+            ttd.dir("mappers/c8y.d")
+                .file("new.toml")
+                .with_raw_content("url = \"example.com\"");
+            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+
+            let err = validate_config(&config, &cloud).await.unwrap_err();
+            pretty_assertions::assert_eq!(err.to_string(), format!("You have matching URLs and device IDs for different profiles.
+
+{path}/mappers/c8y.toml: url, {path}/mappers/c8y.d/new.toml: url are set to the same value, but so are device.id, device.id.
+
+Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud.", path = ttd.utf8_path()))
+        }
+
+        #[tokio::test]
+        async fn specifies_relevant_device_id_for_seperate_mapper_config_same_id_error() {
+            yansi::disable();
+            let cloud = Cloud::c8y(Some("new".parse().unwrap()));
+            let ttd = TempTedgeDir::new();
+            ttd.dir("mappers")
+                .file("c8y.toml")
+                .with_raw_content("url = \"example.com\"\ndevice.id = \"my-device\"");
+            ttd.dir("mappers/c8y.d")
+                .file("new.toml")
+                .with_raw_content("url = \"example.com\"\ndevice.id = \"my-device\"");
+            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+
+            let err = validate_config(&config, &cloud).await.unwrap_err();
+            pretty_assertions::assert_eq!(err.to_string(), format!("You have matching URLs and device IDs for different profiles.
+
+{path}/mappers/c8y.toml: url, {path}/mappers/c8y.d/new.toml: url are set to the same value, but so are {path}/mappers/c8y.toml: device.id, {path}/mappers/c8y.d/new.toml: device.id.
+
+Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud.", path = ttd.utf8_path()))
         }
 
         #[tokio::test]
@@ -1255,7 +1353,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             c8y.profiles.new.proxy.bind.port = 8002",
             );
 
-            validate_config(&config, &cloud).unwrap();
+            validate_config(&config, &cloud).await.unwrap();
         }
 
         #[tokio::test]
@@ -1282,7 +1380,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                 ),
             );
 
-            validate_config(&config, &cloud).unwrap();
+            validate_config(&config, &cloud).await.unwrap();
         }
 
         #[tokio::test]
@@ -1310,7 +1408,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                 ),
             );
 
-            validate_config(&config, &cloud).unwrap();
+            validate_config(&config, &cloud).await.unwrap();
         }
 
         #[tokio::test]
@@ -1318,7 +1416,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let cloud = Cloud::az(Some("new".parse().unwrap()));
             let config = TEdgeConfig::load_toml_str("az.profiles.new.url = \"example.com\"");
 
-            validate_config(&config, &cloud).unwrap();
+            validate_config(&config, &cloud).await.unwrap();
         }
 
         #[tokio::test]
@@ -1326,7 +1424,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let cloud = Cloud::aws(Some("new".parse().unwrap()));
             let config = TEdgeConfig::load_toml_str("aws.profiles.new.url = \"example.com\"");
 
-            validate_config(&config, &cloud).unwrap();
+            validate_config(&config, &cloud).await.unwrap();
         }
 
         #[tokio::test]
@@ -1338,7 +1436,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             c8y.profiles.new.proxy.bind.port = 8002",
             );
 
-            let err = validate_config(&config, &cloud).unwrap_err();
+            let err = validate_config(&config, &cloud).await.unwrap_err();
             eprintln!("err={err}");
             assert!(err.to_string().contains("c8y.bridge.topic_prefix"));
             assert!(err
@@ -1355,7 +1453,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             c8y.profiles.new.bridge.topic_prefix = \"c8y-new\"",
             );
 
-            let err = validate_config(&config, &cloud).unwrap_err();
+            let err = validate_config(&config, &cloud).await.unwrap_err();
             eprintln!("err={err}");
             assert!(err.to_string().contains("c8y.proxy.bind.port"));
             assert!(err.to_string().contains("c8y.profiles.new.proxy.bind.port"));
@@ -1369,7 +1467,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                 c8y.profiles.new.url = \"example.com\"",
             );
 
-            validate_config(&config, &cloud).unwrap();
+            validate_config(&config, &cloud).await.unwrap();
         }
 
         #[tokio::test]
@@ -1378,7 +1476,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let config =
                 TEdgeConfig::load_toml_str("az.profiles.new.bridge.topic_prefix = \"az-new\"");
 
-            validate_config(&config, &cloud).unwrap();
+            validate_config(&config, &cloud).await.unwrap();
         }
     }
 }

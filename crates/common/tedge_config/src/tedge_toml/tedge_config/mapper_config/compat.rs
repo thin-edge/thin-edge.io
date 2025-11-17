@@ -64,16 +64,8 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
             smartrest1: Smartrest1Config {
                 templates: c8y.smartrest1.templates.clone(),
             },
-            http: c8y
-                .http
-                .or_config_not_set()
-                .expect("http endpoint should be set")
-                .clone(),
-            mqtt: c8y
-                .mqtt
-                .or_config_not_set()
-                .expect("mqtt endpoint should be set")
-                .clone(),
+            http: c8y.http.clone(),
+            mqtt: c8y.mqtt.clone(),
             proxy: ProxyConfig {
                 bind: ProxyBindConfig {
                     address: c8y.proxy.bind.address,
@@ -114,12 +106,7 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
             },
             mqtt_service: MqttServiceConfig {
                 enabled: c8y.mqtt_service.enabled,
-                url: c8y
-                    .mqtt_service
-                    .url
-                    .or_config_not_set()
-                    .expect("mqtt_service url should be set")
-                    .clone(),
+                url: c8y.mqtt_service.url.clone(),
                 topic_prefix: c8y.mqtt_service.topic_prefix.clone(),
                 topics: c8y.mqtt_service.topics.clone(),
             },
@@ -180,14 +167,13 @@ where
     T: FromCloudConfig<CloudConfigReader = R> + ApplyRuntimeDefaults,
     R: CloudConfigAccessor,
 {
-    let url = cloud_config
-        .url()
-        .or_none()
-        .ok_or(MapperConfigError::MissingField { field: "url" })?
-        .clone();
+    let url = cloud_config.url().clone();
 
     let device = DeviceConfig {
-        id: cloud_config.device_id().ok().map(|s| s.to_string()),
+        id: to_optional_config(
+            cloud_config.device_id().ok().map(|s| s.to_string()),
+            cloud_config.device_id_key(),
+        ),
         key_path: cloud_config.device_key_path().to_owned(),
         cert_path: cloud_config.device_cert_path().to_owned(),
         csr_path: cloud_config.device_csr_path().to_owned(),
@@ -233,6 +219,7 @@ where
 trait CloudConfigAccessor {
     fn url(&self) -> &OptionalConfig<ConnectUrl>;
     fn device_id(&self) -> Result<String, ReadError>;
+    fn device_id_key(&self) -> Cow<'static, str>;
     fn device_key_path(&self) -> &AbsolutePath;
     fn device_cert_path(&self) -> &AbsolutePath;
     fn device_csr_path(&self) -> &AbsolutePath;
@@ -248,6 +235,10 @@ trait CloudConfigAccessor {
 impl CloudConfigAccessor for TEdgeConfigReaderC8y {
     fn url(&self) -> &OptionalConfig<ConnectUrl> {
         &self.url
+    }
+
+    fn device_id_key(&self) -> Cow<'static, str> {
+        self.device.id.1.key().clone()
     }
 
     fn device_id(&self) -> Result<String, ReadError> {
@@ -300,6 +291,10 @@ impl CloudConfigAccessor for TEdgeConfigReaderAz {
         &self.url
     }
 
+    fn device_id_key(&self) -> Cow<'static, str> {
+        self.device.id.1.key().clone()
+    }
+
     fn device_id(&self) -> Result<String, ReadError> {
         Ok(self.device.id()?.clone())
     }
@@ -348,6 +343,10 @@ impl CloudConfigAccessor for TEdgeConfigReaderAz {
 impl CloudConfigAccessor for TEdgeConfigReaderAws {
     fn url(&self) -> &OptionalConfig<ConnectUrl> {
         &self.url
+    }
+
+    fn device_id_key(&self) -> Cow<'static, str> {
+        self.device.id.1.key().clone()
     }
 
     fn device_id(&self) -> Result<String, ReadError> {
@@ -414,18 +413,21 @@ mod tests {
 
         let config: C8yMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
 
-        assert_eq!(config.url.as_str(), "tenant.cumulocity.com");
+        assert_eq!(
+            config.url.or_none().unwrap().as_str(),
+            "tenant.cumulocity.com"
+        );
 
         assert_eq!(config.cloud_specific.auth_method, AuthMethod::Certificate);
         assert!(config.cloud_specific.entity_store.auto_register);
         assert!(config.cloud_specific.entity_store.clean_start);
 
         assert_eq!(
-            config.cloud_specific.http.to_string(),
+            config.cloud_specific.http.or_none().unwrap().to_string(),
             "tenant.cumulocity.com:443"
         );
         assert_eq!(
-            config.cloud_specific.mqtt.to_string(),
+            config.cloud_specific.mqtt.or_none().unwrap().to_string(),
             "tenant.cumulocity.com:8883"
         );
     }
@@ -445,7 +447,10 @@ mod tests {
         let config: C8yMapperConfig =
             load_cloud_mapper_config(Some("test-tenant"), &tedge_config).unwrap();
 
-        assert_eq!(config.url.as_str(), "test.cumulocity.com");
+        assert_eq!(
+            config.url.or_none().unwrap().as_str(),
+            "test.cumulocity.com"
+        );
     }
 
     #[test]
@@ -462,7 +467,10 @@ mod tests {
 
         let config: AzMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
 
-        assert_eq!(config.url.as_str(), "mydevice.azure-devices.net");
+        assert_eq!(
+            config.url.or_none().unwrap().as_str(),
+            "mydevice.azure-devices.net"
+        );
         assert!(config.cloud_specific.timestamp);
         assert_eq!(config.cloud_specific.timestamp_format, TimeFormat::Unix);
     }
@@ -481,13 +489,16 @@ mod tests {
 
         let config: AwsMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
 
-        assert_eq!(config.url.as_str(), "mydevice.amazonaws.com");
+        assert_eq!(
+            config.url.or_none().unwrap().as_str(),
+            "mydevice.amazonaws.com"
+        );
         assert!(config.cloud_specific.timestamp);
         assert_eq!(config.cloud_specific.timestamp_format, TimeFormat::Unix);
     }
 
     #[test]
-    fn test_missing_url_returns_error() {
+    fn test_missing_url_preserves_key_name() {
         let tedge_toml = r#"
             [c8y]
             # URL intentionally not set
@@ -498,13 +509,9 @@ mod tests {
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 
-        let result: Result<C8yMapperConfig, _> = load_cloud_mapper_config(None, &tedge_config);
+        let result: C8yMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
 
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            MapperConfigError::MissingField { field: "url" }
-        ));
+        assert_eq!(result.url.key(), "c8y.url");
     }
 
     #[test]
@@ -594,7 +601,8 @@ mod tests {
         let config: C8yMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
 
         // Device ID should come from tedge_config
-        assert_eq!(config.device.id.unwrap(), "my-device-123");
+        assert_eq!(config.device.id.or_none().unwrap(), "my-device-123");
+        assert_eq!(config.device.id.key(), "device.id");
 
         // Other device fields should have defaults from tedge_config
         assert!(config.device.key_path.as_str().contains("tedge"));

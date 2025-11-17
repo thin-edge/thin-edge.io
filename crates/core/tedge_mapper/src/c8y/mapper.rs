@@ -319,9 +319,8 @@ fn core_mqtt_bridge_config(
         tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
     }
 
-    // TODO fail if c8y.mqtt isn't set
     // TODO mapper.mqtt should probably be a global setting
-    let c8y = &c8y_config.cloud_specific.mqtt;
+    let c8y = c8y_config.cloud_specific.mqtt.or_config_not_set()?;
     let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
         c8y_config.device.id()?,
         c8y.host().to_string(),
@@ -441,7 +440,11 @@ fn mqtt_service_bridge_config(
     // Templates
     tc.forward_from_local("#", local_prefix.clone(), "")?;
 
-    let c8y = &c8y_config.cloud_specific.mqtt_service.url;
+    let c8y = c8y_config
+        .cloud_specific
+        .mqtt_service
+        .url
+        .or_config_not_set()?;
     let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
         c8y_config.device.id()?,
         c8y.host().to_string(),
