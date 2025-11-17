@@ -8,3 +8,6 @@ pub use client::TedgeP11Client;
 
 /// Serialization and framing of messages sent between the client and server.
 mod connection;
+
+mod frame;
+mod frame1;
