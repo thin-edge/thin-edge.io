@@ -11,9 +11,7 @@ use rustls::RootCertStore;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io;
-use std::io::stderr;
 use std::io::Cursor;
-use std::io::IsTerminal;
 use std::path::Path;
 use tedge_config::OptionalConfig;
 use tracing::info;
@@ -68,11 +66,6 @@ pub fn load_ssl_config(
     ca_path: OptionalConfig<impl TrustStoreLoader>,
     service_name: &'static str,
 ) -> anyhow::Result<Option<rustls::ServerConfig>> {
-    // TODO this could be moved somewhere more generic (e.g. where we initialize tracing subscriber)
-    if !stderr().is_terminal() {
-        yansi::disable();
-    }
-
     let enabled = Paint::green("enabled").bold();
     let disabled = Paint::red("disabled").bold();
     let service_name = service_name.bold();

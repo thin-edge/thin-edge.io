@@ -12,7 +12,7 @@ macro_rules! subscriber_builder {
     () => {
         tracing_subscriber::fmt()
             .with_writer(std::io::stderr)
-            .with_ansi(std::io::stderr().is_terminal())
+            .with_ansi(std::io::stderr().is_terminal() && yansi::Condition::no_color())
             .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
     };
 }
@@ -75,7 +75,7 @@ fn logger(
 ) -> Result<Arc<dyn tracing::Subscriber + Send + Sync>, SystemTomlError> {
     let subscriber = tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
-        .with_ansi(std::io::stderr().is_terminal())
+        .with_ansi(std::io::stderr().is_terminal() && yansi::Condition::no_color())
         .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
     let log_level = flags
         .log_level
@@ -124,7 +124,7 @@ pub fn get_log_level(
 pub fn set_log_level(log_level: tracing::Level) {
     let subscriber = tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
-        .with_ansi(std::io::stderr().is_terminal())
+        .with_ansi(std::io::stderr().is_terminal() && yansi::Condition::no_color())
         .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
 
     if std::env::var("RUST_LOG").is_ok() {
