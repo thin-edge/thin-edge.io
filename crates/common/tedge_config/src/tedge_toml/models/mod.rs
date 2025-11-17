@@ -45,7 +45,16 @@ pub use tedge_utils::timestamp::TimeFormat;
 pub use topic_prefix::TopicPrefix;
 
 #[derive(
-    Debug, Display, Clone, Copy, Eq, PartialEq, doku::Document, serde::Serialize, serde::Deserialize,
+    Debug,
+    Display,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    doku::Document,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumIter,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]

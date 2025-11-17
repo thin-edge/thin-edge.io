@@ -52,12 +52,14 @@ use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::Read;
+use std::iter::Iterator;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
+use strum::IntoEnumIterator;
 use tedge_api::mqtt_topics::EntityTopicId;
 pub use tedge_config_macros::ConfigNotSet;
 pub use tedge_config_macros::MultiError;
@@ -132,7 +134,7 @@ impl TEdgeConfig {
     {
         use tokio::fs::try_exists;
         let profile = profile.as_ref().map(|p| p.borrow().to_owned());
-        let mapper_config_dir = self.location.tedge_config_root_path().join("mappers");
+        let mapper_config_dir = self.mappers_config_dir();
 
         let ty = T::expected_cloud_type().to_string();
 
@@ -185,6 +187,83 @@ impl TEdgeConfig {
                 Err(err).with_context(|| format!("reading {mapper_config_dir}"))
             }
         }
+    }
+
+    pub fn mappers_config_dir(&self) -> Utf8PathBuf {
+        self.root_dir().join("mappers")
+    }
+
+    pub fn profiled_config_directories(&self) -> impl Iterator<Item = Utf8PathBuf> + use<'_> {
+        CloudType::iter().map(|ty| self.mappers_config_dir().join(format!("{ty}.d")))
+    }
+
+    async fn all_profiles<T>(
+        &self,
+    ) -> Box<dyn futures::stream::Stream<Item = Option<ProfileName>> + Unpin + Send + '_>
+    where
+        T: ExpectedCloudType,
+    {
+        use futures::future::ready;
+        use futures::StreamExt;
+        use tokio::fs::try_exists;
+        let mapper_config_dir = self.mappers_config_dir();
+
+        let ty = T::expected_cloud_type();
+
+        match (
+            try_exists(mapper_config_dir.join(format!("{ty}.toml"))).await,
+            try_exists(mapper_config_dir.join(format!("{ty}.d"))).await,
+        ) {
+            (Ok(true), _) | (_, Ok(true)) => Box::new(
+                futures::stream::once(ready(None)).chain(
+                    tokio_stream::wrappers::ReadDirStream::new(
+                        tokio::fs::read_dir(self.mappers_config_dir().join(format!("{ty}.d")))
+                            .await
+                            .unwrap(),
+                    )
+                    .filter_map(|entry| ready((|| entry.ok()?.file_name().into_string().ok())()))
+                    .filter_map(|s| {
+                        ready((|| {
+                            ProfileName::try_from(s.strip_suffix(".toml")?.to_owned()).ok()
+                        })())
+                    })
+                    .map(Some),
+                ),
+            ),
+            _ => match ty {
+                CloudType::C8y => Box::new(futures::stream::iter(
+                    self.c8y.keys().map(|p| p.map(<_>::to_owned)),
+                )),
+                CloudType::Az => Box::new(futures::stream::iter(
+                    self.az.keys().map(|p| p.map(<_>::to_owned)),
+                )),
+                CloudType::Aws => Box::new(futures::stream::iter(
+                    self.aws.keys().map(|p| p.map(<_>::to_owned)),
+                )),
+            },
+        }
+    }
+
+    pub async fn all_mapper_configs<T>(&self) -> Vec<(Arc<MapperConfig<T>>, Option<ProfileName>)>
+    where
+        T: DeserializeOwned
+            + ApplyRuntimeDefaults
+            + ExpectedCloudType
+            + FromCloudConfig
+            + Send
+            + Sync
+            + 'static,
+    {
+        use futures::stream::StreamExt;
+        let mut generalised_profiles = self.all_profiles::<T>().await;
+        let mut configs = Vec::new();
+        while let Some(profile) = generalised_profiles.next().await {
+            if let Ok(config) = self.mapper_config(&profile).await {
+                configs.push((config, profile));
+            }
+        }
+
+        configs
     }
 
     pub async fn as_cloud_config(
@@ -1766,7 +1845,10 @@ mod tests {
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(None))
             .await
             .unwrap();
-        assert_eq!(mapper_config.url.input, "example.com");
+        assert_eq!(
+            mapper_config.http().or_none().unwrap().host().to_string(),
+            "example.com"
+        );
         assert_eq!(mapper_config.cloud_specific.proxy.bind.port, 8123);
     }
 
@@ -1787,7 +1869,10 @@ mod tests {
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("myprofile")))
             .await
             .unwrap();
-        assert_eq!(mapper_config.url.input, "example.com");
+        assert_eq!(
+            mapper_config.http().or_none().unwrap().host().to_string(),
+            "example.com"
+        );
         assert_eq!(mapper_config.cloud_specific.proxy.bind.port, 8123);
     }
 
@@ -1848,7 +1933,10 @@ mod tests {
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("myprofile")))
             .await
             .unwrap();
-        assert_eq!(config.url.input, "from.tedge.toml");
+        assert_eq!(
+            config.http().or_none().unwrap().host().to_string(),
+            "from.tedge.toml"
+        );
     }
 
     #[tokio::test]
@@ -1863,7 +1951,10 @@ mod tests {
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(None))
             .await
             .unwrap();
-        assert_eq!(config.url.input, "from.tedge.toml");
+        assert_eq!(
+            config.http().or_none().unwrap().host().to_string(),
+            "from.tedge.toml"
+        );
     }
 
     #[tokio::test]
@@ -1880,7 +1971,7 @@ mod tests {
             .mapper_config::<AzMapperSpecificConfig>(&profile_name(None))
             .await
             .unwrap();
-        assert_eq!(config.url.input, "az.url");
+        assert_eq!(config.url().or_none().unwrap().input, "az.url");
     }
 
     #[tokio::test]

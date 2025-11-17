@@ -319,7 +319,12 @@ async fn proxy(
     config: &TEdgeConfig,
     c8y_config: &C8yMapperConfig,
 ) -> miette::Result<()> {
-    let host = c8y_config.cloud_specific.http.to_string();
+    let host = c8y_config
+        .cloud_specific
+        .http
+        .or_config_not_set()
+        .into_diagnostic()?
+        .to_string();
     let url = build_proxy_url(host.as_str(), command.key())?;
     let auth = Auth::retrieve(config, c8y_config)
         .await.context("Failed when requesting JWT from Cumulocity or invalid username/password credentials are given")?;

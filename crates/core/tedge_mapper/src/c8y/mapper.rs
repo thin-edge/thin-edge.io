@@ -307,7 +307,7 @@ fn mqtt_bridge_config(
         }
     }
 
-    let c8y = &c8y_config.cloud_specific.mqtt;
+    let c8y = &c8y_config.mqtt().or_config_not_set()?;
     let mut c8y_port = c8y.port().into();
     if use_mqtt_service && c8y_port == MQTT_CORE_TLS_PORT {
         c8y_port = MQTT_SERVICE_TLS_PORT;

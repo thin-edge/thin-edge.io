@@ -43,9 +43,9 @@ pub struct C8yEndPoint {
 
 impl C8yEndPoint {
     pub fn from_config(c8y_config: &C8yMapperConfig) -> Result<Self, C8yEndPointConfigError> {
+        let c8y_host = c8y_config.http().or_config_not_set()?.to_string();
+        let c8y_mqtt_host = c8y_config.mqtt().or_config_not_set()?.to_string();
         let c8y_config = &c8y_config.cloud_specific;
-        let c8y_host = c8y_config.http.to_string();
-        let c8y_mqtt_host = c8y_config.mqtt.to_string();
         let auth_proxy_addr = c8y_config.proxy.client.host.clone();
         let auth_proxy_port = c8y_config.proxy.client.port;
         let auth_proxy_protocol = c8y_config

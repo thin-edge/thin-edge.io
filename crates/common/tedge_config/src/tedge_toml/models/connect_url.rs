@@ -3,7 +3,7 @@ use std::fmt;
 use std::str::FromStr;
 use url::Host;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq, Hash)]
 #[serde(try_from = "String", into = "String")]
 pub struct ConnectUrl {
     pub(crate) input: String,

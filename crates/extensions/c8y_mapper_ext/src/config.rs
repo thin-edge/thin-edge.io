@@ -171,8 +171,16 @@ impl C8yMapperConfig {
         let device_id = c8y_config.device.id()?.to_string();
         let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
         let service = tedge_config.service.clone();
-        let c8y_host = c8y_config.cloud_specific.http.to_string();
-        let c8y_mqtt = c8y_config.cloud_specific.mqtt.to_string();
+        let c8y_host = c8y_config
+            .cloud_specific
+            .http
+            .or_config_not_set()?
+            .to_string();
+        let c8y_mqtt = c8y_config
+            .cloud_specific
+            .mqtt
+            .or_config_not_set()?
+            .to_string();
         let tedge_http_address = tedge_config.http.client.host.clone();
         let tedge_http_port = tedge_config.http.client.port;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());

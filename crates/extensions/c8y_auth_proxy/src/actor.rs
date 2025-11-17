@@ -36,13 +36,13 @@ impl C8yAuthProxyBuilder {
     pub fn try_from_config(config: &TEdgeConfig, c8y: &C8yMapperConfig) -> anyhow::Result<Self> {
         let reqwest_client = config.cloud_root_certs()?.client();
         let auth_retriever = C8yAuthRetriever::from_tedge_config(config, c8y)?;
-        let c8y = &c8y.cloud_specific;
         let app_data = AppData {
             is_https: true,
-            host: c8y.http.to_string(),
+            host: c8y.http().or_config_not_set()?.to_string(),
             token_manager: C8yTokenManager::new(auth_retriever).shared(),
             client: reqwest_client,
         };
+        let c8y = &c8y.cloud_specific;
         let bind = &c8y.proxy.bind;
         let (signal_sender, signal_receiver) = mpsc::channel(10);
         let cert_path = c8y.proxy.cert_path.clone().map(Utf8PathBuf::from);

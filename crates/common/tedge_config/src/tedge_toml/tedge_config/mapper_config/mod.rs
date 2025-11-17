@@ -35,10 +35,10 @@ pub use compat::load_cloud_mapper_config;
 pub use compat::FromCloudConfig;
 
 /// Device-specific configuration fields shared across all cloud types
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Clone, Document)]
 pub struct DeviceConfig {
     /// Device identifier (optional, will be derived from certificate if not set)
-    id: Option<String>,
+    id: OptionalConfig<String>,
 
     /// Path to the device's private key
     pub key_path: AbsolutePath,
@@ -62,30 +62,36 @@ impl DeviceConfig {
     /// This will parse the certificate and extract the Common Name if device.id is not set.
     /// Note: This method allocates a String when deriving from certificate.
     pub fn id(&self) -> Result<String, MapperConfigError> {
-        if let Some(ref id) = self.id {
+        if let OptionalConfig::Present { value: ref id, .. } = self.id {
             Ok(id.clone())
         } else {
             // Try to derive from certificate
             device_id_from_cert(&self.cert_path)
         }
     }
+
+    pub fn id_key(&self) -> &Cow<'static, str> {
+        self.id.key()
+    }
 }
 
 /// Bridge configuration fields shared across all cloud types
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Clone, Document)]
 pub struct BridgeConfig {
     /// The topic prefix for the bridge MQTT topic
     pub topic_prefix: TopicPrefix,
 
     /// The amount of time after which the bridge should send a ping
     pub keepalive_interval: SecondsOrHumanTime,
+
+    pub include: BridgeIncludeConfig,
 }
 
 /// Base mapper configuration with common fields and cloud-specific fields via generics
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Clone, Document)]
 pub struct MapperConfig<T> {
     /// Endpoint URL of the cloud tenant
-    pub url: ConnectUrl,
+    url: OptionalConfig<ConnectUrl>,
 
     /// Path where cloud root certificate(s) are stored
     pub root_cert_path: AbsolutePath,
@@ -103,7 +109,6 @@ pub struct MapperConfig<T> {
     pub max_payload_size: MqttPayloadLimit,
 
     /// Cloud-specific configuration fields (flattened into the same level)
-    #[serde(flatten)]
     pub cloud_specific: T,
 }
 
@@ -193,21 +198,21 @@ pub struct ProxyConfig {
 
     /// Server certificate path for the proxy
     #[serde(
-        default = "default_optional_path",
+        default = "default_optional_config",
         deserialize_with = "deserialize_optional_config"
     )]
     pub cert_path: OptionalConfig<AbsolutePath>,
 
     /// Server private key path for the proxy
     #[serde(
-        default = "default_optional_path",
+        default = "default_optional_config",
         deserialize_with = "deserialize_optional_config"
     )]
     pub key_path: OptionalConfig<AbsolutePath>,
 
     /// CA certificates path for the proxy
     #[serde(
-        default = "default_optional_path",
+        default = "default_optional_config",
         deserialize_with = "deserialize_optional_config"
     )]
     pub ca_path: OptionalConfig<AbsolutePath>,
@@ -288,7 +293,6 @@ pub struct EnableConfig {
 
 /// Bridge include configuration
 #[derive(Debug, Clone, Deserialize, Document)]
-#[serde(default)]
 pub struct BridgeIncludeConfig {
     /// Set the bridge local clean session flag
     #[serde(default = "default_bridge_include_local_cleansession")]
@@ -330,20 +334,23 @@ pub struct C8yMapperSpecificConfig {
 
     /// HTTP endpoint for Cumulocity
     // Note: http will be derived from url at runtime, no serde default
-    pub http: HostPort<HTTPS_PORT>,
+    #[serde(
+        default = "default_optional_config",
+        deserialize_with = "deserialize_optional_config"
+    )]
+    pub http: OptionalConfig<HostPort<HTTPS_PORT>>,
 
     /// MQTT endpoint for Cumulocity
     // Note: mqtt will be derived from url at runtime, no serde default
-    pub mqtt: HostPort<MQTT_TLS_PORT>,
+    #[serde(
+        default = "default_optional_config",
+        deserialize_with = "deserialize_optional_config"
+    )]
+    pub mqtt: OptionalConfig<HostPort<MQTT_TLS_PORT>>,
 
     /// HTTP proxy configuration
     #[serde(default)]
     pub proxy: ProxyConfig,
-
-    // TODO this shouldn't work like this -> should be bridge.include not bridge_include
-    /// Bridge include configuration
-    #[serde(default)]
-    pub bridge_include: BridgeIncludeConfig,
 
     /// Entity store configuration
     #[serde(default = "default_entity_store_config")]
@@ -416,6 +423,7 @@ pub enum MapperConfigError {
     #[error("Failed to parse mapper configuration: {0}")]
     TomlParse(#[from] toml::de::Error),
 
+    // TODO remove me
     /// Required field is missing after applying defaults
     #[error("Required field '{field}' is missing from mapper configuration")]
     MissingField { field: &'static str },
@@ -453,6 +461,7 @@ struct PartialDeviceConfig {
 struct PartialBridgeConfig {
     topic_prefix: Option<TopicPrefix>,
     keepalive_interval: Option<SecondsOrHumanTime>,
+    include: BridgeIncludeConfig,
 }
 
 /// Partial mapper configuration with optional common fields
@@ -506,9 +515,10 @@ where
     let device = if let Some(partial_device) = partial.device {
         DeviceConfig {
             // device.id is optional - will be derived from certificate if not set
-            id: partial_device
-                .id
-                .or_else(|| tedge_config.device.id().ok().map(|s| s.to_string())),
+            id: to_optional_config(
+                partial_device.id,
+                format!("{config_path}: device.id").into(),
+            ),
             key_path: partial_device
                 .key_path
                 .unwrap_or_else(|| tedge_config.device.key_path.clone()),
@@ -529,7 +539,10 @@ where
         // No device section in file, use all defaults from tedge_config
         DeviceConfig {
             // device.id is optional - will be derived from certificate if not set
-            id: tedge_config.device.id().ok().map(|s| s.to_string()),
+            id: to_optional_config(
+                tedge_config.device.id().ok().map(|s| s.to_string()),
+                "device.id".into(),
+            ),
             key_path: tedge_config.device.key_path.clone(),
             cert_path: tedge_config.device.cert_path.clone(),
             csr_path: tedge_config.device.csr_path.clone(),
@@ -547,12 +560,14 @@ where
             keepalive_interval: partial_bridge
                 .keepalive_interval
                 .unwrap_or_else(default_keepalive_interval),
+            include: partial_bridge.include,
         }
     } else {
         // No bridge section, use all defaults
         BridgeConfig {
             topic_prefix: T::default_bridge_topic_prefix(),
             keepalive_interval: default_keepalive_interval(),
+            include: default_bridge_include_config(),
         }
     };
 
@@ -561,10 +576,7 @@ where
         .root_cert_path
         .unwrap_or_else(default_root_cert_path);
 
-    // URL is still required - can't have a mapper config without knowing where to connect
-    let url = partial
-        .url
-        .ok_or(MapperConfigError::MissingField { field: "url" })?;
+    let url = to_optional_config(partial.url, format!("{}: url", config_path).into());
 
     // Apply default topics
     let topics = partial.topics.unwrap_or_else(T::default_topics);
@@ -618,7 +630,7 @@ impl ExpectedCloudType for AwsMapperSpecificConfig {
 pub trait ApplyRuntimeDefaults {
     fn apply_runtime_defaults(
         &mut self,
-        url: &ConnectUrl,
+        url: &OptionalConfig<ConnectUrl>,
         tedge_config: &TEdgeConfig,
         config_path: &AbsolutePath,
     );
@@ -631,6 +643,17 @@ pub trait ApplyRuntimeDefaults {
 
     /// Returns the default max payload size for this cloud type
     fn default_max_payload_size() -> MqttPayloadLimit;
+}
+
+pub trait HasUrl {
+    // The configured URL field, used to check whether profiles are
+    fn configured_url(&self) -> &OptionalConfig<ConnectUrl>;
+}
+
+impl<T> HasUrl for MapperConfig<T> {
+    fn configured_url(&self) -> &OptionalConfig<ConnectUrl> {
+        &self.url
+    }
 }
 
 fn default_keepalive_interval() -> SecondsOrHumanTime {
@@ -689,7 +712,7 @@ fn default_proxy_client_port() -> u16 {
     8001 // Will be overridden at runtime if bind.port differs
 }
 
-fn default_optional_path() -> OptionalConfig<AbsolutePath> {
+fn default_optional_config<T>() -> OptionalConfig<T> {
     OptionalConfig::empty("")
 }
 
@@ -703,9 +726,9 @@ fn default_proxy_config() -> ProxyConfig {
             host: default_proxy_client_host(),
             port: default_proxy_client_port(),
         },
-        cert_path: default_optional_path(),
-        key_path: default_optional_path(),
-        ca_path: default_optional_path(),
+        cert_path: default_optional_config(),
+        key_path: default_optional_config(),
+        ca_path: default_optional_config(),
     }
 }
 
@@ -917,10 +940,9 @@ impl Default for C8yMapperSpecificConfig {
             credentials_path: AbsolutePath::try_new("/").expect("Valid path"),
             smartrest: default_smartrest_config(),
             smartrest1: default_smartrest1_config(),
-            http: "localhost".parse().expect("Valid hostname"), // Will be derived from url at runtime
-            mqtt: "localhost".parse().expect("Valid hostname"), // Will be derived from url at runtime
+            http: OptionalConfig::Empty("".into()), // Will be derived from url at runtime
+            mqtt: OptionalConfig::Empty("".into()), // Will be derived from url at runtime
             proxy: ProxyConfig::default(),
-            bridge_include: BridgeIncludeConfig::default(),
             entity_store: default_entity_store_config(),
             software_management: default_software_management_config(),
             operations: default_operations_config(),
@@ -957,21 +979,38 @@ fn set_key_if_blank<T>(field: &mut OptionalConfig<T>, value: Cow<'static, str>) 
     }
 }
 
+fn convert_optional_value<T: Clone, U: From<T>>(field: &OptionalConfig<T>) -> OptionalConfig<U> {
+    match field.clone() {
+        OptionalConfig::Present { value, key } => OptionalConfig::Present {
+            value: value.into(),
+            key,
+        },
+        OptionalConfig::Empty(key) => OptionalConfig::Empty(key),
+    }
+}
+
+fn to_optional_config<T>(field: Option<T>, key: Cow<'static, str>) -> OptionalConfig<T> {
+    match field {
+        Some(value) => OptionalConfig::Present { value, key },
+        None => OptionalConfig::Empty(key),
+    }
+}
+
 impl ApplyRuntimeDefaults for C8yMapperSpecificConfig {
     fn apply_runtime_defaults(
         &mut self,
-        url: &ConnectUrl,
+        url: &OptionalConfig<ConnectUrl>,
         tedge_config: &TEdgeConfig,
         config_path: &AbsolutePath,
     ) {
-        // Derive http endpoint from url if it's still the placeholder
-        if self.http.to_string() == "localhost:443" {
-            self.http = url.as_str().parse().expect("Valid URL");
+        // Derive http endpoint from url if it's not been set
+        if self.http.or_none().is_none() {
+            self.http = convert_optional_value(url);
         }
 
-        // Derive mqtt endpoint from url if it's still the placeholder
-        if self.mqtt.to_string() == "localhost:8883" {
-            self.mqtt = url.as_str().parse().expect("Valid URL");
+        // Derive mqtt endpoint from url if it's not been set
+        if self.mqtt.or_none().is_none() {
+            self.mqtt = convert_optional_value(url);
         }
 
         // Apply proxy port inheritance: client.port defaults to bind.port
@@ -983,6 +1022,7 @@ impl ApplyRuntimeDefaults for C8yMapperSpecificConfig {
             self.credentials_path = default_credentials_path(&tedge_config.location)
         }
 
+        // Don't need to set the key for http or mqtt as these are set from url
         set_key_if_blank(
             &mut self.proxy.cert_path,
             format!("{}: proxy.cert_path", config_path).into(),
@@ -1013,7 +1053,7 @@ impl ApplyRuntimeDefaults for C8yMapperSpecificConfig {
 impl ApplyRuntimeDefaults for AzMapperSpecificConfig {
     fn apply_runtime_defaults(
         &mut self,
-        _url: &ConnectUrl,
+        _url: &OptionalConfig<ConnectUrl>,
         _tedge_config: &TEdgeConfig,
         _config_path: &AbsolutePath,
     ) {
@@ -1038,7 +1078,7 @@ impl ApplyRuntimeDefaults for AzMapperSpecificConfig {
 impl ApplyRuntimeDefaults for AwsMapperSpecificConfig {
     fn apply_runtime_defaults(
         &mut self,
-        _url: &ConnectUrl,
+        _url: &OptionalConfig<ConnectUrl>,
         _tedge_config: &TEdgeConfig,
         _config_path: &AbsolutePath,
     ) {
@@ -1074,6 +1114,34 @@ fn device_id_from_cert(cert_path: &Utf8Path) -> Result<String, MapperConfigError
     })?;
 
     Ok(device_id)
+}
+
+// Allow access to url directly for az and aws, but require c8y dependent crates
+// to access the url through mqtt/http variables
+impl MapperConfig<AzMapperSpecificConfig> {
+    /// Get the cloud URL for Azure
+    pub fn url(&self) -> &OptionalConfig<ConnectUrl> {
+        &self.url
+    }
+}
+
+impl MapperConfig<AwsMapperSpecificConfig> {
+    /// Get the cloud URL for AWS
+    pub fn url(&self) -> &OptionalConfig<ConnectUrl> {
+        &self.url
+    }
+}
+
+impl MapperConfig<C8yMapperSpecificConfig> {
+    /// Get the MQTT endpoint for Cumulocity
+    pub fn mqtt(&self) -> &OptionalConfig<HostPort<MQTT_TLS_PORT>> {
+        &self.cloud_specific.mqtt
+    }
+
+    /// Get the HTTP endpoint for Cumulocity
+    pub fn http(&self) -> &OptionalConfig<HostPort<HTTPS_PORT>> {
+        &self.cloud_specific.http
+    }
 }
 
 #[cfg(test)]
@@ -1138,11 +1206,11 @@ mod tests {
 
         // Runtime defaults: http/mqtt derived from url
         assert_eq!(
-            config.cloud_specific.http.to_string(),
+            config.cloud_specific.http.or_none().unwrap().to_string(),
             "tenant.example.com:443"
         );
         assert_eq!(
-            config.cloud_specific.mqtt.to_string(),
+            config.cloud_specific.mqtt.or_none().unwrap().to_string(),
             "tenant.example.com:8883"
         );
     }
@@ -1254,9 +1322,19 @@ mod tests {
 
         // http should be derived from url with HTTPS port
         assert_eq!(
-            config.cloud_specific.http.to_string(),
+            config.http().or_none().unwrap().to_string(),
             "my-tenant.cumulocity.com:443"
         );
+    }
+
+    #[test]
+    fn mqtt_key_contains_filename_if_missing() {
+        let toml = "";
+
+        let config = deserialize_from_str::<C8yMapperSpecificConfig>(toml).unwrap();
+
+        // For C8y, we check mqtt key since url is private
+        assert_eq!(config.mqtt().key(), "/not/on/disk.toml: url");
     }
 
     #[test]
@@ -1269,7 +1347,7 @@ mod tests {
 
         // mqtt should be derived from url with MQTT TLS port
         assert_eq!(
-            config.cloud_specific.mqtt.to_string(),
+            config.mqtt().or_none().unwrap().to_string(),
             "my-tenant.cumulocity.com:8883"
         );
     }

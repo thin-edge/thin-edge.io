@@ -211,6 +211,7 @@ tokio = { version = "1.44", default-features = false, features = [
     "process",
 ] }
 tokio-rustls = { version = "0.26.1", default-features = false }
+tokio-stream = { version = "0.1", features = ["fs"] }
 tokio-tungstenite = { version = "0.28" }
 tokio-util = { version = "0.7", features = ["codec"] }
 toml = "0.9"
