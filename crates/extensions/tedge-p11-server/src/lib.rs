@@ -38,7 +38,6 @@ pub use proxy::TedgeP11Server;
 mod signer;
 pub use signer::signing_key;
 
-/// Interfaces with the PKCS#11 dynamic module using cryptoki crate.
 pub mod pkcs11;
 pub use pkcs11::AuthPin;
 pub use pkcs11::CryptokiConfigDirect;
