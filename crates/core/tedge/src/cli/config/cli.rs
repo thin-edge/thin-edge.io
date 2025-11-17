@@ -132,8 +132,9 @@ macro_rules! try_with_profile {
     }};
 }
 
+#[async_trait::async_trait]
 impl BuildCommand for ConfigCmd {
-    fn build_command(self, _: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    async fn build_command(self, _: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
             ConfigCmd::Get { key, profile } => Ok(GetConfigCommand {
                 key: try_with_profile!(key, profile),

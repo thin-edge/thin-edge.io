@@ -80,4 +80,7 @@ pub enum FirmwareManagementConfigBuildError {
 
     #[error(transparent)]
     C8yEndPointConfigError(#[from] c8y_api::http_proxy::C8yEndPointConfigError),
+
+    #[error(transparent)]
+    MapperConfigError(#[from] tedge_config::tedge_toml::mapper_config::MapperConfigError),
 }

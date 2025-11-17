@@ -1,9 +1,12 @@
 mod version;
 use reqwest::NoProxy;
+use serde::de::DeserializeOwned;
 use version::TEdgeTomlVersion;
 
 mod append_remove;
 pub use append_remove::AppendRemoveItem;
+
+pub mod mapper_config;
 
 use super::models::auth_method::AuthMethod;
 use super::models::proxy_url::ProxyUrl;
@@ -11,6 +14,7 @@ use super::models::timestamp::TimeFormat;
 use super::models::AptConfig;
 use super::models::AutoFlag;
 use super::models::AutoLogUpload;
+use super::models::CloudType;
 use super::models::ConnectUrl;
 use super::models::Cryptoki;
 use super::models::HostPort;
@@ -24,6 +28,9 @@ use super::models::MQTT_SVC_TLS_PORT;
 use super::models::MQTT_TLS_PORT;
 use super::tedge_config_location::TEdgeConfigLocation;
 use crate::models::AbsolutePath;
+use crate::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+use crate::tedge_toml::mapper_config::FromCloudConfig;
+use crate::tedge_toml::mapper_config::MapperConfigError;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
@@ -36,16 +43,24 @@ use certificate::CertificateError;
 use certificate::CloudHttpConfig;
 use certificate::PemCertificate;
 use doku::Document;
+use mapper_config::load_mapper_config;
+use mapper_config::ApplyRuntimeDefaults;
+use mapper_config::ExpectedCloudType;
+use mapper_config::MapperConfig;
 use once_cell::sync::Lazy;
 use reqwest::Certificate;
+use std::borrow::Borrow;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::io::Read;
+use std::iter::Iterator;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
+use strum::IntoEnumIterator;
 pub use tedge_config_macros::ConfigNotSet;
 pub use tedge_config_macros::MultiError;
 pub use tedge_config_macros::ProfileName;
@@ -75,6 +90,8 @@ impl<T> OptionalConfigError<T> for OptionalConfig<T> {
 pub struct TEdgeConfig {
     reader: TEdgeConfigReader,
     location: TEdgeConfigLocation,
+    cached_mapper_configs:
+        tokio::sync::Mutex<anymap3::Map<dyn std::any::Any + Send + Sync + 'static>>,
 }
 
 impl std::ops::Deref for TEdgeConfig {
@@ -90,6 +107,7 @@ impl TEdgeConfig {
         Self {
             reader: TEdgeConfigReader::from_dto(dto, &location),
             location,
+            cached_mapper_configs: <_>::default(),
         }
     }
 
@@ -99,6 +117,162 @@ impl TEdgeConfig {
 
     pub fn root_dir(&self) -> &Utf8Path {
         self.location.tedge_config_root_path()
+    }
+
+    pub async fn mapper_config<T>(
+        &self,
+        profile: &Option<impl Borrow<ProfileName>>,
+    ) -> anyhow::Result<Arc<MapperConfig<T>>>
+    where
+        T: DeserializeOwned
+            + ApplyRuntimeDefaults
+            + ExpectedCloudType
+            + FromCloudConfig
+            + Send
+            + Sync
+            + 'static,
+    {
+        use tokio::fs::try_exists;
+        let profile = profile.as_ref().map(|p| p.borrow().to_owned());
+        let mapper_config_dir = self.location.tedge_config_root_path().join("mappers");
+
+        let ty = T::expected_cloud_type().to_string();
+
+        let filename = profile
+            .as_ref()
+            .map_or_else(|| format!("{ty}.toml"), |p| format!("{ty}.d/{p}.toml"));
+        let path = mapper_config_dir.join(filename);
+
+        match (
+            try_exists(mapper_config_dir.join(format!("{ty}.toml"))).await,
+            try_exists(mapper_config_dir.join(format!("{ty}.d"))).await,
+            try_exists(&path).await,
+        ) {
+            // Generalised config we're looking for exists, read it
+            (_, _, Ok(true)) => {
+                let mut cached_configs = self.cached_mapper_configs.lock().await;
+                let configs_for_cloud = cached_configs
+                    .entry::<HashMap<Option<ProfileName>, Arc<MapperConfig<T>>>>()
+                    .or_default();
+
+                if let Some(cached_config) = configs_for_cloud.get(&profile) {
+                    Ok(cached_config.clone())
+                } else {
+                    let map = load_mapper_config::<T>(
+                        &AbsolutePath::try_new(path.as_str()).unwrap(),
+                        self,
+                    )
+                    .await?;
+
+                    configs_for_cloud.insert(profile.clone(), Arc::new(map));
+
+                    Ok(configs_for_cloud.get(&profile).unwrap().clone())
+                }
+            }
+            // Generalised mapper configurations for this cloud exist, but this
+            // profile isn't found
+            (Ok(true), _, _) | (_, Ok(true), _) => {
+                Err(anyhow!("mapper configuration file {path} doesn't exist"))
+            }
+            // No generalised mapper configurations exist for this cloud,
+            // fallback to tedge.toml
+            (Ok(_default_profile_exists @ false), Ok(_profile_dir_exists @ false), _) => {
+                Ok(Arc::new(mapper_config::compat::load_cloud_mapper_config(
+                    profile.as_deref(),
+                    self,
+                )?))
+            }
+            // Something went wrong, e.g. permissions
+            (Err(err), _, _) | (_, Err(err), _) => {
+                Err(err).with_context(|| format!("reading {mapper_config_dir}"))
+            }
+        }
+    }
+
+    pub fn mappers_config_dir(&self) -> Utf8PathBuf {
+        self.root_dir().join("mappers")
+    }
+
+    pub fn profiled_config_directories(&self) -> impl Iterator<Item = Utf8PathBuf> + use<'_> {
+        CloudType::iter().map(|ty| self.mappers_config_dir().join(format!("{ty}.d")))
+    }
+
+    pub async fn all_mapper_configs<T>(&self) -> Vec<(Arc<MapperConfig<T>>, Option<ProfileName>)>
+    where
+        T: DeserializeOwned
+            + ApplyRuntimeDefaults
+            + ExpectedCloudType
+            + FromCloudConfig
+            + Send
+            + Sync
+            + 'static,
+    {
+        let ty = T::expected_cloud_type();
+        let generalised_profiles =
+            std::fs::read_dir(self.mappers_config_dir().join(format!("{ty}.d")))
+                .into_iter()
+                .flatten()
+                .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+                .filter_map(|s| ProfileName::try_from(s.strip_suffix(".toml")?.to_owned()).ok());
+        let mut configs = Vec::new();
+        for profile in std::iter::once(None).chain(generalised_profiles.map(Some)) {
+            if let Ok(config) = self.mapper_config(&profile).await {
+                configs.push((config, profile));
+            }
+        }
+        configs
+    }
+
+    pub async fn as_cloud_config(
+        &self,
+        cloud: Cloud<'_>,
+    ) -> Result<DynCloudConfig<'_>, MultiError> {
+        Ok(match cloud {
+            Cloud::C8y(profile) => self
+                .mapper_config::<C8yMapperSpecificConfig>(&profile)
+                .await
+                .map(|config| DynCloudConfig::Arc(config as Arc<_>))?,
+            Cloud::Az(profile) => DynCloudConfig::Borrow(self.az.try_get(profile)?),
+            Cloud::Aws(profile) => DynCloudConfig::Borrow(self.aws.try_get(profile)?),
+        })
+    }
+}
+
+pub enum DynCloudConfig<'a> {
+    Arc(Arc<dyn CloudConfig + Send + Sync>),
+    Borrow(&'a (dyn CloudConfig + Send + Sync)),
+}
+
+impl CloudConfig for DynCloudConfig<'_> {
+    fn device_key_path(&self) -> &Utf8Path {
+        match self {
+            Self::Arc(config) => config.device_key_path(),
+            Self::Borrow(config) => config.device_key_path(),
+        }
+    }
+    fn device_cert_path(&self) -> &Utf8Path {
+        match self {
+            Self::Arc(config) => config.device_cert_path(),
+            Self::Borrow(config) => config.device_cert_path(),
+        }
+    }
+    fn root_cert_path(&self) -> &Utf8Path {
+        match self {
+            Self::Arc(config) => config.root_cert_path(),
+            Self::Borrow(config) => config.root_cert_path(),
+        }
+    }
+    fn key_uri(&self) -> Option<Arc<str>> {
+        match self {
+            Self::Arc(config) => config.key_uri(),
+            Self::Borrow(config) => config.key_uri(),
+        }
+    }
+    fn key_pin(&self) -> Option<Arc<str>> {
+        match self {
+            Self::Arc(config) => config.key_pin(),
+            Self::Borrow(config) => config.key_pin(),
+        }
     }
 }
 
@@ -243,7 +417,7 @@ define_tedge_config! {
         organization_unit: Arc<str>,
     },
 
-    #[tedge_config(multi)]
+    #[tedge_config(multi, reader(private))]
     c8y: {
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
@@ -1010,6 +1184,18 @@ define_tedge_config! {
 static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();
 
 impl TEdgeConfigReader {
+    pub fn c8y_keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
+        self.c8y.keys()
+    }
+
+    pub fn c8y_keys_str(&self) -> impl Iterator<Item = Option<&str>> {
+        self.c8y.keys_str()
+    }
+
+    pub fn c8y_entries(&self) -> impl Iterator<Item = (Option<&str>, &TEdgeConfigReaderC8y)> {
+        self.c8y.entries()
+    }
+
     pub fn cloud_root_certs(&self) -> anyhow::Result<CloudHttpConfig> {
         let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
             let c8y_roots = self.c8y.entries().flat_map(|(key, c8y)| {
@@ -1079,14 +1265,6 @@ impl TEdgeConfigReader {
         .unwrap()
     }
 
-    pub fn as_cloud_config(&self, cloud: Cloud<'_>) -> Result<&dyn CloudConfig, MultiError> {
-        Ok(match cloud {
-            Cloud::C8y(profile) => self.c8y.try_get(profile)?,
-            Cloud::Az(profile) => self.az.try_get(profile)?,
-            Cloud::Aws(profile) => self.aws.try_get(profile)?,
-        })
-    }
-
     pub fn device_key_path<'a>(
         &self,
         cloud: Option<impl Into<Cloud<'a>>>,
@@ -1124,6 +1302,7 @@ impl TEdgeConfigReader {
     }
 
     pub fn device_id<'a>(&self, cloud: Option<impl Into<Cloud<'a>>>) -> Result<&str, ReadError> {
+        println!("device_id");
         Ok(match cloud.map(<_>::into) {
             None => self.device.id()?,
             Some(Cloud::C8y(profile)) => self.c8y.try_get(profile)?.device.id()?,
@@ -1211,6 +1390,28 @@ impl CloudConfig for TEdgeConfigReaderAws {
 
     fn key_pin(&self) -> Option<Arc<str>> {
         self.device.key_pin.or_none().cloned()
+    }
+}
+
+impl<T> CloudConfig for MapperConfig<T> {
+    fn device_key_path(&self) -> &Utf8Path {
+        &self.device.key_path
+    }
+
+    fn device_cert_path(&self) -> &Utf8Path {
+        &self.device.cert_path
+    }
+
+    fn root_cert_path(&self) -> &Utf8Path {
+        &self.root_cert_path
+    }
+
+    fn key_uri(&self) -> Option<Arc<str>> {
+        self.device.key_uri.clone()
+    }
+
+    fn key_pin(&self) -> Option<Arc<str>> {
+        self.device.key_pin.clone()
     }
 }
 
@@ -1401,6 +1602,9 @@ pub enum ReadError {
     #[error(transparent)]
     Multi(#[from] MultiError),
 
+    #[error(transparent)]
+    MapperConfig(#[from] MapperConfigError),
+
     #[error("Config value {key}, cannot be read: {message} ")]
     ReadOnlyNotFound {
         key: Cow<'static, str>,
@@ -1512,6 +1716,9 @@ impl TEdgeConfigReaderHttpClientAuth {
 
 #[cfg(test)]
 mod tests {
+    use crate::tedge_toml::mapper_config::AzMapperSpecificConfig;
+    use tedge_test_utils::fs::TempTedgeDir;
+
     use super::*;
 
     #[test_case::test_case("device.id")]
@@ -1570,5 +1777,189 @@ mod tests {
             reader.c8y.try_get::<str>(None).unwrap().http.key(),
             "c8y.url"
         );
+    }
+
+    macro_rules! assert_error_contains {
+        ($res:ident, $expected:expr) => {
+            match &$res {
+                Ok(_) => panic!(
+                    "expected {} to be an error, but it succeeded",
+                    stringify!($res)
+                ),
+                Err(e) => {
+                    let msg = format!("{e:#}");
+                    if !msg.contains($expected) {
+                        panic!(
+                            "expected error {msg:?} to contain {:?}, but it didn't",
+                            $expected
+                        );
+                    }
+                }
+            }
+        };
+    }
+
+    #[tokio::test]
+    async fn mapper_config_reads_non_profiled_mapper() {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("mappers")
+            .file("c8y.toml")
+            .with_toml_content(toml::toml! {
+                url = "example.com"
+
+                proxy.bind.port = 8123
+            });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let mapper_config = tedge_config
+            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(None))
+            .await
+            .unwrap();
+        assert_eq!(mapper_config.url.or_none().unwrap().input, "example.com");
+        assert_eq!(mapper_config.cloud_specific.proxy.bind.port, 8123);
+    }
+
+    #[tokio::test]
+    async fn mapper_config_reads_profiled_mapper() {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("mappers")
+            .dir("c8y.d")
+            .file("myprofile.toml")
+            .with_toml_content(toml::toml! {
+                url = "example.com"
+
+                proxy.bind.port = 8123
+            });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let mapper_config = tedge_config
+            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("myprofile")))
+            .await
+            .unwrap();
+        assert_eq!(mapper_config.url.or_none().unwrap().input, "example.com");
+        assert_eq!(mapper_config.cloud_specific.proxy.bind.port, 8123);
+    }
+
+    #[tokio::test]
+    async fn mapper_config_fails_if_profile_is_not_migrated_but_directory_exists() {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("mappers")
+            .dir("c8y.d")
+            .file("myprofile.toml")
+            .with_toml_content(toml::toml! {
+                url = "example.com"
+
+                proxy.bind.port = 8123
+            });
+        ttd.file("tedge.toml").with_toml_content(toml::toml! {
+            c8y.profiles.non-existent-profile.url = "from.tedge.toml"
+        });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let res = tedge_config
+            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("non-existent-profile")))
+            .await;
+        assert_error_contains!(res, &ttd.dir("mappers/c8y.d").path().display().to_string());
+        assert_error_contains!(res, "doesn't exist");
+    }
+
+    #[tokio::test]
+    async fn mapper_config_fails_if_profile_is_not_migrated_but_default_profile_is() {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("mappers")
+            .file("c8y.toml")
+            .with_toml_content(toml::toml! {
+                url = "example.com"
+
+                proxy.bind.port = 8123
+            });
+        ttd.file("tedge.toml").with_toml_content(toml::toml! {
+            c8y.profiles.non-existent-profile.url = "from.tedge.toml"
+        });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let res = tedge_config
+            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("non-existent-profile")))
+            .await;
+        assert_error_contains!(res, &ttd.dir("mappers/c8y.d").path().display().to_string());
+        assert_error_contains!(res, "doesn't exist");
+    }
+
+    #[tokio::test]
+    async fn mapper_config_falls_back_to_tedge_toml_config_if_directory_does_not_exist() {
+        let ttd = TempTedgeDir::new();
+        ttd.file("tedge.toml").with_toml_content(toml::toml! {
+            c8y.profiles.myprofile.url = "from.tedge.toml"
+        });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let config = tedge_config
+            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("myprofile")))
+            .await
+            .unwrap();
+        assert_eq!(config.url.or_none().unwrap().input, "from.tedge.toml");
+    }
+
+    #[tokio::test]
+    async fn mapper_config_falls_back_to_tedge_toml_config_for_default_profile() {
+        let ttd = TempTedgeDir::new();
+        ttd.file("tedge.toml").with_toml_content(toml::toml! {
+            c8y.url = "from.tedge.toml"
+        });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let config = tedge_config
+            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(None))
+            .await
+            .unwrap();
+        assert_eq!(config.url.or_none().unwrap().input, "from.tedge.toml");
+    }
+
+    #[tokio::test]
+    async fn mapper_config_falls_back_to_tedge_toml_config_if_only_another_cloud_is_using_new_format(
+    ) {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("mappers").file("c8y.toml");
+        ttd.file("tedge.toml").with_toml_content(toml::toml! {
+            az.url = "az.url"
+        });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let config = tedge_config
+            .mapper_config::<AzMapperSpecificConfig>(&profile_name(None))
+            .await
+            .unwrap();
+        assert_eq!(config.url.or_none().unwrap().input, "az.url");
+    }
+
+    #[tokio::test]
+    async fn mapper_config_fails_if_mapper_config_directory_exists_but_is_inaccessible() {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("mappers").set_mode(0o000);
+
+        ttd.file("tedge.toml").with_toml_content(toml::toml! {
+            c8y.url = "from.tedge.toml"
+        });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let error = tedge_config
+            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(None))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            format!(
+                "reading {}/mappers: Permission denied (os error 13)",
+                ttd.path().display()
+            )
+        );
+    }
+
+    fn profile_name(input: Option<&str>) -> Option<ProfileName> {
+        input
+            .map(<_>::to_owned)
+            .map(ProfileName::try_from)
+            .transpose()
+            .unwrap()
     }
 }

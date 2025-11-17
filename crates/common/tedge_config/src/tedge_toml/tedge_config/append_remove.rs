@@ -57,6 +57,7 @@ impl_append_remove_for_single_value!(
     AptConfig,
     MqttPayloadLimit,
     AuthMethod,
+    CloudType,
     Cryptoki,
     ProxyUrl,
 );

@@ -11,6 +11,7 @@ use crate::system_services::SystemServiceManager;
 use camino::Utf8Path;
 use tedge_config::models::auth_method::AuthType;
 use tedge_config::models::proxy_url::ProxyUrl;
+use tedge_config::models::AbsolutePath;
 use tedge_config::tedge_toml::MultiError;
 use yansi::Paint as _;
 
@@ -262,7 +263,7 @@ pub struct ConfigLogger<'a> {
     service_manager: &'a dyn SystemServiceManager,
     mosquitto_version: Option<&'a str>,
     cloud: &'a MaybeBorrowedCloud<'a>,
-    credentials_path: Option<&'a Utf8Path>,
+    credentials_path: Option<&'a AbsolutePath>,
     cryptoki: &'a str,
     proxy_url: Option<&'a ProxyUrl>,
     proxy_username: Option<&'a str>,
@@ -276,7 +277,7 @@ impl<'a> ConfigLogger<'a> {
         config: &'a BridgeConfig,
         service_manager: &'a dyn SystemServiceManager,
         cloud: &'a MaybeBorrowedCloud<'a>,
-        credentials_path: Option<&'a Utf8Path>,
+        credentials_path: Option<&'a AbsolutePath>,
         cryptoki: &'a str,
         proxy_url: Option<&'a ProxyUrl>,
         proxy_username: Option<&'a str>,
