@@ -830,11 +830,7 @@ pub async fn bridge_config(
                 bridge_keyfile: c8y_config.device.key_path.clone().into(),
                 smartrest_templates: c8y_config.cloud_specific.smartrest.templates.clone(),
                 smartrest_one_templates: c8y_config.cloud_specific.smartrest1.templates.clone(),
-                include_local_clean_session: c8y_config
-                    .cloud_specific
-                    .bridge_include
-                    .local_cleansession
-                    .clone(),
+                include_local_clean_session: c8y_config.bridge.include.local_cleansession,
                 bridge_location,
                 topic_prefix: c8y_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),

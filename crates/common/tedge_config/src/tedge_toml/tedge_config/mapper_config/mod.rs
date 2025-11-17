@@ -77,13 +77,15 @@ impl DeviceConfig {
 }
 
 /// Bridge configuration fields shared across all cloud types
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Clone, Document)]
 pub struct BridgeConfig {
     /// The topic prefix for the bridge MQTT topic
     pub topic_prefix: TopicPrefix,
 
     /// The amount of time after which the bridge should send a ping
     pub keepalive_interval: SecondsOrHumanTime,
+
+    pub include: BridgeIncludeConfig,
 }
 
 /// Base mapper configuration with common fields and cloud-specific fields via generics
@@ -292,7 +294,6 @@ pub struct EnableConfig {
 
 /// Bridge include configuration
 #[derive(Debug, Clone, Deserialize, Document)]
-#[serde(default)]
 pub struct BridgeIncludeConfig {
     /// Set the bridge local clean session flag
     #[serde(default = "default_bridge_include_local_cleansession")]
@@ -363,11 +364,6 @@ pub struct C8yMapperSpecificConfig {
     /// HTTP proxy configuration
     #[serde(default)]
     pub proxy: ProxyConfig,
-
-    // TODO this shouldn't work like this -> should be bridge.include not bridge_include
-    /// Bridge include configuration
-    #[serde(default)]
-    pub bridge_include: BridgeIncludeConfig,
 
     /// Entity store configuration
     #[serde(default = "default_entity_store_config")]
@@ -478,6 +474,7 @@ struct PartialDeviceConfig {
 struct PartialBridgeConfig {
     topic_prefix: Option<TopicPrefix>,
     keepalive_interval: Option<SecondsOrHumanTime>,
+    include: BridgeIncludeConfig,
 }
 
 /// Partial mapper configuration with optional common fields
@@ -576,12 +573,14 @@ where
             keepalive_interval: partial_bridge
                 .keepalive_interval
                 .unwrap_or_else(default_keepalive_interval),
+            include: partial_bridge.include,
         }
     } else {
         // No bridge section, use all defaults
         BridgeConfig {
             topic_prefix: T::default_bridge_topic_prefix(),
             keepalive_interval: default_keepalive_interval(),
+            include: default_bridge_include_config(),
         }
     };
 
@@ -952,7 +951,6 @@ impl Default for C8yMapperSpecificConfig {
             http: OptionalConfig::Empty("".into()), // Will be derived from url at runtime
             mqtt: OptionalConfig::Empty("".into()), // Will be derived from url at runtime
             proxy: ProxyConfig::default(),
-            bridge_include: BridgeIncludeConfig::default(),
             entity_store: default_entity_store_config(),
             software_management: default_software_management_config(),
             operations: default_operations_config(),

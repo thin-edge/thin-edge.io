@@ -79,9 +79,6 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
                 key_path: c8y.proxy.key_path.clone(),
                 ca_path: c8y.proxy.ca_path.clone(),
             },
-            bridge_include: BridgeIncludeConfig {
-                local_cleansession: c8y.bridge.include.local_cleansession.clone(),
-            },
             entity_store: EntityStoreConfig {
                 auto_register: c8y.entity_store.auto_register,
                 clean_start: c8y.entity_store.clean_start,
@@ -184,6 +181,7 @@ where
     let bridge = BridgeConfig {
         topic_prefix: cloud_config.bridge_topic_prefix().clone(),
         keepalive_interval: cloud_config.bridge_keepalive_interval().clone(),
+        include: cloud_config.bridge_include_config().clone(),
     };
 
     let topics = cloud_config.topics().clone();
@@ -227,6 +225,7 @@ trait CloudConfigAccessor {
     fn device_key_pin(&self) -> Option<Arc<str>>;
     fn bridge_topic_prefix(&self) -> &TopicPrefix;
     fn bridge_keepalive_interval(&self) -> &SecondsOrHumanTime;
+    fn bridge_include_config(&self) -> BridgeIncludeConfig;
     fn topics(&self) -> &TemplatesSet;
     fn root_cert_path(&self) -> &AbsolutePath;
     fn max_payload_size(&self) -> MqttPayloadLimit;
@@ -271,6 +270,12 @@ impl CloudConfigAccessor for TEdgeConfigReaderC8y {
 
     fn bridge_keepalive_interval(&self) -> &SecondsOrHumanTime {
         &self.bridge.keepalive_interval
+    }
+
+    fn bridge_include_config(&self) -> BridgeIncludeConfig {
+        BridgeIncludeConfig {
+            local_cleansession: self.bridge.include.local_cleansession,
+        }
     }
 
     fn topics(&self) -> &TemplatesSet {
@@ -327,6 +332,10 @@ impl CloudConfigAccessor for TEdgeConfigReaderAz {
         &self.bridge.keepalive_interval
     }
 
+    fn bridge_include_config(&self) -> BridgeIncludeConfig {
+        <_>::default()
+    }
+
     fn topics(&self) -> &TemplatesSet {
         &self.topics
     }
@@ -379,6 +388,10 @@ impl CloudConfigAccessor for TEdgeConfigReaderAws {
 
     fn bridge_keepalive_interval(&self) -> &SecondsOrHumanTime {
         &self.bridge.keepalive_interval
+    }
+
+    fn bridge_include_config(&self) -> BridgeIncludeConfig {
+        <_>::default()
     }
 
     fn topics(&self) -> &TemplatesSet {

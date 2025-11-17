@@ -272,11 +272,7 @@ impl BridgeConfigC8yMqttServiceParams {
             remote_password,
             bridge_certfile: c8y_config.device.cert_path.clone().into(),
             bridge_keyfile: c8y_config.device.key_path.clone().into(),
-            include_local_clean_session: c8y_config
-                .cloud_specific
-                .bridge_include
-                .local_cleansession
-                .clone(),
+            include_local_clean_session: c8y_config.bridge.include.local_cleansession,
             bridge_location,
             topic_prefix: c8y_config.cloud_specific.mqtt_service.topic_prefix.clone(),
             profile_name: profile.cloned(),
