@@ -223,13 +223,8 @@ pub fn profile_completions() -> Vec<CompletionCandidate> {
         .chain(tc.az.keys_str().flatten().map(CompletionCandidate::new))
         .chain(tc.aws.keys_str().flatten().map(CompletionCandidate::new))
         .chain(
-            ["mappers/c8y.d", "mappers/az.d", "mappers/aws.d"]
-                .into_iter()
-                .flat_map(|dir| {
-                    std::fs::read_dir(tc.root_dir().join(dir))
-                        .into_iter()
-                        .flatten()
-                })
+            tc.profiled_config_directories()
+                .flat_map(|dir| std::fs::read_dir(dir).into_iter().flatten())
                 .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
                 .filter_map(|s| Some(s.strip_suffix(".toml")?.to_owned()))
                 .map(CompletionCandidate::new),

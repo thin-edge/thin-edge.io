@@ -53,12 +53,14 @@ use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::Read;
+use std::iter::Iterator;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
+use strum::IntoEnumIterator;
 pub use tedge_config_macros::ConfigNotSet;
 pub use tedge_config_macros::MultiError;
 pub use tedge_config_macros::ProfileName;
@@ -187,6 +189,14 @@ impl TEdgeConfig {
         }
     }
 
+    pub fn mappers_config_dir(&self) -> Utf8PathBuf {
+        self.root_dir().join("mappers")
+    }
+
+    pub fn profiled_config_directories(&self) -> impl Iterator<Item = Utf8PathBuf> + use<'_> {
+        CloudType::iter().map(|ty| self.mappers_config_dir().join(format!("{ty}.d")))
+    }
+
     pub async fn all_mapper_configs<T>(&self) -> Vec<(Arc<MapperConfig<T>>, Option<ProfileName>)>
     where
         T: DeserializeOwned
@@ -199,7 +209,7 @@ impl TEdgeConfig {
     {
         let ty = T::expected_cloud_type();
         let generalised_profiles =
-            std::fs::read_dir(self.root_dir().join(format!("mappers/{ty}.d")))
+            std::fs::read_dir(self.mappers_config_dir().join(format!("{ty}.d")))
                 .into_iter()
                 .flatten()
                 .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
