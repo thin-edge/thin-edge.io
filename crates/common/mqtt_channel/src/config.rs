@@ -80,6 +80,14 @@ pub struct BrokerConfig {
     pub authentication: Option<AuthenticationConfig>,
 }
 
+impl BrokerConfig {
+    pub fn is_using_tls(&self) -> bool {
+        self.authentication
+            .as_ref()
+            .is_some_and(|a| a.is_using_tls())
+    }
+}
+
 /// MQTT certificate authentication configuration.
 ///
 /// Intended to mirror authentication model found in the [mosquitto] MQTT
@@ -141,6 +149,10 @@ impl AuthenticationConfig {
 
     pub fn set_password(&mut self, password: Zeroizing<String>) {
         self.password = Some(password);
+    }
+
+    pub fn is_using_tls(&self) -> bool {
+        !self.cert_store.is_empty()
     }
 
     pub fn to_rustls_client_config(&self) -> Result<Option<rustls::ClientConfig>, rustls::Error> {
