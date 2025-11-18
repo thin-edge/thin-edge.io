@@ -3,7 +3,6 @@ use c8y_firmware_manager::FirmwareManagerBuilder;
 use c8y_firmware_manager::FirmwareManagerConfig;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::DeviceTopicId;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_config::cli::CommonArgs;
@@ -81,11 +80,7 @@ async fn run_with(
 
     //Instantiate health monitor actor
     // TODO: take a user-configurable service topic id
-    let mqtt_device_topic_id = &tedge_config
-        .mqtt
-        .device_topic_id
-        .parse::<EntityTopicId>()
-        .unwrap();
+    let mqtt_device_topic_id = &tedge_config.mqtt.device_topic_id;
 
     let service_topic_id = mqtt_device_topic_id
         .to_default_service_topic_id(PLUGIN_NAME)

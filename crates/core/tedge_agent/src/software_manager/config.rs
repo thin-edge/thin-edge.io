@@ -29,11 +29,7 @@ impl SoftwareManagerConfig {
             .or_none()
             .cloned();
 
-        let device = tedge_config
-            .mqtt
-            .device_topic_id
-            .parse()
-            .unwrap_or(EntityTopicId::default_main_device());
+        let device = tedge_config.mqtt.device_topic_id.clone();
 
         Ok(SoftwareManagerConfig {
             device,

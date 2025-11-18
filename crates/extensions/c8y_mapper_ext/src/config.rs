@@ -10,7 +10,6 @@ use c8y_http_proxy::C8YHttpConfig;
 use camino::Utf8Path;
 use serde_json::Value;
 use std::path::Path;
-use std::str::FromStr;
 use std::sync::Arc;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommandMetadata;
@@ -169,7 +168,7 @@ impl C8yMapperConfig {
 
         let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
         let device_id = c8y_config.device.id()?.to_string();
-        let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
+        let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
         let service = tedge_config.service.clone();
         let c8y_host = c8y_config.http.or_config_not_set()?.to_string();
         let c8y_mqtt = c8y_config.mqtt.or_config_not_set()?.to_string();

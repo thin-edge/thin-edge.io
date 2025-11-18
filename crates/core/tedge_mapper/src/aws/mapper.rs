@@ -6,12 +6,10 @@ use async_trait::async_trait;
 use aws_mapper_ext::converter::AwsConverter;
 use clock::WallClock;
 use mqtt_channel::TopicFilter;
-use std::str::FromStr;
 use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::models::TopicPrefix;
@@ -44,7 +42,7 @@ impl TEdgeComponent for AwsMapper {
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         if tedge_config.mqtt.bridge.built_in {
             let device_id = aws_config.device.id()?;
-            let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
+            let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
 
             let rules = built_in_bridge_rules(device_id, prefix)?;
 

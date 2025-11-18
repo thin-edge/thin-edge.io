@@ -188,12 +188,7 @@ pub fn service_monitor_client_config(
 
     // there is one mapper instance per cloud per thin-edge instance, perhaps we should use some
     // predefined topic id instead of trying to derive it from current device?
-    let entity_topic_id: EntityTopicId = tedge_config
-        .mqtt
-        .device_topic_id
-        .clone()
-        .parse()
-        .context("Invalid device_topic_id")?;
+    let entity_topic_id: EntityTopicId = tedge_config.mqtt.device_topic_id.clone();
     let prefix = &c8y_config.bridge.topic_prefix;
 
     let mapper_service_topic_id = entity_topic_id
@@ -356,12 +351,7 @@ fn core_mqtt_bridge_config(
 
     // there is one mapper instance per cloud per thin-edge instance, perhaps we should use some
     // predefined topic id instead of trying to derive it from current device?
-    let entity_topic_id: EntityTopicId = tedge_config
-        .mqtt
-        .device_topic_id
-        .clone()
-        .parse()
-        .context("Invalid device_topic_id")?;
+    let entity_topic_id: EntityTopicId = tedge_config.mqtt.device_topic_id.clone();
 
     let mapper_service_topic_id = entity_topic_id
         .default_service_for_device(c8y_mapper_name)
@@ -464,12 +454,7 @@ fn mqtt_service_bridge_config(
         "tedge-mapper-bridge-{}",
         c8y_config.mqtt_service.topic_prefix.as_str()
     );
-    let device_topic_id: EntityTopicId = tedge_config
-        .mqtt
-        .device_topic_id
-        .clone()
-        .parse()
-        .context("Invalid device_topic_id")?;
+    let device_topic_id: EntityTopicId = tedge_config.mqtt.device_topic_id.clone();
 
     let bridge_health_topic =
         service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);

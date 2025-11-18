@@ -37,7 +37,6 @@ use std::hash::Hash;
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::Duration;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::service_health_topic;
@@ -783,7 +782,7 @@ pub(crate) fn bridge_health_topic(
     };
 
     let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
-    let device_topic_id = tedge_config.mqtt.device_topic_id.parse::<EntityTopicId>()?;
+    let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
     Ok(service_health_topic(
         &mqtt_schema,
         &device_topic_id,
