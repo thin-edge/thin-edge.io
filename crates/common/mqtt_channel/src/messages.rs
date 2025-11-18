@@ -74,7 +74,7 @@ impl Debug for DebugPayload {
 
 impl From<String> for DebugPayload {
     fn from(value: String) -> Self {
-        DebugPayload(value.into_bytes())
+        DebugPayload::new(value)
     }
 }
 
@@ -86,7 +86,7 @@ impl From<DebugPayload> for Vec<u8> {
 
 impl From<Vec<u8>> for DebugPayload {
     fn from(value: Vec<u8>) -> Self {
-        DebugPayload(value)
+        DebugPayload::new(value)
     }
 }
 
@@ -132,14 +132,14 @@ impl<'de> Deserialize<'de> for DebugPayload {
             where
                 E: serde::de::Error,
             {
-                Ok(DebugPayload(value.as_bytes().to_vec()))
+                Ok(DebugPayload::new(value))
             }
 
             fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                Ok(DebugPayload(value.to_vec()))
+                Ok(DebugPayload::new(value))
             }
         }
 
@@ -157,15 +157,24 @@ impl Display for DebugPayload {
 }
 
 impl DebugPayload {
+    /// Remove any trailing null char
+    fn new(payload: impl Into<Vec<u8>>) -> Self {
+        let mut payload = payload.into();
+        if payload.ends_with(b"\0") {
+            payload.pop();
+        };
+        DebugPayload(payload)
+    }
+
     /// The payload string (unless this payload is not UTF8)
     pub fn as_str(&self) -> Result<&str, MqttError> {
         let bytes = self.as_bytes();
         std::str::from_utf8(bytes).map_err(|err| MqttError::new_invalid_utf8_payload(bytes, err))
     }
 
-    /// The bytes of the payload (except any trailing null char)
+    /// The bytes of the payload
     pub fn as_bytes(&self) -> &[u8] {
-        self.0.strip_suffix(&[0]).unwrap_or(self.0.as_slice())
+        self.0.as_slice()
     }
 }
 
@@ -179,7 +188,7 @@ impl MqttMessage {
     {
         MqttMessage {
             topic: topic.clone(),
-            payload: DebugPayload(payload.into()),
+            payload: DebugPayload::new(payload),
             qos: QoS::AtLeastOnce,
             retain: false,
         }
@@ -241,7 +250,7 @@ impl From<Publish> for MqttMessage {
 
         MqttMessage {
             topic: Topic::new_unchecked(&topic),
-            payload: DebugPayload(payload.to_vec()),
+            payload: DebugPayload::new(payload),
             qos,
             retain,
         }
@@ -317,7 +326,7 @@ mod tests {
     fn message_serialize_deserialize() {
         let message = MqttMessage {
             topic: Topic::new("test").unwrap(),
-            payload: DebugPayload("test-payload".as_bytes().to_vec()),
+            payload: DebugPayload::new("test-payload"),
             qos: QoS::AtMostOnce,
             retain: true,
         };
