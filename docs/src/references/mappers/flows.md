@@ -64,14 +64,14 @@ interface FlowStep {
     onMessage(message: Message, config: object): null | Message | Message[],
   
     // called at regular intervals to produce aggregated messages
-    onInterval(timestamp: Timestamp, config: object): null | Message | Message[],
+    onInterval(time: Date, config: object): null | Message | Message[],
   
     // update the step config given a config update message
     onConfigUpdate(message: Message, config: object): object
 }
 ```
 
-A message contains the message topic and payload as well as an ingestion timestamp.
+A message contains the message topic and payload as well as a processing timestamp.
 The bytes of the raw message payload are also accessible as an array of unsigned bytes: 
 
 ```ts
@@ -79,12 +79,7 @@ type Message = {
   topic: string,
   payload: string,
   raw_payload: Uint8Array,
-  timestamp: Timestamp
-}
-
-type Timestamp = {
-  seconds: number,
-  nanoseconds: number
+  time: Date
 }
 ```
 
@@ -93,7 +88,7 @@ These values are configured by the flow and can be dynamically updated on recept
 
 The `onMessage` function is called for each message to be transformed
   - The arguments passed to the function are:
-    - The message `{ topic: string, payload: string, raw_payload: Uint8Array, timestamp: { seconds: u64, nanoseconds: u32 } }`
+    - The message `{ topic: string, payload: string, raw_payload: Uint8Array, time: Date }`
     - The config as read from the flow config or updated by the script
   - The function is expected to return zero, one or many transformed messages `[{ topic: string, payload: string }]`
   - An exception can be thrown if the input message cannot be transformed.

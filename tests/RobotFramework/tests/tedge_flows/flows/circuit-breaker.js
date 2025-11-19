@@ -14,7 +14,6 @@ class State {
     static batch = [0]
 }
 
-
 export function onMessage (message, config) {
     State.total += 1
     State.batch[0] += 1
@@ -45,8 +44,7 @@ export function onMessage (message, config) {
     }
 }
 
-
-export function onInterval(timestamp, config) {
+export function onInterval(time, config) {
     let max_batch_count = config.tick_count || 10
     let new_batch_count = State.batch.unshift(0)
     if (new_batch_count > max_batch_count) {
@@ -61,5 +59,4 @@ export function onInterval(timestamp, config) {
     } else {
         return []
     }
-
 }

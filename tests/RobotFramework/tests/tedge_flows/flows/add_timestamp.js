@@ -1,8 +1,8 @@
 export function onMessage (message) {
   let payload = JSON.parse(message.payload)
   if (!payload.time) {
-    let timestamp = message.timestamp
-    payload.time = timestamp.seconds + (timestamp.nanoseconds / 1e9)
+    let time = message.time
+    payload.time = time.getTime() / 1000;
   }
 
   return [{
