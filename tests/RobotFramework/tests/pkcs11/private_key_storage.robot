@@ -1,9 +1,11 @@
 *** Settings ***
 Documentation       Test thin-edge.io MQTT client authentication using a Hardware Security Module (HSM).
 ...
-...                 To do this, we install SoftHSM2 which allows us to create software-backed PKCS#11 (cryptoki)
-...                 cryptographic tokens that will be read by thin-edge. In real production environments a dedicated
-...                 hardware device would be used.
+...                 This suite focuses on testing selection and connecting to the cloud using different types of private
+...                 keys stored in PKCS#11 tokens.
+...
+...                 Uses SoftHSM2 to simulate a hardware security module for testing purposes. In real production
+...                 environments, a dedicated hardware device would be used.
 
 # it would be good to explain here why we use the tedge-p11-server exclusively and not the module mode
 Resource            pkcs11_common.resource
@@ -160,188 +162,8 @@ Can pass PIN in the request using device.key_pin
 
     [Teardown]    Execute Command    tedge config unset device.key_pin
 
-Can create a private key on the PKCS11 token
-    Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token --pin=123456 --so-pin=123456
-
-    ${output}=    Execute Command
-    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=create-key-token"
-    ...    exp_exit_code=!0
-    ...    strip=True
-    ...    stdout=False
-    ...    stderr=True
-    Should Be Equal    ${output}    No matching objects found
-
-    Set tedge-p11-server Uri    value=pkcs11:token=create-key-token
-
-    Create private key    label=rsa-2048    type=rsa    p11tool_keytype=RSA-2048
-    Create private key
-    ...    label=rsa-3072
-    ...    type=rsa
-    ...    bits=3072
-    ...    p11tool_keytype=RSA-3072
-    Create private key
-    ...    label=rsa-4096
-    ...    type=rsa
-    ...    bits=4096
-    ...    p11tool_keytype=RSA-4096
-
-    Create private key
-    ...    label=ec-256
-    ...    type=ecdsa
-    ...    curve=p256
-    ...    p11tool_keytype=EC/ECDSA-SECP256R1
-    Create private key
-    ...    label=ec-384
-    ...    type=ecdsa
-    ...    curve=p384
-    ...    p11tool_keytype=EC/ECDSA-SECP384R1
-    # ECDSA P521 not supported by rcgen
-
-    [Teardown]    Set tedge-p11-server Uri    value=
-
-tedge cert create-key-hsm should ask where to create keypair if multiple tokens available
-    # setup multiple tokens
-    Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token1 --pin=123456 --so-pin=123456
-    Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token2 --pin=123456 --so-pin=123456
-
-    # unset key_uri so there there's no hint where to generate the keypair
-    Execute Command    cmd=tedge config unset device.key_uri
-    ${stderr}=    Execute Command
-    ...    cmd=tedge cert create-key-hsm --type ecdsa --label my-key
-    ...    strip=True
-    ...    stdout=False
-    ...    stderr=True
-    ...    exp_exit_code=1
-    Should Contain    ${stderr}    No token URL was provided for this operation; the available tokens are:
-    Should Contain    ${stderr}    token=create-key-token1
-    Should Contain    ${stderr}    token=create-key-token2
-
-tedge cert create-key-hsm can set chosen id and returns error if object with this id already exists
-    ${output}=    Execute Command
-    ...    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"
-    ...    strip=True
-    ...    stdout=False
-    ...    stderr=True
-    Should Contain    ${output}    id=%01%02%03
-
-    ${output}=    Execute Command
-    ...    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "pkcs11:token=tedge"
-    ...    strip=True
-    ...    stdout=False
-    ...    stderr=True
-    ...    exp_exit_code=!0
-    Should Contain    ${output}    Object with this id already exists on the token
-
-tedge cert create-key-hsm can set pin per request
-    ${output}=    Execute Command
-    ...    cmd=tedge cert create-key-hsm --label my-key --pin 000000 "pkcs11:token=tedge"
-    ...    strip=True
-    ...    stdout=False
-    ...    stderr=True
-    ...    exp_exit_code=!0
-    Should Contain    ${output}    The specified PIN is incorrect
-
-tedge cert create-key-hsm can save public key to file
-    ${output}=    Execute Command
-    ...    cmd=tedge cert create-key-hsm --label my-key --outfile-pubkey pubkey.pem "pkcs11:token=tedge"
-    ...    strip=True
-    ...    stdout=False
-    ...    stderr=True
-    ${pubkey}=    Execute Command    cat pubkey.pem    strip=True
-    Should Contain    ${output}    ${pubkey}
-
-Ignore tedge.toml if missing
-    Execute Command    rm -f ./tedge.toml
-    ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0
-    # Don't log anything (this is normal behaviour as the user does not have to create a tedge.toml file)
-    Should Not Contain    ${stderr}    Failed to read ./tedge.toml: No such file
-    # And proceed
-    Should Contain    ${stderr}    Using cryptoki configuration
-    # Using default values
-    Should Contain    ${stderr}    tedge-p11-server.sock
-
-Ignore tedge.toml if empty
-    Execute Command    touch ./tedge.toml
-    ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0
-    # Don't log anything (this is normal behaviour, where the file is used for tedge and not tedge-p11-server)
-    Should Not Contain    ${stderr}    Failed to parse ./tedge.toml: invalid TOML
-    # And proceed
-    Should Contain    ${stderr}    Using cryptoki configuration
-    # Using default values
-    Should Contain    ${stderr}    tedge-p11-server.sock
-
-Ignore tedge.toml if incomplete
-    Execute Command    echo '[device]' >./tedge.toml
-    ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0
-    # Don't log anything (this is normal behaviour, where the file is used for tedge and not tedge-p11-server)
-    Should Not Contain    ${stderr}    Failed to parse ./tedge.toml: invalid TOML
-    Should Not Contain    ${stderr}    missing field `cryptoki`
-    # And proceed
-    Should Contain    ${stderr}    Using cryptoki configuration
-    # Using default values
-    Should Contain    ${stderr}    tedge-p11-server.sock
-
-Do not warn the user if tedge.toml is incomplete but not used
-    Execute Command    rm -f ./tedge.toml
-    ${stderr}=    Execute Command
-    ...    tedge-p11-server --config-dir . --module-path xx.so --pin 11.pin --socket-path yy.sock --uri zz.uri
-    ...    exp_exit_code=!0
-    # Don't warn as all values are provided on the command line
-    Should Not Contain    ${stderr}    Failed to read ./tedge.toml: No such file
-    # And proceed
-    Should Contain    ${stderr}    Using cryptoki configuration
-    # Using the values provided on the command lin
-    Should Contain    ${stderr}    xx.so
-    Should Contain    ${stderr}    yy.sock
-    Should Contain    ${stderr}    zz.uri
-
-Warn the user if tedge.toml exists but cannot be read
-    Execute Command    echo '[device.cryptoki]' >./tedge.toml
-    Execute Command    chmod a-rw ./tedge.toml
-    ${stderr}=    Execute Command
-    ...    sudo -u tedge tedge-p11-server --config-dir . --module-path xx.so
-    ...    exp_exit_code=!0
-    # Warn the user
-    Should Contain    ${stderr}    Failed to read ./tedge.toml: Permission denied
-    # But proceed
-    Should Contain    ${stderr}    Using cryptoki configuration
-
-Warn the user if tedge.toml cannot be parsed
-    Execute Command    rm -f ./tedge.toml
-    Execute Command    echo '[corrupted toml ...' >./tedge.toml
-    ${stderr}=    Execute Command    tedge-p11-server --config-dir . --module-path xx.so    exp_exit_code=!0
-    # Warn the user
-    Should Contain    ${stderr}    Failed to parse ./tedge.toml: invalid TOML
-    # But proceed
-    Should Contain    ${stderr}    Using cryptoki configuration
-
 
 *** Keywords ***
-Create private key
-    [Arguments]    ${type}    ${label}    ${bits}=${EMPTY}    ${curve}=${EMPTY}    ${p11tool_keytype}=${EMPTY}
-    # create the private key on token and write CSR to device.csr_path
-    VAR    ${command}=    tedge cert create-key-hsm --label ${label} --type ${type} "pkcs11:token=create-key-token"
-    IF    $bits
-        VAR    ${command}=    ${command} --bits ${bits}
-    END
-    IF    $curve
-        VAR    ${command}=    ${command} --curve ${curve}
-    END
-    ${create_key_output}=    Execute Command    ${command}    strip=True    stderr=True    stdout=False
-
-    # check if key is created
-    ${output}=    Execute Command
-    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=create-key-token"
-    IF    $p11tool_keytype
-        Should Contain    ${output}    Type: Private key (${p11tool_keytype})
-    ELSE
-        Should Contain    ${output}    Type: Private key
-    END
-    Should Contain    ${output}    Label: ${label}
-
-    ${key_uri}=    Execute Command    tedge config get device.key_uri    strip=True
-    Should Contain    ${create_key_output}    ${key_uri}
-
 Test tedge cert renew
     [Arguments]    ${type}    ${bits}=${EMPTY}    ${curve}=${EMPTY}
 
