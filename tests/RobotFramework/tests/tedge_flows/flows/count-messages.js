@@ -11,7 +11,7 @@ export function onMessage (message) {
     return []
 }
 
-export function onInterval(timestamp, config) {
+export function onInterval(time, config) {
     let message = {
         topic: config.topic || "te/error",
         payload: JSON.stringify(State.count_per_topic)

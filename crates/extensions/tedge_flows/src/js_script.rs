@@ -319,7 +319,7 @@ export async function onMessage(message, config) {
     async fn using_date() {
         let js = r#"
 export function onMessage(message, config) {
-    let time = message.timestamp;
+    let time = message.time;
     return {
         "topic": message.topic,
         "payload": JSON.stringify({

@@ -61,7 +61,7 @@ impl From<Message> for JsonValue {
             ("topic", JsonValue::string(value.topic)),
             ("payload", payload),
             ("raw_payload", raw_payload),
-            ("timestamp", JsonValue::option(value.timestamp)),
+            ("time", JsonValue::option(value.timestamp)),
         ])
     }
 }
