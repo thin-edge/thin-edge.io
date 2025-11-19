@@ -76,7 +76,7 @@ async fn run_with(
     // Create actor instances
     let mqtt_config = tedge_config.mqtt_config()?;
     let identity = tedge_config.http.client.auth.identity()?;
-    let cloud_root_certs = tedge_config.cloud_root_certs()?;
+    let cloud_root_certs = tedge_config.cloud_root_certs().await?;
     let mut downloader_actor = DownloaderActor::new(identity, cloud_root_certs).builder();
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
 

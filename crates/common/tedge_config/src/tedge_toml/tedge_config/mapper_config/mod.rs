@@ -27,15 +27,18 @@ use doku::Document;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::borrow::Cow;
+use std::fmt::Display;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
+use std::ops::Deref;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 pub use compat::load_cloud_mapper_config;
 pub use compat::FromCloudConfig;
 
 /// Device-specific configuration fields shared across all cloud types
-#[derive(Debug, Clone, Document)]
+#[derive(Debug, Document)]
 pub struct DeviceConfig {
     /// Device identifier (optional, will be derived from certificate if not set)
     id: OptionalConfig<String>,
@@ -76,10 +79,10 @@ impl DeviceConfig {
 }
 
 /// Bridge configuration fields shared across all cloud types
-#[derive(Debug, Clone, Document)]
+#[derive(Debug, Document)]
 pub struct BridgeConfig {
     /// The topic prefix for the bridge MQTT topic
-    pub topic_prefix: TopicPrefix,
+    pub topic_prefix: Keyed<TopicPrefix>,
 
     /// The amount of time after which the bridge should send a ping
     pub keepalive_interval: SecondsOrHumanTime,
@@ -87,14 +90,34 @@ pub struct BridgeConfig {
     pub include: BridgeIncludeConfig,
 }
 
+/// Trait linking cloud-specific config to its mapper-specific configuration
+pub trait SpecialisedCloudConfig:
+    Sized
+    + DeserializeOwned
+    + ApplyRuntimeDefaults
+    + ExpectedCloudType
+    + FromCloudConfig
+    + Send
+    + Sync
+    + 'static
+{
+    /// The mapper-specific configuration type for this cloud
+    type SpecialisedMapperConfig: DeserializeOwned
+        + std::fmt::Debug
+        + Document
+        + Default
+        + Send
+        + Sync;
+}
+
 /// Base mapper configuration with common fields and cloud-specific fields via generics
-#[derive(Debug, Clone, Document)]
-pub struct MapperConfig<T> {
+#[derive(Debug, Document)]
+pub struct MapperConfig<T: SpecialisedCloudConfig> {
     /// Endpoint URL of the cloud tenant
     url: OptionalConfig<ConnectUrl>,
 
     /// Path where cloud root certificate(s) are stored
-    pub root_cert_path: AbsolutePath,
+    pub root_cert_path: Keyed<AbsolutePath>,
 
     /// Device-specific configuration
     pub device: DeviceConfig,
@@ -105,15 +128,72 @@ pub struct MapperConfig<T> {
     /// Bridge configuration
     pub bridge: BridgeConfig,
 
-    /// Maximum MQTT payload size
-    pub max_payload_size: MqttPayloadLimit,
+    pub mapper: MapperMapperConfig<T::SpecialisedMapperConfig>,
 
     /// Cloud-specific configuration fields (flattened into the same level)
     pub cloud_specific: T,
 }
 
+/// Empty mapper-specific configuration for C8y (no cloud-specific mapper fields)
+#[derive(Debug, Deserialize, Document, Default)]
+pub struct EmptyMapperSpecific {}
+
+/// AWS-specific mapper configuration fields
+#[derive(Debug, Deserialize, Document)]
+pub struct AwsMapperSpecific {
+    /// Whether to add timestamps to messages
+    #[serde(default = "default_timestamp")]
+    pub timestamp: bool,
+
+    /// The timestamp format to use
+    #[serde(default = "default_timestamp_format")]
+    pub timestamp_format: TimeFormat,
+}
+
+/// Azure-specific mapper configuration fields
+#[derive(Debug, Deserialize, Document)]
+pub struct AzMapperSpecific {
+    /// Whether to add timestamps to messages
+    #[serde(default = "default_timestamp")]
+    pub timestamp: bool,
+
+    /// The timestamp format to use
+    #[serde(default = "default_timestamp_format")]
+    pub timestamp_format: TimeFormat,
+}
+
+#[derive(Debug, Deserialize, Document)]
+pub struct PartialMapperMapperConfig<M> {
+    #[serde(default)]
+    mqtt: PartialMqttConfig,
+
+    /// Cloud-specific mapper configuration (e.g., timestamp settings for AWS/Azure)
+    #[serde(flatten)]
+    pub cloud_specific: M,
+}
+
+#[derive(Debug, Deserialize, Document, Default)]
+pub struct PartialMqttConfig {
+    #[serde(default)]
+    pub max_payload_size: Option<MqttPayloadLimit>,
+}
+
+#[derive(Debug, Document)]
+pub struct MapperMapperConfig<M> {
+    pub mqtt: MqttConfig,
+
+    /// Cloud-specific mapper configuration
+    pub cloud_specific: M,
+}
+
+#[derive(Debug, Document)]
+pub struct MqttConfig {
+    /// Maximum MQTT payload size
+    pub max_payload_size: MqttPayloadLimit,
+}
+
 /// SmartREST configuration for Cumulocity
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct SmartrestConfig {
     /// Set of SmartREST template IDs the device should subscribe to
@@ -129,7 +209,7 @@ pub struct SmartrestConfig {
     pub child_device: SmartrestChildDeviceConfig,
 }
 
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct Smartrest1Config {
     /// Set of SmartREST 1 template IDs the device should subscribe to
@@ -138,7 +218,7 @@ pub struct Smartrest1Config {
 }
 
 /// Child device SmartREST configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct SmartrestChildDeviceConfig {
     /// Attach the c8y_IsDevice fragment to child devices on creation
@@ -147,7 +227,7 @@ pub struct SmartrestChildDeviceConfig {
 }
 
 /// Proxy bind configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct ProxyBindConfig {
     /// The IP address local proxy binds to
@@ -156,11 +236,90 @@ pub struct ProxyBindConfig {
 
     /// The port local proxy binds to
     #[serde(default = "default_proxy_bind_port")]
-    pub port: u16,
+    pub port: Keyed<u16>,
+}
+
+#[derive(Debug)]
+pub struct Keyed<T> {
+    value: T,
+    key: Cow<'static, str>,
+    accessed: Arc<AtomicBool>,
+}
+
+impl<T> Keyed<T> {
+    fn new(value: T, key: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            value,
+            key: key.into(),
+            accessed: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn value(&self) -> &T {
+        self.accessed
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        &self.value
+    }
+
+    pub fn key(&self) -> &Cow<'static, str> {
+        &self.key
+    }
+}
+
+impl<T> Drop for Keyed<T> {
+    fn drop(&mut self) {
+        // The key should always be set, but this has to happen after deserialising
+        // If the value has been used
+        if self.accessed.load(std::sync::atomic::Ordering::SeqCst) {
+            debug_assert!(
+                !self.key.is_empty(),
+                "Must set a key for a `Keyed<T>` value after deserialising"
+            )
+        }
+    }
+}
+
+impl<T: Display> Display for Keyed<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value().fmt(f)
+    }
+}
+
+impl<T: Document> Document for Keyed<T> {
+    fn ty() -> doku::Type {
+        T::ty()
+    }
+}
+
+impl<T> Deref for Keyed<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.value()
+    }
+}
+
+impl<T: PartialEq> PartialEq<T> for Keyed<T> {
+    fn eq(&self, other: &T) -> bool {
+        self.value() == other
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Keyed<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self {
+            value: T::deserialize(deserializer)?,
+            key: "".into(),
+            accessed: Arc::new(AtomicBool::new(false)),
+        })
+    }
 }
 
 /// Proxy client configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct ProxyClientConfig {
     /// The address of the host on which the proxy is running
@@ -185,7 +344,7 @@ where
 }
 
 /// HTTP proxy configuration for Cumulocity
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct ProxyConfig {
     /// Proxy bind configuration
@@ -219,7 +378,7 @@ pub struct ProxyConfig {
 }
 
 /// Entity store configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct EntityStoreConfig {
     /// Enable auto registration feature
@@ -232,7 +391,7 @@ pub struct EntityStoreConfig {
 }
 
 /// Software management configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct SoftwareManagementConfig {
     /// Software management API to use (legacy or advanced)
@@ -245,7 +404,7 @@ pub struct SoftwareManagementConfig {
 }
 
 /// Operations configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct OperationsConfig {
     /// Auto-upload the operation log once it finishes
@@ -254,7 +413,7 @@ pub struct OperationsConfig {
 }
 
 /// Availability/heartbeat configuration for Cumulocity
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct AvailabilityConfig {
     /// Enable sending heartbeat to Cumulocity periodically
@@ -267,7 +426,7 @@ pub struct AvailabilityConfig {
 }
 
 /// Feature enable/disable flags
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct EnableConfig {
     /// Enable log_upload feature
@@ -292,7 +451,7 @@ pub struct EnableConfig {
 }
 
 /// Bridge include configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 pub struct BridgeIncludeConfig {
     /// Set the bridge local clean session flag
     #[serde(default = "default_bridge_include_local_cleansession")]
@@ -300,7 +459,7 @@ pub struct BridgeIncludeConfig {
 }
 
 /// MQTT service configuration for Cumulocity
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct MqttServiceConfig {
     /// Whether to connect to the MQTT service endpoint or not
@@ -312,8 +471,26 @@ pub struct MqttServiceConfig {
     pub topics: TemplatesSet,
 }
 
+impl Default for AwsMapperSpecific {
+    fn default() -> Self {
+        Self {
+            timestamp: default_timestamp(),
+            timestamp_format: default_timestamp_format(),
+        }
+    }
+}
+
+impl Default for AzMapperSpecific {
+    fn default() -> Self {
+        Self {
+            timestamp: default_timestamp(),
+            timestamp_format: default_timestamp_format(),
+        }
+    }
+}
+
 /// Cumulocity-specific mapper configuration fields
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct C8yMapperSpecificConfig {
     /// Authentication method (certificate, basic, or auto)
@@ -378,29 +555,26 @@ pub struct C8yMapperSpecificConfig {
 }
 
 /// Azure IoT-specific mapper configuration fields
-#[derive(Debug, Clone, Deserialize, Document)]
-#[serde(default)]
-pub struct AzMapperSpecificConfig {
-    /// Whether to add timestamps to messages
-    #[serde(default = "default_timestamp")]
-    pub timestamp: bool,
-
-    /// The timestamp format to use
-    #[serde(default = "default_timestamp_format")]
-    pub timestamp_format: TimeFormat,
-}
+#[derive(Debug, Deserialize, Document)]
+pub struct AzMapperSpecificConfig {}
 
 /// AWS IoT-specific mapper configuration fields
-#[derive(Debug, Clone, Deserialize, Document)]
-#[serde(default)]
-pub struct AwsMapperSpecificConfig {
-    /// Whether to add timestamps to messages
-    #[serde(default = "default_timestamp")]
-    pub timestamp: bool,
+#[derive(Debug, Deserialize, Document)]
+pub struct AwsMapperSpecificConfig {}
 
-    /// The timestamp format to use
-    #[serde(default = "default_timestamp_format")]
-    pub timestamp_format: TimeFormat,
+/// CloudConfig implementation for C8y
+impl SpecialisedCloudConfig for C8yMapperSpecificConfig {
+    type SpecialisedMapperConfig = EmptyMapperSpecific;
+}
+
+/// CloudConfig implementation for Azure
+impl SpecialisedCloudConfig for AzMapperSpecificConfig {
+    type SpecialisedMapperConfig = AzMapperSpecific;
+}
+
+/// CloudConfig implementation for AWS
+impl SpecialisedCloudConfig for AwsMapperSpecificConfig {
+    type SpecialisedMapperConfig = AwsMapperSpecific;
 }
 
 /// Type alias for Cumulocity mapper configuration
@@ -466,13 +640,18 @@ struct PartialBridgeConfig {
 
 /// Partial mapper configuration with optional common fields
 #[derive(Debug, Deserialize)]
-struct PartialMapperConfig<T> {
+#[serde(bound(
+    deserialize = "T: DeserializeOwned, T::SpecialisedMapperConfig: Default + DeserializeOwned"
+))]
+struct PartialMapperConfig<T: SpecialisedCloudConfig> {
     url: Option<ConnectUrl>,
     root_cert_path: Option<AbsolutePath>,
     device: Option<PartialDeviceConfig>,
     topics: Option<TemplatesSet>,
     bridge: Option<PartialBridgeConfig>,
-    max_payload_size: Option<MqttPayloadLimit>,
+
+    #[serde(default)]
+    mapper: PartialMapperMapperConfig<T::SpecialisedMapperConfig>,
 
     #[serde(flatten)]
     cloud_specific: T,
@@ -496,7 +675,7 @@ pub(crate) async fn load_mapper_config<T>(
     tedge_config: &TEdgeConfig,
 ) -> Result<MapperConfig<T>, MapperConfigError>
 where
-    T: DeserializeOwned + ApplyRuntimeDefaults,
+    T: DeserializeOwned + ApplyRuntimeDefaults + SpecialisedCloudConfig,
 {
     let toml_content = tokio::fs::read_to_string(config_path.as_std_path()).await?;
     load_mapper_config_from_string(&toml_content, tedge_config, config_path)
@@ -508,7 +687,7 @@ fn load_mapper_config_from_string<T>(
     config_path: &AbsolutePath,
 ) -> Result<MapperConfig<T>, MapperConfigError>
 where
-    T: DeserializeOwned + ApplyRuntimeDefaults,
+    T: DeserializeOwned + ApplyRuntimeDefaults + SpecialisedCloudConfig,
 {
     let partial: PartialMapperConfig<T> = toml::from_str(toml_content)?;
 
@@ -554,9 +733,12 @@ where
     // Apply defaults for bridge fields
     let bridge = if let Some(partial_bridge) = partial.bridge {
         BridgeConfig {
-            topic_prefix: partial_bridge
-                .topic_prefix
-                .unwrap_or_else(T::default_bridge_topic_prefix),
+            topic_prefix: Keyed::new(
+                partial_bridge
+                    .topic_prefix
+                    .unwrap_or_else(T::default_bridge_topic_prefix),
+                format!("{config_path}: bridge.topic_prefix"),
+            ),
             keepalive_interval: partial_bridge
                 .keepalive_interval
                 .unwrap_or_else(default_keepalive_interval),
@@ -565,24 +747,32 @@ where
     } else {
         // No bridge section, use all defaults
         BridgeConfig {
-            topic_prefix: T::default_bridge_topic_prefix(),
+            topic_prefix: Keyed::new(
+                T::default_bridge_topic_prefix(),
+                format!("{config_path}: bridge.topic_prefix"),
+            ),
             keepalive_interval: default_keepalive_interval(),
             include: default_bridge_include_config(),
         }
     };
 
     // Apply default for root_cert_path
-    let root_cert_path = partial
-        .root_cert_path
-        .unwrap_or_else(default_root_cert_path);
+    let root_cert_path = Keyed::new(
+        partial
+            .root_cert_path
+            .unwrap_or_else(default_root_cert_path),
+        format!("{config_path}: root_cert_path"),
+    );
 
-    let url = to_optional_config(partial.url, format!("{}: url", config_path).into());
+    let url = to_optional_config(partial.url, format!("{config_path}: url").into());
 
     // Apply default topics
     let topics = partial.topics.unwrap_or_else(T::default_topics);
 
     // Apply default max_payload_size
     let max_payload_size = partial
+        .mapper
+        .mqtt
         .max_payload_size
         .unwrap_or_else(T::default_max_payload_size);
 
@@ -599,7 +789,10 @@ where
         device,
         topics,
         bridge,
-        max_payload_size,
+        mapper: MapperMapperConfig {
+            mqtt: MqttConfig { max_payload_size },
+            cloud_specific: partial.mapper.cloud_specific,
+        },
         cloud_specific,
     })
 }
@@ -650,7 +843,7 @@ pub trait HasUrl {
     fn configured_url(&self) -> &OptionalConfig<ConnectUrl>;
 }
 
-impl<T> HasUrl for MapperConfig<T> {
+impl<T: SpecialisedCloudConfig> HasUrl for MapperConfig<T> {
     fn configured_url(&self) -> &OptionalConfig<ConnectUrl> {
         &self.url
     }
@@ -700,8 +893,8 @@ fn default_proxy_bind_address() -> IpAddr {
     IpAddr::V4(Ipv4Addr::LOCALHOST)
 }
 
-fn default_proxy_bind_port() -> u16 {
-    8001
+fn default_proxy_bind_port() -> Keyed<u16> {
+    Keyed::new(8001, "")
 }
 
 fn default_proxy_client_host() -> Arc<str> {
@@ -953,20 +1146,11 @@ impl Default for C8yMapperSpecificConfig {
     }
 }
 
-impl Default for AzMapperSpecificConfig {
+impl<T: Default> Default for PartialMapperMapperConfig<T> {
     fn default() -> Self {
         Self {
-            timestamp: default_timestamp(),
-            timestamp_format: default_timestamp_format(),
-        }
-    }
-}
-
-impl Default for AwsMapperSpecificConfig {
-    fn default() -> Self {
-        Self {
-            timestamp: default_timestamp(),
-            timestamp_format: default_timestamp_format(),
+            mqtt: PartialMqttConfig::default(),
+            cloud_specific: T::default(),
         }
     }
 }
@@ -976,6 +1160,12 @@ fn set_key_if_blank<T>(field: &mut OptionalConfig<T>, value: Cow<'static, str>) 
     match field {
         OC::Present { ref mut key, .. } | OC::Empty(ref mut key) if key.is_empty() => *key = value,
         _ => (),
+    }
+}
+
+fn set_key_if_blank2<T>(field: &mut Keyed<T>, value: Cow<'static, str>) {
+    if field.key.is_empty() {
+        field.key = value
     }
 }
 
@@ -1015,7 +1205,7 @@ impl ApplyRuntimeDefaults for C8yMapperSpecificConfig {
 
         // Apply proxy port inheritance: client.port defaults to bind.port
         if self.proxy.client.port == 8001 && self.proxy.bind.port != 8001 {
-            self.proxy.client.port = self.proxy.bind.port;
+            self.proxy.client.port = *self.proxy.bind.port;
         }
 
         if self.credentials_path == serde_placeholder_credentials_path() {
@@ -1034,6 +1224,10 @@ impl ApplyRuntimeDefaults for C8yMapperSpecificConfig {
         set_key_if_blank(
             &mut self.proxy.ca_path,
             format!("{}: proxy.ca_path", config_path).into(),
+        );
+        set_key_if_blank2(
+            &mut self.proxy.bind.port,
+            format!("{}: proxy.bind.port", config_path).into(),
         );
     }
 
@@ -1263,26 +1457,6 @@ mod tests {
     }
 
     #[test]
-    fn az_config_applies_correct_defaults() {
-        let toml = "";
-        let config: AzMapperSpecificConfig = toml::from_str(toml).unwrap();
-
-        // Az-specific defaults
-        assert!(config.timestamp);
-        assert_eq!(config.timestamp_format, TimeFormat::Unix);
-    }
-
-    #[test]
-    fn aws_config_applies_correct_defaults() {
-        let toml = "";
-        let config: AwsMapperSpecificConfig = toml::from_str(toml).unwrap();
-
-        // AWS-specific defaults
-        assert!(config.timestamp);
-        assert_eq!(config.timestamp_format, TimeFormat::Unix);
-    }
-
-    #[test]
     fn device_fields_populate_from_tedge_config() {
         let tedge_toml = r#"
             device.id = "test-id"
@@ -1421,7 +1595,7 @@ mod tests {
         let config = deserialize_from_str::<C8yMapperSpecificConfig>(toml).unwrap();
 
         // max_payload_size should have C8Y default (16184 bytes)
-        assert_eq!(config.max_payload_size.0, 16184);
+        assert_eq!(config.mapper.mqtt.max_payload_size.0, 16184);
     }
 
     #[test]
@@ -1433,7 +1607,7 @@ mod tests {
         let config = deserialize_from_str::<AzMapperSpecificConfig>(toml).unwrap();
 
         // max_payload_size should have Azure default (256 KB = 262144 bytes)
-        assert_eq!(config.max_payload_size.0, 262144);
+        assert_eq!(config.mapper.mqtt.max_payload_size.0, 262144);
     }
 
     #[test]
@@ -1445,7 +1619,7 @@ mod tests {
         let config = deserialize_from_str::<AwsMapperSpecificConfig>(toml).unwrap();
 
         // max_payload_size should have AWS default (128 KB = 131072 bytes)
-        assert_eq!(config.max_payload_size.0, 131072);
+        assert_eq!(config.mapper.mqtt.max_payload_size.0, 131072);
     }
 
     #[test]
@@ -1524,6 +1698,19 @@ mod tests {
     }
 
     #[test]
+    fn aws_config_can_have_specialised_and_non_specialised_mapper_fields() {
+        let toml = r#"
+            mapper.timestamp = false
+            mapper.mqtt.max_payload_size = 12345
+        "#;
+
+        let config = deserialize_from_str::<AwsMapperSpecificConfig>(toml).unwrap();
+
+        assert_eq!(config.mapper.mqtt.max_payload_size, MqttPayloadLimit(12345));
+        assert!(!config.mapper.cloud_specific.timestamp);
+    }
+
+    #[test]
     fn empty_proxy_cert_path_has_file_in_empty_key_name() {
         let toml = r#"
             url = "tenant.cumulocity.com"
@@ -1539,7 +1726,7 @@ mod tests {
 
     fn deserialize_from_str<T>(toml: &str) -> Result<MapperConfig<T>, MapperConfigError>
     where
-        T: DeserializeOwned + ApplyRuntimeDefaults,
+        T: DeserializeOwned + ApplyRuntimeDefaults + SpecialisedCloudConfig,
     {
         let tedge_config =
             TEdgeConfig::from_dto(&TEdgeConfigDto::default(), TEdgeConfigLocation::default());

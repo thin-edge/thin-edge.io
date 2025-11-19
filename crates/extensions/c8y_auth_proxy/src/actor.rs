@@ -33,8 +33,11 @@ pub struct C8yAuthProxyBuilder {
 }
 
 impl C8yAuthProxyBuilder {
-    pub fn try_from_config(config: &TEdgeConfig, c8y: &C8yMapperConfig) -> anyhow::Result<Self> {
-        let reqwest_client = config.cloud_root_certs()?.client();
+    pub async fn try_from_config(
+        config: &TEdgeConfig,
+        c8y: &C8yMapperConfig,
+    ) -> anyhow::Result<Self> {
+        let reqwest_client = config.cloud_root_certs().await?.client();
         let auth_retriever = C8yAuthRetriever::from_tedge_config(config, c8y)?;
         let app_data = AppData {
             is_https: true,
@@ -52,7 +55,7 @@ impl C8yAuthProxyBuilder {
         Ok(Self {
             app_data,
             bind_address: bind.address,
-            bind_port: bind.port,
+            bind_port: *bind.port,
             signal_sender,
             signal_receiver,
             cert_path,

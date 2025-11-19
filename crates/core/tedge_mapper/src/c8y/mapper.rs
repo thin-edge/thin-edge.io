@@ -82,13 +82,13 @@ impl TEdgeComponent for CumulocityMapper {
 
         let mut http_actor = HttpActor::new(tedge_config.http.client_tls_config()?).builder();
         let c8y_auth_proxy_actor =
-            C8yAuthProxyBuilder::try_from_config(&tedge_config, &c8y_config)?;
+            C8yAuthProxyBuilder::try_from_config(&tedge_config, &c8y_config).await?;
 
         let mut fs_watch_actor = FsWatchActorBuilder::new();
         let mut timer_actor = TimerActor::builder();
 
         let identity = tedge_config.http.client.auth.identity()?;
-        let cloud_root_certs = tedge_config.cloud_root_certs()?;
+        let cloud_root_certs = tedge_config.cloud_root_certs().await?;
         let mut uploader_actor =
             UploaderActor::new(identity.clone(), cloud_root_certs.clone()).builder();
         let mut downloader_actor = DownloaderActor::new(identity, cloud_root_certs).builder();
@@ -332,7 +332,7 @@ fn mqtt_bridge_config(
             read_c8y_credentials(&c8y_config.cloud_specific.credentials_path)?;
         use_credentials(
             &mut cloud_config,
-            &c8y_config.root_cert_path,
+            &*c8y_config.root_cert_path,
             username,
             password,
         )?;

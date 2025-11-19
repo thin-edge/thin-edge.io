@@ -222,7 +222,7 @@ impl C8yMapperConfig {
             .smartrest
             .child_device
             .create_with_device_marker;
-        let max_mqtt_payload_size = c8y_config.max_payload_size.0;
+        let max_mqtt_payload_size = c8y_config.mapper.mqtt.max_payload_size.0;
 
         // Add command topics
         topics.add_all(mqtt_schema.topics(AnyEntity, AnyCommand));

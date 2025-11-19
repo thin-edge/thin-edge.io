@@ -58,6 +58,14 @@ impl TEdgeConfig {
     }
 
     #[cfg(feature = "test")]
+    pub fn load_toml_str_with_warnings(toml: &str) -> (TEdgeConfig, UnusedValueWarnings) {
+        TEdgeConfigLocation::load_toml_str_with_warnings(
+            toml,
+            TEdgeConfigLocation::from_custom_root("/dont/read/system/etc/tedge"),
+        )
+    }
+
+    #[cfg(feature = "test")]
     pub fn load_toml_str_with_root_dir(config_dir: impl AsRef<StdPath>, toml: &str) -> TEdgeConfig {
         TEdgeConfigLocation::load_toml_str(toml, TEdgeConfigLocation::from_custom_root(config_dir))
     }

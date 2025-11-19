@@ -46,13 +46,17 @@ use tedge_config::models::AbsolutePath;
 use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
 use tedge_config::models::MQTT_SERVICE_TLS_PORT;
+#[cfg(feature = "aws")]
+use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
+#[cfg(feature = "azure")]
+use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
 #[cfg(feature = "c8y")]
 use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::mapper_config::HasUrl;
 use tedge_config::tedge_toml::mapper_config::MapperConfig;
+use tedge_config::tedge_toml::mapper_config::SpecialisedCloudConfig;
 #[cfg(feature = "c8y")]
 use tedge_config::tedge_toml::ProfileName;
-use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::TEdgeConfigReaderMqtt;
 use tedge_config::TEdgeConfig;
 #[cfg(any(feature = "aws", feature = "azure"))]
@@ -533,90 +537,22 @@ async fn validate_config(
     match cloud {
         #[cfg(feature = "aws")]
         MaybeBorrowedCloud::Aws(_) => {
-            let profiles = config
-                .aws
-                .entries()
-                .filter(|(_, config)| config.url.or_none().is_some())
-                .map(|(s, _)| Some(s?.to_string()))
-                .collect::<Vec<_>>();
-            disallow_matching_url_device_id(
-                config,
-                ReadableKey::AwsUrl,
-                ReadableKey::AwsDeviceId,
-                &profiles,
-            )?;
-            disallow_matching_configurations(config, ReadableKey::AwsBridgeTopicPrefix, &profiles)?;
+            let configs = config.all_mapper_configs::<AwsMapperSpecificConfig>().await;
+            disallow_matching_url_device_id(&configs)?;
+            disallow_matching_bridge_topic_prefix(&configs)?;
         }
         #[cfg(feature = "azure")]
         MaybeBorrowedCloud::Azure(_) => {
-            let profiles = config
-                .az
-                .entries()
-                .filter(|(_, config)| config.url.or_none().is_some())
-                .map(|(s, _)| Some(s?.to_string()))
-                .collect::<Vec<_>>();
-            disallow_matching_url_device_id(
-                config,
-                ReadableKey::AzUrl,
-                ReadableKey::AzDeviceId,
-                &profiles,
-            )?;
-            disallow_matching_configurations(config, ReadableKey::AzBridgeTopicPrefix, &profiles)?;
+            let configs = config.all_mapper_configs::<AzMapperSpecificConfig>().await;
+            disallow_matching_url_device_id(&configs)?;
+            disallow_matching_bridge_topic_prefix(&configs)?;
         }
         #[cfg(feature = "c8y")]
         MaybeBorrowedCloud::C8y(_) => {
-            let profiles = config
-                .c8y_entries()
-                .filter(|(_, config)| config.http.or_none().is_some())
-                .map(|(s, _)| Some(s?.to_string()))
-                .collect::<Vec<_>>();
             let configs = config.all_mapper_configs::<C8yMapperSpecificConfig>().await;
-            disallow_matching_url_device_id_new(&configs)?;
-            disallow_matching_configurations(config, ReadableKey::C8yBridgeTopicPrefix, &profiles)?;
-            disallow_matching_configurations(config, ReadableKey::C8yProxyBindPort, &profiles)?;
-        }
-    }
-    Ok(())
-}
-
-fn disallow_matching_url_device_id(
-    config: &TEdgeConfig,
-    url: fn(Option<String>) -> ReadableKey,
-    device_id: fn(Option<String>) -> ReadableKey,
-    profiles: &[Option<String>],
-) -> anyhow::Result<()> {
-    let url_entries = profiles.iter().map(|profile| {
-        let key = url(profile.clone());
-        let value = config.read_string(&key).ok();
-        ((profile, key), value)
-    });
-
-    for url_matches in find_all_matching(url_entries) {
-        let device_id_entries = profiles.iter().filter_map(|profile| {
-            url_matches.iter().find(|(p, _)| *p == profile)?;
-            let key = device_id(profile.clone());
-            let value = config.read_string(&key).ok();
-            Some(((profile, key), value))
-        });
-        if let Some(matches) = find_matching(device_id_entries) {
-            let url_keys: String = matches
-                .iter()
-                .map(|&(k, _)| format!("{}", url(k.clone()).yellow().bold()))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let device_id_keys: String = matches
-                .iter()
-                .map(|(_, key)| format!("{}", key.yellow().bold()))
-                .collect::<Vec<_>>()
-                .join(", ");
-            bail!(
-                "You have matching URLs and device IDs for different profiles.
-
-{url_keys} are set to the same value, but so are {device_id_keys}.
-
-Each cloud profile requires either a unique URL or unique device ID, \
-so it corresponds to a unique device in the associated cloud."
-            );
+            disallow_matching_url_device_id(&configs)?;
+            disallow_matching_bridge_topic_prefix(&configs)?;
+            disallow_matching_proxy_bind_port(&configs)?;
         }
     }
     Ok(())
@@ -624,11 +560,10 @@ so it corresponds to a unique device in the associated cloud."
 
 type MapperConfigData<T> = (Arc<MapperConfig<T>>, Option<ProfileName>);
 
-fn disallow_matching_url_device_id_new<T>(
-    mapper_configs: &[MapperConfigData<T>],
-) -> anyhow::Result<()>
+fn disallow_matching_url_device_id<T>(mapper_configs: &[MapperConfigData<T>]) -> anyhow::Result<()>
 where
     MapperConfig<T>: HasUrl,
+    T: SpecialisedCloudConfig,
 {
     let url_entries = mapper_configs.iter().map(|(config, profile)| {
         let value = config.configured_url();
@@ -668,19 +603,34 @@ so it corresponds to a unique device in the associated cloud."
     Ok(())
 }
 
-fn disallow_matching_configurations(
-    config: &TEdgeConfig,
-    configuration: fn(Option<String>) -> ReadableKey,
-    profiles: &[Option<String>],
+#[cfg(feature = "c8y")]
+fn disallow_matching_bridge_topic_prefix<T>(configs: &[MapperConfigData<T>]) -> anyhow::Result<()>
+where
+    T: SpecialisedCloudConfig,
+{
+    let entries = configs.iter().map(|(config, _profile)| {
+        let value = &config.bridge.topic_prefix;
+        (value.key().clone(), (*value).clone())
+    });
+    if let Some(matches) = find_matching(entries) {
+        let keys: String = matches
+            .iter()
+            .map(|k| format!("{}", k.yellow().bold()))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        bail!("The configurations: {keys} should be set to different values before connecting, but are currently set to the same value");
+    }
+    Ok(())
+}
+
+#[cfg(feature = "c8y")]
+fn disallow_matching_proxy_bind_port(
+    configs: &[MapperConfigData<C8yMapperSpecificConfig>],
 ) -> anyhow::Result<()> {
-    let keys = profiles
-        .iter()
-        .cloned()
-        .map(configuration)
-        .collect::<Vec<_>>();
-    let entries = keys.into_iter().filter_map(|key| {
-        let value = config.read_string(&key).ok()?;
-        Some((key, value))
+    let entries = configs.iter().map(|(config, _profile)| {
+        let value = &config.cloud_specific.proxy.bind.port;
+        (value.key().clone(), **value)
     });
     if let Some(matches) = find_matching(entries) {
         let keys: String = matches
@@ -752,11 +702,13 @@ pub async fn bridge_config(
     match cloud {
         #[cfg(feature = "azure")]
         MaybeBorrowedCloud::Azure(profile) => {
-            let az_config = config.az.try_get(profile.as_deref())?;
+            let az_config = config
+                .mapper_config::<AzMapperSpecificConfig>(profile)
+                .await?;
 
             let params = BridgeConfigAzureParams {
                 mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
-                    az_config.url.or_config_not_set()?.as_str(),
+                    az_config.url().or_config_not_set()?.as_str(),
                 )
                 .map_err(TEdgeConfigError::from)?,
                 config_file: cloud.bridge_config_filename(),
@@ -776,11 +728,13 @@ pub async fn bridge_config(
         }
         #[cfg(feature = "aws")]
         MaybeBorrowedCloud::Aws(profile) => {
-            let aws_config = config.aws.try_get(profile.as_deref())?;
+            let aws_config = config
+                .mapper_config::<AwsMapperSpecificConfig>(profile)
+                .await?;
 
             let params = BridgeConfigAwsParams {
                 mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
-                    aws_config.url.or_config_not_set()?.as_str(),
+                    aws_config.url().or_config_not_set()?.as_str(),
                 )
                 .map_err(TEdgeConfigError::from)?,
                 config_file: cloud.bridge_config_filename(),

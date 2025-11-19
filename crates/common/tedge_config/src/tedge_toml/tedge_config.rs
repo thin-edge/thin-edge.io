@@ -1,4 +1,5 @@
 mod version;
+use futures::Stream;
 use reqwest::NoProxy;
 use serde::de::DeserializeOwned;
 use version::TEdgeTomlVersion;
@@ -27,9 +28,13 @@ use super::models::HTTPS_PORT;
 use super::models::MQTT_TLS_PORT;
 use super::tedge_config_location::TEdgeConfigLocation;
 use crate::models::AbsolutePath;
+use crate::tedge_toml::mapper_config::AwsMapperSpecificConfig;
+use crate::tedge_toml::mapper_config::AzMapperSpecificConfig;
 use crate::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use crate::tedge_toml::mapper_config::FromCloudConfig;
+use crate::tedge_toml::mapper_config::HasUrl;
 use crate::tedge_toml::mapper_config::MapperConfigError;
+use crate::tedge_toml::mapper_config::SpecialisedCloudConfig;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
@@ -42,6 +47,7 @@ use certificate::CertificateError;
 use certificate::CloudHttpConfig;
 use certificate::PemCertificate;
 use doku::Document;
+use futures::StreamExt;
 use mapper_config::load_mapper_config;
 use mapper_config::ApplyRuntimeDefaults;
 use mapper_config::ExpectedCloudType;
@@ -58,7 +64,6 @@ use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::OnceLock;
 use strum::IntoEnumIterator;
 use tedge_api::mqtt_topics::EntityTopicId;
 pub use tedge_config_macros::ConfigNotSet;
@@ -125,6 +130,7 @@ impl TEdgeConfig {
     ) -> anyhow::Result<Arc<MapperConfig<T>>>
     where
         T: DeserializeOwned
+            + mapper_config::SpecialisedCloudConfig
             + ApplyRuntimeDefaults
             + ExpectedCloudType
             + FromCloudConfig
@@ -246,20 +252,16 @@ impl TEdgeConfig {
 
     pub async fn all_mapper_configs<T>(&self) -> Vec<(Arc<MapperConfig<T>>, Option<ProfileName>)>
     where
-        T: DeserializeOwned
-            + ApplyRuntimeDefaults
-            + ExpectedCloudType
-            + FromCloudConfig
-            + Send
-            + Sync
-            + 'static,
+        T: SpecialisedCloudConfig,
     {
         use futures::stream::StreamExt;
         let mut generalised_profiles = self.all_profiles::<T>().await;
         let mut configs = Vec::new();
         while let Some(profile) = generalised_profiles.next().await {
             if let Ok(config) = self.mapper_config(&profile).await {
-                configs.push((config, profile));
+                if config.configured_url().or_none().is_some() {
+                    configs.push((config, profile));
+                }
             }
         }
 
@@ -275,10 +277,189 @@ impl TEdgeConfig {
                 .mapper_config::<C8yMapperSpecificConfig>(&profile)
                 .await
                 .map(|config| DynCloudConfig::Arc(config as Arc<_>))?,
-            Cloud::Az(profile) => DynCloudConfig::Borrow(self.az.try_get(profile)?),
-            Cloud::Aws(profile) => DynCloudConfig::Borrow(self.aws.try_get(profile)?),
+            Cloud::Az(profile) => self
+                .mapper_config::<AzMapperSpecificConfig>(&profile)
+                .await
+                .map(|config| DynCloudConfig::Arc(config as Arc<_>))?,
+            Cloud::Aws(profile) => self
+                .mapper_config::<AwsMapperSpecificConfig>(&profile)
+                .await
+                .map(|config| DynCloudConfig::Arc(config as Arc<_>))?,
         })
     }
+
+    pub async fn device_id<'a>(
+        &self,
+        cloud: Option<impl Into<Cloud<'a>>>,
+    ) -> Result<String, ReadError> {
+        Ok(match cloud.map(<_>::into) {
+            None => self.device.id()?.to_owned(),
+            Some(Cloud::C8y(profile)) => self
+                .mapper_config::<C8yMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .id()?,
+            Some(Cloud::Az(profile)) => self
+                .mapper_config::<AzMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .id()?,
+            Some(Cloud::Aws(profile)) => self
+                .mapper_config::<AwsMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .id()?,
+        })
+    }
+
+    pub async fn device_key_path<'a>(
+        &self,
+        cloud: Option<impl Into<Cloud<'a>>>,
+    ) -> Result<AbsolutePath, MultiError> {
+        Ok(match cloud.map(<_>::into) {
+            None => self.device.key_path.clone(),
+            Some(Cloud::C8y(profile)) => self
+                .mapper_config::<C8yMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .key_path
+                .clone(),
+            Some(Cloud::Az(profile)) => self
+                .mapper_config::<AzMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .key_path
+                .clone(),
+            Some(Cloud::Aws(profile)) => self
+                .mapper_config::<AwsMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .key_path
+                .clone(),
+        })
+    }
+
+    pub async fn device_cert_path<'a>(
+        &self,
+        cloud: Option<impl Into<Cloud<'a>>>,
+    ) -> Result<AbsolutePath, MultiError> {
+        Ok(match cloud.map(<_>::into) {
+            None => self.device.cert_path.clone(),
+            Some(Cloud::C8y(profile)) => self
+                .mapper_config::<C8yMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .cert_path
+                .clone(),
+            Some(Cloud::Az(profile)) => self
+                .mapper_config::<AzMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .cert_path
+                .clone(),
+            Some(Cloud::Aws(profile)) => self
+                .mapper_config::<AwsMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .cert_path
+                .clone(),
+        })
+    }
+
+    pub async fn device_csr_path<'a>(
+        &self,
+        cloud: Option<impl Into<Cloud<'a>>>,
+    ) -> Result<AbsolutePath, MultiError> {
+        Ok(match cloud.map(<_>::into) {
+            None => self.device.csr_path.clone(),
+            Some(Cloud::C8y(profile)) => self
+                .mapper_config::<C8yMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .csr_path
+                .clone(),
+            Some(Cloud::Az(profile)) => self
+                .mapper_config::<AzMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .csr_path
+                .clone(),
+            Some(Cloud::Aws(profile)) => self
+                .mapper_config::<AwsMapperSpecificConfig>(&profile)
+                .await?
+                .device
+                .csr_path
+                .clone(),
+        })
+    }
+
+    pub async fn cloud_root_certs(&self) -> anyhow::Result<CloudHttpConfig> {
+        let roots = CLOUD_ROOT_CERTIFICATES
+            .get_or_init(|| async {
+                let c8y_roots = futures::stream::iter(
+                    self.all_mapper_configs::<C8yMapperSpecificConfig>().await,
+                )
+                .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
+                let az_roots = futures::stream::iter(
+                    self.all_mapper_configs::<AzMapperSpecificConfig>().await,
+                )
+                .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
+                let aws_roots = futures::stream::iter(
+                    self.all_mapper_configs::<AwsMapperSpecificConfig>().await,
+                )
+                .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
+
+                c8y_roots
+                    .chain(az_roots)
+                    .chain(aws_roots)
+                    .collect::<Vec<_>>()
+                    .await
+                    .into()
+            })
+            .await;
+
+        let proxy = if let Some(address) = self.proxy.address.or_none() {
+            let url = address.url();
+            let no_proxy = self
+                .proxy
+                .no_proxy
+                .or_none()
+                .and_then(|s| NoProxy::from_string(s))
+                .or_else(NoProxy::from_env);
+            let mut proxy = reqwest::Proxy::all(url)
+                .context("Failed to configure HTTP proxy connection")?
+                .no_proxy(no_proxy);
+            if let Some((username, password)) =
+                all_or_nothing((self.proxy.username.as_ref(), self.proxy.password.as_ref()))
+                    .map_err(|e| anyhow::anyhow!("{}", e))?
+            {
+                proxy = proxy.basic_auth(username, password)
+            }
+            Some(proxy)
+        } else {
+            None
+        };
+
+        Ok(CloudHttpConfig::new(roots.clone(), proxy))
+    }
+}
+
+fn stream_trust_store<T: SpecialisedCloudConfig>(
+    mapper_config: Arc<MapperConfig<T>>,
+) -> impl Stream<Item = Certificate> {
+    futures::stream::once(async move {
+        read_trust_store(&mapper_config.root_cert_path)
+            .await
+            .unwrap_or_else(move |e| {
+                // TODO key should show actual location for generalised configs
+                error!(
+                    "Unable to read certificates from {}: {e:?}",
+                    mapper_config.root_cert_path.key()
+                );
+                vec![]
+            })
+    })
+    .flat_map(futures::stream::iter)
 }
 
 pub enum DynCloudConfig<'a> {
@@ -700,6 +881,7 @@ define_tedge_config! {
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
     #[tedge_config(multi)]
+    #[tedge_config(reader(private))]
     az: {
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
@@ -786,6 +968,7 @@ define_tedge_config! {
     },
 
     #[tedge_config(multi)]
+    #[tedge_config(reader(private))]
     aws: {
         /// Endpoint URL of AWS IoT tenant
         #[tedge_config(example = "your-endpoint.amazonaws.com")]
@@ -1221,7 +1404,8 @@ define_tedge_config! {
 
 }
 
-static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();
+static CLOUD_ROOT_CERTIFICATES: tokio::sync::OnceCell<Arc<[Certificate]>> =
+    tokio::sync::OnceCell::const_new();
 
 impl TEdgeConfigReader {
     pub fn c8y_keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
@@ -1236,61 +1420,28 @@ impl TEdgeConfigReader {
         self.c8y.entries()
     }
 
-    pub fn cloud_root_certs(&self) -> anyhow::Result<CloudHttpConfig> {
-        let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
-            let c8y_roots = self.c8y.entries().flat_map(|(key, c8y)| {
-                read_trust_store(&c8y.root_cert_path).unwrap_or_else(move |e| {
-                    error!(
-                        "Unable to read certificates from {}: {e:?}",
-                        ReadableKey::C8yRootCertPath(key.map(<_>::to_owned))
-                    );
-                    vec![]
-                })
-            });
-            let az_roots = self.az.entries().flat_map(|(key, az)| {
-                read_trust_store(&az.root_cert_path).unwrap_or_else(move |e| {
-                    error!(
-                        "Unable to read certificates from {}: {e:?}",
-                        ReadableKey::AzRootCertPath(key.map(<_>::to_owned))
-                    );
-                    vec![]
-                })
-            });
-            let aws_roots = self.aws.entries().flat_map(|(key, aws)| {
-                read_trust_store(&aws.root_cert_path).unwrap_or_else(move |e| {
-                    error!(
-                        "Unable to read certificates from {}: {e:?}",
-                        ReadableKey::AwsRootCertPath(key.map(<_>::to_owned))
-                    );
-                    vec![]
-                })
-            });
-            c8y_roots.chain(az_roots).chain(aws_roots).collect()
-        });
+    pub fn az_keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
+        self.az.keys()
+    }
 
-        let proxy = if let Some(address) = self.proxy.address.or_none() {
-            let url = address.url();
-            let no_proxy = self
-                .proxy
-                .no_proxy
-                .or_none()
-                .and_then(|s| NoProxy::from_string(s))
-                .or_else(NoProxy::from_env);
-            let mut proxy = reqwest::Proxy::all(url)
-                .context("Failed to configure HTTP proxy connection")?
-                .no_proxy(no_proxy);
-            if let Some((username, password)) =
-                all_or_nothing((self.proxy.username.as_ref(), self.proxy.password.as_ref()))
-                    .map_err(|e| anyhow::anyhow!("{}", e))?
-            {
-                proxy = proxy.basic_auth(username, password)
-            }
-            Some(proxy)
-        } else {
-            None
-        };
+    pub fn az_keys_str(&self) -> impl Iterator<Item = Option<&str>> {
+        self.az.keys_str()
+    }
 
-        Ok(CloudHttpConfig::new(roots.clone(), proxy))
+    pub fn az_entries(&self) -> impl Iterator<Item = (Option<&str>, &TEdgeConfigReaderAz)> {
+        self.az.entries()
+    }
+
+    pub fn aws_keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
+        self.aws.keys()
+    }
+
+    pub fn aws_keys_str(&self) -> impl Iterator<Item = Option<&str>> {
+        self.aws.keys_str()
+    }
+
+    pub fn aws_entries(&self) -> impl Iterator<Item = (Option<&str>, &TEdgeConfigReaderAws)> {
+        self.aws.entries()
     }
 
     pub fn cloud_client_tls_config(&self) -> rustls::ClientConfig {
@@ -1303,52 +1454,6 @@ impl TEdgeConfigReader {
                 .chain(self.aws.values().map(|aws| &aws.root_cert_path)),
         )
         .unwrap()
-    }
-
-    pub fn device_key_path<'a>(
-        &self,
-        cloud: Option<impl Into<Cloud<'a>>>,
-    ) -> Result<&Utf8Path, MultiError> {
-        Ok(match cloud.map(<_>::into) {
-            None => &self.device.key_path,
-            Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.key_path,
-            Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.key_path,
-            Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.key_path,
-        })
-    }
-
-    pub fn device_cert_path<'a>(
-        &self,
-        cloud: Option<impl Into<Cloud<'a>>>,
-    ) -> Result<&Utf8Path, MultiError> {
-        Ok(match cloud.map(<_>::into) {
-            None => &self.device.cert_path,
-            Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.cert_path,
-            Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.cert_path,
-            Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.cert_path,
-        })
-    }
-
-    pub fn device_csr_path<'a>(
-        &self,
-        cloud: Option<impl Into<Cloud<'a>>>,
-    ) -> Result<&Utf8Path, MultiError> {
-        Ok(match cloud.map(<_>::into) {
-            None => &self.device.csr_path,
-            Some(Cloud::C8y(profile)) => &self.c8y.try_get(profile)?.device.csr_path,
-            Some(Cloud::Az(profile)) => &self.az.try_get(profile)?.device.csr_path,
-            Some(Cloud::Aws(profile)) => &self.aws.try_get(profile)?.device.csr_path,
-        })
-    }
-
-    pub fn device_id<'a>(&self, cloud: Option<impl Into<Cloud<'a>>>) -> Result<&str, ReadError> {
-        println!("device_id");
-        Ok(match cloud.map(<_>::into) {
-            None => self.device.id()?,
-            Some(Cloud::C8y(profile)) => self.c8y.try_get(profile)?.device.id()?,
-            Some(Cloud::Az(profile)) => self.az.try_get(profile)?.device.id()?,
-            Some(Cloud::Aws(profile)) => self.aws.try_get(profile)?.device.id()?,
-        })
     }
 }
 
@@ -1367,73 +1472,7 @@ pub trait CloudConfig {
     fn key_pin(&self) -> Option<Arc<str>>;
 }
 
-impl CloudConfig for TEdgeConfigReaderC8y {
-    fn device_key_path(&self) -> &Utf8Path {
-        &self.device.key_path
-    }
-
-    fn device_cert_path(&self) -> &Utf8Path {
-        &self.device.cert_path
-    }
-
-    fn root_cert_path(&self) -> &Utf8Path {
-        &self.root_cert_path
-    }
-
-    fn key_uri(&self) -> Option<Arc<str>> {
-        self.device.key_uri.or_none().cloned()
-    }
-
-    fn key_pin(&self) -> Option<Arc<str>> {
-        self.device.key_pin.or_none().cloned()
-    }
-}
-
-impl CloudConfig for TEdgeConfigReaderAz {
-    fn device_key_path(&self) -> &Utf8Path {
-        &self.device.key_path
-    }
-
-    fn device_cert_path(&self) -> &Utf8Path {
-        &self.device.cert_path
-    }
-
-    fn root_cert_path(&self) -> &Utf8Path {
-        &self.root_cert_path
-    }
-
-    fn key_uri(&self) -> Option<Arc<str>> {
-        self.device.key_uri.or_none().cloned()
-    }
-
-    fn key_pin(&self) -> Option<Arc<str>> {
-        self.device.key_pin.or_none().cloned()
-    }
-}
-
-impl CloudConfig for TEdgeConfigReaderAws {
-    fn device_key_path(&self) -> &Utf8Path {
-        &self.device.key_path
-    }
-
-    fn device_cert_path(&self) -> &Utf8Path {
-        &self.device.cert_path
-    }
-
-    fn root_cert_path(&self) -> &Utf8Path {
-        &self.root_cert_path
-    }
-
-    fn key_uri(&self) -> Option<Arc<str>> {
-        self.device.key_uri.or_none().cloned()
-    }
-
-    fn key_pin(&self) -> Option<Arc<str>> {
-        self.device.key_pin.or_none().cloned()
-    }
-}
-
-impl<T> CloudConfig for MapperConfig<T> {
+impl<T: mapper_config::SpecialisedCloudConfig> CloudConfig for MapperConfig<T> {
     fn device_key_path(&self) -> &Utf8Path {
         &self.device.key_path
     }
@@ -1646,6 +1685,9 @@ pub enum ReadError {
         key: Cow<'static, str>,
         cause: String,
     },
+
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
 }
 
 /// An abstraction over the possible default functions for tedge config values
@@ -1995,6 +2037,22 @@ mod tests {
                 ttd.path().display()
             )
         );
+    }
+
+    #[test_case::test_case("Legacy"; "UpperCamelCase legacy")]
+    #[test_case::test_case("Advanced"; "UpperCamelCase advanced")]
+    #[test_case::test_case("legacy"; "camelCase legacy")]
+    #[test_case::test_case("advanced"; "camelCase advanced")]
+    fn tedge_toml_supports_both_old_and_updated_casing_for_software_management_api(value: &str) {
+        let toml = format!(
+            r#"
+            c8y.software_management.api = "{value}"
+        "#
+        );
+        let config = TEdgeConfig::load_toml_str(&toml);
+        let c8y = config.c8y.try_get(None::<&str>).unwrap();
+        let expected = value.to_lowercase().parse().unwrap();
+        assert_eq!(c8y.software_management.api, expected);
     }
 
     fn profile_name(input: Option<&str>) -> Option<ProfileName> {

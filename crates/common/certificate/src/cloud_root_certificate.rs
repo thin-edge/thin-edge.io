@@ -52,7 +52,7 @@ impl CloudHttpConfig {
 }
 
 /// Read a directory into a [RootCertStore]
-pub fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<Certificate>> {
+pub async fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<Certificate>> {
     let mut certs = Vec::new();
     for path in iter_file_or_directory(ca_dir_or_file) {
         let path =
