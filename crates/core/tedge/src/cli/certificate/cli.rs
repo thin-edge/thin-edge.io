@@ -276,7 +276,7 @@ impl BuildCommand for TEdgeCertCli {
                 let cmd = c8y::UploadCertCmd {
                     device_id: c8y.device.id()?.clone(),
                     path: c8y.device.cert_path.clone().into(),
-                    host: c8y.cloud_specific.http.or_config_not_set()?.to_owned(),
+                    host: c8y.http().or_config_not_set()?.to_owned(),
                     cloud_root_certs: config.cloud_root_certs()?,
                     username,
                     password,

@@ -50,6 +50,7 @@ use tedge_config::models::HostPort;
 use tedge_config::models::TopicPrefix;
 #[cfg(feature = "c8y")]
 use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+use tedge_config::tedge_toml::mapper_config::HasUrl;
 use tedge_config::tedge_toml::mapper_config::MapperConfig;
 #[cfg(feature = "c8y")]
 use tedge_config::tedge_toml::ProfileName;
@@ -571,17 +572,10 @@ async fn validate_config(
                 .filter(|(_, config)| config.http.or_none().is_some())
                 .map(|(s, _)| Some(s?.to_string()))
                 .collect::<Vec<_>>();
-            disallow_matching_url_device_id(
-                config,
-                ReadableKey::C8yUrl,
-                ReadableKey::C8yDeviceId,
-                &profiles,
-            )?;
-            disallow_matching_configurations(config, ReadableKey::C8yBridgeTopicPrefix, &profiles)?;
-            disallow_matching_configurations(config, ReadableKey::C8yProxyBindPort, &profiles)?;
-
             let configs = config.all_mapper_configs::<C8yMapperSpecificConfig>().await;
             disallow_matching_url_device_id_new(&configs)?;
+            disallow_matching_configurations(config, ReadableKey::C8yBridgeTopicPrefix, &profiles)?;
+            disallow_matching_configurations(config, ReadableKey::C8yProxyBindPort, &profiles)?;
         }
     }
     Ok(())
@@ -634,10 +628,16 @@ type MapperConfigData<T> = (Arc<MapperConfig<T>>, Option<ProfileName>);
 
 fn disallow_matching_url_device_id_new<T>(
     mapper_configs: &[MapperConfigData<T>],
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    MapperConfig<T>: HasUrl,
+{
     let url_entries = mapper_configs.iter().map(|(config, profile)| {
-        let value = &config.url;
-        ((profile, value.key()), value.or_none())
+        let value = config.configured_url();
+        (
+            (profile, value.key()),
+            value.or_none().map(|h| h.to_string()),
+        )
     });
 
     for url_matches in find_all_matching(url_entries) {
@@ -820,7 +820,7 @@ pub async fn bridge_config(
             };
 
             let params = BridgeConfigC8yParams {
-                mqtt_host: c8y_config.cloud_specific.mqtt.or_config_not_set()?.clone(),
+                mqtt_host: c8y_config.mqtt().or_config_not_set()?.clone(),
                 config_file: cloud.bridge_config_filename(),
                 bridge_root_cert_path: c8y_config.root_cert_path.clone().into(),
                 remote_clientid: c8y_config.device.id()?.clone(),
@@ -1290,7 +1290,7 @@ mod tests {
             );
 
             let err = validate_config(&config, &cloud).await.unwrap_err();
-            assert_eq!(err.to_string(), "You have matching URLs and device IDs for different profiles.
+            pretty_assertions::assert_eq!(err.to_string(), "You have matching URLs and device IDs for different profiles.
 
 c8y.url, c8y.profiles.new.url are set to the same value, but so are c8y.device.id, c8y.profiles.new.device.id.
 

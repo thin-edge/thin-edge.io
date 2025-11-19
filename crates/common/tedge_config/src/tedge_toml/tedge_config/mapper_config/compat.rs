@@ -1,4 +1,5 @@
 use super::*;
+use crate::tedge_toml::ReadableKey;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderAws;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderAz;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderC8y;
@@ -47,7 +48,7 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
             MapperConfigError::ConfigRead(format!("C8y profile '{}' not found", profile.unwrap()))
         })?;
 
-        build_mapper_config(c8y_config, tedge_config)
+        build_mapper_config(c8y_config, tedge_config, profile)
     }
 
     fn from_cloud_config(c8y: &Self::CloudConfigReader) -> Self {
@@ -122,7 +123,7 @@ impl FromCloudConfig for AzMapperSpecificConfig {
             MapperConfigError::ConfigRead(format!("Azure profile '{}' not found", profile.unwrap()))
         })?;
 
-        build_mapper_config(az_config, tedge_config)
+        build_mapper_config(az_config, tedge_config, profile)
     }
 
     fn from_cloud_config(az: &Self::CloudConfigReader) -> Self {
@@ -144,7 +145,7 @@ impl FromCloudConfig for AwsMapperSpecificConfig {
             MapperConfigError::ConfigRead(format!("AWS profile '{}' not found", profile.unwrap()))
         })?;
 
-        build_mapper_config(aws_config, tedge_config)
+        build_mapper_config(aws_config, tedge_config, profile)
     }
 
     fn from_cloud_config(aws: &Self::CloudConfigReader) -> Self {
@@ -159,6 +160,7 @@ impl FromCloudConfig for AwsMapperSpecificConfig {
 fn build_mapper_config<T, R>(
     cloud_config: &R,
     tedge_config: &TEdgeConfig,
+    profile: Option<&str>,
 ) -> Result<MapperConfig<T>, MapperConfigError>
 where
     T: FromCloudConfig<CloudConfigReader = R> + ApplyRuntimeDefaults,
@@ -169,7 +171,7 @@ where
     let device = DeviceConfig {
         id: to_optional_config(
             cloud_config.device_id().ok().map(|s| s.to_string()),
-            cloud_config.device_id_key(),
+            cloud_config.device_id_key(profile),
         ),
         key_path: cloud_config.device_key_path().to_owned(),
         cert_path: cloud_config.device_cert_path().to_owned(),
@@ -217,7 +219,7 @@ where
 trait CloudConfigAccessor {
     fn url(&self) -> &OptionalConfig<ConnectUrl>;
     fn device_id(&self) -> Result<String, ReadError>;
-    fn device_id_key(&self) -> Cow<'static, str>;
+    fn device_id_key(&self, profile: Option<&str>) -> Cow<'static, str>;
     fn device_key_path(&self) -> &AbsolutePath;
     fn device_cert_path(&self) -> &AbsolutePath;
     fn device_csr_path(&self) -> &AbsolutePath;
@@ -236,8 +238,8 @@ impl CloudConfigAccessor for TEdgeConfigReaderC8y {
         &self.url
     }
 
-    fn device_id_key(&self) -> Cow<'static, str> {
-        self.device.id.1.key().clone()
+    fn device_id_key(&self, profile: Option<&str>) -> Cow<'static, str> {
+        ReadableKey::C8yDeviceId(profile.map(<_>::to_owned)).to_cow_str()
     }
 
     fn device_id(&self) -> Result<String, ReadError> {
@@ -296,8 +298,8 @@ impl CloudConfigAccessor for TEdgeConfigReaderAz {
         &self.url
     }
 
-    fn device_id_key(&self) -> Cow<'static, str> {
-        self.device.id.1.key().clone()
+    fn device_id_key(&self, profile: Option<&str>) -> Cow<'static, str> {
+        ReadableKey::AzDeviceId(profile.map(<_>::to_owned)).to_cow_str()
     }
 
     fn device_id(&self) -> Result<String, ReadError> {
@@ -354,8 +356,8 @@ impl CloudConfigAccessor for TEdgeConfigReaderAws {
         &self.url
     }
 
-    fn device_id_key(&self) -> Cow<'static, str> {
-        self.device.id.1.key().clone()
+    fn device_id_key(&self, profile: Option<&str>) -> Cow<'static, str> {
+        ReadableKey::AwsDeviceId(profile.map(<_>::to_owned)).to_cow_str()
     }
 
     fn device_id(&self) -> Result<String, ReadError> {
@@ -426,21 +428,16 @@ mod tests {
 
         let config: C8yMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
 
-        assert_eq!(
-            config.url.or_none().unwrap().as_str(),
-            "tenant.cumulocity.com"
-        );
-
         assert_eq!(config.cloud_specific.auth_method, AuthMethod::Certificate);
         assert!(config.cloud_specific.entity_store.auto_register);
         assert!(config.cloud_specific.entity_store.clean_start);
 
         assert_eq!(
-            config.cloud_specific.http.or_none().unwrap().to_string(),
+            config.http().or_none().unwrap().to_string(),
             "tenant.cumulocity.com:443"
         );
         assert_eq!(
-            config.cloud_specific.mqtt.or_none().unwrap().to_string(),
+            config.mqtt().or_none().unwrap().to_string(),
             "tenant.cumulocity.com:8883"
         );
     }
@@ -461,7 +458,7 @@ mod tests {
             load_cloud_mapper_config(Some("test-tenant"), &tedge_config).unwrap();
 
         assert_eq!(
-            config.url.or_none().unwrap().as_str(),
+            config.http().or_none().unwrap().host().to_string(),
             "test.cumulocity.com"
         );
     }
@@ -481,7 +478,7 @@ mod tests {
         let config: AzMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
 
         assert_eq!(
-            config.url.or_none().unwrap().as_str(),
+            config.url().or_none().unwrap().as_str(),
             "mydevice.azure-devices.net"
         );
         assert!(config.cloud_specific.timestamp);
@@ -503,7 +500,7 @@ mod tests {
         let config: AwsMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
 
         assert_eq!(
-            config.url.or_none().unwrap().as_str(),
+            config.url().or_none().unwrap().as_str(),
             "mydevice.amazonaws.com"
         );
         assert!(config.cloud_specific.timestamp);
@@ -602,7 +599,7 @@ mod tests {
             [device]
             id = "my-device-123"
 
-            [c8y]
+            [c8y.profiles.new]
             url = "tenant.cumulocity.com"
         "#;
 
@@ -611,11 +608,14 @@ mod tests {
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 
-        let config: C8yMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
+        let config: C8yMapperConfig = load_cloud_mapper_config(Some("new"), &tedge_config).unwrap();
 
         // Device ID should come from tedge_config
         assert_eq!(config.device.id.or_none().unwrap(), "my-device-123");
-        assert_eq!(config.device.id.key(), "device.id");
+        // The key should be set to the specific device_id key for the cloud
+        // This is for the error message the mapper produces when trying to
+        // connect the same device id to the same url
+        assert_eq!(config.device.id.key(), "c8y.profiles.new.device.id");
 
         // Other device fields should have defaults from tedge_config
         assert!(config.device.key_path.as_str().contains("tedge"));

@@ -320,7 +320,7 @@ fn core_mqtt_bridge_config(
     }
 
     // TODO mapper.mqtt should probably be a global setting
-    let c8y = c8y_config.cloud_specific.mqtt.or_config_not_set()?;
+    let c8y = c8y_config.mqtt().or_config_not_set()?;
     let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
         c8y_config.device.id()?,
         c8y.host().to_string(),

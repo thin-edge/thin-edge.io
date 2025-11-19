@@ -92,7 +92,7 @@ pub struct BridgeConfig {
 #[derive(Debug, Clone, Document)]
 pub struct MapperConfig<T> {
     /// Endpoint URL of the cloud tenant
-    pub url: OptionalConfig<ConnectUrl>,
+    url: OptionalConfig<ConnectUrl>,
 
     /// Path where cloud root certificate(s) are stored
     pub root_cert_path: AbsolutePath,
@@ -658,6 +658,17 @@ pub trait ApplyRuntimeDefaults {
     fn default_max_payload_size() -> MqttPayloadLimit;
 }
 
+pub trait HasUrl {
+    // The configured URL field, used to check whether profiles are
+    fn configured_url(&self) -> &OptionalConfig<ConnectUrl>;
+}
+
+impl<T> HasUrl for MapperConfig<T> {
+    fn configured_url(&self) -> &OptionalConfig<ConnectUrl> {
+        &self.url
+    }
+}
+
 fn default_keepalive_interval() -> SecondsOrHumanTime {
     "60s".parse().expect("Valid duration")
 }
@@ -1129,6 +1140,34 @@ fn device_id_from_cert(cert_path: &Utf8Path) -> Result<String, MapperConfigError
     Ok(device_id)
 }
 
+// Allow access to url directly for az and aws, but require c8y dependent crates
+// to access the url through mqtt/http variables
+impl MapperConfig<AzMapperSpecificConfig> {
+    /// Get the cloud URL for Azure
+    pub fn url(&self) -> &OptionalConfig<ConnectUrl> {
+        &self.url
+    }
+}
+
+impl MapperConfig<AwsMapperSpecificConfig> {
+    /// Get the cloud URL for AWS
+    pub fn url(&self) -> &OptionalConfig<ConnectUrl> {
+        &self.url
+    }
+}
+
+impl MapperConfig<C8yMapperSpecificConfig> {
+    /// Get the MQTT endpoint for Cumulocity
+    pub fn mqtt(&self) -> &OptionalConfig<HostPort<MQTT_TLS_PORT>> {
+        &self.cloud_specific.mqtt
+    }
+
+    /// Get the HTTP endpoint for Cumulocity
+    pub fn http(&self) -> &OptionalConfig<HostPort<HTTPS_PORT>> {
+        &self.cloud_specific.http
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::TEdgeConfigDto;
@@ -1307,18 +1346,19 @@ mod tests {
 
         // http should be derived from url with HTTPS port
         assert_eq!(
-            config.cloud_specific.http.or_none().unwrap().to_string(),
+            config.http().or_none().unwrap().to_string(),
             "my-tenant.cumulocity.com:443"
         );
     }
 
     #[test]
-    fn url_key_contains_filename_if_missing() {
+    fn mqtt_key_contains_filename_if_missing() {
         let toml = "";
 
         let config = deserialize_from_str::<C8yMapperSpecificConfig>(toml).unwrap();
 
-        assert_eq!(config.url.key(), "/not/on/disk.toml: url");
+        // For C8y, we check mqtt key since url is private
+        assert_eq!(config.mqtt().key(), "/not/on/disk.toml: url");
     }
 
     #[test]
@@ -1331,7 +1371,7 @@ mod tests {
 
         // mqtt should be derived from url with MQTT TLS port
         assert_eq!(
-            config.cloud_specific.mqtt.or_none().unwrap().to_string(),
+            config.mqtt().or_none().unwrap().to_string(),
             "my-tenant.cumulocity.com:8883"
         );
     }
