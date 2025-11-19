@@ -52,7 +52,7 @@ impl C8yAuthProxyBuilder {
         Ok(Self {
             app_data,
             bind_address: bind.address,
-            bind_port: bind.port,
+            bind_port: *bind.port,
             signal_sender,
             signal_receiver,
             cert_path,

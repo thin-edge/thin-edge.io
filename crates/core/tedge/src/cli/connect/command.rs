@@ -567,15 +567,10 @@ async fn validate_config(
         }
         #[cfg(feature = "c8y")]
         MaybeBorrowedCloud::C8y(_) => {
-            let profiles = config
-                .c8y_entries()
-                .filter(|(_, config)| config.http.or_none().is_some())
-                .map(|(s, _)| Some(s?.to_string()))
-                .collect::<Vec<_>>();
             let configs = config.all_mapper_configs::<C8yMapperSpecificConfig>().await;
             disallow_matching_url_device_id_new(&configs)?;
-            disallow_matching_configurations(config, ReadableKey::C8yBridgeTopicPrefix, &profiles)?;
-            disallow_matching_configurations(config, ReadableKey::C8yProxyBindPort, &profiles)?;
+            disallow_matching_bridge_topic_prefix(&configs)?;
+            disallow_matching_proxy_bind_port(&configs)?;
         }
     }
     Ok(())
@@ -683,6 +678,44 @@ fn disallow_matching_configurations(
     let entries = keys.into_iter().filter_map(|key| {
         let value = config.read_string(&key).ok()?;
         Some((key, value))
+    });
+    if let Some(matches) = find_matching(entries) {
+        let keys: String = matches
+            .iter()
+            .map(|k| format!("{}", k.yellow().bold()))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        bail!("The configurations: {keys} should be set to different values before connecting, but are currently set to the same value");
+    }
+    Ok(())
+}
+
+#[cfg(feature = "c8y")]
+fn disallow_matching_bridge_topic_prefix<T>(configs: &[MapperConfigData<T>]) -> anyhow::Result<()> {
+    let entries = configs.iter().map(|(config, _profile)| {
+        let value = &config.bridge.topic_prefix;
+        (value.key().clone(), (*value).clone())
+    });
+    if let Some(matches) = find_matching(entries) {
+        let keys: String = matches
+            .iter()
+            .map(|k| format!("{}", k.yellow().bold()))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        bail!("The configurations: {keys} should be set to different values before connecting, but are currently set to the same value");
+    }
+    Ok(())
+}
+
+#[cfg(feature = "c8y")]
+fn disallow_matching_proxy_bind_port(
+    configs: &[MapperConfigData<C8yMapperSpecificConfig>],
+) -> anyhow::Result<()> {
+    let entries = configs.iter().map(|(config, _profile)| {
+        let value = &config.cloud_specific.proxy.bind.port;
+        (value.key().clone(), **value)
     });
     if let Some(matches) = find_matching(entries) {
         let keys: String = matches

@@ -30,6 +30,7 @@ use super::tedge_config_location::TEdgeConfigLocation;
 use crate::models::AbsolutePath;
 use crate::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use crate::tedge_toml::mapper_config::FromCloudConfig;
+use crate::tedge_toml::mapper_config::HasUrl;
 use crate::tedge_toml::mapper_config::MapperConfigError;
 use anyhow::anyhow;
 use anyhow::Context;
@@ -259,7 +260,9 @@ impl TEdgeConfig {
         let mut configs = Vec::new();
         while let Some(profile) = generalised_profiles.next().await {
             if let Ok(config) = self.mapper_config(&profile).await {
-                configs.push((config, profile));
+                if config.configured_url().or_none().is_some() {
+                    configs.push((config, profile));
+                }
             }
         }
 

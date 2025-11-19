@@ -28,15 +28,18 @@ use doku::Document;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::borrow::Cow;
+use std::fmt::Display;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
+use std::ops::Deref;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 pub use compat::load_cloud_mapper_config;
 pub use compat::FromCloudConfig;
 
 /// Device-specific configuration fields shared across all cloud types
-#[derive(Debug, Clone, Document)]
+#[derive(Debug, Document)]
 pub struct DeviceConfig {
     /// Device identifier (optional, will be derived from certificate if not set)
     id: OptionalConfig<String>,
@@ -77,10 +80,10 @@ impl DeviceConfig {
 }
 
 /// Bridge configuration fields shared across all cloud types
-#[derive(Debug, Clone, Document)]
+#[derive(Debug, Document)]
 pub struct BridgeConfig {
     /// The topic prefix for the bridge MQTT topic
-    pub topic_prefix: TopicPrefix,
+    pub topic_prefix: Keyed<TopicPrefix>,
 
     /// The amount of time after which the bridge should send a ping
     pub keepalive_interval: SecondsOrHumanTime,
@@ -89,7 +92,7 @@ pub struct BridgeConfig {
 }
 
 /// Base mapper configuration with common fields and cloud-specific fields via generics
-#[derive(Debug, Clone, Document)]
+#[derive(Debug, Document)]
 pub struct MapperConfig<T> {
     /// Endpoint URL of the cloud tenant
     url: OptionalConfig<ConnectUrl>,
@@ -114,7 +117,7 @@ pub struct MapperConfig<T> {
 }
 
 /// SmartREST configuration for Cumulocity
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct SmartrestConfig {
     /// Set of SmartREST template IDs the device should subscribe to
@@ -130,7 +133,7 @@ pub struct SmartrestConfig {
     pub child_device: SmartrestChildDeviceConfig,
 }
 
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct Smartrest1Config {
     /// Set of SmartREST 1 template IDs the device should subscribe to
@@ -139,7 +142,7 @@ pub struct Smartrest1Config {
 }
 
 /// Child device SmartREST configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct SmartrestChildDeviceConfig {
     /// Attach the c8y_IsDevice fragment to child devices on creation
@@ -148,7 +151,7 @@ pub struct SmartrestChildDeviceConfig {
 }
 
 /// Proxy bind configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct ProxyBindConfig {
     /// The IP address local proxy binds to
@@ -157,11 +160,90 @@ pub struct ProxyBindConfig {
 
     /// The port local proxy binds to
     #[serde(default = "default_proxy_bind_port")]
-    pub port: u16,
+    pub port: Keyed<u16>,
+}
+
+#[derive(Debug)]
+pub struct Keyed<T> {
+    value: T,
+    key: Cow<'static, str>,
+    accessed: Arc<AtomicBool>,
+}
+
+impl<T> Keyed<T> {
+    fn new(value: T, key: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            value,
+            key: key.into(),
+            accessed: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn value(&self) -> &T {
+        self.accessed
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        &self.value
+    }
+
+    pub fn key(&self) -> &Cow<'static, str> {
+        &self.key
+    }
+}
+
+impl<T> Drop for Keyed<T> {
+    fn drop(&mut self) {
+        // The key should always be set, but this has to happen after deserialising
+        // If the value has been used
+        if self.accessed.load(std::sync::atomic::Ordering::SeqCst) {
+            debug_assert!(
+                !self.key.is_empty(),
+                "Must set a key for a `Keyed<T>` value after deserialising"
+            )
+        }
+    }
+}
+
+impl<T: Display> Display for Keyed<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value().fmt(f)
+    }
+}
+
+impl<T: Document> Document for Keyed<T> {
+    fn ty() -> doku::Type {
+        T::ty()
+    }
+}
+
+impl<T> Deref for Keyed<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.value()
+    }
+}
+
+impl<T: PartialEq> PartialEq<T> for Keyed<T> {
+    fn eq(&self, other: &T) -> bool {
+        self.value() == other
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Keyed<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self {
+            value: T::deserialize(deserializer)?,
+            key: "".into(),
+            accessed: Arc::new(AtomicBool::new(false)),
+        })
+    }
 }
 
 /// Proxy client configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct ProxyClientConfig {
     /// The address of the host on which the proxy is running
@@ -186,7 +268,7 @@ where
 }
 
 /// HTTP proxy configuration for Cumulocity
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct ProxyConfig {
     /// Proxy bind configuration
@@ -220,7 +302,7 @@ pub struct ProxyConfig {
 }
 
 /// Entity store configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct EntityStoreConfig {
     /// Enable auto registration feature
@@ -233,7 +315,7 @@ pub struct EntityStoreConfig {
 }
 
 /// Software management configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct SoftwareManagementConfig {
     /// Software management API to use (legacy or advanced)
@@ -246,7 +328,7 @@ pub struct SoftwareManagementConfig {
 }
 
 /// Operations configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct OperationsConfig {
     /// Auto-upload the operation log once it finishes
@@ -255,7 +337,7 @@ pub struct OperationsConfig {
 }
 
 /// Availability/heartbeat configuration for Cumulocity
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct AvailabilityConfig {
     /// Enable sending heartbeat to Cumulocity periodically
@@ -268,7 +350,7 @@ pub struct AvailabilityConfig {
 }
 
 /// Feature enable/disable flags
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct EnableConfig {
     /// Enable log_upload feature
@@ -293,7 +375,7 @@ pub struct EnableConfig {
 }
 
 /// Bridge include configuration
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 pub struct BridgeIncludeConfig {
     /// Set the bridge local clean session flag
     #[serde(default = "default_bridge_include_local_cleansession")]
@@ -301,7 +383,7 @@ pub struct BridgeIncludeConfig {
 }
 
 /// MQTT service configuration for Cumulocity
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct MqttServiceConfig {
     /// Whether to connect to the MQTT service endpoint or not
@@ -326,7 +408,7 @@ pub struct MqttServiceConfig {
 }
 
 /// Cumulocity-specific mapper configuration fields
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct C8yMapperSpecificConfig {
     /// Authentication method (certificate, basic, or auto)
@@ -391,7 +473,7 @@ pub struct C8yMapperSpecificConfig {
 }
 
 /// Azure IoT-specific mapper configuration fields
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct AzMapperSpecificConfig {
     /// Whether to add timestamps to messages
@@ -404,7 +486,7 @@ pub struct AzMapperSpecificConfig {
 }
 
 /// AWS IoT-specific mapper configuration fields
-#[derive(Debug, Clone, Deserialize, Document)]
+#[derive(Debug, Deserialize, Document)]
 #[serde(default)]
 pub struct AwsMapperSpecificConfig {
     /// Whether to add timestamps to messages
@@ -567,9 +649,12 @@ where
     // Apply defaults for bridge fields
     let bridge = if let Some(partial_bridge) = partial.bridge {
         BridgeConfig {
-            topic_prefix: partial_bridge
-                .topic_prefix
-                .unwrap_or_else(T::default_bridge_topic_prefix),
+            topic_prefix: Keyed::new(
+                partial_bridge
+                    .topic_prefix
+                    .unwrap_or_else(T::default_bridge_topic_prefix),
+                format!("{config_path}: bridge.topic_prefix"),
+            ),
             keepalive_interval: partial_bridge
                 .keepalive_interval
                 .unwrap_or_else(default_keepalive_interval),
@@ -578,7 +663,10 @@ where
     } else {
         // No bridge section, use all defaults
         BridgeConfig {
-            topic_prefix: T::default_bridge_topic_prefix(),
+            topic_prefix: Keyed::new(
+                T::default_bridge_topic_prefix(),
+                format!("{config_path}: bridge.topic_prefix"),
+            ),
             keepalive_interval: default_keepalive_interval(),
             include: default_bridge_include_config(),
         }
@@ -713,8 +801,8 @@ fn default_proxy_bind_address() -> IpAddr {
     IpAddr::V4(Ipv4Addr::LOCALHOST)
 }
 
-fn default_proxy_bind_port() -> u16 {
-    8001
+fn default_proxy_bind_port() -> Keyed<u16> {
+    Keyed::new(8001, "")
 }
 
 fn default_proxy_client_host() -> Arc<str> {
@@ -998,6 +1086,12 @@ fn set_key_if_blank<T>(field: &mut OptionalConfig<T>, value: Cow<'static, str>) 
     }
 }
 
+fn set_key_if_blank2<T>(field: &mut Keyed<T>, value: Cow<'static, str>) {
+    if field.key.is_empty() {
+        field.key = value
+    }
+}
+
 fn convert_optional_value<T: Clone, U: From<T>>(field: &OptionalConfig<T>) -> OptionalConfig<U> {
     match field.clone() {
         OptionalConfig::Present { value, key } => OptionalConfig::Present {
@@ -1034,7 +1128,7 @@ impl ApplyRuntimeDefaults for C8yMapperSpecificConfig {
 
         // Apply proxy port inheritance: client.port defaults to bind.port
         if self.proxy.client.port == 8001 && self.proxy.bind.port != 8001 {
-            self.proxy.client.port = self.proxy.bind.port;
+            self.proxy.client.port = *self.proxy.bind.port;
         }
 
         // Derive mqtt_service.url from mqtt if it's set and still the placeholder
@@ -1058,6 +1152,10 @@ impl ApplyRuntimeDefaults for C8yMapperSpecificConfig {
         set_key_if_blank(
             &mut self.proxy.ca_path,
             format!("{}: proxy.ca_path", config_path).into(),
+        );
+        set_key_if_blank2(
+            &mut self.proxy.bind.port,
+            format!("{}: proxy.bind.port", config_path).into(),
         );
     }
 
