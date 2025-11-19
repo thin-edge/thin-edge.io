@@ -219,10 +219,10 @@ impl Connection {
         const INSECURE_MQTT_PORT: u16 = 1883;
         const SECURE_MQTT_PORT: u16 = 8883;
 
-        if config.broker.port == INSECURE_MQTT_PORT && config.broker.authentication.is_some() {
+        if config.broker.port == INSECURE_MQTT_PORT && config.broker.is_using_tls() {
             warn!(target: "MQTT", "Connecting on port 1883 for insecure MQTT using a TLS connection");
         }
-        if config.broker.port == SECURE_MQTT_PORT && config.broker.authentication.is_none() {
+        if config.broker.port == SECURE_MQTT_PORT && !config.broker.is_using_tls() {
             warn!(target: "MQTT", "Connecting on port 8883 for secure MQTT without a CA file");
         }
 
