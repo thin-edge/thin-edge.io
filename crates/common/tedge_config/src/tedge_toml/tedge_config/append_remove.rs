@@ -38,6 +38,7 @@ impl_append_remove_for_single_value!(
     AbsolutePath,
     String,
     ConnectUrl,
+    EntityTopicId,
     HostPort<HTTPS_PORT>,
     HostPort<MQTT_TLS_PORT>,
     HostPort<MQTT_SVC_TLS_PORT>,

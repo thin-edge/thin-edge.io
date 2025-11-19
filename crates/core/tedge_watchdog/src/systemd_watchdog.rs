@@ -97,11 +97,7 @@ async fn start_watchdog_for_tedge_services(tedge_config: TEdgeConfig) {
 
     // TODO: now that we have entity registration, instead of hardcoding, the watchdog can see all
     // running services by looking at registration messages
-    let device_topic_id = tedge_config
-        .mqtt
-        .device_topic_id
-        .parse::<EntityTopicId>()
-        .expect("Services not in default scheme unsupported");
+    let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
 
     let tedge_services = vec![
         "tedge-mapper-c8y",
@@ -165,11 +161,7 @@ async fn monitor_tedge_service(
     res_topic: Topic,
     interval: Duration,
 ) -> Result<(), WatchdogError> {
-    let mqtt_device_topic_id: EntityTopicId = tedge_config
-        .mqtt
-        .device_topic_id
-        .parse()
-        .context("Can't parse as device topic id")?;
+    let mqtt_device_topic_id: EntityTopicId = tedge_config.mqtt.device_topic_id.clone();
 
     let mqtt_topic_root = &tedge_config.mqtt.topic_root;
 

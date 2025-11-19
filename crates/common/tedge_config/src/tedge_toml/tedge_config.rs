@@ -46,6 +46,7 @@ use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
+use tedge_api::mqtt_topics::EntityTopicId;
 pub use tedge_config_macros::ConfigNotSet;
 pub use tedge_config_macros::MultiError;
 pub use tedge_config_macros::ProfileName;
@@ -673,10 +674,11 @@ define_tedge_config! {
         topic_root: String,
 
         /// The device MQTT topic identifier
-        #[tedge_config(default(value = "device/main//"))]
+        #[tedge_config(default(function = "EntityTopicId::default_main_device"))]
         #[tedge_config(example = "device/main//")]
         #[tedge_config(example = "device/child_001//")]
-        device_topic_id: String,
+        #[doku(as = "String")]
+        device_topic_id: EntityTopicId,
 
         bind: {
             /// The address mosquitto binds to for internal use

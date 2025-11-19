@@ -120,11 +120,12 @@ impl AgentConfig {
             .mqtt_topic_root
             .unwrap_or(tedge_config.mqtt.topic_root.clone().into());
 
-        let mqtt_device_topic_id: EntityTopicId = cliopts
-            .mqtt_device_topic_id
-            .unwrap_or(tedge_config.mqtt.device_topic_id.clone().into())
-            .parse()
-            .context("Could not parse the device MQTT topic")?;
+        let mqtt_device_topic_id: EntityTopicId = match cliopts.mqtt_device_topic_id {
+            Some(topic_id) => topic_id
+                .parse()
+                .context("Could not parse the device MQTT topic")?,
+            None => tedge_config.mqtt.device_topic_id.clone(),
+        };
         let service_topic_id = mqtt_device_topic_id.to_default_service_topic_id("tedge-agent")
             .with_context(|| format!("Device topic id {} currently needs default scheme, e.g: 'device/DEVICE_NAME//'", mqtt_device_topic_id))?;
 
