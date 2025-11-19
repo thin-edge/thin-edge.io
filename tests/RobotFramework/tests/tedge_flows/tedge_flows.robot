@@ -10,12 +10,22 @@ Test Tags           theme:tedge_flows
 
 *** Test Cases ***
 Add missing timestamps
-    ${transformed_msg}    Execute Command    tedge flows test --processing-time "2025-06-27 11:31:02" te/device/main///m/ '{}'
+    ${transformed_msg}    Execute Command
+    ...    tedge flows test --processing-time "2025-06-27 11:31:02" te/device/main///m/ '{}'
     Should Contain    ${transformed_msg}    item="time":"2025-06-27T11:31:02.000Z"
 
 Convert timestamps to ISO
     ${transformed_msg}    Execute Command    tedge flows test te/device/main///m/ '{"time": 1751023862.000}'
     Should Contain    ${transformed_msg}    item="time":"2025-06-27T11:31:02.000Z"
+
+Convert message timestamps to local time
+    Execute Command    ln -sf /usr/share/zoneinfo/Australia/Brisbane /etc/localtime
+    ${transformed_msg}    Execute Command
+    ...    tedge flows test --flow get-localtime.js --processing-time "2025-11-19T11:31:02" t {}
+    Should Contain    ${transformed_msg}    item="time":"Wed Nov 19 2025 21:31:02 GMT+1000"
+    Should Contain    ${transformed_msg}    item="utc":"2025-11-19T11:31:02.000Z"
+    Should Contain    ${transformed_msg}    item="local":"2025-11-19T21:31:02.000
+    [Teardown]    Execute Command    ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
 
 Extract measurement type from topic
     ${transformed_msg}    Execute Command
