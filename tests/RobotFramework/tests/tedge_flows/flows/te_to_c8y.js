@@ -51,7 +51,8 @@ export function onMessage(message, config) {
     type: type
   }
 
-  let meta = config[`${message.topic}/meta`] || {}
+  let store = new FlowStore()
+  let meta = store.get(`${message.topic}/meta`) || {}
 
   for (let [k, v] of Object.entries(payload)) {
     let k_meta = meta[k] || {}
@@ -93,41 +94,4 @@ export function onMessage(message, config) {
     topic: "c8y/measurement/measurements/create",
     payload: JSON.stringify(c8y_msg)
   }]
-}
-
-/// Update the config with measurement metadata.
-///
-/// These metadata are expected to have the same shape of the actual values.
-///
-/// ```
-/// [te/device/main///m/example/meta] { "temperature": { "unit": "°C" }}
-/// ```
-///
-/// and:
-/// ```
-/// [te/device/main///m/example] { "temperature": 23 }
-/// ```
-///
-/// will be merged by the onMessage function into:
-/// ```
-/// [c8y/measurement/measurements/create] {
-///   "type": "example",
-///   "temperature": {
-///     "temperature": {
-///       "value": 23,
-///       "unit": "°C"
-///     }
-///   }
-/// }
-/// ```
-export function onConfigUpdate(message, config) {
-  let type = message.topic
-  let metadata = JSON.parse(message.payload)
-
-  let fragment = {
-    [type]: metadata
-  }
-  Object.assign(config, fragment)
-
-  return config
 }

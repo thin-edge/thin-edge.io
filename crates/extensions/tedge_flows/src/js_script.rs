@@ -555,6 +555,38 @@ export async function onMessage(message, config) {
         );
     }
 
+    #[tokio::test]
+    async fn using_the_context() {
+        let js = r#"
+export function onMessage(message) {
+    let data = new FlowStore()
+    return {
+        topic: message.topic,
+        payload: JSON.stringify(data.get(message.topic))
+    }
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        runtime.store.insert(
+            "foo/bar",
+            serde_json::json!({
+                "hello": "world",
+                "guess": 42,
+            }),
+        );
+
+        let input = Message::new("foo/bar", "");
+        let output = Message::new("foo/bar", r#"{"guess":42,"hello":"world"}"#);
+        assert_eq!(
+            script
+                .on_message(&runtime, SystemTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
     async fn runtime_with(js: &str) -> (JsRuntime, JsScript) {
         let mut runtime = JsRuntime::try_new().await.unwrap();
         let mut script = JsScript::new("toml".into(), 1, "js".into());

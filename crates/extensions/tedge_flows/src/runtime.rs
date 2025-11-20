@@ -5,6 +5,8 @@ use crate::js_runtime::JsRuntime;
 use crate::registry::BaseFlowRegistry;
 use crate::registry::FlowRegistryExt;
 use crate::stats::Counter;
+use crate::FlowError;
+use crate::FlowOutput;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -121,6 +123,9 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
 
         self.stats.runtime_on_message_done(started_at);
         out_messages
+            .into_iter()
+            .filter_map(|flow_output| self.store_context_values(flow_output))
+            .collect()
     }
 
     pub async fn on_interval(&mut self, timestamp: SystemTime, now: Instant) -> Vec<FlowResult> {
@@ -133,6 +138,45 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
             out_messages.push(flow_output);
         }
         out_messages
+    }
+
+    fn store_context_values(&mut self, messages: FlowResult) -> Option<FlowResult> {
+        match messages {
+            FlowResult::Ok {
+                messages,
+                output: FlowOutput::Context,
+                flow,
+            } => {
+                for message in messages {
+                    if let Err(error) = self.store_context_value(&message) {
+                        return Some(FlowResult::Err {
+                            flow,
+                            error,
+                            output: FlowOutput::Context,
+                        });
+                    }
+                }
+                None
+            }
+            messages => Some(messages),
+        }
+    }
+
+    pub fn store_context_value(&mut self, message: &Message) -> Result<(), FlowError> {
+        if message.payload.is_empty() {
+            self.js_runtime.store.remove(&message.topic)
+        } else {
+            let payload = message.payload_str().ok_or(FlowError::UnsupportedMessage(
+                "Non UFT8 payload".to_string(),
+            ))?;
+            let value: serde_json::Value = serde_json::from_str(payload)
+                .map_err(|err| FlowError::UnsupportedMessage(format!("Non JSON payload: {err}")))?;
+            self.js_runtime
+                .store
+                .insert(message.topic.to_owned(), value);
+        }
+
+        Ok(())
     }
 
     pub async fn dump_processing_stats(&self) {
