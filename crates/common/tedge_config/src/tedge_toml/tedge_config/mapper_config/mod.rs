@@ -91,9 +91,17 @@ pub struct BridgeConfig {
     pub include: BridgeIncludeConfig,
 }
 
+/// Trait linking cloud-specific config to its mapper-specific configuration
+pub trait SpecialisedCloudConfig:
+    Sized + DeserializeOwned + ApplyRuntimeDefaults + ExpectedCloudType + FromCloudConfig + Send + Sync + 'static
+{
+    /// The mapper-specific configuration type for this cloud
+    type SpecialisedMapperConfig: DeserializeOwned + std::fmt::Debug + Document + Default + Send + Sync;
+}
+
 /// Base mapper configuration with common fields and cloud-specific fields via generics
 #[derive(Debug, Document)]
-pub struct MapperConfig<T> {
+pub struct MapperConfig<T: SpecialisedCloudConfig> {
     /// Endpoint URL of the cloud tenant
     url: OptionalConfig<ConnectUrl>,
 
@@ -109,11 +117,68 @@ pub struct MapperConfig<T> {
     /// Bridge configuration
     pub bridge: BridgeConfig,
 
-    /// Maximum MQTT payload size
-    pub max_payload_size: MqttPayloadLimit,
+    pub mapper: MapperMapperConfig<T::SpecialisedMapperConfig>,
 
     /// Cloud-specific configuration fields (flattened into the same level)
     pub cloud_specific: T,
+}
+
+/// Empty mapper-specific configuration for C8y (no cloud-specific mapper fields)
+#[derive(Debug, Deserialize, Document, Default)]
+pub struct EmptyMapperSpecific {}
+
+/// AWS-specific mapper configuration fields
+#[derive(Debug, Deserialize, Document)]
+pub struct AwsMapperSpecific {
+    /// Whether to add timestamps to messages
+    #[serde(default = "default_timestamp")]
+    pub timestamp: bool,
+
+    /// The timestamp format to use
+    #[serde(default = "default_timestamp_format")]
+    pub timestamp_format: TimeFormat,
+}
+
+/// Azure-specific mapper configuration fields
+#[derive(Debug, Deserialize, Document)]
+pub struct AzMapperSpecific {
+    /// Whether to add timestamps to messages
+    #[serde(default = "default_timestamp")]
+    pub timestamp: bool,
+
+    /// The timestamp format to use
+    #[serde(default = "default_timestamp_format")]
+    pub timestamp_format: TimeFormat,
+}
+
+#[derive(Debug, Deserialize, Document)]
+pub struct PartialMapperMapperConfig<M> {
+    #[serde(default)]
+    mqtt: PartialMqttConfig,
+
+    /// Cloud-specific mapper configuration (e.g., timestamp settings for AWS/Azure)
+    #[serde(flatten)]
+    pub cloud_specific: M,
+}
+
+#[derive(Debug, Deserialize, Document, Default)]
+pub struct PartialMqttConfig {
+    #[serde(default)]
+    pub max_payload_size: Option<MqttPayloadLimit>,
+}
+
+#[derive(Debug, Document)]
+pub struct MapperMapperConfig<M> {
+    pub mqtt: MqttConfig,
+
+    /// Cloud-specific mapper configuration
+    pub cloud_specific: M,
+}
+
+#[derive(Debug, Document)]
+pub struct MqttConfig {
+    /// Maximum MQTT payload size
+    pub max_payload_size: MqttPayloadLimit,
 }
 
 /// SmartREST configuration for Cumulocity
@@ -407,6 +472,24 @@ pub struct MqttServiceConfig {
     pub topics: TemplatesSet,
 }
 
+impl Default for AwsMapperSpecific {
+    fn default() -> Self {
+        Self {
+            timestamp: default_timestamp(),
+            timestamp_format: default_timestamp_format(),
+        }
+    }
+}
+
+impl Default for AzMapperSpecific {
+    fn default() -> Self {
+        Self {
+            timestamp: default_timestamp(),
+            timestamp_format: default_timestamp_format(),
+        }
+    }
+}
+
 /// Cumulocity-specific mapper configuration fields
 #[derive(Debug, Deserialize, Document)]
 #[serde(default)]
@@ -474,28 +557,25 @@ pub struct C8yMapperSpecificConfig {
 
 /// Azure IoT-specific mapper configuration fields
 #[derive(Debug, Deserialize, Document)]
-#[serde(default)]
-pub struct AzMapperSpecificConfig {
-    /// Whether to add timestamps to messages
-    #[serde(default = "default_timestamp")]
-    pub timestamp: bool,
-
-    /// The timestamp format to use
-    #[serde(default = "default_timestamp_format")]
-    pub timestamp_format: TimeFormat,
-}
+pub struct AzMapperSpecificConfig {}
 
 /// AWS IoT-specific mapper configuration fields
 #[derive(Debug, Deserialize, Document)]
-#[serde(default)]
-pub struct AwsMapperSpecificConfig {
-    /// Whether to add timestamps to messages
-    #[serde(default = "default_timestamp")]
-    pub timestamp: bool,
+pub struct AwsMapperSpecificConfig {}
 
-    /// The timestamp format to use
-    #[serde(default = "default_timestamp_format")]
-    pub timestamp_format: TimeFormat,
+/// CloudConfig implementation for C8y
+impl SpecialisedCloudConfig for C8yMapperSpecificConfig {
+    type SpecialisedMapperConfig = EmptyMapperSpecific;
+}
+
+/// CloudConfig implementation for Azure
+impl SpecialisedCloudConfig for AzMapperSpecificConfig {
+    type SpecialisedMapperConfig = AzMapperSpecific;
+}
+
+/// CloudConfig implementation for AWS
+impl SpecialisedCloudConfig for AwsMapperSpecificConfig {
+    type SpecialisedMapperConfig = AwsMapperSpecific;
 }
 
 /// Type alias for Cumulocity mapper configuration
@@ -561,13 +641,16 @@ struct PartialBridgeConfig {
 
 /// Partial mapper configuration with optional common fields
 #[derive(Debug, Deserialize)]
-struct PartialMapperConfig<T> {
+#[serde(bound(deserialize = "T: DeserializeOwned, T::SpecialisedMapperConfig: Default + DeserializeOwned"))]
+struct PartialMapperConfig<T: SpecialisedCloudConfig> {
     url: Option<ConnectUrl>,
     root_cert_path: Option<AbsolutePath>,
     device: Option<PartialDeviceConfig>,
     topics: Option<TemplatesSet>,
     bridge: Option<PartialBridgeConfig>,
-    max_payload_size: Option<MqttPayloadLimit>,
+
+    #[serde(default)]
+    mapper: PartialMapperMapperConfig<T::SpecialisedMapperConfig>,
 
     #[serde(flatten)]
     cloud_specific: T,
@@ -591,7 +674,7 @@ pub(crate) async fn load_mapper_config<T>(
     tedge_config: &TEdgeConfig,
 ) -> Result<MapperConfig<T>, MapperConfigError>
 where
-    T: DeserializeOwned + ApplyRuntimeDefaults,
+    T: DeserializeOwned + ApplyRuntimeDefaults + SpecialisedCloudConfig,
 {
     let toml_content = tokio::fs::read_to_string(config_path.as_std_path()).await?;
     load_mapper_config_from_string(&toml_content, tedge_config, config_path)
@@ -603,7 +686,7 @@ fn load_mapper_config_from_string<T>(
     config_path: &AbsolutePath,
 ) -> Result<MapperConfig<T>, MapperConfigError>
 where
-    T: DeserializeOwned + ApplyRuntimeDefaults,
+    T: DeserializeOwned + ApplyRuntimeDefaults + SpecialisedCloudConfig,
 {
     let partial: PartialMapperConfig<T> = toml::from_str(toml_content)?;
 
@@ -684,6 +767,8 @@ where
 
     // Apply default max_payload_size
     let max_payload_size = partial
+        .mapper
+        .mqtt
         .max_payload_size
         .unwrap_or_else(T::default_max_payload_size);
 
@@ -700,7 +785,10 @@ where
         device,
         topics,
         bridge,
-        max_payload_size,
+        mapper: MapperMapperConfig {
+            mqtt: MqttConfig { max_payload_size },
+            cloud_specific: partial.mapper.cloud_specific,
+        },
         cloud_specific,
     })
 }
@@ -751,7 +839,7 @@ pub trait HasUrl {
     fn configured_url(&self) -> &OptionalConfig<ConnectUrl>;
 }
 
-impl<T> HasUrl for MapperConfig<T> {
+impl<T: SpecialisedCloudConfig> HasUrl for MapperConfig<T> {
     fn configured_url(&self) -> &OptionalConfig<ConnectUrl> {
         &self.url
     }
@@ -1060,20 +1148,11 @@ impl Default for C8yMapperSpecificConfig {
     }
 }
 
-impl Default for AzMapperSpecificConfig {
+impl<T: Default> Default for PartialMapperMapperConfig<T> {
     fn default() -> Self {
         Self {
-            timestamp: default_timestamp(),
-            timestamp_format: default_timestamp_format(),
-        }
-    }
-}
-
-impl Default for AwsMapperSpecificConfig {
-    fn default() -> Self {
-        Self {
-            timestamp: default_timestamp(),
-            timestamp_format: default_timestamp_format(),
+            mqtt: PartialMqttConfig::default(),
+            cloud_specific: T::default(),
         }
     }
 }
@@ -1385,26 +1464,6 @@ mod tests {
     }
 
     #[test]
-    fn az_config_applies_correct_defaults() {
-        let toml = "";
-        let config: AzMapperSpecificConfig = toml::from_str(toml).unwrap();
-
-        // Az-specific defaults
-        assert!(config.timestamp);
-        assert_eq!(config.timestamp_format, TimeFormat::Unix);
-    }
-
-    #[test]
-    fn aws_config_applies_correct_defaults() {
-        let toml = "";
-        let config: AwsMapperSpecificConfig = toml::from_str(toml).unwrap();
-
-        // AWS-specific defaults
-        assert!(config.timestamp);
-        assert_eq!(config.timestamp_format, TimeFormat::Unix);
-    }
-
-    #[test]
     fn device_fields_populate_from_tedge_config() {
         let tedge_toml = r#"
             device.id = "test-id"
@@ -1543,7 +1602,7 @@ mod tests {
         let config = deserialize_from_str::<C8yMapperSpecificConfig>(toml).unwrap();
 
         // max_payload_size should have C8Y default (16184 bytes)
-        assert_eq!(config.max_payload_size.0, 16184);
+        assert_eq!(config.mapper.mqtt.max_payload_size.0, 16184);
     }
 
     #[test]
@@ -1555,7 +1614,7 @@ mod tests {
         let config = deserialize_from_str::<AzMapperSpecificConfig>(toml).unwrap();
 
         // max_payload_size should have Azure default (256 KB = 262144 bytes)
-        assert_eq!(config.max_payload_size.0, 262144);
+        assert_eq!(config.mapper.mqtt.max_payload_size.0, 262144);
     }
 
     #[test]
@@ -1567,7 +1626,7 @@ mod tests {
         let config = deserialize_from_str::<AwsMapperSpecificConfig>(toml).unwrap();
 
         // max_payload_size should have AWS default (128 KB = 131072 bytes)
-        assert_eq!(config.max_payload_size.0, 131072);
+        assert_eq!(config.mapper.mqtt.max_payload_size.0, 131072);
     }
 
     #[test]
@@ -1646,6 +1705,19 @@ mod tests {
     }
 
     #[test]
+    fn aws_config_can_have_specialised_and_non_specialised_mapper_fields() {
+        let toml = r#"
+            mapper.timestamp = false
+            mapper.mqtt.max_payload_size = 12345
+        "#;
+
+        let config = deserialize_from_str::<AwsMapperSpecificConfig>(toml).unwrap();
+
+        assert_eq!(config.mapper.mqtt.max_payload_size, MqttPayloadLimit(12345));
+        assert_eq!(config.mapper.cloud_specific.timestamp, false);
+    }
+
+    #[test]
     fn empty_proxy_cert_path_has_file_in_empty_key_name() {
         let toml = r#"
             url = "tenant.cumulocity.com"
@@ -1661,7 +1733,7 @@ mod tests {
 
     fn deserialize_from_str<T>(toml: &str) -> Result<MapperConfig<T>, MapperConfigError>
     where
-        T: DeserializeOwned + ApplyRuntimeDefaults,
+        T: DeserializeOwned + ApplyRuntimeDefaults + SpecialisedCloudConfig,
     {
         let tedge_config =
             TEdgeConfig::from_dto(&TEdgeConfigDto::default(), TEdgeConfigLocation::default());

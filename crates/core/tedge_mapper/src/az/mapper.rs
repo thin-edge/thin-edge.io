@@ -16,8 +16,9 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::models::TopicPrefix;
+use tedge_config::tedge_toml::mapper_config::AzMapperConfig;
+use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
-use tedge_config::tedge_toml::TEdgeConfigReaderAz;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
@@ -36,7 +37,9 @@ impl TEdgeComponent for AzureMapper {
         tedge_config: TEdgeConfig,
         _config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
-        let az_config = tedge_config.az.try_get(self.profile.as_deref())?;
+        let az_config = tedge_config
+            .mapper_config::<AzMapperSpecificConfig>(&self.profile)
+            .await?;
         let prefix = &az_config.bridge.topic_prefix;
         let az_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
@@ -47,25 +50,25 @@ impl TEdgeComponent for AzureMapper {
             let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
 
             let remote_clientid = az_config.device.id()?;
-            let rules = built_in_bridge_rules(remote_clientid, prefix)?;
+            let rules = built_in_bridge_rules(&remote_clientid, prefix)?;
 
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
-                remote_clientid,
-                az_config.url.or_config_not_set()?.to_string(),
+                &remote_clientid,
+                az_config.url().or_config_not_set()?.to_string(),
                 8883,
             );
             cloud_config.set_clean_session(false);
             cloud_config.set_credentials(
                 format!(
                     "{}/{remote_clientid}/?api-version=2018-06-30",
-                    az_config.url.or_config_not_set()?
+                    az_config.url().or_config_not_set()?
                 ),
                 "",
             );
             cloud_config.set_keep_alive(az_config.bridge.keepalive_interval.duration());
 
             let tls_config = tedge_config
-                .mqtt_client_config_rustls(az_config)
+                .mqtt_client_config_rustls(&*az_config)
                 .context("Failed to create MQTT TLS config")?;
             cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
 
@@ -90,15 +93,15 @@ impl TEdgeComponent for AzureMapper {
         }
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let az_converter = AzureConverter::new(
-            az_config.mapper.timestamp,
+            az_config.mapper.cloud_specific.timestamp,
             Box::new(WallClock),
             mqtt_schema,
-            az_config.mapper.timestamp_format,
+            az_config.mapper.cloud_specific.timestamp_format,
             prefix,
             az_config.mapper.mqtt.max_payload_size.0,
         );
         let mut az_converting_actor = ConvertingActor::builder("AzConverter", az_converter);
-        az_converting_actor.connect_source(get_topic_filter(az_config), &mut mqtt_actor);
+        az_converting_actor.connect_source(get_topic_filter(&az_config), &mut mqtt_actor);
         az_converting_actor.connect_sink(NoConfig, &mqtt_actor);
 
         runtime.spawn(az_converting_actor).await?;
@@ -108,7 +111,7 @@ impl TEdgeComponent for AzureMapper {
     }
 }
 
-fn get_topic_filter(az_config: &TEdgeConfigReaderAz) -> TopicFilter {
+fn get_topic_filter(az_config: &AzMapperConfig) -> TopicFilter {
     let mut topics = TopicFilter::empty();
     for topic in az_config.topics.0.clone() {
         if topics.add(&topic).is_err() {

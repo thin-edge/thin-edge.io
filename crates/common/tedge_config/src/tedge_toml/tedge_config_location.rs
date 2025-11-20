@@ -396,9 +396,11 @@ fn keys_in_inner(prefix: &str, table: &toml::map::Map<String, toml::Value>) -> V
 #[cfg(test)]
 mod tests {
     use crate::models::AbsolutePath;
+    use crate::tedge_toml::mapper_config::AzMapperSpecificConfig;
     use crate::tedge_toml::Cloud;
     use crate::TEdgeConfigReader;
     use once_cell::sync::Lazy;
+    use tedge_config_macros::ProfileName;
     use tedge_test_utils::fs::TempTedgeDir;
     use tokio::sync::Mutex;
     use tokio::sync::MutexGuard;
@@ -536,26 +538,20 @@ type = "a-service-type""#;
 
     #[tokio::test]
     async fn toml_values_can_be_overridden_with_environment() {
-        let (_dir, t) = create_temp_tedge_config("az.root_cert_path = \"/toml/path\"").unwrap();
+        let (_dir, t) = create_temp_tedge_config("apt.name = \"tedge.*\"").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_AZ_ROOT_CERT_PATH", "/env/path");
+        env.set_var("TEDGE_APT_NAME", "apt.env.*");
         let config = t.load().await.unwrap();
-        assert_eq!(
-            config.az.try_get::<&str>(None).unwrap().root_cert_path,
-            AbsolutePath::try_new("/env/path").unwrap()
-        );
+        assert_eq!(config.apt.name.or_none().unwrap(), "apt.env.*");
     }
 
     #[tokio::test]
     async fn environment_variables_can_contain_toml_syntax_strings() {
-        let (_dir, t) = create_temp_tedge_config("").unwrap();
+        let (_dir, t) = create_temp_tedge_config("apt.name = \"tedge.*\"").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_AZ_ROOT_CERT_PATH", "\"/env/path\"");
+        env.set_var("TEDGE_APT_NAME", "\"apt.env.*\"");
         let config = t.load().await.unwrap();
-        assert_eq!(
-            config.az.try_get::<&str>(None).unwrap().root_cert_path,
-            AbsolutePath::try_new("/env/path").unwrap()
-        );
+        assert_eq!(config.apt.name.or_none().unwrap(), "apt.env.*");
     }
 
     #[tokio::test]
@@ -578,14 +574,11 @@ type = "a-service-type""#;
 
     #[tokio::test]
     async fn empty_environment_variables_reset_configuration_parameters() {
-        let (_dir, t) = create_temp_tedge_config("az.root_cert_path = \"/toml/path\"").unwrap();
+        let (_dir, t) = create_temp_tedge_config("apt.name = \"tedge.*\"").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_AZ_ROOT_CERT_PATH", "");
+        env.set_var("TEDGE_APT_NAME", "");
         let config = t.load().await.unwrap();
-        assert_eq!(
-            config.az.try_get::<&str>(None).unwrap().root_cert_path,
-            AbsolutePath::try_new("/etc/ssl/certs").unwrap()
-        );
+        assert_eq!(config.apt.name.or_none(), None);
     }
 
     #[tokio::test]
@@ -595,8 +588,14 @@ type = "a-service-type""#;
         let mut env = EnvSandbox::new().await;
         env.set_var("TEDGE_AZ_PROFILES_TEST_ROOT_CERT_PATH", "/env/path");
         let config = t.load().await.unwrap();
+        let az_config = config
+            .mapper_config::<AzMapperSpecificConfig>(&Some(
+                ProfileName::try_from("test".to_owned()).unwrap(),
+            ))
+            .await
+            .unwrap();
         assert_eq!(
-            config.az.try_get(Some("test")).unwrap().root_cert_path,
+            az_config.root_cert_path,
             AbsolutePath::try_new("/env/path").unwrap()
         );
     }

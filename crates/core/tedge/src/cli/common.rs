@@ -220,8 +220,8 @@ pub fn profile_completions() -> Vec<CompletionCandidate> {
     tc.c8y_keys_str()
         .flatten()
         .map(CompletionCandidate::new)
-        .chain(tc.az.keys_str().flatten().map(CompletionCandidate::new))
-        .chain(tc.aws.keys_str().flatten().map(CompletionCandidate::new))
+        .chain(tc.az_keys_str().flatten().map(CompletionCandidate::new))
+        .chain(tc.aws_keys_str().flatten().map(CompletionCandidate::new))
         .chain(
             tc.profiled_config_directories()
                 .flat_map(|dir| std::fs::read_dir(dir).into_iter().flatten())

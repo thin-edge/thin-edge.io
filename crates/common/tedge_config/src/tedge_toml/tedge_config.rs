@@ -31,6 +31,7 @@ use crate::models::AbsolutePath;
 use crate::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use crate::tedge_toml::mapper_config::FromCloudConfig;
 use crate::tedge_toml::mapper_config::HasUrl;
+use crate::tedge_toml::mapper_config::SpecialisedCloudConfig;
 use crate::tedge_toml::mapper_config::MapperConfigError;
 use anyhow::anyhow;
 use anyhow::Context;
@@ -126,6 +127,7 @@ impl TEdgeConfig {
     ) -> anyhow::Result<Arc<MapperConfig<T>>>
     where
         T: DeserializeOwned
+            + mapper_config::SpecialisedCloudConfig
             + ApplyRuntimeDefaults
             + ExpectedCloudType
             + FromCloudConfig
@@ -247,13 +249,7 @@ impl TEdgeConfig {
 
     pub async fn all_mapper_configs<T>(&self) -> Vec<(Arc<MapperConfig<T>>, Option<ProfileName>)>
     where
-        T: DeserializeOwned
-            + ApplyRuntimeDefaults
-            + ExpectedCloudType
-            + FromCloudConfig
-            + Send
-            + Sync
-            + 'static,
+        T:  SpecialisedCloudConfig,
     {
         use futures::stream::StreamExt;
         let mut generalised_profiles = self.all_profiles::<T>().await;
@@ -714,6 +710,7 @@ define_tedge_config! {
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
     #[tedge_config(multi)]
+    #[tedge_config(reader(private))]
     az: {
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
@@ -800,6 +797,7 @@ define_tedge_config! {
     },
 
     #[tedge_config(multi)]
+    #[tedge_config(reader(private))]
     aws: {
         /// Endpoint URL of AWS IoT tenant
         #[tedge_config(example = "your-endpoint.amazonaws.com")]
@@ -1242,6 +1240,30 @@ impl TEdgeConfigReader {
         self.c8y.entries()
     }
 
+    pub fn az_keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
+        self.az.keys()
+    }
+
+    pub fn az_keys_str(&self) -> impl Iterator<Item = Option<&str>> {
+        self.az.keys_str()
+    }
+
+    pub fn az_entries(&self) -> impl Iterator<Item = (Option<&str>, &TEdgeConfigReaderAz)> {
+        self.az.entries()
+    }
+
+    pub fn aws_keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
+        self.aws.keys()
+    }
+
+    pub fn aws_keys_str(&self) -> impl Iterator<Item = Option<&str>> {
+        self.aws.keys_str()
+    }
+
+    pub fn aws_entries(&self) -> impl Iterator<Item = (Option<&str>, &TEdgeConfigReaderAws)> {
+        self.aws.entries()
+    }
+
     pub fn cloud_root_certs(&self) -> anyhow::Result<CloudHttpConfig> {
         let roots = CLOUD_ROOT_CERTIFICATES.get_or_init(|| {
             let c8y_roots = self.c8y.entries().flat_map(|(key, c8y)| {
@@ -1439,7 +1461,7 @@ impl CloudConfig for TEdgeConfigReaderAws {
     }
 }
 
-impl<T> CloudConfig for MapperConfig<T> {
+impl<T: mapper_config::SpecialisedCloudConfig> CloudConfig for MapperConfig<T> {
     fn device_key_path(&self) -> &Utf8Path {
         &self.device.key_path
     }
