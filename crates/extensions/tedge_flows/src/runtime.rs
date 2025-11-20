@@ -104,14 +104,6 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
 
         let mut out_messages = vec![];
         for flow in self.registry.flows_mut() {
-            let config_result = flow
-                .as_mut()
-                .on_config_update(&self.js_runtime, message)
-                .await;
-            if config_result.is_err() {
-                out_messages.push(config_result);
-                continue;
-            }
             if flow.as_ref().accept_message(source, message) {
                 let flow_output = flow
                     .as_mut()

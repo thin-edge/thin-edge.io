@@ -18,7 +18,6 @@ pub struct JsScript {
     pub interval: Duration,
     pub next_execution: Option<Instant>,
     pub no_js_on_message_fun: bool,
-    pub no_js_on_config_update_fun: bool,
     pub no_js_on_interval_fun: bool,
 }
 
@@ -32,7 +31,6 @@ impl JsScript {
             interval: Duration::ZERO,
             next_execution: None,
             no_js_on_message_fun: true,
-            no_js_on_config_update_fun: true,
             no_js_on_interval_fun: true,
         }
     }
@@ -69,7 +67,7 @@ impl JsScript {
     /// The "onMessage" function of the JS module is passed 3 arguments
     /// - the current timestamp
     /// - the message to be transformed
-    /// - the flow step config (as configured for the flow step, possibly updated by onConfigUpdate messages)
+    /// - the flow step config (as configured in the flow toml)
     ///
     /// The returned value is expected to be an array of messages.
     pub async fn on_message(
@@ -92,32 +90,6 @@ impl JsScript {
             .await
             .map_err(flow::error_from_js)?
             .try_into()
-    }
-
-    /// Update the flow step config using a metadata message
-    ///
-    /// The "onConfigUpdate" function of the JS module is passed 2 arguments
-    /// - the message
-    /// - the current flow step config
-    ///
-    /// The value returned by this function is used as the updated flow step config
-    pub async fn on_config_update(
-        &mut self,
-        js: &JsRuntime,
-        message: &Message,
-    ) -> Result<(), FlowError> {
-        debug!(target: "flows", "{}: onConfigUpdate({message})", self.module_name());
-        if self.no_js_on_config_update_fun {
-            return Ok(());
-        }
-
-        let input = vec![message.clone().into(), self.config.clone()];
-        let config = js
-            .call_function(&self.module_name(), "onConfigUpdate", input)
-            .await
-            .map_err(flow::error_from_js)?;
-        self.config = config;
-        Ok(())
     }
 
     /// Initialize the next execution time for this script's interval

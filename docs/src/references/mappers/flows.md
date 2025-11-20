@@ -56,7 +56,6 @@ A transformation *script* is a JavaScript or TypeScript module that exports:
 
 - at least, a function `onMessage()`, aimed to transform one input message into zero, one or more output messages,
 - possibly, a function `onInterval()`, called at regular intervals to produce aggregated messages,
-- possibly, a function `onConfigUpdate()`, used to update the step config.
 
 ```ts
 interface FlowStep {
@@ -64,10 +63,7 @@ interface FlowStep {
     onMessage(message: Message, config: object): null | Message | Message[],
   
     // called at regular intervals to produce aggregated messages
-    onInterval(time: Date, config: object): null | Message | Message[],
-  
-    // update the step config given a config update message
-    onConfigUpdate(message: Message, config: object): object
+    onInterval(time: Date, config: object): null | Message | Message[]
 }
 ```
 
@@ -92,11 +88,6 @@ The `onMessage` function is called for each message to be transformed
     - The config as read from the flow config or updated by the script
   - The function is expected to return zero, one or many transformed messages `[{ topic: string, payload: string }]`
   - An exception can be thrown if the input message cannot be transformed.
-- If defined and associated in the step config with `meta_topics`, the `onConfigUpdate` function is called on each message received on these `meta_topics`.
-  - The arguments are:
-    - The message to be interpreted as a config update `{ topic: string, payload: string }`
-    - The current config
-  - The returned value (an arbitrary JSON value) is then used as the new config for the flow script.
 - A flow script can also export a `onInterval` function
   - This function is called at a regular pace with the current time and config.
   - The flow script can then return zero, one or many transformed messages
@@ -112,10 +103,7 @@ The `onMessage` function is called for each message to be transformed
 - A step is defined by a JavaScript file with an `.mjs` or `.js` extension.
   - This can also be a TypeScript module with a `.ts` extension.
 - The definition of flow defines its input, output and error sink as well as a list of transformation steps.
-  - Each step is built from a javascript and is possibly given a config (arbitrary json that will be passed to the script)
-  - Each step can also subscribe to a list of MQTT meta topics where the metadata about the actual data message is stored
-    (e.g, meta topic of a measurement type where its units threshold values are defined).
-    The messages received on these topics will be passed to the `onConfigUpdate` letting the script update its config.
+- Each step is built from a javascript and is possibly given a config (arbitrary json that will be passed to the script)
 
 ```toml
 input.mqtt.topics = ["te/+/+/+/+/m/+"]
@@ -123,7 +111,7 @@ input.mqtt.topics = ["te/+/+/+/+/m/+"]
 steps = [
     { script = "add_timestamp.js" },
     { script = "drop_stragglers.js", config = { max_delay = 60 } },
-    { script = "te_to_c8y.js", meta_topics = ["te/+/+/+/+/m/+/meta"] }
+    { script = "te_to_c8y.js" }
 ]
 ```
 
@@ -216,7 +204,6 @@ This mapper:
 - loads all the flows defined in `/etc/tedge/flows`
 - reloads any flow or script that is created, updated or deleted while the mapper is running
 - subscribes to each flow `input.mqtt.topics`, dispatching the messages to the `onMessage` functions
-- subscribes to each step `meta_topics`, dispatching the messages to the `onConfigUpdate` functions
 - triggers at the configured pace the `onInterval` functions
 - publishes memory usage statistics
 - publishes flows and steps usage statistics
