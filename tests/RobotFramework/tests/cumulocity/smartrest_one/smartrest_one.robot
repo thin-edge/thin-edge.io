@@ -89,7 +89,7 @@ SmartREST1 Template Should Exist
 Custom Setup
     [Arguments]    ${use_builtin_bridge}
     ${DEVICE_SN}=    Setup    register=${False}
-    Execute Command    cmd=tedge config set c8y.url "${C8Y_CONFIG.host}"
+    Set Cumulocity URLs
     Execute Command    tedge config set mqtt.bridge.built_in ${use_builtin_bridge}
     Execute Command    tedge config set c8y.auth_method basic
 
