@@ -1,0 +1,7 @@
+#
+# Update flows context with measurement metadata
+#
+[input.mqtt]
+topics = ["te/+/+/+/+/m/+/meta"]
+
+[output.context]

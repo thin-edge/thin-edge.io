@@ -87,6 +87,7 @@ pub enum FlowInput {
 pub enum FlowOutput {
     Mqtt { topic: Option<Topic> },
     File { path: Utf8PathBuf },
+    Context,
 }
 
 /// The final outcome of a sequence of transformations applied by a flow to a message

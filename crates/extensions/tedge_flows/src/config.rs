@@ -88,6 +88,9 @@ pub enum OutputConfig {
 
     #[serde(rename = "file")]
     File { path: Utf8PathBuf },
+
+    #[serde(rename = "context")]
+    Context,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -269,6 +272,7 @@ impl TryFrom<OutputConfig> for FlowOutput {
                 topic: topic.map(into_topic).transpose()?,
             },
             OutputConfig::File { path } => FlowOutput::File { path },
+            OutputConfig::Context => FlowOutput::Context,
         })
     }
 }
