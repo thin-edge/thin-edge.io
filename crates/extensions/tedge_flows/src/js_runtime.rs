@@ -53,7 +53,6 @@ impl JsRuntime {
         for export in exports {
             match export {
                 "onMessage" => script.no_js_on_message_fun = false,
-                "onConfigUpdate" => script.no_js_on_config_update_fun = false,
                 "onInterval" => script.no_js_on_interval_fun = false,
                 _ => (),
             }
@@ -78,7 +77,7 @@ impl JsRuntime {
     ) -> Result<Vec<&'static str>, LoadError> {
         let (sender, receiver) = oneshot::channel();
         let source = source.into();
-        let imports = vec!["onMessage", "onConfigUpdate", "onInterval"];
+        let imports = vec!["onMessage", "onInterval"];
         TIME_CREDITS.store(100000, std::sync::atomic::Ordering::Relaxed);
         self.send(
             receiver,
