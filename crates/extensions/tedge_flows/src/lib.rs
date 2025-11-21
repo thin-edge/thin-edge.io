@@ -55,6 +55,27 @@ use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 pub use transformers::Transformer;
 
+pub struct FlowsMapperConfig {
+    pub(crate) statistics_topic: Topic,
+    pub(crate) status_topic: Topic,
+}
+
+impl Default for FlowsMapperConfig {
+    fn default() -> Self {
+        FlowsMapperConfig::new("te/device/main/service/tedge-mapper-local")
+    }
+}
+
+impl FlowsMapperConfig {
+    /// Panics if the topic prefix is not a valid MQTT topic name
+    pub fn new(topic_prefix: &str) -> Self {
+        FlowsMapperConfig {
+            statistics_topic: Topic::new(&format!("{topic_prefix}/status/metrics")).unwrap(),
+            status_topic: Topic::new(&format!("{topic_prefix}/status/flows")).unwrap(),
+        }
+    }
+}
+
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 
 pub fn default_flows_dir(tedge_config_dir: &Utf8Path) -> Utf8PathBuf {
@@ -76,17 +97,17 @@ pub fn flows_dir(tedge_config_dir: &Utf8Path, mapper: &str, profile: Option<&str
 struct Tick;
 
 pub struct FlowsMapperBuilder {
+    config: FlowsMapperConfig,
     message_box: SimpleMessageBoxBuilder<InputMessage, SubscriptionDiff>,
     mqtt_sender: DynSender<MqttMessage>,
     watch_request_sender: DynSender<WatchRequest>,
     processor: MessageProcessor<ConnectedFlowRegistry>,
-    status_topic: Topic,
 }
 
 impl FlowsMapperBuilder {
     pub async fn try_new(
         registry: ConnectedFlowRegistry,
-        status_topic: Topic,
+        config: FlowsMapperConfig,
     ) -> Result<Self, LoadError> {
         let mut processor = MessageProcessor::try_new(registry).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
@@ -96,11 +117,11 @@ impl FlowsMapperBuilder {
         processor.load_all_flows().await;
 
         Ok(FlowsMapperBuilder {
+            config,
             message_box,
             mqtt_sender,
             watch_request_sender,
             processor,
-            status_topic,
         })
     }
 
@@ -169,11 +190,11 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
     fn build(self) -> FlowsMapper {
         let subscriptions = self.topics();
         let watched_commands = HashSet::new();
-        let status_topic = self.status_topic;
         let stats_publisher = MqttStatsPublisher {
-            topic_prefix: "te/device/main/service/tedge-flows/stats".to_string(),
+            topic_prefix: self.config.statistics_topic.to_string(),
         };
         FlowsMapper {
+            config: self.config,
             messages: self.message_box.build(),
             mqtt_sender: self.mqtt_sender,
             watch_request_sender: self.watch_request_sender,
@@ -181,7 +202,6 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
             watched_commands,
             processor: self.processor,
             next_dump: Instant::now() + STATS_DUMP_INTERVAL,
-            status_topic,
             stats_publisher,
         }
     }
