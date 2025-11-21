@@ -5028,6 +5028,7 @@ dependencies = [
  "serde",
  "strum",
  "strum_macros",
+ "tedge_config",
  "tedge_config_macros",
  "tedge_test_utils",
  "tedge_utils",

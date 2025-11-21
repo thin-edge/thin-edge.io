@@ -2035,6 +2035,22 @@ mod tests {
         );
     }
 
+    #[test_case::test_case("Legacy"; "UpperCamelCase legacy")]
+    #[test_case::test_case("Advanced"; "UpperCamelCase advanced")]
+    #[test_case::test_case("legacy"; "camelCase legacy")]
+    #[test_case::test_case("advanced"; "camelCase advanced")]
+    fn tedge_toml_supports_both_old_and_updated_casing_for_software_management_api(value: &str) {
+        let toml = format!(
+            r#"
+            c8y.software_management.api = "{value}"
+        "#
+        );
+        let config = TEdgeConfig::load_toml_str(&toml);
+        let c8y = config.c8y.try_get(None::<&str>).unwrap();
+        let expected = value.to_lowercase().parse().unwrap();
+        assert_eq!(c8y.software_management.api, expected);
+    }
+
     fn profile_name(input: Option<&str>) -> Option<ProfileName> {
         input
             .map(<_>::to_owned)
