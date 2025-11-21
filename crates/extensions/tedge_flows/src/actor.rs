@@ -409,6 +409,12 @@ impl FlowsMapper {
                     error!(target: "flows", "{flow}: cannot flush {path}: {err}");
                 }
             }
+            FlowOutput::Context => {
+                // Any context output reaching this point is an error
+                for message in messages {
+                    error!(target: "flows", "{flow}: cannot store context value: {}", message.payload_str().unwrap_or_default());
+                }
+            }
         }
         Ok(())
     }

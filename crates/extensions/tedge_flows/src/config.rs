@@ -40,9 +40,6 @@ pub struct StepConfig {
     #[serde(default)]
     #[serde(deserialize_with = "parse_human_duration")]
     interval: Duration,
-
-    #[serde(default)]
-    meta_topics: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -88,6 +85,9 @@ pub enum OutputConfig {
 
     #[serde(rename = "file")]
     File { path: Utf8PathBuf },
+
+    #[serde(rename = "context")]
+    Context,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -156,7 +156,6 @@ impl FlowConfig {
             script: ScriptSpec::JavaScript(script),
             config: None,
             interval: Duration::default(),
-            meta_topics: vec![],
         };
         Self {
             input: InputConfig::Mqtt {
@@ -211,11 +210,7 @@ impl StepConfig {
         let script = JsScript::new(flow.to_owned(), index, path)
             .with_config(self.config)
             .with_interval(self.interval);
-        let config_topics = topic_filters(self.meta_topics)?;
-        Ok(FlowStep {
-            script,
-            config_topics,
-        })
+        Ok(FlowStep { script })
     }
 }
 
@@ -269,6 +264,7 @@ impl TryFrom<OutputConfig> for FlowOutput {
                 topic: topic.map(into_topic).transpose()?,
             },
             OutputConfig::File { path } => FlowOutput::File { path },
+            OutputConfig::Context => FlowOutput::Context,
         })
     }
 }
