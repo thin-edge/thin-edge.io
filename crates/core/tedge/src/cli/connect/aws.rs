@@ -20,9 +20,7 @@ pub async fn check_device_status_aws(
     let topic_prefix = &aws_config.bridge.topic_prefix;
     let aws_topic_pub_check_connection = format!("{topic_prefix}/test-connection");
     let aws_topic_sub_check_connection = format!("{topic_prefix}/connection-success");
-    let built_in_bridge_health = bridge_health_topic(topic_prefix, tedge_config)
-        .unwrap()
-        .name;
+    let built_in_bridge_health = bridge_health_topic(topic_prefix, tedge_config).name;
     const CLIENT_ID: &str = "check_connection_aws";
     const REGISTRATION_PAYLOAD: &[u8] = b"";
 

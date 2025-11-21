@@ -23,9 +23,7 @@ pub(crate) async fn check_device_status_azure(
 ) -> Result<DeviceStatus, ConnectError> {
     let az_config = tedge_config.az.try_get(profile)?;
     let topic_prefix = &az_config.bridge.topic_prefix;
-    let built_in_bridge_health = bridge_health_topic(topic_prefix, tedge_config)
-        .unwrap()
-        .name;
+    let built_in_bridge_health = bridge_health_topic(topic_prefix, tedge_config).name;
     let azure_topic_device_twin_downstream = format!(r##"{topic_prefix}/twin/res/#"##);
     let azure_topic_device_twin_upstream = format!(r#"{topic_prefix}/twin/GET/?$rid=1"#);
     const CLIENT_ID: &str = "check_connection_az";

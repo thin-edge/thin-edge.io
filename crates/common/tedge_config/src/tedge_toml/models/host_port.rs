@@ -58,6 +58,12 @@ impl<const P: u16> HostPort<P> {
     pub fn port(&self) -> Port {
         self.port
     }
+
+    /// Sets the port for this HostPort and updates the stored input string as well
+    pub fn set_port(&mut self, port: u16) {
+        self.port = Port(port);
+        self.input = format!("{}:{}", self.hostname, self.port);
+    }
 }
 
 impl<const P: u16> From<HostPort<P>> for String {

@@ -20,7 +20,6 @@ use super::models::SoftwareManagementApiFlag;
 use super::models::TemplatesSet;
 use super::models::TopicPrefix;
 use super::models::HTTPS_PORT;
-use super::models::MQTT_SVC_TLS_PORT;
 use super::models::MQTT_TLS_PORT;
 use super::tedge_config_location::TEdgeConfigLocation;
 use crate::models::AbsolutePath;
@@ -475,20 +474,9 @@ define_tedge_config! {
             #[tedge_config(example = "true", default(value = false))]
             enabled: bool,
 
-            /// MQTT service endpoint for the Cumulocity tenant, with optional port.
-            #[tedge_config(example = "mqtt.your-tenant.cumulocity.com:9883")]
-            #[tedge_config(default(from_optional_key = "c8y.mqtt"))]
-            url: HostPort<MQTT_SVC_TLS_PORT>,
-
-            /// The topic prefix that will be used for the Cumulocity MQTT service endpoint connection.
-            /// For instance, if set to "c8y-mqtt", then messages published to `c8y-mqtt/xyz`
-            /// will be forwarded to the MQTT service endpoint on the `xyz` topic
-            #[tedge_config(example = "c8y-mqtt", default(function = "c8y_mqtt_service_topic_prefix"))]
-            topic_prefix: TopicPrefix,
-
             /// Set of MQTT topics the bridge should subscribe to on the Cumulocity MQTT service endpoint
             #[tedge_config(example = "incoming/topic,another/topic,test/topic")]
-            #[tedge_config(default(value = "$demo/$error"))]
+            #[tedge_config(default(function = "TemplatesSet::default"))]
             topics: TemplatesSet,
         }
     },
@@ -1218,16 +1206,6 @@ impl CloudConfig for TEdgeConfigReaderAws {
 
 fn c8y_topic_prefix() -> TopicPrefix {
     TopicPrefix::try_new("c8y").unwrap()
-}
-
-fn c8y_mqtt_service_topic_prefix() -> TopicPrefix {
-    TopicPrefix::try_new("c8y-mqtt").unwrap()
-}
-
-impl From<HostPort<MQTT_TLS_PORT>> for HostPort<MQTT_SVC_TLS_PORT> {
-    fn from(value: HostPort<MQTT_TLS_PORT>) -> Self {
-        HostPort::try_from(value.host().to_string()).expect("Source hostname must have been valid")
-    }
 }
 
 fn az_topic_prefix() -> TopicPrefix {
