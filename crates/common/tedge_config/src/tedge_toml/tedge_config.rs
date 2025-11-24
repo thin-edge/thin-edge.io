@@ -917,6 +917,12 @@ define_tedge_config! {
         path: AbsolutePath,
     },
 
+    share: {
+        /// The directory used to store plugins (e.g., log, config, diag)
+        #[tedge_config(example = "/usr/share", default(from_str = "/usr/share"))]
+        path: AbsolutePath,
+    },
+
     firmware: {
         child: {
             update: {
@@ -986,13 +992,13 @@ define_tedge_config! {
 
     diag: {
         /// The directories where diagnostic plugins are stored
-        #[tedge_config(example = "/usr/share/diag-plugins,/etc/tedge/diag-plugins", default(value = "/usr/share/tedge/diag-plugins"))]
+        #[tedge_config(example = "/usr/share/tedge/diag-plugins,/etc/tedge/diag-plugins", default(function = "default_diag_plugin_paths"))]
         plugin_paths: TemplatesSet,
     },
 
     log: {
         /// The directories where log plugins are stored
-        #[tedge_config(example = "/usr/share/log-plugins,/etc/tedge/log-plugins", default(value = "/usr/share/tedge/log-plugins"))]
+        #[tedge_config(example = "/usr/share/tedge/log-plugins,/etc/tedge/log-plugins", default(function = "default_log_plugin_paths"))]
         plugin_paths: TemplatesSet,
     },
 }
@@ -1358,10 +1364,31 @@ fn default_credentials_path(location: &TEdgeConfigLocation) -> AbsolutePath {
         .unwrap()
 }
 
+fn default_diag_plugin_paths(dto: &TEdgeConfigDto) -> TemplatesSet {
+    let share_dir = dto
+        .share
+        .path
+        .clone()
+        .map(|p| p.to_path_buf())
+        .unwrap_or(Utf8PathBuf::from("/usr/share"));
+    let diag_dir = share_dir.join("tedge").join("diag-plugins").to_string();
+    vec![diag_dir].into()
+}
+
+fn default_log_plugin_paths(dto: &TEdgeConfigDto) -> TemplatesSet {
+    let share_dir = dto
+        .share
+        .path
+        .clone()
+        .map(|p| p.to_path_buf())
+        .unwrap_or(Utf8PathBuf::from("/usr/share"));
+    let log_dir = share_dir.join("tedge").join("log-plugins").to_string();
+    vec![log_dir].into()
+}
+
 fn default_mqtt_port() -> NonZeroU16 {
     NonZeroU16::try_from(1883).unwrap()
 }
-
 impl TEdgeConfigReaderMqttBridgeReconnectPolicy {
     /// Designed for injecting into tests without requiring a full [TEdgeConfig]
     pub fn test_value() -> Self {
@@ -1531,6 +1558,7 @@ mod tests {
     #[test_case::test_case("logs.path")]
     #[test_case::test_case("run.path")]
     #[test_case::test_case("data.path")]
+    #[test_case::test_case("share.path")]
     #[test_case::test_case("firmware.child.update.timeout")]
     #[test_case::test_case("service.type")]
     #[test_case::test_case("run.lock_files")]

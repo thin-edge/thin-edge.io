@@ -19,6 +19,7 @@ Check existence of init directories
     ThinEdgeIO.Directory Should Not Exist    /etc/tedge/device-certs
     ThinEdgeIO.Directory Should Not Exist    /var/tedge
     ThinEdgeIO.Directory Should Not Exist    /var/log/tedge
+    ThinEdgeIO.Directory Should Not Exist    /usr/share/tedge
 
 Tedge init and check creation of folders
     [Documentation]    Running tedge init should create these folders
@@ -31,6 +32,7 @@ Tedge init and check creation of folders
     ThinEdgeIO.Directory Should Exist    /etc/tedge/device-certs
     ThinEdgeIO.Directory Should Exist    /var/tedge
     ThinEdgeIO.Directory Should Exist    /var/log/tedge
+    ThinEdgeIO.Directory Should Exist    /usr/share/tedge
 
 Check ownership of the folders
     [Documentation]    Running tedge init has created the folders assigning default user/group
@@ -42,6 +44,7 @@ Check ownership of the folders
     Check Owner of Directory    /etc/tedge/device-certs    tedge:tedge
     Check Owner of Directory    /var/tedge    tedge:tedge
     Check Owner of Directory    /var/log/tedge    tedge:tedge
+    Check Owner of Directory    /usr/share/tedge    tedge:tedge
 
 Change user/group and check the change
     [Documentation]    Running tedge init --user <user> --group <group>    is setting custom user/group
@@ -54,6 +57,7 @@ Change user/group and check the change
     Check Owner of Directory    /etc/tedge/device-certs    petertest:petertest
     Check Owner of Directory    /var/tedge    petertest:petertest
     Check Owner of Directory    /var/log/tedge    petertest:petertest
+    Check Owner of Directory    /usr/share/tedge    petertest:petertest
 
 Tedge init and check if default values are restored
     [Documentation]    Running tedge init after setting custom user/group should restore the default user/group
@@ -66,6 +70,7 @@ Tedge init and check if default values are restored
     Check Owner of Directory    /etc/tedge/device-certs    tedge:tedge
     Check Owner of Directory    /var/tedge    tedge:tedge
     Check Owner of Directory    /var/log/tedge    tedge:tedge
+    Check Owner of Directory    /usr/share/tedge    tedge:tedge
 
 
 *** Keywords ***
@@ -77,6 +82,7 @@ Custom Setup
     Execute Command    sudo rm -rf /etc/tedge
     Execute Command    sudo rm -rf /var/tedge
     Execute Command    sudo rm -rf /var/log/tedge
+    Execute Command    sudo rm -rf /usr/share/tedge
 
 Custom Teardown
     Get Suite Logs
