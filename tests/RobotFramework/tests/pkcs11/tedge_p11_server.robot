@@ -81,22 +81,13 @@ Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    ${DEVICE_SN}
 
-    # Allow the tedge user to access softhsm
-    Execute Command    sudo usermod -a -G softhsm tedge
-    Transfer To Device    ${CURDIR}/data/init_softhsm.sh    /usr/bin/
-
-    # initialize the soft hsm and create a certificate signing request
-    Execute Command    tedge config set device.cryptoki.pin 123456
-    Execute Command    tedge config set device.cryptoki.module_path /usr/lib/softhsm/libsofthsm2.so
-    Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --device-id "${DEVICE_SN}" --pin 123456
+    Execute Command    cmd=/usr/bin/tedge-init-hsm.sh --type softhsm2 --pin 123456
+    # tests expect that the device.key_uri is initially unset
+    Execute Command    cmd=tedge config unset device.key_uri
 
     # configure tedge
     ${domain}=    Cumulocity.Get Domain
     Execute Command    tedge config set c8y.url "${domain}"
-    Execute Command    tedge config set mqtt.bridge.built_in true
-    Execute Command    tedge config set device.cryptoki.mode socket
-
-    ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=${True}
-    ThinEdgeIO.Register Device With Cumulocity CA    ${DEVICE_SN}    csr_path=${csr_path}
+    ThinEdgeIO.Register Device With Cumulocity CA    ${DEVICE_SN}
 
     Unset tedge-p11-server Uri

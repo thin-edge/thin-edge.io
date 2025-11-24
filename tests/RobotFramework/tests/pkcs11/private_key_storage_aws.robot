@@ -5,7 +5,7 @@ Documentation       Test thin-edge.io MQTT client authentication using a Hardwar
 ...                 cryptographic tokens that will be read by thin-edge. In real production environments a dedicated
 ...                 hardware device would be used.
 
-Resource            ../../resources/common.resource
+Resource            pkcs11_common.resource
 Library             ThinEdgeIO
 Library             Cumulocity
 Library             AWS
@@ -78,15 +78,13 @@ Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    $DEVICE_SN
 
-    # Allow the tedge user to access softhsm
-    Execute Command    sudo usermod -a -G softhsm tedge
-    Transfer To Device    ${CURDIR}/data/init_softhsm.sh    /usr/bin/
     Remove Existing Certificates
 
     # initialize the soft hsm and create a self-signed certificate
-    Execute Command    tedge config set device.cryptoki.pin 123456
-    Execute Command    tedge config set device.cryptoki.module_path /usr/lib/softhsm/libsofthsm2.so
-    Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --self-signed --device-id "${DEVICE_SN}" --pin 123456
+    Execute Command    sudo /usr/bin/tedge-init-hsm.sh --type softhsm2 --label tedge --pin 123456
+
+    ${cert_path}=    Execute Command    cmd=tedge config get device.cert_path    strip=${True}
+    Create Self Signed Certificate    common_name=${DEVICE_SN}    label=tedge    output_path=${cert_path}
 
     # configure tedge
     ${aws_url}=    AWS.Get IoT URL

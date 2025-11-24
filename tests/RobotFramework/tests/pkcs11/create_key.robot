@@ -106,12 +106,12 @@ Saves public key to file using --outfile-pubkey flag
 Create private key
     [Arguments]    ${type}    ${label}    ${bits}=${EMPTY}    ${curve}=${EMPTY}    ${p11tool_keytype}=${EMPTY}
     # create the private key on token and write CSR to device.csr_path
-    VAR    ${command}=    tedge cert create-key-hsm --label ${label} --type ${type} "${TOKEN_URI}"
+    ${command}=    Set Variable    tedge cert create-key-hsm --label ${label} --type ${type} "${TOKEN_URI}"
     IF    $bits
-        VAR    ${command}=    ${command} --bits ${bits}
+        ${command}=    Set Variable    ${command} --bits ${bits}
     END
     IF    $curve
-        VAR    ${command}=    ${command} --curve ${curve}
+        ${command}=    Set Variable    ${command} --curve ${curve}
     END
     ${create_key_output}=    Execute Command    ${command}    strip=True    stderr=True    stdout=False
 
@@ -132,20 +132,11 @@ Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    ${DEVICE_SN}
 
-    # Allow the tedge user to access softhsm
-    Execute Command    sudo usermod -a -G softhsm tedge
-    Transfer To Device    ${CURDIR}/data/init_softhsm.sh    /usr/bin/
-
-    # initialize the soft hsm and create a certificate signing request
     Execute Command    tedge config set device.cryptoki.pin 123456
     Execute Command    tedge config set device.cryptoki.module_path /usr/lib/softhsm/libsofthsm2.so
-    Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --device-id "${DEVICE_SN}" --pin 123456
 
     # configure tedge
     ${domain}=    Cumulocity.Get Domain
     Execute Command    tedge config set c8y.url "${domain}"
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge config set device.cryptoki.mode socket
-
-    ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=${True}
-    ThinEdgeIO.Register Device With Cumulocity CA    ${DEVICE_SN}    csr_path=${csr_path}

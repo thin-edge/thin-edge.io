@@ -83,20 +83,21 @@ Select Private key using a request URI
 Connects to C8y using an RSA key
     [Documentation]    Test that we can connect to C8y using an RSA private keys of all sizes.
     [Setup]    Unset tedge-p11-server Uri
-    [Template]    Connect to C8y using new keypair
-    type=rsa    bits=4096
-    type=rsa    bits=3072
-    type=rsa    bits=2048
-    # type=rsa    bits=1024    # RSA 1024 is considered to be insecure is not supported when using the Cumulocity Certificate Authority feature
+    [Template]    Connect to C8y using new RSA keypair
+    bits=4096
+    bits=3072
+    bits=2048
 
 Connects to C8y supporting all TLS13 ECDSA signature algorithms
     [Documentation]    Check that we support all ECDSA sigschemes used in TLS1.3, i.e: ecdsa_secp256r1_sha256,
     ...    ecdsa_secp384r1_sha384, ecdsa_secp521r1_sha512.
     [Setup]    Unset tedge-p11-server Uri
 
-    Connect to C8y using new keypair    type=ecdsa    curve=secp256r1
-    Connect to C8y using new keypair    type=ecdsa    curve=secp384r1
-    Connect to C8y using new keypair    type=ecdsa    curve=secp521r1
+    Connect to C8y using new ECDSA keypair    curve=p256
+    Connect to C8y using new ECDSA keypair    curve=p384
+    # rcgen doesn't support p521
+    # https://github.com/rustls/rcgen/issues/60
+    # Connect to C8y using new ECDSA keypair    curve=p521
 
     Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
     Command Should Fail With
@@ -116,8 +117,8 @@ Can use PKCS11 key to renew the public certificate
     ...    can renew both a self-signed certificate and a certificate signed by C8y CA.
     [Setup]    Unset tedge-p11-server Uri
 
-    Test tedge cert renew    type=ecdsa    curve=secp256r1
-    Test tedge cert renew    type=ecdsa    curve=secp384r1
+    Test tedge cert renew    type=ecdsa    curve=p256
+    Test tedge cert renew    type=ecdsa    curve=p384
 
     # renewal isn't supported for secp521r1 because rcgen doesn't support it
     # https://github.com/rustls/rcgen/issues/60
@@ -129,7 +130,7 @@ Can use PKCS11 key to renew the public certificate
 Can use tedge cert download c8y to download a certificate
     [Documentation]    Download a certificate using CSR generated with PKCS11 without a prior certificate.
     # this new keypair doesn't have an associated certificate
-    Set up new PKCS11 keypair    type=ecdsa
+    Set up new PKCS11 ECDSA keypair
 
     ${credentials}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN}
     Execute Command
@@ -139,8 +140,8 @@ Can use tedge cert download c8y to download a certificate
 
 Can renew the certificate using different keypair
     [Documentation]    Starting with an initial trusted certificate, replace the keypair and renew the certificate.
-    Connect to C8y using new keypair    type=ecdsa
-    Set up new PKCS11 keypair    type=ecdsa
+    Connect to C8y using new ECDSA keypair
+    Set up new PKCS11 ECDSA keypair
     Execute Command    tedge cert renew c8y
     ${stdout}=    Tedge Reconnect Should Succeed
     Should Contain    ${stdout}    The new certificate is now the active certificate
@@ -166,8 +167,11 @@ Can pass PIN in the request using device.key_pin
 *** Keywords ***
 Test tedge cert renew
     [Arguments]    ${type}    ${bits}=${EMPTY}    ${curve}=${EMPTY}
-
-    Connect to C8y using new keypair    type=${type}    curve=${curve}    bits=${bits}
+    IF    $type == "rsa"
+        Connect to C8y using new RSA keypair    ${bits}
+    ELSE
+        Connect to C8y using new ECDSA keypair    ${curve}
+    END
     # We could alternatively use Cumulocity CA to start with a signed cert, but for testing certificate renewal, we want
     # to test both renewing a self-signed cert and a cert issued by C8y CA. When we start with self-signed cert, after
     # the first renewal we get a cert signed by CA, so we test all scenarios by just doing renew 2 times.
@@ -194,21 +198,13 @@ Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    ${DEVICE_SN}
 
-    # Allow the tedge user to access softhsm
-    Execute Command    sudo usermod -a -G softhsm tedge
-    Transfer To Device    ${CURDIR}/data/init_softhsm.sh    /usr/bin/
-
-    # initialize the soft hsm and create a certificate signing request
-    Execute Command    tedge config set device.cryptoki.pin 123456
-    Execute Command    tedge config set device.cryptoki.module_path /usr/lib/softhsm/libsofthsm2.so
-    Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --device-id "${DEVICE_SN}" --pin 123456
+    # initialize the soft hsm
+    Execute Command    sudo /usr/bin/tedge-init-hsm.sh --type softhsm2 --pin 123456
+    # tests expect that the device.key_uri is initially unset
+    Execute Command    cmd=tedge config unset device.key_uri
 
     # configure tedge
     Set Cumulocity URLs
-    Execute Command    tedge config set mqtt.bridge.built_in true
-    Execute Command    tedge config set device.cryptoki.mode socket
-
-    ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=${True}
-    ThinEdgeIO.Register Device With Cumulocity CA    ${DEVICE_SN}    csr_path=${csr_path}
+    ThinEdgeIO.Register Device With Cumulocity CA    ${DEVICE_SN}
 
     Unset tedge-p11-server Uri

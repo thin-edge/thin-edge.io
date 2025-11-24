@@ -8,41 +8,29 @@ Library             ThinEdgeIO
 
 
 *** Variables ***
-${DEVICE_SN}        ${EMPTY}    # should be set in setup of test suites
-${CERT_TEMPLATE}    /etc/tedge/hsm/cert.template    # created by init_softhsm script
+${DEVICE_SN}    ${EMPTY}    # should be set in setup of test suites
 
 
 *** Keywords ***
-Connect to C8y using new keypair
+Create Self Signed Certificate
+    [Arguments]    ${common_name}    ${label}    ${output_path}    ${pin}=123456
+    Execute Command
+    ...    cmd=printf 'dn = "CN=${common_name}, OU=Test Device, O=Thin Edge, ST=QLD, C=AU"\nca\n' | GNUTLS_PIN=${pin} certtool --generate-self-signed --template /dev/stdin --outfile "${output_path}" --load-privkey "pkcs11:token=tedge;object=${label}"
+
+Connect to C8y using new ECDSA keypair
     [Documentation]    Connects to C8y with a newly generated keypair and a self-signed certificate.
     ...    The private key is saved on the token, and the self-signed certificate is registered with c8y.
-    [Arguments]    ${type}    # ecdsa or rsa
-    ...    ${curve}=secp256r1    # if type == ECDSA, curve of the key - one of {secp256r1, secp384r1, secp521r1}
-    ...    ${bits}=4096    # if type == RSA, length in bits of the RSA key - one of {1024, 2048, 3072, 4096}
+    [Arguments]    ${curve}=p256    # if type == ECDSA, curve of the key - one of {secp256r1, secp384r1, secp521r1}
 
     # We could alternatively use Cumulocity CA to start with a signed cert, but for testing certificate renewal, we want
     # to test both renewing a self-signed cert and a cert issued by C8y CA. When we start with self-signed cert, after
     # the first renewal we get a cert signed by CA, so we test all scenarios by just doing renew 2 times.
+    ${label}=    Set up new PKCS11 ECDSA keypair    curve=${curve}
 
-    IF    '${type}' == 'ecdsa'
-        VAR    ${object_name}=    ${type}-${curve}
-    ELSE IF    '${type}' == 'rsa'
-        VAR    ${object_name}=    ${type}-${bits}
-    ELSE
-        Fail    Wrong key type provided.
-    END
-
-    # guarantee name of the object is unique even if multiple keys of the same type and bits/curve are generated
-    ${identifier}=    String.Generate Random String
-    VAR    ${object_name}=    ${object_name}-${identifier}
-
-    Set up new PKCS11 keypair    ${type}    ${curve}    ${bits}    ${object_name}
-
-    VAR    ${cert_path}=    /etc/tedge/device-certs/${object_name}.pem
+    ${cert_path}=    Set Variable    /etc/tedge/device-certs/${label}.pem
     Execute Command    cmd=tedge config set device.cert_path ${cert_path}
 
-    Execute Command
-    ...    cmd=GNUTLS_PIN=123456 certtool --generate-self-signed --template "${CERT_TEMPLATE}" --outfile "${cert_path}" --load-privkey "pkcs11:token=tedge;object=${object_name}"
+    Create Self Signed Certificate    common_name=${DEVICE_SN}    label=${label}    output_path=${cert_path}
 
     Execute Command
     ...    cmd=sudo env C8Y_USER="${C8Y_CONFIG.username}" C8Y_PASSWORD="${C8Y_CONFIG.password}" tedge cert upload c8y
@@ -50,41 +38,46 @@ Connect to C8y using new keypair
 
     Tedge Reconnect Should Succeed
 
-Set up new PKCS11 keypair
-    [Documentation]    Creates a new keypair on the PKCS11 token, configures thin-edge to use the new key and returns the URI of the new keypair.
-    [Arguments]    ${type}    # ecdsa or rsa
-    ...    ${curve}=secp256r1    # if type == ECDSA, curve of the key - one of {secp256r1, secp384r1, secp521r1}
-    ...    ${bits}=4096    # if type == RSA, length in bits of the RSA key - one of {1024, 2048, 3072, 4096}
-    ...    ${object_name}=${EMPTY}    # label of the private and public keys
+Connect to C8y using new RSA keypair
+    [Documentation]    Connects to C8y with a newly generated keypair and a self-signed certificate.
+    ...    The private key is saved on the token, and the self-signed certificate is registered with c8y.
+    [Arguments]    ${bits}=4096    # length in bits of the RSA key - one of {1024, 2048, 3072, 4096}
 
-    IF    '${type}' == 'ecdsa'
-        VAR    ${p11tool_args}=    --curve=${curve}
-    ELSE IF    '${type}' == 'rsa'
-        VAR    ${p11tool_args}=    --bits=${bits}
-    ELSE
-        Fail    Wrong key type provided.
-    END
+    # We could alternatively use Cumulocity CA to start with a signed cert, but for testing certificate renewal, we want
+    # to test both renewing a self-signed cert and a cert issued by C8y CA. When we start with self-signed cert, after
+    # the first renewal we get a cert signed by CA, so we test all scenarios by just doing renew 2 times.
 
-    IF    "${object_name}" == "${EMPTY}"
-        IF    '${type}' == 'ecdsa'
-            VAR    ${object_name}=    ${type}-${curve}
-        ELSE IF    '${type}' == 'rsa'
-            VAR    ${object_name}=    ${type}-${bits}
-        ELSE
-            Fail    Wrong key type provided.
-        END
-        ${identifier}=    String.Generate Random String
-        VAR    ${object_name}=    ${object_name}-${identifier}
-    END
+    # guarantee name of the object is unique even if multiple keys of the same type and bits/curve are generated
+    ${label}=    Set up new PKCS11 RSA keypair    bits=${bits}
+
+    ${cert_path}=    Set Variable    /etc/tedge/device-certs/${label}.pem
+    Execute Command    cmd=tedge config set device.cert_path ${cert_path}
+
+    Create Self Signed Certificate    common_name=${DEVICE_SN}    label=${label}    output_path=${cert_path}
 
     Execute Command
-    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ${type} ${p11tool_args} --label ${object_name} "pkcs11:token=tedge"
+    ...    cmd=sudo env C8Y_USER="${C8Y_CONFIG.username}" C8Y_PASSWORD="${C8Y_CONFIG.password}" tedge cert upload c8y
+    ThinEdgeIO.Register Certificate For Cleanup
 
-    VAR    ${key_uri}=    pkcs11:token=tedge;object=${object_name}
-    # warning: PKCS11 _uri variables contain ; so they need to be quoted!
-    Execute Command    cmd=tedge config set device.key_uri "${key_uri}"
+    Tedge Reconnect Should Succeed
 
-    RETURN    ${key_uri}
+Set up new PKCS11 RSA keypair
+    [Documentation]    Creates a new keypair on the PKCS11 token, configures thin-edge to use the new key
+    [Arguments]    ${bits}=2048    # length in bits of the RSA key - one of {1024, 2048, 3072, 4096}
+    ${identifier}=    String.Generate Random String
+    ${label}=    Set Variable    rsa-${bits}-${identifier}
+    Execute Command
+    ...    cmd=tedge cert create-key-hsm --type rsa --bits ${bits} --label "${label}" "pkcs11:token=tedge"
+    RETURN    ${label}
+
+Set up new PKCS11 ECDSA keypair
+    [Documentation]    Creates a new keypair on the PKCS11 token, configures thin-edge to use the new key
+    [Arguments]    ${curve}=p256    # curve of the key - one of {p256, p384}
+    ${identifier}=    String.Generate Random String
+    ${label}=    Set Variable    ecdsa-${curve}-${identifier}
+    Execute Command
+    ...    cmd=tedge cert create-key-hsm --type ecdsa --curve ${curve} --label "${label}" "pkcs11:token=tedge"
+    RETURN    ${label}
 
 Set tedge-p11-server Uri
     [Arguments]    ${value}
