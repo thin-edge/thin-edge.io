@@ -95,10 +95,6 @@ impl TEdgeInitCmd {
         create_directory(&config.logs.path, &permissions).await?;
         create_directory(&config.data.path, &permissions).await?;
 
-        for log_plugins_dir in &config.log.plugin_paths.0 {
-            create_directory(&log_plugins_dir, &permissions).await?;
-        }
-
         let entity_store_file = config_dir.join(".agent").join("entity_store.jsonl");
 
         if entity_store_file.exists() {
