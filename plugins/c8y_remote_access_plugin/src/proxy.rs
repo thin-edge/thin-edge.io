@@ -87,7 +87,7 @@ struct Websocket {
 }
 
 fn generate_sec_websocket_key() -> String {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut bytes = [0u8; 16];
     rng.fill_bytes(&mut bytes);
     BASE64_STANDARD.encode(bytes)
