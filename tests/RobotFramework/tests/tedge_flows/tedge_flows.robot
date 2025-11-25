@@ -47,7 +47,7 @@ Translate complex tedge json to c8y json
     ...    strip=True
     Should Be Equal
     ...    ${transformed_msg}
-    ...    [c8y/measurement/measurements/create] {"type":"environment","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":258},"location":{"latitude":32.54,"longitude":-117.67,"altitude":98.6},"pressure":{"pressure":98}}
+    ...    [c8y/measurement/measurements/create] {"type":"environment","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":{"value":258}},"location":{"latitude":{"value":32.54},"longitude":{"value":-117.67},"altitude":{"value":98.6}},"pressure":{"pressure":{"value":98}}}
 
 Using base64 to encode tedge flows input
     ${encoded_input}    Execute Command
@@ -57,11 +57,11 @@ Using base64 to encode tedge flows input
     ...    strip=True
     Should Be Equal
     ...    ${transformed_msg}
-    ...    [c8y/measurement/measurements/create] {"type":"env","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":258}}
+    ...    [c8y/measurement/measurements/create] {"type":"env","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":{"value":258}}}
 
 Using base64 to encode tedge flows output
     ${encoded_output}    Execute Command
-    ...    echo -n '{"type":"env","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":258}}' | base64 --wrap\=0
+    ...    echo -n '{"type":"env","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":{"value":258}}}' | base64 --wrap\=0
     ${transformed_msg}    Execute Command
     ...    tedge flows test --base64-output te/device/main///m/env '{"time":"2025-06-27T08:11:05.301804125Z", "temperature": 258}'
     ...    strip=True

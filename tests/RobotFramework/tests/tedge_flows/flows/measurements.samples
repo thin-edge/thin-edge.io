@@ -1,6 +1,6 @@
 # The default is to have no units
-INPUT: [te/device/main///m/] {"temperature": 25, "time":"2025-06-27T13:33:53.493Z"}
-OUTPUT: [c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","temperature":{"temperature":25},"time":"2025-06-27T13:33:53.493Z"}
+INPUT: [te/device/main///m/] {"temperature": 25,"outside":{"humidity":85}, "time":"2025-06-27T13:33:53.493Z"}
+OUTPUT: [c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","temperature":{"temperature":{"value":25}},"outside":{"humidity":{"value":85}},"time":"2025-06-27T13:33:53.493Z"}
 
 # Units can be set using the meta topic
 INPUT: [te/device/main///m//meta] {"temperature": { "unit": "°C" }}
@@ -17,7 +17,7 @@ OUTPUT: [c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","tem
 # Units can be set to across measurement types
 INPUT: [te/device/main///m/environment/meta] { "temperature": { "unit": "°C" }, "location": { "altitude": { "unit": "m" } }, "pressure": { "unit": "pascal" } }
 INPUT: [te/device/main///m/environment] {"time":"2025-06-27T08:11:05.301804125Z", "temperature": 25, "location": {"latitude": 32.54, "longitude": -117.67, "altitude": 98.6 }, "pressure": 98}
-OUTPUT: [c8y/measurement/measurements/create] {"type":"environment","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":{"value":25,"unit":"°C"}},"location":{"latitude":32.54,"longitude":-117.67,"altitude":{"value":98.6,"unit":"m"}},"pressure":{"pressure":{"value":98,"unit":"pascal"}}}
+OUTPUT: [c8y/measurement/measurements/create] {"type":"environment","time":"2025-06-27T08:11:05.301804125Z","temperature":{"temperature":{"value":25,"unit":"°C"}},"location":{"latitude":{"value":32.54},"longitude":{"value":-117.67},"altitude":{"value":98.6,"unit":"m"}},"pressure":{"pressure":{"value":98,"unit":"pascal"}}}
 
 # For the default type °F are still used, while changed to °C for environment measurements
 INPUT: [te/device/main///m/] {"temperature": 77, "time":"2025-06-27T12:40:24.122Z"}
