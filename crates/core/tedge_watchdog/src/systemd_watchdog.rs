@@ -287,16 +287,22 @@ fn notify_systemd(pid: u32, status: &str) -> Result<ExitStatus, WatchdogError> {
 
 fn get_watchdog_sec(service_file: &str) -> Result<u64, WatchdogError> {
     let entry = parse_entry(service_file)?;
-    if let Some(interval) = entry.section("Service").attr("WatchdogSec") {
-        match interval.parse::<u64>() {
-            Ok(i) => Ok(i),
-            Err(e) => {
-                error!(
-                    "Failed to parse the to WatchdogSec to integer from {}",
-                    service_file
-                );
-                Err(WatchdogError::ParseWatchdogSecToInt(e))
+    if let Some(service_section) = entry.section("Service") {
+        if let Some(interval) = service_section.attr("WatchdogSec").get(0) {
+            match interval.parse::<u64>() {
+                Ok(i) => Ok(i),
+                Err(e) => {
+                    error!(
+                        "Failed to parse the to WatchdogSec to integer from {}",
+                        service_file
+                    );
+                    Err(WatchdogError::ParseWatchdogSecToInt(e))
+                }
             }
+        } else {
+            Err(WatchdogError::NoWatchdogSec {
+                file: service_file.to_string(),
+            })
         }
     } else {
         Err(WatchdogError::NoWatchdogSec {
