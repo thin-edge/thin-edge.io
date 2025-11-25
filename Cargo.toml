@@ -84,7 +84,7 @@ async-compat = "0.2.1"
 async-http-proxy = "1.2"
 async-tempfile = "0.7"
 async-trait = "0.1"
-async-tungstenite = { version = "0.28", features = [
+async-tungstenite = { version = "0.29.1", features = [
     "tokio-runtime",
     "tokio-rustls-native-certs",
 ] }
@@ -211,7 +211,7 @@ uzers = "0.12"
 walkdir = "2"
 which = "8.0"
 whoami = "1.5.0"
-ws_stream_tungstenite = "0.14"
+ws_stream_tungstenite = "0.15.0"
 x509-parser = "0.18"
 yansi = { version = "1.0.1", default-features = false, features = [
     "detect-env",
