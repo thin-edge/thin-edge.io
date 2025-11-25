@@ -173,7 +173,7 @@ rstest = "0.16.0"
 rumqttc = { version = "0.25.1", default-features = false, features = [
     "use-rustls-no-provider",
 ] }
-rumqttd = "0.19"
+rumqttd = "0.20"
 rustls = { version = "0.23", default-features = false, features = [
     "std",
     "tls12",
