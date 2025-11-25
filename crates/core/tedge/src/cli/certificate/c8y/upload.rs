@@ -88,7 +88,7 @@ impl UploadCertCmd {
 
             // Read the password from /dev/tty
             let password = if password_arg.is_empty() {
-                rpassword::read_password_from_tty(Some("Enter password: "))?
+                rpassword::prompt_password("Enter password: ")?
             } else {
                 password_arg
             };

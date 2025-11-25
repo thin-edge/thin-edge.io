@@ -167,7 +167,7 @@ rcgen = { version = "0.14", features = ["pem", "zeroize"] }
 regex = "1.4"
 reqwest = { version = "0.12", default-features = false }
 ron = "0.12"
-rpassword = "5.0"
+rpassword = "7.4"
 rsa = "0.9.8"
 rstest = "0.26"
 rumqttc = { version = "0.25.1", default-features = false, features = [

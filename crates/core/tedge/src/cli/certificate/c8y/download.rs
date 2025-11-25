@@ -153,7 +153,7 @@ impl DownloadCertCmd {
 
             // Read the security token from /dev/tty
             let one_time_password = if self_one_time_password.is_empty() {
-                rpassword::read_password_from_tty(Some("Enter one-time password: "))?
+                rpassword::prompt_password("Enter one-time password: ")?
             } else {
                 self_one_time_password
             };
