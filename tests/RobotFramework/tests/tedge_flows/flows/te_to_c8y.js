@@ -66,6 +66,8 @@ export function onMessage(message, config) {
     else if (typeof(v) === "number") {
       if (Object.keys(k_meta).length>0) {
         v = { value: v, ...k_meta }
+      } else {
+        v = { value: v }
       }
       let fragment = { [k]: { [k]: v } }
       Object.assign(c8y_msg, fragment)
@@ -76,6 +78,8 @@ export function onMessage(message, config) {
         if (typeof(sub_v) === "number") {
           if (sub_k_meta) {
             sub_v = { value: sub_v, ...sub_k_meta }
+          } else {
+            sub_v = { value: sub_v }
           }
           let sub_fragment = { [sub_k]: sub_v }
           Object.assign(fragment, sub_fragment)
