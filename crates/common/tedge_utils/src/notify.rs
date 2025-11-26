@@ -6,7 +6,6 @@ use notify::event::RemoveKind;
 use notify::EventKind;
 use notify::RecommendedWatcher;
 use notify::RecursiveMode;
-use notify::Watcher;
 use notify_debouncer_full as debouncer;
 use std::hash::Hash;
 use std::path::Path;
@@ -146,9 +145,7 @@ impl NotifyStream {
     pub fn add_watcher(&mut self, dir_path: &Path) -> Result<(), NotifyStreamError> {
         // Try to use canonical paths to avoid false negatives when dealing with symlinks
         let dir_path = dir_path.canonicalize()?;
-        self.debouncer
-            .watcher()
-            .watch(&dir_path, RecursiveMode::Recursive)?;
+        self.debouncer.watch(&dir_path, RecursiveMode::Recursive)?;
 
         Ok(())
     }
