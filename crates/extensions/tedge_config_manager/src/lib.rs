@@ -1,10 +1,13 @@
 mod actor;
 mod config;
 mod error;
+mod plugin;
+mod plugin_manager;
 
 #[cfg(test)]
 mod tests;
 
+use crate::plugin_manager::ExternalPlugins;
 use actor::*;
 pub use config::*;
 use log::error;
@@ -188,6 +191,12 @@ impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
     fn try_build(self) -> Result<ConfigManagerActor, Self::Error> {
         let (output_sender, input_receiver) = self.box_builder.build().into_split();
 
+        let external_plugins = ExternalPlugins::new(
+            self.config.plugin_dirs.clone(),
+            true,
+            self.config.tmp_path.clone(),
+        );
+
         Ok(ConfigManagerActor::new(
             self.config,
             self.plugin_config,
@@ -195,6 +204,7 @@ impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
             output_sender,
             self.downloader,
             self.uploader,
+            external_plugins,
         ))
     }
 }

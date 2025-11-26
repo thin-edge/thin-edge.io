@@ -1,7 +1,7 @@
-# Extensible configuration management
+# Extensible configuration and log management
 
 * Date: __2025-08-12__
-* Status: __New__
+* Status: __Approved__
 
 ## Background
 
@@ -100,7 +100,6 @@ The agent uses the plugins as follows:
     The types must be printed with one type per line.
   - `get <type> <tmp-target-file-path>`: Get the existing configuration for the given type.
   - `set <type> [--url <new-config-url>] [--file <new-config-file-path>]`: Update the existing config file
-  - `finalize <type>`: Take any post-processing actions after the new config is applied
 - Existing file-based config management using `tedge-configuration-plugin.toml` is moved to a default `file` plugin.
 - The `tedge-configuration-plugin.toml` entries are provided an optional `exec` field to run any commands
   after the config file update, as follows:
@@ -118,9 +117,8 @@ The agent uses the plugins as follows:
 - The `file` plugin's is implemented as follows:
   - `list`: list all the config types listed in `tedge-configuration-plugin.toml`.
   - `get`: Copy the contents of the existing configuration to the temp target file argument passed to it.
-  - `set`: Replace the existing config file with new config file in the argument.
-  - `finalize`: Perform the command specified in the `exec` field.
-    No-op when no `exec` command is provided.
+  - `set`: Replace the existing config file with new config file in the argument
+     and execute the command specified in the `exec` field, if one is provided.
 - For non file based configurations, that can't be defined in the `tedge-configuration-plugin.toml`,
   they must have dedicated plugins that declare their types in the `list` command.
 
@@ -142,9 +140,7 @@ The agent uses the plugins as follows:
 - When a `config_update` request is received for a type, the following actions are performed in sequence:
   - Call `get` command of the corresponding plugin and cache the target temporary file as a backup.
   - Call `set` command of the corresponding plugin with the updated config path in the argument.
-  - Call `finalize` command of the plugin and complete the operation if successful.
-  - If `set` or `finalize` commands fail, call the `set` command again with the original config file backup as the target.
-  - Call `finalize` again if the previous `set` attempt to restore the original configuration succeeded and fail the operation.
+  - If `set` commands fail, call the `set` command again with the original config file backup as the target.
 
 ### Phase 2
 

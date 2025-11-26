@@ -103,6 +103,7 @@ pub(crate) struct AgentConfig {
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
     pub log_plugin_dirs: Vec<Utf8PathBuf>,
+    pub config_plugin_dirs: Vec<Utf8PathBuf>,
     entity_auto_register: bool,
     entity_store_clean_start: bool,
 }
@@ -203,6 +204,13 @@ impl AgentConfig {
             .iter()
             .map(Utf8PathBuf::from)
             .collect();
+        let config_plugin_dirs = tedge_config
+            .configuration
+            .plugin_paths
+            .0
+            .iter()
+            .map(Utf8PathBuf::from)
+            .collect();
 
         Ok(Self {
             mqtt_config,
@@ -230,6 +238,7 @@ impl AgentConfig {
             service: tedge_config.service.clone(),
             capabilities,
             log_plugin_dirs,
+            config_plugin_dirs,
             entity_auto_register,
             entity_store_clean_start,
         })
@@ -358,6 +367,7 @@ impl Agent {
                     tmp_path: self.config.tmp_dir.clone(),
                     is_sudo_enabled: self.config.is_sudo_enabled,
                     config_update_enabled: self.config.capabilities.config_update,
+                    plugin_dirs: self.config.config_plugin_dirs,
                 })?;
                 let mut config_manager = ConfigManagerBuilder::try_new(
                     manager_config,

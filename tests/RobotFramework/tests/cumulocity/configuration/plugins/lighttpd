@@ -1,0 +1,100 @@
+#!/bin/sh
+set -eu
+
+usage() {
+    echo "Usage: $0 <command> [args...]"
+    echo "Commands:"
+    echo "  list                                    List all config types supported by this plugin"
+    echo "  get <type>                              Print the config for the specified type to stdout"
+    echo "  set <type> <new-config-path>            Update the config for the specified type from the new config path"
+    exit 1
+}
+
+list_config_types() {
+    echo lighttpd.conf
+}
+
+get_config() {
+    config_type="$1"
+
+    if [ "$config_type" != "lighttpd.conf" ]; then
+        echo "Error: Unsupported config type '$config_type'" >&2
+        exit 1
+    fi
+
+    # Print the effective configuration, aggregating all config extensions and applying defaults
+    lighttpd -p -f /etc/lighttpd/lighttpd.conf
+}
+
+set_config() {
+    config_type="$1"
+    target_config="$2"
+    config_path="/etc/lighttpd/lighttpd.conf"
+    backup_path="${config_path}.backup"
+
+    if [ "$config_type" != "lighttpd.conf" ]; then
+        echo "Error: Unsupported config type '$config_type'" >&2
+        exit 1
+    fi
+
+    # Verify the new configuration before applying it
+    if ! lighttpd -t -f "$target_config" 2>&1; then
+        echo "Error: Configuration validation failed" >&2
+        exit 1
+    fi
+
+    # Backup existing configuration
+    if [ -f "$config_path" ]; then
+        cp "$config_path" "$backup_path"
+    fi
+
+    # Apply new configuration
+    mv "$target_config" "$config_path"
+
+    # Restart the service and check if it succeeded
+    if ! systemctl restart lighttpd; then
+        echo "Error: Failed to reload lighttpd service, restoring backup" >&2
+        if [ -f "$backup_path" ]; then
+            mv "$backup_path" "$config_path"
+            systemctl reload lighttpd
+        fi
+        exit 1
+    fi
+
+    rm -f "$backup_path"
+}
+
+main() {
+    if [ $# -lt 1 ]; then
+        usage
+    fi
+
+    command="$1"
+    shift
+
+    case "$command" in
+        list)
+            list_config_types
+            ;;
+        get)
+            if [ $# -lt 1 ]; then
+                echo "Error: 'get' command requires a <type> argument" >&2
+                exit 1
+            fi
+            get_config "$@"
+            ;;
+        set)
+            if [ $# -lt 2 ]; then
+                echo "Error: 'set' command requires <type> and <new-config-path> arguments" >&2
+                exit 1
+            fi
+            set_config "$@"
+            ;;
+        *)
+            echo "Error: Unknown command '$command'" >&2
+            usage
+            ;;
+    esac
+}
+
+main "$@"

@@ -78,6 +78,11 @@ async fn new_config_manager_builder(
 ) {
     let config = ConfigManagerConfig {
         config_dir: temp_dir.to_path_buf(),
+        plugin_dirs: vec![temp_dir
+            .to_path_buf()
+            .join("config-plugins")
+            .try_into()
+            .unwrap()],
         plugin_config_dir: temp_dir.to_path_buf(),
         plugin_config_path: temp_dir.join("tedge-configuration-plugin.toml"),
         config_reload_topics: [
