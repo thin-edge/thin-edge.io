@@ -30,8 +30,6 @@ use tedge_utils::file::FileError;
 use nix::fcntl::fallocate;
 #[cfg(target_os = "linux")]
 use nix::fcntl::FallocateFlags;
-#[cfg(target_os = "linux")]
-use std::os::unix::prelude::AsRawFd;
 
 fn default_backoff() -> ExponentialBackoff {
     // Default retry is an exponential retry with a limit of 15 minutes total.
@@ -450,7 +448,7 @@ fn try_pre_allocate_space(file: &File, path: &Path, file_len: u64) -> Result<(),
     // Reserve diskspace
     #[cfg(target_os = "linux")]
     let _ = fallocate(
-        file.as_raw_fd(),
+        file,
         FallocateFlags::empty(),
         0,
         file_len.try_into().expect("file too large to fit in i64"),

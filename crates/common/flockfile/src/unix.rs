@@ -91,7 +91,7 @@ impl Flockfile {
         })?;
 
         // Write the PID to the lock file
-        write(file.as_raw_fd(), pid_string.as_bytes()).map_err(|err| FlockfileError::FromNix {
+        write(&file, pid_string.as_bytes()).map_err(|err| FlockfileError::FromNix {
             path: path.clone(),
             source: err,
         })?;
