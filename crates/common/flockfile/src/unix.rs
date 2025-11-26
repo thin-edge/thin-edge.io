@@ -1,6 +1,6 @@
 use nix::errno::Errno::EACCES;
 use nix::errno::Errno::EAGAIN;
-use nix::fcntl::flock;
+use nix::fcntl::Flock;
 use nix::fcntl::FlockArg;
 use nix::unistd::write;
 use std::fs::File;
@@ -8,7 +8,6 @@ use std::fs::OpenOptions;
 use std::fs::{self};
 use std::io;
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::path::PathBuf;
 use tracing::debug;
@@ -52,8 +51,9 @@ impl FlockfileError {
 /// If application exits unexpectedly the filelock will be dropped, but the lockfile will not be removed unless handled in signal handler.
 #[derive(Debug)]
 pub struct Flockfile {
-    handle: Option<File>,
-    pub path: PathBuf,
+    #[allow(unused)]
+    lock: Flock<File>,
+    path: PathBuf,
 }
 
 impl Flockfile {
@@ -83,32 +83,26 @@ impl Flockfile {
         // Convert the PID to a string
         let pid_string = format!("{}", std::process::id());
 
-        flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock).map_err(|err| {
-            FlockfileError::FromNix {
-                path: path.clone(),
-                source: err,
-            }
+        let file_clone = file.try_clone().map_err(|err| FlockfileError::FromIo {
+            path: path.clone(),
+            source: err,
         })?;
+        let lock =
+            Flock::lock(file_clone, FlockArg::LockExclusiveNonblock).map_err(|(_, err)| {
+                FlockfileError::FromNix {
+                    path: path.clone(),
+                    source: err,
+                }
+            })?;
 
         // Write the PID to the lock file
-        write(file.as_raw_fd(), pid_string.as_bytes()).map_err(|err| FlockfileError::FromNix {
+        write(&file, pid_string.as_bytes()).map_err(|err| FlockfileError::FromNix {
             path: path.clone(),
             source: err,
         })?;
 
         debug!(r#"Lockfile created {:?}"#, &path);
-        Ok(Flockfile {
-            handle: Some(file),
-            path,
-        })
-    }
-
-    /// Manually remove filelock and lockfile from the filesystem, this method doesn't have to be called explicitly,
-    /// however if access to the locked file is required this must be called.
-    pub fn unlock(mut self) -> Result<(), io::Error> {
-        self.handle.take().expect("handle dropped");
-        fs::remove_file(&self.path)?;
-        Ok(())
+        Ok(Flockfile { lock, path })
     }
 
     /// Create the lock file if it does not exist,
@@ -122,21 +116,17 @@ impl Flockfile {
 }
 
 impl Drop for Flockfile {
-    /// The Drop trait will be called always when the lock goes out of scope, however,
+    /// The Drop trait will always be called when the lock goes out of scope, however,
     /// if the program exits unexpectedly and drop is not called the lock will be removed by the system.
     fn drop(&mut self) {
-        if let Some(handle) = self.handle.take() {
-            drop(handle);
-
-            // Even if the file is not removed this is not an issue, as OS will take care of the flock.
-            // Additionally if the file is created before an attempt to create the lock that won't be an issue as we rely on filesystem lock.
-            match fs::remove_file(&self.path) {
-                Ok(()) => debug!(r#"Lockfile deleted "{:?}""#, self.path),
-                Err(err) => warn!(
-                    r#"Error while handling lockfile at "{:?}": {:?}"#,
-                    self.path, err
-                ),
-            }
+        // Even if the file is not removed this is not an issue, as OS will take care of the flock.
+        // Additionally, if the file is created before an attempt to create the lock that won't be an issue as we rely on filesystem lock.
+        match fs::remove_file(&self.path) {
+            Ok(()) => debug!(r#"Lockfile deleted "{:?}""#, self.path),
+            Err(err) => warn!(
+                r#"Error while handling lockfile at "{:?}": {:?}"#,
+                self.path, err
+            ),
         }
     }
 }
@@ -180,21 +170,6 @@ mod tests {
     use std::io;
     use std::io::Read;
     use tempfile::NamedTempFile;
-
-    #[test]
-    fn lock_access_remove() {
-        let path = NamedTempFile::new().unwrap().into_temp_path().to_owned();
-        let lockfile = Flockfile::new_lock(&path).unwrap();
-
-        assert_eq!(lockfile.path, path);
-
-        lockfile.unlock().unwrap();
-
-        assert_eq!(
-            fs::metadata(path).unwrap_err().kind(),
-            io::ErrorKind::NotFound
-        );
-    }
 
     #[test]
     fn lock_out_of_scope() {
