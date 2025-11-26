@@ -19,6 +19,12 @@ on:
         required: false
         default: "10"
 
+      retries:
+        description: Maximum times to retry failed system tests. 0 = No retries
+        type: number
+        required: false
+        default: 0
+
   # Use a manual approval process before PR's are given access to
   # the secrets which are required to run the integration tests.
   # The PR code should be manually approved to see if it can be trusted.
@@ -326,6 +332,7 @@ jobs:
           invoke test \
             --processes "${{ inputs.processes || '' }}" \
             --include "${{ inputs.include || '' }}" \
+            --retries "${{ inputs.retries || '0' }}" \
             --outputdir output
 
       - name: Upload test results
@@ -347,7 +354,7 @@ jobs:
     name: Publish ${{ matrix.job.target }}
     if: |
       always() &&
-      github.event_name != 'pull_request_target' &&
+      (github.event_name != 'pull_request_target' && github.event_name != 'workflow_dispatch') &&
       (needs.check-build.result == 'success') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-24.04
@@ -402,7 +409,7 @@ jobs:
     name: Publish Containers
     if: |
       always() &&
-      github.event_name != 'pull_request_target' &&
+      (github.event_name != 'pull_request_target' && github.event_name != 'workflow_dispatch') &&
       (needs.check-build.result == 'success') &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-24.04
@@ -476,7 +483,7 @@ jobs:
     name: Publish Virtual Packages
     if: |
       always() &&
-      github.event_name != 'pull_request_target' &&
+      (github.event_name != 'pull_request_target' && github.event_name != 'workflow_dispatch') &&
       needs.publish.result == 'success'
     runs-on: ubuntu-24.04
     needs: [publish]
