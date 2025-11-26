@@ -9,17 +9,11 @@ use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 
 use anyhow::Context;
-use serde::Deserialize;
-use serde::Serialize;
 use tracing::warn;
 
-use crate::service::ChooseSchemeRequest;
-use crate::service::ChooseSchemeResponse;
-use crate::service::CreateKeyRequest;
-use crate::service::CreateKeyResponse;
-use crate::service::SignRequest;
-use crate::service::SignRequestWithSigScheme;
-use crate::service::SignResponse;
+pub use super::frame::Frame;
+pub use super::frame::Frame1;
+pub use super::frame::ProtocolError;
 
 pub struct Connection {
     stream: UnixStream,
@@ -69,40 +63,3 @@ impl Connection {
         Ok(())
     }
 }
-
-/// The actual frame that we serialize and send/receive.
-///
-/// This essentially just adds a version tag and should deal with cases when non-backwards
-/// compatible changes are added to new versions.
-///
-/// For example, current connection semantics is one request/response per connection (client
-/// connects, sends request and closes sending half, server reads, sends response and closes sending
-/// half, etc.) but if we wanted to move away from that model, we can very easily because the
-/// version is the first byte sent by the client so maintaining compatibility should be easy.
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-enum Frame {
-    Version1(Frame1),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Frame1 {
-    Error(ProtocolError),
-    ChooseSchemeRequest(ChooseSchemeRequest),
-    SignRequest(SignRequest),
-    ChooseSchemeResponse(ChooseSchemeResponse),
-    SignResponse(SignResponse),
-    SignRequestWithSigScheme(SignRequestWithSigScheme),
-    GetPublicKeyPemRequest(Option<String>),
-    GetPublicKeyPemResponse(String),
-    Ping,
-    Pong,
-    CreateKeyRequest(CreateKeyRequest),
-    CreateKeyResponse(CreateKeyResponse),
-    GetTokensUrisRequest,
-    GetTokensUrisResponse(Vec<String>),
-}
-
-/// An error that can be returned to the client by the server.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProtocolError(pub String);
