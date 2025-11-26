@@ -101,6 +101,12 @@ contents:
     file_info:
       mode: 0755
 
+  # misc. utilities
+  - src: ./configuration/contrib/pkcs11/tedge-init-hsm.sh
+    dst: /usr/bin/tedge-init-hsm.sh
+    file_info:
+      mode: 0755
+
   # journald
   - src: ./configuration/contrib/log-plugins/journald
     dst: /usr/share/tedge/log-plugins/

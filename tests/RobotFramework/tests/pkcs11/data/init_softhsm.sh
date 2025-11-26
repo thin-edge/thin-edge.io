@@ -1,4 +1,5 @@
 #!/bin/sh
+# legacy script which is only used in tests when create-key-hsm is not available
 set -e
 
 DEVICE_ID="${DEVICE_ID:-}"

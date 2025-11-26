@@ -82,18 +82,18 @@ Select Private key using a request URI
 Connects to C8y using an RSA key
     [Documentation]    Test that we can connect to C8y using an RSA private keys of all sizes.
     [Setup]    Unset tedge-p11-server Uri
-    [Template]    Connect to C8y using new keypair
-    type=rsa    bits=4096
-    type=rsa    bits=3072
-    type=rsa    bits=2048
-    # type=rsa    bits=1024    # RSA 1024 is considered to be insecure is not supported when using the Cumulocity Certificate Authority feature
+    [Template]    Connect to C8y using new RSA keypair
+    bits=4096
+    bits=3072
+    bits=2048
+    # bits=1024    # RSA 1024 is considered to be insecure is not supported when using the Cumulocity Certificate Authority feature
 
 Connects to C8y supporting all TLS13 ECDSA signature algorithms
     [Documentation]    Check that we support all ECDSA sigschemes used in TLS1.3, i.e: ecdsa_secp256r1_sha256,
     ...    ecdsa_secp384r1_sha384, ecdsa_secp521r1_sha512.
     [Setup]    Unset tedge-p11-server Uri
-    [Template]    Connect to C8y using new keypair
-    type=ecdsa    curve=secp256r1
+    [Template]    Connect to C8y using new ECDSA keypair
+    curve=secp256r1
 
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
@@ -190,3 +190,57 @@ Custom Setup
     Register Device With Cumulocity CA    ${DEVICE_SN}    csr_path=${csr_path}
 
     Unset tedge-p11-server Uri
+
+Connect to C8y using new ECDSA keypair
+    [Documentation]    Connects to C8y with a newly generated keypair and a self-signed certificate.
+    ...    The private key is saved on the token, and the self-signed certificate is registered with c8y.
+    [Arguments]    ${curve}=secp256r1
+    ${label}=    Set up new PKCS11 ECDSA keypair    curve=${curve}
+
+    ${cert_path}=    Set Variable    /etc/tedge/device-certs/${label}.pem
+    Execute Command    cmd=tedge config set device.cert_path ${cert_path}
+
+    Create Self Signed Certificate    common_name=${DEVICE_SN}    label=${label}    output_path=${cert_path}
+    Set tedge-p11-server Uri    value=pkcs11:token=tedge;object=${label}
+
+    Execute Command
+    ...    cmd=sudo env C8Y_USER="${C8Y_CONFIG.username}" C8Y_PASSWORD="${C8Y_CONFIG.password}" tedge cert upload c8y
+    ThinEdgeIO.Register Certificate For Cleanup
+
+    Tedge Reconnect Should Succeed
+
+Connect to C8y using new RSA keypair
+    [Documentation]    Connects to C8y with a newly generated keypair and a self-signed certificate.
+    ...    The private key is saved on the token, and the self-signed certificate is registered with c8y.
+    [Arguments]    ${bits}=4096    # length in bits of the RSA key - one of {1024, 2048, 3072, 4096}
+    ${label}=    Set up new PKCS11 RSA keypair    bits=${bits}
+
+    ${cert_path}=    Set Variable    /etc/tedge/device-certs/${label}.pem
+    Execute Command    cmd=tedge config set device.cert_path ${cert_path}
+
+    Create Self Signed Certificate    common_name=${DEVICE_SN}    label=${label}    output_path=${cert_path}
+    Set tedge-p11-server Uri    value=pkcs11:token=tedge;object=${label}
+
+    Execute Command
+    ...    cmd=sudo env C8Y_USER="${C8Y_CONFIG.username}" C8Y_PASSWORD="${C8Y_CONFIG.password}" tedge cert upload c8y
+    ThinEdgeIO.Register Certificate For Cleanup
+
+    Tedge Reconnect Should Succeed
+
+Set up new PKCS11 RSA keypair
+    [Documentation]    Creates a new keypair on the PKCS11 token, configures thin-edge to use the new key
+    [Arguments]    ${bits}=2048    # length in bits of the RSA key - one of {1024, 2048, 3072, 4096}
+    ${identifier}=    String.Generate Random String
+    ${label}=    Set Variable    rsa-${bits}-${identifier}
+    Execute Command
+    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey rsa --bits=${bits} --label "${label}" --outfile "/etc/tedge/hsm/${label}.pub" "pkcs11:token=tedge"
+    RETURN    ${label}
+
+Set up new PKCS11 ECDSA keypair
+    [Documentation]    Creates a new keypair on the PKCS11 token, configures thin-edge to use the new key
+    [Arguments]    ${curve}=p256    # curve of the key - one of {p256, p384}
+    ${identifier}=    String.Generate Random String
+    ${label}=    Set Variable    ecdsa-${curve}-${identifier}
+    Execute Command
+    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ECDSA --curve ${curve} --label "${label}" --outfile "/etc/tedge/hsm/${label}.pub" "pkcs11:token=tedge"
+    RETURN    ${label}
