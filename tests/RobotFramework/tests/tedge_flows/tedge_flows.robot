@@ -80,6 +80,20 @@ Units are configured using topic metadata
     ...    ${transformed_msg}
     ...    ${expected_msg}
 
+Entity registration data are passed around using the context
+    Install Flow    context-flows    device_registration.toml
+    Install Flow    context-flows    device_events.toml
+    ${transformed_msg}    Execute Command
+    ...    cat /etc/tedge/data/registrations.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval
+    ...    strip=True
+    ${expected_msg}    Execute Command
+    ...    cat /etc/tedge/data/registrations.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
+    ...    strip=True
+    Should Be Equal
+    ...    ${transformed_msg}
+    ...    ${expected_msg}
+    [Teardown]    Uninstall Flow    device_*.toml
+
 Computing average over a time window
     ${transformed_msg}    Execute Command
     ...    cat /etc/tedge/data/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval --flow /etc/tedge/flows/average.js

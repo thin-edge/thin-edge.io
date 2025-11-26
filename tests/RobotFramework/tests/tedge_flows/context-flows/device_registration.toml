@@ -1,0 +1,7 @@
+input.mqtt.topics = ["te/+/+/+/+"]
+
+steps = [
+    { script = "registration.js" },
+]
+
+[output.context]
