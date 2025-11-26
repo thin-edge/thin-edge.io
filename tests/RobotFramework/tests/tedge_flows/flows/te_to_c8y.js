@@ -42,7 +42,7 @@
 ///     }
 /// }
 /// ```
-export function onMessage(message, config) {
+export function onMessage(message, config, context) {
   let topic_parts = message.topic.split( '/')
   let type = topic_parts[6] || "ThinEdgeMeasurement"
   let payload = JSON.parse(message.payload)
@@ -51,8 +51,7 @@ export function onMessage(message, config) {
     type: type
   }
 
-  let store = new FlowStore()
-  let meta = store.get(`${message.topic}/meta`) || {}
+  let meta = context.get(`${message.topic}/meta`) || {}
 
   for (let [k, v] of Object.entries(payload)) {
     let k_meta = meta[k] || {}

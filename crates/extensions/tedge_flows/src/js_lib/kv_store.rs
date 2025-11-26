@@ -1,9 +1,10 @@
 use crate::js_value::JsonValue;
 use rquickjs::class::Trace;
-use rquickjs::Class;
 use rquickjs::Ctx;
+use rquickjs::IntoJs;
 use rquickjs::JsLifetime;
 use rquickjs::Result;
+use rquickjs::Value;
 use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -16,9 +17,12 @@ pub struct KVStore {
 
 impl KVStore {
     pub fn init(&self, ctx: &Ctx<'_>) {
-        let globals = ctx.globals();
-        let _ = Class::<FlowStore>::define(&globals);
         self.store_as_userdata(ctx)
+    }
+
+    pub fn js_object<'js>(ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        let store = FlowStore {};
+        store.into_js(ctx)
     }
 
     pub fn get(&self, key: &str) -> JsonValue {
@@ -59,15 +63,10 @@ impl KVStore {
 
 #[derive(Clone, Trace, JsLifetime)]
 #[rquickjs::class(frozen)]
-pub struct FlowStore {}
+struct FlowStore {}
 
 #[rquickjs::methods]
 impl<'js> FlowStore {
-    #[qjs(constructor)]
-    fn new(_ctx: Ctx<'js>) -> Result<FlowStore> {
-        Ok(FlowStore {})
-    }
-
     fn get(&self, ctx: Ctx<'js>, key: String) -> Result<JsonValue> {
         let data = KVStore::get_from_userdata(&ctx);
         Ok(data.get(&key))

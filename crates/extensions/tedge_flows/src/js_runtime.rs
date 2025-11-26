@@ -262,15 +262,15 @@ impl<'js> JsModules<'js> {
             function: function.clone(),
         })?;
 
+        let te_context = KVStore::js_object(&ctx)?;
         let r = match &args[..] {
-            [] => f.call(()),
-            [v0] => f.call((v0,)),
-            [v0, v1] => f.call((v0, v1)),
-            [v0, v1, v2] => f.call((v0, v1, v2)),
-            [v0, v1, v2, v3] => f.call((v0, v1, v2, v3)),
-            [v0, v1, v2, v3, v4] => f.call((v0, v1, v2, v3, v4)),
-            [v0, v1, v2, v3, v4, v5] => f.call((v0, v1, v2, v3, v4, v5)),
-            [v0, v1, v2, v3, v4, v5, v6] => f.call((v0, v1, v2, v3, v4, v5, v6)),
+            [] => f.call((te_context,)),
+            [v0] => f.call((v0, te_context)),
+            [v0, v1] => f.call((v0, v1, te_context)),
+            [v0, v1, v2] => f.call((v0, v1, v2, te_context)),
+            [v0, v1, v2, v3] => f.call((v0, v1, v2, v3, te_context)),
+            [v0, v1, v2, v3, v4] => f.call((v0, v1, v2, v3, v4, te_context)),
+            [v0, v1, v2, v3, v4, v5] => f.call((v0, v1, v2, v3, v4, v5, te_context)),
             _ => return Err(anyhow::anyhow!("Too many args").into()),
         };
 

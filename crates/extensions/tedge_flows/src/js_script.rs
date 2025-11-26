@@ -530,11 +530,10 @@ export async function onMessage(message, config) {
     #[tokio::test]
     async fn using_the_context() {
         let js = r#"
-export function onMessage(message) {
-    let data = new FlowStore()
+export function onMessage(message, config, context) {
     return {
         topic: message.topic,
-        payload: JSON.stringify(data.get(message.topic))
+        payload: JSON.stringify(context.get(message.topic))
     }
 }
         "#;
