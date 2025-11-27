@@ -1,7 +1,9 @@
 pub mod compat;
 
 use crate::models::CloudType;
+use crate::tedge_toml::tedge_config::cert_error_into_config_error;
 use crate::tedge_toml::tedge_config::default_credentials_path;
+use crate::tedge_toml::ReadableKey;
 use crate::TEdgeConfig;
 
 use super::super::models::auth_method::AuthMethod;
@@ -1295,11 +1297,8 @@ impl ApplyRuntimeDefaults for AwsMapperSpecificConfig {
 
 /// Helper function to extract device ID from certificate
 fn device_id_from_cert(cert_path: &Utf8Path) -> Result<String, MapperConfigError> {
-    let pem = PemCertificate::from_pem_file(cert_path).map_err(|err| {
-        MapperConfigError::ConfigRead(format!(
-            "Failed to read certificate from {cert_path}: {err}"
-        ))
-    })?;
+    let pem = PemCertificate::from_pem_file(cert_path)
+        .map_err(|err| cert_error_into_config_error(ReadableKey::DeviceId.to_cow_str(), err))?;
 
     let device_id = pem.subject_common_name().map_err(|err| {
         MapperConfigError::ConfigRead(format!(
