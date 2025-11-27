@@ -262,7 +262,9 @@ impl<'js> JsModules<'js> {
             function: function.clone(),
         })?;
 
-        let te_context = KVStore::js_object(&ctx)?;
+        // module_name = format!("{flow}|{index}|{script}");
+        let (flow_name, _) = module_name.split_once('|').unwrap();
+        let te_context = KVStore::js_context(&ctx, flow_name, &module_name)?;
         let r = match &args[..] {
             [] => f.call((te_context,)),
             [v0] => f.call((v0, te_context)),

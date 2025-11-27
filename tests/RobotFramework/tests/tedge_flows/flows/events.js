@@ -15,7 +15,7 @@ export function onMessage(message, config, context) {
 
     let entity_id = `${topic_parts[1]}/${topic_parts[2]}/${topic_parts[3]}/${topic_parts[4]}`
     if (entity_id != "device/main//") {
-        let entity = context.get(entity_id)
+        let entity = context.mapper.get(entity_id)
         if (entity && entity["@type"] == "child-device") {
             let external_id = entity["@id"]
             if (external_id) {

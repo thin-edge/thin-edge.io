@@ -148,6 +148,7 @@ impl JsScript {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::js_lib::kv_store::MAPPER_NAMESPACE;
 
     #[tokio::test]
     async fn identity_script() {
@@ -531,19 +532,30 @@ export async function onMessage(message, config) {
     async fn using_the_context() {
         let js = r#"
 export function onMessage(message, config, context) {
+    let payload = context.mapper.get(message.topic);
+    let fragment = context.script.get(message.topic);
+    Object.assign(payload, fragment)
     return {
         topic: message.topic,
-        payload: JSON.stringify(context.get(message.topic))
+        payload: JSON.stringify(payload)
     }
 }
         "#;
         let (runtime, script) = runtime_with(js).await;
 
         runtime.store.insert(
+            MAPPER_NAMESPACE,
+            "foo/bar",
+            serde_json::json!({
+                "guess": 42,
+            }),
+        );
+
+        runtime.store.insert(
+            &script.module_name,
             "foo/bar",
             serde_json::json!({
                 "hello": "world",
-                "guess": 42,
             }),
         );
 

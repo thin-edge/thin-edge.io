@@ -51,7 +51,7 @@ export function onMessage(message, config, context) {
     type: type
   }
 
-  let meta = context.get(`${message.topic}/meta`) || {}
+  let meta = context.mapper.get(`${message.topic}/meta`) || {}
 
   for (let [k, v] of Object.entries(payload)) {
     let k_meta = meta[k] || {}
