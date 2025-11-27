@@ -39,6 +39,16 @@ impl JsScript {
         self.module_name.to_owned()
     }
 
+    pub fn context(&self) -> JsonValue {
+        // module_name = format!("{flow}|{index}|{script}");
+        let (flow_name, _) = self.module_name.split_once('|').unwrap();
+        JsonValue::Context {
+            flow: flow_name.to_owned(),
+            step: self.module_name(),
+            config: Box::new(self.config.clone()),
+        }
+    }
+
     pub fn with_config(self, config: Option<serde_json::Value>) -> Self {
         if let Some(config) = config {
             Self {
@@ -65,7 +75,6 @@ impl JsScript {
     /// Transform an input message into zero, one or more output messages
     ///
     /// The "onMessage" function of the JS module is passed 3 arguments
-    /// - the current timestamp
     /// - the message to be transformed
     /// - the flow step config (as configured in the flow toml)
     ///
@@ -85,7 +94,7 @@ impl JsScript {
         if message.timestamp.is_none() {
             message.timestamp = Some(timestamp);
         }
-        let input = vec![message.into(), self.config.clone()];
+        let input = vec![message.into(), self.context()];
         js.call_function(&self.module_name(), "onMessage", input)
             .await
             .map_err(flow::error_from_js)?
@@ -137,7 +146,7 @@ impl JsScript {
         timestamp: SystemTime,
     ) -> Result<Vec<Message>, FlowError> {
         debug!(target: "flows", "{}: onInterval({timestamp:?})", self.module_name());
-        let input = vec![timestamp.into(), self.config.clone()];
+        let input = vec![timestamp.into(), self.context()];
         js.call_function(&self.module_name(), "onInterval", input)
             .await
             .map_err(flow::error_from_js)?
@@ -149,6 +158,7 @@ impl JsScript {
 mod tests {
     use super::*;
     use crate::js_lib::kv_store::MAPPER_NAMESPACE;
+    use serde_json::json;
 
     #[tokio::test]
     async fn identity_script() {
@@ -229,7 +239,8 @@ mod tests {
     #[tokio::test]
     async fn collectd_script() {
         let js = r#"
-export function onMessage(message, config) {
+export function onMessage(message, context) {
+    const { topic = "topic/not/set" } = context.config;
     let groups = message.topic.split( '/')
     let data = message.payload.split(':')
 
@@ -238,18 +249,17 @@ export function onMessage(message, config) {
 	let time = data[0]
 	let value = data[1]
 
-    var topic = "te/device/main///m/collectd"
-    if (config && config.topic) {
-        topic = config.topic
-    }
-
     return [ {
         topic: topic,
         payload: `{"time": ${time}, "${group}": {"${measurement}": ${value}}}`
     }]
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
+        script.config = json!({
+            "topic": "te/device/main///m/collectd"
+        })
+        .into();
 
         let input = Message::new(
             "collectd/h/memory/percent-used",
@@ -271,7 +281,7 @@ export function onMessage(message, config) {
     #[tokio::test]
     async fn promise_script() {
         let js = r#"
-export async function onMessage(message, config) {
+export async function onMessage(message) {
     return [{topic:"foo/bar",payload:`{foo:"bar"}`}];
 }
         "#;
@@ -291,7 +301,7 @@ export async function onMessage(message, config) {
     #[tokio::test]
     async fn using_date() {
         let js = r#"
-export function onMessage(message, config) {
+export function onMessage(message) {
     let time = message.time;
     return {
         "topic": message.topic,
@@ -378,7 +388,7 @@ export function onMessage(message) {
     #[tokio::test]
     async fn using_text_decoder() {
         let js = r#"
-export async function onMessage(message, config) {
+export async function onMessage(message) {
     const utf8decoder = new TextDecoder();
     const encodedText = message.raw_payload;
     console.log(encodedText);
@@ -403,7 +413,7 @@ export async function onMessage(message, config) {
     #[tokio::test]
     async fn using_text_encoder() {
         let js = r#"
-export async function onMessage(message, config) {
+export async function onMessage(message) {
     const utf8encoder = new TextEncoder();
     console.log(message.payload);
     const encodedText = utf8encoder.encode(message.payload);
@@ -427,7 +437,7 @@ export async function onMessage(message, config) {
     #[tokio::test]
     async fn decode_utf8_with_bom_and_invalid_chars() {
         let js = r#"
-export async function onMessage(message, config) {
+export async function onMessage(message) {
     const utf8decoder = new TextDecoder();
     const encodedText = message.raw_payload;
     const decodedText = utf8decoder.decode(encodedText);
@@ -451,7 +461,7 @@ export async function onMessage(message, config) {
     #[tokio::test]
     async fn using_text_encoder_into() {
         let js = r#"
-export async function onMessage(message, config) {
+export async function onMessage(message) {
     const utf8encoder = new TextEncoder();
     const u8array = new Uint8Array(8);
     const result = utf8encoder.encodeInto(message.payload, u8array);
@@ -476,7 +486,7 @@ export async function onMessage(message, config) {
     #[tokio::test]
     async fn using_standard_built_in_objects() {
         let js = r#"
-export async function onMessage(message, config) {
+export async function onMessage(message) {
     const te = new globalThis.TextEncoder();
     const td = new globalThis.TextDecoder();
 
@@ -502,7 +512,7 @@ export async function onMessage(message, config) {
     #[tokio::test]
     async fn reading_raw_integers() {
         let js = r#"
-export async function onMessage(message, config) {
+export async function onMessage(message) {
     const measurements = new Uint32Array(message.raw_payload.buffer);
 
     const tedge_json = {
@@ -531,7 +541,7 @@ export async function onMessage(message, config) {
     #[tokio::test]
     async fn using_the_context() {
         let js = r#"
-export function onMessage(message, config, context) {
+export function onMessage(message, context) {
     let payload = context.mapper.get(message.topic);
     let fragment = context.script.get(message.topic);
     Object.assign(payload, fragment)

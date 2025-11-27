@@ -2,7 +2,7 @@ class State {
     static cache = []
 }
 
-export function onMessage(message, config, context) {
+export function onMessage(message, context) {
     let topic_parts = message.topic.split( '/')
     if (topic_parts.length < 7 || topic_parts[5] != "e") {
         throw new Error("Not a thin-edge event")
@@ -43,13 +43,13 @@ export function onMessage(message, config, context) {
     }
 }
 
-export function onInterval(time, config, context) {
+export function onInterval(time, context) {
     let pending_events = State.cache
     State.cache = []
 
     let c8y_events = []
     for (const event of pending_events) {
-        let c8y_event = onMessage(event, config, context)
+        let c8y_event = onMessage(event, context)
         if (c8y_event) {
             c8y_events.push(c8y_event)
         }

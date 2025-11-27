@@ -1,4 +1,5 @@
-export function onMessage(message, config) {
+export function onMessage(message, context) {
+    const { topic = "te/device/main///m/collectd" } = context.config;
     let groups = message.topic.split('/')
     let data = message.payload.split(':')
 
@@ -16,7 +17,7 @@ export function onMessage(message, config) {
     let value = data[1]
 
     return [{
-        topic: config.topic || "te/device/main///m/collectd",
+        topic: topic,
         payload: `{"time": ${time}, "${group}": {"${measurement}": ${value}}}`
     }]
 }

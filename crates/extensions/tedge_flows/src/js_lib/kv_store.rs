@@ -28,12 +28,14 @@ impl KVStore {
         ctx: &Ctx<'js>,
         flow_name: &str,
         script_name: &str,
+        config: &JsonValue,
     ) -> Result<Value<'js>> {
         let context = Object::new(ctx.clone())?;
 
         context.set("mapper", FlowStore::new(MAPPER_NAMESPACE))?;
         context.set("flow", FlowStore::new(flow_name))?;
         context.set("script", FlowStore::new(script_name))?;
+        context.set("config", config)?;
 
         context.into_js(ctx)
     }

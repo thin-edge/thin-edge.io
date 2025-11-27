@@ -1,6 +1,6 @@
-export function onMessage (message, config) {
+export function onMessage (message, context) {
   return [{
-    topic: config.topic || "te/error",
+    topic: context.config.topic || "te/error",
     payload: message.payload
   }]
 }

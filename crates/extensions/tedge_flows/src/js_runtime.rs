@@ -262,17 +262,14 @@ impl<'js> JsModules<'js> {
             function: function.clone(),
         })?;
 
-        // module_name = format!("{flow}|{index}|{script}");
-        let (flow_name, _) = module_name.split_once('|').unwrap();
-        let te_context = KVStore::js_context(&ctx, flow_name, &module_name)?;
         let r = match &args[..] {
-            [] => f.call((te_context,)),
-            [v0] => f.call((v0, te_context)),
-            [v0, v1] => f.call((v0, v1, te_context)),
-            [v0, v1, v2] => f.call((v0, v1, v2, te_context)),
-            [v0, v1, v2, v3] => f.call((v0, v1, v2, v3, te_context)),
-            [v0, v1, v2, v3, v4] => f.call((v0, v1, v2, v3, v4, te_context)),
-            [v0, v1, v2, v3, v4, v5] => f.call((v0, v1, v2, v3, v4, v5, te_context)),
+            [] => f.call(()),
+            [v0] => f.call((v0,)),
+            [v0, v1] => f.call((v0, v1)),
+            [v0, v1, v2] => f.call((v0, v1, v2)),
+            [v0, v1, v2, v3] => f.call((v0, v1, v2, v3)),
+            [v0, v1, v2, v3, v4] => f.call((v0, v1, v2, v3, v4)),
+            [v0, v1, v2, v3, v4, v5] => f.call((v0, v1, v2, v3, v4, v5)),
             _ => return Err(anyhow::anyhow!("Too many args").into()),
         };
 

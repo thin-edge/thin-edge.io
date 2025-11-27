@@ -42,7 +42,7 @@
 ///     }
 /// }
 /// ```
-export function onMessage(message, config, context) {
+export function onMessage(message, context) {
   let topic_parts = message.topic.split( '/')
   let type = topic_parts[6] || "ThinEdgeMeasurement"
   let payload = JSON.parse(message.payload)
