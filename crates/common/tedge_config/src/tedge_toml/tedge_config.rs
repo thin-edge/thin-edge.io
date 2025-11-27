@@ -210,7 +210,7 @@ impl TEdgeConfig {
                 // Check for config conflict: both new format and legacy exist
                 if self.has_legacy_config::<T>(profile.as_ref()) {
                     let legacy_key = match profile.as_ref() {
-                        None => format!("{ty}"),
+                        None => ty,
                         Some(p) => format!("{ty}.profiles.{p}"),
                     };
                     tracing::warn!(
