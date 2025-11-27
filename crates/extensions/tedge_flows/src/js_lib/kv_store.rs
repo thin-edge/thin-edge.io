@@ -59,6 +59,14 @@ impl KVStore {
         }
     }
 
+    pub fn keys(&self, namespace: &str) -> Vec<String> {
+        let data = self.data.lock().unwrap();
+        match data.get(namespace) {
+            None => vec![],
+            Some(map) => map.keys().cloned().collect(),
+        }
+    }
+
     pub fn remove(&self, namespace: &str, key: &str) {
         let mut data = self.data.lock().unwrap();
         if let Some(map) = data.get_mut(namespace) {
@@ -101,5 +109,20 @@ impl<'js> FlowStore {
     fn get(&self, ctx: Ctx<'js>, key: String) -> Result<JsonValue> {
         let data = KVStore::get_from_userdata(&ctx);
         Ok(data.get(&self.namespace, &key))
+    }
+
+    fn set(&self, ctx: Ctx<'js>, key: String, value: JsonValue) {
+        let data = KVStore::get_from_userdata(&ctx);
+        data.insert(&self.namespace, &key, value)
+    }
+
+    fn remove(&self, ctx: Ctx<'js>, key: String) {
+        let data = KVStore::get_from_userdata(&ctx);
+        data.remove(&self.namespace, &key)
+    }
+
+    fn keys(&self, ctx: Ctx<'js>) -> Vec<String> {
+        let data = KVStore::get_from_userdata(&ctx);
+        data.keys(&self.namespace)
     }
 }

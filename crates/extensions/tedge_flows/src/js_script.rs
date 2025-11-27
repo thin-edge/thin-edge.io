@@ -580,6 +580,120 @@ export function onMessage(message, context) {
         );
     }
 
+    #[tokio::test]
+    async fn listing_context_keys() {
+        let js = r#"
+export function onMessage(message, context) {
+    let entities = {}
+    for (const key of context.mapper.keys()) {
+        const entity = context.mapper.get(key)
+        entities[key] = entity["external_id"]
+    }
+    return {
+        topic: message.topic,
+        payload: JSON.stringify(entities)
+    }
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        runtime.store.insert(
+            MAPPER_NAMESPACE,
+            "device/main///",
+            serde_json::json!({
+                "external_id": "Raspberry-123",
+            }),
+        );
+        runtime.store.insert(
+            MAPPER_NAMESPACE,
+            "device/child-01///",
+            serde_json::json!({
+                "external_id": "Raspberry-123:child-01",
+            }),
+        );
+
+        let input = Message::new("foo/bar", "");
+        let output = Message::new(
+            "foo/bar",
+            r#"{"device/child-01///":"Raspberry-123:child-01","device/main///":"Raspberry-123"}"#,
+        );
+        assert_eq!(
+            script
+                .on_message(&runtime, SystemTime::now(), &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn updating_the_context() {
+        let js = r#"
+export function onMessage(message, context) {
+    let count = context.script.get("count") || 0;
+    context.script.set("count", count + 1);
+    return message
+}
+        "#;
+        let (runtime, script) = runtime_with(js).await;
+
+        let input = Message::new("foo/bar", "");
+
+        script
+            .on_message(&runtime, SystemTime::now(), &input)
+            .await
+            .unwrap();
+        assert_eq!(
+            runtime.store.get(&script.module_name, "count"),
+            JsonValue::Number(1.into())
+        );
+
+        script
+            .on_message(&runtime, SystemTime::now(), &input)
+            .await
+            .unwrap();
+        assert_eq!(
+            runtime.store.get(&script.module_name, "count"),
+            JsonValue::Number(2.into())
+        );
+    }
+
+    #[tokio::test]
+    async fn removing_keys_from_the_context() {
+        let js = r#"
+export function onMessage(message, context) {
+    context.mapper.set("foo", null)
+    context.mapper.remove("bar")
+    return message
+}
+        "#;
+
+        let (runtime, script) = runtime_with(js).await;
+        runtime.store.insert(
+            MAPPER_NAMESPACE,
+            "foo",
+            serde_json::json!({
+                "a": 1,
+            }),
+        );
+        runtime.store.insert(
+            MAPPER_NAMESPACE,
+            "bar",
+            serde_json::json!({
+                "b": 2,
+            }),
+        );
+
+        let input = Message::new("foo/bar", "");
+
+        script
+            .on_message(&runtime, SystemTime::now(), &input)
+            .await
+            .unwrap();
+        assert_eq!(runtime.store.get(MAPPER_NAMESPACE, "foo"), JsonValue::Null);
+        assert_eq!(runtime.store.get(MAPPER_NAMESPACE, "bar"), JsonValue::Null);
+    }
+
     async fn runtime_with(js: &str) -> (JsRuntime, JsScript) {
         let mut runtime = JsRuntime::try_new().await.unwrap();
         let mut script = JsScript::new("toml".into(), 1, "js".into());
