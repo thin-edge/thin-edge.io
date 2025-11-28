@@ -38,13 +38,20 @@ which rule how to consume, transform and produce MQTT messages.
   - Builtin steps provide generic building blocks such as %%te%% JSON translation into Cumulocity JSON.
   - Users can implement specific steps using JavaScript or TypeScript to refine transformations to their use cases. 
 - If some message transformations can be fully defined only from the input message, most require a *context*.
-  - What is the Cumulocity internal id of the device? What are the units used by a sensor? Does the location of the device matter?
-  - Such a context can only be specific and has to be built from various sources, configuration, metadata and capability messages.  
-  - For that purpose, %%te%% maintain a context object which is
-    - created, cached and populated by %%te%% using configuration data,
+  - What is the Cumulocity internal id of the device? What are the units used by a sensor? What is the location of the device?
+  - For that purpose, %%te%% maintain a `context` object which is
     - passed to all invocations of transformation steps,
-    - enriched by some flows and steps with context info extracted from metadata and capability messages,
+    - structured along 3 namespaces
+      - `context.mapper` is shared by all the flows of a mapper
+      - `context.flow` is private to the flow, shared by all the steps of that flow
+      - `context.script` is private to a script instance and persisted across script reloads
+    - created, cached and populated by %%te%% using configuration data,
+    - possibly enriched by the flows with data extracted from metadata and capability messages,
     - used by all flows and steps to adapt their behavior
+  - The `context` object also provides a `context.config` object
+    - which content is specific to each script instance and provided by flows configuration
+    - to set values such as thresholds, ranges, durations, units or endpoints
+    - giving the users a way to control the behavior of a step without rewriting scripts.
 - %%te%% provides some support to steps aggregating messages over time windows.
   - For each aggregating step, the mapper persists a state (a JSON object)
     which can be updated by the step function on each message and at regular intervals
@@ -60,10 +67,10 @@ A transformation *script* is a JavaScript or TypeScript module that exports:
 ```ts
 interface FlowStep {
     // transform one input message into zero, one or more output messages
-    onMessage(message: Message, config: object): null | Message | Message[],
+    onMessage(message: Message, context: Context): null | Message | Message[],
   
     // called at regular intervals to produce aggregated messages
-    onInterval(time: Date, config: object): null | Message | Message[]
+    onInterval(time: Date, context: Context): null | Message | Message[]
 }
 ```
 
@@ -79,17 +86,49 @@ type Message = {
 }
 ```
 
-A `config` is an object freely defined by the step module, to provide default values such as thresholds, durations or units.
-These values are configured by the flow and can be dynamically updated on reception of config update messages.
+The `context` object passed to `onMessage()` and `onInterval()` gives scripts and flows a way to share data.
+
+```ts
+type Context = {
+  // A set of (key, value) pairs shared by all the scripts of a mapper
+  mapper: KVStore,
+  
+  // A set of (key, value) pairs shared by all the scripts of a flow
+  flow: KVStore,
+  
+  // A set of (key, value) pairs private to a script, persisted across module reloads
+  script: KVStore,
+  
+  // A value provided by the flow configuration of that step
+  config: any,
+}
+
+type KVStore = {
+  // List the keys for which this store holds a value  
+  keys(): string[]
+  
+  // Get the value attached to a key (returning null, if none)
+  get(key: string): any,
+  
+  // Set the value attached to a key (removing the key if the provided value is null)
+  set(key: string, value: any),
+  
+  // Remove any value attache to a key
+  remove(key: string),
+}
+```
+
+The `context.config` is an object freely defined by the step module, to provide default values such as thresholds, durations or units.
 
 The `onMessage` function is called for each message to be transformed
   - The arguments passed to the function are:
     - The message `{ topic: string, payload: string, raw_payload: Uint8Array, time: Date }`
-    - The config as read from the flow config or updated by the script
+    - A context object with the config and state
   - The function is expected to return zero, one or many transformed messages `[{ topic: string, payload: string }]`
   - An exception can be thrown if the input message cannot be transformed.
-- A flow script can also export a `onInterval` function
-  - This function is called at a regular pace with the current time and config.
+
+A flow script can also export a `onInterval` function
+  - This function is called at a regular pace with the current time and context.
   - The flow script can then return zero, one or many transformed messages
   - By sharing an internal state between the `onMessage` and `onInterval` functions,
     the flow script can implement aggregations over a time window.
@@ -189,6 +228,15 @@ accept_topics = "c8y/#"
 
 [errors.file]
 path = "/var/run/tedge/flows.log"
+```
+
+The output of flow can also be directed to the global context aka `context.mapper`.
+The main usage is for a flow to store and share metadata received as retained MQTT messages,
+so this metadata can be used by other transformation flows;
+the canonical example being a context flow populating the context with measurement units to be used by a measurement publisher flow.
+
+```toml
+[output.context]
 ```
 
 ## %%te%% flow mapper
