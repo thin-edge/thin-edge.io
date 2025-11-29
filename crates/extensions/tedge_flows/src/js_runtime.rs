@@ -1,4 +1,5 @@
 use crate::js_lib;
+use crate::js_lib::kv_store::KVStore;
 use crate::js_script::JsScript;
 use crate::js_value::JsonValue;
 use crate::LoadError;
@@ -17,6 +18,7 @@ use tracing::debug;
 
 pub struct JsRuntime {
     runtime: rquickjs::AsyncRuntime,
+    pub(crate) store: KVStore,
     worker: mpsc::Sender<JsRequest>,
     execution_timeout: Duration,
 }
@@ -35,10 +37,12 @@ impl JsRuntime {
             })))
             .await;
         let context = rquickjs::AsyncContext::full(&runtime).await?;
-        let worker = JsWorker::spawn(context).await;
+        let store = KVStore::default();
+        let worker = JsWorker::spawn(context, store.clone()).await;
         let execution_timeout = Duration::from_secs(5);
         Ok(JsRuntime {
             runtime,
+            store,
             worker,
             execution_timeout,
         })
@@ -49,7 +53,6 @@ impl JsRuntime {
         for export in exports {
             match export {
                 "onMessage" => script.no_js_on_message_fun = false,
-                "onConfigUpdate" => script.no_js_on_config_update_fun = false,
                 "onInterval" => script.no_js_on_interval_fun = false,
                 _ => (),
             }
@@ -74,7 +77,7 @@ impl JsRuntime {
     ) -> Result<Vec<&'static str>, LoadError> {
         let (sender, receiver) = oneshot::channel();
         let source = source.into();
-        let imports = vec!["onMessage", "onConfigUpdate", "onInterval"];
+        let imports = vec!["onMessage", "onInterval"];
         TIME_CREDITS.store(100000, std::sync::atomic::Ordering::Relaxed);
         self.send(
             receiver,
@@ -164,20 +167,21 @@ struct JsWorker {
 }
 
 impl JsWorker {
-    pub async fn spawn(context: rquickjs::AsyncContext) -> mpsc::Sender<JsRequest> {
+    pub async fn spawn(context: rquickjs::AsyncContext, store: KVStore) -> mpsc::Sender<JsRequest> {
         let (sender, requests) = mpsc::channel(100);
         tokio::spawn(async move {
             let worker = JsWorker { context, requests };
-            worker.run().await
+            worker.run(store).await
         });
         sender
     }
 
-    async fn run(mut self) {
+    async fn run(mut self, store: KVStore) {
         rquickjs::async_with!(self.context => |ctx| {
             js_lib::console::init(&ctx);
             js_lib::text_decoder::init(&ctx);
             js_lib::text_encoder::init(&ctx);
+            store.init(&ctx);
             let mut modules = JsModules::new();
             while let Some(request) = self.requests.recv().await {
                 match request {
@@ -266,7 +270,6 @@ impl<'js> JsModules<'js> {
             [v0, v1, v2, v3] => f.call((v0, v1, v2, v3)),
             [v0, v1, v2, v3, v4] => f.call((v0, v1, v2, v3, v4)),
             [v0, v1, v2, v3, v4, v5] => f.call((v0, v1, v2, v3, v4, v5)),
-            [v0, v1, v2, v3, v4, v5, v6] => f.call((v0, v1, v2, v3, v4, v5, v6)),
             _ => return Err(anyhow::anyhow!("Too many args").into()),
         };
 

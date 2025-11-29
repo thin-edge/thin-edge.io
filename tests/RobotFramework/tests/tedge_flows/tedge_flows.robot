@@ -80,6 +80,20 @@ Units are configured using topic metadata
     ...    ${transformed_msg}
     ...    ${expected_msg}
 
+Entity registration data are passed around using the context
+    Install Flow    context-flows    device_registration.toml
+    Install Flow    context-flows    device_events.toml
+    ${transformed_msg}    Execute Command
+    ...    cat /etc/tedge/data/registrations.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval
+    ...    strip=True
+    ${expected_msg}    Execute Command
+    ...    cat /etc/tedge/data/registrations.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
+    ...    strip=True
+    Should Be Equal
+    ...    ${transformed_msg}
+    ...    ${expected_msg}
+    [Teardown]    Uninstall Flow    device_*.toml
+
 Computing average over a time window
     ${transformed_msg}    Execute Command
     ...    cat /etc/tedge/data/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval --flow /etc/tedge/flows/average.js
@@ -92,6 +106,8 @@ Computing average over a time window
     ...    ${expected_msg}
 
 Each instance of a script must have its own static state
+    Install Flow    counting-flows    count-measurements.toml
+    Install Flow    counting-flows    count-events.toml
     ${transformed_msg}    Execute Command
     ...    cat /etc/tedge/data/count-messages.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval | sort
     ...    strip=True
@@ -101,36 +117,38 @@ Each instance of a script must have its own static state
     Should Be Equal
     ...    ${transformed_msg}
     ...    ${expected_msg}
+    [Teardown]    Uninstall Flow    count-*.toml
 
 Running tedge-flows
-    # Assuming the flow count-events.toml has been properly installed
+    Install Flow    counting-flows    count-events.toml
     Execute Command    tedge mqtt sub test/count/e --duration 2s | grep '{}'
+    [Teardown]    Uninstall Flow    count-events.toml
 
 Consuming messages from a process stdout
-    Install Journalctl Flow    journalctl-follow.toml
+    Install Flow    journalctl-flows    journalctl-follow.toml
     ${test_start}    Get Unix Timestamp
     Restart Service    tedge-agent
     ${messages}    Should Have MQTT Messages    topic=log/journalctl-follow    minimum=10    date_from=${test_start}
     Should Not Be Empty    ${messages[0]}    msg=Output should not be empty lines
-    [Teardown]    Uninstall Journalctl Flow    journalctl-follow.toml
+    [Teardown]    Uninstall Flow    journalctl-follow.toml
 
 Consuming messages from a process stdout, periodically
-    Install Journalctl Flow    journalctl-cursor.toml
+    Install Flow    journalctl-flows    journalctl-cursor.toml
     ${test_start}    Get Unix Timestamp
     Restart Service    tedge-agent
     ${messages}    Should Have MQTT Messages    topic=log/journalctl-cursor    minimum=1    date_from=${test_start}
     Should Not Be Empty    ${messages[0]}    msg=Output should not be empty lines
-    [Teardown]    Uninstall Journalctl Flow    journalctl-cursor.toml
+    [Teardown]    Uninstall Flow    journalctl-cursor.toml
 
 Consuming messages from the tail of file
-    Install Flow    tail-named-pipe.toml
+    Install Flow    input-flows    tail-named-pipe.toml
     ${start}    Get Unix Timestamp
     Execute Command    echo hello>/tmp/events
     Should Have MQTT Messages    topic=log/events    message_contains=hello    minimum=1    date_from=${start}
     [Teardown]    Uninstall Flow    tail-named-pipe.toml
 
 Consuming messages from a file, periodically
-    Install Flow    read-file-periodically.toml
+    Install Flow    input-flows    read-file-periodically.toml
     Execute Command    echo hello >/tmp/file.input
     Execute Command    tedge mqtt sub test/file/input --duration 1s | grep hello
     Execute Command    echo world >/tmp/file.input
@@ -143,7 +161,7 @@ Consuming messages from a file, periodically
     [Teardown]    Uninstall Flow    read-file-periodically.toml
 
 Appending messages to a file
-    Install Flow    append-to-file.toml
+    Install Flow    input-flows    append-to-file.toml
     Execute Command    for i in $(seq 3); do tedge mqtt pub seq/events "$i"; done
     Execute Command    grep '\\[seq/events\\] 1' /tmp/events.log
     Execute Command    grep '\\[seq/events\\] 2' /tmp/events.log
@@ -151,7 +169,7 @@ Appending messages to a file
     [Teardown]    Uninstall Flow    append-to-file.toml
 
 Publishing transformation errors
-    Install Flow    publish-js-errors.toml
+    Install Flow    input-flows    publish-js-errors.toml
     ${start}    Get Unix Timestamp
     Execute Command    tedge mqtt pub collectd/foo 12345:6789
     Should Have MQTT Messages
@@ -194,23 +212,11 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*.toml    /etc/tedge/flows/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*.samples    /etc/tedge/data/
 
-Install Journalctl Flow
-    [Arguments]    ${definition_file}
-    ${start}    Get Unix Timestamp
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/journalctl-flows/${definition_file}    /etc/tedge/flows/
-    Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
-    ...    date_from=${start}
-    ...    message_contains=${definition_file}
-
-Uninstall Journalctl Flow
-    [Arguments]    ${definition_file}
-    Execute Command    cmd=rm -f /etc/tedge/flows/${definition_file}
-
 Install Flow
-    [Arguments]    ${definition_file}
+    [Arguments]    ${directory}    ${definition_file}
     ${start}    Get Unix Timestamp
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/input-flows/${definition_file}    /etc/tedge/flows/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/${definition_file}    /etc/tedge/flows/
+
     Should Have MQTT Messages
     ...    topic=te/device/main/service/tedge-flows/status/flows
     ...    date_from=${start}

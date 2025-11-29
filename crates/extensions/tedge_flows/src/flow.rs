@@ -44,7 +44,6 @@ pub struct Flow {
 /// A message transformation step
 pub struct FlowStep {
     pub script: JsScript,
-    pub config_topics: TopicFilter,
 }
 
 pub enum SourceTag {
@@ -87,6 +86,7 @@ pub enum FlowInput {
 pub enum FlowOutput {
     Mqtt { topic: Option<Topic> },
     File { path: Utf8PathBuf },
+    Context,
 }
 
 /// The final outcome of a sequence of transformations applied by a flow to a message
@@ -155,33 +155,7 @@ impl Flow {
     }
 
     pub fn topics(&self) -> TopicFilter {
-        let mut topics = self.input.topics();
-        for step in self.steps.iter() {
-            topics.add_all(step.config_topics.clone())
-        }
-        topics
-    }
-
-    pub async fn on_config_update(
-        &mut self,
-        js_runtime: &JsRuntime,
-        message: &Message,
-    ) -> FlowResult {
-        let result = self.on_config_update_steps(js_runtime, message).await;
-        self.publish(result)
-    }
-
-    async fn on_config_update_steps(
-        &mut self,
-        js_runtime: &JsRuntime,
-        message: &Message,
-    ) -> Result<Vec<Message>, FlowError> {
-        for step in self.steps.iter_mut() {
-            if step.config_topics.accept_topic_name(&message.topic) {
-                step.script.on_config_update(js_runtime, message).await?
-            }
-        }
-        Ok(vec![])
+        self.input.topics()
     }
 
     pub fn accept_message(&self, _source: &SourceTag, message: &Message) -> bool {
@@ -375,9 +349,6 @@ impl FlowStep {
         let script = &self.script;
         if script.no_js_on_message_fun {
             warn!(target: "flows", "Flow script with no 'onMessage' function: {}", script.path);
-        }
-        if script.no_js_on_config_update_fun && !self.config_topics.is_empty() {
-            warn!(target: "flows", "Flow script with no 'onConfigUpdate' function: {}; but configured with 'config_topics' in {flow}", script.path);
         }
         if script.no_js_on_interval_fun && !script.interval.is_zero() {
             warn!(target: "flows", "Flow script with no 'onInterval' function: {}; but configured with an 'interval' in {flow}", script.path);

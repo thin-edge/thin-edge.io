@@ -1,5 +1,6 @@
 // Reject any message that is too old, too new or with no timestamp
-export function onMessage (message, config) {
+export function onMessage (message, context) {
+    const { max_advance = 1, max_delay = 10} = context.config
     let payload = JSON.parse(message.payload)
     if (!payload.time) {
         return []
@@ -11,8 +12,8 @@ export function onMessage (message, config) {
     }
 
     let time = message.time
-    let max = time + (config.max_advance || 1);
-    let min = time - (config.max_delay || 10);
+    let max = time + max_advance;
+    let min = time - max_delay;
 
     if (min <= msg_time && msg_time <= max) {
         return [message]

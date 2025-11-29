@@ -14,7 +14,6 @@ pub enum Dimension {
     Flow(String),
     OnMessage(String),
     OnInterval(String),
-    OnConfigUpdate(String),
 }
 
 pub enum Sample {
@@ -177,7 +176,6 @@ impl Display for Dimension {
             Dimension::Flow(toml) => write!(f, "flow {toml}"),
             Dimension::OnMessage(js) => write!(f, "onMessage step {js}"),
             Dimension::OnInterval(js) => write!(f, "onInterval step {js}"),
-            Dimension::OnConfigUpdate(js) => write!(f, "onConfigUpdate step {js}"),
         }
     }
 }
@@ -187,7 +185,6 @@ impl Dimension {
         match f {
             "onMessage" => Some(Dimension::OnMessage(js.to_owned())),
             "onInterval" => Some(Dimension::OnInterval(js.to_owned())),
-            "onConfigUpdate" => Some(Dimension::OnConfigUpdate(js.to_owned())),
             _ => None,
         }
     }

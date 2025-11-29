@@ -20,6 +20,11 @@ pub enum JsonValue {
     Time(SystemTime),
     Array(Vec<JsonValue>),
     Object(BTreeMap<String, JsonValue>),
+    Context {
+        flow: String,
+        step: String,
+        config: Box<JsonValue>,
+    },
 }
 
 impl Default for JsonValue {
@@ -106,6 +111,11 @@ impl From<JsonValue> for serde_json::Value {
                     .map(|(k, v)| (k, serde_json::Value::from(v)))
                     .collect(),
             ),
+            JsonValue::Context { flow, step, config } => json!({
+                "flow": flow,
+                "step": step,
+                "config": serde_json::Value::from(*config)
+            }),
         }
     }
 }
@@ -222,6 +232,10 @@ impl<'js> IntoJs<'js> for JsonValueRef<'_> {
                     object.set(key, JsonValueRef(value))?;
                 }
                 Ok(object.into_value())
+            }
+            JsonValue::Context { flow, step, config } => {
+                use crate::js_lib::kv_store::KVStore;
+                KVStore::js_context(ctx, flow, step, config)
             }
         }
     }

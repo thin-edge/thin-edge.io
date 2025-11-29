@@ -1,0 +1,18 @@
+# The main device doesn't have to be registered to send events
+INPUT: [te/device/main///e/system] {"text": "restarted", "time":"2025-06-27T13:33:53.493Z"}
+OUTPUT: [c8y/event/events/create] {"type":"system","text":"restarted","time":"2025-06-27T13:33:53.493Z"}
+
+# Before sending events, child devices have to be registered
+INPUT: [te/device/child-1//] {"@type": "child-device", "@id": "child-device-1"}
+
+# An external source is added to events sent by child devices.
+# The external ids of the child devices is extracted from entity metadata
+INPUT: [te/device/child-1///e/system] {"text": "restarted", "time":"2025-06-27T13:33:53.493Z"}
+OUTPUT: [c8y/event/events/create] {"type":"system","text":"restarted","time":"2025-06-27T13:33:53.493Z","externalSource":{"externalId":"child-device-1","type":"c8y_Serial"}}
+
+# A child device can also publish events before being registered
+INPUT: [te/device/child-2///e/system] {"text": "restarted", "time":"2025-06-27T13:33:53.493Z"}
+
+# In that case events are cache till the device is properly registered
+INPUT: [te/device/child-2//] {"@type": "child-device", "@id": "rasp-A:device:child-2"}
+OUTPUT: [c8y/event/events/create] {"type":"system","text":"restarted","time":"2025-06-27T13:33:53.493Z","externalSource":{"externalId":"rasp-A:device:child-2","type":"c8y_Serial"}}

@@ -14,11 +14,11 @@ class State {
     static batch = [0]
 }
 
-export function onMessage (message, config) {
+export function onMessage (message, context) {
+    const { back_to_normal = 100, too_many = 1000 } = context.config
     State.total += 1
     State.batch[0] += 1
     if (State.open) {
-        let back_to_normal = config.back_to_normal || 100
         if (State.total < back_to_normal) {
             State.open = false
             if (config.message_on_back_to_normal) {
@@ -30,7 +30,6 @@ export function onMessage (message, config) {
             return []
         }
     } else {
-        let too_many = config.too_many || 1000
         if (State.total < too_many) {
             return [message]
         } else {
@@ -44,7 +43,8 @@ export function onMessage (message, config) {
     }
 }
 
-export function onInterval(time, config) {
+export function onInterval(time, context) {
+    let config = context.config
     let max_batch_count = config.tick_count || 10
     let new_batch_count = State.batch.unshift(0)
     if (new_batch_count > max_batch_count) {
