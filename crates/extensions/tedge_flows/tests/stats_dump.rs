@@ -1,5 +1,6 @@
 use camino::Utf8Path;
 use std::convert::Infallible;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;
@@ -14,6 +15,7 @@ use tedge_actors::NoConfig;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_flows::FlowsMapperBuilder;
+use tedge_flows::FlowsMapperConfig;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
@@ -90,10 +92,7 @@ async fn stats_are_dumped_when_no_interval_handlers_registered() {
     "#;
     std::fs::write(config_dir.join("mqtt_only_flow.toml"), config).expect("Failed to write config");
 
-    let mut flows_builder = FlowsMapperBuilder::try_new(Utf8Path::from_path(config_dir).unwrap())
-        .await
-        .expect("Failed to create FlowsMapperBuilder");
-
+    let mut flows_builder = flows_builder(config_dir).await;
     let mut mock_mqtt = MockMqttBuilder::new();
     flows_builder.connect(&mut mock_mqtt);
 
@@ -155,10 +154,7 @@ async fn stats_dumped_when_interval_handlers_present() {
     "#;
     std::fs::write(config_dir.join("interval_flow.toml"), config).expect("Failed to write config");
 
-    let mut flows_builder = FlowsMapperBuilder::try_new(Utf8Path::from_path(config_dir).unwrap())
-        .await
-        .expect("Failed to create FlowsMapperBuilder");
-
+    let mut flows_builder = flows_builder(config_dir).await;
     let mut mock_mqtt = MockMqttBuilder::new();
     flows_builder.connect(&mut mock_mqtt);
 
@@ -215,10 +211,7 @@ async fn stats_not_dumped_before_300_seconds() {
     "#;
     std::fs::write(config_dir.join("mqtt_only_flow.toml"), config).expect("Failed to write config");
 
-    let mut flows_builder = FlowsMapperBuilder::try_new(Utf8Path::from_path(config_dir).unwrap())
-        .await
-        .expect("Failed to create FlowsMapperBuilder");
-
+    let mut flows_builder = flows_builder(config_dir).await;
     let mut mock_mqtt = MockMqttBuilder::new();
     flows_builder.connect(&mut mock_mqtt);
 
@@ -246,6 +239,13 @@ async fn stats_not_dumped_before_300_seconds() {
         "Stats should not be dumped before 300 seconds. Captured logs:\n{}",
         log_text
     );
+}
+
+async fn flows_builder(config_dir: &Path) -> FlowsMapperBuilder {
+    let config = FlowsMapperConfig::default();
+    FlowsMapperBuilder::try_new(config, Utf8Path::from_path(config_dir).unwrap())
+        .await
+        .expect("Failed to create FlowsMapperBuilder")
 }
 
 type MockMqttActor = SimpleMessageBox<MqttMessage, MqttMessage>;

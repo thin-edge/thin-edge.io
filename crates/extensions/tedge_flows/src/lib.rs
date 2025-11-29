@@ -18,6 +18,7 @@ pub use crate::flow::*;
 pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
 pub use crate::runtime::MessageProcessor;
+use crate::stats::MqttStatsPublisher;
 use camino::Utf8Path;
 use std::collections::HashSet;
 use std::convert::Infallible;
@@ -38,11 +39,26 @@ use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::SubscriptionDiff;
+use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 use tracing::error;
+
+pub struct FlowsMapperConfig {
+    pub statistics_topic: Topic,
+    pub status_topic: Topic,
+}
+
+impl Default for FlowsMapperConfig {
+    fn default() -> Self {
+        FlowsMapperConfig {
+            statistics_topic: Topic::new("te/device/main/service/tedge-flows/statistics").unwrap(),
+            status_topic: Topic::new("te/device/main/service/tedge-flows/status").unwrap(),
+        }
+    }
+}
 
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 
@@ -50,6 +66,7 @@ fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: 
 struct Tick;
 
 pub struct FlowsMapperBuilder {
+    config: FlowsMapperConfig,
     message_box: SimpleMessageBoxBuilder<InputMessage, SubscriptionDiff>,
     mqtt_sender: DynSender<MqttMessage>,
     watch_request_sender: DynSender<WatchRequest>,
@@ -57,8 +74,11 @@ pub struct FlowsMapperBuilder {
 }
 
 impl FlowsMapperBuilder {
-    pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
-        let registry = ConnectedFlowRegistry::new(config_dir);
+    pub async fn try_new(
+        config: FlowsMapperConfig,
+        flows_dir: impl AsRef<Utf8Path>,
+    ) -> Result<Self, LoadError> {
+        let registry = ConnectedFlowRegistry::new(flows_dir);
         let mut processor = MessageProcessor::try_new(registry).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
         let mqtt_sender = NullSender.into();
@@ -67,6 +87,7 @@ impl FlowsMapperBuilder {
         processor.load_all_flows().await;
 
         Ok(FlowsMapperBuilder {
+            config,
             message_box,
             mqtt_sender,
             watch_request_sender,
@@ -131,7 +152,11 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
     fn build(self) -> FlowsMapper {
         let subscriptions = self.topics().clone();
         let watched_commands = HashSet::new();
+        let stats_publisher = MqttStatsPublisher {
+            topic_prefix: self.config.statistics_topic.to_string(),
+        };
         FlowsMapper {
+            config: self.config,
             messages: self.message_box.build(),
             mqtt_sender: self.mqtt_sender,
             watch_request_sender: self.watch_request_sender,
@@ -139,6 +164,7 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
             watched_commands,
             processor: self.processor,
             next_dump: Instant::now() + STATS_DUMP_INTERVAL,
+            stats_publisher,
         }
     }
 }
