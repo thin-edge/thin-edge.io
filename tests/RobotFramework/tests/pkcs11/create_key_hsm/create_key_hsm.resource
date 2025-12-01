@@ -1,12 +1,7 @@
 *** Settings ***
 Documentation       Tests for the `tedge cert create-key-hsm` command.
 
-Resource            pkcs11_common.resource
-
-Suite Setup         Custom Setup
-Suite Teardown      Get Suite Logs
-
-Test Tags           adapter:docker    theme:cryptoki
+Resource            ../pkcs11_common.resource
 
 
 *** Variables ***
@@ -14,8 +9,8 @@ ${KEY_URI}      ${EMPTY}
 ${TOKEN_URI}    pkcs11:token=create-key-token
 
 
-*** Test Cases ***
-Can create a private key on the PKCS11 token
+*** Keywords ***
+Create a private key on the PKCS11 token
     Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token --pin=123456 --so-pin=123456
 
     ${output}=    Execute Command
@@ -50,7 +45,7 @@ Can create a private key on the PKCS11 token
     ...    p11tool_keytype=EC/ECDSA-SECP384R1
     # ECDSA P521 not supported by rcgen
 
-Shows connected initialized tokens when token argument is not provided
+Show connected initialized tokens when token argument is not provided
     # setup multiple tokens
     Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token1 --pin=123456 --so-pin=123456
     Execute Command    cmd=softhsm2-util --init-token --free --label create-key-token2 --pin=123456 --so-pin=123456
@@ -67,7 +62,7 @@ Shows connected initialized tokens when token argument is not provided
     Should Contain    ${stderr}    token=create-key-token1
     Should Contain    ${stderr}    token=create-key-token2
 
-Can set key ID using --id flag
+Set key ID using --id flag
     ${output}=    Execute Command
     ...    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "${TOKEN_URI}"
     ...    strip=True
@@ -83,7 +78,7 @@ Can set key ID using --id flag
     ...    exp_exit_code=!0
     Should Contain    ${output}    Object with this id already exists on the token
 
-Can provide PIN using --pin flag
+Provide PIN using --pin flag
     ${output}=    Execute Command
     ...    cmd=tedge cert create-key-hsm --label my-key --pin 000000 "${TOKEN_URI}"
     ...    strip=True
@@ -92,7 +87,7 @@ Can provide PIN using --pin flag
     ...    exp_exit_code=!0
     Should Contain    ${output}    The specified PIN is incorrect
 
-Saves public key to file using --outfile-pubkey flag
+Save public key to file using --outfile-pubkey flag
     ${output}=    Execute Command
     ...    cmd=tedge cert create-key-hsm --label my-key --outfile-pubkey pubkey.pem "${TOKEN_URI}"
     ...    strip=True
@@ -101,8 +96,6 @@ Saves public key to file using --outfile-pubkey flag
     ${pubkey}=    Execute Command    cat pubkey.pem    strip=True
     Should Contain    ${output}    ${pubkey}
 
-
-*** Keywords ***
 Create private key
     [Arguments]    ${type}    ${label}    ${bits}=${EMPTY}    ${curve}=${EMPTY}    ${p11tool_keytype}=${EMPTY}
     # create the private key on token and write CSR to device.csr_path
@@ -129,6 +122,7 @@ Create private key
     Should Contain    ${create_key_output}    ${key_uri}
 
 Custom Setup
+    [Arguments]    ${tedge_p11_server_version}
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    ${DEVICE_SN}
 
@@ -140,3 +134,5 @@ Custom Setup
     Execute Command    tedge config set c8y.url "${domain}"
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge config set device.cryptoki.mode socket
+
+    Install tedge-p11-server    ${tedge_p11_server_version}

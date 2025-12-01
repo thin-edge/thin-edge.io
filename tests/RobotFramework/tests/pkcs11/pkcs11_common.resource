@@ -102,3 +102,21 @@ Command Should Fail With
     ${stderr}=    Execute Command    ${command}    exp_exit_code=!0    stdout=false    stderr=true
     Should Contain    ${stderr}    ${error}
     RETURN    ${stderr}
+
+Install tedge-p11-server
+    [Arguments]    ${version}=""
+
+    # this doesn't install anything but adds cloudsmith repo to apt
+    Execute Command    curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' | sudo -E bash
+
+    IF    $version
+        VAR    ${package}=    tedge-p11-server=${version}
+    ELSE
+        VAR    ${package}=    tedge-p11-server
+    END
+    Execute Command    cmd=apt-get install -y --allow-downgrades ${package}
+
+    IF    $version
+        ${stdout}=    Execute Command    tedge-p11-server -V    strip=True
+        Should Be Equal    ${stdout}    tedge-p11-server ${version}
+    END
