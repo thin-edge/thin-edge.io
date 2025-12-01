@@ -105,7 +105,7 @@ impl std::ops::Deref for TEdgeConfig {
 }
 
 /// Decision about which configuration source to use
-enum ConfigDecision {
+pub enum ConfigDecision {
     /// Load from new format file at the given path
     LoadNew { path: Utf8PathBuf },
     /// Load from tedge.toml via compatibility layer
@@ -143,7 +143,7 @@ impl TEdgeConfig {
     /// 2. If new format exists for some profiles but not the requested one, returns NotFound
     /// 3. If the config directory is inaccessible due to a permissions error, return Error
     /// 4. If no new format exists at all, fall back to legacy tedge.toml format
-    async fn decide_config_source<T>(&self, profile: Option<&ProfileName>) -> ConfigDecision
+    pub async fn decide_config_source<T>(&self, profile: Option<&ProfileName>) -> ConfigDecision
     where
         T: ExpectedCloudType,
     {
