@@ -59,6 +59,33 @@ Supported config types updated on sync signal
     Execute Command    tedge mqtt pub te/device/main/service/tedge-agent/signal/sync_config '{}'
     Command Metadata Should Have Refreshed    ${start_time}
 
+Dynamic plugin install and remove
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/dummy_plugin
+    ...    /usr/share/tedge/config-plugins/dummy_plugin
+    Execute Command    chmod +x /usr/share/tedge/config-plugins/dummy_plugin
+
+    Should Contain Supported Configuration Types    dummy_config::dummy_plugin
+
+    ${operation}=    Cumulocity.Get Configuration    dummy_config::dummy_plugin
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=30
+
+    ${config_url}=    Cumulocity.Create Inventory Binary
+    ...    dummy_config
+    ...    dummy_config
+    ...    contents=dummy content
+    ${operation}=    Cumulocity.Set Configuration    dummy_config::dummy_plugin    url=${config_url}
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=30
+
+    # Dynamically remove the plugin and verify subsequent operations fail
+    Execute Command    rm /usr/share/tedge/config-plugins/dummy_plugin
+
+    ${operation}=    Cumulocity.Get Configuration    dummy_config::dummy_plugin
+    ${operation}=    Operation Should Be FAILED
+    ...    ${operation}
+    ...    timeout=30
+    ...    failure_reason=.*Plugin not found.*
+
 
 *** Keywords ***
 Custom Setup

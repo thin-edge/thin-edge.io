@@ -532,20 +532,20 @@ impl ConfigManagerWorker {
             FsWatchEvent::DirectoryCreated(_) => return Ok(()),
         };
 
-        match path.file_name() {
-            Some(path) if path.eq(DEFAULT_PLUGIN_CONFIG_FILE_NAME) => {
-                self.reload_supported_config_types().await?;
-                Ok(())
-            }
-            Some(_) => Ok(()),
-            None => {
-                error!(
-                    "Path for {} does not exist",
-                    DEFAULT_PLUGIN_CONFIG_FILE_NAME
-                );
-                Ok(())
-            }
+        let plugin_changed = self
+            .config
+            .plugin_dirs
+            .iter()
+            .any(|plugin_dir| path.starts_with(plugin_dir));
+        if plugin_changed
+            || path
+                .file_name()
+                .is_some_and(|name| name.eq(DEFAULT_PLUGIN_CONFIG_FILE_NAME))
+        {
+            self.reload_supported_config_types().await?;
         }
+
+        Ok(())
     }
 
     async fn reload_supported_config_types(&mut self) -> Result<(), RuntimeError> {

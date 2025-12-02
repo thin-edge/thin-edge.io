@@ -62,7 +62,7 @@ pub struct ConfigManagerBuilder {
 impl ConfigManagerBuilder {
     pub async fn try_new(
         config: ConfigManagerConfig,
-        fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
+        fs_notify: &mut impl MessageSource<FsWatchEvent, Vec<PathBuf>>,
         downloader_actor: &mut impl Service<ConfigDownloadRequest, ConfigDownloadResult>,
         uploader_actor: &mut impl Service<ConfigUploadRequest, ConfigUploadResult>,
     ) -> Result<Self, FileError> {
@@ -76,7 +76,7 @@ impl ConfigManagerBuilder {
         let uploader = ClientMessageBox::new(uploader_actor);
 
         fs_notify.connect_sink(
-            ConfigManagerBuilder::watched_directory(&config),
+            ConfigManagerBuilder::watched_directories(&config),
             &box_builder.get_sender(),
         );
 
@@ -161,9 +161,15 @@ impl ConfigManagerBuilder {
         topic_filter
     }
 
-    /// Directory watched by the config actors for configuration changes
-    fn watched_directory(config: &ConfigManagerConfig) -> PathBuf {
-        config.plugin_config_dir.clone()
+    /// Directories watched by the config actor
+    /// - for configuration changes
+    /// - for plugin changes
+    fn watched_directories(config: &ConfigManagerConfig) -> Vec<PathBuf> {
+        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
+        for dir in &config.plugin_dirs {
+            watch_dirs.push(dir.into());
+        }
+        watch_dirs
     }
 
     /// Extract a config actor request from an MQTT message
