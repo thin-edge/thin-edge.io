@@ -20,7 +20,8 @@ Create Self Signed Certificate
 Connect to C8y using new ECDSA keypair
     [Documentation]    Connects to C8y with a newly generated keypair and a self-signed certificate.
     ...    The private key is saved on the token, and the self-signed certificate is registered with c8y.
-    [Arguments]    ${curve}=p256    # if type == ECDSA, curve of the key - one of {secp256r1, secp384r1, secp521r1}
+    # if type == ECDSA, curve of the key - one of {secp256r1, secp384r1, secp521r1}
+    [Arguments]    ${curve}=secp256r1
 
     # We could alternatively use Cumulocity CA to start with a signed cert, but for testing certificate renewal, we want
     # to test both renewing a self-signed cert and a cert issued by C8y CA. When we start with self-signed cert, after
@@ -67,16 +68,24 @@ Set up new PKCS11 RSA keypair
     ${identifier}=    String.Generate Random String
     ${label}=    Set Variable    rsa-${bits}-${identifier}
     Execute Command
-    ...    cmd=tedge cert create-key-hsm --type rsa --bits ${bits} --label "${label}" "pkcs11:token=tedge"
+    # ...    cmd=tedge cert create-key-hsm --type rsa --bits ${bits} --label "${label}" "pkcs11:token=tedge"
+    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey rsa --bits ${bits} --label ${label} "pkcs11:token=tedge"
+    VAR    ${key_uri}=    pkcs11:token=tedge;object=${label}
+    # warning: PKCS11 _uri variables contain ; so they need to be quoted!
+    Execute Command    cmd=tedge config set device.key_uri "${key_uri}"
     RETURN    ${label}
 
 Set up new PKCS11 ECDSA keypair
     [Documentation]    Creates a new keypair on the PKCS11 token, configures thin-edge to use the new key
-    [Arguments]    ${curve}=p256    # curve of the key - one of {p256, p384}
+    [Arguments]    ${curve}=secp256r1    # curve of the key - one of {p256, p384}
     ${identifier}=    String.Generate Random String
     ${label}=    Set Variable    ecdsa-${curve}-${identifier}
     Execute Command
-    ...    cmd=tedge cert create-key-hsm --type ecdsa --curve ${curve} --label "${label}" "pkcs11:token=tedge"
+    # ...    cmd=tedge cert create-key-hsm --type ecdsa --curve ${curve} --label "${label}" "pkcs11:token=tedge"
+    ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ecdsa --curve ${curve} --label ${label} "pkcs11:token=tedge"
+    VAR    ${key_uri}=    pkcs11:token=tedge;object=${label}
+    # warning: PKCS11 _uri variables contain ; so they need to be quoted!
+    Execute Command    cmd=tedge config set device.key_uri "${key_uri}"
     RETURN    ${label}
 
 Set tedge-p11-server Uri
