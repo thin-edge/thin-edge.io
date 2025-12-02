@@ -27,6 +27,22 @@ impl Parse for Configuration {
     }
 }
 
+#[derive(Debug)]
+pub struct SubConfigInput {
+    pub name: syn::Ident,
+    pub config: Configuration,
+}
+
+impl Parse for SubConfigInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let name = input.parse()?;
+        let content;
+        syn::braced!(content in input);
+        let config = Configuration::parse(&content)?;
+        Ok(Self { name, config })
+    }
+}
+
 #[derive(FromAttributes)]
 #[darling(attributes(tedge_config))]
 pub struct ConfigurationAttributes {
@@ -51,10 +67,6 @@ pub struct ConfigurationGroup {
     pub deprecated_names: Vec<SpannedValue<String>>,
     pub rename: Option<SpannedValue<String>>,
     pub ident: syn::Ident,
-    #[allow(dead_code)] // FIXME: field `colon_token` is never read
-    colon_token: Token![:],
-    #[allow(dead_code)] // FIXME: field `brace` is never read
-    brace: syn::token::Brace,
     pub content: Punctuated<FieldOrGroup, Token![,]>,
 }
 
@@ -63,6 +75,10 @@ impl Parse for ConfigurationGroup {
         let content;
         let attributes = input.call(Attribute::parse_outer)?;
         let known_attributes = ConfigurationAttributes::from_attributes(&attributes)?;
+        let ident = input.parse()?;
+        input.parse::<Token![:]>()?;
+        syn::braced!(content in input);
+        let content = content.parse_terminated(<_>::parse, Token![,])?;
         Ok(ConfigurationGroup {
             attrs: attributes.into_iter().filter(not_tedge_config).collect(),
             dto: known_attributes.dto,
@@ -70,10 +86,8 @@ impl Parse for ConfigurationGroup {
             deprecated_names: known_attributes.deprecated_names,
             rename: known_attributes.rename,
             multi: known_attributes.multi,
-            ident: input.parse()?,
-            colon_token: input.parse()?,
-            brace: syn::braced!(content in input),
-            content: content.parse_terminated(<_>::parse, Token![,])?,
+            ident,
+            content,
         })
     }
 }
@@ -134,10 +148,62 @@ pub struct ConfigurableField {
     pub note: Option<SpannedValue<String>>,
     #[darling(multiple, rename = "example")]
     pub examples: Vec<SpannedValue<String>>,
+    #[darling(default)]
+    pub sub_fields: Option<SpannedValue<EnumEntries>>,
     pub ident: Option<syn::Ident>,
     pub ty: syn::Type,
     #[darling(default)]
     pub from: Option<syn::Type>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum EnumEntry {
+    NameOnly(syn::Ident),
+    NameAndFields(syn::Ident, syn::Ident),
+}
+
+impl EnumEntry {
+    pub fn span(&self) -> proc_macro2::Span {
+        match self {
+            Self::NameOnly(name) | Self::NameAndFields(name, _) => name.span(),
+        }
+    }
+}
+
+impl Parse for EnumEntry {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let ident: syn::Ident = input.parse()?;
+
+        if input.peek(syn::token::Paren) {
+            let content;
+            syn::parenthesized!(content in input);
+            let ty: syn::Ident = content.parse()?;
+            Ok(EnumEntry::NameAndFields(ident, ty))
+        } else {
+            Ok(EnumEntry::NameOnly(ident))
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct EnumEntries(pub Vec<EnumEntry>);
+
+impl FromMeta for EnumEntries {
+    fn from_expr(expr: &Expr) -> darling::Result<Self> {
+        match expr {
+            Expr::Array(array) => {
+                let entries: syn::Result<Vec<_>> = array
+                    .elems
+                    .iter()
+                    .map(|elem| syn::parse2(elem.to_token_stream()))
+                    .collect();
+                Ok(EnumEntries(entries?))
+            }
+            _ => Err(darling::Error::custom(
+                "Expected an array of enum entries like [C8y(C8y), Custom]",
+            )),
+        }
+    }
 }
 
 #[derive(Debug, FromMeta, PartialEq, Eq)]
@@ -204,4 +270,49 @@ pub struct ReaderSettings {
 pub struct ReadonlySettings {
     pub write_error: String,
     pub function: syn::Path,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_enum_attribute_parsing() {
+        let field: ConfigurableField = syn::parse_quote! {
+            #[tedge_config(sub_fields = [C8y(C8y), Aws(Aws), Custom])]
+            ty: BridgeType
+        };
+
+        let c8y_ident = syn::parse_quote!(C8y);
+        let c8y_type = syn::parse_quote!(C8y);
+        let aws_ident = syn::parse_quote!(Aws);
+        let aws_type = syn::parse_quote!(Aws);
+        let custom_ident = syn::parse_quote!(Custom);
+
+        let expected = EnumEntries(vec![
+            EnumEntry::NameAndFields(c8y_ident, c8y_type),
+            EnumEntry::NameAndFields(aws_ident, aws_type),
+            EnumEntry::NameOnly(custom_ident),
+        ]);
+
+        assert_eq!(&**field.sub_fields.as_ref().unwrap(), &expected);
+        assert_eq!(field.ident.as_ref().unwrap().to_string(), "ty");
+    }
+
+    #[test]
+    fn test_sub_config_input_parsing() {
+        let input: SubConfigInput = syn::parse_quote! {
+            BridgeConfig {
+                bridge_azure: {
+                    url: String,
+                },
+                bridge_aws: {
+                    region: String,
+                },
+            }
+        };
+
+        assert_eq!(input.name.to_string(), "BridgeConfig");
+        assert_eq!(input.config.groups.len(), 2);
+    }
 }
