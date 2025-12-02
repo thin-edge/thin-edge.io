@@ -21,16 +21,27 @@ Use Private Key in SoftHSM2 using tedge-p11-server
 
 Renew certificate
     [Template]    Renew certificate using tedge-p11-server version
-    ${TEDGE_P11_SERVER_VERSION}
-    ${EMPTY}
+    ${TEDGE_P11_SERVER_VERSION}    PKCS #11 service failed: Failed to find a signing key
+    ${EMPTY}    PKCS #11 service failed: Failed to find a key
 
 
 *** Keywords ***
 Renew certificate using tedge-p11-server version
-    [Arguments]    ${version}
+    [Arguments]    ${version}    ${error}
     Install tedge-p11-server    ${version}
     Execute Command    tedge cert renew c8y
     Tedge Reconnect Should Succeed
+
+    Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
+    Command Should Fail With
+    ...    tedge cert renew c8y
+    ...    error=Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
+
+    Execute Command    systemctl start tedge-p11-server.socket
+
+    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
+    Command Should Fail With    tedge cert renew c8y    ${error}
+    Execute Command    cmd=tedge config unset c8y.device.key_uri
 
 Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
