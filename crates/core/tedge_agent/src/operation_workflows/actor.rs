@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use log::error;
 use log::info;
+use log::warn;
 use std::process::Output;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -169,15 +170,32 @@ impl WorkflowActor {
                 info!("Received sync signal, requesting all builtin actors to sync");
                 self.sync_signal_dispatcher.sync_all().await?;
             }
-            SignalType::SyncOperation(operation) => {
-                info!(
-                    "Received sync signal for {}, requesting the corresponding actor to sync",
-                    operation
-                );
-                self.sync_signal_dispatcher.sync(operation).await?;
-            }
-            SignalType::Custom(_) => {
-                // Custom signal types are not handled yet
+            SignalType::SyncOperation(operation) => match operation {
+                OperationType::ConfigSnapshot | OperationType::ConfigUpdate => {
+                    warn!("Sync signal for sync_config_snapshot or sync_config_update isn't supported. Use 'sync_config' signal instead.");
+                }
+                operation => {
+                    info!(
+                        "Received sync signal for {}, requesting the corresponding actor to sync",
+                        operation
+                    );
+                    self.sync_signal_dispatcher.sync(operation).await?;
+                }
+            },
+            SignalType::Custom(signal) => {
+                match signal.as_str() {
+                    "sync_config" => {
+                        info!("Received sync_config signal, requesting the builtin config actor to sync");
+                        // Sending sync signal ConfigSnapshot but not ConfigUpdate is fine
+                        // as the actor syncs the cmd metadata for both on receipt of either signal
+                        self.sync_signal_dispatcher
+                            .sync(OperationType::ConfigSnapshot)
+                            .await?;
+                    }
+                    _ => {
+                        // Custom signal types are not handled yet
+                    }
+                }
             }
         }
         Ok(())

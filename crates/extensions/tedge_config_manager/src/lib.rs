@@ -15,6 +15,7 @@ use serde_json::json;
 use std::path::PathBuf;
 use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MappingSender;
@@ -25,6 +26,7 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::commands::CmdMetaSyncSignal;
 use tedge_api::commands::ConfigSnapshotCmd;
 use tedge_api::commands::ConfigUpdateCmd;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -33,6 +35,7 @@ use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
+use tedge_api::workflow::SyncOnCommand;
 use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
@@ -274,4 +277,17 @@ fn generic_command_into_update_request(cmd: GenericCommandState) -> Option<Confi
     let topic = cmd.topic.clone();
     let cmd = ConfigUpdateCmd::try_from(cmd).ok()?;
     Some(ConfigOperation::Update(topic, cmd.payload).into())
+}
+
+impl MessageSink<CmdMetaSyncSignal> for ConfigManagerBuilder {
+    fn get_sender(&self) -> DynSender<CmdMetaSyncSignal> {
+        self.box_builder.get_sender().sender_clone()
+    }
+}
+
+impl SyncOnCommand for ConfigManagerBuilder {
+    /// Return the list of operations for which this actor wants to receive sync signals
+    fn sync_on_commands(&self) -> Vec<OperationType> {
+        vec![OperationType::SoftwareUpdate]
+    }
 }

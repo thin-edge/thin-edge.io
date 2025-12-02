@@ -43,6 +43,22 @@ Config operation plugin
     ${updated_tag}=    Execute Command    curl -I http://localhost 2>/dev/null | grep -i '^Server:'
     Should Contain    ${updated_tag}    tedge-lighttpd
 
+Supported config types updated on software update
+    ${start_time}=    Get Unix Timestamp
+    ${OPERATION}=    Install Software    cron
+    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
+
+    Command Metadata Should Have Refreshed    ${start_time}
+
+Supported config types updated on sync signal
+    ${start_time}=    Get Unix Timestamp
+    Execute Command    tedge mqtt pub te/device/main/service/tedge-agent/signal/sync '{}'
+    Command Metadata Should Have Refreshed    ${start_time}
+
+    ${start_time}=    Get Unix Timestamp
+    Execute Command    tedge mqtt pub te/device/main/service/tedge-agent/signal/sync_config '{}'
+    Command Metadata Should Have Refreshed    ${start_time}
+
 
 *** Keywords ***
 Custom Setup
@@ -53,3 +69,14 @@ Custom Setup
     Execute Command    mkdir /usr/share/tedge/config-plugins
     Restart Service    tedge-agent
     Service Should Be Running    tedge-agent
+
+Command Metadata Should Have Refreshed
+    [Arguments]    ${start_time}
+    Should Have MQTT Messages
+    ...    topic=te/device/main///cmd/config_snapshot
+    ...    date_from=${start_time}
+    ...    message_contains=tedge-configuration-plugin
+    Should Have MQTT Messages
+    ...    topic=te/device/main///cmd/config_update
+    ...    date_from=${start_time}
+    ...    message_contains=tedge-configuration-plugin

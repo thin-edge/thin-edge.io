@@ -377,6 +377,10 @@ impl Agent {
                 )
                 .await?;
                 converter_actor_builder.register_builtin_operation(&mut config_manager);
+                converter_actor_builder
+                    .register_sync_signal_sink(OperationType::ConfigSnapshot, &config_manager);
+                converter_actor_builder
+                    .register_sync_signal_sink(OperationType::ConfigUpdate, &config_manager);
                 Some(config_manager)
             } else if self.config.capabilities.config_update {
                 warn!("Config_snapshot operation must be enabled to run config_update!");

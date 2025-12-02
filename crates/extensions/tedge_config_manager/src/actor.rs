@@ -17,6 +17,7 @@ use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
+use tedge_api::commands::CmdMetaSyncSignal;
 use tedge_api::commands::CommandPayload;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigSnapshotCmdPayload;
@@ -55,7 +56,7 @@ pub type ConfigDownloadResult = (MqttTopic, DownloadResult);
 pub type ConfigUploadRequest = (MqttTopic, UploadRequest);
 pub type ConfigUploadResult = (MqttTopic, UploadResult);
 
-fan_in_message_type!(ConfigInput[ConfigOperation, FsWatchEvent] : Debug);
+fan_in_message_type!(ConfigInput[ConfigOperation, CmdMetaSyncSignal, FsWatchEvent] : Debug);
 
 pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
@@ -93,6 +94,7 @@ impl Actor for ConfigManagerActor {
                     Ok(())
                 }
                 ConfigInput::FsWatchEvent(event) => worker.process_file_watch_events(event).await,
+                ConfigInput::CmdMetaSyncSignal(_) => worker.reload_supported_config_types().await,
             };
 
             if let Err(err) = result {
