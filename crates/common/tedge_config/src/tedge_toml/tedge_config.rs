@@ -1,6 +1,7 @@
 mod version;
 use futures::Stream;
 use reqwest::NoProxy;
+use tokio::fs::DirEntry;
 use version::TEdgeTomlVersion;
 
 mod append_remove;
@@ -300,33 +301,33 @@ impl TEdgeConfig {
         use futures::future::ready;
         use futures::StreamExt;
 
+        fn file_name_string(entry: tokio::io::Result<DirEntry>) -> Option<String> {
+            entry.ok()?.file_name().into_string().ok()
+        }
+
+        fn profile_name_from_filename(filename: &str) -> Option<ProfileName> {
+            ProfileName::try_from(filename.strip_suffix(".toml")?.to_owned()).ok()
+        }
+
         let ty = T::expected_cloud_type();
 
         match self.decide_config_source::<T>(None).await {
             ConfigDecision::LoadNew { .. }
             | ConfigDecision::NotFound { .. }
-            | ConfigDecision::PermissionError { .. } => Box::new(
-                futures::stream::once(ready(None)).chain(
-                    tokio_stream::wrappers::ReadDirStream::new(
-                        tokio::fs::read_dir(self.mappers_config_dir().join(format!("{ty}.d")))
-                            .await
-                            .with_context(|| {
-                                format!(
-                                    "failed to list mapper configurations in {}",
-                                    self.mappers_config_dir().join(format!("{ty}.d"))
-                                )
-                            })
-                            .unwrap(),
-                    )
-                    .filter_map(|entry| ready((|| entry.ok()?.file_name().into_string().ok())()))
-                    .filter_map(|s| {
-                        ready((|| {
-                            ProfileName::try_from(s.strip_suffix(".toml")?.to_owned()).ok()
-                        })())
-                    })
-                    .map(Some),
-                ),
-            ),
+            | ConfigDecision::PermissionError { .. } => {
+                let default_profile = futures::stream::once(ready(None));
+                match tokio::fs::read_dir(self.mappers_config_dir().join(format!("{ty}.d"))).await {
+                    Ok(profile_dir) => Box::new(
+                        default_profile.chain(
+                            tokio_stream::wrappers::ReadDirStream::new(profile_dir)
+                                .filter_map(|entry| ready(file_name_string(entry)))
+                                .filter_map(|s| ready(profile_name_from_filename(&s)))
+                                .map(Some),
+                        ),
+                    ),
+                    Err(_) => Box::new(default_profile),
+                }
+            }
             ConfigDecision::LoadLegacy => match ty {
                 CloudType::C8y => Box::new(futures::stream::iter(
                     self.c8y.keys().map(|p| p.map(<_>::to_owned)),
@@ -2132,6 +2133,114 @@ mod tests {
         let c8y = config.c8y.try_get(None::<&str>).unwrap();
         let expected = value.to_lowercase().parse().unwrap();
         assert_eq!(c8y.software_management.api, expected);
+    }
+
+    #[tokio::test]
+    async fn all_mapper_configs_succeeds_when_profile_directory_does_not_exist() {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("mappers")
+            .file("c8y.toml")
+            .with_toml_content(toml::toml! {
+                url = "example.com"
+            });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let configs = tedge_config
+            .all_mapper_configs::<C8yMapperSpecificConfig>()
+            .await;
+
+        assert_eq!(configs.len(), 1);
+        assert_eq!(configs[0].1, None); // default profile
+        assert_eq!(
+            configs[0].0.http().or_none().unwrap().host().to_string(),
+            "example.com"
+        );
+    }
+
+    #[tokio::test]
+    async fn all_mapper_configs_includes_both_default_and_profiles_when_directory_exists() {
+        let ttd = TempTedgeDir::new();
+        let mappers_dir = ttd.dir("mappers");
+        mappers_dir.file("c8y.toml").with_toml_content(toml::toml! {
+            url = "default.example.com"
+        });
+        mappers_dir
+            .dir("c8y.d")
+            .file("profile1.toml")
+            .with_toml_content(toml::toml! {
+                url = "profile1.example.com"
+            });
+        mappers_dir
+            .dir("c8y.d")
+            .file("profile2.toml")
+            .with_toml_content(toml::toml! {
+                url = "profile2.example.com"
+            });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let configs = tedge_config
+            .all_mapper_configs::<C8yMapperSpecificConfig>()
+            .await;
+
+        assert_eq!(configs.len(), 3);
+
+        // Default profile should be first
+        assert_eq!(configs[0].1, None);
+        assert_eq!(
+            configs[0].0.http().or_none().unwrap().host().to_string(),
+            "default.example.com"
+        );
+
+        // Profiles in order
+        let profile_names: Vec<_> = configs[1..]
+            .iter()
+            .map(|(_, name)| name.as_ref().unwrap().as_ref())
+            .collect();
+        assert!(profile_names.contains(&"profile1"));
+        assert!(profile_names.contains(&"profile2"));
+    }
+
+    #[tokio::test]
+    async fn all_mapper_configs_handles_multiple_clouds_with_missing_profile_directories() {
+        let ttd = TempTedgeDir::new();
+        // C8y mapper with no profile directory
+        ttd.dir("mappers")
+            .file("c8y.toml")
+            .with_toml_content(toml::toml! {
+                url = "c8y.example.com"
+            });
+        // Az mapper with no profile directory
+        ttd.dir("mappers")
+            .file("az.toml")
+            .with_toml_content(toml::toml! {
+                url = "az.example.com"
+            });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+
+        let c8y_configs = tedge_config
+            .all_mapper_configs::<C8yMapperSpecificConfig>()
+            .await;
+        assert_eq!(c8y_configs.len(), 1);
+        assert_eq!(
+            c8y_configs[0]
+                .0
+                .http()
+                .or_none()
+                .unwrap()
+                .host()
+                .to_string(),
+            "c8y.example.com"
+        );
+
+        let az_configs = tedge_config
+            .all_mapper_configs::<AzMapperSpecificConfig>()
+            .await;
+        assert_eq!(az_configs.len(), 1);
+        assert_eq!(
+            az_configs[0].0.url().or_none().unwrap().input,
+            "az.example.com"
+        );
     }
 
     fn profile_name(input: Option<&str>) -> Option<ProfileName> {
