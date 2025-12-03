@@ -294,7 +294,7 @@ impl TEdgeConfig {
 
     async fn all_profiles<T>(
         &self,
-    ) -> Box<dyn futures::stream::Stream<Item = Option<ProfileName>> + Unpin + Send + '_>
+    ) -> Box<dyn futures::stream::Stream<Item = Option<ProfileName>> + Unpin + Send + Sync + '_>
     where
         T: ExpectedCloudType,
     {
@@ -524,9 +524,13 @@ impl TEdgeConfig {
     }
 }
 
+/// Return the trust store as a stream, for easy chaining
+/// 
+/// Note: This does not stream the certificates as they are read from disk. It
+/// simply reads all the certificates, then returns them as a stream.
 fn stream_trust_store<T: SpecialisedCloudConfig>(
     mapper_config: Arc<MapperConfig<T>>,
-) -> impl Stream<Item = Certificate> {
+) -> impl Stream<Item = Certificate> + Send {
     futures::stream::once(async move {
         read_trust_store(&mapper_config.root_cert_path)
             .await

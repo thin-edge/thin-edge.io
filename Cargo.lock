@@ -1005,6 +1005,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.12",
  "time",
+ "tokio",
+ "tokio-stream",
  "tracing",
  "x509-parser 0.18.0",
  "zeroize",
