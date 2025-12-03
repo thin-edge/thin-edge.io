@@ -3,7 +3,6 @@ use anyhow::Context;
 use axum::extract::ws::rejection::WebSocketUpgradeRejection;
 use axum::extract::ws::WebSocket;
 use axum::extract::FromRef;
-use axum::extract::Path;
 use axum::extract::State;
 use axum::extract::WebSocketUpgrade;
 use axum::http::HeaderValue;
@@ -395,17 +394,20 @@ async fn respond_to(
     State(host): State<TargetHost>,
     State(client): State<reqwest::Client>,
     retrieve_token: State<SharedTokenManager>,
-    path: Option<Path<String>>,
     uri: hyper::Uri,
     method: Method,
     mut headers: HeaderMap<HeaderValue>,
     ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
     small_body: crate::body::PossiblySmallBody,
 ) -> Result<Response, ProxyError> {
-    let path = match &path {
-        Some(Path(p)) => p.as_str(),
-        None => "",
-    };
+    // Workaround to avoid using `axum::extract::Path`
+    // as it always decodes percent encoded characters
+    let base = uri
+        .path()
+        .strip_prefix("/c8y")
+        .expect("The path must start with /c8y");
+    let path = base.strip_prefix("/").unwrap_or(base);
+
     let auth: fn(reqwest::RequestBuilder, &str) -> reqwest::RequestBuilder =
         if headers.contains_key(AUTHORIZATION) {
             |req, _auth_value| req
@@ -981,6 +983,33 @@ mod tests {
         let res = reqwest_client()
             .get(format!(
                 "https://localhost:{port}/c8y/inventory/managedObjects?pageSize=100"
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), 200);
+    }
+
+    #[test_case::test_case(";%+:@&=,?"; "decoded")]
+    #[test_case::test_case("%25%3B%2B%3A%40%26%3D%2C%3F%23"; "encoded")] // %;+:@&=,?#
+    #[tokio::test]
+    async fn sends_percent_encoded_string_request_3884(device_id: &str) {
+        let _ = env_logger::try_init();
+        let mut server = mockito::Server::new_async().await;
+        let _mock = server
+            .mock(
+                "GET",
+                format!("/identity/externalIds/c8y_Serial/{device_id}").as_str(),
+            )
+            .with_status(200)
+            .create_async()
+            .await;
+
+        let port = start_server(&server, vec!["test-token"]);
+
+        let res = reqwest_client()
+            .get(format!(
+                "https://localhost:{port}/c8y/identity/externalIds/c8y_Serial/{device_id}"
             ))
             .send()
             .await

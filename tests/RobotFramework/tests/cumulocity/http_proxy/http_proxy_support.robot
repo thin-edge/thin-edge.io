@@ -45,6 +45,12 @@ Install thin-edge.io behind a Proxy using curl
     ...    cmd=export https_proxy=http://127.0.0.1:8080; curl -fsSL https://thin-edge.io/install.sh | sh -s
     Configure and Connect to Cumulocity
 
+C8Y HTTP proxy supports percent encoded characters
+    [Tags]    \#3884
+    [Setup]    Setup
+    Execute Command    tedge mqtt pub c8y/s/us 101,"test;device"
+    Execute Command    tedge http get /c8y/identity/externalIds/c8y_Serial/test%3Bdevice
+
 
 *** Keywords ***
 Setup Device With thin-edge.io
