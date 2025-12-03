@@ -1,5 +1,5 @@
 ---
-title: Extensible Log Management
+title: Log Management
 tags: [Extend, Log Management]
 sidebar_position: 2
 description: Extend log management capabilities with plugins
@@ -195,7 +195,8 @@ get_log_by_type() {
     # Retrieve logs using docker logs
     docker logs "$log_type" \
         --since "$since" \
-        --until "$until"
+        --until "$until" \
+        2>&1
 }
 
 if [ $# -lt 1 ]; then
