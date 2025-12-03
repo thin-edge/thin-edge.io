@@ -2,12 +2,12 @@ use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use reqwest::Certificate;
-use tokio_stream::Stream;
-use tokio_stream::StreamExt as _;
-use tokio_stream::wrappers::ReadDirStream;
 use std::io::Cursor;
 use std::pin::Pin;
 use std::sync::Arc;
+use tokio_stream::wrappers::ReadDirStream;
+use tokio_stream::Stream;
+use tokio_stream::StreamExt as _;
 
 #[derive(Debug, Clone)]
 pub struct CloudHttpConfig {
@@ -94,7 +94,10 @@ async fn stream_file_or_directory(
         Box::pin(dir_stream.map(move |file| match file {
             Ok(file) => {
                 let mut path = base_path.clone();
-                path.push(file.file_name().to_str().ok_or(anyhow::anyhow!("encountered non-utf8 path: {}", file.file_name().display()))?);
+                path.push(file.file_name().to_str().ok_or(anyhow::anyhow!(
+                    "encountered non-utf8 path: {}",
+                    file.file_name().to_string_lossy()
+                ))?);
                 Ok(path)
             }
             Err(e) => Err(e).with_context(|| format!("reading metadata for file in {base_path}")),

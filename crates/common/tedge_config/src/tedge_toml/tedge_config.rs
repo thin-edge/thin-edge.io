@@ -525,7 +525,7 @@ impl TEdgeConfig {
 }
 
 /// Return the trust store as a stream, for easy chaining
-/// 
+///
 /// Note: This does not stream the certificates as they are read from disk. It
 /// simply reads all the certificates, then returns them as a stream.
 fn stream_trust_store<T: SpecialisedCloudConfig>(

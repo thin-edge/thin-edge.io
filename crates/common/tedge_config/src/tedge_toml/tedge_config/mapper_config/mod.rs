@@ -599,11 +599,6 @@ pub enum MapperConfigError {
     #[error("Failed to parse mapper configuration: {0}")]
     TomlParse(#[from] toml::de::Error),
 
-    // TODO remove me
-    /// Required field is missing after applying defaults
-    #[error("Required field '{field}' is missing from mapper configuration")]
-    MissingField { field: &'static str },
-
     /// Failed to read from tedge config
     #[error("Failed to read from tedge config: {0}")]
     ConfigRead(String),
