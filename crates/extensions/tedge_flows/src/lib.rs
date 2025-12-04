@@ -10,6 +10,7 @@ mod js_value;
 mod registry;
 mod runtime;
 mod stats;
+mod steps;
 
 use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
