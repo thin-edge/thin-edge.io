@@ -11,7 +11,6 @@ Test Tags           adapter:docker    theme:cryptoki
 
 
 *** Variables ***
-# It seems 1.6.2 tag was created but later removed, as packages with this tag are present on cloudsmith.
 ${TEDGE_P11_SERVER_VERSION}     1.6.2~300+g5cfe216
 
 
