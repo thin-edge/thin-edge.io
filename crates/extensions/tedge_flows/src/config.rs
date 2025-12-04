@@ -1,9 +1,9 @@
 use crate::flow::Flow;
 use crate::flow::FlowInput;
 use crate::flow::FlowOutput;
-use crate::flow::FlowStep;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
+use crate::steps::FlowStep;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -181,10 +181,7 @@ impl FlowConfig {
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
             let mut step = step.compile(config_dir, i, &source);
-            js_runtime.load_script(&mut step.script).await?;
-            step.check(&source);
-            step.fix();
-            step.script.init_next_execution();
+            step.load_script(js_runtime).await?;
             steps.push(step);
         }
         Ok(Flow {
@@ -204,10 +201,10 @@ impl StepConfig {
             ScriptSpec::JavaScript(path) if path.starts_with(config_dir) => path,
             ScriptSpec::JavaScript(path) => config_dir.join(path),
         };
-        let script = JsScript::new(flow.to_owned(), index, path)
+        let script = JsScript::new(flow.to_owned(), index, path);
+        FlowStep::new_script(script)
             .with_config(self.config)
-            .with_interval(self.interval);
-        FlowStep { script }
+            .with_interval(self.interval)
     }
 }
 

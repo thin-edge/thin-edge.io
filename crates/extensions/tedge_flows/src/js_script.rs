@@ -7,16 +7,14 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::time::Duration;
 use std::time::SystemTime;
-use tokio::time::Instant;
 use tracing::debug;
+use tracing::warn;
 
 #[derive(Clone, Debug)]
 pub struct JsScript {
     pub module_name: String,
+    pub flow: Utf8PathBuf,
     pub path: Utf8PathBuf,
-    pub config: JsonValue,
-    pub interval: Duration,
-    pub next_execution: Option<Instant>,
     pub no_js_on_message_fun: bool,
     pub no_js_on_interval_fun: bool,
 }
@@ -26,50 +24,32 @@ impl JsScript {
         let module_name = format!("{flow}|{index}|{path}");
         JsScript {
             module_name,
+            flow,
             path,
-            config: JsonValue::default(),
-            interval: Duration::ZERO,
-            next_execution: None,
             no_js_on_message_fun: true,
             no_js_on_interval_fun: true,
         }
     }
 
-    pub fn module_name(&self) -> String {
-        self.module_name.to_owned()
+    pub(crate) fn check(&self, interval: &Duration) {
+        if self.no_js_on_message_fun {
+            warn!(target: "flows", "Flow script with no 'onMessage' function: {}", self.path);
+        }
+        if self.no_js_on_interval_fun && !interval.is_zero() {
+            warn!(target: "flows", "Flow script with no 'onInterval' function: {}; but configured with an 'interval' in {}", self.path, self.flow);
+        }
     }
 
-    pub fn context(&self) -> JsonValue {
-        // module_name = format!("{flow}|{index}|{script}");
-        let (flow_name, _) = self.module_name.split_once('|').unwrap();
+    pub fn context(&self, config: &JsonValue) -> JsonValue {
         JsonValue::Context {
-            flow: flow_name.to_owned(),
-            step: self.module_name(),
-            config: Box::new(self.config.clone()),
+            flow: self.flow.to_string(),
+            step: self.module_name.to_owned(),
+            config: Box::new(config.clone()),
         }
-    }
-
-    pub fn with_config(self, config: Option<serde_json::Value>) -> Self {
-        if let Some(config) = config {
-            Self {
-                config: JsonValue::from(config),
-                ..self
-            }
-        } else {
-            self
-        }
-    }
-
-    pub fn with_interval(self, interval: Duration) -> Self {
-        Self { interval, ..self }
     }
 
     pub fn path(&self) -> &Utf8Path {
         &self.path
-    }
-
-    pub fn source(&self) -> String {
-        self.path.to_string()
     }
 
     /// Transform an input message into zero, one or more output messages
@@ -84,8 +64,9 @@ impl JsScript {
         js: &JsRuntime,
         timestamp: SystemTime,
         message: &Message,
+        config: &JsonValue,
     ) -> Result<Vec<Message>, FlowError> {
-        debug!(target: "flows", "{}: onMessage({timestamp:?}, {message})", self.module_name());
+        debug!(target: "flows", "{}: onMessage({timestamp:?}, {message})", &self.module_name);
         if self.no_js_on_message_fun {
             return Ok(vec![message.clone()]);
         }
@@ -94,41 +75,11 @@ impl JsScript {
         if message.timestamp.is_none() {
             message.timestamp = Some(timestamp);
         }
-        let input = vec![message.into(), self.context()];
-        js.call_function(&self.module_name(), "onMessage", input)
+        let input = vec![message.into(), self.context(config)];
+        js.call_function(&self.module_name, "onMessage", input)
             .await
             .map_err(flow::error_from_js)?
             .try_into()
-    }
-
-    /// Initialize the next execution time for this script's interval
-    /// Should be called after the script is loaded and interval is set
-    pub fn init_next_execution(&mut self) {
-        if !self.no_js_on_interval_fun && !self.interval.is_zero() {
-            self.next_execution = Some(Instant::now() + self.interval);
-        }
-    }
-
-    /// Check if this script should execute its interval function now
-    /// Returns true and updates next_execution if it's time to execute
-    pub fn should_execute_interval(&mut self, now: Instant) -> bool {
-        if self.no_js_on_interval_fun || self.interval.is_zero() {
-            return false;
-        }
-
-        match self.next_execution {
-            Some(deadline) if now >= deadline => {
-                // Time to execute - schedule next execution
-                self.next_execution = Some(now + self.interval);
-                true
-            }
-            None => {
-                // First execution - initialize and execute
-                self.next_execution = Some(now + self.interval);
-                true
-            }
-            _ => false,
-        }
     }
 
     /// Trigger the onInterval function of the JS module
@@ -138,16 +89,18 @@ impl JsScript {
     /// - the current flow step config
     ///
     /// Return zero, one or more messages
-    ///
-    /// Note: Caller should check should_execute_interval() before calling this
     pub async fn on_interval(
         &self,
         js: &JsRuntime,
         timestamp: SystemTime,
+        config: &JsonValue,
     ) -> Result<Vec<Message>, FlowError> {
-        debug!(target: "flows", "{}: onInterval({timestamp:?})", self.module_name());
-        let input = vec![timestamp.into(), self.context()];
-        js.call_function(&self.module_name(), "onInterval", input)
+        if self.no_js_on_interval_fun {
+            return Ok(vec![]);
+        };
+        debug!(target: "flows", "{}: onInterval({timestamp:?})", self.module_name);
+        let input = vec![timestamp.into(), self.context(config)];
+        js.call_function(&self.module_name, "onInterval", input)
             .await
             .map_err(flow::error_from_js)?
             .try_into()
@@ -158,6 +111,7 @@ impl JsScript {
 mod tests {
     use super::*;
     use crate::js_lib::kv_store::MAPPER_NAMESPACE;
+    use crate::steps::FlowStep;
     use serde_json::json;
 
     #[tokio::test]
@@ -562,7 +516,7 @@ export function onMessage(message, context) {
         );
 
         runtime.store.insert(
-            &script.module_name,
+            script.step_name(),
             "foo/bar",
             serde_json::json!({
                 "hello": "world",
@@ -644,7 +598,7 @@ export function onMessage(message, context) {
             .await
             .unwrap();
         assert_eq!(
-            runtime.store.get(&script.module_name, "count"),
+            runtime.store.get(script.step_name(), "count"),
             JsonValue::Number(1.into())
         );
 
@@ -653,7 +607,7 @@ export function onMessage(message, context) {
             .await
             .unwrap();
         assert_eq!(
-            runtime.store.get(&script.module_name, "count"),
+            runtime.store.get(script.step_name(), "count"),
             JsonValue::Number(2.into())
         );
     }
@@ -694,13 +648,14 @@ export function onMessage(message, context) {
         assert_eq!(runtime.store.get(MAPPER_NAMESPACE, "bar"), JsonValue::Null);
     }
 
-    async fn runtime_with(js: &str) -> (JsRuntime, JsScript) {
+    async fn runtime_with(js: &str) -> (JsRuntime, FlowStep) {
         let mut runtime = JsRuntime::try_new().await.unwrap();
         let mut script = JsScript::new("toml".into(), 1, "js".into());
-        if let Err(err) = runtime.load_js(script.module_name(), js).await {
+        if let Err(err) = runtime.load_js(script.module_name.to_owned(), js).await {
             panic!("{:?}", err);
         }
         script.no_js_on_message_fun = false;
-        (runtime, script)
+        let step = FlowStep::new_script(script);
+        (runtime, step)
     }
 }

@@ -53,7 +53,7 @@ impl FlowRegistry for BaseFlowRegistry {
     fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + '_ {
         self.flows()
             .flat_map(|flow| &flow.steps)
-            .filter_map(|step| step.script.next_execution)
+            .filter_map(|step| step.next_execution)
     }
 }
 
@@ -148,11 +148,11 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
     async fn reload_script(&mut self, js_runtime: &mut JsRuntime, path: Utf8PathBuf) {
         for flow in self.store_mut().flows_mut() {
             for step in &mut flow.as_mut().steps {
-                if step.script.path() == path {
-                    match js_runtime.load_script(&mut step.script).await {
+                if step.path() == Some(&path) {
+                    match step.load_script(js_runtime).await {
                         Ok(()) => {
                             info!(target: "flows", "Reloading flow script {path}");
-                            step.script.init_next_execution();
+                            step.init_next_execution();
                         }
                         Err(e) => {
                             error!(target: "flows", "Failed to reload flow script {path}: {e}");
@@ -168,7 +168,7 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         for flow in self.store().flows() {
             let flow_id = flow.as_ref().name();
             for step in flow.as_ref().steps.iter() {
-                if step.script.path() == path {
+                if step.path() == Some(&path) {
                     warn!(target: "flows", "Removing a script used by a flow {flow_id}: {path}");
                     return;
                 }

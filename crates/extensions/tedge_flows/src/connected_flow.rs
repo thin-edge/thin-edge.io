@@ -159,7 +159,7 @@ impl FlowRegistry for ConnectedFlowRegistry {
             .flows
             .flows()
             .flat_map(|flow| &flow.as_ref().steps)
-            .filter_map(|step| step.script.next_execution);
+            .filter_map(|step| step.next_execution);
 
         let source_deadlines = self.flows.flows().filter_map(|flow| flow.next_deadline());
 

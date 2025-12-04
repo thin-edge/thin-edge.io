@@ -49,7 +49,9 @@ impl JsRuntime {
     }
 
     pub async fn load_script(&mut self, script: &mut JsScript) -> Result<(), LoadError> {
-        let exports = self.load_file(script.module_name(), script.path()).await?;
+        let exports = self
+            .load_file(script.module_name.clone(), script.path())
+            .await?;
         for export in exports {
             match export {
                 "onMessage" => script.no_js_on_message_fun = false,
