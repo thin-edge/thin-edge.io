@@ -16,28 +16,36 @@ ${TEDGE_P11_SERVER_VERSION}     1.6.1
 
 
 *** Test Cases ***
-# the test cases are basically copy-pasted from private_key_storage.robot, as the purpose of this suite is to run the
-# exact same tests with a slightly different setup. It would be easiest if we could import the test cases themselves
-# from another test suite, but this isn't possible. So we extract reusable keywords into a resource file, but test cases
-# remain duplicated.
 Use Private Key in SoftHSM2 using tedge-p11-server
     Tedge Reconnect Should Succeed
 
 Renew certificate
-    Execute Command    tedge cert renew c8y
-    Tedge Reconnect Should Succeed
+    [Template]    Renew certificate using tedge-p11-server version
+    ${TEDGE_P11_SERVER_VERSION}    PKCS #11 service failed: Failed to find a signing key
+    ${EMPTY}    PKCS #11 service failed: Failed to find a key
 
 
 *** Keywords ***
+Renew certificate using tedge-p11-server version
+    [Arguments]    ${version}    ${error}
+    Install tedge-p11-server    ${version}
+    Execute Command    tedge cert renew c8y
+    Tedge Reconnect Should Succeed
+
+    Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
+    Command Should Fail With
+    ...    tedge cert renew c8y
+    ...    error=Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
+
+    Execute Command    systemctl start tedge-p11-server.socket
+
+    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
+    Command Should Fail With    tedge cert renew c8y    ${error}
+    Execute Command    cmd=tedge config unset c8y.device.key_uri
+
 Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    ${DEVICE_SN}
-
-    # this doesn't install anything but adds cloudsmith repo to apt
-    Execute Command    curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' | sudo -E bash
-    Execute Command    cmd=apt-get install -y --allow-downgrades tedge-p11-server=${TEDGE_P11_SERVER_VERSION}
-    ${stdout}=    Execute Command    tedge-p11-server -V    strip=True
-    Should Be Equal    ${stdout}    tedge-p11-server ${TEDGE_P11_SERVER_VERSION}
 
     # Allow the tedge user to access softhsm
     Execute Command    sudo usermod -a -G softhsm tedge
@@ -55,5 +63,3 @@ Custom Setup
 
     ${csr_path}=    Execute Command    cmd=tedge config get device.csr_path    strip=${True}
     Register Device With Cumulocity CA    ${DEVICE_SN}    csr_path=${csr_path}
-
-    Unset tedge-p11-server Uri

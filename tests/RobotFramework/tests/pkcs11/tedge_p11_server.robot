@@ -75,6 +75,19 @@ Warn the user if tedge.toml cannot be parsed
     # But proceed
     Should Contain    ${stderr}    Using cryptoki configuration
 
+    Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
+    Command Should Fail With
+    ...    tedge cert renew c8y
+    ...    error=Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
+
+    Execute Command    systemctl start tedge-p11-server.socket
+
+    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
+    Command Should Fail With
+    ...    tedge cert renew c8y
+    ...    error=PKCS #11 service failed: Failed to find a key
+    Execute Command    cmd=tedge config unset c8y.device.key_uri
+
 
 *** Keywords ***
 Custom Setup
