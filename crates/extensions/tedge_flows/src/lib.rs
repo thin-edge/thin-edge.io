@@ -40,6 +40,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_watch_ext::WatchActorBuilder;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
@@ -96,6 +97,10 @@ impl FlowsMapperBuilder {
             &self.message_box,
             |msg| Some(InputMessage::FsWatchEvent(msg)),
         );
+    }
+
+    pub fn connect_cmd(&mut self, cmd: &mut WatchActorBuilder) {
+        cmd.connect(self);
     }
 
     fn topics(&self) -> TopicFilter {

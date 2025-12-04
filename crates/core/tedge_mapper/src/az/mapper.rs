@@ -18,9 +18,12 @@ use tedge_config::tedge_toml::mapper_config::AzMapperConfig;
 use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
+use tedge_file_system_ext::FsWatchActorBuilder;
+use tedge_flows::FlowsMapperBuilder;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
+use tedge_watch_ext::WatchActorBuilder;
 use tracing::warn;
 use yansi::Paint;
 
@@ -33,7 +36,7 @@ impl TEdgeComponent for AzureMapper {
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
-        _config_dir: &tedge_config::Path,
+        config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
         let az_config = tedge_config.mapper_config::<AzMapperSpecificConfig>(&self.profile)?;
         let prefix = &az_config.bridge.topic_prefix;
@@ -100,6 +103,17 @@ impl TEdgeComponent for AzureMapper {
         az_converting_actor.connect_source(get_topic_filter(&az_config), &mut mqtt_actor);
         az_converting_actor.connect_sink(NoConfig, &mqtt_actor);
 
+        let mut fs_actor = FsWatchActorBuilder::new();
+        let mut cmd_watcher_actor = WatchActorBuilder::new();
+        let mut flows_mapper =
+            FlowsMapperBuilder::try_new(config_dir.join(prefix.as_str()).join("flows")).await?;
+        flows_mapper.connect(&mut mqtt_actor);
+        flows_mapper.connect_fs(&mut fs_actor);
+        flows_mapper.connect_cmd(&mut cmd_watcher_actor);
+
+        runtime.spawn(flows_mapper).await?;
+        runtime.spawn(fs_actor).await?;
+        runtime.spawn(cmd_watcher_actor).await?;
         runtime.spawn(az_converting_actor).await?;
         runtime.spawn(mqtt_actor).await?;
         runtime.run_to_completion().await?;
