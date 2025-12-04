@@ -20,6 +20,7 @@ Test Tags           adapter:docker    theme:cryptoki
 *** Variables ***
 ${KEY_URI}                      ${EMPTY}
 ${TEDGE_P11_SERVER_VERSION}     1.6.0
+${PKCS11_USE_P11TOOL}    ${True}
 
 
 *** Test Cases ***

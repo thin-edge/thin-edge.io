@@ -87,8 +87,8 @@ Connects to C8y supporting all TLS13 ECDSA signature algorithms
     ...    ecdsa_secp384r1_sha384, ecdsa_secp521r1_sha512.
     [Setup]    Unset tedge-p11-server Uri
 
-    Connect to C8y using new ECDSA keypair    curve=secp256r1
-    Connect to C8y using new ECDSA keypair    curve=secp384r1
+    Connect to C8y using new ECDSA keypair    curve=p256
+    Connect to C8y using new ECDSA keypair    curve=p384
     # rcgen doesn't support p521
     # https://github.com/rustls/rcgen/issues/60
     # Connect to C8y using new ECDSA keypair    curve=p521
@@ -98,8 +98,8 @@ Use PKCS11 key to renew the public certificate
     ...    can renew both a self-signed certificate and a certificate signed by C8y CA.
     [Setup]    Unset tedge-p11-server Uri
 
-    Test tedge cert renew    type=ecdsa    curve=secp256r1
-    Test tedge cert renew    type=ecdsa    curve=secp384r1
+    Test tedge cert renew    type=ecdsa    curve=p256
+    Test tedge cert renew    type=ecdsa    curve=p384
 
     # renewal isn't supported for secp521r1 because rcgen doesn't support it
     # https://github.com/rustls/rcgen/issues/60
