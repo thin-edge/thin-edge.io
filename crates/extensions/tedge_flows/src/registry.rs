@@ -2,6 +2,7 @@ use crate::config::ConfigError;
 use crate::config::FlowConfig;
 use crate::flow::Flow;
 use crate::js_runtime::JsRuntime;
+use crate::transformers::BuiltinTransformers;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -16,6 +17,9 @@ pub trait FlowRegistry {
 
     fn compile(flow: Flow) -> Result<Self::Flow, ConfigError>;
 
+    fn builtins(&self) -> &BuiltinTransformers;
+    fn builtins_mut(&mut self) -> &mut BuiltinTransformers;
+
     fn store(&self) -> &FlowStore<Self::Flow>;
     fn store_mut(&mut self) -> &mut FlowStore<Self::Flow>;
 
@@ -24,12 +28,14 @@ pub trait FlowRegistry {
 
 pub struct BaseFlowRegistry {
     flows: FlowStore<Flow>,
+    builtins: BuiltinTransformers,
 }
 
 impl BaseFlowRegistry {
     pub fn new(config_dir: impl AsRef<Utf8Path>) -> Self {
         BaseFlowRegistry {
             flows: FlowStore::new(config_dir),
+            builtins: BuiltinTransformers::default(),
         }
     }
 }
@@ -48,6 +54,14 @@ impl FlowRegistry for BaseFlowRegistry {
 
     fn store_mut(&mut self) -> &mut FlowStore<Self::Flow> {
         &mut self.flows
+    }
+
+    fn builtins(&self) -> &BuiltinTransformers {
+        &self.builtins
+    }
+
+    fn builtins_mut(&mut self) -> &mut BuiltinTransformers {
+        &mut self.builtins
     }
 
     fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + '_ {
@@ -152,7 +166,6 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
                     match step.load_script(js_runtime).await {
                         Ok(()) => {
                             info!(target: "flows", "Reloading flow script {path}");
-                            step.init_next_execution();
                         }
                         Err(e) => {
                             error!(target: "flows", "Failed to reload flow script {path}: {e}");
@@ -183,7 +196,12 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         config: FlowConfig,
     ) {
         match config
-            .compile(js_runtime, self.store().config_dir(), path.to_owned())
+            .compile(
+                self.builtins(),
+                js_runtime,
+                self.store().config_dir(),
+                path.to_owned(),
+            )
             .await
             .and_then(Self::compile)
         {

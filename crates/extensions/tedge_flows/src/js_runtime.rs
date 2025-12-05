@@ -50,19 +50,36 @@ impl JsRuntime {
 
     pub async fn load_script(&mut self, script: &mut JsScript) -> Result<(), LoadError> {
         let exports = self
-            .load_file(script.module_name.clone(), script.path())
+            .load_file(script.module_name.to_owned(), script.path())
             .await?;
-        for export in exports {
-            match export {
-                "onMessage" => script.no_js_on_message_fun = false,
-                "onInterval" => script.no_js_on_interval_fun = false,
-                _ => (),
-            }
-        }
+        Self::set_exports(script, &exports);
         Ok(())
     }
 
-    pub async fn load_file(
+    pub async fn load_script_literal(
+        &mut self,
+        script: &mut JsScript,
+        source: impl Into<Vec<u8>>,
+    ) -> Result<(), LoadError> {
+        let exports = self.load_js(script.module_name.to_owned(), source).await?;
+        Self::set_exports(script, &exports);
+        Ok(())
+    }
+
+    fn set_exports(script: &mut JsScript, exports: &[&str]) {
+        for export in exports {
+            match *export {
+                "onMessage" => script.is_defined = true,
+                "onInterval" => script.is_periodic = true,
+                _ => (),
+            }
+        }
+        if !script.is_defined {
+            tracing::warn!(target: "flows", "Flow script with no 'onMessage' function: {}", script.path);
+        }
+    }
+
+    async fn load_file(
         &mut self,
         module_name: String,
         path: impl AsRef<Utf8Path>,
@@ -74,7 +91,7 @@ impl JsRuntime {
         self.load_js(module_name, source).await
     }
 
-    pub async fn load_js(
+    async fn load_js(
         &mut self,
         name: String,
         source: impl Into<Vec<u8>>,

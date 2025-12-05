@@ -1,10 +1,12 @@
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::js_value::JsonValue;
+use crate::transformers::Transformer;
 use crate::FlowError;
 use crate::LoadError;
 use crate::Message;
 use camino::Utf8Path;
+use std::fmt::Display;
 use std::time::Duration;
 use std::time::SystemTime;
 use tokio::time::Instant;
@@ -19,12 +21,31 @@ pub struct FlowStep {
 
 pub enum StepHandler {
     JsScript(JsScript),
+    Transformer(String, Box<dyn Transformer>),
 }
 
 impl FlowStep {
+    /// Return a name that uniquely identifies a step instance
+    ///
+    /// This name is built after : the flow name, the script name (or builtin transformer)
+    /// and the index that step among all the steps of the flow (so two instances of the same script
+    /// in the same flow are given different instance name).
+    pub fn instance_name(flow: impl Display, script: impl Display, index: usize) -> String {
+        format!("{flow}|{index}|{script}")
+    }
+
     pub fn new_script(script: JsScript) -> Self {
         FlowStep {
             handler: StepHandler::JsScript(script),
+            config: JsonValue::default(),
+            interval: Duration::ZERO,
+            next_execution: None,
+        }
+    }
+
+    pub fn new_transformer(instance_name: String, transformer: Box<dyn Transformer>) -> Self {
+        FlowStep {
+            handler: StepHandler::Transformer(instance_name, transformer),
             config: JsonValue::default(),
             interval: Duration::ZERO,
             next_execution: None,
@@ -42,14 +63,32 @@ impl FlowStep {
         }
     }
 
-    pub fn with_interval(self, interval: Duration) -> Self {
-        Self { interval, ..self }
+    pub fn with_interval(mut self, interval: Option<Duration>, flow: &str) -> Self {
+        let is_periodic = match &self.handler {
+            StepHandler::JsScript(script) => script.is_periodic,
+            StepHandler::Transformer(_, builtin) => builtin.is_periodic(),
+        };
+        if !is_periodic && interval.is_some() {
+            tracing::warn!(target: "flows", "Script with no 'onInterval' function: {}; but configured with an 'interval' in {flow}", self.source());
+        }
+        let interval = interval.unwrap_or_else(|| {
+            if is_periodic {
+                Duration::from_secs(1)
+            } else {
+                Duration::ZERO
+            }
+        });
+
+        self.interval = interval;
+        self.init_next_execution();
+        self
     }
 
     /// Return source of this step (a path or a builtin transformer)
     pub fn source(&self) -> &str {
         match &self.handler {
             StepHandler::JsScript(script) => script.path.as_str(),
+            StepHandler::Transformer(_, builtin) => builtin.name(),
         }
     }
 
@@ -57,33 +96,31 @@ impl FlowStep {
     pub fn path(&self) -> Option<&Utf8Path> {
         match &self.handler {
             StepHandler::JsScript(script) => Some(&script.path),
+            StepHandler::Transformer(_, _) => None,
         }
     }
 
     pub fn step_name(&self) -> &str {
         match &self.handler {
             StepHandler::JsScript(script) => &script.module_name,
+            StepHandler::Transformer(instance_name, _) => instance_name,
         }
     }
 
     pub async fn load_script(&mut self, js: &mut JsRuntime) -> Result<(), LoadError> {
-        match &mut self.handler {
-            StepHandler::JsScript(script) => {
-                js.load_script(script).await?;
-                script.check(&self.interval);
-                if !script.no_js_on_interval_fun && self.interval.is_zero() {
-                    // Zero as a default is not appropriate for a script with an onInterval handler
-                    self.interval = Duration::from_secs(1);
-                }
-            }
+        if let StepHandler::JsScript(script) = &mut self.handler {
+            js.load_script(script).await?;
+            // FIXME: there is bug here when the updated version adds an on_interval method
+            // This method will be ignored, because the interval is zero (because there no on_interval method before)
+            // => The configured interval must not be erased
+            self.init_next_execution();
         }
-        self.init_next_execution();
         Ok(())
     }
 
     /// Initialize the next execution time for this script's interval
     /// Should be called after the script is loaded and interval is set
-    pub fn init_next_execution(&mut self) {
+    fn init_next_execution(&mut self) {
         if !self.interval.is_zero() {
             self.next_execution = Some(Instant::now() + self.interval);
         }
@@ -124,6 +161,9 @@ impl FlowStep {
                     .on_message(js, timestamp, message, &self.config)
                     .await
             }
+            StepHandler::Transformer(_, builtin) => {
+                builtin.on_message(timestamp, message, &self.config)
+            }
         }
     }
 
@@ -139,6 +179,7 @@ impl FlowStep {
     ) -> Result<Vec<Message>, FlowError> {
         match &self.handler {
             StepHandler::JsScript(script) => script.on_interval(js, timestamp, &self.config).await,
+            StepHandler::Transformer(_, builtin) => builtin.on_interval(timestamp, &self.config),
         }
     }
 }
