@@ -1,0 +1,32 @@
+#!/bin/bash
+case "$1" in
+    "list")
+        echo "dummy_config"
+        ;;
+    "get")
+        case "$2" in
+            "dummy_config")
+                echo "Dummy content"
+                ;;
+            *)
+                echo "Unsupported config type \"$2\"" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    "set")
+        case "$2" in
+            "dummy_config")
+                # Fake config update
+                echo "Config updated successfully"
+                ;;
+            *)
+                echo "Unsupported config type \"$2\"" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    *)
+        exit 1
+        ;;
+esac

@@ -905,9 +905,9 @@ impl CommandPayload for ConfigUpdateCmdPayload {
 }
 
 impl ConfigUpdateCmdPayload {
-    pub fn successful(&mut self, path: impl Into<String>) {
+    pub fn successful(&mut self, path: Option<impl ToString>) {
         self.status = CommandStatus::Successful;
-        self.path = Some(path.into())
+        self.path = path.map(|p| p.to_string());
     }
 }
 

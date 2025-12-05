@@ -1,10 +1,13 @@
 mod actor;
 mod config;
 mod error;
+mod plugin;
+mod plugin_manager;
 
 #[cfg(test)]
 mod tests;
 
+use crate::plugin_manager::ExternalPlugins;
 use actor::*;
 pub use config::*;
 use log::error;
@@ -12,6 +15,7 @@ use serde_json::json;
 use std::path::PathBuf;
 use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
+use tedge_actors::CloneSender;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MappingSender;
@@ -22,6 +26,7 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::commands::CmdMetaSyncSignal;
 use tedge_api::commands::ConfigSnapshotCmd;
 use tedge_api::commands::ConfigUpdateCmd;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -30,6 +35,7 @@ use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
+use tedge_api::workflow::SyncOnCommand;
 use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
@@ -56,7 +62,7 @@ pub struct ConfigManagerBuilder {
 impl ConfigManagerBuilder {
     pub async fn try_new(
         config: ConfigManagerConfig,
-        fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
+        fs_notify: &mut impl MessageSource<FsWatchEvent, Vec<PathBuf>>,
         downloader_actor: &mut impl Service<ConfigDownloadRequest, ConfigDownloadResult>,
         uploader_actor: &mut impl Service<ConfigUploadRequest, ConfigUploadResult>,
     ) -> Result<Self, FileError> {
@@ -70,7 +76,7 @@ impl ConfigManagerBuilder {
         let uploader = ClientMessageBox::new(uploader_actor);
 
         fs_notify.connect_sink(
-            ConfigManagerBuilder::watched_directory(&config),
+            ConfigManagerBuilder::watched_directories(&config),
             &box_builder.get_sender(),
         );
 
@@ -155,9 +161,15 @@ impl ConfigManagerBuilder {
         topic_filter
     }
 
-    /// Directory watched by the config actors for configuration changes
-    fn watched_directory(config: &ConfigManagerConfig) -> PathBuf {
-        config.plugin_config_dir.clone()
+    /// Directories watched by the config actor
+    /// - for configuration changes
+    /// - for plugin changes
+    fn watched_directories(config: &ConfigManagerConfig) -> Vec<PathBuf> {
+        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
+        for dir in &config.plugin_dirs {
+            watch_dirs.push(dir.into());
+        }
+        watch_dirs
     }
 
     /// Extract a config actor request from an MQTT message
@@ -188,6 +200,12 @@ impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
     fn try_build(self) -> Result<ConfigManagerActor, Self::Error> {
         let (output_sender, input_receiver) = self.box_builder.build().into_split();
 
+        let external_plugins = ExternalPlugins::new(
+            self.config.plugin_dirs.clone(),
+            true,
+            self.config.tmp_path.clone(),
+        );
+
         Ok(ConfigManagerActor::new(
             self.config,
             self.plugin_config,
@@ -195,6 +213,7 @@ impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
             output_sender,
             self.downloader,
             self.uploader,
+            external_plugins,
         ))
     }
 }
@@ -264,4 +283,17 @@ fn generic_command_into_update_request(cmd: GenericCommandState) -> Option<Confi
     let topic = cmd.topic.clone();
     let cmd = ConfigUpdateCmd::try_from(cmd).ok()?;
     Some(ConfigOperation::Update(topic, cmd.payload).into())
+}
+
+impl MessageSink<CmdMetaSyncSignal> for ConfigManagerBuilder {
+    fn get_sender(&self) -> DynSender<CmdMetaSyncSignal> {
+        self.box_builder.get_sender().sender_clone()
+    }
+}
+
+impl SyncOnCommand for ConfigManagerBuilder {
+    /// Return the list of operations for which this actor wants to receive sync signals
+    fn sync_on_commands(&self) -> Vec<OperationType> {
+        vec![OperationType::SoftwareUpdate]
+    }
 }

@@ -995,6 +995,13 @@ define_tedge_config! {
         #[tedge_config(example = "/usr/share/log-plugins,/etc/tedge/log-plugins", default(value = "/usr/share/tedge/log-plugins"))]
         plugin_paths: TemplatesSet,
     },
+
+    configuration: {
+        /// The directories where configuration plugins are stored
+        #[tedge_config(example = "/usr/share/tedge/config-plugins,/usr/local/share/tedge/config-plugins", default(value = "/usr/share/tedge/config-plugins"))]
+        plugin_paths: TemplatesSet,
+    }
+
 }
 
 static CLOUD_ROOT_CERTIFICATES: OnceLock<Arc<[Certificate]>> = OnceLock::new();

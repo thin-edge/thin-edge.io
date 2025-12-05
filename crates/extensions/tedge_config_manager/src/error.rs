@@ -35,6 +35,9 @@ pub enum ConfigManagementError {
     #[error(transparent)]
     FromAtomFileError(#[from] tedge_utils::fs::AtomFileError),
 
+    #[error("Config plugin '{plugin_name}' error: {reason}")]
+    PluginError { plugin_name: String, reason: String },
+
     #[error("{0:#}")]
     Other(#[from] anyhow::Error),
 }

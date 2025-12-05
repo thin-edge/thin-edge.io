@@ -57,11 +57,12 @@ This mechanism can be used to override the factory plugins when needed.
 ## Permissions
 
 Plugins are executed by the agent with `sudo` privileges.
-The agent automatically creates the following sudoers entry,
-giving sudo rights to all plugins installed at `/usr/local/lib/tedge/log-plugins`:
+When %%te%% is installed using the official packages available for the supported package managers,
+the `tedge` package automatically creates the following sudoers entry,
+giving sudo rights to all plugins installed at `/usr/share/tedge/log-plugins`:
 
 ```
-tedge    ALL = (ALL) NOPASSWD:SETENV: /usr/local/lib/tedge/log-plugins/[a-zA-Z0-9]*
+tedge    ALL = (ALL) NOPASSWD:SETENV: /usr/share/tedge/log-plugins/[a-zA-Z0-9]*
 ```
 
 If the `log.plugin_paths` config is updated with additional directories as shown in the previous section,
