@@ -53,6 +53,17 @@ impl JsonValue {
             .collect();
         JsonValue::Object(object)
     }
+
+    pub fn string_property(&self, property: &str) -> Option<&str> {
+        match self {
+            JsonValue::Object(map) => map.get(property),
+            _ => None,
+        }
+        .and_then(|v| match v {
+            JsonValue::String(string) => Some(string.as_str()),
+            _ => None,
+        })
+    }
 }
 
 impl From<Message> for JsonValue {

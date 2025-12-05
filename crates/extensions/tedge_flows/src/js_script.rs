@@ -5,38 +5,26 @@ use crate::js_runtime::JsRuntime;
 use crate::js_value::JsonValue;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use std::time::Duration;
 use std::time::SystemTime;
 use tracing::debug;
-use tracing::warn;
 
 #[derive(Clone, Debug)]
 pub struct JsScript {
     pub module_name: String,
     pub flow: Utf8PathBuf,
     pub path: Utf8PathBuf,
-    pub no_js_on_message_fun: bool,
-    pub no_js_on_interval_fun: bool,
+    pub is_defined: bool,
+    pub is_periodic: bool,
 }
 
 impl JsScript {
-    pub fn new(flow: Utf8PathBuf, index: usize, path: Utf8PathBuf) -> Self {
-        let module_name = format!("{flow}|{index}|{path}");
+    pub fn new(module_name: String, flow: Utf8PathBuf, path: Utf8PathBuf) -> Self {
         JsScript {
             module_name,
             flow,
             path,
-            no_js_on_message_fun: true,
-            no_js_on_interval_fun: true,
-        }
-    }
-
-    pub(crate) fn check(&self, interval: &Duration) {
-        if self.no_js_on_message_fun {
-            warn!(target: "flows", "Flow script with no 'onMessage' function: {}", self.path);
-        }
-        if self.no_js_on_interval_fun && !interval.is_zero() {
-            warn!(target: "flows", "Flow script with no 'onInterval' function: {}; but configured with an 'interval' in {}", self.path, self.flow);
+            is_defined: false,
+            is_periodic: false,
         }
     }
 
@@ -67,7 +55,7 @@ impl JsScript {
         config: &JsonValue,
     ) -> Result<Vec<Message>, FlowError> {
         debug!(target: "flows", "{}: onMessage({timestamp:?}, {message})", &self.module_name);
-        if self.no_js_on_message_fun {
+        if !self.is_defined {
             return Ok(vec![message.clone()]);
         }
 
@@ -95,7 +83,7 @@ impl JsScript {
         timestamp: SystemTime,
         config: &JsonValue,
     ) -> Result<Vec<Message>, FlowError> {
-        if self.no_js_on_interval_fun {
+        if !self.is_periodic {
             return Ok(vec![]);
         };
         debug!(target: "flows", "{}: onInterval({timestamp:?})", self.module_name);
@@ -113,6 +101,7 @@ mod tests {
     use crate::js_lib::kv_store::MAPPER_NAMESPACE;
     use crate::steps::FlowStep;
     use serde_json::json;
+    use std::time::Duration;
 
     #[tokio::test]
     async fn identity_script() {
@@ -650,11 +639,10 @@ export function onMessage(message, context) {
 
     async fn runtime_with(js: &str) -> (JsRuntime, FlowStep) {
         let mut runtime = JsRuntime::try_new().await.unwrap();
-        let mut script = JsScript::new("toml".into(), 1, "js".into());
-        if let Err(err) = runtime.load_js(script.module_name.to_owned(), js).await {
+        let mut script = JsScript::new("toml|1|js".to_owned(), "toml".into(), "js".into());
+        if let Err(err) = runtime.load_script_literal(&mut script, js).await {
             panic!("{:?}", err);
         }
-        script.no_js_on_message_fun = false;
         let step = FlowStep::new_script(script);
         (runtime, step)
     }

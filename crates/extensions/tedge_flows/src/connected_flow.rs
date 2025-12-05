@@ -12,6 +12,7 @@ use crate::input_source::PollingSource;
 use crate::input_source::StreamingSource;
 use crate::registry::FlowRegistry;
 use crate::registry::FlowStore;
+use crate::transformers::BuiltinTransformers;
 use camino::Utf8Path;
 use std::time::SystemTime;
 use tedge_watch_ext::WatchRequest;
@@ -128,12 +129,14 @@ fn polling_source(input: FlowInput) -> Option<Box<dyn PollingSource>> {
 
 pub struct ConnectedFlowRegistry {
     flows: FlowStore<ConnectedFlow>,
+    builtins: BuiltinTransformers,
 }
 
 impl ConnectedFlowRegistry {
     pub fn new(config_dir: impl AsRef<Utf8Path>) -> Self {
         ConnectedFlowRegistry {
             flows: FlowStore::new(config_dir),
+            builtins: BuiltinTransformers::default(),
         }
     }
 }
@@ -152,6 +155,14 @@ impl FlowRegistry for ConnectedFlowRegistry {
 
     fn store_mut(&mut self) -> &mut FlowStore<Self::Flow> {
         &mut self.flows
+    }
+
+    fn builtins(&self) -> &BuiltinTransformers {
+        &self.builtins
+    }
+
+    fn builtins_mut(&mut self) -> &mut BuiltinTransformers {
+        &mut self.builtins
     }
 
     fn deadlines(&self) -> impl Iterator<Item = Instant> + '_ {

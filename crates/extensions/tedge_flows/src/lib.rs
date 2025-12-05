@@ -11,6 +11,7 @@ mod registry;
 mod runtime;
 mod stats;
 mod steps;
+mod transformers;
 
 use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
@@ -151,6 +152,9 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
 
 #[derive(thiserror::Error, Debug)]
 pub enum LoadError {
+    #[error("Builtin transformer not found: {name}")]
+    UnknownTransformer { name: String },
+
     #[error("JavaScript module not found: {module_name}")]
     UnknownModule { module_name: String },
 
