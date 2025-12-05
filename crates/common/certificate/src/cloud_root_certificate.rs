@@ -2,8 +2,12 @@ use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use reqwest::Certificate;
-use std::fs::File;
+use std::io::Cursor;
+use std::pin::Pin;
 use std::sync::Arc;
+use tokio_stream::wrappers::ReadDirStream;
+use tokio_stream::Stream;
+use tokio_stream::StreamExt as _;
 
 #[derive(Debug, Clone)]
 pub struct CloudHttpConfig {
@@ -52,9 +56,10 @@ impl CloudHttpConfig {
 }
 
 /// Read a directory into a [RootCertStore]
-pub fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<Certificate>> {
+pub async fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<Certificate>> {
     let mut certs = Vec::new();
-    for path in iter_file_or_directory(ca_dir_or_file) {
+    let mut stream = stream_file_or_directory(ca_dir_or_file).await;
+    while let Some(path) = stream.next().await {
         let path =
             path.with_context(|| format!("reading metadata for file at {ca_dir_or_file}"))?;
 
@@ -62,7 +67,7 @@ pub fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<Certifi
             continue;
         }
 
-        let mut pem_file = match File::open(&path).map(std::io::BufReader::new) {
+        let pem_bytes = match tokio::fs::read(&path).await {
             Ok(pem_file) => pem_file,
             err if path == ca_dir_or_file => {
                 err.with_context(|| format!("failed to read from path {path:?}"))?
@@ -70,7 +75,7 @@ pub fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<Certifi
             Err(_other_unreadable_file) => continue,
         };
 
-        let ders = rustls_pemfile::certs(&mut pem_file)
+        let ders = rustls_pemfile::certs(&mut Cursor::new(pem_bytes))
             .map(|res| Ok(Certificate::from_der(&res?)?))
             .collect::<anyhow::Result<Vec<_>>>()
             .with_context(|| format!("reading {path}"))?;
@@ -80,20 +85,24 @@ pub fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<Certifi
     Ok(certs)
 }
 
-fn iter_file_or_directory(
+async fn stream_file_or_directory(
     possible_dir: &Utf8Path,
-) -> Box<dyn Iterator<Item = anyhow::Result<Utf8PathBuf>> + 'static> {
-    let path = possible_dir.to_path_buf();
-    if let Ok(dir) = possible_dir.read_dir_utf8() {
-        Box::new(dir.map(move |file| match file {
+) -> Pin<Box<dyn Stream<Item = anyhow::Result<Utf8PathBuf>> + Send + 'static>> {
+    let base_path = possible_dir.to_path_buf();
+    if let Ok(dir) = tokio::fs::read_dir(possible_dir).await {
+        let dir_stream = ReadDirStream::new(dir);
+        Box::pin(dir_stream.map(move |file| match file {
             Ok(file) => {
-                let mut path = path.clone();
-                path.push(file.file_name());
+                let mut path = base_path.clone();
+                path.push(file.file_name().to_str().ok_or(anyhow::anyhow!(
+                    "encountered non-utf8 path: {}",
+                    file.file_name().to_string_lossy()
+                ))?);
                 Ok(path)
             }
-            Err(e) => Err(e).with_context(|| format!("reading metadata for file in {path}")),
+            Err(e) => Err(e).with_context(|| format!("reading metadata for file in {base_path}")),
         }))
     } else {
-        Box::new([Ok(path)].into_iter())
+        Box::pin(tokio_stream::once(Ok(base_path)))
     }
 }

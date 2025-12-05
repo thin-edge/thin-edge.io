@@ -132,8 +132,9 @@ pub trait Command {
 ///     Get { key: ReadableKey },
 /// }
 ///
+/// #[async_trait::async_trait]
 /// impl BuildCommand for ConfigCmd {
-///     fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+///     async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
 ///         let cmd = match self {
 ///             ConfigCmd::Set { key, value } => SetConfigCommand {
 ///                 key,
@@ -147,10 +148,14 @@ pub trait Command {
 ///     }
 /// }
 /// ```
+#[async_trait::async_trait]
 pub trait BuildCommand {
     /// Build a command from the config.
     ///
     /// As some commands have to update the config (notably `tedge config set`),
     /// the command are given not only the config but also the location of that config.
-    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError>;
+    async fn build_command(
+        self,
+        config: &TEdgeConfig,
+    ) -> Result<Box<dyn Command>, crate::ConfigError>;
 }

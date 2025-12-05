@@ -14,6 +14,7 @@ use tedge_actors::DynSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
 use tedge_config::TEdgeConfig;
 use tedge_config_macros::OptionalConfig;
 use tracing::info;
@@ -32,19 +33,19 @@ pub struct C8yAuthProxyBuilder {
 }
 
 impl C8yAuthProxyBuilder {
-    pub fn try_from_config(
+    pub async fn try_from_config(
         config: &TEdgeConfig,
-        c8y_profile: Option<&str>,
+        c8y: &C8yMapperConfig,
     ) -> anyhow::Result<Self> {
-        let reqwest_client = config.cloud_root_certs()?.client();
-        let c8y = config.c8y.try_get(c8y_profile)?;
-        let auth_retriever = C8yAuthRetriever::from_tedge_config(config, c8y_profile)?;
+        let reqwest_client = config.cloud_root_certs().await?.client();
+        let auth_retriever = C8yAuthRetriever::from_tedge_config(config, c8y)?;
         let app_data = AppData {
             is_https: true,
-            host: c8y.http.or_config_not_set()?.to_string(),
+            host: c8y.http().or_config_not_set()?.to_string(),
             token_manager: C8yTokenManager::new(auth_retriever).shared(),
             client: reqwest_client,
         };
+        let c8y = &c8y.cloud_specific;
         let bind = &c8y.proxy.bind;
         let (signal_sender, signal_receiver) = mpsc::channel(10);
         let cert_path = c8y.proxy.cert_path.clone().map(Utf8PathBuf::from);
@@ -54,7 +55,7 @@ impl C8yAuthProxyBuilder {
         Ok(Self {
             app_data,
             bind_address: bind.address,
-            bind_port: bind.port,
+            bind_port: *bind.port,
             signal_sender,
             signal_receiver,
             cert_path,

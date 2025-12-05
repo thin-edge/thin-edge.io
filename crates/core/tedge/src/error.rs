@@ -44,4 +44,7 @@ pub enum TEdgeError {
 
     #[error(transparent)]
     FromC8yEndPointConfigError(#[from] c8y_api::http_proxy::C8yEndPointConfigError),
+
+    #[error(transparent)]
+    FromMapperConfigError(#[from] tedge_config::tedge_toml::mapper_config::MapperConfigError),
 }

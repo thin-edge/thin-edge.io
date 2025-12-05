@@ -14,12 +14,14 @@ test = []
 
 [dependencies]
 anyhow = { workspace = true }
+anymap3 = { workspace = true }
 camino = { workspace = true, features = ["serde", "serde1"] }
 certificate = { workspace = true, features = ["reqwest"] }
 clap = { workspace = true }
 clap_complete = { workspace = true }
 doku = { workspace = true }
 figment = { workspace = true, features = ["env", "toml"] }
+futures = { workspace = true }
 humantime = { workspace = true }
 mqtt_channel = { workspace = true }
 once_cell = { workspace = true }
@@ -34,7 +36,8 @@ tedge_api = { workspace = true }
 tedge_config_macros = { workspace = true }
 tedge_utils = { workspace = true, features = ["timestamp"] }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
+tokio-stream = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -45,6 +48,7 @@ yansi = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 figment = { workspace = true, features = ["test"] }
+tedge_config = { workspace = true, features = ["test"] }
 tedge_test_utils = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }

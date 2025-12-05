@@ -30,6 +30,8 @@ use rumqttc::QoS::AtLeastOnce;
 use rumqttc::TlsError;
 use rumqttc::Transport;
 use tedge_config::models::auth_method::AuthType;
+use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
+use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
@@ -170,15 +172,17 @@ pub(crate) async fn check_device_status_c8y(
     tedge_config: &TEdgeConfig,
     c8y_profile: Option<&ProfileName>,
 ) -> Result<DeviceStatus, ConnectError> {
-    let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
-
+    let c8y_config = tedge_config
+        .mapper_config::<C8yMapperSpecificConfig>(&c8y_profile)
+        .await?;
     let prefix = &c8y_config.bridge.topic_prefix;
     let built_in_bridge = tedge_config.mqtt.bridge.built_in;
     let bridge_health_topic = bridge_health_topic(prefix, tedge_config).name;
 
     let (downstream_topic, upstream_topic, payload) = if c8y_config
+        .cloud_specific
         .auth_method
-        .is_basic(&c8y_config.credentials_path)
+        .is_basic(&c8y_config.cloud_specific.credentials_path)
     {
         (
             format!("{prefix}/s/ds"),
@@ -312,9 +316,9 @@ async fn publish_device_create_message(
 
 pub(crate) async fn get_connected_c8y_url(
     tedge_config: &TEdgeConfig,
-    c8y_prefix: Option<&str>,
+    c8y_config: &C8yMapperConfig,
 ) -> Result<String, ConnectError> {
-    let prefix = &tedge_config.c8y.try_get(c8y_prefix)?.bridge.topic_prefix;
+    let prefix = &c8y_config.bridge.topic_prefix;
     let c8y_topic_builtin_jwt_token_upstream = format!("{prefix}/s/uat");
     let c8y_topic_builtin_jwt_token_downstream = format!("{prefix}/s/dat");
     const CLIENT_ID: &str = "get_jwt_token_c8y";

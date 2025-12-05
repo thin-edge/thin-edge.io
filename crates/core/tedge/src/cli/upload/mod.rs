@@ -62,8 +62,9 @@ fn parse_mime_type(input: &str) -> Result<String, anyhow::Error> {
     Ok(input.parse::<mime_guess::mime::Mime>()?.to_string())
 }
 
+#[async_trait::async_trait]
 impl BuildCommand for UploadCmd {
-    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let cmd = match self {
             UploadCmd::C8y {
                 event_type,
@@ -75,9 +76,9 @@ impl BuildCommand for UploadCmd {
                 device_id,
             } => {
                 let identity = config.http.client.auth.identity()?;
-                let cloud_root_certs = config.cloud_root_certs()?;
-                let c8y = C8yEndPoint::local_proxy(config, profile.as_deref())?;
-                let c8y_config = config.c8y.try_get(profile.as_deref())?;
+                let cloud_root_certs = config.cloud_root_certs().await?;
+                let c8y_config = config.mapper_config(&profile).await?;
+                let c8y = C8yEndPoint::local_proxy(&c8y_config)?;
                 let device_id = match device_id {
                     None => c8y_config.device.id()?.clone(),
                     Some(device_id) => device_id,

@@ -217,11 +217,17 @@ pub fn profile_completions() -> Vec<CompletionCandidate> {
     let Ok(tc) = TEdgeConfig::load_sync(get_config_dir()) else {
         return vec![];
     };
-    tc.c8y
-        .keys_str()
+    tc.c8y_keys_str()
         .flatten()
         .map(CompletionCandidate::new)
-        .chain(tc.az.keys_str().flatten().map(CompletionCandidate::new))
-        .chain(tc.aws.keys_str().flatten().map(CompletionCandidate::new))
+        .chain(tc.az_keys_str().flatten().map(CompletionCandidate::new))
+        .chain(tc.aws_keys_str().flatten().map(CompletionCandidate::new))
+        .chain(
+            tc.profiled_config_directories()
+                .flat_map(|dir| std::fs::read_dir(dir).into_iter().flatten())
+                .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+                .filter_map(|s| Some(s.strip_suffix(".toml")?.to_owned()))
+                .map(CompletionCandidate::new),
+        )
         .collect()
 }

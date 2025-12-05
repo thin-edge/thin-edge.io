@@ -74,8 +74,9 @@ pub enum TEdgeFlowsCli {
     },
 }
 
+#[async_trait::async_trait]
 impl BuildCommand for TEdgeFlowsCli {
-    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
             TEdgeFlowsCli::List { flows_dir, topic } => {
                 let flows_dir = flows_dir.unwrap_or_else(|| Self::default_flows_dir(config));
