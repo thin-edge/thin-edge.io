@@ -182,7 +182,7 @@ impl ExternalPlugins {
                             config.software.plugin.exclude.or_none().cloned(),
                             config.software.plugin.include.or_none().cloned(),
                             identity,
-                            config.cloud_root_certs()?,
+                            config.cloud_root_certs().await?,
                             config.tmp.path.as_path().into(),
                         );
                         self.plugin_map.insert(plugin_name.into(), plugin);

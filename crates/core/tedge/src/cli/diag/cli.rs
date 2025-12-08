@@ -43,8 +43,9 @@ pub enum TEdgeDiagCli {
     },
 }
 
+#[async_trait::async_trait]
 impl BuildCommand for TEdgeDiagCli {
-    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
             TEdgeDiagCli::Collect {
                 plugin_dir,

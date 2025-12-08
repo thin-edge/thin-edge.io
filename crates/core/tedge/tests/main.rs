@@ -403,6 +403,309 @@ mod tests {
         assert!(output_str.contains("Example"));
     }
 
+    // Tests for restrict_cloud_config_update behavior
+    #[test_case("set", "c8y.url", "new.example.com", "c8y", None; "set default c8y")]
+    #[test_case("unset", "c8y.url", "", "c8y", None; "unset default c8y")]
+    #[test_case("add", "c8y.smartrest.templates", "template1", "c8y", None; "add default c8y")]
+    #[test_case("remove", "c8y.smartrest.templates", "template1", "c8y", None; "remove default c8y")]
+    #[test_case("set", "az.url", "new.example.com", "az", None; "set default az")]
+    #[test_case("unset", "az.url", "", "az", None; "unset default az")]
+    #[test_case("set", "aws.url", "new.example.com", "aws", None; "set default aws")]
+    #[test_case("unset", "aws.url", "", "aws", None; "unset default aws")]
+    #[test_case("set", "c8y.profiles.prod.url", "new.example.com", "c8y", Some("prod"); "set profile c8y")]
+    #[test_case("set", "az.profiles.prod.url", "new.example.com", "az", Some("prod"); "set profile az")]
+    #[test_case("set", "aws.profiles.prod.url", "new.example.com", "aws", Some("prod"); "set profile aws")]
+    fn migrated_config_blocks_mutation_commands(
+        cmd: &str,
+        config_key: &str,
+        value: &str,
+        cloud: &str,
+        profile: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+
+        // Setup migrated config for the specific cloud being tested
+        match profile {
+            None => setup_migrated_default(&temp_dir, cloud),
+            Some(p) => setup_migrated_profile(&temp_dir, cloud, p),
+        }
+
+        let test_home = temp_dir.path().to_str().unwrap();
+
+        // Build expected path in error message
+        let expected_path = match profile {
+            None => format!("{}/mappers/{}.toml", test_home, cloud),
+            Some(p) => format!("{}/mappers/{}.d/{}.toml", test_home, cloud, p),
+        };
+
+        // Attempt the command
+        let mut args = vec!["--config-dir", test_home, "config", cmd, config_key];
+        if !value.is_empty() {
+            args.push(value);
+        }
+
+        let mut command = tedge_command_with_test_home(args)?;
+
+        // Verify it fails with appropriate error
+        command
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(format!("tedge config {cmd}")))
+            .stderr(predicate::str::contains(format!(
+                "cannot be used to update {cloud} mapper config"
+            )))
+            .stderr(predicate::str::contains(&expected_path))
+            .stderr(predicate::str::contains(config_key));
+
+        Ok(())
+    }
+
+    #[test_case("set", "c8y.url", "new.example.com", "c8y"; "set c8y")]
+    #[test_case("unset", "c8y.url", "", "c8y"; "unset c8y")]
+    #[test_case("add", "c8y.smartrest.templates", "template1", "c8y"; "add c8y")]
+    #[test_case("set", "az.url", "new.example.com", "az"; "set az")]
+    #[test_case("unset", "az.url", "", "az"; "unset az")]
+    #[test_case("set", "aws.url", "new.example.com", "aws"; "set aws")]
+    #[test_case("unset", "aws.url", "", "aws"; "unset aws")]
+    fn legacy_config_allows_mutation_commands(
+        cmd: &str,
+        config_key: &str,
+        value: &str,
+        cloud: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+
+        // Setup legacy config for the specific cloud being tested
+        setup_legacy_config(&temp_dir, cloud);
+
+        let test_home = temp_dir.path().to_str().unwrap();
+
+        // Attempt the command
+        let mut args = vec!["--config-dir", test_home, "config", cmd, config_key];
+        if !value.is_empty() {
+            args.push(value);
+        }
+
+        let mut command = tedge_command_with_test_home(args)?;
+
+        // Verify it succeeds
+        command.assert().success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn non_cloud_configs_unaffected_by_migration() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+
+        // Setup: All three clouds migrated
+        setup_migrated_default(&temp_dir, "c8y");
+        setup_migrated_default(&temp_dir, "az");
+        setup_migrated_default(&temp_dir, "aws");
+
+        let test_home = temp_dir.path().to_str().unwrap();
+
+        // Try to set a non-cloud config (mqtt.port)
+        let mut set_mqtt_cmd = tedge_command_with_test_home([
+            "--config-dir",
+            test_home,
+            "config",
+            "set",
+            "mqtt.bind.port",
+            "1234",
+        ])?;
+
+        // Should succeed despite all clouds being migrated
+        set_mqtt_cmd.assert().success();
+
+        // Verify the value was set
+        let mut get_mqtt_cmd = tedge_command_with_test_home([
+            "--config-dir",
+            test_home,
+            "config",
+            "get",
+            "mqtt.bind.port",
+        ])?;
+
+        get_mqtt_cmd
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("1234"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn c8y_migration_does_not_affect_az_and_aws() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+
+        // Setup: c8y migrated, az and aws in legacy
+        setup_migrated_default(&temp_dir, "c8y");
+        let tedge_toml = temp_dir.path().join("tedge.toml");
+        std::fs::write(
+            &tedge_toml,
+            "[az]\nurl = \"az.example.com\"\n[aws]\nurl = \"aws.example.com\"\n",
+        )?;
+
+        let test_home = temp_dir.path().to_str().unwrap();
+
+        // c8y set should fail
+        let mut set_c8y_cmd = tedge_command_with_test_home([
+            "--config-dir",
+            test_home,
+            "config",
+            "set",
+            "c8y.url",
+            "new.example.com",
+        ])?;
+        set_c8y_cmd.assert().failure();
+
+        // az set should succeed
+        let mut set_az_cmd = tedge_command_with_test_home([
+            "--config-dir",
+            test_home,
+            "config",
+            "set",
+            "az.url",
+            "new.az.example.com",
+        ])?;
+        set_az_cmd.assert().success();
+
+        // aws set should succeed
+        let mut set_aws_cmd = tedge_command_with_test_home([
+            "--config-dir",
+            test_home,
+            "config",
+            "set",
+            "aws.url",
+            "new.aws.example.com",
+        ])?;
+        set_aws_cmd.assert().success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn az_migration_does_not_affect_c8y_and_aws() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+
+        // Setup: az migrated, c8y and aws in legacy
+        setup_migrated_default(&temp_dir, "az");
+        let tedge_toml = temp_dir.path().join("tedge.toml");
+        std::fs::write(
+            &tedge_toml,
+            "[c8y]\nurl = \"c8y.example.com\"\n[aws]\nurl = \"aws.example.com\"\n",
+        )?;
+
+        let test_home = temp_dir.path().to_str().unwrap();
+
+        // az set should fail
+        let mut set_az_cmd = tedge_command_with_test_home([
+            "--config-dir",
+            test_home,
+            "config",
+            "set",
+            "az.url",
+            "new.example.com",
+        ])?;
+        set_az_cmd.assert().failure();
+
+        // c8y set should succeed
+        let mut set_c8y_cmd = tedge_command_with_test_home([
+            "--config-dir",
+            test_home,
+            "config",
+            "set",
+            "c8y.url",
+            "new.c8y.example.com",
+        ])?;
+        set_c8y_cmd.assert().success();
+
+        // aws set should succeed
+        let mut set_aws_cmd = tedge_command_with_test_home([
+            "--config-dir",
+            test_home,
+            "config",
+            "set",
+            "aws.url",
+            "new.aws.example.com",
+        ])?;
+        set_aws_cmd.assert().success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn aws_migration_does_not_affect_c8y_and_az() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+
+        // Setup: aws migrated, c8y and az in legacy
+        setup_migrated_default(&temp_dir, "aws");
+        let tedge_toml = temp_dir.path().join("tedge.toml");
+        std::fs::write(
+            &tedge_toml,
+            "[c8y]\nurl = \"c8y.example.com\"\n[az]\nurl = \"az.example.com\"\n",
+        )?;
+
+        let test_home = temp_dir.path().to_str().unwrap();
+
+        // aws set should fail
+        let mut set_aws_cmd = tedge_command_with_test_home([
+            "--config-dir",
+            test_home,
+            "config",
+            "set",
+            "aws.url",
+            "new.example.com",
+        ])?;
+        set_aws_cmd.assert().failure();
+
+        // c8y set should succeed
+        let mut set_c8y_cmd = tedge_command_with_test_home([
+            "--config-dir",
+            test_home,
+            "config",
+            "set",
+            "c8y.url",
+            "new.c8y.example.com",
+        ])?;
+        set_c8y_cmd.assert().success();
+
+        // az set should succeed
+        let mut set_az_cmd = tedge_command_with_test_home([
+            "--config-dir",
+            test_home,
+            "config",
+            "set",
+            "az.url",
+            "new.az.example.com",
+        ])?;
+        set_az_cmd.assert().success();
+
+        Ok(())
+    }
+
+    // Helper functions for restrict_cloud_config_update tests
+    fn setup_legacy_config(temp_dir: &tempfile::TempDir, cloud: &str) {
+        let tedge_toml = temp_dir.path().join("tedge.toml");
+        let content = format!("[{cloud}]\nurl = \"example.com\"\n");
+        std::fs::write(tedge_toml, content).unwrap();
+    }
+
+    fn setup_migrated_default(temp_dir: &tempfile::TempDir, cloud: &str) {
+        let mappers_dir = temp_dir.path().join("mappers");
+        std::fs::create_dir_all(&mappers_dir).unwrap();
+        let config_path = mappers_dir.join(format!("{cloud}.toml"));
+        std::fs::write(config_path, "url = \"example.com\"\n").unwrap();
+    }
+
+    fn setup_migrated_profile(temp_dir: &tempfile::TempDir, cloud: &str, profile: &str) {
+        let profile_dir = temp_dir.path().join("mappers").join(format!("{cloud}.d"));
+        std::fs::create_dir_all(&profile_dir).unwrap();
+        let config_path = profile_dir.join(format!("{profile}.toml"));
+        std::fs::write(config_path, "url = \"example.com\"\n").unwrap();
+    }
+
     fn tedge_command_with_test_home<I, S>(
         args: I,
     ) -> Result<assert_cmd::Command, Box<dyn std::error::Error>>

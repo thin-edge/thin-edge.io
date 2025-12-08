@@ -91,6 +91,7 @@ async fn main() -> anyhow::Result<()> {
 
             let cmd = cmd
                 .build_command(&tedge_config)
+                .await
                 .with_context(|| "missing configuration parameter")?;
 
             match cmd.execute(tedge_config).await {

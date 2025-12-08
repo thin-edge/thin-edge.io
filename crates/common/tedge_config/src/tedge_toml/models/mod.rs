@@ -45,6 +45,47 @@ pub use tedge_utils::timestamp::TimeFormat;
 pub use topic_prefix::TopicPrefix;
 
 #[derive(
+    Debug,
+    Display,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    doku::Document,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumIter,
+)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum CloudType {
+    C8y,
+    Az,
+    Aws,
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("Failed to parse cloud type: {input}. Supported values are: 'c8y', 'az' or 'aws'")]
+pub struct InvalidCloudType {
+    input: String,
+}
+
+impl FromStr for CloudType {
+    type Err = InvalidCloudType;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input {
+            "c8y" => Ok(CloudType::C8y),
+            "az" => Ok(CloudType::Az),
+            "aws" => Ok(CloudType::Aws),
+            _ => Err(InvalidCloudType {
+                input: input.to_string(),
+            }),
+        }
+    }
+}
+
+#[derive(
     Debug, Display, Clone, Copy, Eq, PartialEq, doku::Document, serde::Serialize, serde::Deserialize,
 )]
 #[serde(rename_all = "kebab-case")]

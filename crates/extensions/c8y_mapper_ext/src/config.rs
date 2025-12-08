@@ -26,6 +26,8 @@ use tedge_api::substitution::Record;
 use tedge_config::models::AutoLogUpload;
 use tedge_config::models::SoftwareManagementApiFlag;
 use tedge_config::models::TopicPrefix;
+use tedge_config::tedge_toml::mapper_config;
+use tedge_config::tedge_toml::mapper_config::MapperConfigError;
 use tedge_config::tedge_toml::ConfigNotSet;
 use tedge_config::tedge_toml::MultiError;
 use tedge_config::tedge_toml::ReadError;
@@ -158,7 +160,7 @@ impl C8yMapperConfig {
     pub fn from_tedge_config(
         config_dir: impl AsRef<Utf8Path>,
         tedge_config: &TEdgeConfig,
-        c8y_profile: Option<&str>,
+        c8y_config: &mapper_config::C8yMapperConfig,
     ) -> Result<C8yMapperConfig, C8yMapperConfigBuildError> {
         let config_dir: Arc<Utf8Path> = config_dir.as_ref().into();
 
@@ -166,18 +168,26 @@ impl C8yMapperConfig {
         let data_dir: DataDir = tedge_config.data.path.as_path().to_owned().into();
         let tmp_dir = tedge_config.tmp.path.as_path().into();
 
-        let c8y_config = tedge_config.c8y.try_get(c8y_profile)?;
         let device_id = c8y_config.device.id()?.to_string();
         let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
         let service = tedge_config.service.clone();
-        let c8y_host = c8y_config.http.or_config_not_set()?.to_string();
-        let c8y_mqtt = c8y_config.mqtt.or_config_not_set()?.to_string();
+        let c8y_host = c8y_config
+            .cloud_specific
+            .http
+            .or_config_not_set()?
+            .to_string();
+        let c8y_mqtt = c8y_config
+            .cloud_specific
+            .mqtt
+            .or_config_not_set()?
+            .to_string();
         let tedge_http_address = tedge_config.http.client.host.clone();
         let tedge_http_port = tedge_config.http.client.port;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
-        let auth_proxy_addr = c8y_config.proxy.client.host.clone();
-        let auth_proxy_port = c8y_config.proxy.client.port;
+        let auth_proxy_addr = c8y_config.cloud_specific.proxy.client.host.clone();
+        let auth_proxy_port = c8y_config.cloud_specific.proxy.client.port;
         let auth_proxy_protocol = c8y_config
+            .cloud_specific
             .proxy
             .cert_path
             .or_none()
@@ -186,11 +196,11 @@ impl C8yMapperConfig {
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
 
         let capabilities = Capabilities {
-            log_upload: c8y_config.enable.log_upload,
-            config_snapshot: c8y_config.enable.config_snapshot,
-            config_update: c8y_config.enable.config_update,
-            firmware_update: c8y_config.enable.firmware_update,
-            device_profile: c8y_config.enable.device_profile,
+            log_upload: c8y_config.cloud_specific.enable.log_upload,
+            config_snapshot: c8y_config.cloud_specific.enable.config_snapshot,
+            config_update: c8y_config.cloud_specific.enable.config_update,
+            firmware_update: c8y_config.cloud_specific.enable.firmware_update,
+            device_profile: c8y_config.cloud_specific.enable.device_profile,
         };
         let bridge_config = BridgeConfig {
             c8y_prefix: c8y_config.bridge.topic_prefix.clone(),
@@ -198,16 +208,20 @@ impl C8yMapperConfig {
 
         let mut topics = Self::default_internal_topic_filter(&bridge_config.c8y_prefix)?;
 
-        let enable_auto_register = c8y_config.entity_store.auto_register;
-        let clean_start = c8y_config.entity_store.clean_start;
+        let enable_auto_register = c8y_config.cloud_specific.entity_store.auto_register;
+        let clean_start = c8y_config.cloud_specific.entity_store.clean_start;
 
-        let software_management_api = c8y_config.software_management.api;
-        let software_management_with_types = c8y_config.software_management.with_types;
+        let software_management_api = c8y_config.cloud_specific.software_management.api;
+        let software_management_with_types =
+            c8y_config.cloud_specific.software_management.with_types;
 
-        let auto_log_upload = c8y_config.operations.auto_log_upload;
-        let smartrest_use_operation_id = c8y_config.smartrest.use_operation_id;
-        let smartrest_child_device_create_with_device_marker =
-            c8y_config.smartrest.child_device.create_with_device_marker;
+        let auto_log_upload = c8y_config.cloud_specific.operations.auto_log_upload;
+        let smartrest_use_operation_id = c8y_config.cloud_specific.smartrest.use_operation_id;
+        let smartrest_child_device_create_with_device_marker = c8y_config
+            .cloud_specific
+            .smartrest
+            .child_device
+            .create_with_device_marker;
         let max_mqtt_payload_size = c8y_config.mapper.mqtt.max_payload_size.0;
 
         // Add command topics
@@ -369,6 +383,9 @@ pub enum C8yMapperConfigBuildError {
 
     #[error(transparent)]
     FromMultiError(#[from] MultiError),
+
+    #[error(transparent)]
+    FromMapperConfigError(#[from] MapperConfigError),
 }
 
 #[derive(thiserror::Error, Debug)]

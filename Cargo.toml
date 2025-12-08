@@ -76,6 +76,7 @@ upload = { path = "crates/common/upload" }
 
 anstyle = "1.0"
 anyhow = "1.0"
+anymap3 = "1.0"
 asn1-rs = { version = "0.7.0", features = ["bigint"] }
 assert-json-diff = "2.0"
 assert_cmd = "2.0"
@@ -210,6 +211,7 @@ tokio = { version = "1.44", default-features = false, features = [
     "process",
 ] }
 tokio-rustls = { version = "0.26.1", default-features = false }
+tokio-stream = { version = "0.1", features = ["fs"] }
 tokio-tungstenite = { version = "0.28" }
 tokio-util = { version = "0.7", features = ["codec"] }
 toml = "0.9"

@@ -104,6 +104,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anymap3"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "170433209e817da6aae2c51aa0dd443009a613425dd041ebfb2492d1c4c11a25"
+
+[[package]]
 name = "arc-swap"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -999,6 +1005,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.12",
  "time",
+ "tokio",
+ "tokio-stream",
  "tracing",
  "x509-parser 0.18.0",
  "zeroize",
@@ -4914,6 +4922,7 @@ name = "tedge_config"
 version = "1.7.1"
 dependencies = [
  "anyhow",
+ "anymap3",
  "assert_matches",
  "camino",
  "certificate",
@@ -4921,6 +4930,7 @@ dependencies = [
  "clap_complete",
  "doku",
  "figment",
+ "futures",
  "humantime",
  "mqtt_channel",
  "once_cell",
@@ -4932,6 +4942,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "tedge_api",
+ "tedge_config",
  "tedge_config_macros",
  "tedge_test_utils",
  "tedge_utils",
@@ -4939,6 +4950,7 @@ dependencies = [
  "test-case",
  "thiserror 2.0.12",
  "tokio",
+ "tokio-stream",
  "toml 0.9.6",
  "tracing",
  "tracing-subscriber",

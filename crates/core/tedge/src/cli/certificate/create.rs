@@ -2,6 +2,7 @@ use super::error::CertError;
 use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
 use certificate::KeyCertPair;
@@ -190,18 +191,18 @@ async fn persist_public_key(mut key_file: File, cert_pem: String) -> Result<(), 
     Ok(())
 }
 
-pub fn certificate_is_self_signed(cert_path: &Utf8PathBuf) -> Result<bool, CertError> {
-    fn get_certificate_ca(cert_path: &Utf8PathBuf) -> Result<bool, CertError> {
+pub fn certificate_is_self_signed(cert_path: &Utf8Path) -> Result<bool, CertError> {
+    fn get_certificate_ca(cert_path: &Utf8Path) -> Result<bool, CertError> {
         let cert = std::fs::read_to_string(cert_path)?;
         let pem = PemCertificate::from_pem_string(&cert)?;
         let self_signed = pem.issuer()? == pem.subject()?;
         Ok(self_signed)
     }
-    get_certificate_ca(cert_path).map_err(|err| err.cert_context(cert_path.clone()))
+    get_certificate_ca(cert_path).map_err(|err| err.cert_context(cert_path.to_owned()))
 }
 
-pub async fn certificate_cn(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
-    async fn get_certificate_cn(cert_path: &Utf8PathBuf) -> Result<String, CertError> {
+pub async fn certificate_cn(cert_path: &Utf8Path) -> Result<String, CertError> {
+    async fn get_certificate_cn(cert_path: &Utf8Path) -> Result<String, CertError> {
         let cert = tokio::fs::read_to_string(cert_path).await?;
         let pem = PemCertificate::from_pem_string(&cert)?;
 
@@ -209,7 +210,7 @@ pub async fn certificate_cn(cert_path: &Utf8PathBuf) -> Result<String, CertError
     }
     get_certificate_cn(cert_path)
         .await
-        .map_err(|err| err.cert_context(cert_path.clone()))
+        .map_err(|err| err.cert_context(cert_path.to_owned()))
 }
 
 #[cfg(test)]

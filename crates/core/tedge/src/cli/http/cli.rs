@@ -11,6 +11,7 @@ use clap::Args;
 use reqwest::Body;
 use reqwest::Client;
 use reqwest::Identity;
+use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::OptionalConfig;
 use tedge_config::TEdgeConfig;
@@ -193,14 +194,17 @@ impl Content {
     }
 }
 
+#[async_trait::async_trait]
 impl BuildCommand for TEdgeHttpCli {
-    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
+    async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let uri = self.uri();
 
         let (protocol, host, port) = if uri.starts_with("/c8y") {
-            let c8y_config = config.c8y.try_get(self.c8y_profile())?;
-            let client = &c8y_config.proxy.client;
-            let protocol = https_if_some(&c8y_config.proxy.cert_path);
+            let c8y_config = config
+                .mapper_config::<C8yMapperSpecificConfig>(&self.c8y_profile())
+                .await?;
+            let client = &c8y_config.cloud_specific.proxy.client;
+            let protocol = https_if_some(&c8y_config.cloud_specific.proxy.cert_path);
             (protocol, client.host.clone(), client.port)
         } else if uri.starts_with("/tedge") || uri.starts_with("/te") {
             let client = &config.http.client;
@@ -212,7 +216,7 @@ impl BuildCommand for TEdgeHttpCli {
 
         let url = format!("{protocol}://{host}:{port}{uri}");
         let identity = config.http.client.auth.identity()?;
-        let client = http_client(config.cloud_root_certs()?, identity.as_ref())?;
+        let client = http_client(config.cloud_root_certs().await?, identity.as_ref())?;
         let action = self.into();
 
         Ok(HttpCommand {

@@ -19,8 +19,12 @@ pub struct TEdgeConnectOpt {
     cloud: CloudArg,
 }
 
+#[async_trait::async_trait]
 impl BuildCommand for TEdgeConnectOpt {
-    fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, crate::ConfigError> {
+    async fn build_command(
+        self,
+        config: &TEdgeConfig,
+    ) -> Result<Box<dyn Command>, crate::ConfigError> {
         let Self {
             is_test_connection,
             offline_mode,

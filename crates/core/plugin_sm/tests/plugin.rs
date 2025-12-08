@@ -65,7 +65,7 @@ mod tests {
             None,
             None,
             config.http.client.auth.identity()?,
-            config.cloud_root_certs().unwrap(),
+            config.cloud_root_certs().await.unwrap(),
             Arc::from(Utf8PathBuf::from("/tmp")),
         );
         assert_eq!(plugin.name, "test");

@@ -9,6 +9,7 @@ use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
+use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 
@@ -16,7 +17,9 @@ pub async fn check_device_status_aws(
     tedge_config: &TEdgeConfig,
     profile: Option<&ProfileName>,
 ) -> Result<DeviceStatus, ConnectError> {
-    let aws_config = tedge_config.aws.try_get(profile)?;
+    let aws_config = tedge_config
+        .mapper_config::<AwsMapperSpecificConfig>(&profile)
+        .await?;
     let topic_prefix = &aws_config.bridge.topic_prefix;
     let aws_topic_pub_check_connection = format!("{topic_prefix}/test-connection");
     let aws_topic_sub_check_connection = format!("{topic_prefix}/connection-success");

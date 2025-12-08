@@ -136,11 +136,26 @@ impl TEdgeConfigLocation {
 
     #[cfg(feature = "test")]
     pub(crate) fn load_toml_str(toml: &str, location: TEdgeConfigLocation) -> TEdgeConfig {
-        let toml_value = toml::from_str(toml).unwrap();
-        let (dto, warnings) =
-            deserialize_toml(toml_value, Utf8Path::new("/not/read/from/file/system")).unwrap();
+        let (tedge_config, warnings) = Self::load_toml_str_with_warnings(toml, location);
         warnings.emit();
-        TEdgeConfig::from_dto(&dto, location)
+        tedge_config
+    }
+
+    #[cfg(feature = "test")]
+    pub(crate) fn load_toml_str_with_warnings(
+        toml: &str,
+        location: TEdgeConfigLocation,
+    ) -> (TEdgeConfig, UnusedValueWarnings) {
+        let toml_path = Utf8Path::new("/not/read/from/file/system");
+        let toml_value: toml::Value = toml::from_str(toml).unwrap();
+        let (mut dto, mut warnings) = deserialize_toml(toml_value.clone(), toml_path).unwrap();
+        if let Some(migrations) = dto.config.version.unwrap_or_default().migrations() {
+            let migrated_toml = migrations
+                .into_iter()
+                .fold(toml_value, |toml, migration| migration.apply_to(toml));
+            (dto, warnings) = deserialize_toml(migrated_toml, toml_path).unwrap();
+        }
+        (TEdgeConfig::from_dto(&dto, location), warnings)
     }
 
     async fn load_dto_with_warnings<Sources: ConfigSources>(
@@ -396,9 +411,10 @@ fn keys_in_inner(prefix: &str, table: &toml::map::Map<String, toml::Value>) -> V
 #[cfg(test)]
 mod tests {
     use crate::models::AbsolutePath;
+    use crate::tedge_toml::mapper_config::AzMapperSpecificConfig;
     use crate::tedge_toml::Cloud;
-    use crate::TEdgeConfigReader;
     use once_cell::sync::Lazy;
+    use tedge_config_macros::ProfileName;
     use tedge_test_utils::fs::TempTedgeDir;
     use tokio::sync::Mutex;
     use tokio::sync::MutexGuard;
@@ -498,29 +514,22 @@ child_update_timeout = 3429
 
 [service]
 type = "a-service-type""#;
-        let (_tempdir, config_location) = create_temp_tedge_config(toml).unwrap();
-        let (dto, warnings) = config_location
-            .load_dto_with_warnings::<FileOnly>()
-            .await
-            .unwrap();
+        let (tedge_config, warnings) = TEdgeConfig::load_toml_str_with_warnings(toml);
 
-        // Figment will warn us if we're not using a field. If we've migrated
-        // everything successfully, then no warnings will be emitted
+        // No warnings should be emitted
         assert_eq!(warnings, UnusedValueWarnings::default());
 
-        let reader = TEdgeConfigReader::from_dto(&dto, &config_location);
-
         assert_eq!(
-            reader.device_cert_path(None::<Void>).unwrap(),
-            "/tedge/device-cert.pem"
+            tedge_config.device_cert_path(None::<Void>).await.unwrap(),
+            "/tedge/device-cert.pem".parse().unwrap()
         );
         assert_eq!(
-            reader.device_key_path(None::<Void>).unwrap(),
-            "/tedge/device-key.pem"
+            tedge_config.device_key_path(None::<Void>).await.unwrap(),
+            "/tedge/device-key.pem".parse().unwrap()
         );
-        assert_eq!(reader.device.ty, "a-device");
-        assert_eq!(u16::from(reader.mqtt.bind.port), 1886);
-        assert_eq!(u16::from(reader.mqtt.client.port), 1885);
+        assert_eq!(tedge_config.device.ty, "a-device");
+        assert_eq!(u16::from(tedge_config.mqtt.bind.port), 1886);
+        assert_eq!(u16::from(tedge_config.mqtt.client.port), 1885);
     }
 
     #[tokio::test]
@@ -536,83 +545,64 @@ type = "a-service-type""#;
 
     #[tokio::test]
     async fn toml_values_can_be_overridden_with_environment() {
-        let (_dir, t) = create_temp_tedge_config("c8y.root_cert_path = \"/toml/path\"").unwrap();
+        let (_dir, t) = create_temp_tedge_config("apt.name = \"tedge.*\"").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_ROOT_CERT_PATH", "/env/path");
+        env.set_var("TEDGE_APT_NAME", "apt.env.*");
         let config = t.load().await.unwrap();
-        assert_eq!(
-            config.c8y.try_get::<&str>(None).unwrap().root_cert_path,
-            AbsolutePath::try_new("/env/path").unwrap()
-        );
+        assert_eq!(config.apt.name.or_none().unwrap(), "apt.env.*");
     }
 
     #[tokio::test]
     async fn environment_variables_can_contain_toml_syntax_strings() {
-        let (_dir, t) = create_temp_tedge_config("").unwrap();
+        let (_dir, t) = create_temp_tedge_config("apt.name = \"tedge.*\"").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_ROOT_CERT_PATH", "\"/env/path\"");
+        env.set_var("TEDGE_APT_NAME", "\"apt.env.*\"");
         let config = t.load().await.unwrap();
-        assert_eq!(
-            config.c8y.try_get::<&str>(None).unwrap().root_cert_path,
-            AbsolutePath::try_new("/env/path").unwrap()
-        );
+        assert_eq!(config.apt.name.or_none().unwrap(), "apt.env.*");
     }
 
     #[tokio::test]
     async fn environment_variables_are_parsed_using_custom_fromstr_implementations() {
         let (_dir, t) = create_temp_tedge_config("").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_SMARTREST_TEMPLATES", "test,values");
+        env.set_var("TEDGE_DIAG_PLUGIN_PATHS", "test,values");
         let config = t.load().await.unwrap();
-        assert_eq!(
-            config
-                .c8y
-                .try_get::<&str>(None)
-                .unwrap()
-                .smartrest
-                .templates,
-            ["test", "values"]
-        );
+        assert_eq!(config.diag.plugin_paths, ["test", "values"]);
     }
 
     #[tokio::test]
     async fn environment_variables_can_contain_toml_format_arrays() {
         let (_dir, t) = create_temp_tedge_config("").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_SMARTREST_TEMPLATES", "[\"test\",\"values\"]");
+        env.set_var("TEDGE_DIAG_PLUGIN_PATHS", "[\"test\",\"values\"]");
         let config = t.load().await.unwrap();
-        assert_eq!(
-            config
-                .c8y
-                .try_get::<&str>(None)
-                .unwrap()
-                .smartrest
-                .templates,
-            ["test", "values"]
-        );
+        assert_eq!(config.diag.plugin_paths, ["test", "values"]);
     }
 
     #[tokio::test]
     async fn empty_environment_variables_reset_configuration_parameters() {
-        let (_dir, t) = create_temp_tedge_config("c8y.root_cert_path = \"/toml/path\"").unwrap();
+        let (_dir, t) = create_temp_tedge_config("apt.name = \"tedge.*\"").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_ROOT_CERT_PATH", "");
+        env.set_var("TEDGE_APT_NAME", "");
         let config = t.load().await.unwrap();
-        assert_eq!(
-            config.c8y.try_get::<&str>(None).unwrap().root_cert_path,
-            AbsolutePath::try_new("/etc/ssl/certs").unwrap()
-        );
+        assert_eq!(config.apt.name.or_none(), None);
     }
 
     #[tokio::test]
     async fn environment_variables_can_override_profiled_configurations() {
         let (_dir, t) =
-            create_temp_tedge_config("c8y.profiles.test.root_cert_path = \"/toml/path\"").unwrap();
+            create_temp_tedge_config("az.profiles.test.root_cert_path = \"/toml/path\"").unwrap();
         let mut env = EnvSandbox::new().await;
-        env.set_var("TEDGE_C8Y_PROFILES_TEST_ROOT_CERT_PATH", "/env/path");
+        env.set_var("TEDGE_AZ_PROFILES_TEST_ROOT_CERT_PATH", "/env/path");
         let config = t.load().await.unwrap();
+        let az_config = config
+            .mapper_config::<AzMapperSpecificConfig>(&Some(
+                ProfileName::try_from("test".to_owned()).unwrap(),
+            ))
+            .await
+            .unwrap();
         assert_eq!(
-            config.c8y.try_get(Some("test")).unwrap().root_cert_path,
+            az_config.root_cert_path,
             AbsolutePath::try_new("/env/path").unwrap()
         );
     }

@@ -7,7 +7,7 @@
 use std::borrow::Cow;
 use std::ops::Deref;
 
-#[derive(serde::Serialize, Clone, PartialEq, Eq, Debug)]
+#[derive(serde::Serialize, Clone, PartialEq, Eq, Debug, Hash)]
 #[serde(into = "Option<T>", bound = "T: Clone + serde::Serialize")]
 /// The value for an optional configuration (i.e. one without a default value)
 ///
