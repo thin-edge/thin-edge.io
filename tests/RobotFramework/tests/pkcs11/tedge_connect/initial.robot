@@ -19,8 +19,8 @@ Test Tags           adapter:docker    theme:cryptoki
 
 *** Variables ***
 ${KEY_URI}                      ${EMPTY}
-${TEDGE_P11_SERVER_VERSION}     1.6.0
-${PKCS11_USE_P11TOOL}    ${True}
+${TEDGE_P11_SERVER_VERSION}     1.5.1
+${PKCS11_USE_P11TOOL}           ${True}
 
 
 *** Test Cases ***
@@ -37,19 +37,5 @@ Can connect to C8y using an RSA key
     Connects to C8y using an RSA key
 
 Can connect to C8y supporting all TLS13 ECDSA signature algorithms
+    Install tedge-p11-server    1.6.0
     Connects to C8y supporting all TLS13 ECDSA signature algorithms
-
-# Can use PKCS11 key to renew the public certificate
-#    Use PKCS11 key to renew the public certificate
-
-# Can use tedge cert download c8y to download a certificate
-#    Use tedge cert download c8y to download a certificate
-
-# Can renew the certificate using different keypair
-#    Renew the certificate using different keypair
-
-# Can pass PIN in the request using pin-value
-#    Pass PIN in the request using pin-value
-
-# Can pass PIN in the request using device.key_pin
-#    Pass PIN in the request using device.key_pin

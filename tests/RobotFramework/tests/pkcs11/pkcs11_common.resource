@@ -8,11 +8,11 @@ Library             ThinEdgeIO
 
 
 *** Variables ***
-${DEVICE_SN}    ${EMPTY}    # should be set in setup of test suites
+${DEVICE_SN}                ${EMPTY}    # should be set in setup of test suites
 
 # if `False`, PKCS11 operations like creating keys, will use new tedge features, e.g. `tedge cert create-key-hsm`.
 # if `True`, `p11tool` will be used instead
-${PKCS11_USE_P11TOOL}    ${False}
+${PKCS11_USE_P11TOOL}       ${False}
 
 
 *** Keywords ***
@@ -145,3 +145,26 @@ Install tedge-p11-server
         ${stdout}=    Execute Command    tedge-p11-server -V    strip=True
         Should Be Equal    ${stdout}    tedge-p11-server ${version}
     END
+
+tedge-p11-server Setup
+    [Arguments]    ${tedge_p11_server_version}
+    ${DEVICE_SN}=    Setup    register=${False}
+    Set Suite Variable    ${DEVICE_SN}
+
+    # Allow the tedge user to access softhsm
+    Execute Command    sudo usermod -a -G softhsm tedge
+    Transfer To Device    ${CURDIR}/data/init_softhsm.sh    /usr/bin/
+    Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --device-id "${DEVICE_SN}" --pin 123456
+
+    Execute Command    tedge config set device.cryptoki.pin 123456
+    Execute Command    tedge config set device.cryptoki.module_path /usr/lib/softhsm/libsofthsm2.so
+    Execute Command    tedge config set mqtt.bridge.built_in true
+    Execute Command    tedge config set device.cryptoki.mode socket
+
+    # tests expect that the device.key_uri is initially unset
+    Execute Command    cmd=tedge config unset device.key_uri
+
+    Set Cumulocity URLs
+    ThinEdgeIO.Register Device With Cumulocity CA    ${DEVICE_SN}
+
+    Install tedge-p11-server    ${tedge_p11_server_version}
