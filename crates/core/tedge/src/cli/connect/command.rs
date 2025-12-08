@@ -794,7 +794,11 @@ pub async fn bridge_config(
                 bridge_keyfile: c8y_config.device.key_path.clone().into(),
                 smartrest_templates: c8y_config.cloud_specific.smartrest.templates.clone(),
                 smartrest_one_templates: c8y_config.cloud_specific.smartrest1.templates.clone(),
-                include_local_clean_session: c8y_config.bridge.include.local_cleansession,
+                include_local_clean_session: c8y_config
+                    .cloud_specific
+                    .bridge
+                    .include
+                    .local_cleansession,
                 bridge_location,
                 topic_prefix: c8y_config.bridge.topic_prefix.clone(),
                 profile_name: profile.clone().map(Cow::into_owned),
@@ -1253,9 +1257,9 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let err = validate_config(&config, &cloud).await.unwrap_err();
             pretty_assertions::assert_eq!(err.to_string(), format!("You have matching URLs and device IDs for different profiles.
 
-{path}/mappers/c8y.toml: url, {path}/mappers/c8y.d/new.toml: url are set to the same value, but so are device.id, device.id.
+c8y.url, c8y.profiles.new.url are set to the same value, but so are c8y.device.id, c8y.profiles.new.device.id.
 
-Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud.", path = ttd.utf8_path()))
+Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud."))
         }
 
         #[tokio::test]
@@ -1274,9 +1278,9 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let err = validate_config(&config, &cloud).await.unwrap_err();
             pretty_assertions::assert_eq!(err.to_string(), format!("You have matching URLs and device IDs for different profiles.
 
-{path}/mappers/c8y.toml: url, {path}/mappers/c8y.d/new.toml: url are set to the same value, but so are {path}/mappers/c8y.toml: device.id, {path}/mappers/c8y.d/new.toml: device.id.
+c8y.url, c8y.profiles.new.url are set to the same value, but so are c8y.device.id, c8y.profiles.new.device.id.
 
-Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud.", path = ttd.utf8_path()))
+Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud."))
         }
 
         #[tokio::test]

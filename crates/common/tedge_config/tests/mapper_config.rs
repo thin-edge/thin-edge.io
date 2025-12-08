@@ -96,7 +96,7 @@ async fn partial_migration_default_new_profile_legacy_errors() {
         .mapper_config::<C8yMapperSpecificConfig>(&Some(prod_profile))
         .await;
 
-    let err = prod_result.unwrap_err();
+    let err = prod_result.err().unwrap();
     let expected_path = format!("{}/mappers/c8y.d/prod.toml", ttd.utf8_path());
     assert!(
         err.to_string().contains(&expected_path),
@@ -136,7 +136,7 @@ async fn partial_migration_default_legacy_profile_new_errors() {
         .mapper_config::<C8yMapperSpecificConfig>(&None::<ProfileName>)
         .await;
 
-    let err = default_result.unwrap_err();
+    let err = default_result.err().unwrap();
     let expected_path = format!("{}/mappers/c8y.toml", ttd.utf8_path());
     assert!(
         err.to_string().contains(&expected_path),

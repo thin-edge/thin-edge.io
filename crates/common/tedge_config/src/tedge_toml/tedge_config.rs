@@ -90,11 +90,13 @@ impl<T> OptionalConfigError<T> for OptionalConfig<T> {
     }
 }
 
+type AnyMap = anymap3::Map<dyn std::any::Any + Send + Sync + 'static>;
+
 pub struct TEdgeConfig {
+    dto: TEdgeConfigDto,
     reader: TEdgeConfigReader,
     location: TEdgeConfigLocation,
-    cached_mapper_configs:
-        tokio::sync::Mutex<anymap3::Map<dyn std::any::Any + Send + Sync + 'static>>,
+    cached_mapper_configs: Arc<tokio::sync::Mutex<AnyMap>>,
 }
 
 impl std::ops::Deref for TEdgeConfig {
@@ -121,9 +123,10 @@ pub enum ConfigDecision {
 }
 
 impl TEdgeConfig {
-    pub(crate) fn from_dto(dto: &TEdgeConfigDto, location: TEdgeConfigLocation) -> Self {
+    pub(crate) fn from_dto(dto: TEdgeConfigDto, location: TEdgeConfigLocation) -> Self {
         Self {
-            reader: TEdgeConfigReader::from_dto(dto, &location),
+            reader: TEdgeConfigReader::from_dto(&dto, &location),
+            dto,
             location,
             cached_mapper_configs: <_>::default(),
         }
@@ -231,6 +234,7 @@ impl TEdgeConfig {
                     let map = load_mapper_config::<T>(
                         &AbsolutePath::try_new(path.as_str()).unwrap(),
                         self,
+                        profile.as_deref(),
                     )
                     .await?;
 
@@ -2113,7 +2117,8 @@ mod tests {
         let error = tedge_config
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(None))
             .await
-            .unwrap_err();
+            .err()
+            .unwrap();
         assert_eq!(
             format!("{error:#}"),
             format!(

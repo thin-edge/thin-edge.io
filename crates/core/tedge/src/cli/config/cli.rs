@@ -3,6 +3,7 @@ use crate::cli::config::commands::*;
 use crate::command::*;
 use crate::ConfigError;
 use clap_complete::ArgValueCandidates;
+use tedge_config::models::CloudType;
 use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
 use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
 use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
@@ -10,6 +11,7 @@ use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfig;
+use tedge_config::tedge_toml::mapper_config::compat::IsCloudConfig;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum ConfigCmd {
@@ -188,38 +190,35 @@ impl BuildCommand for ConfigCmd {
     }
 }
 
-pub async fn restrict_cloud_config_update(
+pub async fn restrict_cloud_config_access(
     cmd: &str,
-    key: &WritableKey,
+    key: &(impl IsCloudConfig + std::fmt::Display),
     tedge_config: &TEdgeConfig,
 ) -> anyhow::Result<()> {
     use tedge_config::tedge_toml::ConfigDecision as CD;
-    let key = key.to_cow_str();
-    let (cloud, config_source) = match key.split_once(".") {
-        None => unreachable!("Configuration keys always contain ."),
-        Some((cloud @ "c8y", rest)) => {
-            let profile = extract_profile_name(rest);
+    let Some((cloud, profile)) = key.cloud_type_for() else {
+        // Not a cloud config, we don't need to worry about
+        return Ok(());
+    };
+    let (cloud, config_source) = match cloud {
+        CloudType::C8y => {
             let source = tedge_config
                 .decide_config_source::<C8yMapperSpecificConfig>(profile.as_ref())
                 .await;
             (cloud, source)
         }
-        Some((cloud @ "az", rest)) => {
-            let profile = extract_profile_name(rest);
+        CloudType::Az => {
             let source = tedge_config
                 .decide_config_source::<AzMapperSpecificConfig>(profile.as_ref())
                 .await;
             (cloud, source)
         }
-        Some((cloud @ "aws", rest)) => {
-            let profile = extract_profile_name(rest);
+        CloudType::Aws => {
             let source = tedge_config
                 .decide_config_source::<AwsMapperSpecificConfig>(profile.as_ref())
                 .await;
             (cloud, source)
         }
-        // Not a cloud config, we don't need to worry about
-        _ => return Ok(()),
     };
 
     match config_source {
@@ -238,10 +237,4 @@ pub async fn restrict_cloud_config_update(
                 Err(error.context(message))
             }
         }
-}
-
-fn extract_profile_name(partial_config_key: &str) -> Option<ProfileName> {
-    let partial_config_key = partial_config_key.strip_prefix("profiles.")?;
-    let (profile, _rest) = partial_config_key.split_once(".")?;
-    Some(profile.parse().unwrap())
 }

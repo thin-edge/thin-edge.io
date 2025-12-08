@@ -2,6 +2,7 @@ use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::TEdgeConfig;
 
 use crate::command::Command;
+use crate::config::restrict_cloud_config_access;
 use crate::log::MaybeFancy;
 
 pub struct GetConfigCommand {
@@ -15,6 +16,7 @@ impl Command for GetConfigCommand {
     }
 
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        restrict_cloud_config_access("get", &self.key, &tedge_config).await?;
         match tedge_config.read_string(&self.key) {
             Ok(value) => {
                 println!("{}", value);

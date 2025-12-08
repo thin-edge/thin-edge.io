@@ -82,10 +82,10 @@ impl TEdgeComponent for AwsMapper {
         }
         let clock = Box::new(WallClock);
         let aws_converter = AwsConverter::new(
-            aws_config.mapper.cloud_specific.timestamp,
+            aws_config.cloud_specific.mapper.timestamp,
             clock,
             mqtt_schema,
-            aws_config.mapper.cloud_specific.timestamp_format,
+            aws_config.cloud_specific.mapper.timestamp_format,
             prefix.value().clone(),
             aws_config.mapper.mqtt.max_payload_size.0,
         );
