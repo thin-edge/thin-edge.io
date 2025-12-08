@@ -91,10 +91,10 @@ impl TEdgeComponent for AzureMapper {
         }
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let az_converter = AzureConverter::new(
-            az_config.mapper.cloud_specific.timestamp,
+            az_config.cloud_specific.mapper.timestamp,
             Box::new(WallClock),
             mqtt_schema,
-            az_config.mapper.cloud_specific.timestamp_format,
+            az_config.cloud_specific.mapper.timestamp_format,
             prefix,
             az_config.mapper.mqtt.max_payload_size.0,
         );
