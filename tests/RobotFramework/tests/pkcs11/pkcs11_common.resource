@@ -8,7 +8,11 @@ Library             ThinEdgeIO
 
 
 *** Variables ***
-${DEVICE_SN}    ${EMPTY}    # should be set in setup of test suites
+${DEVICE_SN}                ${EMPTY}    # should be set in setup of test suites
+
+# if `False`, PKCS11 operations like creating keys, will use new tedge features, e.g. `tedge cert create-key-hsm`.
+# if `True`, `p11tool` will be used instead
+${PKCS11_USE_P11TOOL}       ${False}
 
 
 *** Keywords ***
@@ -20,7 +24,8 @@ Create Self Signed Certificate
 Connect to C8y using new ECDSA keypair
     [Documentation]    Connects to C8y with a newly generated keypair and a self-signed certificate.
     ...    The private key is saved on the token, and the self-signed certificate is registered with c8y.
-    [Arguments]    ${curve}=p256    # if type == ECDSA, curve of the key - one of {secp256r1, secp384r1, secp521r1}
+    # if type == ECDSA, curve of the key - one of {secp256r1, secp384r1, secp521r1}
+    [Arguments]    ${curve}=p256
 
     # We could alternatively use Cumulocity CA to start with a signed cert, but for testing certificate renewal, we want
     # to test both renewing a self-signed cert and a cert issued by C8y CA. When we start with self-signed cert, after
@@ -66,8 +71,18 @@ Set up new PKCS11 RSA keypair
     [Arguments]    ${bits}=2048    # length in bits of the RSA key - one of {1024, 2048, 3072, 4096}
     ${identifier}=    String.Generate Random String
     ${label}=    Set Variable    rsa-${bits}-${identifier}
-    Execute Command
-    ...    cmd=tedge cert create-key-hsm --type rsa --bits ${bits} --label "${label}" "pkcs11:token=tedge"
+
+    IF    ${PKCS11_USE_P11TOOL}
+        Execute Command
+        ...    cmd=p11tool --set-pin=123456 --login --generate-privkey rsa --bits ${bits} --label ${label} "pkcs11:token=tedge"
+    ELSE
+        Execute Command
+        ...    cmd=tedge cert create-key-hsm --type rsa --bits ${bits} --label "${label}" "pkcs11:token=tedge"
+    END
+
+    VAR    ${key_uri}=    pkcs11:token=tedge;object=${label}
+    # warning: PKCS11 _uri variables contain ; so they need to be quoted!
+    Execute Command    cmd=tedge config set device.key_uri "${key_uri}"
     RETURN    ${label}
 
 Set up new PKCS11 ECDSA keypair
@@ -75,8 +90,18 @@ Set up new PKCS11 ECDSA keypair
     [Arguments]    ${curve}=p256    # curve of the key - one of {p256, p384}
     ${identifier}=    String.Generate Random String
     ${label}=    Set Variable    ecdsa-${curve}-${identifier}
-    Execute Command
-    ...    cmd=tedge cert create-key-hsm --type ecdsa --curve ${curve} --label "${label}" "pkcs11:token=tedge"
+
+    IF    ${PKCS11_USE_P11TOOL}
+        Execute Command
+        ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ecdsa --curve sec${curve}r1 --label ${label} "pkcs11:token=tedge"
+    ELSE
+        Execute Command
+        ...    cmd=tedge cert create-key-hsm --type ecdsa --curve ${curve} --label "${label}" "pkcs11:token=tedge"
+    END
+
+    VAR    ${key_uri}=    pkcs11:token=tedge;object=${label}
+    # warning: PKCS11 _uri variables contain ; so they need to be quoted!
+    Execute Command    cmd=tedge config set device.key_uri "${key_uri}"
     RETURN    ${label}
 
 Set tedge-p11-server Uri
@@ -102,3 +127,44 @@ Command Should Fail With
     ${stderr}=    Execute Command    ${command}    exp_exit_code=!0    stdout=false    stderr=true
     Should Contain    ${stderr}    ${error}
     RETURN    ${stderr}
+
+Install tedge-p11-server
+    [Arguments]    ${version}=""
+
+    # this doesn't install anything but adds cloudsmith repo to apt
+    Execute Command    curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' | sudo -E bash
+
+    IF    $version
+        VAR    ${package}=    tedge-p11-server=${version}
+    ELSE
+        VAR    ${package}=    tedge-p11-server
+    END
+    Execute Command    cmd=apt-get install -y --allow-downgrades ${package}
+
+    IF    $version
+        ${stdout}=    Execute Command    tedge-p11-server -V    strip=True
+        Should Be Equal    ${stdout}    tedge-p11-server ${version}
+    END
+
+tedge-p11-server Setup
+    [Arguments]    ${tedge_p11_server_version}
+    ${DEVICE_SN}=    Setup    register=${False}
+    Set Suite Variable    ${DEVICE_SN}
+
+    # Allow the tedge user to access softhsm
+    Execute Command    sudo usermod -a -G softhsm tedge
+    Transfer To Device    ${CURDIR}/data/init_softhsm.sh    /usr/bin/
+    Execute Command    sudo -u tedge /usr/bin/init_softhsm.sh --device-id "${DEVICE_SN}" --pin 123456
+
+    Execute Command    tedge config set device.cryptoki.pin 123456
+    Execute Command    tedge config set device.cryptoki.module_path /usr/lib/softhsm/libsofthsm2.so
+    Execute Command    tedge config set mqtt.bridge.built_in true
+    Execute Command    tedge config set device.cryptoki.mode socket
+
+    # tests expect that the device.key_uri is initially unset
+    Execute Command    cmd=tedge config unset device.key_uri
+
+    Set Cumulocity URLs
+    ThinEdgeIO.Register Device With Cumulocity CA    ${DEVICE_SN}
+
+    Install tedge-p11-server    ${tedge_p11_server_version}

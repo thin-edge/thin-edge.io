@@ -8,19 +8,14 @@ Documentation       Test thin-edge.io MQTT client authentication using a Hardwar
 ...                 environments, a dedicated hardware device would be used.
 
 # it would be good to explain here why we use the tedge-p11-server exclusively and not the module mode
-Resource            pkcs11_common.resource
-
-Suite Setup         Custom Setup
-Suite Teardown      Get Suite Logs
-
-Test Tags           adapter:docker    theme:cryptoki
+Resource            ../pkcs11_common.resource
 
 
 *** Variables ***
 ${KEY_URI}      ${EMPTY}
 
 
-*** Test Cases ***
+*** Keywords ***
 Use Private Key in SoftHSM2 using tedge-p11-server
     Tedge Reconnect Should Succeed
 
@@ -83,10 +78,9 @@ Select Private key using a request URI
 Connects to C8y using an RSA key
     [Documentation]    Test that we can connect to C8y using an RSA private keys of all sizes.
     [Setup]    Unset tedge-p11-server Uri
-    [Template]    Connect to C8y using new RSA keypair
-    bits=4096
-    bits=3072
-    bits=2048
+    Connect to C8y using new RSA keypair    bits=4096
+    Connect to C8y using new RSA keypair    bits=3072
+    Connect to C8y using new RSA keypair    bits=2048
 
 Connects to C8y supporting all TLS13 ECDSA signature algorithms
     [Documentation]    Check that we support all ECDSA sigschemes used in TLS1.3, i.e: ecdsa_secp256r1_sha256,
@@ -99,102 +93,8 @@ Connects to C8y supporting all TLS13 ECDSA signature algorithms
     # https://github.com/rustls/rcgen/issues/60
     # Connect to C8y using new ECDSA keypair    curve=p521
 
-    Execute Command    systemctl stop tedge-p11-server tedge-p11-server.socket
-    Command Should Fail With
-    ...    tedge cert renew c8y
-    ...    error=Failed to connect to tedge-p11-server UNIX socket at '/run/tedge-p11-server/tedge-p11-server.sock'
-
-    Execute Command    systemctl start tedge-p11-server.socket
-
-    Execute Command    cmd=tedge config set c8y.device.key_uri pkcs11:object=nonexistent_key
-    Command Should Fail With
-    ...    tedge cert renew c8y
-    ...    error=PKCS #11 service failed: Failed to find a key
-    Execute Command    cmd=tedge config unset c8y.device.key_uri
-
-Can use PKCS11 key to renew the public certificate
-    [Documentation]    Test that `tedge cert renew c8y` works with all supported keys. We do renew 2 times to see if we
-    ...    can renew both a self-signed certificate and a certificate signed by C8y CA.
-    [Setup]    Unset tedge-p11-server Uri
-
-    Test tedge cert renew    type=ecdsa    curve=p256
-    Test tedge cert renew    type=ecdsa    curve=p384
-
-    # renewal isn't supported for secp521r1 because rcgen doesn't support it
-    # https://github.com/rustls/rcgen/issues/60
-
-    Test tedge cert renew    type=rsa    bits=2048
-    Test tedge cert renew    type=rsa    bits=3072
-    Test tedge cert renew    type=rsa    bits=4096
-
-Can use tedge cert download c8y to download a certificate
-    [Documentation]    Download a certificate using CSR generated with PKCS11 without a prior certificate.
-    # this new keypair doesn't have an associated certificate
-    Set up new PKCS11 ECDSA keypair
-
-    ${credentials}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN}
-    Execute Command
-    ...    cmd=tedge cert download c8y --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --retry-every 5s --max-timeout 60s
-
-    Tedge Reconnect Should Succeed
-
-Can renew the certificate using different keypair
-    [Documentation]    Starting with an initial trusted certificate, replace the keypair and renew the certificate.
-    Connect to C8y using new ECDSA keypair
-    Set up new PKCS11 ECDSA keypair
-    Execute Command    tedge cert renew c8y
-    ${stdout}=    Tedge Reconnect Should Succeed
-    Should Contain    ${stdout}    The new certificate is now the active certificate
-
-Can pass PIN in the request using pin-value
-    [Documentation]    Tests if the PIN can be changed for the request by assuming current one is correct and setting a
-    ...    different one to see if we get an error about pin being incorrect.
-
-    ${key_uri}=    Execute Command    tedge config get device.key_uri    strip=True    ignore_exit_code=True
-    # FIXME: this breaks if currently set URI already has query attributes, but currently that's not the case (other tests don't set it)
-    Execute Command    cmd=tedge config set device.key_uri "pkcs11:token=tedge;object=tedge?pin-value=incorrect"
-    Tedge Reconnect Should Fail With    The specified PIN is incorrect
-
-    [Teardown]    Execute Command    tedge config set device.key_uri "${key_uri}"
-
-Can pass PIN in the request using device.key_pin
-    Execute Command    tedge config set device.key_pin incorrect
-    Tedge Reconnect Should Fail With    The specified PIN is incorrect
-
-    [Teardown]    Execute Command    tedge config unset device.key_pin
-
-
-*** Keywords ***
-Test tedge cert renew
-    [Arguments]    ${type}    ${bits}=${EMPTY}    ${curve}=${EMPTY}
-    IF    $type == "rsa"
-        Connect to C8y using new RSA keypair    ${bits}
-    ELSE
-        Connect to C8y using new ECDSA keypair    ${curve}
-    END
-    # We could alternatively use Cumulocity CA to start with a signed cert, but for testing certificate renewal, we want
-    # to test both renewing a self-signed cert and a cert issued by C8y CA. When we start with self-signed cert, after
-    # the first renewal we get a cert signed by CA, so we test all scenarios by just doing renew 2 times.
-
-    Execute Command    tedge cert renew c8y
-    ${stderr}=    Execute Command
-    ...    openssl req -text -noout -in /etc/tedge/device-certs/tedge.csr -verify
-    ...    stdout=False
-    ...    stderr=true
-    Should Contain    ${stderr}    Certificate request self-signature verify OK
-
-    Tedge Reconnect Should Succeed
-
-    Execute Command    tedge cert renew c8y
-    ${stderr}=    Execute Command
-    ...    openssl req -text -noout -in /etc/tedge/device-certs/tedge.csr -verify
-    ...    stdout=False
-    ...    stderr=true
-    Should Contain    ${stderr}    Certificate request self-signature verify OK
-
-    Tedge Reconnect Should Succeed
-
 Custom Setup
+    [Arguments]    ${tedge_p11_server_version}
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    ${DEVICE_SN}
 
@@ -206,5 +106,7 @@ Custom Setup
     # configure tedge
     Set Cumulocity URLs
     ThinEdgeIO.Register Device With Cumulocity CA    ${DEVICE_SN}
+
+    Install tedge-p11-server    ${tedge_p11_server_version}
 
     Unset tedge-p11-server Uri
