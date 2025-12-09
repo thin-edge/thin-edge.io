@@ -1,5 +1,5 @@
 input.file.path = "/tmp/events"
 
 steps = [
-    { script = "set_topic.js", config = { topic = "log/events" } }
+    { builtin = "set-topic", config = { topic = "log/events" } }
 ]

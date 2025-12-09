@@ -9,5 +9,5 @@ command = """sh -c "sudo journalctl --no-pager --cursor-file=/tmp/tedge-agent-cu
 interval = "1s"
 
 [[steps]]
-script = "set_topic.js"
+builtin = "set-topic"
 config.topic = "log/journalctl-cursor"

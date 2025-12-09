@@ -1,6 +1,6 @@
 input.mqtt.topics = ["te/+/+/+/+/e/+"]
 
 steps = [
-    { script = "add_timestamp.js" },
+    { builtin = "add-timestamp" },
     { script = "events.js", interval = "1s" }
 ]

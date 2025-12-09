@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::time::SystemTime;
 
 mod add_timestamp;
+mod set_topic;
 
 pub trait Transformer: Send + Sync + 'static {
     fn name(&self) -> &str;
@@ -40,16 +41,24 @@ impl<T: Default + Clone + Transformer> TransformerBuilder for T {
     }
 }
 
-#[derive(Default)]
 pub struct BuiltinTransformers {
     transformers: HashMap<String, Box<dyn TransformerBuilder>>,
 }
 
+impl Default for BuiltinTransformers {
+    fn default() -> Self {
+        let mut transformers = BuiltinTransformers {
+            transformers: HashMap::default(),
+        };
+        transformers.register(add_timestamp::AddTimestamp);
+        transformers.register(set_topic::SetTopic);
+        transformers
+    }
+}
+
 impl BuiltinTransformers {
     pub fn new() -> Self {
-        let mut transformers = BuiltinTransformers::default();
-        transformers.register(add_timestamp::AddTimestamp);
-        transformers
+        Self::default()
     }
 
     pub fn register(&mut self, prototype: impl TransformerBuilder + Transformer) {
