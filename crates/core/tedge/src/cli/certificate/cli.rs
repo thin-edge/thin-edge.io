@@ -34,7 +34,10 @@ use tracing::debug;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeCertCli {
-    /// Create a self-signed device certificate
+    /// Create a self-signed device certificate.
+    ///
+    /// This command creates the device certificate and private key, and persists them, if they
+    /// don't already exist.
     Create {
         /// The device identifier to be used as the common name for the certificate
         #[clap(long = "device-id", global = true)]
