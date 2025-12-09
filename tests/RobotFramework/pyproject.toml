@@ -6,6 +6,7 @@ ignore = [
     "missing-doc-suite",
     "missing-doc-test-case",
     "missing-doc-keyword",
+    "missing-doc-resource-file",
 
     # Size
     "too-long-test-case",
