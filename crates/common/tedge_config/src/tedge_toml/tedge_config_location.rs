@@ -6,11 +6,14 @@ use crate::TEdgeConfig;
 use crate::TEdgeConfigDto;
 use crate::TEdgeConfigError;
 use crate::TEdgeConfigReader;
+use crate::tedge_toml::mapper_config::ExpectedCloudType;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde::Deserialize as _;
 use serde::Serialize;
+use tedge_config_macros::ProfileName;
+use tokio::fs::DirEntry;
 use std::path::PathBuf;
 use tedge_utils::file::change_mode;
 use tedge_utils::file::change_mode_sync;
@@ -79,6 +82,54 @@ impl TEdgeConfigLocation {
 
     pub(crate) fn tedge_config_root_path(&self) -> &Utf8Path {
         &self.tedge_config_root_path
+    }
+
+    pub fn mappers_config_dir(&self) -> Utf8PathBuf {
+        self.tedge_config_root_path.join("mappers")
+    }
+
+    /// Decide which configuration source to use for a given cloud and profile
+    ///
+    /// This function centralizes the decision logic for mapper configuration precedence:
+    /// 1. New format (`mappers/[cloud].toml` or `mappers/[cloud].d/[profile].toml`) takes precedence
+    /// 2. If new format exists for some profiles but not the requested one, returns NotFound
+    /// 3. If the config directory is inaccessible due to a permissions error, return Error
+    /// 4. If no new format exists at all, fall back to legacy tedge.toml format
+    pub async fn decide_config_source<T>(&self, profile: Option<&ProfileName>) -> ConfigDecision
+    where
+        T: ExpectedCloudType,
+    {
+        use tokio::fs::try_exists;
+
+        let mapper_config_dir = self.mappers_config_dir();
+        let ty = T::expected_cloud_type().to_string();
+
+        let filename = profile.map_or_else(|| format!("{ty}.toml"), |p| format!("{ty}.d/{p}.toml"));
+        let path = mapper_config_dir.join(&filename);
+
+        let default_profile_path = mapper_config_dir.join(format!("{ty}.toml"));
+        let profile_dir_path = mapper_config_dir.join(format!("{ty}.d"));
+
+        match (
+            try_exists(&default_profile_path).await,
+            try_exists(&profile_dir_path).await,
+            try_exists(&path).await,
+        ) {
+            // The specific config we're looking for exists
+            (_, _, Ok(true)) => ConfigDecision::LoadNew { path },
+
+            // New format configs exist for this cloud, but not the specific profile requested
+            (Ok(true), _, _) | (_, Ok(true), _) => ConfigDecision::NotFound { path },
+
+            // No new format configs exist for this cloud, use legacy
+            (Ok(false), Ok(false), _) => ConfigDecision::LoadLegacy,
+
+            // Permission error accessing mapper config directory
+            (Err(err), _, _) | (_, Err(err), _) => ConfigDecision::PermissionError {
+                mapper_config_dir,
+                error: err,
+            },
+        }
     }
 
     pub async fn update_toml(
@@ -158,6 +209,47 @@ impl TEdgeConfigLocation {
         (TEdgeConfig::from_dto(dto, location), warnings)
     }
 
+    pub(crate) async fn mapper_config_profiles<T>(
+        &self,
+    ) -> Option<Box<dyn futures::stream::Stream<Item = Option<ProfileName>> + Unpin + Send + Sync + '_>>
+    where
+        T: ExpectedCloudType,
+    {
+        use futures::future::ready;
+        use futures::StreamExt;
+
+        fn file_name_string(entry: tokio::io::Result<DirEntry>) -> Option<String> {
+            entry.ok()?.file_name().into_string().ok()
+        }
+
+        fn profile_name_from_filename(filename: &str) -> Option<ProfileName> {
+            ProfileName::try_from(filename.strip_suffix(".toml")?.to_owned()).ok()
+        }
+
+        let ty = T::expected_cloud_type();
+
+        match self.decide_config_source::<T>(None).await {
+            ConfigDecision::LoadNew { .. }
+            | ConfigDecision::NotFound { .. }
+            | ConfigDecision::PermissionError { .. } => {
+                let default_profile = futures::stream::once(ready(None));
+                match tokio::fs::read_dir(self.mappers_config_dir().join(format!("{ty}.d"))).await {
+                    Ok(profile_dir) => Some(Box::new(
+                        default_profile.chain(
+                            tokio_stream::wrappers::ReadDirStream::new(profile_dir)
+                                .filter_map(|entry| ready(file_name_string(entry)))
+                                .filter_map(|s| ready(profile_name_from_filename(&s)))
+                                .map(Some),
+                        )),
+                    ),
+                    Err(_) => Some(Box::new(default_profile)),
+                }
+            }
+            ConfigDecision::LoadLegacy => None,
+        }
+    }
+
+
     async fn load_dto_with_warnings<Sources: ConfigSources>(
         &self,
     ) -> Result<(TEdgeConfigDto, UnusedValueWarnings), TEdgeConfigError> {
@@ -190,6 +282,8 @@ impl TEdgeConfigLocation {
         if Sources::INCLUDE_ENVIRONMENT {
             update_with_environment_variables(&mut dto, &mut warnings)?;
         }
+
+        dto.populate_mapper_configs(self).await?;
 
         Ok((dto, warnings))
     }
@@ -225,6 +319,8 @@ impl TEdgeConfigLocation {
         if Sources::INCLUDE_ENVIRONMENT {
             update_with_environment_variables(&mut dto, &mut warnings)?;
         }
+        
+            todo!("populate_mapper_configs_sync");
 
         Ok((dto, warnings))
     }
@@ -297,6 +393,22 @@ impl ConfigSources for FileAndEnvironment {
 impl ConfigSources for FileOnly {
     const INCLUDE_ENVIRONMENT: bool = false;
 }
+
+/// Decision about which configuration source to use
+pub enum ConfigDecision {
+    /// Load from new format file at the given path
+    LoadNew { path: Utf8PathBuf },
+    /// Load from tedge.toml via compatibility layer
+    LoadLegacy,
+    /// Configuration file not found
+    NotFound { path: Utf8PathBuf },
+    /// Permission error accessing mapper config directory
+    PermissionError {
+        mapper_config_dir: Utf8PathBuf,
+        error: std::io::Error,
+    },
+}
+
 
 #[derive(Default, Debug, PartialEq, Eq)]
 #[must_use]

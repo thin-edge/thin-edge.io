@@ -195,7 +195,7 @@ pub async fn restrict_cloud_config_access(
     key: &(impl IsCloudConfig + std::fmt::Display),
     tedge_config: &TEdgeConfig,
 ) -> anyhow::Result<()> {
-    use tedge_config::tedge_toml::ConfigDecision as CD;
+    use tedge_config::ConfigDecision as CD;
     let Some((cloud, profile)) = key.cloud_type_for() else {
         // Not a cloud config, we don't need to worry about
         return Ok(());
