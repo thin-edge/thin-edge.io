@@ -96,6 +96,7 @@ impl TEdgeComponent for AzureMapper {
             az_config.mapper.cloud_specific.timestamp_format,
             prefix,
             az_config.mapper.mqtt.max_payload_size.0,
+            az_config.topics.to_string(),
         );
         let flows_dir = config_dir.join(prefix.as_str()).join("flows");
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
