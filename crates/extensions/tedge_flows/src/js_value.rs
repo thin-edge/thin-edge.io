@@ -6,6 +6,7 @@ use rquickjs::FromJs;
 use rquickjs::IntoJs;
 use rquickjs::Value;
 use serde_json::json;
+use serde_json::Number;
 use std::collections::BTreeMap;
 use std::time::SystemTime;
 
@@ -61,6 +62,17 @@ impl JsonValue {
         }
         .and_then(|v| match v {
             JsonValue::String(string) => Some(string.as_str()),
+            _ => None,
+        })
+    }
+
+    pub fn number_property(&self, property: &str) -> Option<Number> {
+        match self {
+            JsonValue::Object(map) => map.get(property),
+            _ => None,
+        }
+        .and_then(|v| match v {
+            JsonValue::Number(n) => Some(n.clone()),
             _ => None,
         })
     }

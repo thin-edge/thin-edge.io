@@ -5,20 +5,16 @@ use anyhow::Context;
 use async_trait::async_trait;
 use az_mapper_ext::converter::AzureConverter;
 use clock::WallClock;
-use mqtt_channel::TopicFilter;
 use std::borrow::Cow;
-use tedge_actors::ConvertingActor;
-use tedge_actors::MessageSink;
-use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::models::TopicPrefix;
-use tedge_config::tedge_toml::mapper_config::AzMapperConfig;
 use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
+use tedge_flows::ConnectedFlowRegistry;
+use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperBuilder;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
@@ -98,15 +94,18 @@ impl TEdgeComponent for AzureMapper {
             az_config.cloud_specific.mapper.timestamp_format,
             prefix,
             az_config.mapper.mqtt.max_payload_size.0,
+            az_config.topics.to_string(),
         );
-        let mut az_converting_actor = ConvertingActor::builder("AzConverter", az_converter);
-        az_converting_actor.connect_source(get_topic_filter(&az_config), &mut mqtt_actor);
-        az_converting_actor.connect_sink(NoConfig, &mqtt_actor);
+        let flows_dir = config_dir.join(prefix.as_str()).join("flows");
+        let mut flows = ConnectedFlowRegistry::new(flows_dir);
+        flows
+            .persist_builtin_flow("mea", az_converter.builtin_flow().as_str())
+            .await?;
 
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();
-        let mut flows_mapper =
-            FlowsMapperBuilder::try_new(config_dir.join(prefix.as_str()).join("flows")).await?;
+
+        let mut flows_mapper = FlowsMapperBuilder::try_new(flows).await?;
         flows_mapper.connect(&mut mqtt_actor);
         flows_mapper.connect_fs(&mut fs_actor);
         flows_mapper.connect_cmd(&mut cmd_watcher_actor);
@@ -114,21 +113,10 @@ impl TEdgeComponent for AzureMapper {
         runtime.spawn(flows_mapper).await?;
         runtime.spawn(fs_actor).await?;
         runtime.spawn(cmd_watcher_actor).await?;
-        runtime.spawn(az_converting_actor).await?;
         runtime.spawn(mqtt_actor).await?;
         runtime.run_to_completion().await?;
         Ok(())
     }
-}
-
-fn get_topic_filter(az_config: &AzMapperConfig) -> TopicFilter {
-    let mut topics = TopicFilter::empty();
-    for topic in az_config.topics.0.clone() {
-        if topics.try_add(&topic).is_err() {
-            warn!("The configured topic '{topic}' is invalid and ignored.");
-        }
-    }
-    topics
 }
 
 fn built_in_bridge_rules(

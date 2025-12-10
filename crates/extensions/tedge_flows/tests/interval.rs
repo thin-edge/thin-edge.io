@@ -9,6 +9,7 @@ use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowsMapperBuilder;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
@@ -410,7 +411,8 @@ async fn tick(duration: Duration) {
 type ActorHandle = tokio::task::JoinHandle<Result<(), tedge_actors::RuntimeError>>;
 
 async fn spawn_flows_actor(config_dir: &TempDir, mqtt: &mut MockMqtt) -> ActorHandle {
-    let mut flows_builder = FlowsMapperBuilder::try_new(config_dir.path().to_str().unwrap())
+    let flows = ConnectedFlowRegistry::new(config_dir.path().to_str().unwrap());
+    let mut flows_builder = FlowsMapperBuilder::try_new(flows)
         .await
         .expect("Failed to create FlowsMapper");
 

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::time::SystemTime;
 
 mod add_timestamp;
+mod cap_payload_size;
 mod set_topic;
 
 pub trait Transformer: Send + Sync + 'static {
@@ -51,6 +52,7 @@ impl Default for BuiltinTransformers {
             transformers: HashMap::default(),
         };
         transformers.register(add_timestamp::AddTimestamp);
+        transformers.register(cap_payload_size::CapPayloadSize);
         transformers.register(set_topic::SetTopic);
         transformers
     }
@@ -62,12 +64,8 @@ impl BuiltinTransformers {
     }
 
     pub fn register(&mut self, prototype: impl TransformerBuilder + Transformer) {
-        self.register_builder(prototype.name().to_owned(), prototype);
-    }
-
-    pub fn register_builder(&mut self, name: impl ToString, transformer: impl TransformerBuilder) {
         self.transformers
-            .insert(name.to_string(), Box::new(transformer));
+            .insert(prototype.name().to_owned(), Box::new(prototype));
     }
 
     pub fn new_instance(&self, name: &str) -> Result<Box<dyn Transformer>, LoadError> {

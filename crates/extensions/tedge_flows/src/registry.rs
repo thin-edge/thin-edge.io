@@ -3,10 +3,14 @@ use crate::config::FlowConfig;
 use crate::flow::Flow;
 use crate::js_runtime::JsRuntime;
 use crate::transformers::BuiltinTransformers;
+use crate::transformers::Transformer;
+use crate::transformers::TransformerBuilder;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
+use tedge_utils::file;
+use tedge_utils::fs;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -97,6 +101,26 @@ pub trait FlowRegistryExt: FlowRegistry {
         path: &Utf8Path,
         config: FlowConfig,
     );
+
+    /// Create a builtin flow definition in the flow configuration directory.
+    ///
+    /// This flow definition is persisted as a file with the given name and content.
+    /// - a `.toml` extension is added to the filename
+    /// - if this file already exists
+    ///   then its content is not overridden:
+    ///   this might be a user provided flow.
+    /// - if a file with the same name and extension of `.toml.disabled` exists,
+    ///   then the file for the builtin flow is not created: this is how a user can disable a builtin flow
+    /// - in any case, is created a file with the given name and a `.toml.template` extension:
+    ///   this template can be used to adapt the builtin flow.
+    async fn persist_builtin_flow(
+        &mut self,
+        name: &str,
+        content: &str,
+    ) -> Result<(), UpdateFlowRegistryError>;
+
+    /// Register a transformer that can be used as a builtin in flow steps
+    fn register_builtin(&mut self, transformer: impl TransformerBuilder + Transformer);
 }
 
 #[async_trait]
@@ -213,6 +237,51 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
             }
         }
     }
+
+    async fn persist_builtin_flow(
+        &mut self,
+        name: &str,
+        content: &str,
+    ) -> Result<(), UpdateFlowRegistryError> {
+        let dir = self.store().config_dir();
+        let flow_path = dir.join(name).with_extension("toml");
+        let disabled_flow_path = flow_path.with_extension("toml.disabled");
+        let builtin_flow_path = flow_path.with_extension("toml.template");
+
+        // Persist a copy of flow definition to be used by users as a template for their flows.
+        file::create_directory_with_defaults(dir).await?;
+        tedge_utils::fs::atomically_write_file_async(
+            builtin_flow_path.as_std_path(),
+            content.as_bytes(),
+        )
+        .await?;
+        file::overwrite_file(builtin_flow_path.as_std_path(), content).await?;
+
+        // Don't update the flow definition if overridden or disabled.
+        if file::path_exists(&disabled_flow_path).await {
+            return Ok(());
+        }
+        if file::path_exists(&flow_path).await {
+            return Ok(());
+        }
+        tedge_utils::fs::atomically_write_file_async(flow_path.as_std_path(), content.as_bytes())
+            .await?;
+
+        Ok(())
+    }
+
+    fn register_builtin(&mut self, transformer: impl TransformerBuilder + Transformer) {
+        self.builtins_mut().register(transformer)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum UpdateFlowRegistryError {
+    #[error(transparent)]
+    FileError(#[from] file::FileError),
+
+    #[error(transparent)]
+    AtomicFileError(#[from] fs::AtomFileError),
 }
 
 pub struct FlowStore<F> {

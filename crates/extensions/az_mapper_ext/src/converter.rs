@@ -18,6 +18,7 @@ pub struct MapperConfig {
     pub out_topic: Topic,
     pub errors_topic: Topic,
     pub time_format: TimeFormat,
+    pub input_topics: String,
 }
 
 pub struct AzureConverter {
@@ -36,11 +37,13 @@ impl AzureConverter {
         time_format: TimeFormat,
         topic_prefix: &TopicPrefix,
         max_payload_size: u32,
+        input_topics: String,
     ) -> Self {
         let mapper_config = MapperConfig {
             out_topic: Topic::new_unchecked(&format!("{topic_prefix}/messages/events/")),
             errors_topic: mqtt_schema.error_topic(),
             time_format,
+            input_topics,
         };
         let size_threshold = SizeThreshold(max_payload_size as usize);
         AzureConverter {
@@ -48,7 +51,7 @@ impl AzureConverter {
             clock,
             size_threshold,
             mapper_config,
-            mqtt_schema: MqttSchema::default(),
+            mqtt_schema,
         }
     }
 
@@ -142,6 +145,27 @@ impl AzureConverter {
         error!("Mapping error: {}", error);
         MqttMessage::new(&self.mapper_config.errors_topic, error.to_string())
     }
+
+    pub fn builtin_flow(&self) -> String {
+        format!(
+            r#"
+input.mqtt.topics = {input_topics}
+
+steps = [
+    {{ builtin = "add-timestamp", config = {{ property = "time", format = "{time_format}" }} }},
+    {{ builtin = "cap-payload-size", config = {{ max_size = {max_size} }} }},
+]
+
+output.mqtt.topic = "{output_topic}"
+errors.mqtt.topic = "{errors_topic}"
+"#,
+            input_topics = self.mapper_config.input_topics,
+            max_size = self.size_threshold.0,
+            time_format = self.mapper_config.time_format,
+            output_topic = self.mapper_config.out_topic,
+            errors_topic = self.mapper_config.errors_topic,
+        )
+    }
 }
 
 impl Converter for AzureConverter {
@@ -201,6 +225,7 @@ mod tests {
             TimeFormat::Rfc3339,
             &TopicPrefix::try_from("az").unwrap(),
             1,
+            "".to_string(),
         );
 
         let _topic = "az/messages/events/".to_string();
@@ -475,6 +500,7 @@ mod tests {
             TimeFormat::Unix,
             &TopicPrefix::try_from("az").unwrap(),
             AZ_MQTT_PAYLOAD_LIMIT,
+            "".to_string(),
         );
 
         let input = r#"{"pid":1234,"status":"up","time":1694586060}"#;
@@ -511,6 +537,7 @@ mod tests {
             TimeFormat::Rfc3339,
             &TopicPrefix::try_from("az").unwrap(),
             AZ_MQTT_PAYLOAD_LIMIT,
+            "".to_string(),
         )
     }
 }

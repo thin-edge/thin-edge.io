@@ -15,7 +15,7 @@ mod transformers;
 
 use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
-use crate::connected_flow::ConnectedFlowRegistry;
+pub use crate::connected_flow::ConnectedFlowRegistry;
 pub use crate::flow::*;
 pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
@@ -60,8 +60,7 @@ pub struct FlowsMapperBuilder {
 }
 
 impl FlowsMapperBuilder {
-    pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
-        let registry = ConnectedFlowRegistry::new(config_dir);
+    pub async fn try_new(registry: ConnectedFlowRegistry) -> Result<Self, LoadError> {
         let mut processor = MessageProcessor::try_new(registry).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
         let mqtt_sender = NullSender.into();

@@ -13,6 +13,7 @@ use tedge_actors::MessageSource as ActorMessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowsMapperBuilder;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
@@ -90,7 +91,8 @@ async fn stats_are_dumped_when_no_interval_handlers_registered() {
     "#;
     std::fs::write(config_dir.join("mqtt_only_flow.toml"), config).expect("Failed to write config");
 
-    let mut flows_builder = FlowsMapperBuilder::try_new(Utf8Path::from_path(config_dir).unwrap())
+    let flows = ConnectedFlowRegistry::new(Utf8Path::from_path(config_dir).unwrap());
+    let mut flows_builder = FlowsMapperBuilder::try_new(flows)
         .await
         .expect("Failed to create FlowsMapperBuilder");
 
@@ -155,7 +157,8 @@ async fn stats_dumped_when_interval_handlers_present() {
     "#;
     std::fs::write(config_dir.join("interval_flow.toml"), config).expect("Failed to write config");
 
-    let mut flows_builder = FlowsMapperBuilder::try_new(Utf8Path::from_path(config_dir).unwrap())
+    let flows = ConnectedFlowRegistry::new(Utf8Path::from_path(config_dir).unwrap());
+    let mut flows_builder = FlowsMapperBuilder::try_new(flows)
         .await
         .expect("Failed to create FlowsMapperBuilder");
 
@@ -215,7 +218,8 @@ async fn stats_not_dumped_before_300_seconds() {
     "#;
     std::fs::write(config_dir.join("mqtt_only_flow.toml"), config).expect("Failed to write config");
 
-    let mut flows_builder = FlowsMapperBuilder::try_new(Utf8Path::from_path(config_dir).unwrap())
+    let flows = ConnectedFlowRegistry::new(Utf8Path::from_path(config_dir).unwrap());
+    let mut flows_builder = FlowsMapperBuilder::try_new(flows)
         .await
         .expect("Failed to create FlowsMapperBuilder");
 

@@ -2,6 +2,7 @@ use crate::core::mapper::start_basic_actors;
 use crate::TEdgeComponent;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
+use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowsMapperBuilder;
 use tedge_watch_ext::WatchActorBuilder;
 
@@ -19,7 +20,9 @@ impl TEdgeComponent for GenMapper {
 
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();
-        let mut flows_mapper = FlowsMapperBuilder::try_new(config_dir.join("flows")).await?;
+        let flows_dir = config_dir.join("flows");
+        let flows = ConnectedFlowRegistry::new(flows_dir);
+        let mut flows_mapper = FlowsMapperBuilder::try_new(flows).await?;
         flows_mapper.connect(&mut mqtt_actor);
         flows_mapper.connect_fs(&mut fs_actor);
         flows_mapper.connect_cmd(&mut cmd_watcher_actor);
