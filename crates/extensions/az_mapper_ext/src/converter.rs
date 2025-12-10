@@ -48,7 +48,7 @@ impl AzureConverter {
             clock,
             size_threshold,
             mapper_config,
-            mqtt_schema: MqttSchema::default(),
+            mqtt_schema,
         }
     }
 
@@ -141,6 +141,27 @@ impl AzureConverter {
     fn new_error_message(&self, error: ConversionError) -> MqttMessage {
         error!("Mapping error: {}", error);
         MqttMessage::new(&self.mapper_config.errors_topic, error.to_string())
+    }
+
+    pub fn builtin_flow(&self) -> String {
+        format!(
+            r#"
+input.mqtt.topics = ["{te}/+/+/+/+/m/+","{te}/+/+/+/+/e/+","{te}/+/+/+/+/a/+", "{te}/+/+/+/+/status/health"]
+
+steps = [
+    {{ builtin = "add-timestamp", config = {{ property = "time", format = "{time_format}" }} }},
+    {{ builtin = "cap-payload-size", config = {{ max_size = {max_size} }} }},
+]
+
+output.mqtt.topic = "{output_topic}"
+errors.mqtt.topic = "{errors_topic}"
+"#,
+            te = self.mqtt_schema.root,
+            max_size = self.size_threshold.0,
+            time_format = self.mapper_config.time_format,
+            output_topic = self.mapper_config.out_topic,
+            errors_topic = self.mapper_config.errors_topic,
+        )
     }
 }
 
