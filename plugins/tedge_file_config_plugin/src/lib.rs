@@ -11,6 +11,9 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use log::debug;
 use log::info;
+use std::fs::File;
+use std::io::stdout;
+use std::io::BufReader;
 use std::io::ErrorKind;
 use tedge_utils::atomic::MaybePermissions;
 use tedge_write::CopyOptions;
@@ -47,10 +50,13 @@ impl FileConfigPlugin {
             return Err(PluginError::FileNotFound(config_path));
         }
 
-        let content = std::fs::read_to_string(&config_path)
-            .with_context(|| format!("failed to read the contents of '{config_path}'"))?;
-        print!("{content}");
+        let file =
+            File::open(&config_path).with_context(|| format!("failed to read: '{config_path}'"))?;
+        let mut reader = BufReader::new(&file);
+        let mut out = stdout().lock();
 
+        std::io::copy(&mut reader, &mut out)
+            .with_context(|| format!("failed to print contents of: '{config_path}' to stdout"))?;
         Ok(())
     }
 
