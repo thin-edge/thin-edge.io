@@ -2,11 +2,9 @@ use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use log::debug;
 use log::error;
 use log::info;
 use serde_json::json;
-use std::io::ErrorKind;
 use std::sync::Arc;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -33,17 +31,11 @@ use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::Topic;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
-use tedge_utils::atomic::MaybePermissions;
-use tedge_write::CopyOptions;
-use tedge_write::CreateDirsOptions;
 use time::OffsetDateTime;
 
 use crate::plugin::ExternalPlugin;
 use crate::plugin_manager::ExternalPlugins;
-use crate::FileEntry;
-use crate::TedgeWriteStatus;
 
-use super::config::PluginConfig;
 use super::error::ConfigManagementError;
 use super::ConfigManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
@@ -60,7 +52,6 @@ fan_in_message_type!(ConfigInput[ConfigOperation, CmdMetaSyncSignal, FsWatchEven
 
 pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
-    plugin_config: PluginConfig,
     input_receiver: LoggingReceiver<ConfigInput>,
     output_sender: LoggingSender<ConfigOperationData>,
     downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
@@ -77,7 +68,6 @@ impl Actor for ConfigManagerActor {
     async fn run(mut self) -> Result<(), RuntimeError> {
         let mut worker = ConfigManagerWorker {
             config: Arc::from(self.config),
-            plugin_config: self.plugin_config,
             output_sender: self.output_sender,
             downloader: self.downloader,
             uploader: self.uploader,
@@ -109,7 +99,6 @@ impl Actor for ConfigManagerActor {
 impl ConfigManagerActor {
     pub fn new(
         config: ConfigManagerConfig,
-        plugin_config: PluginConfig,
         input_receiver: LoggingReceiver<ConfigInput>,
         output_sender: LoggingSender<ConfigOperationData>,
         downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
@@ -118,7 +107,6 @@ impl ConfigManagerActor {
     ) -> Self {
         ConfigManagerActor {
             config,
-            plugin_config,
             input_receiver,
             output_sender,
             downloader,
@@ -131,7 +119,6 @@ impl ConfigManagerActor {
 #[derive(Clone)]
 struct ConfigManagerWorker {
     config: Arc<ConfigManagerConfig>,
-    plugin_config: PluginConfig,
     output_sender: LoggingSender<ConfigOperationData>,
     downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
     uploader: ClientMessageBox<ConfigUploadRequest, ConfigUploadResult>,
@@ -238,31 +225,21 @@ impl ConfigManagerWorker {
         topic: &Topic,
         request: &mut ConfigSnapshotCmdPayload,
     ) -> Result<Utf8PathBuf, ConfigManagementError> {
-        let config_path = if let Some(plugin) = self.get_plugin(&request.config_type)? {
-            let (config_type, plugin_name) = split_cloud_config_type(&request.config_type)
-                .expect("get_plugin returned Some, so config_type must have a plugin");
-            let target_file = self.config.tmp_path.join(format!(
-                "{}_{}_{}.conf",
-                config_type,
-                plugin_name,
-                OffsetDateTime::now_utc().unix_timestamp()
-            ));
+        let (config_type, plugin_name) = split_cloud_config_type(&request.config_type);
+        let plugin = self.get_plugin(plugin_name)?;
 
-            info!(
-                target: "config plugins",
-                "Retrieving config type: {} to file: {}", config_type, target_file
-            );
+        let config_path = self.config.tmp_path.join(format!(
+            "{}_{}_{}.conf",
+            config_type,
+            plugin_name,
+            OffsetDateTime::now_utc().unix_timestamp()
+        ));
 
-            plugin.get(config_type, &target_file).await?;
-
-            target_file.to_path_buf()
-        } else {
-            // No plugin specified; fall back to built-in file-based config handling
-            let file_entry = self
-                .plugin_config
-                .get_file_entry_from_type(&request.config_type)?;
-            Utf8PathBuf::from(&file_entry.path)
-        };
+        info!(
+            target: "config plugins",
+            "Retrieving config type: {} to file: {}", config_type, config_path
+        );
+        plugin.get(config_type, &config_path).await?;
 
         let tedge_url = match &request.tedge_url {
             Some(tedge_url) => tedge_url,
@@ -386,136 +363,18 @@ impl ConfigManagerWorker {
         let from_path = Utf8Path::from_path(&from)
             .with_context(|| format!("path is not utf-8: '{}'", from.to_string_lossy()))?;
 
-        let config_path = if let Some(plugin) = self.get_plugin(&request.config_type)? {
-            let (config_type, _) = split_cloud_config_type(&request.config_type)
-                .expect("get_plugin returned Some, so config_type must have a plugin");
-            info!(
-                target: "config plugins",
-                "Setting config type: {} from file: {}", config_type, from_path
-            );
+        let (config_type, plugin_name) = split_cloud_config_type(&request.config_type);
 
-            plugin.set(config_type, from_path).await?;
+        let plugin = self.get_plugin(plugin_name)?;
 
-            None
-        } else {
-            // No plugin specified; fall back to legacy file-based config handling
-            let file_entry = self
-                .plugin_config
-                .get_file_entry_from_type(&request.config_type)?;
-            let to = Utf8PathBuf::from(&file_entry.path);
+        info!(
+            target: "config plugins",
+            "Setting config type: {} from file: {}", config_type, from_path
+        );
 
-            if let Some(parent) = to.parent() {
-                if !parent.exists() {
-                    self.create_parent_dirs(parent, file_entry)?;
-                }
-            }
+        plugin.set(config_type, from_path).await?;
 
-            let deployed_to_path = self
-                .deploy_config_file(from_path, file_entry)
-                .context("failed to deploy configuration file")?;
-            Some(deployed_to_path)
-        };
-
-        Ok(config_path)
-    }
-
-    /// Creates the parent directories of the target file if they are missing,
-    /// and applies the permissions and ownership that are specified.
-    /// First, if `use_tedge_write` is enabled, it tries to use tedge-write to create the missing parent directories.
-    /// If it's disabled or creation with elevated privileges fails, fall back to the current user.
-    fn create_parent_dirs(&self, parent: &Utf8Path, file_entry: &FileEntry) -> anyhow::Result<()> {
-        if let TedgeWriteStatus::Enabled { sudo } = self.config.use_tedge_write.clone() {
-            debug!("Creating the missing parent directories with elevation at '{parent}'");
-            let result = CreateDirsOptions {
-                dir_path: parent,
-                sudo,
-                mode: file_entry.parent_permissions.mode,
-                user: file_entry.parent_permissions.user.as_deref(),
-                group: file_entry.parent_permissions.group.as_deref(),
-            }
-            .create();
-
-            match result {
-                Ok(()) => return Ok(()),
-                Err(err) => {
-                    info!("Failed to create the missing parent directories with elevation at '{parent}' with error: {err}. \
-            Falling back to the current user to create the directories.");
-                }
-            }
-        }
-
-        debug!("Creating the missing parent directories without elevation at '{parent}'");
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create parent directories. Path: '{parent}'"))?;
-
-        file_entry.parent_permissions.clone().apply_sync(parent.as_std_path())
-            .with_context(|| format!("failed to change permissions or mode of the parent directory. Path: '{parent}'"))?;
-
-        Ok(())
-    }
-
-    /// Deploys the new version of the configuration file and returns the path under which it was
-    /// deployed.
-    ///
-    /// Ensures that the configuration file under `dest` is overwritten atomically by a new version
-    /// currently stored in a temporary directory.
-    ///
-    /// If the configuration file doesn't already exist, a new file with target permissions is
-    /// created. If the configuration file already exists, its content is overwritten, but owner and
-    /// mode remains unchanged.
-    ///
-    /// If `use_tedge_write` is enabled, a `tedge-write` process is spawned when privilege elevation
-    /// is required.
-    fn deploy_config_file(
-        &self,
-        from: &Utf8Path,
-        file_entry: &FileEntry,
-    ) -> anyhow::Result<Utf8PathBuf> {
-        let to = Utf8PathBuf::from(&file_entry.path);
-        let permissions = MaybePermissions::try_from(&file_entry.file_permissions)?;
-
-        let src = std::fs::File::open(from)
-            .with_context(|| format!("failed to open source temporary file '{from}'"))?;
-
-        let Err(err) = tedge_utils::atomic::write_file_atomic_set_permissions_if_doesnt_exist(
-            src,
-            &to,
-            &permissions,
-        )
-        .with_context(|| format!("failed to deploy config file from '{from}' to '{to}'")) else {
-            return Ok(to);
-        };
-
-        if let Some(io_error) = err.downcast_ref::<std::io::Error>() {
-            if io_error.kind() != ErrorKind::PermissionDenied {
-                return Err(err);
-            }
-        }
-
-        match self.config.use_tedge_write.clone() {
-            TedgeWriteStatus::Disabled => {
-                return Err(err);
-            }
-
-            TedgeWriteStatus::Enabled { sudo } => {
-                let mode = file_entry.file_permissions.mode;
-                let user = file_entry.file_permissions.user.as_deref();
-                let group = file_entry.file_permissions.group.as_deref();
-
-                let options = CopyOptions {
-                    from,
-                    to: to.as_path(),
-                    sudo,
-                    mode,
-                    user,
-                    group,
-                };
-
-                options.copy()?;
-            }
-        }
-
-        Ok(to)
+        Ok(None)
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), RuntimeError> {
@@ -550,7 +409,6 @@ impl ConfigManagerWorker {
 
     async fn reload_supported_config_types(&mut self) -> Result<(), RuntimeError> {
         info!(target: "config plugins", "Reloading supported config types");
-        self.plugin_config = PluginConfig::new(self.config.plugin_config_path.as_path());
         self.external_plugins.load().await?;
 
         self.publish_supported_config_types().await?;
@@ -559,7 +417,7 @@ impl ConfigManagerWorker {
 
     /// updates the config types
     async fn publish_supported_config_types(&mut self) -> Result<(), ChannelError> {
-        let mut config_types = self.plugin_config.get_all_file_types();
+        let mut config_types = Vec::new();
 
         // Add external plugin config types with ::plugin_name suffix
         for plugin_type in self.external_plugins.get_all_plugin_types() {
@@ -572,7 +430,14 @@ impl ConfigManagerWorker {
                         );
 
                         for conf_type in conf_types {
-                            config_types.push(build_cloud_config_type(&conf_type, &plugin_type));
+                            if plugin_type == "file" {
+                                // For the file plugin, add config types without suffix (default behavior)
+                                config_types.push(conf_type);
+                            } else {
+                                // For other plugins, add with suffix
+                                config_types
+                                    .push(build_cloud_config_type(&conf_type, &plugin_type));
+                            }
                         }
                     }
                     Err(e) => {
@@ -597,22 +462,13 @@ impl ConfigManagerWorker {
         Ok(())
     }
 
-    fn get_plugin(
-        &self,
-        config_type: &str,
-    ) -> Result<Option<&ExternalPlugin>, ConfigManagementError> {
-        if let Some((_, plugin_name)) = split_cloud_config_type(config_type) {
-            if let Some(plugin) = self.external_plugins.by_plugin_type(plugin_name) {
-                Ok(Some(plugin))
-            } else {
-                Err(ConfigManagementError::PluginError {
-                    plugin_name: plugin_name.to_string(),
-                    reason: "Plugin not found".to_string(),
-                })
-            }
-        } else {
-            Ok(None)
-        }
+    fn get_plugin(&self, plugin_name: &str) -> Result<&ExternalPlugin, ConfigManagementError> {
+        self.external_plugins
+            .by_plugin_type(plugin_name)
+            .ok_or_else(|| ConfigManagementError::PluginError {
+                plugin_name: plugin_name.to_string(),
+                reason: "Plugin not found".to_string(),
+            })
     }
 
     async fn publish_command_status(
@@ -624,8 +480,10 @@ impl ConfigManagerWorker {
     }
 }
 
-fn split_cloud_config_type(config_type: &str) -> Option<(&str, &str)> {
-    config_type.split_once("::")
+fn split_cloud_config_type(config_type: &str) -> (&str, &str) {
+    config_type
+        .split_once("::")
+        .unwrap_or((config_type, "file"))
 }
 
 fn build_cloud_config_type(config_type: &str, plugin_name: &str) -> String {

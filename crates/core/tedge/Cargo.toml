@@ -50,6 +50,7 @@ strum_macros = { workspace = true }
 tar = { workspace = true }
 tedge-agent = { workspace = true }
 tedge-apt-plugin = { workspace = true }
+tedge-file-config-plugin = { workspace = true }
 tedge-file-log-plugin = { workspace = true }
 tedge-mapper = { workspace = true, default-features = false }
 tedge-p11-server = { workspace = true }

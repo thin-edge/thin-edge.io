@@ -53,7 +53,6 @@ use toml::toml;
 /// This is an actor builder.
 pub struct ConfigManagerBuilder {
     config: ConfigManagerConfig,
-    plugin_config: PluginConfig,
     box_builder: SimpleMessageBoxBuilder<ConfigInput, ConfigOperationData>,
     downloader: ClientMessageBox<ConfigDownloadRequest, ConfigDownloadResult>,
     uploader: ClientMessageBox<ConfigUploadRequest, ConfigUploadResult>,
@@ -68,7 +67,6 @@ impl ConfigManagerBuilder {
     ) -> Result<Self, FileError> {
         Self::init(&config).await?;
 
-        let plugin_config = PluginConfig::new(config.plugin_config_path.as_path());
         let box_builder = SimpleMessageBoxBuilder::new("Tedge-Config-Manager", 16);
 
         let downloader = ClientMessageBox::new(downloader_actor);
@@ -82,7 +80,6 @@ impl ConfigManagerBuilder {
 
         Ok(ConfigManagerBuilder {
             config,
-            plugin_config,
             box_builder,
             downloader,
             uploader,
@@ -202,13 +199,12 @@ impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
 
         let external_plugins = ExternalPlugins::new(
             self.config.plugin_dirs.clone(),
-            true,
+            self.config.sudo_enabled,
             self.config.tmp_path.clone(),
         );
 
         Ok(ConfigManagerActor::new(
             self.config,
-            self.plugin_config,
             input_receiver,
             output_sender,
             self.downloader,
