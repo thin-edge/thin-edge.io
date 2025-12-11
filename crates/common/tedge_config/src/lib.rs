@@ -27,11 +27,6 @@ impl TEdgeConfig {
         config_location.load().await
     }
 
-    pub fn load_sync(config_dir: impl AsRef<StdPath>) -> Result<Self, TEdgeConfigError> {
-        let config_location = TEdgeConfigLocation::from_custom_root(config_dir.as_ref());
-        config_location.load_sync()
-    }
-
     pub async fn update_toml(
         self,
         update: &impl Fn(&mut TEdgeConfigDto, &TEdgeConfigReader) -> ConfigSettingResult<()>,

@@ -804,7 +804,7 @@ mod tests {
         let cloud: Option<Cloud> = cloud_arg.map(<_>::try_into).transpose().unwrap();
         let ttd = TempTedgeDir::new();
         ttd.file("tedge.toml").with_toml_content(toml);
-        let config = TEdgeConfig::load_sync(ttd.path()).unwrap();
+        let config = TEdgeConfig::load(ttd.path()).await.unwrap();
         let id = input_id.map(|s| s.to_string());
         let result = get_device_id(id, &config, &cloud).await;
         assert_eq!(result.unwrap().as_str(), expected);
@@ -826,7 +826,7 @@ mod tests {
         let cloud: Option<Cloud> = cloud_arg.map(<_>::try_into).transpose().unwrap();
         let ttd = TempTedgeDir::new();
         ttd.file("tedge.toml").with_toml_content(toml);
-        let config = TEdgeConfig::load_sync(ttd.path()).unwrap();
+        let config = TEdgeConfig::load(ttd.path()).await.unwrap();
         let id = input_id.map(|s| s.to_string());
         let result = get_device_id(id, &config, &cloud).await;
         assert!(result.is_err());

@@ -217,29 +217,6 @@ impl TEdgeConfig {
         self.mapper_config(profile).await
     }
 
-    // pub async fn cloud_config_reader<T: SpecialisedCloudConfig>(
-    //     &self,
-    //     profile: &Option<impl Borrow<ProfileName>>,
-    // ) -> anyhow::Result<T::CloudConfigReader> {
-    //     let profile = profile.as_ref().map(|p| p.borrow().to_owned());
-    //     let ty = T::expected_cloud_type().to_string();
-
-    //     match self.decide_config_source::<T>(profile.as_ref()).await {
-    //         ConfigDecision::LoadNew { path } => {
-    //             let toml = tokio::fs::read_to_string(&path).await.with_context(|| format!("failed to read mapper configuration at {path}"))?;
-    //             T::read_tedge_config(&toml, self, profile.as_deref()).map(<_>::into)
-    //         },
-    //         ConfigDecision::NotFound { path } => {
-    //             Err(anyhow!("mapper configuration file {path} doesn't exist"))
-    //         }
-    //         ConfigDecision::LoadLegacy => match T::expected_cloud_type() {
-    //             CloudType::Aws => self.aws.try_get(profile.as_ref()).map(Cow::Borrowed),
-    //             CloudType::Az => self.az.try_get(profile.as_ref()).map(Cow::Borrowed),
-    //             CloudType::C8y => self.c8y.try_get(profile.as_ref()).map(Cow::Borrowed),
-    //         },
-    //     }
-    // }
-
     pub async fn mapper_config<T: SpecialisedCloudConfig>(
         &self,
         profile: &Option<impl Borrow<ProfileName>>,
