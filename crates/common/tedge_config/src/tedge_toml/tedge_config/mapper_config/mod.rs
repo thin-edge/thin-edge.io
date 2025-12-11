@@ -2,6 +2,7 @@ pub mod compat;
 
 use crate::models::CloudType;
 use crate::tedge_toml::tedge_config::cert_error_into_config_error;
+use crate::tedge_toml::MapperConfigLocation;
 use crate::tedge_toml::ReadableKey;
 use crate::tedge_toml::TEdgeConfigDtoAws;
 use crate::tedge_toml::TEdgeConfigDtoAz;
@@ -28,6 +29,7 @@ use super::MultiError;
 use super::OptionalConfig;
 use super::ReadError;
 use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use certificate::PemCertificate;
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
@@ -98,13 +100,48 @@ pub struct C8yBridgeConfig {
 pub trait SpecialisedCloudConfig:
     Sized + ExpectedCloudType + FromCloudConfig + Send + Sync + 'static
 {
-    type CloudDto: Default + DeserializeOwned + Send + Sync + 'static;
+    type CloudDto: HasPath + Default + DeserializeOwned + Send + Sync + 'static;
 
     fn into_config_reader(
         dto: Self::CloudDto,
         base_config: &TEdgeConfig,
         profile: Option<&str>,
     ) -> Self::CloudConfigReader;
+}
+
+pub trait HasPath {
+    fn set_path(&mut self, path: Utf8PathBuf);
+    fn get_path(&self) -> Option<&Utf8Path>;
+}
+
+impl HasPath for TEdgeConfigDtoC8y {
+    fn set_path(&mut self, path: Utf8PathBuf) {
+        self.read_from = Some(path)
+    }
+
+    fn get_path(&self) -> Option<&Utf8Path> {
+        self.read_from.as_deref()
+    }
+}
+
+impl HasPath for TEdgeConfigDtoAz {
+    fn set_path(&mut self, path: Utf8PathBuf) {
+        self.read_from = Some(path)
+    }
+
+    fn get_path(&self) -> Option<&Utf8Path> {
+        self.read_from.as_deref()
+    }
+}
+
+impl HasPath for TEdgeConfigDtoAws {
+    fn set_path(&mut self, path: Utf8PathBuf) {
+        self.read_from = Some(path)
+    }
+
+    fn get_path(&self) -> Option<&Utf8Path> {
+        self.read_from.as_deref()
+    }
 }
 
 /// Base mapper configuration with common fields and cloud-specific fields via generics

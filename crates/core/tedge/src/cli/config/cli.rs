@@ -3,11 +3,6 @@ use crate::cli::config::commands::*;
 use crate::command::*;
 use crate::ConfigError;
 use clap_complete::ArgValueCandidates;
-use tedge_config::models::CloudType;
-use tedge_config::tedge_toml::mapper_config::compat::IsCloudConfig;
-use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
-use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
-use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::WritableKey;
@@ -188,53 +183,4 @@ impl BuildCommand for ConfigCmd {
             .into_boxed()),
         }
     }
-}
-
-pub async fn restrict_cloud_config_access(
-    cmd: &str,
-    key: &(impl IsCloudConfig + std::fmt::Display),
-    tedge_config: &TEdgeConfig,
-) -> anyhow::Result<()> {
-    use tedge_config::ConfigDecision as CD;
-    let Some((cloud, profile)) = key.cloud_type_for() else {
-        // Not a cloud config, we don't need to worry about
-        return Ok(());
-    };
-    let (cloud, config_source) = match cloud {
-        CloudType::C8y => {
-            let source = tedge_config
-                .decide_config_source::<C8yMapperSpecificConfig>(profile.as_ref())
-                .await;
-            (cloud, source)
-        }
-        CloudType::Az => {
-            let source = tedge_config
-                .decide_config_source::<AzMapperSpecificConfig>(profile.as_ref())
-                .await;
-            (cloud, source)
-        }
-        CloudType::Aws => {
-            let source = tedge_config
-                .decide_config_source::<AwsMapperSpecificConfig>(profile.as_ref())
-                .await;
-            (cloud, source)
-        }
-    };
-
-    match config_source {
-            // Cloud config stored in tedge.toml
-            CD::LoadLegacy => Ok(()),
-
-            // The cloud config has been migrated to new format
-            CD::LoadNew { path } | CD::NotFound { path } => {
-                Err(anyhow::anyhow!("`tedge config {cmd}` cannot be used to update {cloud} mapper config. Please directly edit {path} to update {key}"))
-            },
-
-            // Mappers directory exists, but we can't see inside it to check if the cloud is migrated
-            CD::PermissionError { mapper_config_dir, error } => {
-                let message = format!("Could not access {mapper_config_dir} to establish whether {cloud} mapper config is stored in `tedge.toml` or a separate file");
-                let error = anyhow::Error::new(error);
-                Err(error.context(message))
-            }
-        }
 }
