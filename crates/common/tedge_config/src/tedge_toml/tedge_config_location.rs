@@ -1,26 +1,26 @@
 use std::path::Path;
 
+use crate::tedge_toml::mapper_config::ExpectedCloudType;
 use crate::tedge_toml::DtoKey;
 use crate::ConfigSettingResult;
 use crate::TEdgeConfig;
 use crate::TEdgeConfigDto;
 use crate::TEdgeConfigError;
 use crate::TEdgeConfigReader;
-use crate::tedge_toml::mapper_config::ExpectedCloudType;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde::Deserialize as _;
 use serde::Serialize;
-use tedge_config_macros::ProfileName;
-use tokio::fs::DirEntry;
 use std::path::PathBuf;
+use tedge_config_macros::ProfileName;
 use tedge_utils::file::change_mode;
 use tedge_utils::file::change_mode_sync;
 use tedge_utils::file::change_user_and_group;
 use tedge_utils::file::change_user_and_group_sync;
 use tedge_utils::fs::atomically_write_file_async;
 use tedge_utils::fs::atomically_write_file_sync;
+use tokio::fs::DirEntry;
 use tracing::debug;
 use tracing::subscriber::NoSubscriber;
 use tracing::warn;
@@ -211,7 +211,9 @@ impl TEdgeConfigLocation {
 
     pub(crate) async fn mapper_config_profiles<T>(
         &self,
-    ) -> Option<Box<dyn futures::stream::Stream<Item = Option<ProfileName>> + Unpin + Send + Sync + '_>>
+    ) -> Option<
+        Box<dyn futures::stream::Stream<Item = Option<ProfileName>> + Unpin + Send + Sync + '_>,
+    >
     where
         T: ExpectedCloudType,
     {
@@ -240,15 +242,14 @@ impl TEdgeConfigLocation {
                                 .filter_map(|entry| ready(file_name_string(entry)))
                                 .filter_map(|s| ready(profile_name_from_filename(&s)))
                                 .map(Some),
-                        )),
-                    ),
+                        ),
+                    )),
                     Err(_) => Some(Box::new(default_profile)),
                 }
             }
             ConfigDecision::LoadLegacy => None,
         }
     }
-
 
     async fn load_dto_with_warnings<Sources: ConfigSources>(
         &self,
@@ -319,8 +320,8 @@ impl TEdgeConfigLocation {
         if Sources::INCLUDE_ENVIRONMENT {
             update_with_environment_variables(&mut dto, &mut warnings)?;
         }
-        
-            todo!("populate_mapper_configs_sync");
+
+        todo!("populate_mapper_configs_sync");
 
         Ok((dto, warnings))
     }
@@ -408,7 +409,6 @@ pub enum ConfigDecision {
         error: std::io::Error,
     },
 }
-
 
 #[derive(Default, Debug, PartialEq, Eq)]
 #[must_use]

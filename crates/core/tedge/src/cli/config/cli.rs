@@ -4,6 +4,7 @@ use crate::command::*;
 use crate::ConfigError;
 use clap_complete::ArgValueCandidates;
 use tedge_config::models::CloudType;
+use tedge_config::tedge_toml::mapper_config::compat::IsCloudConfig;
 use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
 use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
 use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
@@ -11,7 +12,6 @@ use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfig;
-use tedge_config::tedge_toml::mapper_config::compat::IsCloudConfig;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum ConfigCmd {
