@@ -14,13 +14,11 @@ use camino::Utf8PathBuf;
 use serde::Deserialize as _;
 use serde::Serialize;
 use std::path::PathBuf;
+use tedge_config_macros::MultiDto;
 use tedge_config_macros::ProfileName;
 use tedge_utils::file::change_mode;
-use tedge_utils::file::change_mode_sync;
 use tedge_utils::file::change_user_and_group;
-use tedge_utils::file::change_user_and_group_sync;
 use tedge_utils::fs::atomically_write_file_async;
-use tedge_utils::fs::atomically_write_file_sync;
 use tokio::fs::DirEntry;
 use tracing::debug;
 use tracing::subscriber::NoSubscriber;
@@ -157,29 +155,12 @@ impl TEdgeConfigLocation {
         Ok(TEdgeConfig::from_dto(dto, self.clone()))
     }
 
-    pub(crate) fn load_sync(self) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let dto = self.load_dto_sync::<FileAndEnvironment>()?;
-        debug!(
-            "Loading configuration from {:?}",
-            self.tedge_config_file_path
-        );
-        Ok(TEdgeConfig::from_dto(dto, self))
-    }
-
     async fn load_dto_from_toml_and_env(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
         self.load_dto::<FileAndEnvironment>().await
     }
 
     async fn load_dto<Sources: ConfigSources>(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
         let (dto, warnings) = self.load_dto_with_warnings::<Sources>().await?;
-
-        warnings.emit();
-
-        Ok(dto)
-    }
-
-    fn load_dto_sync<Sources: ConfigSources>(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
-        let (dto, warnings) = self.load_dto_with_warnings_sync::<Sources>()?;
 
         warnings.emit();
 
@@ -290,56 +271,10 @@ impl TEdgeConfigLocation {
         Ok((dto, warnings))
     }
 
-    fn load_dto_with_warnings_sync<Sources: ConfigSources>(
-        &self,
-    ) -> Result<(TEdgeConfigDto, UnusedValueWarnings), TEdgeConfigError> {
-        let toml_path = self.toml_path();
-        let mut tedge_toml_readable = true;
-        let config = std::fs::read_to_string(toml_path).unwrap_or_else(|_| {
-            tedge_toml_readable = false;
-            String::new()
-        });
-        let toml: toml::Value = toml::de::from_str(&config)?;
-        let (mut dto, mut warnings) = deserialize_toml(toml, toml_path)?;
-
-        if let Some(migrations) = dto.config.version.unwrap_or_default().migrations() {
-            if !tedge_toml_readable {
-                tracing::info!("Migrating tedge.toml configuration to version 2");
-
-                let toml = toml::de::from_str(&config)?;
-                let migrated_toml = migrations
-                    .into_iter()
-                    .fold(toml, |toml, migration| migration.apply_to(toml));
-
-                self.store_sync(&migrated_toml)?;
-
-                // Reload DTO to get the settings in the right place
-                (dto, warnings) = deserialize_toml(migrated_toml, toml_path)?;
-            }
-        }
-
-        if Sources::INCLUDE_ENVIRONMENT {
-            update_with_environment_variables(&mut dto, &mut warnings)?;
-        }
-
-        todo!("populate_mapper_configs_sync");
-
-        Ok((dto, warnings))
-    }
-
     async fn store(&self, mut config: TEdgeConfigDto) -> Result<(), TEdgeConfigError> {
-        self.store_cloud(&mut config.c8y.non_profile).await?;
-        self.store_cloud(&mut config.az.non_profile).await?;
-        self.store_cloud(&mut config.aws.non_profile).await?;
-        for profile in config.c8y.profiles.values_mut() {
-            self.store_cloud(profile).await?;
-        }
-        for profile in &mut config.az.profiles.values_mut() {
-            self.store_cloud(profile).await?;
-        }
-        for profile in &mut config.aws.profiles.values_mut() {
-            self.store_cloud(profile).await?;
-        }
+        self.store_cloud(&mut config.c8y).await?;
+        self.store_cloud(&mut config.az).await?;
+        self.store_cloud(&mut config.aws).await?;
         self.store_in(self.toml_path(), &config).await
     }
 
@@ -371,38 +306,27 @@ impl TEdgeConfigLocation {
         Ok(())
     }
 
-    async fn store_cloud<S: Serialize + HasPath + Default>(
-        &self,
-        config: &mut S,
-    ) -> Result<(), TEdgeConfigError> {
-        if let Some(toml_path) = config.get_path() {
-            self.store_in(toml_path, config).await?;
-            // Discard config that has been persisted to another location
-            let _ = std::mem::take(config);
+    async fn store_cloud<S>(&self, cloud: &mut MultiDto<S>) -> Result<(), TEdgeConfigError>
+    where
+        S: Serialize + HasPath + Default + PartialEq,
+    {
+        if cloud.non_profile.get_path().is_some() {
+            self.store_cloud_entry(&cloud.non_profile).await?;
+            for profile in cloud.profiles.values() {
+                self.store_cloud_entry(profile).await?;
+            }
+            std::mem::take(cloud);
         }
         Ok(())
     }
 
-    fn store_sync<S: Serialize>(&self, config: &S) -> Result<(), TEdgeConfigError> {
-        let toml = toml::to_string_pretty(&config)?;
-
-        // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
-        if !self.tedge_config_root_path.exists() {
-            std::fs::create_dir(self.tedge_config_root_path())?;
+    async fn store_cloud_entry<S: Serialize + HasPath + Default>(
+        &self,
+        config: &S,
+    ) -> Result<(), TEdgeConfigError> {
+        if let Some(toml_path) = config.get_path() {
+            self.store_in(toml_path, config).await?;
         }
-
-        let toml_path = self.toml_path();
-
-        atomically_write_file_sync(toml_path, toml.as_bytes())?;
-
-        if let Err(err) = change_user_and_group_sync(toml_path.as_ref(), "tedge", "tedge") {
-            warn!("failed to set file ownership for '{toml_path}': {err}");
-        }
-
-        if let Err(err) = change_mode_sync(toml_path.as_ref(), 0o644) {
-            warn!("failed to set file permissions for '{toml_path}': {err}");
-        }
-
         Ok(())
     }
 }

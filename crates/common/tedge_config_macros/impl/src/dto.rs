@@ -97,7 +97,7 @@ pub fn generate(
         impl #name {
             // If #name is a "multi" field, we don't use this method, but it's a pain to conditionally generate it, so just ignore the warning
             #[allow(unused)]
-            fn is_default(&self) -> bool {
+            pub fn is_default(&self) -> bool {
                 self == &Self::default()
             }
         }

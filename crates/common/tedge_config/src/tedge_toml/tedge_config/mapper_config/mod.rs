@@ -2,7 +2,6 @@ pub mod compat;
 
 use crate::models::CloudType;
 use crate::tedge_toml::tedge_config::cert_error_into_config_error;
-use crate::tedge_toml::MapperConfigLocation;
 use crate::tedge_toml::ReadableKey;
 use crate::tedge_toml::TEdgeConfigDtoAws;
 use crate::tedge_toml::TEdgeConfigDtoAz;
