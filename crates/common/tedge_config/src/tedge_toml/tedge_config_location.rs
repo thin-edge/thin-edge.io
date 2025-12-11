@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::tedge_toml::mapper_config::ExpectedCloudType;
+use crate::tedge_toml::mapper_config::HasPath;
 use crate::tedge_toml::DtoKey;
 use crate::ConfigSettingResult;
 use crate::TEdgeConfig;
@@ -140,7 +141,7 @@ impl TEdgeConfigLocation {
         let reader = TEdgeConfigReader::from_dto(&config, self);
         update(&mut config, &reader)?;
 
-        self.store(&config).await
+        self.store(config).await
     }
 
     fn toml_path(&self) -> &Utf8Path {
@@ -274,7 +275,7 @@ impl TEdgeConfigLocation {
                     .into_iter()
                     .fold(toml, |toml, migration| migration.apply_to(toml));
 
-                self.store(&migrated_toml).await?;
+                self.store_in(self.toml_path(), &migrated_toml).await?;
 
                 (dto, warnings) = deserialize_toml(migrated_toml, toml_path)?;
             }
@@ -326,18 +327,34 @@ impl TEdgeConfigLocation {
         Ok((dto, warnings))
     }
 
-    async fn store<S: Serialize>(&self, config: &S) -> Result<(), TEdgeConfigError> {
+    async fn store(&self, mut config: TEdgeConfigDto) -> Result<(), TEdgeConfigError> {
+        self.store_cloud(&mut config.c8y.non_profile).await?;
+        self.store_cloud(&mut config.az.non_profile).await?;
+        self.store_cloud(&mut config.aws.non_profile).await?;
+        for profile in config.c8y.profiles.values_mut() {
+            self.store_cloud(profile).await?;
+        }
+        for profile in &mut config.az.profiles.values_mut() {
+            self.store_cloud(profile).await?;
+        }
+        for profile in &mut config.aws.profiles.values_mut() {
+            self.store_cloud(profile).await?;
+        }
+        self.store_in(self.toml_path(), &config).await
+    }
+
+    async fn store_in<S: Serialize>(
+        &self,
+        toml_path: &Utf8Path,
+        config: &S,
+    ) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config)?;
 
         // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
-        if !tokio::fs::try_exists(&self.tedge_config_root_path)
-            .await
-            .unwrap_or(false)
-        {
-            tokio::fs::create_dir(self.tedge_config_root_path()).await?;
+        if !tokio::fs::try_exists(toml_path).await.unwrap_or(false) {
+            tokio::fs::create_dir_all(toml_path.parent().expect("provided path must have parent"))
+                .await?;
         }
-
-        let toml_path = self.toml_path();
 
         atomically_write_file_async(toml_path, toml.as_bytes()).await?;
 
@@ -351,6 +368,18 @@ impl TEdgeConfigLocation {
             warn!("failed to set file permissions for '{toml_path}': {err}");
         }
 
+        Ok(())
+    }
+
+    async fn store_cloud<S: Serialize + HasPath + Default>(
+        &self,
+        config: &mut S,
+    ) -> Result<(), TEdgeConfigError> {
+        if let Some(toml_path) = config.get_path() {
+            self.store_in(toml_path, config).await?;
+            // Discard config that has been persisted to another location
+            let _ = std::mem::take(config);
+        }
         Ok(())
     }
 

@@ -53,7 +53,7 @@ fn generate_structs(
 
     for item in items {
         match item {
-            FieldOrGroup::Field(field) => {
+            FieldOrGroup::Field(field) if !field.reader().skip => {
                 let ty = field.ty();
                 attrs.push(field.attrs().to_vec());
                 idents.push(field.ident());
@@ -143,6 +143,9 @@ fn generate_structs(
                     true => parse_quote!(),
                     false => parse_quote!(pub),
                 });
+            }
+            FieldOrGroup::Field(_) => {
+                // Explicitly skipped using `#[tedge_config(reader(skip))]`
             }
             FieldOrGroup::Group(_) => {
                 // Explicitly skipped using `#[tedge_config(reader(skip))]`
@@ -550,7 +553,7 @@ fn generate_conversions(
 
     for item in items {
         match item {
-            FieldOrGroup::Field(field) => {
+            FieldOrGroup::Field(field) if !field.reader().skip => {
                 let name = field.ident();
                 let value = reader_value_for_field(field, &parents, root_fields, Vec::new())?;
                 field_conversions.push(quote_spanned!(name.span()=> #name: #value));
@@ -615,7 +618,7 @@ fn generate_conversions(
                     generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
                 rest.push(sub_conversions);
             }
-            FieldOrGroup::Group(_) | FieldOrGroup::Multi(_) => {
+            FieldOrGroup::Field(_) | FieldOrGroup::Group(_) | FieldOrGroup::Multi(_) => {
                 // Skipped
             }
         }
@@ -868,6 +871,40 @@ mod tests {
     }
 
     #[test]
+    fn generate_structs_ignores_reader_skipped_fields_for_reader_only() {
+        let input: crate::input::Configuration = parse_quote!(
+            c8y: {
+                #[tedge_config(reader(skip))]
+                read_from: Utf8PathBuf,
+            },
+        );
+        let actual = generate_structs(
+            &parse_quote!(TEdgeConfigReader),
+            &input.groups,
+            Vec::new(),
+            "",
+        )
+        .unwrap();
+        let mut file: syn::File = syn::parse2(actual.clone()).unwrap();
+        let target: syn::Ident = parse_quote!(TEdgeConfigReaderC8y);
+        file.items.retain(
+            |i| matches!(i, Item::Struct(ItemStruct { ident: self_ty, .. }) if *self_ty == target),
+        );
+
+        // Should contain no fields as all have been skipped
+        let expected = parse_quote! {
+            #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
+            #[non_exhaustive]
+            pub struct TEdgeConfigReaderC8y {}
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&file),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
     fn fields_are_public_only_if_directly_readable() {
         let input: crate::input::Configuration = parse_quote!(
             test: {
@@ -1045,6 +1082,45 @@ mod tests {
                                 }
                             },
                         ),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&file),
+            prettyplease::unparse(&expected)
+        )
+    }
+
+    #[test]
+    fn skipped_reader_values_are_excluded_from_from_dto() {
+        let input: crate::input::Configuration = parse_quote!(
+            c8y: {
+                #[tedge_config(reader(skip))]
+                #[serde(skip)]
+                read_from: Utf8PathBuf,
+            },
+        );
+        let actual = generate_conversions(
+            &parse_quote!(TEdgeConfigReader),
+            &input.groups,
+            Vec::new(),
+            &input.groups,
+        )
+        .unwrap();
+        let mut file: syn::File = syn::parse2(actual).unwrap();
+        let target: syn::Type = parse_quote!(TEdgeConfigReaderC8y);
+        file.items
+            .retain(|i| matches!(i, Item::Impl(ItemImpl { self_ty, ..}) if **self_ty == target));
+
+        let expected = parse_quote! {
+            impl TEdgeConfigReaderC8y {
+                #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
+                #[automatically_derived]
+                /// Converts the provided [TEdgeConfigDto] into a reader
+                pub(crate) fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
+                    Self {
                     }
                 }
             }

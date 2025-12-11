@@ -1,6 +1,7 @@
 mod version;
 use futures::Stream;
 use reqwest::NoProxy;
+use serde::Deserialize;
 use version::TEdgeTomlVersion;
 
 mod append_remove;
@@ -30,6 +31,7 @@ use crate::models::AbsolutePath;
 use crate::tedge_toml::mapper_config::AwsMapperSpecificConfig;
 use crate::tedge_toml::mapper_config::AzMapperSpecificConfig;
 use crate::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+use crate::tedge_toml::mapper_config::HasPath as _;
 use crate::tedge_toml::mapper_config::HasUrl;
 use crate::tedge_toml::mapper_config::MapperConfigError;
 use crate::tedge_toml::mapper_config::SpecialisedCloudConfig;
@@ -129,24 +131,27 @@ impl TEdgeConfigDto {
         let ty = T::expected_cloud_type();
         match all_profiles {
             Some(profiles) => {
-                let default_profile_toml =
-                    read_file_if_exists(&mappers_dir.join(format!("{ty}.toml"))).await?;
-                // TODO quote path in error messages
-                let default_profile_config: T::CloudDto = default_profile_toml.map_or_else(
+                let toml_path = mappers_dir.join(format!("{ty}.toml"));
+                let default_profile_toml = read_file_if_exists(&toml_path).await?;
+                let mut default_profile_config: T::CloudDto = default_profile_toml.map_or_else(
                     || Ok(<_>::default()),
-                    |toml| toml::from_str(&toml).context("failed to deserialise mapper config"),
+                    |toml| {
+                        toml::from_str(&toml).with_context(|| {
+                            format!("failed to deserialise mapper config in {toml_path}")
+                        })
+                    },
                 )?;
+                default_profile_config.set_path(toml_path);
                 dto.non_profile = default_profile_config;
 
                 dto.profiles = profiles
                     .filter_map(|profile| futures::future::ready(profile))
                     .then(|profile| async {
-                        let profile_toml = tokio::fs::read_to_string(
-                            mappers_dir.join(format!("{ty}.d/{profile}.toml")),
-                        )
-                        .await?;
-                        let profiled_config: T::CloudDto = toml::from_str(&profile_toml)
+                        let toml_path = mappers_dir.join(format!("{ty}.d/{profile}.toml"));
+                        let profile_toml = tokio::fs::read_to_string(&toml_path).await?;
+                        let mut profiled_config: T::CloudDto = toml::from_str(&profile_toml)
                             .context("failed to deserialise mapper config")?;
+                        profiled_config.set_path(toml_path);
                         Ok::<_, anyhow::Error>((profile, profiled_config))
                     })
                     .try_collect()
@@ -610,6 +615,12 @@ pub static READABLE_KEYS: Lazy<Vec<(Cow<'static, str>, doku::Type)>> = Lazy::new
     struct_field_paths(None, &fields)
 });
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, doku::Document, serde::Serialize)]
+pub enum MapperConfigLocation {
+    TedgeToml,
+    SeparateFile(#[doku(as = "String")] camino::Utf8PathBuf),
+}
+
 define_tedge_config! {
     #[tedge_config(reader(skip))]
     config: {
@@ -737,6 +748,10 @@ define_tedge_config! {
 
     #[tedge_config(multi, reader(private))]
     c8y: {
+        #[tedge_config(reader(skip))]
+        #[serde(skip)]
+        read_from: Utf8PathBuf,
+
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
         // Config consumers should use `c8y.http`/`c8y.mqtt` as appropriate, hence this field is private
@@ -977,6 +992,10 @@ define_tedge_config! {
     #[tedge_config(multi)]
     #[tedge_config(reader(private))]
     az: {
+        #[tedge_config(reader(skip))]
+        #[serde(skip)]
+        read_from: Utf8PathBuf,
+
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
         url: ConnectUrl,
@@ -1064,6 +1083,10 @@ define_tedge_config! {
     #[tedge_config(multi)]
     #[tedge_config(reader(private))]
     aws: {
+        #[tedge_config(reader(skip))]
+        #[serde(skip)]
+        read_from: Utf8PathBuf,
+
         /// Endpoint URL of AWS IoT tenant
         #[tedge_config(example = "your-endpoint.amazonaws.com")]
         url: ConnectUrl,
