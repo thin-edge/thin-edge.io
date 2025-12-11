@@ -1,9 +1,9 @@
 use super::*;
-use crate::tedge_toml::WritableKey;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderAws;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderAz;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderC8y;
 use crate::tedge_toml::ReadableKey;
+use crate::tedge_toml::WritableKey;
 use crate::TEdgeConfig;
 
 pub trait IsCloudConfig {
