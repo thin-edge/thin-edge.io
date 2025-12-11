@@ -26,7 +26,6 @@ use super::models::TopicPrefix;
 use super::models::HTTPS_PORT;
 use super::models::MQTT_TLS_PORT;
 use super::tedge_config_location::TEdgeConfigLocation;
-use crate::ConfigDecision;
 use crate::models::AbsolutePath;
 use crate::tedge_toml::mapper_config::AwsMapperSpecificConfig;
 use crate::tedge_toml::mapper_config::AzMapperSpecificConfig;
@@ -34,6 +33,7 @@ use crate::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use crate::tedge_toml::mapper_config::HasUrl;
 use crate::tedge_toml::mapper_config::MapperConfigError;
 use crate::tedge_toml::mapper_config::SpecialisedCloudConfig;
+use crate::ConfigDecision;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
@@ -55,6 +55,7 @@ use reqwest::Certificate;
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::io::ErrorKind;
 use std::io::Read;
 use std::iter::Iterator;
 use std::net::IpAddr;
@@ -107,28 +108,62 @@ impl std::ops::Deref for TEdgeConfig {
     }
 }
 
+async fn read_file_if_exists(path: &Utf8Path) -> anyhow::Result<Option<String>> {
+    match tokio::fs::read_to_string(path).await {
+        Ok(contents) => Ok(Some(contents)),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).context(format!("failed to read mapper configuration from {path}")),
+    }
+}
+
 impl TEdgeConfigDto {
-    pub(crate) async fn populate_mapper_configs(&mut self, location: &TEdgeConfigLocation) -> anyhow::Result<()> {
+    async fn populate_single_mapper<T: SpecialisedCloudConfig>(
+        dto: &mut MultiDto<T::CloudDto>,
+        location: &TEdgeConfigLocation,
+    ) -> anyhow::Result<()> {
         use futures::StreamExt;
         use futures::TryStreamExt;
+
         let mappers_dir = location.tedge_config_root_path().join("mappers");
-        let all_profiles = location.mapper_config_profiles::<C8yMapperSpecificConfig>().await;
+        let all_profiles = location.mapper_config_profiles::<T>().await;
+        let ty = T::expected_cloud_type();
         match all_profiles {
             Some(profiles) => {
-                // TODO don't fail on non-existence of file
-                let default_profile_toml = tokio::fs::read_to_string(mappers_dir.join("c8y.toml")).await.unwrap();
+                let default_profile_toml =
+                    read_file_if_exists(&mappers_dir.join(format!("{ty}.toml"))).await?;
                 // TODO quote path in error messages
-                let c8y_config: TEdgeConfigDtoC8y = toml::from_str(&default_profile_toml).context("failed to deserialise mapper config")?;
-                self.c8y.non_profile = c8y_config;
+                let default_profile_config: T::CloudDto = default_profile_toml.map_or_else(
+                    || Ok(<_>::default()),
+                    |toml| toml::from_str(&toml).context("failed to deserialise mapper config"),
+                )?;
+                dto.non_profile = default_profile_config;
 
-                self.c8y.profiles = profiles.filter_map(|profile| futures::future::ready(profile)).then(|profile| async {
-                    let profile_toml = tokio::fs::read_to_string(mappers_dir.join("c8y.d").join(format!("{profile}.toml"))).await?;
-                    let c8y_config: TEdgeConfigDtoC8y = toml::from_str(&profile_toml).context("failed to deserialise mapper config")?;
-                    Ok::<_, anyhow::Error>((profile, c8y_config))
-                }).try_collect().await?;
+                dto.profiles = profiles
+                    .filter_map(|profile| futures::future::ready(profile))
+                    .then(|profile| async {
+                        let profile_toml = tokio::fs::read_to_string(
+                            mappers_dir.join(format!("{ty}.d/{profile}.toml")),
+                        )
+                        .await?;
+                        let profiled_config: T::CloudDto = toml::from_str(&profile_toml)
+                            .context("failed to deserialise mapper config")?;
+                        Ok::<_, anyhow::Error>((profile, profiled_config))
+                    })
+                    .try_collect()
+                    .await?;
             }
-            None => ()
+            None => (),
         }
+        Ok(())
+    }
+
+    pub(crate) async fn populate_mapper_configs(
+        &mut self,
+        location: &TEdgeConfigLocation,
+    ) -> anyhow::Result<()> {
+        Self::populate_single_mapper::<C8yMapperSpecificConfig>(&mut self.c8y, location).await?;
+        Self::populate_single_mapper::<AzMapperSpecificConfig>(&mut self.az, location).await?;
+        Self::populate_single_mapper::<AwsMapperSpecificConfig>(&mut self.aws, location).await?;
         Ok(())
     }
 }
@@ -143,7 +178,10 @@ impl TEdgeConfig {
         }
     }
 
-    pub async fn decide_config_source<T>(&self, profile: Option<&ProfileName>) -> ConfigDecision where T: ExpectedCloudType{
+    pub async fn decide_config_source<T>(&self, profile: Option<&ProfileName>) -> ConfigDecision
+    where
+        T: ExpectedCloudType,
+    {
         self.location.decide_config_source::<T>(profile).await
     }
 
@@ -204,7 +242,11 @@ impl TEdgeConfig {
         let profile = profile.as_ref().map(|p| p.borrow().to_owned());
         let ty = T::expected_cloud_type().to_string();
 
-        match self.location.decide_config_source::<T>(profile.as_ref()).await {
+        match self
+            .location
+            .decide_config_source::<T>(profile.as_ref())
+            .await
+        {
             ConfigDecision::LoadNew { path } => {
                 // Check for config conflict: both new format and legacy exist
                 if self.has_legacy_config::<T>(profile.as_ref()) {

@@ -98,7 +98,7 @@ pub struct C8yBridgeConfig {
 pub trait SpecialisedCloudConfig:
     Sized + ExpectedCloudType + FromCloudConfig + Send + Sync + 'static
 {
-    type CloudDto: DeserializeOwned + Send + Sync + 'static;
+    type CloudDto: Default + DeserializeOwned + Send + Sync + 'static;
 
     fn into_config_reader(
         dto: Self::CloudDto,
