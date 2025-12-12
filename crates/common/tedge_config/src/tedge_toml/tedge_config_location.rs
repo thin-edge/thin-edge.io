@@ -262,11 +262,11 @@ impl TEdgeConfigLocation {
             }
         }
 
+        dto.populate_mapper_configs(self).await?;
+
         if Sources::INCLUDE_ENVIRONMENT {
             update_with_environment_variables(&mut dto, &mut warnings)?;
         }
-
-        dto.populate_mapper_configs(self).await?;
 
         Ok((dto, warnings))
     }
@@ -576,11 +576,11 @@ type = "a-service-type""#;
         assert_eq!(warnings, UnusedValueWarnings::default());
 
         assert_eq!(
-            tedge_config.device_cert_path(None::<Void>).await.unwrap(),
+            tedge_config.device_cert_path(None::<Void>).unwrap(),
             "/tedge/device-cert.pem".parse().unwrap()
         );
         assert_eq!(
-            tedge_config.device_key_path(None::<Void>).await.unwrap(),
+            tedge_config.device_key_path(None::<Void>).unwrap(),
             "/tedge/device-key.pem".parse().unwrap()
         );
         assert_eq!(tedge_config.device.ty, "a-device");
@@ -655,7 +655,6 @@ type = "a-service-type""#;
             .mapper_config::<AzMapperSpecificConfig>(&Some(
                 ProfileName::try_from("test".to_owned()).unwrap(),
             ))
-            .await
             .unwrap();
         assert_eq!(
             az_config.root_cert_path,

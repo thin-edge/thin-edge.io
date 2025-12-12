@@ -57,7 +57,7 @@ pub async fn run(firmware_plugin_opt: FirmwarePluginOpt) -> Result<(), anyhow::E
 
     let tedge_config = tedge_config::TEdgeConfig::load(config_dir).await?;
     let c8y_profile = firmware_plugin_opt.profile;
-    let c8y_config = tedge_config.mapper_config(&c8y_profile).await?;
+    let c8y_config = tedge_config.mapper_config(&c8y_profile)?;
 
     if firmware_plugin_opt.init {
         warn!("This --init option has been deprecated and will be removed in a future release");

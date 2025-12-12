@@ -49,14 +49,12 @@ use certificate::CloudHttpConfig;
 use certificate::PemCertificate;
 use doku::Document;
 use futures::StreamExt;
-use mapper_config::load_mapper_config;
 use mapper_config::ExpectedCloudType;
 use mapper_config::MapperConfig;
 use once_cell::sync::Lazy;
 use reqwest::Certificate;
 use std::borrow::Borrow;
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::iter::Iterator;
@@ -93,13 +91,10 @@ impl<T> OptionalConfigError<T> for OptionalConfig<T> {
     }
 }
 
-type AnyMap = anymap3::Map<dyn std::any::Any + Send + Sync + 'static>;
-
 pub struct TEdgeConfig {
     dto: TEdgeConfigDto,
     reader: TEdgeConfigReader,
     location: TEdgeConfigLocation,
-    cached_mapper_configs: Arc<tokio::sync::Mutex<AnyMap>>,
 }
 
 impl std::ops::Deref for TEdgeConfig {
@@ -188,7 +183,6 @@ impl TEdgeConfig {
             reader: TEdgeConfigReader::from_dto(&dto, &location),
             dto,
             location,
-            cached_mapper_configs: <_>::default(),
         }
     }
 
@@ -207,113 +201,35 @@ impl TEdgeConfig {
         self.location.tedge_config_root_path()
     }
 
-    pub async fn c8y_mapper_config(
+    pub fn c8y_mapper_config(
         &self,
         profile: &Option<impl Borrow<ProfileName>>,
-    ) -> anyhow::Result<Arc<MapperConfig<C8yMapperSpecificConfig>>> {
-        self.mapper_config(profile).await
+    ) -> anyhow::Result<MapperConfig<C8yMapperSpecificConfig>> {
+        self.mapper_config(profile)
     }
-    pub async fn az_mapper_config(
+    pub fn az_mapper_config(
         &self,
         profile: &Option<impl Borrow<ProfileName>>,
-    ) -> anyhow::Result<Arc<MapperConfig<AzMapperSpecificConfig>>> {
-        self.mapper_config(profile).await
+    ) -> anyhow::Result<MapperConfig<AzMapperSpecificConfig>> {
+        self.mapper_config(profile)
     }
-    pub async fn aws_mapper_config(
+    pub fn aws_mapper_config(
         &self,
         profile: &Option<impl Borrow<ProfileName>>,
-    ) -> anyhow::Result<Arc<MapperConfig<AwsMapperSpecificConfig>>> {
-        self.mapper_config(profile).await
+    ) -> anyhow::Result<MapperConfig<AwsMapperSpecificConfig>> {
+        self.mapper_config(profile)
     }
 
-    pub async fn mapper_config<T: SpecialisedCloudConfig>(
+    pub fn mapper_config<T: SpecialisedCloudConfig>(
         &self,
         profile: &Option<impl Borrow<ProfileName>>,
-    ) -> anyhow::Result<Arc<MapperConfig<T>>> {
+    ) -> anyhow::Result<MapperConfig<T>> {
         let profile = profile.as_ref().map(|p| p.borrow().to_owned());
-        let ty = T::expected_cloud_type().to_string();
 
-        match self
-            .location
-            .decide_config_source::<T>(profile.as_ref())
-            .await
-        {
-            ConfigDecision::LoadNew { path } => {
-                // Check for config conflict: both new format and legacy exist
-                if self.has_legacy_config::<T>(profile.as_ref()) {
-                    let legacy_key = match profile.as_ref() {
-                        None => ty,
-                        Some(p) => format!("{ty}.profiles.{p}"),
-                    };
-                    tracing::warn!(
-                        "Both {path} and tedge.toml [{legacy_key}] exist. Using {path}. \
-                         Consider removing the [{legacy_key}] section from tedge.toml."
-                    );
-                }
-
-                let mut cached_configs = self.cached_mapper_configs.lock().await;
-                let configs_for_cloud = cached_configs
-                    .entry::<HashMap<Option<ProfileName>, Arc<MapperConfig<T>>>>()
-                    .or_default();
-
-                if let Some(cached_config) = configs_for_cloud.get(&profile) {
-                    Ok(cached_config.clone())
-                } else {
-                    let map = load_mapper_config::<T>(
-                        &AbsolutePath::try_new(path.as_str()).unwrap(),
-                        self,
-                        profile.as_deref(),
-                    )
-                    .await?;
-
-                    configs_for_cloud.insert(profile.clone(), Arc::new(map));
-
-                    Ok(configs_for_cloud.get(&profile).unwrap().clone())
-                }
-            }
-            ConfigDecision::NotFound { path } => {
-                Err(anyhow!("mapper configuration file {path} doesn't exist"))
-            }
-            ConfigDecision::LoadLegacy => Ok(Arc::new(
-                mapper_config::compat::load_cloud_mapper_config(profile.as_deref(), self)?,
-            )),
-            ConfigDecision::PermissionError {
-                mapper_config_dir,
-                error,
-            } => Err(error).with_context(|| format!("reading {mapper_config_dir}")),
-        }
-    }
-
-    /// Check if a legacy tedge.toml configuration exists for the given cloud
-    /// type and profile by checking if the URL is configured
-    ///
-    /// We have to check if URL is configured since the default profile (aka
-    /// `profile = None`) is always defined, regardless of whether `tedge.toml`
-    /// configures anything.
-    fn has_legacy_config<T>(&self, profile: Option<&ProfileName>) -> bool
-    where
-        T: ExpectedCloudType,
-    {
-        match T::expected_cloud_type() {
-            CloudType::C8y => self
-                .c8y
-                .try_get(profile)
-                .ok()
-                .and_then(|c| c.url.or_none())
-                .is_some(),
-            CloudType::Az => self
-                .az
-                .try_get(profile)
-                .ok()
-                .and_then(|c| c.url.or_none())
-                .is_some(),
-            CloudType::Aws => self
-                .aws
-                .try_get(profile)
-                .ok()
-                .and_then(|c| c.url.or_none())
-                .is_some(),
-        }
+        Ok(mapper_config::compat::load_cloud_mapper_config(
+            profile.as_deref(),
+            self,
+        )?)
     }
 
     pub fn profiled_config_directories(&self) -> impl Iterator<Item = Utf8PathBuf> + use<'_> {
@@ -343,7 +259,8 @@ impl TEdgeConfig {
         }
     }
 
-    pub async fn all_mapper_configs<T>(&self) -> Vec<(Arc<MapperConfig<T>>, Option<ProfileName>)>
+    // TODO handle this properly with cli connect
+    pub async fn all_mapper_configs<T>(&self) -> Vec<(MapperConfig<T>, Option<ProfileName>)>
     where
         T: SpecialisedCloudConfig,
     {
@@ -351,7 +268,7 @@ impl TEdgeConfig {
         let mut generalised_profiles = self.all_profiles::<T>().await;
         let mut configs = Vec::new();
         while let Some(profile) = generalised_profiles.next().await {
-            if let Ok(config) = self.mapper_config(&profile).await {
+            if let Ok(config) = self.mapper_config(&profile) {
                 if config.configured_url().or_none().is_some() {
                     configs.push((config, profile));
                 }
@@ -361,116 +278,59 @@ impl TEdgeConfig {
         configs
     }
 
-    pub async fn as_cloud_config(
+    pub fn as_cloud_config(
         &self,
         cloud: Cloud<'_>,
-    ) -> Result<DynCloudConfig<'_>, MultiError> {
+    ) -> Result<Box<dyn CloudConfig + Send + Sync>, MultiError> {
         Ok(match cloud {
-            Cloud::C8y(profile) => self
-                .c8y_mapper_config(&profile)
-                .await
-                .map(|config| DynCloudConfig::Arc(config as Arc<_>))?,
-            Cloud::Az(profile) => self
-                .az_mapper_config(&profile)
-                .await
-                .map(|config| DynCloudConfig::Arc(config as Arc<_>))?,
-            Cloud::Aws(profile) => self
-                .aws_mapper_config(&profile)
-                .await
-                .map(|config| DynCloudConfig::Arc(config as Arc<_>))?,
+            Cloud::C8y(profile) => self.c8y_mapper_config(&profile).map(Box::new)?,
+            Cloud::Az(profile) => self.az_mapper_config(&profile).map(Box::new)?,
+            Cloud::Aws(profile) => self.aws_mapper_config(&profile).map(Box::new)?,
         })
     }
 
-    pub async fn device_id<'a>(
-        &self,
-        cloud: Option<impl Into<Cloud<'a>>>,
-    ) -> Result<String, ReadError> {
+    pub fn device_id<'a>(&self, cloud: Option<impl Into<Cloud<'a>>>) -> Result<String, ReadError> {
         Ok(match cloud.map(<_>::into) {
             None => self.device.id()?.to_owned(),
-            Some(Cloud::C8y(profile)) => self.c8y_mapper_config(&profile).await?.device.id()?,
-            Some(Cloud::Az(profile)) => self.az_mapper_config(&profile).await?.device.id()?,
-            Some(Cloud::Aws(profile)) => self.aws_mapper_config(&profile).await?.device.id()?,
+            Some(Cloud::C8y(profile)) => self.c8y_mapper_config(&profile)?.device.id()?,
+            Some(Cloud::Az(profile)) => self.az_mapper_config(&profile)?.device.id()?,
+            Some(Cloud::Aws(profile)) => self.aws_mapper_config(&profile)?.device.id()?,
         })
     }
 
-    pub async fn device_key_path<'a>(
+    pub fn device_key_path<'a>(
         &self,
         cloud: Option<impl Into<Cloud<'a>>>,
     ) -> Result<AbsolutePath, MultiError> {
         Ok(match cloud.map(<_>::into) {
             None => self.device.key_path.clone(),
-            Some(Cloud::C8y(profile)) => self
-                .c8y_mapper_config(&profile)
-                .await?
-                .device
-                .key_path
-                .clone(),
-            Some(Cloud::Az(profile)) => self
-                .az_mapper_config(&profile)
-                .await?
-                .device
-                .key_path
-                .clone(),
-            Some(Cloud::Aws(profile)) => self
-                .aws_mapper_config(&profile)
-                .await?
-                .device
-                .key_path
-                .clone(),
+            Some(Cloud::C8y(profile)) => self.c8y_mapper_config(&profile)?.device.key_path.clone(),
+            Some(Cloud::Az(profile)) => self.az_mapper_config(&profile)?.device.key_path.clone(),
+            Some(Cloud::Aws(profile)) => self.aws_mapper_config(&profile)?.device.key_path.clone(),
         })
     }
 
-    pub async fn device_cert_path<'a>(
+    pub fn device_cert_path<'a>(
         &self,
         cloud: Option<impl Into<Cloud<'a>>>,
     ) -> Result<AbsolutePath, MultiError> {
         Ok(match cloud.map(<_>::into) {
             None => self.device.cert_path.clone(),
-            Some(Cloud::C8y(profile)) => self
-                .c8y_mapper_config(&profile)
-                .await?
-                .device
-                .cert_path
-                .clone(),
-            Some(Cloud::Az(profile)) => self
-                .az_mapper_config(&profile)
-                .await?
-                .device
-                .cert_path
-                .clone(),
-            Some(Cloud::Aws(profile)) => self
-                .aws_mapper_config(&profile)
-                .await?
-                .device
-                .cert_path
-                .clone(),
+            Some(Cloud::C8y(profile)) => self.c8y_mapper_config(&profile)?.device.cert_path.clone(),
+            Some(Cloud::Az(profile)) => self.az_mapper_config(&profile)?.device.cert_path.clone(),
+            Some(Cloud::Aws(profile)) => self.aws_mapper_config(&profile)?.device.cert_path.clone(),
         })
     }
 
-    pub async fn device_csr_path<'a>(
+    pub fn device_csr_path<'a>(
         &self,
         cloud: Option<impl Into<Cloud<'a>>>,
     ) -> Result<AbsolutePath, MultiError> {
         Ok(match cloud.map(<_>::into) {
             None => self.device.csr_path.clone(),
-            Some(Cloud::C8y(profile)) => self
-                .c8y_mapper_config(&profile)
-                .await?
-                .device
-                .csr_path
-                .clone(),
-            Some(Cloud::Az(profile)) => self
-                .az_mapper_config(&profile)
-                .await?
-                .device
-                .csr_path
-                .clone(),
-            Some(Cloud::Aws(profile)) => self
-                .aws_mapper_config(&profile)
-                .await?
-                .device
-                .csr_path
-                .clone(),
+            Some(Cloud::C8y(profile)) => self.c8y_mapper_config(&profile)?.device.csr_path.clone(),
+            Some(Cloud::Az(profile)) => self.az_mapper_config(&profile)?.device.csr_path.clone(),
+            Some(Cloud::Aws(profile)) => self.aws_mapper_config(&profile)?.device.csr_path.clone(),
         })
     }
 
@@ -530,7 +390,7 @@ impl TEdgeConfig {
 /// Note: This does not stream the certificates as they are read from disk. It
 /// simply reads all the certificates, then returns them as a stream.
 fn stream_trust_store<T: SpecialisedCloudConfig>(
-    mapper_config: Arc<MapperConfig<T>>,
+    mapper_config: MapperConfig<T>,
 ) -> impl Stream<Item = Certificate> + Send {
     futures::stream::once(async move {
         read_trust_store(&mapper_config.root_cert_path)
@@ -1988,7 +1848,6 @@ mod tests {
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
         let mapper_config = tedge_config
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(None))
-            .await
             .unwrap();
         assert_eq!(
             mapper_config.http().or_none().unwrap().host().to_string(),
@@ -2012,7 +1871,6 @@ mod tests {
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
         let mapper_config = tedge_config
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("myprofile")))
-            .await
             .unwrap();
         assert_eq!(
             mapper_config.http().or_none().unwrap().host().to_string(),
@@ -2038,10 +1896,8 @@ mod tests {
 
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
         let res = tedge_config
-            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("non-existent-profile")))
-            .await;
-        assert_error_contains!(res, &ttd.dir("mappers/c8y.d").path().display().to_string());
-        assert_error_contains!(res, "doesn't exist");
+            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("non-existent-profile")));
+        assert_error_contains!(res, "C8y profile 'non-existent-profile' not found");
     }
 
     #[tokio::test]
@@ -2060,10 +1916,8 @@ mod tests {
 
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
         let res = tedge_config
-            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("non-existent-profile")))
-            .await;
-        assert_error_contains!(res, &ttd.dir("mappers/c8y.d").path().display().to_string());
-        assert_error_contains!(res, "doesn't exist");
+            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("non-existent-profile")));
+        assert_error_contains!(res, "C8y profile 'non-existent-profile' not found");
     }
 
     #[tokio::test]
@@ -2076,7 +1930,6 @@ mod tests {
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
         let config = tedge_config
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(Some("myprofile")))
-            .await
             .unwrap();
         assert_eq!(
             config.http().or_none().unwrap().host().to_string(),
@@ -2094,7 +1947,6 @@ mod tests {
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
         let config = tedge_config
             .mapper_config::<C8yMapperSpecificConfig>(&profile_name(None))
-            .await
             .unwrap();
         assert_eq!(
             config.http().or_none().unwrap().host().to_string(),
@@ -2114,7 +1966,6 @@ mod tests {
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
         let config = tedge_config
             .mapper_config::<AzMapperSpecificConfig>(&profile_name(None))
-            .await
             .unwrap();
         assert_eq!(config.url().or_none().unwrap().input, "az.url");
     }

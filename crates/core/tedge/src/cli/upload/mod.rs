@@ -77,7 +77,7 @@ impl BuildCommand for UploadCmd {
             } => {
                 let identity = config.http.client.auth.identity()?;
                 let cloud_root_certs = config.cloud_root_certs().await?;
-                let c8y_config = config.mapper_config(&profile).await?;
+                let c8y_config = config.mapper_config(&profile)?;
                 let c8y = C8yEndPoint::local_proxy(&c8y_config)?;
                 let device_id = match device_id {
                     None => c8y_config.device.id()?.clone(),

@@ -172,9 +172,7 @@ pub(crate) async fn check_device_status_c8y(
     tedge_config: &TEdgeConfig,
     c8y_profile: Option<&ProfileName>,
 ) -> Result<DeviceStatus, ConnectError> {
-    let c8y_config = tedge_config
-        .mapper_config::<C8yMapperSpecificConfig>(&c8y_profile)
-        .await?;
+    let c8y_config = tedge_config.mapper_config::<C8yMapperSpecificConfig>(&c8y_profile)?;
     let prefix = &c8y_config.bridge.topic_prefix;
     let built_in_bridge = tedge_config.mqtt.bridge.built_in;
     let bridge_health_topic = bridge_health_topic(prefix, tedge_config).name;

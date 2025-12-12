@@ -108,13 +108,12 @@ impl Command for ConnectCommand {
 
         let cloud = tedge_config
             .as_cloud_config((&self.cloud).into())
-            .await
             .map_err(anyhow::Error::new)?;
 
         let cryptoki_key_uri =
             tedge_config
                 .device
-                .cryptoki_config(Some(&cloud))?
+                .cryptoki_config(Some(&*cloud))?
                 .map(|c| match c {
                     CryptokiConfig::Direct(d) => d.uri,
                     CryptokiConfig::SocketService { uri, .. } => uri,
@@ -379,11 +378,10 @@ impl ConnectCommand {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile_name) => {
                 let device_type = &tedge_config.device.ty;
-                let c8y_config = tedge_config
-                    .mapper_config::<C8yMapperSpecificConfig>(profile_name)
-                    .await?;
+                let c8y_config =
+                    tedge_config.mapper_config::<C8yMapperSpecificConfig>(profile_name)?;
                 let mut mqtt_auth_config =
-                    tedge_config.mqtt_auth_config_cloud_broker(&*c8y_config)?;
+                    tedge_config.mqtt_auth_config_cloud_broker(&c8y_config)?;
                 if let Some(client_config) = mqtt_auth_config.client.as_mut() {
                     _certificate_shift
                         .new_cert_path
@@ -408,9 +406,7 @@ async fn credentials_path_for(
     match cloud {
         #[cfg(feature = "c8y")]
         Cloud::C8y(profile) => {
-            let c8y_config = _config
-                .mapper_config::<C8yMapperSpecificConfig>(profile)
-                .await?;
+            let c8y_config = _config.mapper_config::<C8yMapperSpecificConfig>(profile)?;
             Ok(Some(c8y_config.cloud_specific.credentials_path.clone()))
         }
         #[cfg(feature = "aws")]
@@ -429,9 +425,7 @@ impl ConnectCommand {
         match &self.cloud {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => {
-                let c8y_config = tedge_config
-                    .mapper_config::<C8yMapperSpecificConfig>(profile)
-                    .await?;
+                let c8y_config = tedge_config.mapper_config::<C8yMapperSpecificConfig>(profile)?;
 
                 if bridge_config.auth_type == AuthType::Certificate && !self.offline_mode {
                     tenant_matches_configured_url(
@@ -558,7 +552,7 @@ async fn validate_config(
     Ok(())
 }
 
-type MapperConfigData<T> = (Arc<MapperConfig<T>>, Option<ProfileName>);
+type MapperConfigData<T> = (MapperConfig<T>, Option<ProfileName>);
 
 fn disallow_matching_url_device_id<T>(mapper_configs: &[MapperConfigData<T>]) -> anyhow::Result<()>
 where
@@ -702,9 +696,7 @@ pub async fn bridge_config(
     match cloud {
         #[cfg(feature = "azure")]
         MaybeBorrowedCloud::Azure(profile) => {
-            let az_config = config
-                .mapper_config::<AzMapperSpecificConfig>(profile)
-                .await?;
+            let az_config = config.mapper_config::<AzMapperSpecificConfig>(profile)?;
 
             let params = BridgeConfigAzureParams {
                 mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
@@ -728,9 +720,7 @@ pub async fn bridge_config(
         }
         #[cfg(feature = "aws")]
         MaybeBorrowedCloud::Aws(profile) => {
-            let aws_config = config
-                .mapper_config::<AwsMapperSpecificConfig>(profile)
-                .await?;
+            let aws_config = config.mapper_config::<AwsMapperSpecificConfig>(profile)?;
 
             let params = BridgeConfigAwsParams {
                 mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from(
@@ -755,9 +745,7 @@ pub async fn bridge_config(
         #[cfg(feature = "c8y")]
         MaybeBorrowedCloud::C8y(profile) => {
             use tedge_config::models::MQTT_CORE_TLS_PORT;
-            let c8y_config = config
-                .mapper_config::<C8yMapperSpecificConfig>(profile)
-                .await?;
+            let c8y_config = config.mapper_config::<C8yMapperSpecificConfig>(profile)?;
 
             let (remote_username, remote_password) = match c8y_config
                 .cloud_specific
@@ -864,11 +852,10 @@ impl ConnectCommand {
                 if self.offline_mode {
                     eprintln!("Offline mode. Skipping device creation in Cumulocity cloud.")
                 } else {
-                    let c8y_config = tedge_config
-                        .mapper_config::<C8yMapperSpecificConfig>(profile_name)
-                        .await?;
+                    let c8y_config =
+                        tedge_config.mapper_config::<C8yMapperSpecificConfig>(profile_name)?;
                     let mqtt_auth_config =
-                        tedge_config.mqtt_auth_config_cloud_broker(&*c8y_config)?;
+                        tedge_config.mqtt_auth_config_cloud_broker(&c8y_config)?;
                     let spinner = Spinner::start("Creating device in Cumulocity cloud");
                     let res = create_device_with_direct_connection(
                         bridge_config,
@@ -1147,9 +1134,7 @@ async fn tenant_matches_configured_url(
     configured_http_url: &str,
 ) -> Result<bool, Fancy<ConnectError>> {
     let spinner = Spinner::start("Checking Cumulocity is connected to intended tenant");
-    let c8y_config = tedge_config
-        .mapper_config::<C8yMapperSpecificConfig>(&profile_name)
-        .await?;
+    let c8y_config = tedge_config.mapper_config::<C8yMapperSpecificConfig>(&profile_name)?;
     let res = get_connected_c8y_url(tedge_config, &c8y_config).await;
     match spinner.finish(res) {
         Ok(url) if url == configured_mqtt_url || url == configured_http_url => Ok(true),

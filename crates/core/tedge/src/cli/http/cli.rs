@@ -200,9 +200,8 @@ impl BuildCommand for TEdgeHttpCli {
         let uri = self.uri();
 
         let (protocol, host, port) = if uri.starts_with("/c8y") {
-            let c8y_config = config
-                .mapper_config::<C8yMapperSpecificConfig>(&self.c8y_profile())
-                .await?;
+            let c8y_config =
+                config.mapper_config::<C8yMapperSpecificConfig>(&self.c8y_profile())?;
             let client = &c8y_config.cloud_specific.proxy.client;
             let protocol = https_if_some(&c8y_config.cloud_specific.proxy.cert_path);
             (protocol, client.host.clone(), client.port)

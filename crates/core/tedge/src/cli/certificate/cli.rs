@@ -245,8 +245,8 @@ impl BuildCommand for TEdgeCertCli {
 
                 let cmd = CreateCertCmd {
                     id: get_device_id(id, config, &cloud).await?,
-                    cert_path: config.device_cert_path(cloud.as_ref()).await?.into(),
-                    key_path: config.device_key_path(cloud.as_ref()).await?.into(),
+                    cert_path: config.device_cert_path(cloud.as_ref())?.into(),
+                    key_path: config.device_key_path(cloud.as_ref())?.into(),
                     user: user.to_owned(),
                     group: group.to_owned(),
                     csr_template,
@@ -262,25 +262,20 @@ impl BuildCommand for TEdgeCertCli {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 debug!(?cloud);
                 let cloud_config = match cloud.as_ref() {
-                    Some(c) => Some(config.as_cloud_config(c.into()).await?),
+                    Some(c) => Some(config.as_cloud_config(c.into())?),
                     None => None,
                 };
                 let cryptoki = config
                     .device
-                    .cryptoki_config(cloud_config.as_ref().map(|c| c as &dyn CloudConfig))?;
+                    .cryptoki_config(cloud_config.as_ref().map(|c| &**c as &dyn CloudConfig))?;
                 let key = cryptoki
                     .map(super::create_csr::Key::Cryptoki)
                     .unwrap_or(Key::Local(
-                        config
-                            .device_key_path(cloud.as_ref())
-                            .await?
-                            .to_owned()
-                            .into(),
+                        config.device_key_path(cloud.as_ref())?.to_owned().into(),
                     ));
                 debug!(?key);
                 let current_cert = config
                     .device_cert_path(cloud.as_ref())
-                    .await
                     .map(|c| c.into())
                     .ok();
                 debug!(?current_cert);
@@ -292,7 +287,7 @@ impl BuildCommand for TEdgeCertCli {
                     csr_path: if let Some(output_path) = output_path {
                         output_path
                     } else {
-                        config.device_csr_path(cloud.as_ref()).await?.into()
+                        config.device_csr_path(cloud.as_ref())?.into()
                     },
                     current_cert,
                     user: user.to_owned(),
@@ -316,12 +311,12 @@ impl BuildCommand for TEdgeCertCli {
             } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cloud_config = match cloud.as_ref() {
-                    Some(c) => Some(config.as_cloud_config(c.into()).await?),
+                    Some(c) => Some(config.as_cloud_config(c.into())?),
                     None => None,
                 };
                 let cryptoki_config = config
                     .device
-                    .cryptoki_config(cloud_config.as_ref().map(|c| c as &dyn CloudConfig))?
+                    .cryptoki_config(cloud_config.as_ref().map(|c| &**c as &dyn CloudConfig))?
                     .context("Cryptoki config is not enabled")?;
 
                 CreateKeyHsmCmd {
@@ -344,7 +339,7 @@ impl BuildCommand for TEdgeCertCli {
                 show_new,
             } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
-                let device_cert_path = config.device_cert_path(cloud.as_ref()).await?.into();
+                let device_cert_path = config.device_cert_path(cloud.as_ref())?.into();
                 let cert_path = cert_path.unwrap_or(device_cert_path);
                 let cmd = ShowCertCmd {
                     cert_path: if show_new {
@@ -361,7 +356,7 @@ impl BuildCommand for TEdgeCertCli {
 
             TEdgeCertCli::NeedsRenewal { cloud, cert_path } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
-                let device_cert_path = config.device_cert_path(cloud.as_ref()).await?.into();
+                let device_cert_path = config.device_cert_path(cloud.as_ref())?.into();
                 let cmd = ShowCertCmd {
                     cert_path: cert_path.unwrap_or(device_cert_path),
                     minimum: config.certificate.validity.minimum_duration.duration(),
@@ -373,8 +368,8 @@ impl BuildCommand for TEdgeCertCli {
             TEdgeCertCli::Remove { cloud } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
                 let cmd = RemoveCertCmd {
-                    cert_path: config.device_cert_path(cloud.as_ref()).await?.into(),
-                    key_path: config.device_key_path(cloud.as_ref()).await?.into(),
+                    cert_path: config.device_cert_path(cloud.as_ref())?.into(),
+                    key_path: config.device_key_path(cloud.as_ref())?.into(),
                 };
                 cmd.into_boxed()
             }
@@ -384,9 +379,7 @@ impl BuildCommand for TEdgeCertCli {
                 password,
                 profile,
             }) => {
-                let c8y = config
-                    .mapper_config::<C8yMapperSpecificConfig>(&profile)
-                    .await?;
+                let c8y = config.mapper_config::<C8yMapperSpecificConfig>(&profile)?;
                 let cmd = c8y::UploadCertCmd {
                     device_id: c8y.device.id()?.clone(),
                     path: c8y.device.cert_path.clone().into(),
@@ -407,9 +400,7 @@ impl BuildCommand for TEdgeCertCli {
                 retry_every,
                 max_timeout,
             }) => {
-                let c8y_config = config
-                    .mapper_config::<C8yMapperSpecificConfig>(&profile)
-                    .await?;
+                let c8y_config = config.mapper_config::<C8yMapperSpecificConfig>(&profile)?;
 
                 let (csr_path, generate_csr) = match csr_path {
                     None => (c8y_config.device.csr_path.clone().into(), true),
@@ -425,15 +416,14 @@ impl BuildCommand for TEdgeCertCli {
                         .to_owned(),
                 };
 
-                let cryptoki = config.device.cryptoki_config(Some(&*c8y_config))?;
+                let cryptoki = config.device.cryptoki_config(Some(&c8y_config))?;
                 let key = cryptoki
                     .map(super::create_csr::Key::Cryptoki)
                     .unwrap_or(Key::Local(
                         config
                             .device_key_path(Some(tedge_config::tedge_toml::Cloud::C8y(
                                 profile.as_ref(),
-                            )))
-                            .await?
+                            )))?
                             .into(),
                     ));
                 let cmd = c8y::DownloadCertCmd {
@@ -458,8 +448,8 @@ impl BuildCommand for TEdgeCertCli {
                 ca,
             } => {
                 let cloud: Option<Cloud> = cloud.map(<_>::try_into).transpose()?;
-                let cert_path: Utf8PathBuf = config.device_cert_path(cloud.as_ref()).await?.into();
-                let key_path = config.device_key_path(cloud.as_ref()).await?.into();
+                let cert_path: Utf8PathBuf = config.device_cert_path(cloud.as_ref())?.into();
+                let key_path = config.device_key_path(cloud.as_ref())?.into();
                 let new_cert_path = CertificateShift::new_certificate_path(&cert_path);
 
                 // The CA to renew a certificate is determined from the certificate
@@ -492,17 +482,17 @@ impl BuildCommand for TEdgeCertCli {
                     );
                 } else {
                     let (csr_path, generate_csr) = match csr_path {
-                        None => (config.device_csr_path(cloud.as_ref()).await?.into(), true),
+                        None => (config.device_csr_path(cloud.as_ref())?.into(), true),
                         Some(csr_path) => (csr_path, false),
                     };
                     let c8y = match &cloud {
                         None => {
-                            let c8y_config = config.mapper_config(&None::<ProfileName>).await?;
+                            let c8y_config = config.mapper_config(&None::<ProfileName>)?;
                             C8yEndPoint::local_proxy(&c8y_config)?
                         }
                         #[cfg(feature = "c8y")]
                         Some(Cloud::C8y(profile)) => {
-                            let c8y_config = config.mapper_config(profile).await?;
+                            let c8y_config = config.mapper_config(profile)?;
                             C8yEndPoint::local_proxy(&c8y_config)?
                         }
                         #[cfg(any(feature = "aws", feature = "azure"))]
@@ -514,17 +504,15 @@ impl BuildCommand for TEdgeCertCli {
                     };
 
                     let cloud_config = match cloud.as_ref() {
-                        Some(c) => Some(config.as_cloud_config(c.into()).await?),
+                        Some(c) => Some(config.as_cloud_config(c.into())?),
                         None => None,
                     };
                     let cryptoki = config
                         .device
-                        .cryptoki_config(cloud_config.as_ref().map(|c| c as &dyn CloudConfig))?;
+                        .cryptoki_config(cloud_config.as_ref().map(|c| &**c as &dyn CloudConfig))?;
                     let key = cryptoki
                         .map(super::create_csr::Key::Cryptoki)
-                        .unwrap_or(Key::Local(
-                            config.device_key_path(cloud.as_ref()).await?.into(),
-                        ));
+                        .unwrap_or(Key::Local(config.device_key_path(cloud.as_ref())?.into()));
                     let cmd = c8y::RenewCertCmd {
                         c8y,
                         http_config: config.cloud_root_certs().await?,
@@ -582,7 +570,7 @@ async fn get_device_id(
     config: &TEdgeConfig,
     cloud: &Option<Cloud>,
 ) -> Result<String, anyhow::Error> {
-    match (id, config.device_id(cloud.as_ref()).await.ok()) {
+    match (id, config.device_id(cloud.as_ref()).ok()) {
         (None, None) => Err(anyhow!(
             "No device ID is provided. Use `--device-id <name>` option to specify the device ID."
         )),
