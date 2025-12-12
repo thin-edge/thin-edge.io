@@ -431,7 +431,7 @@ Get Unknown Configuration Type From Device
     ${operation}=    Cumulocity.Get Configuration    ${config_type}
     Operation Should Be FAILED
     ...    ${operation}
-    ...    failure_reason=.*requested config_type "${config_type}" is not defined in the plugin configuration file.*
+    ...    failure_reason=.*requested config_type ${config_type} is not defined in the plugin configuration file.*
 
 Get non existent configuration file From Device
     [Arguments]    ${test_desc}    ${device}    ${external_id}    ${config_type}    ${device_file}
@@ -440,7 +440,7 @@ Get non existent configuration file From Device
     ThinEdgeIO.Execute Command    rm -f ${device_file}
     Cumulocity.Set Device    ${external_id}
     ${operation}=    Cumulocity.Get Configuration    ${config_type}
-    Operation Should Be FAILED    ${operation}    failure_reason=.*No such file or directory.*
+    Operation Should Be FAILED    ${operation}    failure_reason=.*file not found.*
 
 Get Configuration from Device
     [Arguments]    ${description}    ${device}    ${external_id}    ${config_type}    ${device_file}

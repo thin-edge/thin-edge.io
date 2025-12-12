@@ -93,10 +93,6 @@ Custom Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist    ${DEVICE_SN}
 
-    Execute Command    mkdir /usr/share/tedge/config-plugins
-    Restart Service    tedge-agent
-    Service Should Be Running    tedge-agent
-
 Command Metadata Should Have Refreshed
     [Arguments]    ${start_time}
     Should Have MQTT Messages

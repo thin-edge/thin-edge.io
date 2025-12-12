@@ -12,9 +12,6 @@ pub enum ConfigManagementError {
     FromChannelError(#[from] tedge_actors::ChannelError),
 
     #[error(transparent)]
-    InvalidConfigTypeError(#[from] InvalidConfigTypeError),
-
-    #[error(transparent)]
     FromPathsError(#[from] tedge_utils::paths::PathsError),
 
     #[error(transparent)]
@@ -46,12 +43,4 @@ impl From<ConfigManagementError> for RuntimeError {
     fn from(error: ConfigManagementError) -> Self {
         RuntimeError::ActorError(Box::new(error))
     }
-}
-
-#[derive(thiserror::Error, Debug)]
-#[error(
-    "The requested config_type {config_type:?} is not defined in the plugin configuration file."
-)]
-pub struct InvalidConfigTypeError {
-    pub config_type: String,
 }

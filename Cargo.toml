@@ -7,6 +7,7 @@ members = [
     "plugins/c8y_firmware_plugin",
     "plugins/c8y_remote_access_plugin",
     "plugins/tedge_apt_plugin",
+    "plugins/tedge_file_config_plugin",
     "plugins/tedge_file_log_plugin",
 ]
 resolver = "2"
@@ -44,6 +45,7 @@ mqtt_tests = { path = "crates/tests/mqtt_tests" }
 plugin_sm = { path = "crates/core/plugin_sm" }
 tedge-agent = { path = "crates/core/tedge_agent" }
 tedge-apt-plugin = { path = "plugins/tedge_apt_plugin" }
+tedge-file-config-plugin = { path = "plugins/tedge_file_config_plugin" }
 tedge-file-log-plugin = { path = "plugins/tedge_file_log_plugin" }
 tedge-mapper = { path = "crates/core/tedge_mapper", default-features = false }
 tedge-p11-server = { path = "crates/extensions/tedge-p11-server" }

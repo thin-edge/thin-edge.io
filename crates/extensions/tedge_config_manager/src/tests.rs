@@ -31,7 +31,6 @@ use crate::actor::ConfigUploadRequest;
 use crate::actor::ConfigUploadResult;
 use crate::ConfigManagerBuilder;
 use crate::ConfigManagerConfig;
-use crate::TedgeWriteStatus;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_secs(3);
 
@@ -47,10 +46,11 @@ fn prepare() -> Result<TempTedgeDir, anyhow::Error> {
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("temp dir not created"))?;
 
-    std::fs::File::create(format!("{tempdir_path}/file_a"))?;
+    // Test files
+    tempdir.file("file_a");
     tempdir.file("file_b").with_raw_content("Some content");
-    std::fs::File::create(format!("{tempdir_path}/file_c"))?;
-    std::fs::File::create(format!("{tempdir_path}/file_d"))?;
+    tempdir.file("file_c");
+    tempdir.file("file_d");
 
     tempdir
         .file("tedge-configuration-plugin.toml")
@@ -62,6 +62,22 @@ fn prepare() -> Result<TempTedgeDir, anyhow::Error> {
             {{ path = "{tempdir_path}/file_d", type = "type_four" }},
         ]"#
         ));
+
+    let plugin_dir = tempdir.dir("config-plugins");
+
+    // Create a mock `file` plugin script
+    let plugin_script = include_str!("../tests/data/file");
+
+    let plugin_path = plugin_dir.file("file").with_raw_content(plugin_script);
+
+    // Make the plugin executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(plugin_path.path())?.permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(plugin_path.path(), perms)?;
+    }
 
     Ok(tempdir)
 }
@@ -93,12 +109,12 @@ async fn new_config_manager_builder(
         .map(Topic::new_unchecked)
         .collect(),
         tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
-        use_tedge_write: TedgeWriteStatus::Disabled,
         mqtt_schema: MqttSchema::new(),
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
         tedge_http_host: "127.0.0.1:3000".into(),
         config_update_enabled: true,
+        sudo_enabled: false,
     };
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
@@ -251,7 +267,8 @@ async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
         upload_request.url,
         "http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_two-1234"
     );
-    assert_eq!(upload_request.file_path, tempdir.path().join("file_b"));
+    let upload_path = upload_request.file_path.to_string();
+    assert!(upload_path.contains("type_two"));
 
     assert_eq!(upload_request.auth, None);
 
@@ -264,7 +281,7 @@ async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
             mqtt.recv().await,
             Some(MqttMessage::new(
                 &config_topic,
-                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
+                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, upload_path)
             ).with_retain())
         );
 
@@ -314,7 +331,8 @@ async fn config_manager_creates_tedge_url_for_snapshot_request() -> Result<(), a
         upload_request.url,
         "http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234"
     );
-    assert_eq!(upload_request.file_path, tempdir.path().join("file_b"));
+    let upload_path = upload_request.file_path.to_string();
+    assert!(upload_path.contains("type_two"));
 
     assert_eq!(upload_request.auth, None);
 
@@ -327,7 +345,7 @@ async fn config_manager_creates_tedge_url_for_snapshot_request() -> Result<(), a
             mqtt.recv().await,
             Some(MqttMessage::new(
                 &config_topic,
-                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
+                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, upload_path)
             ).with_retain())
         );
 
@@ -386,6 +404,10 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
     );
 
     assert!(download_request.headers.is_empty());
+    assert!(download_request
+        .file_path
+        .to_string_lossy()
+        .contains("type_two"));
 
     // Simulate downloading a file is completed.
     std::fs::File::create(&download_request.file_path).unwrap();
@@ -398,7 +420,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
             mqtt.recv().await,
             Some(MqttMessage::new(
                 &config_topic,
-                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config_update/type_two-1234","remoteUrl":"http://www.remote.url","serverUrl":"http://www.remote.url","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
+                r#"{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config_update/type_two-1234","remoteUrl":"http://www.remote.url","serverUrl":"http://www.remote.url","type":"type_two"}"#
             ).with_retain())
         );
 
@@ -444,7 +466,7 @@ async fn request_config_snapshot_that_does_not_exist() -> Result<(), anyhow::Err
         mqtt.recv().await,
         Some(MqttMessage::new(
             &config_topic,
-            r#"{"status":"failed","reason":"The requested config_type \"type_five\" is not defined in the plugin configuration file.","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_five-1234","type":"type_five"}"#
+            r#"{"status":"failed","reason":"Config plugin 'file' error: Command execution failed: Unknown config type: type_five\n","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config-snapshot/type_five-1234","type":"type_five"}"#
         ).with_retain())
     );
 
@@ -536,7 +558,8 @@ async fn receive_executing_snapshot_request_without_tedge_url() -> Result<(), an
         upload_request.url,
         "http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234"
     );
-    assert_eq!(upload_request.file_path, tempdir.path().join("file_b"));
+    let upload_path = upload_request.file_path.to_string();
+    assert!(upload_path.contains("type_two"));
 
     assert_eq!(upload_request.auth, None);
 
@@ -549,7 +572,7 @@ async fn receive_executing_snapshot_request_without_tedge_url() -> Result<(), an
             mqtt.recv().await,
             Some(MqttMessage::new(
                 &config_topic,
-                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, tempdir.path().join("file_b"))
+                format!(r#"{{"status":"successful","tedgeUrl":"http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234","type":"type_two","path":{:?}}}"#, upload_path)
             ).with_retain())
         );
 

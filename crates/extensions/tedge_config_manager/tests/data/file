@@ -1,0 +1,62 @@
+#!/bin/bash
+set -e
+case "$1" in
+    "list")
+        echo "tedge-configuration-plugin"
+        echo "type_one"
+        echo "type_two"
+        echo "type_three"
+        echo "type_four"
+        ;;
+    "get")
+        case "$2" in
+            "tedge-configuration-plugin")
+                echo "tedge-configuration-plugin.toml"
+                ;;
+            "type_one")
+                echo file_a
+                ;;
+            "type_two")
+                echo file_b
+                ;;
+            "type_three")
+                echo file_c
+                ;;
+            "type_four")
+                echo file_d
+                ;;
+            *)
+                echo "Unknown config type: $2" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    "set")
+        config_type="$2"
+        case "$config_type" in
+            "tedge-configuration-plugin")
+                echo "updated tedge-configuration-plugin.toml"
+                ;;
+            "type_one")
+                echo "updated file_a"
+                ;;
+            "type_two")
+                echo "updated file_b"
+                ;;
+            "type_three")
+                echo "updated file_c"
+                ;;
+            "type_four")
+                echo "updated file_d"
+                ;;
+            *)
+                echo "Unknown config type: $config_type" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    *)
+        echo "Unknown command: $1" >&2
+        exit 1
+        ;;
+esac

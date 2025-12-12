@@ -10,6 +10,7 @@ use tedge_agent::AgentOpt;
 use tedge_apt_plugin::AptCli;
 use tedge_config::cli::CommonArgs;
 use tedge_config::TEdgeConfig;
+use tedge_file_config_plugin::bin::FileConfigCli;
 use tedge_file_log_plugin::bin::FileLogCli;
 use tedge_mapper::MapperOpt;
 use tedge_watchdog::WatchdogOpt;
@@ -70,6 +71,8 @@ pub enum Component {
 
     #[clap(alias = "apt")]
     TedgeAptPlugin(AptCli),
+
+    TedgeFileConfigPlugin(FileConfigCli),
 
     TedgeFileLogPlugin(FileLogCli),
 

@@ -1,0 +1,3 @@
+#!/bin/sh
+set -e
+exec tedge run tedge-file-config-plugin "$@"

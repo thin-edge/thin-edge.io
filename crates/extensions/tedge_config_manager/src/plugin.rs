@@ -109,30 +109,12 @@ impl ExternalPlugin {
 
         let output = self.execute(command, None).await?;
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let file = File::create(target_file_path).map_err(|err| {
+        let mut file = File::create(target_file_path).map_err(|err| {
             self.plugin_error(format!(
                 "Failed to create plugin output file at {target_file_path} due to {err}",
             ))
         })?;
-        let mut writer = std::io::BufWriter::new(&file);
-
-        write!(writer, "{}", stdout).map_err(|err| {
-            self.plugin_error(format!(
-                "Failed to write plugin output to {target_file_path} due to {err}",
-            ))
-        })?;
-
-        writer.flush().map_err(|err| {
-            self.plugin_error(format!(
-                "Failed to flush plugin output to {target_file_path} due to {err}",
-            ))
-        })?;
-        file.sync_all().map_err(|err| {
-            self.plugin_error(format!(
-                "Failed to sync plugin output to {target_file_path} due to {err}",
-            ))
-        })?;
+        file.write_all(&output.stdout)?;
 
         Ok(())
     }

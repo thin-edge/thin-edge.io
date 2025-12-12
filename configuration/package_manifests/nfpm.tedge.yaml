@@ -93,6 +93,14 @@ contents:
       mode: 0644
     packager: rpm
 
+  # preset config plugins
+
+  # file
+  - src: ./configuration/contrib/config-plugins/file
+    dst: /usr/share/tedge/config-plugins/
+    file_info:
+      mode: 0755
+
   # preset log plugins
 
   # file
