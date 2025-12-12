@@ -85,7 +85,25 @@ mod tests {
     use std::time::Duration;
 
     #[tokio::test]
-    async fn adding_timestamp() {
+    async fn adding_unix_timestamp() {
+        let step = r#"
+builtin = "add-timestamp"
+config = { property = "time", format = "unix" }
+        "#;
+        let transformers = BuiltinTransformers::new();
+        let (runtime, step) = step_instance(&transformers, step).await;
+
+        let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
+        let input = Message::new("clock", "{}");
+        let output = Message::new("clock", r#"{"time":1763050414.0}"#.to_string());
+        assert_eq!(
+            step.on_message(&runtime, datetime, &input).await.unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn adding_rfc3339_timestamp() {
         let step = r#"
 builtin = "add-timestamp"
 config = { property = "time", format = "rfc-3339" }
@@ -95,7 +113,25 @@ config = { property = "time", format = "rfc-3339" }
 
         let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
         let input = Message::new("clock", "{}");
-        let output = Message::new("clock", r#"{"time":1763050414}"#.to_string());
+        let output = Message::new("clock", r#"{"time":"2025-11-13T16:13:34Z"}"#.to_string());
+        assert_eq!(
+            step.on_message(&runtime, datetime, &input).await.unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn reformating_timestamp_as_rfc3339() {
+        let step = r#"
+builtin = "add-timestamp"
+config = { property = "time", format = "rfc-3339", reformat = true }
+        "#;
+        let transformers = BuiltinTransformers::new();
+        let (runtime, step) = step_instance(&transformers, step).await;
+
+        let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
+        let input = Message::new("clock", r#"{"time":1765555467}"#);
+        let output = Message::new("clock", r#"{"time":"2025-12-12T16:04:27Z"}"#.to_string());
         assert_eq!(
             step.on_message(&runtime, datetime, &input).await.unwrap(),
             vec![output]

@@ -55,13 +55,6 @@ impl AzureConverter {
         }
     }
 
-    pub fn with_threshold(self, size_threshold: SizeThreshold) -> Self {
-        Self {
-            size_threshold,
-            ..self
-        }
-    }
-
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
         let messages = match self.mqtt_schema.entity_channel_of(&input.topic) {
             Ok((_, channel)) => self.try_convert_te_topics(input, channel),
@@ -147,12 +140,22 @@ impl AzureConverter {
     }
 
     pub fn builtin_flow(&self) -> String {
+        let timestamp_step = if self.add_timestamp {
+            format!(
+                r#"{{ builtin = "add-timestamp", config = {{ property = "time", format = "{time_format}" }}, reformat = true }},"#,
+                time_format = self.mapper_config.time_format,
+            )
+        } else {
+            "".to_string()
+        };
+
         format!(
             r#"
 input.mqtt.topics = {input_topics}
 
 steps = [
-    {{ builtin = "add-timestamp", config = {{ property = "time", format = "{time_format}" }} }},
+    {{ builtin = "skip-mosquitto-health-status" }},
+    {timestamp_step}
     {{ builtin = "cap-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
@@ -161,7 +164,6 @@ errors.mqtt.topic = "{errors_topic}"
 "#,
             input_topics = self.mapper_config.input_topics,
             max_size = self.size_threshold.0,
-            time_format = self.mapper_config.time_format,
             output_topic = self.mapper_config.out_topic,
             errors_topic = self.mapper_config.errors_topic,
         )

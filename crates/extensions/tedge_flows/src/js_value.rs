@@ -55,24 +55,30 @@ impl JsonValue {
         JsonValue::Object(object)
     }
 
-    pub fn string_property(&self, property: &str) -> Option<&str> {
+    fn property(&self, property: &str) -> Option<&JsonValue> {
         match self {
             JsonValue::Object(map) => map.get(property),
             _ => None,
         }
-        .and_then(|v| match v {
+    }
+
+    pub fn string_property(&self, property: &str) -> Option<&str> {
+        self.property(property).and_then(|v| match v {
             JsonValue::String(string) => Some(string.as_str()),
             _ => None,
         })
     }
 
-    pub fn number_property(&self, property: &str) -> Option<Number> {
-        match self {
-            JsonValue::Object(map) => map.get(property),
+    pub fn number_property(&self, property: &str) -> Option<&Number> {
+        self.property(property).and_then(|v| match v {
+            JsonValue::Number(n) => Some(n),
             _ => None,
-        }
-        .and_then(|v| match v {
-            JsonValue::Number(n) => Some(n.clone()),
+        })
+    }
+
+    pub fn bool_property(&self, property: &str) -> Option<bool> {
+        self.property(property).and_then(|v| match v {
+            JsonValue::Bool(n) => Some(*n),
             _ => None,
         })
     }
