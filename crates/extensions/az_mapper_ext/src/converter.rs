@@ -140,13 +140,22 @@ impl AzureConverter {
     }
 
     pub fn builtin_flow(&self) -> String {
+        let timestamp_step = if self.add_timestamp {
+            format!(
+                r#"{{ builtin = "add-timestamp", config = {{ property = "time", format = "{time_format}" }}, reformat = true }},"#,
+                time_format = self.mapper_config.time_format,
+            )
+        } else {
+            "".to_string()
+        };
+
         format!(
             r#"
 input.mqtt.topics = {input_topics}
 
 steps = [
     {{ builtin = "skip-mosquitto-health-status" }},
-    {{ builtin = "add-timestamp", config = {{ property = "time", format = "{time_format}" }} }},
+    {timestamp_step}
     {{ builtin = "cap-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
@@ -155,7 +164,6 @@ errors.mqtt.topic = "{errors_topic}"
 "#,
             input_topics = self.mapper_config.input_topics,
             max_size = self.size_threshold.0,
-            time_format = self.mapper_config.time_format,
             output_topic = self.mapper_config.out_topic,
             errors_topic = self.mapper_config.errors_topic,
         )
