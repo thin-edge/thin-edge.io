@@ -17,6 +17,8 @@ Connect to Cumulocity MQTT Service endpoint
     Verify Custom Topic Publish and Subscribe
 
 Connect to Cumulocity MQTT Service endpoint basic auth
+    Skip    msg=Until this issue is fixed on eu-latest
+
     ${DEVICE_SN}=    Setup    register=${False}
 
     Execute Command    tedge config set device.id ${DEVICE_SN}

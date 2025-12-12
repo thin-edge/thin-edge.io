@@ -42,7 +42,6 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
-use tracing::error;
 
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 

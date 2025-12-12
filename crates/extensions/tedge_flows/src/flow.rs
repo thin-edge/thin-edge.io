@@ -16,7 +16,6 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchError;
 use tokio::time::Instant;
-use tracing::error;
 use tracing::warn;
 
 /// A chain of message transformations

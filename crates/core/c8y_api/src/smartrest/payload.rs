@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use serde::Serialize;
-use tracing::error;
 
 use super::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
 

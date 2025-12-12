@@ -38,7 +38,6 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::error;
 use tracing::warn;
 
 type ExternalId = String;
