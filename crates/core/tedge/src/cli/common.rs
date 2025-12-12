@@ -4,6 +4,7 @@ use clap_complete::ArgValueCandidates;
 use clap_complete::CompletionCandidate;
 use std::borrow::Cow;
 use std::fmt;
+use std::path::Path;
 use tedge_config::get_config_dir;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
@@ -214,7 +215,14 @@ impl MaybeBorrowedCloud<'_> {
 /// `TEDGE_CONFIGURATION_DIR` environment variable, or `/etc/tedge` if
 /// that is not set
 pub fn profile_completions() -> Vec<CompletionCandidate> {
-    let Ok(tc) = TEdgeConfig::load_sync(get_config_dir()) else {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(profile_completions_for_config_dir(get_config_dir()))
+    })
+}
+
+async fn profile_completions_for_config_dir(dir: impl AsRef<Path>) -> Vec<CompletionCandidate> {
+    let Ok(tc) = TEdgeConfig::load(dir).await else {
         return vec![];
     };
     tc.c8y_keys_str()
@@ -222,12 +230,44 @@ pub fn profile_completions() -> Vec<CompletionCandidate> {
         .map(CompletionCandidate::new)
         .chain(tc.az_keys_str().flatten().map(CompletionCandidate::new))
         .chain(tc.aws_keys_str().flatten().map(CompletionCandidate::new))
-        .chain(
-            tc.profiled_config_directories()
-                .flat_map(|dir| std::fs::read_dir(dir).into_iter().flatten())
-                .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
-                .filter_map(|s| Some(s.strip_suffix(".toml")?.to_owned()))
-                .map(CompletionCandidate::new),
-        )
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    use crate::cli::common::profile_completions_for_config_dir;
+
+    #[tokio::test]
+    async fn profile_completions_include_tedge_toml_profile_names() {
+        let ttd = TempTedgeDir::new();
+        ttd.file("tedge.toml")
+            .with_raw_content("[c8y.profiles.something]\n[c8y.profiles.other]");
+        let completions = completion_names(&ttd).await;
+        assert_eq!(completions, ["other", "something"]);
+    }
+
+    #[tokio::test]
+    async fn profile_completions_include_separate_mapper_config_profile_names() {
+        let ttd = TempTedgeDir::new();
+        let c8y_profiles = ttd.dir("mappers").dir("c8y.d");
+        c8y_profiles.file("profile1.toml").with_raw_content("");
+        c8y_profiles.file("profile2.toml").with_raw_content("");
+        let completions = completion_names(&ttd).await;
+        assert_eq!(completions, ["profile1", "profile2"]);
+    }
+
+    /// Generates profile completions for the provided config dir, extracts just
+    /// the completion text portion, and sorts them to ensure the order is
+    /// stable
+    async fn completion_names(ttd: &TempTedgeDir) -> Vec<String> {
+        let completions = profile_completions_for_config_dir(ttd.path()).await;
+        let mut completions = completions
+            .iter()
+            .map(|candidate| candidate.get_value().to_str().unwrap().to_owned())
+            .collect::<Vec<_>>();
+        completions.sort();
+        completions
+    }
 }

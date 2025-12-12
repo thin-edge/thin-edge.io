@@ -48,7 +48,7 @@ impl TEdgeComponent for CumulocityMapper {
         tedge_config: TEdgeConfig,
         cfg_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
-        let c8y_config = tedge_config.mapper_config(&self.profile).await?;
+        let c8y_config = tedge_config.mapper_config(&self.profile)?;
         let prefix = &c8y_config.bridge.topic_prefix;
         let c8y_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =

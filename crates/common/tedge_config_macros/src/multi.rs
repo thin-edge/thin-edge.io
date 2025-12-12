@@ -13,9 +13,9 @@ use std::str::FromStr;
 #[serde(bound(serialize = "T: Serialize + Default + PartialEq"), default)]
 pub struct MultiDto<T> {
     #[serde(skip_serializing_if = "is_default")]
-    profiles: ::std::collections::HashMap<ProfileName, T>,
+    pub profiles: ::std::collections::HashMap<ProfileName, T>,
     #[serde(flatten)]
-    non_profile: T,
+    pub non_profile: T,
 }
 
 fn is_default<T: Default + PartialEq>(map: &HashMap<ProfileName, T>) -> bool {
@@ -77,8 +77,8 @@ impl FromStr for ProfileName {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct MultiReader<T> {
-    profiles: ::std::collections::HashMap<ProfileName, T>,
-    non_profile: T,
+    pub profiles: ::std::collections::HashMap<ProfileName, T>,
+    pub non_profile: T,
     parent: &'static str,
 }
 

@@ -78,7 +78,7 @@ pub fn generate(
     let doc_comment_attr =
         (!doc_comment.is_empty()).then(|| quote_spanned!(name.span()=> #[doc = #doc_comment]));
     quote_spanned! {name.span()=>
-        #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+        #[derive(Debug, Default, Clone, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
         // We will add more configurations in the future, so this is
         // non_exhaustive (see
         // https://doc.rust-lang.org/reference/attributes/type_system.html)
@@ -166,7 +166,7 @@ mod tests {
 
         let generated = generate_test_dto(&input);
         let expected = parse_quote! {
-            #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+            #[derive(Debug, Default, Clone, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
             #[non_exhaustive]
             pub struct TEdgeConfigDto {
                 #[serde(default)]
@@ -184,7 +184,7 @@ mod tests {
                 }
             }
 
-            #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+            #[derive(Debug, Default, Clone, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
             #[non_exhaustive]
             pub struct TEdgeConfigDtoC8y {
                 pub url: Option<String>,
@@ -197,7 +197,7 @@ mod tests {
                 }
             }
 
-            #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+            #[derive(Debug, Default, Clone, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
             #[non_exhaustive]
             pub struct TEdgeConfigDtoSudo {
                 pub enable: Option<bool>,
@@ -229,7 +229,7 @@ mod tests {
             .retain(only_struct_named("TEdgeConfigDtoDevice"));
 
         let expected = parse_quote! {
-            #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+            #[derive(Debug, Default, Clone, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
             #[non_exhaustive]
             pub struct TEdgeConfigDtoDevice {
                 pub id: Option<String>,
@@ -254,7 +254,7 @@ mod tests {
             .retain(only_struct_named("TEdgeConfigDtoDevice"));
 
         let expected = parse_quote! {
-            #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
+            #[derive(Debug, Default, Clone, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
             #[non_exhaustive]
             pub struct TEdgeConfigDtoDevice {
                 pub id: Option<String>,
@@ -273,6 +273,7 @@ mod tests {
         syn::parse2(tokens).unwrap()
     }
 
+    #[track_caller]
     fn assert_eq(actual: &syn::File, expected: &syn::File) {
         pretty_assertions::assert_eq!(
             prettyplease::unparse(actual),

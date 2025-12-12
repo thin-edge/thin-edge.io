@@ -35,9 +35,7 @@ impl TEdgeComponent for AzureMapper {
         tedge_config: TEdgeConfig,
         _config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
-        let az_config = tedge_config
-            .mapper_config::<AzMapperSpecificConfig>(&self.profile)
-            .await?;
+        let az_config = tedge_config.mapper_config::<AzMapperSpecificConfig>(&self.profile)?;
         let prefix = &az_config.bridge.topic_prefix;
         let az_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
@@ -66,7 +64,7 @@ impl TEdgeComponent for AzureMapper {
             cloud_config.set_keep_alive(az_config.bridge.keepalive_interval.duration());
 
             let tls_config = tedge_config
-                .mqtt_client_config_rustls(&*az_config)
+                .mqtt_client_config_rustls(&az_config)
                 .context("Failed to create MQTT TLS config")?;
             cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
 
@@ -91,10 +89,10 @@ impl TEdgeComponent for AzureMapper {
         }
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let az_converter = AzureConverter::new(
-            az_config.mapper.cloud_specific.timestamp,
+            az_config.cloud_specific.mapper.timestamp,
             Box::new(WallClock),
             mqtt_schema,
-            az_config.mapper.cloud_specific.timestamp_format,
+            az_config.cloud_specific.mapper.timestamp_format,
             prefix,
             az_config.mapper.mqtt.max_payload_size.0,
         );
