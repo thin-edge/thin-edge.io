@@ -114,7 +114,16 @@ async fn read_file_if_exists(path: &Utf8Path) -> anyhow::Result<Option<String>> 
     match tokio::fs::read_to_string(path).await {
         Ok(contents) => Ok(Some(contents)),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e).context(format!("failed to read mapper configuration from {path}")),
+        Err(e) => {
+            let dir = path.parent().unwrap();
+            // If the error is actually with the mappers directory as a whole,
+            // feed that back to the user
+            if let Err(dir_error) = tokio::fs::read_dir(dir).await {
+                Err(dir_error).context(format!("failed to read {dir}"))
+            } else {
+                Err(e).context(format!("failed to read mapper configuration from {path}"))
+            }
+        },
     }
 }
 
@@ -2119,16 +2128,11 @@ mod tests {
             c8y.url = "from.tedge.toml"
         });
 
-        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
-        let error = tedge_config
-            .mapper_config::<C8yMapperSpecificConfig>(&profile_name(None))
-            .await
-            .err()
-            .unwrap();
+        let error = TEdgeConfig::load(ttd.path()).await.err().unwrap();
         assert_eq!(
             format!("{error:#}"),
             format!(
-                "reading {}/mappers: Permission denied (os error 13)",
+                "failed to read {}/mappers: Permission denied (os error 13)",
                 ttd.path().display()
             )
         );
