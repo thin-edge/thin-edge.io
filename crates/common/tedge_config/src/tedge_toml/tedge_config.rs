@@ -123,7 +123,7 @@ async fn read_file_if_exists(path: &Utf8Path) -> anyhow::Result<Option<String>> 
             } else {
                 Err(e).context(format!("failed to read mapper configuration from {path}"))
             }
-        },
+        }
     }
 }
 
@@ -150,7 +150,7 @@ impl TEdgeConfigDto {
                         })
                     },
                 )?;
-                default_profile_config.set_path(toml_path);
+                default_profile_config.set_mapper_config_dir(mappers_dir.clone());
                 dto.non_profile = default_profile_config;
 
                 dto.profiles = profiles
@@ -160,7 +160,7 @@ impl TEdgeConfigDto {
                         let profile_toml = tokio::fs::read_to_string(&toml_path).await?;
                         let mut profiled_config: T::CloudDto = toml::from_str(&profile_toml)
                             .context("failed to deserialise mapper config")?;
-                        profiled_config.set_path(toml_path);
+                        profiled_config.set_mapper_config_dir(mappers_dir.clone());
                         Ok::<_, anyhow::Error>((profile, profiled_config))
                     })
                     .try_collect()
@@ -736,7 +736,7 @@ define_tedge_config! {
     c8y: {
         #[tedge_config(reader(skip))]
         #[serde(skip)]
-        read_from: Utf8PathBuf,
+        mapper_config_dir: Utf8PathBuf,
 
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
@@ -980,7 +980,7 @@ define_tedge_config! {
     az: {
         #[tedge_config(reader(skip))]
         #[serde(skip)]
-        read_from: Utf8PathBuf,
+        mapper_config_dir: Utf8PathBuf,
 
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
@@ -1071,7 +1071,7 @@ define_tedge_config! {
     aws: {
         #[tedge_config(reader(skip))]
         #[serde(skip)]
-        read_from: Utf8PathBuf,
+        mapper_config_dir: Utf8PathBuf,
 
         /// Endpoint URL of AWS IoT tenant
         #[tedge_config(example = "your-endpoint.amazonaws.com")]

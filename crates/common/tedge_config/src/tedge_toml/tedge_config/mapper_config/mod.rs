@@ -108,38 +108,65 @@ pub trait SpecialisedCloudConfig:
     ) -> Self::CloudConfigReader;
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct MapperConfigPath<'a> {
+    base_dir: &'a Utf8Path,
+    cloud_type: CloudType,
+}
+
+impl MapperConfigPath<'_> {
+    pub fn path_for(&self, profile: Option<&ProfileName>) -> Utf8PathBuf {
+        let dir = self.base_dir;
+        let ty = self.cloud_type;
+        match profile {
+            None => dir.join(format!("{ty}.toml")),
+            Some(profile) => dir.join(format!("{ty}.d/{profile}.toml")),
+        }
+        .into()
+    }
+}
+
 pub trait HasPath {
-    fn set_path(&mut self, path: Utf8PathBuf);
-    fn get_path(&self) -> Option<&Utf8Path>;
+    fn set_mapper_config_dir(&mut self, path: Utf8PathBuf);
+    fn config_path(&self) -> Option<MapperConfigPath<'_>>;
 }
 
 impl HasPath for TEdgeConfigDtoC8y {
-    fn set_path(&mut self, path: Utf8PathBuf) {
-        self.read_from = Some(path)
+    fn set_mapper_config_dir(&mut self, path: Utf8PathBuf) {
+        self.mapper_config_dir = Some(path)
     }
 
-    fn get_path(&self) -> Option<&Utf8Path> {
-        self.read_from.as_deref()
+    fn config_path(&self) -> Option<MapperConfigPath<'_>> {
+        Some(MapperConfigPath {
+            base_dir: self.mapper_config_dir.as_deref()?,
+            cloud_type: CloudType::C8y,
+        })
     }
 }
 
 impl HasPath for TEdgeConfigDtoAz {
-    fn set_path(&mut self, path: Utf8PathBuf) {
-        self.read_from = Some(path)
+    fn set_mapper_config_dir(&mut self, path: Utf8PathBuf) {
+        self.mapper_config_dir = Some(path)
     }
 
-    fn get_path(&self) -> Option<&Utf8Path> {
-        self.read_from.as_deref()
+    fn config_path(&self) -> Option<MapperConfigPath<'_>> {
+        Some(MapperConfigPath {
+            base_dir: self.mapper_config_dir.as_deref()?,
+            cloud_type: CloudType::Az,
+        })
     }
 }
 
 impl HasPath for TEdgeConfigDtoAws {
-    fn set_path(&mut self, path: Utf8PathBuf) {
-        self.read_from = Some(path)
+    fn set_mapper_config_dir(&mut self, path: Utf8PathBuf) {
+        self.mapper_config_dir = Some(path)
     }
 
-    fn get_path(&self) -> Option<&Utf8Path> {
-        self.read_from.as_deref()
+    fn config_path(&self) -> Option<MapperConfigPath<'_>> {
+        Some(MapperConfigPath {
+            base_dir: self.mapper_config_dir.as_deref()?,
+            cloud_type: CloudType::Aws,
+        })
     }
 }
 
