@@ -310,29 +310,13 @@ impl TEdgeConfigLocation {
     where
         S: Serialize + HasPath + Default + PartialEq,
     {
-        if let Some(default_profile_path) = cloud.non_profile.get_path() {
-            self.store_cloud_entry(&cloud.non_profile).await?;
+        if let Some(paths) = cloud.non_profile.config_path() {
+            self.store_in(&paths.path_for(None), &cloud.non_profile)
+                .await?;
             for (name, profile) in &mut cloud.profiles {
-                if profile.get_path().is_none() {
-                    let Some((base_path, "toml")) = default_profile_path.as_str().rsplit_once(".") else {
-                        panic!("{default_profile_path} should end in .toml")
-                    };
-                    // TODO this feels like a hacky way to achieve this
-                    profile.set_path(format!("{base_path}.d/{name}.toml").into());
-                }
-                self.store_cloud_entry(profile).await?;
+                self.store_in(&paths.path_for(Some(name)), profile).await?;
             }
             std::mem::take(cloud);
-        }
-        Ok(())
-    }
-
-    async fn store_cloud_entry<S: Serialize + HasPath + Default>(
-        &self,
-        config: &S,
-    ) -> Result<(), TEdgeConfigError> {
-        if let Some(toml_path) = config.get_path() {
-            self.store_in(toml_path, config).await?;
         }
         Ok(())
     }
