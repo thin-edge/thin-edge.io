@@ -35,7 +35,6 @@ use crate::tedge_toml::mapper_config::HasPath as _;
 use crate::tedge_toml::mapper_config::HasUrl;
 use crate::tedge_toml::mapper_config::MapperConfigError;
 use crate::tedge_toml::mapper_config::SpecialisedCloudConfig;
-use crate::ConfigDecision;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
@@ -126,7 +125,7 @@ impl TEdgeConfigDto {
     async fn populate_single_mapper<T: SpecialisedCloudConfig>(
         dto: &mut MultiDto<T::CloudDto>,
         location: &TEdgeConfigLocation,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<()> where T::CloudDto: PartialEq {
         use futures::StreamExt;
         use futures::TryStreamExt;
 
@@ -135,6 +134,9 @@ impl TEdgeConfigDto {
         let ty = T::expected_cloud_type();
         match all_profiles {
             Some(profiles) => {
+                if !dto.is_default() {
+                    tracing::warn!("{ty} configuration found in `tedge.toml`, but this will be ignored in favour of configuration in {mappers_dir}/{ty}.toml and {mappers_dir}/{ty}.d")
+                }
                 let toml_path = mappers_dir.join(format!("{ty}.toml"));
                 let default_profile_toml = read_file_if_exists(&toml_path).await?;
                 let mut default_profile_config: T::CloudDto = default_profile_toml.map_or_else(
@@ -186,13 +188,6 @@ impl TEdgeConfig {
         }
     }
 
-    pub async fn decide_config_source<T>(&self, profile: Option<&ProfileName>) -> ConfigDecision
-    where
-        T: ExpectedCloudType,
-    {
-        self.location.decide_config_source::<T>(profile).await
-    }
-
     pub(crate) fn location(&self) -> &TEdgeConfigLocation {
         &self.location
     }
@@ -236,38 +231,32 @@ impl TEdgeConfig {
         CloudType::iter().map(|ty| self.location.mappers_config_dir().join(format!("{ty}.d")))
     }
 
-    async fn all_profiles<T>(
-        &self,
-    ) -> Box<dyn futures::stream::Stream<Item = Option<ProfileName>> + Unpin + Send + Sync + '_>
+    fn all_profiles<'a, T>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = Option<ProfileName>> + 'a>
     where
         T: ExpectedCloudType,
     {
-        if let Some(migrated_profiles) = self.location.mapper_config_profiles::<T>().await {
-            migrated_profiles
-        } else {
             match T::expected_cloud_type() {
-                CloudType::C8y => Box::new(futures::stream::iter(
+                CloudType::C8y => Box::new(
                     self.c8y.keys().map(|p| p.map(<_>::to_owned)),
-                )),
-                CloudType::Az => Box::new(futures::stream::iter(
+                ),
+                CloudType::Az => Box::new(
                     self.az.keys().map(|p| p.map(<_>::to_owned)),
-                )),
-                CloudType::Aws => Box::new(futures::stream::iter(
+                ),
+                CloudType::Aws => Box::new(
                     self.aws.keys().map(|p| p.map(<_>::to_owned)),
-                )),
+                ),
             }
-        }
     }
 
-    // TODO handle this properly with cli connect
-    pub async fn all_mapper_configs<T>(&self) -> Vec<(MapperConfig<T>, Option<ProfileName>)>
+    pub fn all_mapper_configs<T>(&self) -> Vec<(MapperConfig<T>, Option<ProfileName>)>
     where
         T: SpecialisedCloudConfig,
     {
-        use futures::stream::StreamExt;
-        let mut generalised_profiles = self.all_profiles::<T>().await;
+        let mut generalised_profiles = self.all_profiles::<T>();
         let mut configs = Vec::new();
-        while let Some(profile) = generalised_profiles.next().await {
+        while let Some(profile) = generalised_profiles.next() {
             if let Ok(config) = self.mapper_config(&profile) {
                 if config.configured_url().or_none().is_some() {
                     configs.push((config, profile));
@@ -338,15 +327,15 @@ impl TEdgeConfig {
         let roots = CLOUD_ROOT_CERTIFICATES
             .get_or_init(|| async {
                 let c8y_roots = futures::stream::iter(
-                    self.all_mapper_configs::<C8yMapperSpecificConfig>().await,
+                    self.all_mapper_configs::<C8yMapperSpecificConfig>(),
                 )
                 .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
                 let az_roots = futures::stream::iter(
-                    self.all_mapper_configs::<AzMapperSpecificConfig>().await,
+                    self.all_mapper_configs::<AzMapperSpecificConfig>(),
                 )
                 .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
                 let aws_roots = futures::stream::iter(
-                    self.all_mapper_configs::<AwsMapperSpecificConfig>().await,
+                    self.all_mapper_configs::<AwsMapperSpecificConfig>()
                 )
                 .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
 
@@ -2016,8 +2005,7 @@ mod tests {
 
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
         let configs = tedge_config
-            .all_mapper_configs::<C8yMapperSpecificConfig>()
-            .await;
+            .all_mapper_configs::<C8yMapperSpecificConfig>();
 
         assert_eq!(configs.len(), 1);
         assert_eq!(configs[0].1, None); // default profile
@@ -2049,8 +2037,7 @@ mod tests {
 
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
         let configs = tedge_config
-            .all_mapper_configs::<C8yMapperSpecificConfig>()
-            .await;
+            .all_mapper_configs::<C8yMapperSpecificConfig>();
 
         assert_eq!(configs.len(), 3);
 
@@ -2089,8 +2076,7 @@ mod tests {
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
         let c8y_configs = tedge_config
-            .all_mapper_configs::<C8yMapperSpecificConfig>()
-            .await;
+            .all_mapper_configs::<C8yMapperSpecificConfig>();
         assert_eq!(c8y_configs.len(), 1);
         assert_eq!(
             c8y_configs[0]
@@ -2104,8 +2090,7 @@ mod tests {
         );
 
         let az_configs = tedge_config
-            .all_mapper_configs::<AzMapperSpecificConfig>()
-            .await;
+            .all_mapper_configs::<AzMapperSpecificConfig>();
         assert_eq!(az_configs.len(), 1);
         assert_eq!(
             az_configs[0].0.url().or_none().unwrap().input,
