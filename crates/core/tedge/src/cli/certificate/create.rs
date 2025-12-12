@@ -2,6 +2,7 @@ use super::error::CertError;
 use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
@@ -12,6 +13,7 @@ use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tedge_config::TEdgeConfig;
+use tedge_p11_server::CryptokiConfig;
 use tokio::fs::File;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
@@ -42,8 +44,10 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        self.create_test_certificate(&self.csr_template).await?;
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        let cryptoki = config.device.cryptoki_config(None)?;
+        self.create_test_certificate(&self.csr_template, cryptoki)
+            .await?;
         eprintln!("Certificate created successfully");
         eprintln!("    => the certificate has to be uploaded to the cloud");
         eprintln!("    => before the device can be connected\n");
@@ -53,8 +57,23 @@ impl Command for CreateCertCmd {
 }
 
 impl CreateCertCmd {
-    pub async fn create_test_certificate(&self, config: &CsrTemplate) -> Result<(), CertError> {
-        let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, &KeyKind::New)?;
+    // test certificate here means it's not yet permanent - establishing the connection using this
+    // new certificate will be tested during `tedge connect` and if an error happens, we will revert
+    // to the previous certificate. If not, the certificate will be set as a permanent active
+    // certificate and will not be tested on further connections.
+    pub async fn create_test_certificate(
+        &self,
+        template: &CsrTemplate,
+        cryptoki: Option<CryptokiConfig>,
+    ) -> Result<(), CertError> {
+        let key_kind = if let Some(cryptoki) = cryptoki {
+            KeyKind::from_cryptoki(cryptoki.clone(), None)
+                .context("failed to create a remote keykind")?
+        } else {
+            KeyKind::New
+        };
+
+        let cert = KeyCertPair::new_selfsigned_certificate(template, &self.id, &key_kind)?;
 
         let cert_path = &self.cert_path;
         persist_new_public_key(
@@ -66,15 +85,18 @@ impl CreateCertCmd {
         .await
         .map_err(|err| err.cert_context(cert_path.clone()))?;
 
-        let key_path = &self.key_path;
-        persist_new_private_key(
-            key_path,
-            cert.private_key_pem_string()?,
-            &self.user,
-            &self.group,
-        )
-        .await
-        .map_err(|err| err.key_context(key_path.clone()))?;
+        // only persist to filesystem if we just created a new key (not using HSM)
+        if let KeyKind::New = key_kind {
+            let key_path = &self.key_path;
+            persist_new_private_key(
+                key_path,
+                cert.private_key_pem_string()?,
+                &self.user,
+                &self.group,
+            )
+            .await
+            .map_err(|err| err.key_context(key_path.clone()))?;
+        }
         Ok(())
     }
 }
@@ -238,7 +260,8 @@ mod tests {
         };
 
         assert_matches!(
-            cmd.create_test_certificate(&CsrTemplate::default()).await,
+            cmd.create_test_certificate(&CsrTemplate::default(), None)
+                .await,
             Ok(())
         );
         assert_eq!(parse_pem_file(&cert_path).tag(), "CERTIFICATE");
@@ -268,7 +291,7 @@ mod tests {
         };
 
         assert!(cmd
-            .create_test_certificate(&CsrTemplate::default())
+            .create_test_certificate(&CsrTemplate::default(), None)
             .await
             .ok()
             .is_none());
@@ -293,7 +316,7 @@ mod tests {
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CsrTemplate::default())
+            .create_test_certificate(&CsrTemplate::default(), None)
             .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertificateNotFound { .. });
@@ -315,7 +338,7 @@ mod tests {
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CsrTemplate::default())
+            .create_test_certificate(&CsrTemplate::default(), None)
             .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyNotFound { .. });

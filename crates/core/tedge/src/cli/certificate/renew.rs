@@ -89,7 +89,7 @@ mod tests {
         };
 
         // First create both cert and key
-        cmd.create_test_certificate(&CsrTemplate::default())
+        cmd.create_test_certificate(&CsrTemplate::default(), None)
             .await
             .unwrap();
 
