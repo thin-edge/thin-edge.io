@@ -104,12 +104,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anymap3"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "170433209e817da6aae2c51aa0dd443009a613425dd041ebfb2492d1c4c11a25"
-
-[[package]]
 name = "arc-swap"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4942,7 +4936,6 @@ name = "tedge_config"
 version = "1.7.1"
 dependencies = [
  "anyhow",
- "anymap3",
  "assert_matches",
  "camino",
  "certificate",
