@@ -4,7 +4,7 @@ use crate::core::mapper::start_basic_actors;
 use crate::core::mqtt::configure_proxy;
 use anyhow::Context;
 use async_trait::async_trait;
-use az_mapper_ext::converter::AzureConverter;
+use az_mapper_ext::AzureConverter;
 use std::borrow::Cow;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
