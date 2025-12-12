@@ -20,6 +20,7 @@ pub use crate::flow::*;
 pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
 pub use crate::runtime::MessageProcessor;
+pub use js_value::JsonValue;
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::path::PathBuf;
@@ -44,6 +45,7 @@ use tedge_watch_ext::WatchActorBuilder;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
+pub use transformers::Transformer;
 
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 

@@ -145,6 +145,7 @@ impl AzureConverter {
 input.mqtt.topics = {input_topics}
 
 steps = [
+    {{ builtin = "skip-mosquitto-health-status" }},
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "{time_format}" }} }},
     {{ builtin = "cap-payload-size", config = {{ max_size = {max_size} }} }},
 ]
