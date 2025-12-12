@@ -34,9 +34,7 @@ impl TEdgeComponent for AwsMapper {
         tedge_config: TEdgeConfig,
         _config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
-        let aws_config = tedge_config
-            .mapper_config::<AwsMapperSpecificConfig>(&self.profile)
-            .await?;
+        let aws_config = tedge_config.mapper_config::<AwsMapperSpecificConfig>(&self.profile)?;
         let prefix = &aws_config.bridge.topic_prefix;
         let aws_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
@@ -58,7 +56,7 @@ impl TEdgeComponent for AwsMapper {
             cloud_config.set_keep_alive(aws_config.bridge.keepalive_interval.duration());
 
             let tls_config = tedge_config
-                .mqtt_client_config_rustls(&*aws_config)
+                .mqtt_client_config_rustls(&aws_config)
                 .context("Failed to create MQTT TLS config")?;
             cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
 

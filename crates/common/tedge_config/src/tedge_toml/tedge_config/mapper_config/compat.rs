@@ -3,39 +3,8 @@ use crate::tedge_toml::tedge_config::TEdgeConfigReaderAws;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderAz;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderC8y;
 use crate::tedge_toml::ReadableKey;
-use crate::tedge_toml::WritableKey;
 use crate::TEdgeConfig;
 
-pub trait IsCloudConfig {
-    fn cloud_type_for(&self) -> Option<(CloudType, Option<ProfileName>)>;
-}
-
-impl IsCloudConfig for WritableKey {
-    fn cloud_type_for(&self) -> Option<(CloudType, Option<ProfileName>)> {
-        cloud_type_for(self.to_cow_str())
-    }
-}
-
-impl IsCloudConfig for ReadableKey {
-    fn cloud_type_for(&self) -> Option<(CloudType, Option<ProfileName>)> {
-        cloud_type_for(self.to_cow_str())
-    }
-}
-
-fn cloud_type_for(key: Cow<'static, str>) -> Option<(CloudType, Option<ProfileName>)> {
-    match key.split_once(".") {
-        Some(("c8y", rest)) => Some((CloudType::C8y, extract_profile_name(rest))),
-        Some(("az", rest)) => Some((CloudType::Az, extract_profile_name(rest))),
-        Some(("aws", rest)) => Some((CloudType::Aws, extract_profile_name(rest))),
-        _ => None,
-    }
-}
-
-fn extract_profile_name(partial_config_key: &str) -> Option<ProfileName> {
-    let partial_config_key = partial_config_key.strip_prefix("profiles.")?;
-    let (profile, _rest) = partial_config_key.split_once(".")?;
-    Some(profile.parse().unwrap())
-}
 /// Trait for creating cloud-specific mapper configuration from tedge.toml cloud sections
 ///
 /// This trait enables backward compatibility by loading the new `MapperConfig<T>` format
