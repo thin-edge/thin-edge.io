@@ -127,6 +127,13 @@ Discard messages that are too large
     ...    minimum=1
     ...    maximum=1
 
+Discard mosquitto health status
+    Execute Command    (sleep 1; tedge mqtt pub te/device/main/service/mosquitto-c8y-bridge/status/health 1)&
+    ${message}=    Execute Command
+    ...    tedge mqtt sub 'az/#' --duration 2s | grep -v '"status":"up"'
+    ...    ignore_exit_code=${True}
+    Should Be Empty    ${message}
+
 
 *** Keywords ***
 Custom Setup
