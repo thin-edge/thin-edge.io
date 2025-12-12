@@ -5,7 +5,6 @@ use crate::core::mqtt::configure_proxy;
 use anyhow::Context;
 use async_trait::async_trait;
 use az_mapper_ext::converter::AzureConverter;
-use clock::WallClock;
 use std::borrow::Cow;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
@@ -92,7 +91,6 @@ impl TEdgeComponent for AzureMapper {
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let az_converter = AzureConverter::new(
             az_config.mapper.cloud_specific.timestamp,
-            Box::new(WallClock),
             mqtt_schema,
             az_config.mapper.cloud_specific.timestamp_format,
             prefix,
