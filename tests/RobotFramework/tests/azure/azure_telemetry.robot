@@ -116,11 +116,23 @@ Publish health status message for main device service
     Execute Command    tedge mqtt pub te/device/main/service/test-service/status/health '{"status":"up"}'
     Should Have MQTT Messages    az/messages/events/    message_contains="status":"up"
 
+Discard messages that are too large
+    ${timestamp}=    Get Unix Timestamp
+    ${event}=    Execute Command    for i in $(seq 100); do echo -n 1234; done
+    Execute Command    tedge mqtt pub te/device/main///e/event-type '{"text": "some digits: ${event}"}'
+    Should Have MQTT Messages
+    ...    te/errors
+    ...    message_contains=Payload is too large
+    ...    date_from=${timestamp}
+    ...    minimum=1
+    ...    maximum=1
+
 
 *** Keywords ***
 Custom Setup
     Setup
     Execute Command    tedge config set mqtt.bridge.built_in false
+    Execute Command    tedge config set az.mapper.mqtt.max_payload_size 128
     Execute Command    sudo systemctl restart tedge-mapper-az.service
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-az
 
