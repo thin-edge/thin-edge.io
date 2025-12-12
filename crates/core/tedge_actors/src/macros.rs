@@ -28,6 +28,7 @@
 #[macro_export]
 macro_rules! fan_in_message_type {
     ( $t:ident [ $( $x:ident ),* ] : $( $d:ident ),*) => {
+        #[allow(clippy::enum_variant_names)]
         #[derive(
             $(
                 $d,

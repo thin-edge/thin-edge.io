@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use camino::Utf8PathBuf;
-use clap::command;
 use clap::Parser;
 use serde::Deserialize;
 use tedge_p11_server::CryptokiConfigDirect;

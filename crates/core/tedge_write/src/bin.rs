@@ -4,7 +4,6 @@ use anyhow::bail;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use clap::arg;
 use clap::Parser;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;

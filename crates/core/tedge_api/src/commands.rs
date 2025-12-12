@@ -10,7 +10,6 @@ use crate::workflow::GenericCommandState;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use download::DownloadInfo;
-use log::error;
 use mqtt_channel::MqttError;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
