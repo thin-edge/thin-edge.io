@@ -19,8 +19,14 @@ impl Transformer for CapPayloadSize {
         config: &JsonValue,
     ) -> Result<Vec<Message>, FlowError> {
         if let Some(max_size) = config.number_property("max_size").and_then(|n| n.as_u64()) {
-            if message.payload.len() >= max_size as usize {
-                return Ok(vec![]);
+            if message.payload.len() > max_size as usize {
+                if config.bool_property("discard").unwrap_or(false) {
+                    return Ok(vec![]);
+                } else {
+                    return Err(FlowError::UnsupportedMessage(format!(
+                        "Payload is too large >{max_size}"
+                    )));
+                }
             }
         }
         Ok(vec![message.clone()])

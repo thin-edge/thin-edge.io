@@ -55,13 +55,6 @@ impl AzureConverter {
         }
     }
 
-    pub fn with_threshold(self, size_threshold: SizeThreshold) -> Self {
-        Self {
-            size_threshold,
-            ..self
-        }
-    }
-
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
         let messages = match self.mqtt_schema.entity_channel_of(&input.topic) {
             Ok((_, channel)) => self.try_convert_te_topics(input, channel),
