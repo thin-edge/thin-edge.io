@@ -409,7 +409,7 @@ pub enum CertificateError {
     Other(#[from] anyhow::Error),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CsrTemplate {
     pub max_cn_size: usize,
     pub validity_period_days: u32,

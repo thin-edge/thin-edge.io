@@ -19,6 +19,7 @@ use tokio::fs::File;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use tracing::debug;
+use tracing::instrument;
 
 /// Create a self-signed device certificate
 pub struct CreateCertCmd {
@@ -47,8 +48,15 @@ impl Command for CreateCertCmd {
 
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         let cryptoki = config.device.cryptoki_config(None)?;
-        self.create_test_certificate(&self.csr_template, cryptoki)
-            .await?;
+        match cryptoki {
+            None => {
+                self.create_test_certificate(&self.csr_template).await?;
+            }
+            Some(c) => {
+                self.create_test_certificate_with_hsm(&self.csr_template, c)
+                    .await?;
+            }
+        }
         eprintln!("Certificate created successfully");
         eprintln!("    => the certificate has to be uploaded to the cloud");
         eprintln!("    => before the device can be connected\n");
@@ -58,23 +66,51 @@ impl Command for CreateCertCmd {
 }
 
 impl CreateCertCmd {
-    pub async fn create_test_certificate(
+    pub async fn create_test_certificate(&self, template: &CsrTemplate) -> Result<(), CertError> {
+        let cert = KeyCertPair::new_selfsigned_certificate(template, &self.id, &KeyKind::New)?;
+
+        let cert_path = &self.cert_path;
+        persist_new_public_key(
+            cert_path,
+            cert.certificate_pem_string()?,
+            &self.user,
+            &self.group,
+        )
+        .await
+        .map_err(|err| err.cert_context(cert_path.clone()))?;
+
+        let key_path = &self.key_path;
+        persist_new_private_key(
+            key_path,
+            cert.private_key_pem_string()?,
+            &self.user,
+            &self.group,
+        )
+        .await
+        .map_err(|err| err.key_context(key_path.clone()))?;
+
+        Ok(())
+    }
+
+    /// Create a self-signed certificate using an HSM (Cryptoki).
+    ///
+    /// Using this method, the keypair needs to be already present on the HSM. After CSR is generated and signed by the
+    /// HSM, we persist only the certificate.
+    #[instrument(skip(self))]
+    pub async fn create_test_certificate_with_hsm(
         &self,
         template: &CsrTemplate,
-        cryptoki: Option<CryptokiConfig>,
+        cryptoki: CryptokiConfig,
     ) -> Result<(), CertError> {
-        let key_kind = if let Some(cryptoki) = cryptoki {
-            KeyKind::from_cryptoki(cryptoki.clone(), None)
-                .context("can't use HSM private key to sign the certificate")
-                .inspect_err(|e| {
-                    let e = format!("{e:#}");
-                    // TODO: replace string comparisons with proper error type comparisons once those are implemented
-                    if e.contains("Didn't find a slot to use") || e.contains("Failed to find a key") {
-                        warning!("When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge cert create-key-hsm` to create the key first.");
-                }})?
-        } else {
-            KeyKind::New
-        };
+        let key_kind = KeyKind::from_cryptoki(cryptoki.clone(), None)
+            .context("can't use HSM private key to sign the certificate")
+            .inspect_err(|e| {
+                let e = format!("{e:#}");
+                // TODO: replace string comparisons with proper error type comparisons once those are implemented
+                if e.contains("Didn't find a slot to use") || e.contains("Failed to find a key") {
+                    warning!("When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge cert create-key-hsm` to create the key first.");
+                }
+            })?;
 
         let cert = KeyCertPair::new_selfsigned_certificate(template, &self.id, &key_kind)?;
 
@@ -88,18 +124,8 @@ impl CreateCertCmd {
         .await
         .map_err(|err| err.cert_context(cert_path.clone()))?;
 
-        // only persist to filesystem if we just created a new key (not using HSM)
-        if let KeyKind::New = key_kind {
-            let key_path = &self.key_path;
-            persist_new_private_key(
-                key_path,
-                cert.private_key_pem_string()?,
-                &self.user,
-                &self.group,
-            )
-            .await
-            .map_err(|err| err.key_context(key_path.clone()))?;
-        }
+        debug!("Using HSM, not persisting private key to the filesystem");
+
         Ok(())
     }
 }
@@ -263,8 +289,7 @@ mod tests {
         };
 
         assert_matches!(
-            cmd.create_test_certificate(&CsrTemplate::default(), None)
-                .await,
+            cmd.create_test_certificate(&CsrTemplate::default()).await,
             Ok(())
         );
         assert_eq!(parse_pem_file(&cert_path).tag(), "CERTIFICATE");
@@ -294,7 +319,7 @@ mod tests {
         };
 
         assert!(cmd
-            .create_test_certificate(&CsrTemplate::default(), None)
+            .create_test_certificate(&CsrTemplate::default())
             .await
             .ok()
             .is_none());
@@ -319,7 +344,7 @@ mod tests {
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CsrTemplate::default(), None)
+            .create_test_certificate(&CsrTemplate::default())
             .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::CertificateNotFound { .. });
@@ -341,7 +366,7 @@ mod tests {
         };
 
         let cert_error = cmd
-            .create_test_certificate(&CsrTemplate::default(), None)
+            .create_test_certificate(&CsrTemplate::default())
             .await
             .unwrap_err();
         assert_matches!(cert_error, CertError::KeyNotFound { .. });

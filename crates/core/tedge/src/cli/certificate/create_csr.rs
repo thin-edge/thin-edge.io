@@ -145,8 +145,7 @@ mod tests {
 
         // create private key and public cert with standard command
         assert_matches!(
-            cmd.create_test_certificate(&CsrTemplate::default(), None)
-                .await,
+            cmd.create_test_certificate(&CsrTemplate::default()).await,
             Ok(())
         );
 
