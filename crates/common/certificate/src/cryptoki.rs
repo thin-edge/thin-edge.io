@@ -113,7 +113,9 @@ impl RemoteKeyPair {
                     // server doesn't understand the request, too old, fallback to the older method of just resigning existing certificate
                     let Some(current_cert) = current_cert else {
                         return Err(CertificateError::Other(
-                            anyhow::anyhow!("tedge-p11-server can only renew existing certificates but there's no existing certificate; upgrade tedge-p11-server or generate a self-signed certificate first")));
+                            anyhow::Error::from(CryptokiError::TooOld(err))
+                                .context("Failed to obtain PEM of PKCS11 public key"),
+                        ));
                     };
                     return Self::from_cryptoki_and_existing_cert(cryptoki_config, current_cert);
                 }
@@ -158,4 +160,13 @@ impl RemoteKeyPair {
             algorithm,
         })
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CryptokiError {
+    #[error("tedge-p11-server wasn't able to understand the request, perhaps because its version is too old")]
+    TooOld(#[source] anyhow::Error),
+
+    #[error(transparent)]
+    Other(anyhow::Error),
 }
