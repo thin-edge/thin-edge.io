@@ -16,7 +16,7 @@ mod cloud_root_certificate;
 #[cfg(feature = "reqwest")]
 pub use cloud_root_certificate::*;
 
-mod cryptoki;
+pub mod cryptoki;
 use cryptoki::RemoteKeyPair;
 
 pub mod device_id;

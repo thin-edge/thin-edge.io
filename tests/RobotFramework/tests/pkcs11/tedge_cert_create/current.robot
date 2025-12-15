@@ -11,3 +11,6 @@ ${TEDGE_P11_SERVER_VERSION}     ${EMPTY}
 *** Test Cases ***
 Tedge cert create should use HSM configuration
     Test tedge cert create uses HSM configuration
+
+Tedge cert create should tell user to manually create key if it's not present
+    Tedge cert create without HSM key
