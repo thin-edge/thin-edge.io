@@ -58,10 +58,6 @@ impl Command for CreateCertCmd {
 }
 
 impl CreateCertCmd {
-    // test certificate here means it's not yet permanent - establishing the connection using this
-    // new certificate will be tested during `tedge connect` and if an error happens, we will revert
-    // to the previous certificate. If not, the certificate will be set as a permanent active
-    // certificate and will not be tested on further connections.
     pub async fn create_test_certificate(
         &self,
         template: &CsrTemplate,
