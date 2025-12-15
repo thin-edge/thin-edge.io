@@ -14,10 +14,7 @@ async-trait = { workspace = true }
 camino = { workspace = true, features = ["serde1"] }
 futures = { workspace = true }
 humantime = { workspace = true }
-rquickjs = { git = "https://github.com/thin-edge/rquickjs", rev = "4ed04ac9af3de453dd41ff09fdd1837c7ceb1f1c", default-features = false, features = [
-    # disable bindgen and rely on pre-generated bindings due to problems
-    # generating the bindings at build time with clang
-    #"bindgen",
+rquickjs = { version = "0.11", default-features = false, features = [
     "futures",
     "macro",
     "parallel",
@@ -33,6 +30,15 @@ time = { workspace = true }
 tokio = { workspace = true, features = ["fs", "macros", "time", "sync"] }
 toml = { workspace = true, features = ["parse"] }
 tracing = { workspace = true }
+
+# Enable the bindgen feature for target triples whose bindings are not shipped by rquickjs.
+# Requires libclang-dev and the appropriate build toolchain for the target (e.g., libc6-dev).
+# Note: The architecture name for i686 must be 'x86'.
+# To check the configuration values for a specific target, run `rustc --print cfg --target ${TARGET}`
+[target.'cfg(not(any(all(target_os="linux",target_vendor="unknown",target_env="gnu",any(target_arch="x86_64",target_arch="x86",target_arch="aarch64",target_arch="loongarch64")),all(target_os="linux",target_vendor="unknown",target_env="musl",any(target_arch="x86_64",target_arch="aarch64",target_arch="loongarch64")),all(target_os="windows",target_vendor="pc",target_env="gnu",any(target_arch="x86_64",target_arch="x86")),all(target_os="windows",target_vendor="pc",target_env="msvc",any(target_arch="x86_64",target_arch="aarch64")),all(target_os="macos",target_vendor="apple",any(target_arch="x86_64",target_arch="aarch64")),all(target_arch="wasm32",any(target_os="wasi",target_os="wasip2")))))'.dependencies]
+rquickjs = { version = "0.11", default-features = false, features = [
+    "bindgen",
+] }
 
 [dev-dependencies]
 tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
