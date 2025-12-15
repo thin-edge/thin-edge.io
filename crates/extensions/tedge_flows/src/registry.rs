@@ -104,15 +104,16 @@ pub trait FlowRegistryExt: FlowRegistry {
 
     /// Create a builtin flow definition in the flow configuration directory.
     ///
-    /// This flow definition is persisted as a file with the given name and content.
-    /// - a `.toml` extension is added to the filename
-    /// - if this file already exists
-    ///   then its content is not overridden:
-    ///   this might be a user provided flow.
-    /// - if a file with the same name and extension of `.toml.disabled` exists,
-    ///   then the file for the builtin flow is not created: this is how a user can disable a builtin flow
-    /// - in any case, is created a file with the given name and a `.toml.template` extension:
-    ///   this template can be used to adapt the builtin flow.
+    /// This flow definition is persisted as a file
+    /// with the given name, a `.toml` extension and the given content.
+    ///
+    /// A copy of the flow is also persisted with the name and a `.toml.template` extension.
+    /// This template can be used by used to derive and tune custom flows.
+    /// This template is also used by `tedge flows` as a witness for user updates:
+    /// if a flow definition differs with its template, then the flow as updated by the user is kept unchanged.
+    ///
+    /// Also, if a file exists with the same name and a `.toml.disabled` extension,
+    /// then the file for the builtin flow is not created: this is how a user can disable a builtin flow.
     async fn persist_builtin_flow(
         &mut self,
         name: &str,
@@ -246,26 +247,24 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         let dir = self.store().config_dir();
         let flow_path = dir.join(name).with_extension("toml");
         let disabled_flow_path = flow_path.with_extension("toml.disabled");
-        let builtin_flow_path = flow_path.with_extension("toml.template");
+        let template_path = flow_path.with_extension("toml.template");
+
+        // Don't update the flow definition if overridden or disabled
+        let prior_flow = tokio::fs::read(&flow_path).await.ok();
+        let prior_template = tokio::fs::read(&template_path).await.ok();
+        let overridden = prior_flow != prior_template;
+        let disabled = tokio::fs::try_exists(&disabled_flow_path)
+            .await
+            .unwrap_or(false);
+        let update_flow = !overridden && !disabled;
 
         // Persist a copy of flow definition to be used by users as a template for their flows.
         file::create_directory_with_defaults(dir).await?;
-        tedge_utils::fs::atomically_write_file_async(
-            builtin_flow_path.as_std_path(),
-            content.as_bytes(),
-        )
-        .await?;
-        file::overwrite_file(builtin_flow_path.as_std_path(), content).await?;
+        fs::atomically_write_file_async(template_path.as_std_path(), content.as_bytes()).await?;
 
-        // Don't update the flow definition if overridden or disabled.
-        if file::path_exists(&disabled_flow_path).await {
-            return Ok(());
+        if update_flow {
+            fs::atomically_write_file_async(flow_path.as_std_path(), content.as_bytes()).await?;
         }
-        if file::path_exists(&flow_path).await {
-            return Ok(());
-        }
-        tedge_utils::fs::atomically_write_file_async(flow_path.as_std_path(), content.as_bytes())
-            .await?;
 
         Ok(())
     }
