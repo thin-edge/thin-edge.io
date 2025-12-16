@@ -509,7 +509,7 @@ impl BuildCommand for TEdgeCertCli {
                     };
                     let cryptoki = config
                         .device
-                        .cryptoki_config(cloud_config.as_ref().map(|c| &**c as &dyn CloudConfig))?;
+                        .cryptoki_config(cloud_config.as_deref())?;
                     let key = cryptoki
                         .map(super::create_csr::Key::Cryptoki)
                         .unwrap_or(Key::Local(config.device_key_path(cloud.as_ref())?.into()));

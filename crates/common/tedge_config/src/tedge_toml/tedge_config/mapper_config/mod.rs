@@ -172,8 +172,6 @@ impl HasPath for TEdgeConfigDtoAws {
 
 /// Base mapper configuration with common fields and cloud-specific fields via generics
 pub struct MapperConfig<T: SpecialisedCloudConfig> {
-    pub tedge_config_reader: T::CloudConfigReader,
-
     /// Endpoint URL of the cloud tenant
     url: OptionalConfig<ConnectUrl>,
 
@@ -189,7 +187,7 @@ pub struct MapperConfig<T: SpecialisedCloudConfig> {
     /// Bridge configuration
     pub bridge: BridgeConfig,
 
-    pub mapper: MapperMapperConfig,
+    pub mapper: CommonMapperConfig,
 
     /// Cloud-specific configuration fields
     pub cloud_specific: T,
@@ -213,7 +211,7 @@ pub struct AzCloudMapperConfig {
     pub timestamp_format: TimeFormat,
 }
 
-pub struct MapperMapperConfig {
+pub struct CommonMapperConfig {
     pub mqtt: MqttConfig,
 }
 
@@ -524,7 +522,6 @@ impl SpecialisedCloudConfig for AwsMapperSpecificConfig {
             }
             None => multi_dto.non_profile = dto,
         };
-        // TODO take TEdgeConfigLocation
         let mut reader = TEdgeConfigReader::from_dto(
             &TEdgeConfigDto {
                 aws: multi_dto,

@@ -242,7 +242,7 @@ impl TEdgeConfigReaderDevice {
     /// - `Ok(Some(CryptokiConfig))` for mode `socket` or `module`
     pub fn cryptoki_config(
         &self,
-        cloud: Option<&dyn CloudConfig>,
+        cloud: Option<&(impl CloudConfig + ?Sized)>,
     ) -> Result<Option<CryptokiConfig>, anyhow::Error> {
         let cryptoki = &self.cryptoki;
         let uri = cloud

@@ -204,13 +204,12 @@ where
     let cloud_specific = T::from_cloud_config(&cloud_config, profile);
 
     Ok(MapperConfig {
-        tedge_config_reader: cloud_config,
         url,
         root_cert_path,
         device,
         topics,
         bridge,
-        mapper: MapperMapperConfig {
+        mapper: CommonMapperConfig {
             mqtt: MqttConfig { max_payload_size },
         },
         cloud_specific,
