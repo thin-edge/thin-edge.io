@@ -16,9 +16,21 @@ Tedge cert create without HSM key
     Execute Command    tedge cert remove
 
     Execute Command    cmd=tedge config set device.key_uri "pkcs11:token=nonexistent"
-    ${stderr}=    Execute Command    tedge cert create --device-id ${DEVICE_SN}    stdout=False    stderr=True    exp_exit_code=1
-    Should Contain    ${stderr}    When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge cert create-key-hsm` to create the key first.
+    ${stderr}=    Execute Command
+    ...    tedge cert create --device-id ${DEVICE_SN}
+    ...    stdout=False
+    ...    stderr=True
+    ...    exp_exit_code=1
+    Should Contain
+    ...    ${stderr}
+    ...    When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge cert create-key-hsm` to create the key first.
 
     Execute Command    cmd=tedge config set device.key_uri "pkcs11:object=nonexistent"
-    ${stderr}=    Execute Command    tedge cert create --device-id ${DEVICE_SN}    stdout=False    stderr=True    exp_exit_code=1
-    Should Contain    ${stderr}    When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge cert create-key-hsm` to create the key first.
+    ${stderr}=    Execute Command
+    ...    tedge cert create --device-id ${DEVICE_SN}
+    ...    stdout=False
+    ...    stderr=True
+    ...    exp_exit_code=1
+    Should Contain
+    ...    ${stderr}
+    ...    When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge cert create-key-hsm` to create the key first.
