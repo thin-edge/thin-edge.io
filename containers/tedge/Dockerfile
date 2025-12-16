@@ -50,6 +50,7 @@ RUN apk add --no-cache \
 
 # install thin-edge.io
 COPY --from=build /usr/bin/tedge /usr/bin/
+COPY --from=build /usr/share/tedge/config-plugins/* /usr/share/tedge/config-plugins/
 COPY --from=build /usr/share/tedge/log-plugins/* /usr/share/tedge/log-plugins/
 COPY --from=build /usr/share/tedge/diag-plugins/* /usr/share/tedge/diag-plugins/
 
