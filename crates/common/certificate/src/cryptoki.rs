@@ -1,10 +1,13 @@
 //! Signing self-signed certs and CSRs using private keys stored on a PKCS #11 cryptographic tokens,
 //! accessible via Cryptoki.
 
-use crate::{CertificateError, PemCertificate, SignatureAlgorithm};
+use crate::CertificateError;
+use crate::PemCertificate;
+use crate::SignatureAlgorithm;
 use anyhow::Context;
 use camino::Utf8Path;
-use tedge_p11_server::{service::ChooseSchemeRequest, CryptokiConfig};
+use tedge_p11_server::service::ChooseSchemeRequest;
+use tedge_p11_server::CryptokiConfig;
 use tracing::trace;
 use x509_parser::public_key::PublicKey;
 
