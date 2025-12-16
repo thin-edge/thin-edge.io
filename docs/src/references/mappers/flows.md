@@ -1,6 +1,6 @@
 ---
-title: Extensible mapper and user-provided Flows
-tags: [Reference, Mappers, Cloud]
+title: User-defined mapping rules
+tags: [Reference, Flows, Mappers, Cloud]
 sidebar_position: 2
 ---
 
@@ -142,17 +142,24 @@ A flow script can also export a `onInterval` function
 - A step is defined by a JavaScript file with an `.mjs` or `.js` extension.
   - This can also be a TypeScript module with a `.ts` extension.
 - The definition of flow defines its input, output and error sink as well as a list of transformation steps.
-- Each step is built from a javascript and is possibly given a config (arbitrary json that will be passed to the script)
+- Each step is built either from a `script` or a `builtin` transformation
+- A step possibly given a config (arbitrary json that will be passed to the transformation script)
 
 ```toml
 input.mqtt.topics = ["te/+/+/+/+/m/+"]
 
 steps = [
-    { script = "add_timestamp.js" },
+    { builtin = "add-timestamp" },
     { script = "drop_stragglers.js", config = { max_delay = 60 } },
     { script = "te_to_c8y.js" }
 ]
 ```
+
+### Transformation
+
+The transformation applied by a step is defined either by
+- a user-provided `script` implemented in JavaScript
+- a builtin transformation provided by %%te%%.
 
 ### Input connectors
 
@@ -306,3 +313,9 @@ The following builtin objects are exported:
 - [`TextDecoder`](https://developer.mozilla.org/en-US/docs/Web/API/TextDecoder)
   - Only `utf-8` is supported 
 - [`TextEncoder`](https://developer.mozilla.org/en-US/docs/Web/API/TextEncoder)
+
+## Builtin transformations
+
+- `{ builtin = "set-topic" }`: assign a topic to messages
+- `{ builtin = "add-timestamp" }`: add a timestamp to JSON messages
+- `{ builtin = "cap-payload-size" }`: filter out messages which payload is too large

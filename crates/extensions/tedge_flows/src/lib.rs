@@ -10,15 +10,17 @@ mod js_value;
 mod registry;
 mod runtime;
 mod stats;
+mod steps;
+mod transformers;
 
 use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
-use crate::connected_flow::ConnectedFlowRegistry;
+pub use crate::connected_flow::ConnectedFlowRegistry;
 pub use crate::flow::*;
 pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
 pub use crate::runtime::MessageProcessor;
-use camino::Utf8Path;
+pub use js_value::JsonValue;
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::path::PathBuf;
@@ -39,9 +41,11 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_watch_ext::WatchActorBuilder;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
+pub use transformers::Transformer;
 
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 
@@ -56,8 +60,7 @@ pub struct FlowsMapperBuilder {
 }
 
 impl FlowsMapperBuilder {
-    pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
-        let registry = ConnectedFlowRegistry::new(config_dir);
+    pub async fn try_new(registry: ConnectedFlowRegistry) -> Result<Self, LoadError> {
         let mut processor = MessageProcessor::try_new(registry).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
         let mqtt_sender = NullSender.into();
@@ -95,6 +98,10 @@ impl FlowsMapperBuilder {
             &self.message_box,
             |msg| Some(InputMessage::FsWatchEvent(msg)),
         );
+    }
+
+    pub fn connect_cmd(&mut self, cmd: &mut WatchActorBuilder) {
+        cmd.connect(self);
     }
 
     fn topics(&self) -> TopicFilter {
@@ -144,6 +151,9 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
 
 #[derive(thiserror::Error, Debug)]
 pub enum LoadError {
+    #[error("Builtin transformer not found: {name}")]
+    UnknownTransformer { name: String },
+
     #[error("JavaScript module not found: {module_name}")]
     UnknownModule { module_name: String },
 
