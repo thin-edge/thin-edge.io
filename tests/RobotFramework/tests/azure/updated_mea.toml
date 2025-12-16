@@ -1,0 +1,11 @@
+
+input.mqtt.topics = ["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
+
+steps = [
+    { builtin = "skip-mosquitto-health-status" },
+    { builtin = "add-timestamp", config = { property = "time", format = "unix", reformat = false } },
+    { builtin = "cap-payload-size", config = { max_size = 262144 } },
+]
+
+output.mqtt.topic = "az/messages/events/"
+errors.mqtt.topic = "te/errors"
