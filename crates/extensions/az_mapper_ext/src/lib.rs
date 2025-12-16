@@ -37,7 +37,7 @@ impl AzureConverter {
     pub fn builtin_flow(&self) -> String {
         let timestamp_step = if self.add_timestamp {
             format!(
-                r#"{{ builtin = "add-timestamp", config = {{ property = "time", format = "{time_format}" }}, reformat = true }},"#,
+                r#"{{ builtin = "add-timestamp", config = {{ property = "time", format = "{time_format}", reformat = true }} }},"#,
                 time_format = self.time_format,
             )
         } else {
