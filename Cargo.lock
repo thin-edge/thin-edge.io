@@ -4764,6 +4764,7 @@ dependencies = [
  "tedge_test_utils",
  "tedge_utils",
  "thiserror 2.0.12",
+ "tokio",
  "toml 0.9.6",
 ]
 
