@@ -1,3 +1,15 @@
+//! Compatibility layer for converting tedge_config data into a [MapperConfig]
+//!
+//! The full flow for reading all mapper configs (regardless of whether sourced
+//! from tedge.toml or a separate file) is:
+//!
+//! - Read tedge.toml into a `TEdgeConfigDto`
+//! - Update `TEdgeConfigDto` with any migrated mapper configs
+//! - When filling the migrated configs in `TEdgeConfigDto`, store the config
+//!   path in the `mapper_config_dir` hidden field. This will be used if we
+//!   write back to the toml to ensure things get written to the correct file
+//! - When a mapper accesses the mapper config, they do this through the generic
+//!   [MapperConfig] type, which is done via this `compat` layer
 use super::*;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderAws;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderAz;
@@ -6,9 +18,6 @@ use crate::tedge_toml::ReadableKey;
 use crate::TEdgeConfig;
 
 /// Trait for creating cloud-specific mapper configuration from tedge.toml cloud sections
-///
-/// This trait enables backward compatibility by loading the new `MapperConfig<T>` format
-/// from the legacy c8y/az/aws configuration sections in tedge.toml.
 pub trait FromCloudConfig: Sized {
     /// The corresponding TEdgeConfigReader type for this cloud
     type CloudConfigReader: CloudConfigAccessor + Send + Sync + 'static;

@@ -468,6 +468,7 @@ fn keys_in_inner(prefix: &str, table: &toml::map::Map<String, toml::Value>) -> V
 mod tests {
     use crate::models::AbsolutePath;
     use crate::tedge_toml::mapper_config::AzMapperSpecificConfig;
+    use crate::tedge_toml::mapper_config::C8yMapperSpecificConfig;
     use crate::tedge_toml::Cloud;
     use once_cell::sync::Lazy;
     use tedge_config_macros::ProfileName;
@@ -633,6 +634,26 @@ type = "a-service-type""#;
         env.set_var("TEDGE_DIAG_PLUGIN_PATHS", "[\"test\",\"values\"]");
         let config = t.load().await.unwrap();
         assert_eq!(config.diag.plugin_paths, ["test", "values"]);
+    }
+
+    #[tokio::test]
+    async fn environment_variables_are_read_with_migrated_mapper_config() {
+        let (ttd, t) = create_temp_tedge_config("").unwrap();
+        ttd.dir("mappers")
+            .file("c8y.toml")
+            .with_raw_content("url = \"example.com\"");
+        let mut env = EnvSandbox::new().await;
+        env.set_var("TEDGE_C8Y_ROOT_CERT_PATH", "/root/cert/path");
+        let config = t.load().await.unwrap();
+        let c8y_config = config
+            .mapper_config::<C8yMapperSpecificConfig>(&None::<ProfileName>)
+            .unwrap();
+        assert_eq!(
+            c8y_config.http().or_none().unwrap().host().to_string(),
+            "example.com",
+            "Verify that c8y.toml file has actually been read"
+        );
+        assert_eq!(c8y_config.root_cert_path.to_string(), "/root/cert/path");
     }
 
     #[tokio::test]
