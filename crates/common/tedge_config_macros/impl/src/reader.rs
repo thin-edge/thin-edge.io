@@ -875,7 +875,7 @@ mod tests {
         let input: crate::input::Configuration = parse_quote!(
             c8y: {
                 #[tedge_config(reader(skip))]
-                read_from: Utf8PathBuf,
+                mapper_config_dir: Utf8PathBuf,
             },
         );
         let actual = generate_structs(
@@ -1099,7 +1099,7 @@ mod tests {
             c8y: {
                 #[tedge_config(reader(skip))]
                 #[serde(skip)]
-                read_from: Utf8PathBuf,
+                mapper_config_dir: Utf8PathBuf,
             },
         );
         let actual = generate_conversions(

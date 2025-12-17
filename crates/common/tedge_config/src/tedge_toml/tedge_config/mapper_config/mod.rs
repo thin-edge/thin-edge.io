@@ -122,7 +122,6 @@ impl MapperConfigPath<'_> {
             None => dir.join(format!("{ty}.toml")),
             Some(profile) => dir.join(format!("{ty}.d/{profile}.toml")),
         }
-        .into()
     }
 }
 

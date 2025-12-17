@@ -125,45 +125,45 @@ impl TEdgeConfigDto {
     async fn populate_single_mapper<T: SpecialisedCloudConfig>(
         dto: &mut MultiDto<T::CloudDto>,
         location: &TEdgeConfigLocation,
-    ) -> anyhow::Result<()> where T::CloudDto: PartialEq {
+    ) -> anyhow::Result<()>
+    where
+        T::CloudDto: PartialEq,
+    {
         use futures::StreamExt;
         use futures::TryStreamExt;
 
         let mappers_dir = location.tedge_config_root_path().join("mappers");
         let all_profiles = location.mapper_config_profiles::<T>().await;
         let ty = T::expected_cloud_type();
-        match all_profiles {
-            Some(profiles) => {
-                if !dto.is_default() {
-                    tracing::warn!("{ty} configuration found in `tedge.toml`, but this will be ignored in favour of configuration in {mappers_dir}/{ty}.toml and {mappers_dir}/{ty}.d")
-                }
-                let toml_path = mappers_dir.join(format!("{ty}.toml"));
-                let default_profile_toml = read_file_if_exists(&toml_path).await?;
-                let mut default_profile_config: T::CloudDto = default_profile_toml.map_or_else(
-                    || Ok(<_>::default()),
-                    |toml| {
-                        toml::from_str(&toml).with_context(|| {
-                            format!("failed to deserialise mapper config in {toml_path}")
-                        })
-                    },
-                )?;
-                default_profile_config.set_mapper_config_dir(mappers_dir.clone());
-                dto.non_profile = default_profile_config;
-
-                dto.profiles = profiles
-                    .filter_map(|profile| futures::future::ready(profile))
-                    .then(|profile| async {
-                        let toml_path = mappers_dir.join(format!("{ty}.d/{profile}.toml"));
-                        let profile_toml = tokio::fs::read_to_string(&toml_path).await?;
-                        let mut profiled_config: T::CloudDto = toml::from_str(&profile_toml)
-                            .context("failed to deserialise mapper config")?;
-                        profiled_config.set_mapper_config_dir(mappers_dir.clone());
-                        Ok::<_, anyhow::Error>((profile, profiled_config))
-                    })
-                    .try_collect()
-                    .await?;
+        if let Some(profiles) = all_profiles {
+            if !dto.is_default() {
+                tracing::warn!("{ty} configuration found in `tedge.toml`, but this will be ignored in favour of configuration in {mappers_dir}/{ty}.toml and {mappers_dir}/{ty}.d")
             }
-            None => (),
+            let toml_path = mappers_dir.join(format!("{ty}.toml"));
+            let default_profile_toml = read_file_if_exists(&toml_path).await?;
+            let mut default_profile_config: T::CloudDto = default_profile_toml.map_or_else(
+                || Ok(<_>::default()),
+                |toml| {
+                    toml::from_str(&toml).with_context(|| {
+                        format!("failed to deserialise mapper config in {toml_path}")
+                    })
+                },
+            )?;
+            default_profile_config.set_mapper_config_dir(mappers_dir.clone());
+            dto.non_profile = default_profile_config;
+
+            dto.profiles = profiles
+                .filter_map(futures::future::ready)
+                .then(|profile| async {
+                    let toml_path = mappers_dir.join(format!("{ty}.d/{profile}.toml"));
+                    let profile_toml = tokio::fs::read_to_string(&toml_path).await?;
+                    let mut profiled_config: T::CloudDto = toml::from_str(&profile_toml)
+                        .context("failed to deserialise mapper config")?;
+                    profiled_config.set_mapper_config_dir(mappers_dir.clone());
+                    Ok::<_, anyhow::Error>((profile, profiled_config))
+                })
+                .try_collect()
+                .await?;
         }
         Ok(())
     }
@@ -231,32 +231,24 @@ impl TEdgeConfig {
         CloudType::iter().map(|ty| self.location.mappers_config_dir().join(format!("{ty}.d")))
     }
 
-    fn all_profiles<'a, T>(
-        &'a self,
-    ) -> Box<dyn Iterator<Item = Option<ProfileName>> + 'a>
+    fn all_profiles<'a, T>(&'a self) -> Box<dyn Iterator<Item = Option<ProfileName>> + 'a>
     where
         T: ExpectedCloudType,
     {
-            match T::expected_cloud_type() {
-                CloudType::C8y => Box::new(
-                    self.c8y.keys().map(|p| p.map(<_>::to_owned)),
-                ),
-                CloudType::Az => Box::new(
-                    self.az.keys().map(|p| p.map(<_>::to_owned)),
-                ),
-                CloudType::Aws => Box::new(
-                    self.aws.keys().map(|p| p.map(<_>::to_owned)),
-                ),
-            }
+        match T::expected_cloud_type() {
+            CloudType::C8y => Box::new(self.c8y.keys().map(|p| p.map(<_>::to_owned))),
+            CloudType::Az => Box::new(self.az.keys().map(|p| p.map(<_>::to_owned))),
+            CloudType::Aws => Box::new(self.aws.keys().map(|p| p.map(<_>::to_owned))),
+        }
     }
 
     pub fn all_mapper_configs<T>(&self) -> Vec<(MapperConfig<T>, Option<ProfileName>)>
     where
         T: SpecialisedCloudConfig,
     {
-        let mut generalised_profiles = self.all_profiles::<T>();
+        let generalised_profiles = self.all_profiles::<T>();
         let mut configs = Vec::new();
-        while let Some(profile) = generalised_profiles.next() {
+        for profile in generalised_profiles {
             if let Ok(config) = self.mapper_config(&profile) {
                 if config.configured_url().or_none().is_some() {
                     configs.push((config, profile));
@@ -326,18 +318,15 @@ impl TEdgeConfig {
     pub async fn cloud_root_certs(&self) -> anyhow::Result<CloudHttpConfig> {
         let roots = CLOUD_ROOT_CERTIFICATES
             .get_or_init(|| async {
-                let c8y_roots = futures::stream::iter(
-                    self.all_mapper_configs::<C8yMapperSpecificConfig>(),
-                )
-                .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
-                let az_roots = futures::stream::iter(
-                    self.all_mapper_configs::<AzMapperSpecificConfig>(),
-                )
-                .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
-                let aws_roots = futures::stream::iter(
-                    self.all_mapper_configs::<AwsMapperSpecificConfig>()
-                )
-                .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
+                let c8y_roots =
+                    futures::stream::iter(self.all_mapper_configs::<C8yMapperSpecificConfig>())
+                        .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
+                let az_roots =
+                    futures::stream::iter(self.all_mapper_configs::<AzMapperSpecificConfig>())
+                        .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
+                let aws_roots =
+                    futures::stream::iter(self.all_mapper_configs::<AwsMapperSpecificConfig>())
+                        .flat_map(|(mapper, _profile)| stream_trust_store(mapper));
 
                 c8y_roots
                     .chain(az_roots)
@@ -2004,8 +1993,7 @@ mod tests {
             });
 
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
-        let configs = tedge_config
-            .all_mapper_configs::<C8yMapperSpecificConfig>();
+        let configs = tedge_config.all_mapper_configs::<C8yMapperSpecificConfig>();
 
         assert_eq!(configs.len(), 1);
         assert_eq!(configs[0].1, None); // default profile
@@ -2036,8 +2024,7 @@ mod tests {
             });
 
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
-        let configs = tedge_config
-            .all_mapper_configs::<C8yMapperSpecificConfig>();
+        let configs = tedge_config.all_mapper_configs::<C8yMapperSpecificConfig>();
 
         assert_eq!(configs.len(), 3);
 
@@ -2075,8 +2062,7 @@ mod tests {
 
         let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
-        let c8y_configs = tedge_config
-            .all_mapper_configs::<C8yMapperSpecificConfig>();
+        let c8y_configs = tedge_config.all_mapper_configs::<C8yMapperSpecificConfig>();
         assert_eq!(c8y_configs.len(), 1);
         assert_eq!(
             c8y_configs[0]
@@ -2089,8 +2075,7 @@ mod tests {
             "c8y.example.com"
         );
 
-        let az_configs = tedge_config
-            .all_mapper_configs::<AzMapperSpecificConfig>();
+        let az_configs = tedge_config.all_mapper_configs::<AzMapperSpecificConfig>();
         assert_eq!(az_configs.len(), 1);
         assert_eq!(
             az_configs[0].0.url().or_none().unwrap().input,
