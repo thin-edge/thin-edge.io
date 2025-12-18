@@ -85,16 +85,6 @@ impl Actor for FlowsMapper {
                         self.update_flow_status(path.as_str()).await?;
                     }
                 }
-                InputMessage::FsWatchEvent(FsWatchEvent::FileCreated(path)) => {
-                    let Ok(path) = Utf8PathBuf::try_from(path) else {
-                        continue;
-                    };
-                    if matches!(path.extension(), Some("toml")) {
-                        self.processor.add_flow(path.clone()).await;
-                        self.send_updated_subscriptions().await?;
-                        self.update_flow_status(path.as_str()).await?;
-                    }
-                }
                 InputMessage::FsWatchEvent(FsWatchEvent::FileDeleted(path)) => {
                     let Ok(path) = Utf8PathBuf::try_from(path) else {
                         continue;
