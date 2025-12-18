@@ -168,6 +168,31 @@ Appending messages to a file
     Execute Command    grep '\\[seq/events\\] 3' /tmp/events.log
     [Teardown]    Uninstall Flow    append-to-file.toml
 
+Reloading a broken script when its permission is fixed
+    # Break the a script and make sure tedge-flows can no more handle measurements
+    Execute Command    chmod a-r /etc/tedge/flows/te_to_c8y.js
+    Restart Service    tedge-flows
+    ${transformed_msg}    Execute Command
+    ...    sudo -u tedge tedge flows test te/device/main///m/ '{"temperature": 258}'
+    ...    stdout=${False}
+    ...    stderr=${True}
+    Should Contain
+    ...    ${transformed_msg}
+    ...    item=Failed to compile flow /etc/tedge/flows/measurements.toml
+    Should Contain
+    ...    ${transformed_msg}
+    ...    item=Cannot read file /etc/tedge/flows/te_to_c8y.js
+    # Then fix the script
+    Execute Command    chmod a+r /etc/tedge/flows/te_to_c8y.js
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub te/device/main///m/ '{"temperature": 259.12}'
+    Should Have MQTT Messages
+    ...    topic=c8y/#
+    ...    minimum=1
+    ...    message_contains="temperature":{"temperature":{"value":259.12}}
+    ...    date_from=${start}
+    [Teardown]    Execute Command    cmd=chmod a-r /etc/tedge/flows/te_to_c8y.js
+
 Publishing transformation errors
     Install Flow    input-flows    publish-js-errors.toml
     ${start}    Get Unix Timestamp
