@@ -4,12 +4,12 @@ use crate::js_script::JsScript;
 use crate::js_value::JsonValue;
 use crate::LoadError;
 use anyhow::anyhow;
+use camino::Utf8Path;
 use rquickjs::module::Evaluated;
 use rquickjs::CaughtError;
 use rquickjs::Ctx;
 use rquickjs::Module;
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -63,10 +63,12 @@ impl JsRuntime {
     pub async fn load_file(
         &mut self,
         module_name: String,
-        path: impl AsRef<Path>,
+        path: impl AsRef<Utf8Path>,
     ) -> Result<Vec<&'static str>, LoadError> {
         let path = path.as_ref();
-        let source = tokio::fs::read_to_string(path).await?;
+        let source = tokio::fs::read_to_string(path)
+            .await
+            .map_err(|err| LoadError::from_io(err, path))?;
         self.load_js(module_name, source).await
     }
 

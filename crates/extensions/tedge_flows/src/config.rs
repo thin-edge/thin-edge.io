@@ -145,7 +145,9 @@ impl FlowConfig {
     }
 
     async fn load_flow(path: &Utf8Path) -> Result<FlowConfig, LoadError> {
-        let specs = read_to_string(path).await?;
+        let specs = read_to_string(path)
+            .await
+            .map_err(|err| LoadError::from_io(err, path))?;
         let flow: FlowConfig = toml::from_str(&specs)?;
         Ok(flow)
     }
@@ -178,7 +180,7 @@ impl FlowConfig {
         let errors = self.errors.try_into()?;
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
-            let mut step = step.compile(config_dir, i, &source).await?;
+            let mut step = step.compile(config_dir, i, &source);
             js_runtime.load_script(&mut step.script).await?;
             step.check(&source);
             step.fix();
@@ -196,12 +198,7 @@ impl FlowConfig {
 }
 
 impl StepConfig {
-    pub async fn compile(
-        self,
-        config_dir: &Utf8Path,
-        index: usize,
-        flow: &Utf8Path,
-    ) -> Result<FlowStep, ConfigError> {
+    pub fn compile(self, config_dir: &Utf8Path, index: usize, flow: &Utf8Path) -> FlowStep {
         let path = match self.script {
             ScriptSpec::JavaScript(path) if path.is_absolute() => path,
             ScriptSpec::JavaScript(path) if path.starts_with(config_dir) => path,
@@ -210,7 +207,7 @@ impl StepConfig {
         let script = JsScript::new(flow.to_owned(), index, path)
             .with_config(self.config)
             .with_interval(self.interval);
-        Ok(FlowStep { script })
+        FlowStep { script }
     }
 }
 
