@@ -22,9 +22,7 @@ pub(crate) async fn check_device_status_azure(
     tedge_config: &TEdgeConfig,
     profile: Option<&ProfileName>,
 ) -> Result<DeviceStatus, ConnectError> {
-    let az_config = tedge_config
-        .mapper_config::<AzMapperSpecificConfig>(&profile)
-        .await?;
+    let az_config = tedge_config.mapper_config::<AzMapperSpecificConfig>(&profile)?;
     let topic_prefix = &az_config.bridge.topic_prefix;
     let built_in_bridge_health = bridge_health_topic(topic_prefix, tedge_config).name;
     let azure_topic_device_twin_downstream = format!(r##"{topic_prefix}/twin/res/#"##);

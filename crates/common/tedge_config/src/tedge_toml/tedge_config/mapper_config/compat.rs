@@ -1,3 +1,15 @@
+//! Compatibility layer for converting tedge_config data into a [MapperConfig]
+//!
+//! The full flow for reading all mapper configs (regardless of whether sourced
+//! from tedge.toml or a separate file) is:
+//!
+//! - Read tedge.toml into a `TEdgeConfigDto`
+//! - Update `TEdgeConfigDto` with any migrated mapper configs
+//! - When filling the migrated configs in `TEdgeConfigDto`, store the config
+//!   path in the `mapper_config_dir` hidden field. This will be used if we
+//!   write back to the toml to ensure things get written to the correct file
+//! - When a mapper accesses the mapper config, they do this through the generic
+//!   [MapperConfig] type, which is done via this `compat` layer
 use super::*;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderAws;
 use crate::tedge_toml::tedge_config::TEdgeConfigReaderAz;
@@ -6,12 +18,9 @@ use crate::tedge_toml::ReadableKey;
 use crate::TEdgeConfig;
 
 /// Trait for creating cloud-specific mapper configuration from tedge.toml cloud sections
-///
-/// This trait enables backward compatibility by loading the new `MapperConfig<T>` format
-/// from the legacy c8y/az/aws configuration sections in tedge.toml.
 pub trait FromCloudConfig: Sized {
     /// The corresponding TEdgeConfigReader type for this cloud
-    type CloudConfigReader;
+    type CloudConfigReader: CloudConfigAccessor + Send + Sync + 'static;
 
     /// Returns the cloud type for this configuration
     fn load_cloud_mapper_config(
@@ -34,7 +43,7 @@ pub fn load_cloud_mapper_config<T>(
     tedge_config: &TEdgeConfig,
 ) -> Result<MapperConfig<T>, MapperConfigError>
 where
-    T: FromCloudConfig + ApplyRuntimeDefaults + SpecialisedCloudConfig,
+    T: SpecialisedCloudConfig,
 {
     T::load_cloud_mapper_config(profile, tedge_config)
 }
@@ -50,7 +59,7 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
             MapperConfigError::ConfigRead(format!("C8y profile '{}' not found", profile.unwrap()))
         })?;
 
-        build_mapper_config(c8y_config, tedge_config, profile)
+        build_mapper_config(c8y_config.clone(), profile)
     }
 
     fn from_cloud_config(c8y: &Self::CloudConfigReader, profile: Option<&str>) -> Self {
@@ -74,8 +83,7 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
                     address: c8y.proxy.bind.address,
                     port: Keyed {
                         value: c8y.proxy.bind.port,
-                        key: ReadableKey::C8yProxyBindPort(profile.map(<_>::to_owned)).to_cow_str(),
-                        accessed: Arc::new(AtomicBool::new(false)),
+                        key: ReadableKey::C8yProxyBindPort(profile.map(<_>::to_owned)),
                     },
                 },
                 client: ProxyClientConfig {
@@ -112,6 +120,11 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
                 enabled: c8y.mqtt_service.enabled,
                 topics: c8y.mqtt_service.topics.clone(),
             },
+            bridge: C8yBridgeConfig {
+                include: C8yBridgeIncludeConfig {
+                    local_cleansession: c8y.bridge.include.local_cleansession,
+                },
+            },
         }
     }
 }
@@ -127,11 +140,16 @@ impl FromCloudConfig for AzMapperSpecificConfig {
             MapperConfigError::ConfigRead(format!("Azure profile '{}' not found", profile.unwrap()))
         })?;
 
-        build_mapper_config(az_config, tedge_config, profile)
+        build_mapper_config(az_config.clone(), profile)
     }
 
-    fn from_cloud_config(_az: &Self::CloudConfigReader, _profile: Option<&str>) -> Self {
-        AzMapperSpecificConfig {}
+    fn from_cloud_config(az: &Self::CloudConfigReader, _profile: Option<&str>) -> Self {
+        AzMapperSpecificConfig {
+            mapper: AzCloudMapperConfig {
+                timestamp: az.mapper.timestamp,
+                timestamp_format: az.mapper.timestamp_format,
+            },
+        }
     }
 }
 
@@ -146,30 +164,33 @@ impl FromCloudConfig for AwsMapperSpecificConfig {
             MapperConfigError::ConfigRead(format!("AWS profile '{}' not found", profile.unwrap()))
         })?;
 
-        build_mapper_config(aws_config, tedge_config, profile)
+        build_mapper_config(aws_config.clone(), profile)
     }
 
-    fn from_cloud_config(_aws: &Self::CloudConfigReader, _profile: Option<&str>) -> Self {
-        AwsMapperSpecificConfig {}
+    fn from_cloud_config(aws: &Self::CloudConfigReader, _profile: Option<&str>) -> Self {
+        AwsMapperSpecificConfig {
+            mapper: AwsCloudMapperConfig {
+                timestamp: aws.mapper.timestamp,
+                timestamp_format: aws.mapper.timestamp_format,
+            },
+        }
     }
 }
 
 /// Generic helper to build MapperConfig from any cloud config reader
-fn build_mapper_config<T, R>(
-    cloud_config: &R,
-    tedge_config: &TEdgeConfig,
+pub fn build_mapper_config<T>(
+    cloud_config: T::CloudConfigReader,
     profile: Option<&str>,
 ) -> Result<MapperConfig<T>, MapperConfigError>
 where
-    T: FromCloudConfig<CloudConfigReader = R> + ApplyRuntimeDefaults + SpecialisedCloudConfig,
-    R: CloudConfigAccessor<MapperSpecific = T::SpecialisedMapperConfig>,
+    T: SpecialisedCloudConfig,
 {
     let url = cloud_config.url().clone();
 
     let device = DeviceConfig {
         id: to_optional_config(
             cloud_config.device_id().ok().map(|s| s.to_string()),
-            cloud_config.device_id_key(profile),
+            &cloud_config.device_id_key(profile),
         ),
         key_path: cloud_config.device_key_path().to_owned(),
         cert_path: cloud_config.device_cert_path().to_owned(),
@@ -181,7 +202,6 @@ where
     let bridge = BridgeConfig {
         topic_prefix: cloud_config.bridge_topic_prefix(profile),
         keepalive_interval: cloud_config.bridge_keepalive_interval().clone(),
-        include: cloud_config.bridge_include_config(),
     };
 
     let topics = cloud_config.topics().clone();
@@ -190,14 +210,7 @@ where
 
     let max_payload_size = cloud_config.max_payload_size();
 
-    let mut cloud_specific = T::from_cloud_config(cloud_config, profile);
-
-    cloud_specific.apply_runtime_defaults(
-        &url,
-        tedge_config,
-        &AbsolutePath::try_new(tedge_config.location.tedge_config_root_path().as_str())
-            .expect("valid absolute path"),
-    );
+    let cloud_specific = T::from_cloud_config(&cloud_config, profile);
 
     Ok(MapperConfig {
         url,
@@ -205,9 +218,8 @@ where
         device,
         topics,
         bridge,
-        mapper: MapperMapperConfig {
+        mapper: CommonMapperConfig {
             mqtt: MqttConfig { max_payload_size },
-            cloud_specific: cloud_config.mapper_specific(),
         },
         cloud_specific,
     })
@@ -217,13 +229,10 @@ where
 ///
 /// This trait provides a uniform interface for accessing common fields
 /// from different cloud configuration readers (C8y, Az, Aws).
-trait CloudConfigAccessor {
-    /// The mapper-specific type for this cloud
-    type MapperSpecific;
-
+pub trait CloudConfigAccessor {
     fn url(&self) -> &OptionalConfig<ConnectUrl>;
     fn device_id(&self) -> Result<String, ReadError>;
-    fn device_id_key(&self, profile: Option<&str>) -> Cow<'static, str>;
+    fn device_id_key(&self, profile: Option<&str>) -> ReadableKey;
     fn device_key_path(&self) -> &AbsolutePath;
     fn device_cert_path(&self) -> &AbsolutePath;
     fn device_csr_path(&self) -> &AbsolutePath;
@@ -231,22 +240,18 @@ trait CloudConfigAccessor {
     fn device_key_pin(&self) -> Option<Arc<str>>;
     fn bridge_topic_prefix(&self, profile: Option<&str>) -> Keyed<TopicPrefix>;
     fn bridge_keepalive_interval(&self) -> &SecondsOrHumanTime;
-    fn bridge_include_config(&self) -> BridgeIncludeConfig;
     fn topics(&self) -> &TemplatesSet;
     fn root_cert_path(&self, profile: Option<&str>) -> Keyed<AbsolutePath>;
     fn max_payload_size(&self) -> MqttPayloadLimit;
-    fn mapper_specific(&self) -> Self::MapperSpecific;
 }
 
 impl CloudConfigAccessor for TEdgeConfigReaderC8y {
-    type MapperSpecific = EmptyMapperSpecific;
-
     fn url(&self) -> &OptionalConfig<ConnectUrl> {
         &self.url
     }
 
-    fn device_id_key(&self, profile: Option<&str>) -> Cow<'static, str> {
-        ReadableKey::C8yDeviceId(profile.map(<_>::to_owned)).to_cow_str()
+    fn device_id_key(&self, profile: Option<&str>) -> ReadableKey {
+        ReadableKey::C8yDeviceId(profile.map(<_>::to_owned))
     }
 
     fn device_id(&self) -> Result<String, ReadError> {
@@ -276,18 +281,12 @@ impl CloudConfigAccessor for TEdgeConfigReaderC8y {
     fn bridge_topic_prefix(&self, profile: Option<&str>) -> Keyed<TopicPrefix> {
         Keyed::new(
             self.bridge.topic_prefix.clone(),
-            ReadableKey::C8yBridgeTopicPrefix(profile.map(<_>::to_owned)).to_cow_str(),
+            ReadableKey::C8yBridgeTopicPrefix(profile.map(<_>::to_owned)),
         )
     }
 
     fn bridge_keepalive_interval(&self) -> &SecondsOrHumanTime {
         &self.bridge.keepalive_interval
-    }
-
-    fn bridge_include_config(&self) -> BridgeIncludeConfig {
-        BridgeIncludeConfig {
-            local_cleansession: self.bridge.include.local_cleansession,
-        }
     }
 
     fn topics(&self) -> &TemplatesSet {
@@ -297,28 +296,22 @@ impl CloudConfigAccessor for TEdgeConfigReaderC8y {
     fn root_cert_path(&self, profile: Option<&str>) -> Keyed<AbsolutePath> {
         Keyed::new(
             self.root_cert_path.clone(),
-            ReadableKey::C8yRootCertPath(profile.map(<_>::to_owned)).to_cow_str(),
+            ReadableKey::C8yRootCertPath(profile.map(<_>::to_owned)),
         )
     }
 
     fn max_payload_size(&self) -> MqttPayloadLimit {
         self.mapper.mqtt.max_payload_size
-    }
-
-    fn mapper_specific(&self) -> Self::MapperSpecific {
-        EmptyMapperSpecific {}
     }
 }
 
 impl CloudConfigAccessor for TEdgeConfigReaderAz {
-    type MapperSpecific = AzMapperSpecific;
-
     fn url(&self) -> &OptionalConfig<ConnectUrl> {
         &self.url
     }
 
-    fn device_id_key(&self, profile: Option<&str>) -> Cow<'static, str> {
-        ReadableKey::AzDeviceId(profile.map(<_>::to_owned)).to_cow_str()
+    fn device_id_key(&self, profile: Option<&str>) -> ReadableKey {
+        ReadableKey::AzDeviceId(profile.map(<_>::to_owned))
     }
 
     fn device_id(&self) -> Result<String, ReadError> {
@@ -348,16 +341,12 @@ impl CloudConfigAccessor for TEdgeConfigReaderAz {
     fn bridge_topic_prefix(&self, profile: Option<&str>) -> Keyed<TopicPrefix> {
         Keyed::new(
             self.bridge.topic_prefix.clone(),
-            ReadableKey::AzBridgeTopicPrefix(profile.map(<_>::to_owned)).to_cow_str(),
+            ReadableKey::AzBridgeTopicPrefix(profile.map(<_>::to_owned)),
         )
     }
 
     fn bridge_keepalive_interval(&self) -> &SecondsOrHumanTime {
         &self.bridge.keepalive_interval
-    }
-
-    fn bridge_include_config(&self) -> BridgeIncludeConfig {
-        <_>::default()
     }
 
     fn topics(&self) -> &TemplatesSet {
@@ -367,31 +356,22 @@ impl CloudConfigAccessor for TEdgeConfigReaderAz {
     fn root_cert_path(&self, profile: Option<&str>) -> Keyed<AbsolutePath> {
         Keyed::new(
             self.root_cert_path.clone(),
-            ReadableKey::AzRootCertPath(profile.map(<_>::to_owned)).to_cow_str(),
+            ReadableKey::AzRootCertPath(profile.map(<_>::to_owned)),
         )
     }
 
     fn max_payload_size(&self) -> MqttPayloadLimit {
         self.mapper.mqtt.max_payload_size
-    }
-
-    fn mapper_specific(&self) -> Self::MapperSpecific {
-        AzMapperSpecific {
-            timestamp: self.mapper.timestamp,
-            timestamp_format: self.mapper.timestamp_format,
-        }
     }
 }
 
 impl CloudConfigAccessor for TEdgeConfigReaderAws {
-    type MapperSpecific = AwsMapperSpecific;
-
     fn url(&self) -> &OptionalConfig<ConnectUrl> {
         &self.url
     }
 
-    fn device_id_key(&self, profile: Option<&str>) -> Cow<'static, str> {
-        ReadableKey::AwsDeviceId(profile.map(<_>::to_owned)).to_cow_str()
+    fn device_id_key(&self, profile: Option<&str>) -> ReadableKey {
+        ReadableKey::AwsDeviceId(profile.map(<_>::to_owned))
     }
 
     fn device_id(&self) -> Result<String, ReadError> {
@@ -421,16 +401,12 @@ impl CloudConfigAccessor for TEdgeConfigReaderAws {
     fn bridge_topic_prefix(&self, profile: Option<&str>) -> Keyed<TopicPrefix> {
         Keyed::new(
             self.bridge.topic_prefix.clone(),
-            ReadableKey::AwsBridgeTopicPrefix(profile.map(<_>::to_owned)).to_cow_str(),
+            ReadableKey::AwsBridgeTopicPrefix(profile.map(<_>::to_owned)),
         )
     }
 
     fn bridge_keepalive_interval(&self) -> &SecondsOrHumanTime {
         &self.bridge.keepalive_interval
-    }
-
-    fn bridge_include_config(&self) -> BridgeIncludeConfig {
-        <_>::default()
     }
 
     fn topics(&self) -> &TemplatesSet {
@@ -440,19 +416,12 @@ impl CloudConfigAccessor for TEdgeConfigReaderAws {
     fn root_cert_path(&self, profile: Option<&str>) -> Keyed<AbsolutePath> {
         Keyed::new(
             self.root_cert_path.clone(),
-            ReadableKey::AwsRootCertPath(profile.map(<_>::to_owned)).to_cow_str(),
+            ReadableKey::AwsRootCertPath(profile.map(<_>::to_owned)),
         )
     }
 
     fn max_payload_size(&self) -> MqttPayloadLimit {
         self.mapper.mqtt.max_payload_size
-    }
-
-    fn mapper_specific(&self) -> Self::MapperSpecific {
-        AwsMapperSpecific {
-            timestamp: self.mapper.timestamp,
-            timestamp_format: self.mapper.timestamp_format,
-        }
     }
 }
 
@@ -469,7 +438,7 @@ mod tests {
         "#;
 
         let tedge_config = TEdgeConfig::from_dto(
-            &toml::from_str(tedge_toml).unwrap(),
+            toml::from_str(tedge_toml).unwrap(),
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 
@@ -497,7 +466,7 @@ mod tests {
         "#;
 
         let tedge_config = TEdgeConfig::from_dto(
-            &toml::from_str(tedge_toml).unwrap(),
+            toml::from_str(tedge_toml).unwrap(),
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 
@@ -518,7 +487,7 @@ mod tests {
         "#;
 
         let tedge_config = TEdgeConfig::from_dto(
-            &toml::from_str(tedge_toml).unwrap(),
+            toml::from_str(tedge_toml).unwrap(),
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 
@@ -528,9 +497,9 @@ mod tests {
             config.url().or_none().unwrap().as_str(),
             "mydevice.azure-devices.net"
         );
-        assert!(config.mapper.cloud_specific.timestamp);
+        assert!(config.cloud_specific.mapper.timestamp);
         assert_eq!(
-            config.mapper.cloud_specific.timestamp_format,
+            config.cloud_specific.mapper.timestamp_format,
             TimeFormat::Unix
         );
     }
@@ -543,7 +512,7 @@ mod tests {
         "#;
 
         let tedge_config = TEdgeConfig::from_dto(
-            &toml::from_str(tedge_toml).unwrap(),
+            toml::from_str(tedge_toml).unwrap(),
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 
@@ -553,9 +522,9 @@ mod tests {
             config.url().or_none().unwrap().as_str(),
             "mydevice.amazonaws.com"
         );
-        assert!(config.mapper.cloud_specific.timestamp);
+        assert!(config.cloud_specific.mapper.timestamp);
         assert_eq!(
-            config.mapper.cloud_specific.timestamp_format,
+            config.cloud_specific.mapper.timestamp_format,
             TimeFormat::Unix
         );
     }
@@ -568,7 +537,7 @@ mod tests {
         "#;
 
         let tedge_config = TEdgeConfig::from_dto(
-            &toml::from_str(tedge_toml).unwrap(),
+            toml::from_str(tedge_toml).unwrap(),
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 
@@ -585,7 +554,7 @@ mod tests {
         "#;
 
         let tedge_config = TEdgeConfig::from_dto(
-            &toml::from_str(tedge_toml).unwrap(),
+            toml::from_str(tedge_toml).unwrap(),
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 
@@ -613,7 +582,7 @@ mod tests {
         "#;
 
         let tedge_config = TEdgeConfig::from_dto(
-            &toml::from_str(tedge_toml).unwrap(),
+            toml::from_str(tedge_toml).unwrap(),
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 
@@ -636,7 +605,7 @@ mod tests {
         "#;
 
         let tedge_config = TEdgeConfig::from_dto(
-            &toml::from_str(tedge_toml).unwrap(),
+            toml::from_str(tedge_toml).unwrap(),
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 
@@ -657,7 +626,7 @@ mod tests {
         "#;
 
         let tedge_config = TEdgeConfig::from_dto(
-            &toml::from_str(tedge_toml).unwrap(),
+            toml::from_str(tedge_toml).unwrap(),
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 
@@ -686,7 +655,7 @@ mod tests {
         "#;
 
         let tedge_config = TEdgeConfig::from_dto(
-            &toml::from_str(tedge_toml).unwrap(),
+            toml::from_str(tedge_toml).unwrap(),
             TEdgeConfigLocation::from_custom_root("/tmp/tedge"),
         );
 

@@ -19,6 +19,7 @@ tedge-write = { workspace = true }
 tedge_config = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 toml = { workspace = true }
 
 [dev-dependencies]

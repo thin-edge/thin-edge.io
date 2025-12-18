@@ -264,10 +264,9 @@ mod tests {
             let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
             let c8y_config = tedge_config
                 .mapper_config::<C8yMapperSpecificConfig>(&None::<ProfileName>)
-                .await
                 .unwrap();
 
-            use_key_and_cert(&mut opts, &*c8y_config).unwrap();
+            use_key_and_cert(&mut opts, &c8y_config).unwrap();
 
             let Transport::Tls(tls) = opts.transport() else {
                 panic!("Transport should be type TLS")

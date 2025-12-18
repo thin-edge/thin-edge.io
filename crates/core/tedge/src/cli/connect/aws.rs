@@ -17,9 +17,7 @@ pub async fn check_device_status_aws(
     tedge_config: &TEdgeConfig,
     profile: Option<&ProfileName>,
 ) -> Result<DeviceStatus, ConnectError> {
-    let aws_config = tedge_config
-        .mapper_config::<AwsMapperSpecificConfig>(&profile)
-        .await?;
+    let aws_config = tedge_config.mapper_config::<AwsMapperSpecificConfig>(&profile)?;
     let topic_prefix = &aws_config.bridge.topic_prefix;
     let aws_topic_pub_check_connection = format!("{topic_prefix}/test-connection");
     let aws_topic_sub_check_connection = format!("{topic_prefix}/connection-success");

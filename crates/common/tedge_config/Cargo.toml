@@ -14,7 +14,6 @@ test = []
 
 [dependencies]
 anyhow = { workspace = true }
-anymap3 = { workspace = true }
 camino = { workspace = true, features = ["serde", "serde1"] }
 certificate = { workspace = true, features = ["reqwest"] }
 clap = { workspace = true }

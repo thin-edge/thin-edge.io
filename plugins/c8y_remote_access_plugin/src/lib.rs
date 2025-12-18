@@ -66,10 +66,7 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
             Ok(())
         }
         Command::Connect((command, p)) => {
-            let c8y_config = tedge_config
-                .mapper_config(&p)
-                .await
-                .map_err(|e| miette!("{e}"))?;
+            let c8y_config = tedge_config.mapper_config(&p).map_err(|e| miette!("{e}"))?;
             proxy(command, &tedge_config, &c8y_config).await
         }
         Command::SpawnChild(command) => {

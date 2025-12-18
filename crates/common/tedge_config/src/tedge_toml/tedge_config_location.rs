@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::tedge_toml::mapper_config::ExpectedCloudType;
+use crate::tedge_toml::mapper_config::HasPath;
 use crate::tedge_toml::DtoKey;
 use crate::ConfigSettingResult;
 use crate::TEdgeConfig;
@@ -12,12 +14,12 @@ use camino::Utf8PathBuf;
 use serde::Deserialize as _;
 use serde::Serialize;
 use std::path::PathBuf;
+use tedge_config_macros::MultiDto;
+use tedge_config_macros::ProfileName;
 use tedge_utils::file::change_mode;
-use tedge_utils::file::change_mode_sync;
 use tedge_utils::file::change_user_and_group;
-use tedge_utils::file::change_user_and_group_sync;
 use tedge_utils::fs::atomically_write_file_async;
-use tedge_utils::fs::atomically_write_file_sync;
+use tokio::fs::DirEntry;
 use tracing::debug;
 use tracing::subscriber::NoSubscriber;
 use tracing::warn;
@@ -81,6 +83,54 @@ impl TEdgeConfigLocation {
         &self.tedge_config_root_path
     }
 
+    pub fn mappers_config_dir(&self) -> Utf8PathBuf {
+        self.tedge_config_root_path.join("mappers")
+    }
+
+    /// Decide which configuration source to use for a given cloud and profile
+    ///
+    /// This function centralizes the decision logic for mapper configuration precedence:
+    /// 1. New format (`mappers/[cloud].toml` or `mappers/[cloud].d/[profile].toml`) takes precedence
+    /// 2. If new format exists for some profiles but not the requested one, returns NotFound
+    /// 3. If the config directory is inaccessible due to a permissions error, return Error
+    /// 4. If no new format exists at all, fall back to legacy tedge.toml format
+    pub async fn decide_config_source<T>(&self, profile: Option<&ProfileName>) -> ConfigDecision
+    where
+        T: ExpectedCloudType,
+    {
+        use tokio::fs::try_exists;
+
+        let mapper_config_dir = self.mappers_config_dir();
+        let ty = T::expected_cloud_type().to_string();
+
+        let filename = profile.map_or_else(|| format!("{ty}.toml"), |p| format!("{ty}.d/{p}.toml"));
+        let path = mapper_config_dir.join(&filename);
+
+        let default_profile_path = mapper_config_dir.join(format!("{ty}.toml"));
+        let profile_dir_path = mapper_config_dir.join(format!("{ty}.d"));
+
+        match (
+            try_exists(&default_profile_path).await,
+            try_exists(&profile_dir_path).await,
+            try_exists(&path).await,
+        ) {
+            // The specific config we're looking for exists
+            (_, _, Ok(true)) => ConfigDecision::LoadNew { path },
+
+            // New format configs exist for this cloud, but not the specific profile requested
+            (Ok(true), _, _) | (_, Ok(true), _) => ConfigDecision::NotFound { path },
+
+            // No new format configs exist for this cloud, use legacy
+            (Ok(false), Ok(false), _) => ConfigDecision::LoadLegacy,
+
+            // Permission error accessing mapper config directory
+            (Err(err), _, _) | (_, Err(err), _) => ConfigDecision::PermissionError {
+                mapper_config_dir,
+                error: err,
+            },
+        }
+    }
+
     pub async fn update_toml(
         &self,
         update: &impl Fn(&mut TEdgeConfigDto, &TEdgeConfigReader) -> ConfigSettingResult<()>,
@@ -89,7 +139,7 @@ impl TEdgeConfigLocation {
         let reader = TEdgeConfigReader::from_dto(&config, self);
         update(&mut config, &reader)?;
 
-        self.store(&config).await
+        self.store(config).await
     }
 
     fn toml_path(&self) -> &Utf8Path {
@@ -102,16 +152,7 @@ impl TEdgeConfigLocation {
             "Loading configuration from {:?}",
             self.tedge_config_file_path
         );
-        Ok(TEdgeConfig::from_dto(&dto, self.clone()))
-    }
-
-    pub(crate) fn load_sync(self) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let dto = self.load_dto_sync::<FileAndEnvironment>()?;
-        debug!(
-            "Loading configuration from {:?}",
-            self.tedge_config_file_path
-        );
-        Ok(TEdgeConfig::from_dto(&dto, self))
+        Ok(TEdgeConfig::from_dto(dto, self.clone()))
     }
 
     async fn load_dto_from_toml_and_env(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
@@ -120,14 +161,6 @@ impl TEdgeConfigLocation {
 
     async fn load_dto<Sources: ConfigSources>(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
         let (dto, warnings) = self.load_dto_with_warnings::<Sources>().await?;
-
-        warnings.emit();
-
-        Ok(dto)
-    }
-
-    fn load_dto_sync<Sources: ConfigSources>(&self) -> Result<TEdgeConfigDto, TEdgeConfigError> {
-        let (dto, warnings) = self.load_dto_with_warnings_sync::<Sources>()?;
 
         warnings.emit();
 
@@ -155,7 +188,49 @@ impl TEdgeConfigLocation {
                 .fold(toml_value, |toml, migration| migration.apply_to(toml));
             (dto, warnings) = deserialize_toml(migrated_toml, toml_path).unwrap();
         }
-        (TEdgeConfig::from_dto(&dto, location), warnings)
+        (TEdgeConfig::from_dto(dto, location), warnings)
+    }
+
+    pub(crate) async fn mapper_config_profiles<T>(
+        &self,
+    ) -> Option<
+        Box<dyn futures::stream::Stream<Item = Option<ProfileName>> + Unpin + Send + Sync + '_>,
+    >
+    where
+        T: ExpectedCloudType,
+    {
+        use futures::future::ready;
+        use futures::StreamExt;
+
+        fn file_name_string(entry: tokio::io::Result<DirEntry>) -> Option<String> {
+            entry.ok()?.file_name().into_string().ok()
+        }
+
+        fn profile_name_from_filename(filename: &str) -> Option<ProfileName> {
+            ProfileName::try_from(filename.strip_suffix(".toml")?.to_owned()).ok()
+        }
+
+        let ty = T::expected_cloud_type();
+
+        match self.decide_config_source::<T>(None).await {
+            ConfigDecision::LoadNew { .. }
+            | ConfigDecision::NotFound { .. }
+            | ConfigDecision::PermissionError { .. } => {
+                let default_profile = futures::stream::once(ready(None));
+                match tokio::fs::read_dir(self.mappers_config_dir().join(format!("{ty}.d"))).await {
+                    Ok(profile_dir) => Some(Box::new(
+                        default_profile.chain(
+                            tokio_stream::wrappers::ReadDirStream::new(profile_dir)
+                                .filter_map(|entry| ready(file_name_string(entry)))
+                                .filter_map(|s| ready(profile_name_from_filename(&s)))
+                                .map(Some),
+                        ),
+                    )),
+                    Err(_) => Some(Box::new(default_profile)),
+                }
+            }
+            ConfigDecision::LoadLegacy => None,
+        }
     }
 
     async fn load_dto_with_warnings<Sources: ConfigSources>(
@@ -181,11 +256,13 @@ impl TEdgeConfigLocation {
                     .into_iter()
                     .fold(toml, |toml, migration| migration.apply_to(toml));
 
-                self.store(&migrated_toml).await?;
+                self.store_in(self.toml_path(), &migrated_toml).await?;
 
                 (dto, warnings) = deserialize_toml(migrated_toml, toml_path)?;
             }
         }
+
+        dto.populate_mapper_configs(self).await?;
 
         if Sources::INCLUDE_ENVIRONMENT {
             update_with_environment_variables(&mut dto, &mut warnings)?;
@@ -194,53 +271,25 @@ impl TEdgeConfigLocation {
         Ok((dto, warnings))
     }
 
-    fn load_dto_with_warnings_sync<Sources: ConfigSources>(
+    async fn store(&self, mut config: TEdgeConfigDto) -> Result<(), TEdgeConfigError> {
+        self.store_cloud(&mut config.c8y).await?;
+        self.store_cloud(&mut config.az).await?;
+        self.store_cloud(&mut config.aws).await?;
+        self.store_in(self.toml_path(), &config).await
+    }
+
+    async fn store_in<S: Serialize>(
         &self,
-    ) -> Result<(TEdgeConfigDto, UnusedValueWarnings), TEdgeConfigError> {
-        let toml_path = self.toml_path();
-        let mut tedge_toml_readable = true;
-        let config = std::fs::read_to_string(toml_path).unwrap_or_else(|_| {
-            tedge_toml_readable = false;
-            String::new()
-        });
-        let toml: toml::Value = toml::de::from_str(&config)?;
-        let (mut dto, mut warnings) = deserialize_toml(toml, toml_path)?;
-
-        if let Some(migrations) = dto.config.version.unwrap_or_default().migrations() {
-            if !tedge_toml_readable {
-                tracing::info!("Migrating tedge.toml configuration to version 2");
-
-                let toml = toml::de::from_str(&config)?;
-                let migrated_toml = migrations
-                    .into_iter()
-                    .fold(toml, |toml, migration| migration.apply_to(toml));
-
-                self.store_sync(&migrated_toml)?;
-
-                // Reload DTO to get the settings in the right place
-                (dto, warnings) = deserialize_toml(migrated_toml, toml_path)?;
-            }
-        }
-
-        if Sources::INCLUDE_ENVIRONMENT {
-            update_with_environment_variables(&mut dto, &mut warnings)?;
-        }
-
-        Ok((dto, warnings))
-    }
-
-    async fn store<S: Serialize>(&self, config: &S) -> Result<(), TEdgeConfigError> {
+        toml_path: &Utf8Path,
+        config: &S,
+    ) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config)?;
 
         // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
-        if !tokio::fs::try_exists(&self.tedge_config_root_path)
-            .await
-            .unwrap_or(false)
-        {
-            tokio::fs::create_dir(self.tedge_config_root_path()).await?;
+        if !tokio::fs::try_exists(toml_path).await.unwrap_or(false) {
+            tokio::fs::create_dir_all(toml_path.parent().expect("provided path must have parent"))
+                .await?;
         }
-
-        let toml_path = self.toml_path();
 
         atomically_write_file_async(toml_path, toml.as_bytes()).await?;
 
@@ -257,26 +306,18 @@ impl TEdgeConfigLocation {
         Ok(())
     }
 
-    fn store_sync<S: Serialize>(&self, config: &S) -> Result<(), TEdgeConfigError> {
-        let toml = toml::to_string_pretty(&config)?;
-
-        // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
-        if !self.tedge_config_root_path.exists() {
-            std::fs::create_dir(self.tedge_config_root_path())?;
+    async fn store_cloud<S>(&self, cloud: &mut MultiDto<S>) -> Result<(), TEdgeConfigError>
+    where
+        S: Serialize + HasPath + Default + PartialEq,
+    {
+        if let Some(paths) = cloud.non_profile.config_path() {
+            self.store_in(&paths.path_for(None), &cloud.non_profile)
+                .await?;
+            for (name, profile) in &mut cloud.profiles {
+                self.store_in(&paths.path_for(Some(name)), profile).await?;
+            }
+            std::mem::take(cloud);
         }
-
-        let toml_path = self.toml_path();
-
-        atomically_write_file_sync(toml_path, toml.as_bytes())?;
-
-        if let Err(err) = change_user_and_group_sync(toml_path.as_ref(), "tedge", "tedge") {
-            warn!("failed to set file ownership for '{toml_path}': {err}");
-        }
-
-        if let Err(err) = change_mode_sync(toml_path.as_ref(), 0o644) {
-            warn!("failed to set file permissions for '{toml_path}': {err}");
-        }
-
         Ok(())
     }
 }
@@ -296,6 +337,21 @@ impl ConfigSources for FileAndEnvironment {
 
 impl ConfigSources for FileOnly {
     const INCLUDE_ENVIRONMENT: bool = false;
+}
+
+/// Decision about which configuration source to use
+pub enum ConfigDecision {
+    /// Load from new format file at the given path
+    LoadNew { path: Utf8PathBuf },
+    /// Load from tedge.toml via compatibility layer
+    LoadLegacy,
+    /// Configuration file not found
+    NotFound { path: Utf8PathBuf },
+    /// Permission error accessing mapper config directory
+    PermissionError {
+        mapper_config_dir: Utf8PathBuf,
+        error: std::io::Error,
+    },
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -412,6 +468,7 @@ fn keys_in_inner(prefix: &str, table: &toml::map::Map<String, toml::Value>) -> V
 mod tests {
     use crate::models::AbsolutePath;
     use crate::tedge_toml::mapper_config::AzMapperSpecificConfig;
+    use crate::tedge_toml::mapper_config::C8yMapperSpecificConfig;
     use crate::tedge_toml::Cloud;
     use once_cell::sync::Lazy;
     use tedge_config_macros::ProfileName;
@@ -520,11 +577,11 @@ type = "a-service-type""#;
         assert_eq!(warnings, UnusedValueWarnings::default());
 
         assert_eq!(
-            tedge_config.device_cert_path(None::<Void>).await.unwrap(),
+            tedge_config.device_cert_path(None::<Void>).unwrap(),
             "/tedge/device-cert.pem".parse().unwrap()
         );
         assert_eq!(
-            tedge_config.device_key_path(None::<Void>).await.unwrap(),
+            tedge_config.device_key_path(None::<Void>).unwrap(),
             "/tedge/device-key.pem".parse().unwrap()
         );
         assert_eq!(tedge_config.device.ty, "a-device");
@@ -580,6 +637,26 @@ type = "a-service-type""#;
     }
 
     #[tokio::test]
+    async fn environment_variables_are_read_with_migrated_mapper_config() {
+        let (ttd, t) = create_temp_tedge_config("").unwrap();
+        ttd.dir("mappers")
+            .file("c8y.toml")
+            .with_raw_content("url = \"example.com\"");
+        let mut env = EnvSandbox::new().await;
+        env.set_var("TEDGE_C8Y_ROOT_CERT_PATH", "/root/cert/path");
+        let config = t.load().await.unwrap();
+        let c8y_config = config
+            .mapper_config::<C8yMapperSpecificConfig>(&None::<ProfileName>)
+            .unwrap();
+        assert_eq!(
+            c8y_config.http().or_none().unwrap().host().to_string(),
+            "example.com",
+            "Verify that c8y.toml file has actually been read"
+        );
+        assert_eq!(c8y_config.root_cert_path.to_string(), "/root/cert/path");
+    }
+
+    #[tokio::test]
     async fn empty_environment_variables_reset_configuration_parameters() {
         let (_dir, t) = create_temp_tedge_config("apt.name = \"tedge.*\"").unwrap();
         let mut env = EnvSandbox::new().await;
@@ -599,7 +676,6 @@ type = "a-service-type""#;
             .mapper_config::<AzMapperSpecificConfig>(&Some(
                 ProfileName::try_from("test".to_owned()).unwrap(),
             ))
-            .await
             .unwrap();
         assert_eq!(
             az_config.root_cert_path,
