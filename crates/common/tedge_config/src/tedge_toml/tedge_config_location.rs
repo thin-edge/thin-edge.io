@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::models::CloudType;
 use crate::tedge_toml::mapper_config::ExpectedCloudType;
 use crate::tedge_toml::mapper_config::HasPath;
 use crate::tedge_toml::DtoKey;
@@ -140,6 +141,27 @@ impl TEdgeConfigLocation {
         update(&mut config, &reader)?;
 
         self.store(config).await
+    }
+
+    pub async fn migrate_mapper_config(
+        &self,
+        cloud_type: CloudType,
+    ) -> Result<(), TEdgeConfigError> {
+        self.update_toml(&|dto, _rdr| {
+            match cloud_type {
+                CloudType::C8y => {
+                    dto.c8y.non_profile.mapper_config_dir = Some(self.mappers_config_dir())
+                }
+                CloudType::Aws => {
+                    dto.aws.non_profile.mapper_config_dir = Some(self.mappers_config_dir())
+                }
+                CloudType::Az => {
+                    dto.az.non_profile.mapper_config_dir = Some(self.mappers_config_dir())
+                }
+            }
+            Ok(())
+        })
+        .await
     }
 
     fn toml_path(&self) -> &Utf8Path {
@@ -820,6 +842,121 @@ type = "a-service-type""#;
             .await
             .unwrap();
         assert!(dbg!(warnings.0.first().unwrap()).contains("c8y.profiles.test.unknown"));
+    }
+
+    #[tokio::test]
+    async fn c8y_config_can_be_migrated() {
+        let (_dir, location) = create_temp_tedge_config("c8y.url = \"test.c8y.io\"").unwrap();
+        let _env_lock = EnvSandbox::new().await;
+
+        location
+            .migrate_mapper_config(CloudType::C8y)
+            .await
+            .unwrap();
+
+        let c8y_toml = tokio::fs::read_to_string(location.mappers_config_dir().join("c8y.toml"))
+            .await
+            .unwrap();
+        assert_eq!(
+            toml::from_str::<toml::Table>(&c8y_toml).unwrap(),
+            toml::toml!(url = "test.c8y.io")
+        );
+
+        // tedge.toml may or may not exist, but the key thing is the url isn't defined there
+        let tedge_toml = tokio::fs::read_to_string(location.tedge_config_file_path)
+            .await
+            .unwrap_or_default();
+        assert!(!toml::from_str::<toml::Table>(&tedge_toml)
+            .unwrap()
+            .contains_key("c8y"));
+    }
+
+    #[tokio::test]
+    async fn profiled_c8y_config_can_be_migrated() {
+        let (_dir, location) =
+            create_temp_tedge_config("c8y.profiles.test.url = \"test.c8y.io\"").unwrap();
+        let _env_lock = EnvSandbox::new().await;
+
+        location
+            .migrate_mapper_config(CloudType::C8y)
+            .await
+            .unwrap();
+
+        let test_toml =
+            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y.d/test.toml"))
+                .await
+                .unwrap();
+        assert_eq!(
+            toml::from_str::<toml::Table>(&test_toml).unwrap(),
+            toml::toml!(url = "test.c8y.io")
+        );
+
+        let c8y_toml = tokio::fs::read_to_string(location.mappers_config_dir().join("c8y.toml"))
+            .await
+            .unwrap_or_default();
+        assert_eq!(
+            toml::from_str::<toml::Table>(&c8y_toml).unwrap(),
+            toml::Table::new()
+        );
+
+        // tedge.toml may or may not exist, but the key thing is the url isn't defined there
+        let tedge_toml = tokio::fs::read_to_string(location.tedge_config_file_path)
+            .await
+            .unwrap_or_default();
+        assert!(!toml::from_str::<toml::Table>(&tedge_toml)
+            .unwrap()
+            .contains_key("c8y"));
+    }
+
+    #[tokio::test]
+    async fn az_config_can_be_migrated() {
+        let (_dir, location) = create_temp_tedge_config("az.url = \"example.com\"").unwrap();
+        let _env_lock = EnvSandbox::new().await;
+
+        location.migrate_mapper_config(CloudType::Az).await.unwrap();
+
+        let az_toml = tokio::fs::read_to_string(location.mappers_config_dir().join("az.toml"))
+            .await
+            .unwrap();
+        assert_eq!(
+            toml::from_str::<toml::Table>(&az_toml).unwrap(),
+            toml::toml!(url = "example.com")
+        );
+
+        // tedge.toml may or may not exist, but the key thing is the url isn't defined there
+        let tedge_toml = tokio::fs::read_to_string(location.tedge_config_file_path)
+            .await
+            .unwrap_or_default();
+        assert!(!toml::from_str::<toml::Table>(&tedge_toml)
+            .unwrap()
+            .contains_key("az"));
+    }
+
+    #[tokio::test]
+    async fn aws_config_can_be_migrated() {
+        let (_dir, location) = create_temp_tedge_config("aws.url = \"example.com\"").unwrap();
+        let _env_lock = EnvSandbox::new().await;
+
+        location
+            .migrate_mapper_config(CloudType::Aws)
+            .await
+            .unwrap();
+
+        let aws_toml = tokio::fs::read_to_string(location.mappers_config_dir().join("aws.toml"))
+            .await
+            .unwrap();
+        assert_eq!(
+            toml::from_str::<toml::Table>(&aws_toml).unwrap(),
+            toml::toml!(url = "example.com")
+        );
+
+        // tedge.toml may or may not exist, but the key thing is the url isn't defined there
+        let tedge_toml = tokio::fs::read_to_string(location.tedge_config_file_path)
+            .await
+            .unwrap_or_default();
+        assert!(!toml::from_str::<toml::Table>(&tedge_toml)
+            .unwrap()
+            .contains_key("aws"));
     }
 
     static LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));

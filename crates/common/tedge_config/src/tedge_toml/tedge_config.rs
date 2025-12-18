@@ -1,7 +1,6 @@
 mod version;
 use futures::Stream;
 use reqwest::NoProxy;
-use serde::Deserialize;
 use version::TEdgeTomlVersion;
 
 mod append_remove;
@@ -438,12 +437,6 @@ pub static READABLE_KEYS: Lazy<Vec<(Cow<'static, str>, doku::Type)>> = Lazy::new
     };
     struct_field_paths(None, &fields)
 });
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, doku::Document, serde::Serialize)]
-pub enum MapperConfigLocation {
-    TedgeToml,
-    SeparateFile(#[doku(as = "String")] camino::Utf8PathBuf),
-}
 
 define_tedge_config! {
     #[tedge_config(reader(skip))]
