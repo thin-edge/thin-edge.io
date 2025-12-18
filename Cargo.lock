@@ -1197,9 +1197,9 @@ dependencies = [
 
 [[package]]
 name = "convert_case"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
+checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -1752,9 +1752,9 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "foldhash"
-version = "0.1.5"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "form_urlencoded"
@@ -1993,6 +1993,12 @@ name = "hashbrown"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84b26c544d002229e640969970a2e74021aadf6e2f96372b9c58eff97de08eb3"
+
+[[package]]
+name = "hashbrown"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 dependencies = [
  "allocator-api2",
  "equivalent",
@@ -3860,8 +3866,8 @@ dependencies = [
 
 [[package]]
 name = "rquickjs"
-version = "0.9.0"
-source = "git+https://github.com/thin-edge/rquickjs?rev=4ed04ac9af3de453dd41ff09fdd1837c7ceb1f1c#4ed04ac9af3de453dd41ff09fdd1837c7ceb1f1c"
+version = "0.10.0"
+source = "git+https://github.com/thin-edge/rquickjs?rev=7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0#7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0"
 dependencies = [
  "rquickjs-core",
  "rquickjs-macro",
@@ -3869,21 +3875,21 @@ dependencies = [
 
 [[package]]
 name = "rquickjs-core"
-version = "0.9.0"
-source = "git+https://github.com/thin-edge/rquickjs?rev=4ed04ac9af3de453dd41ff09fdd1837c7ceb1f1c#4ed04ac9af3de453dd41ff09fdd1837c7ceb1f1c"
+version = "0.10.0"
+source = "git+https://github.com/thin-edge/rquickjs?rev=7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0#7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0"
 dependencies = [
  "async-lock",
- "hashbrown 0.15.3",
+ "hashbrown 0.16.1",
  "relative-path 2.0.1",
  "rquickjs-sys",
 ]
 
 [[package]]
 name = "rquickjs-macro"
-version = "0.9.0"
-source = "git+https://github.com/thin-edge/rquickjs?rev=4ed04ac9af3de453dd41ff09fdd1837c7ceb1f1c#4ed04ac9af3de453dd41ff09fdd1837c7ceb1f1c"
+version = "0.10.0"
+source = "git+https://github.com/thin-edge/rquickjs?rev=7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0#7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0"
 dependencies = [
- "convert_case 0.8.0",
+ "convert_case 0.10.0",
  "fnv",
  "ident_case",
  "indexmap",
@@ -3896,8 +3902,8 @@ dependencies = [
 
 [[package]]
 name = "rquickjs-sys"
-version = "0.9.0"
-source = "git+https://github.com/thin-edge/rquickjs?rev=4ed04ac9af3de453dd41ff09fdd1837c7ceb1f1c#4ed04ac9af3de453dd41ff09fdd1837c7ceb1f1c"
+version = "0.10.0"
+source = "git+https://github.com/thin-edge/rquickjs?rev=7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0#7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0"
 dependencies = [
  "cc",
 ]
