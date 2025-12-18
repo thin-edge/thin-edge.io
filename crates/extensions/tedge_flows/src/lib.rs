@@ -19,6 +19,7 @@ pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
 pub use crate::runtime::MessageProcessor;
 use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::path::PathBuf;
@@ -153,8 +154,11 @@ pub enum LoadError {
         function: String,
     },
 
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    #[error("Cannot read file {path}: {error}")]
+    ReadError {
+        path: Utf8PathBuf,
+        error: std::io::Error,
+    },
 
     #[error(transparent)]
     TomlError(#[from] toml::de::Error),
@@ -164,4 +168,13 @@ pub enum LoadError {
 
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
+}
+
+impl LoadError {
+    pub fn from_io(error: std::io::Error, path: &Utf8Path) -> Self {
+        LoadError::ReadError {
+            path: path.to_owned(),
+            error,
+        }
+    }
 }
