@@ -159,12 +159,12 @@ impl FromCloudConfig for AzMapperSpecificConfig {
             .unwrap()
             .mapper_config_file
             .clone()
-            .unwrap_or_else(||
+            .unwrap_or_else(|| {
                 tedge_config
                     .location
                     .tedge_config_root_path()
-                    .join("tedge.toml"),
-            );
+                    .join("tedge.toml")
+            });
 
         build_mapper_config(az_config.clone(), profile, location)
     }

@@ -309,8 +309,10 @@ impl TEdgeConfigLocation {
 
         // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
         if !tokio::fs::try_exists(toml_path).await.unwrap_or(false) {
-            tokio::fs::create_dir_all(toml_path.parent().expect("provided path must have parent"))
-                .await?;
+            let parent_dir = toml_path.parent().expect("provided path must have parent");
+            tokio::fs::create_dir_all(parent_dir)
+                .await
+                .with_context(|| format!("Failed to create directory {parent_dir}"))?;
         }
 
         atomically_write_file_async(toml_path, toml.as_bytes()).await?;
