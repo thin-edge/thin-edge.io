@@ -3867,7 +3867,7 @@ dependencies = [
 [[package]]
 name = "rquickjs"
 version = "0.10.0"
-source = "git+https://github.com/thin-edge/rquickjs?rev=7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0#7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0"
+source = "git+https://github.com/thin-edge/rquickjs?rev=1ad62cf206313a3944089504e92e1ed5832f04bd#1ad62cf206313a3944089504e92e1ed5832f04bd"
 dependencies = [
  "rquickjs-core",
  "rquickjs-macro",
@@ -3876,7 +3876,7 @@ dependencies = [
 [[package]]
 name = "rquickjs-core"
 version = "0.10.0"
-source = "git+https://github.com/thin-edge/rquickjs?rev=7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0#7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0"
+source = "git+https://github.com/thin-edge/rquickjs?rev=1ad62cf206313a3944089504e92e1ed5832f04bd#1ad62cf206313a3944089504e92e1ed5832f04bd"
 dependencies = [
  "async-lock",
  "hashbrown 0.16.1",
@@ -3887,7 +3887,7 @@ dependencies = [
 [[package]]
 name = "rquickjs-macro"
 version = "0.10.0"
-source = "git+https://github.com/thin-edge/rquickjs?rev=7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0#7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0"
+source = "git+https://github.com/thin-edge/rquickjs?rev=1ad62cf206313a3944089504e92e1ed5832f04bd#1ad62cf206313a3944089504e92e1ed5832f04bd"
 dependencies = [
  "convert_case 0.10.0",
  "fnv",
@@ -3903,7 +3903,7 @@ dependencies = [
 [[package]]
 name = "rquickjs-sys"
 version = "0.10.0"
-source = "git+https://github.com/thin-edge/rquickjs?rev=7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0#7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0"
+source = "git+https://github.com/thin-edge/rquickjs?rev=1ad62cf206313a3944089504e92e1ed5832f04bd#1ad62cf206313a3944089504e92e1ed5832f04bd"
 dependencies = [
  "cc",
 ]

@@ -14,7 +14,7 @@ async-trait = { workspace = true }
 camino = { workspace = true, features = ["serde1"] }
 futures = { workspace = true }
 humantime = { workspace = true }
-rquickjs = { git = "https://github.com/thin-edge/rquickjs", rev = "7508f0c3c134352f8cd64a4c33cc0c063f3e2ab0", default-features = false, features = [
+rquickjs = { git = "https://github.com/thin-edge/rquickjs", rev = "1ad62cf206313a3944089504e92e1ed5832f04bd", default-features = false, features = [
     # Enabling bindgen requires additional build tools, such as libclang and libc6-dev.
     # Using pre-generated bindings avoids these dependencies.
     # To enable this feature, please refer to: https://github.com/thin-edge/thin-edge.io/pull/3896
