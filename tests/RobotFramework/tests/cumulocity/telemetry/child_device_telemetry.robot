@@ -51,6 +51,19 @@ Child devices support sending custom measurements
     ...    series=L1
     Log    ${measurements}
 
+Child devices support sending measurements with units
+    Execute Command    tedge mqtt pub -r te/device/${CHILD_SN}///m/child-mea/meta '{ "temperature": { "unit": "°C" } }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///m/child-mea '{ "temperature": 25.123 }'
+    ${measurements}=    Device Should Have Measurements
+    ...    minimum=1
+    ...    maximum=1
+    ...    type=child-mea
+    ...    value=temperature
+    ...    series=temperature
+    Log    ${measurements}
+    Should Be Equal As Numbers    ${measurements[0]["temperature"]["temperature"]["value"]}    25.123
+    Should Be Equal    ${measurements[0]["temperature"]["temperature"]["unit"]}    °C
+
 Child devices support sending custom events
     Execute Command
     ...    tedge mqtt pub te/device/${CHILD_SN}///e/myCustomType1 '{ "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
