@@ -15,6 +15,7 @@ use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
+use tedge_config::models::CloudType;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tracing::log::warn;
@@ -66,6 +67,7 @@ fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
         }),
         #[cfg(feature = "tedge-flows")]
         MapperName::Flows => Box::new(GenMapper),
+        MapperName::MigrateConfig { .. } => unimplemented!("migrate-config isn't a mapper"),
     }
 }
 
@@ -94,7 +96,7 @@ pub struct MapperOpt {
 }
 
 #[derive(Debug, clap::Subcommand, Clone)]
-#[clap(rename_all = "snake_case")]
+#[clap(rename_all = "kebab-case")]
 pub enum MapperName {
     #[cfg(feature = "azure")]
     Az {
@@ -117,6 +119,10 @@ pub enum MapperName {
     Collectd,
     #[cfg(feature = "tedge-flows")]
     Flows,
+    #[clap(hide = true)]
+    MigrateConfig {
+        cloud_name: CloudType,
+    },
 }
 
 impl fmt::Display for MapperName {
@@ -143,11 +149,20 @@ impl fmt::Display for MapperName {
             MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
             #[cfg(feature = "tedge-flows")]
             MapperName::Flows => write!(f, "tedge-flows"),
+            MapperName::MigrateConfig { cloud_name } => {
+                write!(f, "tedge-mapper-migrate-config-{cloud_name}")
+            }
         }
     }
 }
 
 pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<()> {
+    if let MapperName::MigrateConfig { cloud_name } = mapper_opt.name {
+        config.migrate_mapper_config(cloud_name).await?;
+        println!("Migrated config for {cloud_name}");
+        return Ok(());
+    }
+
     let mapper_name = mapper_opt.name.to_string();
     let component = lookup_component(mapper_opt.name);
 

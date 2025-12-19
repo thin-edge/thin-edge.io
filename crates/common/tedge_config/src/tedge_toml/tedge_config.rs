@@ -1,7 +1,6 @@
 mod version;
 use futures::Stream;
 use reqwest::NoProxy;
-use serde::Deserialize;
 use version::TEdgeTomlVersion;
 
 mod append_remove;
@@ -132,7 +131,7 @@ impl TEdgeConfigDto {
         use futures::StreamExt;
         use futures::TryStreamExt;
 
-        let mappers_dir = location.tedge_config_root_path().join("mappers");
+        let mappers_dir = location.mappers_config_dir();
         let all_profiles = location.mapper_config_profiles::<T>().await;
         let ty = T::expected_cloud_type();
         if let Some(profiles) = all_profiles {
@@ -150,6 +149,7 @@ impl TEdgeConfigDto {
                 },
             )?;
             default_profile_config.set_mapper_config_dir(mappers_dir.clone());
+            default_profile_config.set_mapper_config_file(toml_path);
             dto.non_profile = default_profile_config;
 
             dto.profiles = profiles
@@ -160,6 +160,7 @@ impl TEdgeConfigDto {
                     let mut profiled_config: T::CloudDto = toml::from_str(&profile_toml)
                         .context("failed to deserialise mapper config")?;
                     profiled_config.set_mapper_config_dir(mappers_dir.clone());
+                    profiled_config.set_mapper_config_file(toml_path);
                     Ok::<_, anyhow::Error>((profile, profiled_config))
                 })
                 .try_collect()
@@ -421,6 +422,12 @@ impl CloudConfig for DynCloudConfig<'_> {
             Self::Borrow(config) => config.key_pin(),
         }
     }
+    fn mapper_config_location(&self) -> &Utf8Path {
+        match self {
+            Self::Arc(config) => config.mapper_config_location(),
+            Self::Borrow(config) => config.mapper_config_location(),
+        }
+    }
 }
 
 /// The keys that can be read from the configuration
@@ -438,12 +445,6 @@ pub static READABLE_KEYS: Lazy<Vec<(Cow<'static, str>, doku::Type)>> = Lazy::new
     };
     struct_field_paths(None, &fields)
 });
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, doku::Document, serde::Serialize)]
-pub enum MapperConfigLocation {
-    TedgeToml,
-    SeparateFile(#[doku(as = "String")] camino::Utf8PathBuf),
-}
 
 define_tedge_config! {
     #[tedge_config(reader(skip))]
@@ -575,6 +576,10 @@ define_tedge_config! {
         #[tedge_config(reader(skip))]
         #[serde(skip)]
         mapper_config_dir: Utf8PathBuf,
+
+        #[tedge_config(reader(skip))]
+        #[serde(skip)]
+        mapper_config_file: Utf8PathBuf,
 
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
@@ -820,6 +825,10 @@ define_tedge_config! {
         #[serde(skip)]
         mapper_config_dir: Utf8PathBuf,
 
+        #[tedge_config(reader(skip))]
+        #[serde(skip)]
+        mapper_config_file: Utf8PathBuf,
+
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
         url: ConnectUrl,
@@ -910,6 +919,10 @@ define_tedge_config! {
         #[tedge_config(reader(skip))]
         #[serde(skip)]
         mapper_config_dir: Utf8PathBuf,
+
+        #[tedge_config(reader(skip))]
+        #[serde(skip)]
+        mapper_config_file: Utf8PathBuf,
 
         /// Endpoint URL of AWS IoT tenant
         #[tedge_config(example = "your-endpoint.amazonaws.com")]
@@ -1411,6 +1424,7 @@ pub trait CloudConfig {
     fn root_cert_path(&self) -> &Utf8Path;
     fn key_uri(&self) -> Option<Arc<str>>;
     fn key_pin(&self) -> Option<Arc<str>>;
+    fn mapper_config_location(&self) -> &Utf8Path;
 }
 
 impl<T: SpecialisedCloudConfig> CloudConfig for MapperConfig<T> {
@@ -1432,6 +1446,10 @@ impl<T: SpecialisedCloudConfig> CloudConfig for MapperConfig<T> {
 
     fn key_pin(&self) -> Option<Arc<str>> {
         self.device.key_pin.clone()
+    }
+
+    fn mapper_config_location(&self) -> &Utf8Path {
+        &self.location
     }
 }
 

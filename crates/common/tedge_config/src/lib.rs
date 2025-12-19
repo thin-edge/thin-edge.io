@@ -34,6 +34,13 @@ impl TEdgeConfig {
         self.location().update_toml(update).await
     }
 
+    pub async fn migrate_mapper_config(
+        self,
+        cloud_type: models::CloudType,
+    ) -> Result<(), TEdgeConfigError> {
+        self.location().migrate_mapper_config(cloud_type).await
+    }
+
     #[cfg(feature = "test")]
     /// A test only method designed for injecting configuration into tests
     ///
