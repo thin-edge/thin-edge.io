@@ -10,6 +10,7 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_flows::FlowsMapperBuilder;
+use tedge_flows::FlowsMapperConfig;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
@@ -370,6 +371,7 @@ async fn interval_executes_when_time_exceeds_interval() {
     let count = || {
         captured_messages
             .retain(|msg| !msg.topic.as_ref().contains("status"))
+            .retain(|msg| !msg.topic.as_ref().contains("statistics"))
             .count()
     };
 
@@ -410,9 +412,12 @@ async fn tick(duration: Duration) {
 type ActorHandle = tokio::task::JoinHandle<Result<(), tedge_actors::RuntimeError>>;
 
 async fn spawn_flows_actor(config_dir: &TempDir, mqtt: &mut MockMqtt) -> ActorHandle {
-    let mut flows_builder = FlowsMapperBuilder::try_new(config_dir.path().to_str().unwrap())
-        .await
-        .expect("Failed to create FlowsMapper");
+    let mut flows_builder = FlowsMapperBuilder::try_new(
+        FlowsMapperConfig::default(),
+        config_dir.path().to_str().unwrap(),
+    )
+    .await
+    .expect("Failed to create FlowsMapper");
 
     flows_builder.connect(mqtt);
     let flows_actor = flows_builder.build();
