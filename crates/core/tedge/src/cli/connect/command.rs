@@ -142,6 +142,7 @@ impl Command for ConnectCommand {
             &cryptoki_status,
             tedge_config.proxy.address.or_none(),
             tedge_config.proxy.username.or_none().map(|u| u.as_str()),
+            cloud.mapper_config_location(),
         );
 
         validate_config(&tedge_config, &self.cloud)?;
