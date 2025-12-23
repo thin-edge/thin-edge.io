@@ -79,7 +79,7 @@ case $target in
     export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER="$qemu_aarch64"
     MUSL_SYSROOT_DIR="$HOME/.musl-cross/aarch64-unknown-linux-musl/aarch64-unknown-linux-musl/sysroot"
     export CFLAGS_aarch64_unknown_linux_musl="--sysroot=$MUSL_SYSROOT_DIR"
-    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR"
+    export BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_musl="-I${MUSL_SYSROOT_DIR}/usr/include"
     ;;
   arm-unknown-linux-gnueabi)
     export CC_arm_unknown_linux_gnueabi=arm-linux-gnueabi-gcc
@@ -94,7 +94,7 @@ case $target in
     # TODO: target does not support atomics so it is disabled however the code needs to be checked if this will causes problems
     # as it will no longer be thread safe
     MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabi/arm-unknown-linux-musleabi/sysroot"
-    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
+    export BINDGEN_EXTRA_CLANG_ARGS_arm_unknown_linux_musleabi="-I${MUSL_SYSROOT_DIR}/usr/include -D__STDC_NO_ATOMICS__=1"
     export CFLAGS_arm_unknown_linux_musleabi="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
     ;;
   armv5te-unknown-linux-gnueabi)
@@ -110,7 +110,7 @@ case $target in
     MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabi/arm-unknown-linux-musleabi/sysroot"
     # TODO: target does not support atomics so it is disabled however the code needs to be checked if this will causes problems
     # as it will no longer be thread safe
-    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
+    export BINDGEN_EXTRA_CLANG_ARGS_armv5te_unknown_linux_musleabi="-I${MUSL_SYSROOT_DIR}/usr/include -D__STDC_NO_ATOMICS__=1"
     export CFLAGS_armv5te_unknown_linux_musleabi="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
     ;;
   arm-unknown-linux-musleabihf)
@@ -120,7 +120,7 @@ case $target in
     # TODO: target does not support atomics so it is disabled however the code needs to be checked if this will causes problems
     # as it will no longer be thread safe
     MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabihf/arm-unknown-linux-musleabihf/sysroot"
-    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
+    export BINDGEN_EXTRA_CLANG_ARGS_arm_unknown_linux_musleabihf="-I${MUSL_SYSROOT_DIR}/usr/include -D__STDC_NO_ATOMICS__=1"
     export CFLAGS_arm_unknown_linux_musleabihf="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
     ;;
   arm-unknown-linux-gnueabihf)
@@ -147,7 +147,7 @@ case $target in
     export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_RUNNER="$qemu_arm_gnueabihf"
     MUSL_SYSROOT_DIR="$HOME/.musl-cross/armv7-unknown-linux-musleabihf/armv7-unknown-linux-musleabihf/sysroot"
     export CFLAGS_armv7_unknown_linux_musleabihf="--sysroot=$MUSL_SYSROOT_DIR"
-    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR"
+    export BINDGEN_EXTRA_CLANG_ARGS_armv7_unknown_linux_musleabihf="-I${MUSL_SYSROOT_DIR}/usr/include"
     ;;
   i686-unknown-linux-gnu)
     use_clang=1
@@ -158,7 +158,7 @@ case $target in
     export CARGO_TARGET_I686_UNKNOWN_LINUX_MUSL_RUSTFLAGS="$rustflags_self_contained"
     MUSL_SYSROOT_DIR="$HOME/.musl-cross/i686-unknown-linux-musl/i686-unknown-linux-musl/sysroot"
     export CFLAGS_i686_unknown_linux_musl="--sysroot=$MUSL_SYSROOT_DIR"
-    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR"
+    export BINDGEN_EXTRA_CLANG_ARGS_i686_unknown_linux_musl="-I${MUSL_SYSROOT_DIR}/usr/include"
     ;;
   i686-linux-android)
     export CC_i686_linux_android=$android_tools/i686-linux-android24-clang
@@ -211,6 +211,7 @@ case $target in
     use_clang=1
     export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER=riscv64-linux-gnu-gcc
     export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_RUNNER="$qemu_riscv64"
+    export BINDGEN_EXTRA_CLANG_ARGS_riscv64gc_unknown_linux_gnu="--target=riscv64-unknown-linux-gnu"
     ;;
   riscv64gc-unknown-linux-musl)
     use_clang=1
