@@ -97,6 +97,11 @@ jobs:
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libc6-dev
+
       - name: Install latest nextest release
         uses: taiki-e/install-action@nextest
 
