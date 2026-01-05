@@ -15,6 +15,7 @@ use camino::Utf8PathBuf;
 use serde::Deserialize as _;
 use serde::Serialize;
 use std::path::PathBuf;
+use strum::IntoEnumIterator as _;
 use tedge_config_macros::MultiDto;
 use tedge_config_macros::ProfileName;
 use tedge_utils::file::change_mode;
@@ -59,6 +60,14 @@ pub(crate) struct TEdgeConfigLocation {
 
     /// Full path to the `tedge.toml` file.
     tedge_config_file_path: Utf8PathBuf,
+
+    mapper_config_default_location: MapperConfigLocation,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum MapperConfigLocation {
+    TedgeToml,
+    SeparateFile,
 }
 
 impl Default for TEdgeConfigLocation {
@@ -77,7 +86,13 @@ impl TEdgeConfigLocation {
             tedge_config_file_path: Utf8Path::from_path(tedge_config_root_path.as_ref())
                 .unwrap()
                 .join(TEDGE_CONFIG_FILE),
+            mapper_config_default_location: MapperConfigLocation::TedgeToml,
         }
+    }
+
+    #[cfg(feature = "test")]
+    pub(crate) fn default_to_mapper_config_dir(&mut self) {
+        self.mapper_config_default_location = MapperConfigLocation::SeparateFile;
     }
 
     pub(crate) fn tedge_config_root_path(&self) -> &Utf8Path {
@@ -88,13 +103,28 @@ impl TEdgeConfigLocation {
         self.tedge_config_root_path.join("mappers")
     }
 
+    pub async fn tedge_toml_contains_cloud_config(&self) -> bool {
+        let toml = tokio::fs::read_to_string(self.toml_path())
+            .await
+            .unwrap_or_default();
+        let tedge_toml: toml::Table = toml::from_str(&toml).unwrap();
+        CloudType::iter().any(|key| tedge_toml.contains_key(key.as_ref()))
+    }
+
     /// Decide which configuration source to use for a given cloud and profile
     ///
     /// This function centralizes the decision logic for mapper configuration precedence:
     /// 1. New format (`mappers/[cloud].toml` or `mappers/[cloud].d/[profile].toml`) takes precedence
     /// 2. If new format exists for some profiles but not the requested one, returns NotFound
     /// 3. If the config directory is inaccessible due to a permissions error, return Error
-    /// 4. If no new format exists at all, fall back to legacy tedge.toml format
+    ///
+    /// If no new format exists, we then look at the
+    /// `mapper_config_default_location` field of [TEdgeConfigLocation]:
+    /// 1. If this is set to [MapperConfigLocation::TedgeToml], we fall back to tedge.toml
+    /// 2. If this is set to [MapperConfigLocation::SeparateFile] and no cloud configurations
+    ///    exist in tedge.toml, we use the new mapper config format
+    /// 3. If cloud configurations (for any cloud) do already exist in tedge.toml, we use
+    ///    tedge.toml until the configuration is explicitly migrated
     pub async fn decide_config_source<T>(&self, profile: Option<&ProfileName>) -> ConfigDecision
     where
         T: ExpectedCloudType,
@@ -122,7 +152,15 @@ impl TEdgeConfigLocation {
             (Ok(true), _, _) | (_, Ok(true), _) => ConfigDecision::NotFound { path },
 
             // No new format configs exist for this cloud, use legacy
-            (Ok(false), Ok(false), _) => ConfigDecision::LoadLegacy,
+            (Ok(false), Ok(false), _) => {
+                if self.mapper_config_default_location == MapperConfigLocation::SeparateFile
+                    && !self.tedge_toml_contains_cloud_config().await
+                {
+                    ConfigDecision::LoadNew { path }
+                } else {
+                    ConfigDecision::LoadLegacy
+                }
+            }
 
             // Permission error accessing mapper config directory
             (Err(err), _, _) | (_, Err(err), _) => ConfigDecision::PermissionError {

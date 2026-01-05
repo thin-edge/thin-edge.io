@@ -27,6 +27,22 @@ impl TEdgeConfig {
         config_location.load().await
     }
 
+    /// Load [TEdgeConfig], using a separate mapper config file as the default
+    /// behaviour if no clouds are already configured
+    ///
+    /// As of 2026-01-05, this is only used for testing how the new default will
+    /// work before we fully adopt the new format. When we do this, we should
+    /// probably also include `tedge-mapper config-migrate` commands in the
+    /// relevant package postinstall scripts.
+    #[cfg(feature = "test")]
+    pub async fn load_prefer_separate_mapper_config(
+        config_dir: impl AsRef<StdPath>,
+    ) -> Result<Self, TEdgeConfigError> {
+        let mut config_location = TEdgeConfigLocation::from_custom_root(config_dir.as_ref());
+        config_location.default_to_mapper_config_dir();
+        config_location.load().await
+    }
+
     pub async fn update_toml(
         self,
         update: &impl Fn(&mut TEdgeConfigDto, &TEdgeConfigReader) -> ConfigSettingResult<()>,
