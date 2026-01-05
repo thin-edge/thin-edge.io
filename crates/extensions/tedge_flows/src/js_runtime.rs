@@ -52,7 +52,7 @@ impl JsRuntime {
         let exports = self
             .load_file(script.module_name.to_owned(), script.path())
             .await?;
-        Self::set_exports(script, exports);
+        Self::set_exports(script, exports.as_slice());
         Ok(())
     }
 
@@ -62,13 +62,13 @@ impl JsRuntime {
         source: impl Into<Vec<u8>>,
     ) -> Result<(), LoadError> {
         let exports = self.load_js(script.module_name.to_owned(), source).await?;
-        Self::set_exports(script, exports);
+        Self::set_exports(script, exports.as_slice());
         Ok(())
     }
 
-    fn set_exports(script: &mut JsScript, exports: Vec<&str>) {
+    fn set_exports(script: &mut JsScript, exports: &[&str]) {
         for export in exports {
-            match export {
+            match *export {
                 "onMessage" => script.is_defined = true,
                 "onInterval" => script.is_periodic = true,
                 _ => (),
