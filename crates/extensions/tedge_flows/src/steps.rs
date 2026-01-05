@@ -6,6 +6,7 @@ use crate::FlowError;
 use crate::LoadError;
 use crate::Message;
 use camino::Utf8Path;
+use std::fmt::Display;
 use std::time::Duration;
 use std::time::SystemTime;
 use tokio::time::Instant;
@@ -29,12 +30,8 @@ impl FlowStep {
     /// This name is built after : the flow name, the script name (or builtin transformer)
     /// and the index that step among all the steps of the flow (so two instances of the same script
     /// in the same flow are given different instance name).
-    pub fn instance_name(flow: impl ToString, script: impl ToString, index: usize) -> String {
-        format!(
-            "{flow}|{index}|{script}",
-            flow = flow.to_string(),
-            script = script.to_string()
-        )
+    pub fn instance_name(flow: impl Display, script: impl Display, index: usize) -> String {
+        format!("{flow}|{index}|{script}")
     }
 
     pub fn new_script(script: JsScript) -> Self {
