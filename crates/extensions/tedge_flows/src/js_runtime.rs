@@ -52,7 +52,7 @@ impl JsRuntime {
         let exports = self
             .load_file(script.module_name.to_owned(), script.path())
             .await?;
-        Self::set_exports(script, exports.as_slice());
+        Self::set_exports(script, &exports);
         Ok(())
     }
 
@@ -62,7 +62,7 @@ impl JsRuntime {
         source: impl Into<Vec<u8>>,
     ) -> Result<(), LoadError> {
         let exports = self.load_js(script.module_name.to_owned(), source).await?;
-        Self::set_exports(script, exports.as_slice());
+        Self::set_exports(script, &exports);
         Ok(())
     }
 
