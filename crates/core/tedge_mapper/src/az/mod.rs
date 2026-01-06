@@ -1,4 +1,5 @@
 use std::time::SystemTime;
+use tedge_flows::ConfigError;
 use tedge_flows::FlowError;
 use tedge_flows::JsonValue;
 use tedge_flows::Message;
@@ -14,11 +15,14 @@ impl Transformer for SkipMosquittoHealthStatus {
         "skip-mosquitto-health-status"
     }
 
+    fn set_config(&mut self, _config: JsonValue) -> Result<(), ConfigError> {
+        Ok(())
+    }
+
     fn on_message(
         &self,
         _timestamp: SystemTime,
         message: &Message,
-        _config: &JsonValue,
     ) -> Result<Vec<Message>, FlowError> {
         // don't convert mosquitto bridge notification topic
         // https://github.com/thin-edge/thin-edge.io/issues/2236

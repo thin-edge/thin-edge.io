@@ -1,3 +1,4 @@
+use crate::config::ConfigError;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::js_value::JsonValue;
@@ -14,13 +15,12 @@ use tokio::time::Instant;
 /// A message transformation step
 pub struct FlowStep {
     handler: StepHandler,
-    pub(crate) config: JsonValue,
     interval: Duration,
     pub(crate) next_execution: Option<Instant>,
 }
 
 pub enum StepHandler {
-    JsScript(JsScript),
+    JsScript(JsScript, JsonValue),
     Transformer(String, Box<dyn Transformer>),
 }
 
@@ -35,9 +35,9 @@ impl FlowStep {
     }
 
     pub fn new_script(script: JsScript) -> Self {
+        let config = JsonValue::default();
         FlowStep {
-            handler: StepHandler::JsScript(script),
-            config: JsonValue::default(),
+            handler: StepHandler::JsScript(script, config),
             interval: Duration::ZERO,
             next_execution: None,
         }
@@ -46,26 +46,21 @@ impl FlowStep {
     pub fn new_transformer(instance_name: String, transformer: Box<dyn Transformer>) -> Self {
         FlowStep {
             handler: StepHandler::Transformer(instance_name, transformer),
-            config: JsonValue::default(),
             interval: Duration::ZERO,
             next_execution: None,
         }
     }
 
-    pub fn with_config(self, config: Option<serde_json::Value>) -> Self {
+    pub fn with_config(mut self, config: Option<serde_json::Value>) -> Result<Self, ConfigError> {
         if let Some(config) = config {
-            Self {
-                config: JsonValue::from(config),
-                ..self
-            }
-        } else {
-            self
-        }
+            self.handler.set_config(JsonValue::from(config))?
+        };
+        Ok(self)
     }
 
     pub fn with_interval(mut self, interval: Option<Duration>, flow: &str) -> Self {
         let is_periodic = match &self.handler {
-            StepHandler::JsScript(script) => script.is_periodic,
+            StepHandler::JsScript(script, _) => script.is_periodic,
             StepHandler::Transformer(_, builtin) => builtin.is_periodic(),
         };
         if !is_periodic && interval.is_some() {
@@ -87,7 +82,7 @@ impl FlowStep {
     /// Return source of this step (a path or a builtin transformer)
     pub fn source(&self) -> &str {
         match &self.handler {
-            StepHandler::JsScript(script) => script.path.as_str(),
+            StepHandler::JsScript(script, _) => script.path.as_str(),
             StepHandler::Transformer(_, builtin) => builtin.name(),
         }
     }
@@ -95,20 +90,20 @@ impl FlowStep {
     /// Return the path to the source file of this step (if any, i.e. if not builtin)
     pub fn path(&self) -> Option<&Utf8Path> {
         match &self.handler {
-            StepHandler::JsScript(script) => Some(&script.path),
+            StepHandler::JsScript(script, _) => Some(&script.path),
             StepHandler::Transformer(_, _) => None,
         }
     }
 
     pub fn step_name(&self) -> &str {
         match &self.handler {
-            StepHandler::JsScript(script) => &script.module_name,
+            StepHandler::JsScript(script, _) => &script.module_name,
             StepHandler::Transformer(instance_name, _) => instance_name,
         }
     }
 
     pub async fn load_script(&mut self, js: &mut JsRuntime) -> Result<(), LoadError> {
-        if let StepHandler::JsScript(script) = &mut self.handler {
+        if let StepHandler::JsScript(script, _) = &mut self.handler {
             js.load_script(script).await?;
             // FIXME: there is bug here when the updated version adds an on_interval method
             // This method will be ignored, because the interval is zero (because there no on_interval method before)
@@ -156,14 +151,10 @@ impl FlowStep {
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         match &self.handler {
-            StepHandler::JsScript(script) => {
-                script
-                    .on_message(js, timestamp, message, &self.config)
-                    .await
+            StepHandler::JsScript(script, config) => {
+                script.on_message(js, timestamp, message, config).await
             }
-            StepHandler::Transformer(_, builtin) => {
-                builtin.on_message(timestamp, message, &self.config)
-            }
+            StepHandler::Transformer(_, builtin) => builtin.on_message(timestamp, message),
         }
     }
 
@@ -178,8 +169,23 @@ impl FlowStep {
         timestamp: SystemTime,
     ) -> Result<Vec<Message>, FlowError> {
         match &self.handler {
-            StepHandler::JsScript(script) => script.on_interval(js, timestamp, &self.config).await,
-            StepHandler::Transformer(_, builtin) => builtin.on_interval(timestamp, &self.config),
+            StepHandler::JsScript(script, config) => {
+                script.on_interval(js, timestamp, config).await
+            }
+            StepHandler::Transformer(_, builtin) => builtin.on_interval(timestamp),
         }
+    }
+}
+
+impl StepHandler {
+    pub fn set_config(&mut self, config: JsonValue) -> Result<(), ConfigError> {
+        match self {
+            StepHandler::JsScript(_, ref mut c) => *c = config,
+            StepHandler::Transformer(_, ref mut builtin) => {
+                builtin.set_config(config)?;
+            }
+        }
+
+        Ok(())
     }
 }
