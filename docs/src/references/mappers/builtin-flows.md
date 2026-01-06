@@ -58,7 +58,7 @@ This file can be tuned using the `tedge config` command and the following settin
 For a change of one of these settings to be effective, the Azure mapper has to be restarted:
 ```
 $ sudo tedge config set az.mapper.timestamp_format rfc-3339
-$ sudo systemctl restart tedge-mapper-c8y
+$ sudo systemctl restart tedge-mapper-az
 ```
 :::
 
@@ -82,3 +82,6 @@ Finally, the builtin flow is disabled when replaced by a file with the same name
 # Disable the Azure mapper builtin flow:
 $ mv /etc/tedge/az/flows/mea.toml /etc/tedge/az/flows/mea.toml.disabled
 ```
+
+Alternatively, a builtin flow can be disabled by simply removing its definition
+and keeping the associated `.toml.template` file as a witness.
