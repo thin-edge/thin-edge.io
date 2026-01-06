@@ -10,19 +10,25 @@ import ProposalBanner from '@site/src/components/ProposalBanner'
 
 ## Concepts
 
-The behavior of the mappers provided out-of-the-box by %%te%% for Cumulocity, Azure and AWS, 
-is defined using [__tedge flows__](./flows.md) which definition can be adapted exactly as user defined flows:
+The out-of-the-box mappers for Cumulocity, Azure, and AWS are defined as [__tedge flows__](./flows.md).
+Their definitions can be customized in the same way as any user-defined flow.
 
-- The definitions of the builtin flows of a mapper are persisted on disk along the user provided flows for this mapper.
-- Each builtin flow is materialized by two files:
-  - a flow definition with a `.toml` extension, which can be updated by users and defines the behavior of the mapper
-  - a copy of the builtin definition with a `.toml.template` extension,
-    which is not supposed to be updated and can be used as a reference when the active definition is updated.
-- These flow definitions - user-defined or builtin, updated or not, define the message transformations applied by the mapper.
+- These definitions are persisted on disk alongside the user provided flows for this mapper
+- Each mapper generates two files:
+  - the builtin flow definition with a `.toml` extension
+  - a copy of the generated definition with a `.toml.template` extension
+
+  The builtin flow definition can be customised by the user.
+  The template is intended to be used as a reference when the builtin definition is updated.
+
+- This flow defines the message transformations applied by the mapper,
+  regardless of whether the user customises the behaviour
+
 - When updating a builtin flow, the user can:
   - Change step configurations
-  - Add, remove steps
-  - Combine builtin transformations with custom ones implemented in JavaScript.
+  - Add or remove steps
+  - Combine builtin transformations with custom ones implemented in JavaScript
+
 - A builtin flow can also be disabled and fully replaced by user-defined flows.
 
 :::note
@@ -63,9 +69,9 @@ $ sudo systemctl restart tedge-mapper-az
 :::
 
 This file can also be manually edited to:
-- change step configurations
-- add, remove steps
-- substitute a JavaScript implementation for the builtin transformation.
+- Change step configurations
+- Add or remove steps
+- Substitute a JavaScript implementation for the builtin transformation.
 
 :::note
 If the builtin flow is updated, then the Azure mapper will not override its content,
