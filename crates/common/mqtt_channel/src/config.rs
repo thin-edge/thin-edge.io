@@ -294,6 +294,18 @@ impl Config {
         }
     }
 
+    /// Set the random session name with prefix and clear the session
+    pub fn with_session_prefix(self, prefix: impl Into<String>) -> Self {
+        let random: String = std::iter::repeat_with(fastrand::lowercase)
+            .take(10)
+            .collect();
+        Self {
+            session_name: Some(format!("{}-{}", prefix.into(), random)),
+            clean_session: true,
+            ..self
+        }
+    }
+
     /// Unset the session name and clear the session
     pub fn with_no_session(self) -> Self {
         Self {

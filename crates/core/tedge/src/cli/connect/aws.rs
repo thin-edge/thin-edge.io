@@ -27,7 +27,7 @@ pub async fn check_device_status_aws(
 
     let mut mqtt_options = tedge_config
         .mqtt_config()?
-        .with_session_name(CLIENT_ID)
+        .with_session_prefix(CLIENT_ID)
         .rumqttc_options()?;
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
 
