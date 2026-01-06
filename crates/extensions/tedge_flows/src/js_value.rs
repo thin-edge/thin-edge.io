@@ -69,9 +69,9 @@ impl JsonValue {
         })
     }
 
-    pub fn number_property(&self, property: &str) -> Option<Number> {
+    pub fn number_property(&self, property: &str) -> Option<&Number> {
         self.property(property).and_then(|v| match v {
-            JsonValue::Number(n) => Some(n.clone()),
+            JsonValue::Number(n) => Some(n),
             _ => None,
         })
     }
