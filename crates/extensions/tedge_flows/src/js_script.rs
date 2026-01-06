@@ -198,11 +198,12 @@ export function onMessage(message, context) {
     }]
 }
         "#;
-        let (runtime, mut script) = runtime_with(js).await;
-        script.config = json!({
-            "topic": "te/device/main///m/collectd"
-        })
-        .into();
+        let (runtime, script) = runtime_with(js).await;
+        let script = script
+            .with_config(Some(json!({
+                "topic": "te/device/main///m/collectd"
+            })))
+            .unwrap();
 
         let input = Message::new(
             "collectd/h/memory/percent-used",

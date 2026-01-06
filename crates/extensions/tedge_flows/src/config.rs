@@ -105,6 +105,9 @@ pub enum ConfigError {
 
     #[error(transparent)]
     LoadError(#[from] LoadError),
+
+    #[error("Not a valid step configuration: {0}")]
+    IncorrectSetting(String),
 }
 
 impl FlowConfig {
@@ -219,7 +222,7 @@ impl StepConfig {
             }
         };
         let step = step
-            .with_config(self.config.clone())
+            .with_config(self.config.clone())?
             .with_interval(self.interval, flow.as_str());
         Ok(step)
     }

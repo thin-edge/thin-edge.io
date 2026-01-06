@@ -1,3 +1,4 @@
+use crate::config::ConfigError;
 use crate::js_value::JsonValue;
 use crate::FlowError;
 use crate::LoadError;
@@ -12,22 +13,19 @@ mod set_topic;
 pub trait Transformer: Send + Sync + 'static {
     fn name(&self) -> &str;
 
+    fn set_config(&mut self, config: JsonValue) -> Result<(), ConfigError>;
+
     fn on_message(
         &self,
         timestamp: SystemTime,
         message: &Message,
-        config: &JsonValue,
     ) -> Result<Vec<Message>, FlowError>;
 
     fn is_periodic(&self) -> bool {
         false
     }
 
-    fn on_interval(
-        &self,
-        _timestamp: SystemTime,
-        _config: &JsonValue,
-    ) -> Result<Vec<Message>, FlowError> {
+    fn on_interval(&self, _timestamp: SystemTime) -> Result<Vec<Message>, FlowError> {
         Ok(vec![])
     }
 }
@@ -36,9 +34,9 @@ pub trait TransformerBuilder: Send + Sync + 'static {
     fn new_instance(&self) -> Box<dyn Transformer>;
 }
 
-impl<T: Default + Clone + Transformer> TransformerBuilder for T {
+impl<T: Clone + Transformer> TransformerBuilder for T {
     fn new_instance(&self) -> Box<dyn Transformer> {
-        Box::new(Self::default().clone())
+        Box::new(self.clone())
     }
 }
 
@@ -51,9 +49,9 @@ impl Default for BuiltinTransformers {
         let mut transformers = BuiltinTransformers {
             transformers: HashMap::default(),
         };
-        transformers.register(add_timestamp::AddTimestamp);
-        transformers.register(cap_payload_size::CapPayloadSize);
-        transformers.register(set_topic::SetTopic);
+        transformers.register(add_timestamp::AddTimestamp::default());
+        transformers.register(cap_payload_size::CapPayloadSize::default());
+        transformers.register(set_topic::SetTopic::default());
         transformers
     }
 }
