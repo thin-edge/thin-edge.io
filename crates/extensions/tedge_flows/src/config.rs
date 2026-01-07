@@ -316,12 +316,14 @@ fn into_topic(name: String) -> Result<Topic, ConfigError> {
     Topic::new(&name).map_err(|_| ConfigError::IncorrectTopic(name))
 }
 
-fn topic_filters(patterns: Vec<String>) -> Result<TopicFilter, ConfigError> {
+pub(crate) fn topic_filters<S: AsRef<str> + ToString>(
+    patterns: Vec<S>,
+) -> Result<TopicFilter, ConfigError> {
     let mut topics = TopicFilter::empty();
     for pattern in patterns {
         topics
-            .try_add(pattern.as_str())
-            .map_err(|_| ConfigError::IncorrectTopicFilter(pattern.clone()))?;
+            .try_add(pattern.as_ref())
+            .map_err(|_| ConfigError::IncorrectTopicFilter(pattern.to_string()))?;
     }
     Ok(topics)
 }
