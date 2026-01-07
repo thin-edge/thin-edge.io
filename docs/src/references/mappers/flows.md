@@ -332,6 +332,12 @@ Filter out messages which payload is too large
 - Can be configured to `discard` the messages instead of raising an error (the latter being the default)
 - `{ builtin = "cap-payload-size", config = { max_size = 64000, discard = true }}`
 
+### `ignore-topics`
+
+Filter out messages with specific topics
+- Must be configured with a list of `topics` and topic filters to be ignored
+- `{ builtin = "ignore-topics", config.topics = ["te/device/main/service/mosquitto-c8y-bridge/#"] }`
+
 ### `set-topic`
 
 Assign a target topic to messages

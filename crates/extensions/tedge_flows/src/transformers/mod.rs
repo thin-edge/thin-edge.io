@@ -8,6 +8,7 @@ use std::time::SystemTime;
 
 mod add_timestamp;
 mod cap_payload_size;
+mod ignore_topics;
 mod set_topic;
 
 pub trait Transformer: Send + Sync + 'static {
@@ -51,6 +52,7 @@ impl Default for BuiltinTransformers {
         };
         transformers.register(add_timestamp::AddTimestamp::default());
         transformers.register(cap_payload_size::CapPayloadSize::default());
+        transformers.register(ignore_topics::IgnoreTopics::default());
         transformers.register(set_topic::SetTopic::default());
         transformers
     }
