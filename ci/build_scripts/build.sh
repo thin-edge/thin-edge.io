@@ -107,6 +107,7 @@ GLIBC_VERSION="${GLIBC_VERSION:-2.17}"
 RISCV_GLIBC_VERSION="${RISCV_GLIBC_VERSION:-2.27}"
 OVERRIDE_BINARIES=()
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
+ZIGLANG_BIN=()
 
 BUILD=1
 
@@ -188,14 +189,22 @@ install_zig_tools() {
     cargo $TOOLCHAIN install cargo-zigbuild --version ">=0.17.3"
 
     # Allow users to install zig by other package managers
+    ZIGLANG_BIN=(
+        zig
+    )
     if ! zig --help &>/dev/null; then
         if ! python3 -m ziglang --help &>/dev/null; then
             PIP_ROOT_USER_ACTION=ignore pip3 install ziglang --break-system-packages 2>/dev/null || PIP_ROOT_USER_ACTION=ignore pip3 install ziglang
         fi
+        ZIGLANG_BIN=(
+            python3
+            -m
+            ziglang
+        )
     fi
 
     # Display zig version to help with debugging
-    echo "zig version: $(zig version 2>/dev/null || python3 -m ziglang version 2>/dev/null ||:)"
+    echo "zig version: $("${ZIGLANG_BIN[@]}" version 2>/dev/null ||:)"
 }
 
 build() {
@@ -254,6 +263,18 @@ if [ -z "$ARTIFACT_DIR" ]; then
 fi
 mkdir -p "$ARTIFACT_DIR"
 
+check_clang_version() {
+    CLANG_MAJOR_VERSION=$(clang --version | head -n1 | sed -n 's/.*clang version \([0-9]*\).*/\1/p')
+    if [ -n "$CLANG_MAJOR_VERSION" ] && [ "$CLANG_MAJOR_VERSION" -lt 20 ]; then
+        # add llvm/clang folder to path to override the default Apple clang version which
+        # is older and doesn't support some targets like riscv
+        if command -V brew >/dev/null 2>&1; then
+            HOMEBREW_PATH=$(brew --prefix)
+            export PATH="$HOMEBREW_PATH/opt/llvm/bin:$PATH"
+        fi
+    fi
+}
+
 # build release for target
 # GIT_SEMVER should be referenced in the build.rs scripts
 if [ "$BUILD" = 1 ] && [ ${#BINARIES[@]} -gt 0 ]; then
@@ -274,9 +295,33 @@ if [ "$BUILD" = 1 ] && [ ${#BINARIES[@]} -gt 0 ]; then
         case "$BUILD_TOOL" in
             zig)
                 install_zig_tools
+                check_clang_version
 
                 case "$BINARY_TARGET" in
+                    riscv64gc-unknown-linux-musl)
+                        # find ziglang includes files and provide the paths to bindgen otherwise the
+                        # rquickjs bindgen build step will fail due to missing dependencies
+                        ZIGLANG_LIB_DIR=$("${ZIGLANG_BIN[@]}" env | awk -F"\"" '/.lib_dir/ {print $2}')
+                        
+                        # Explicitly set the target due to a different between rust and bindgen targets for riscv64
+                        # note: BINDGEN_EXTRA_CLANG_ARGS is used instead of the target specific bindgen env variable
+                        # as it is not respected
+                        export BINDGEN_EXTRA_CLANG_ARGS="
+                            --target=riscv64-unknown-linux-musl
+                            -I\"$ZIGLANG_LIB_DIR/libc/include/riscv-linux-gnu\"
+                            -I\"$ZIGLANG_LIB_DIR/libc/include/generic-glibc\"
+                            "
+                        ;;
                     riscv64gc-unknown-linux-gnu)
+                        # Explicitly set the target due to a different between rust and bindgen targets for riscv64
+                        # note: BINDGEN_EXTRA_CLANG_ARGS is used instead of the target specific bindgen env variable
+                        # as it is not respected
+                        ZIGLANG_LIB_DIR=$("${ZIGLANG_BIN[@]}" env | awk -F"\"" '/.lib_dir/ {print $2}')
+                        export BINDGEN_EXTRA_CLANG_ARGS="
+                            --target=riscv64-unknown-linux-gnu
+                            -I\"$ZIGLANG_LIB_DIR/libc/include/riscv-linux-gnu\"
+                            -I\"$ZIGLANG_LIB_DIR/libc/include/generic-glibc\"
+                            "
                         # riscv is a newer processor so the minimum glibc version is higher than for other targets
                         if [ -n "$RISCV_GLIBC_VERSION" ]; then
                             BINARY_TARGET="${BINARY_TARGET}.${RISCV_GLIBC_VERSION}"
