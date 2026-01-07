@@ -18,6 +18,10 @@ tedge_connect_test_positive
     ${output}=    Execute Command    sudo tedge connect c8y --test    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Connection check to c8y cloud is successful.
 
+Multiple tedge connect test processes can run concurrently
+    [Tags]    \#3907
+    Execute Command    sudo tedge connect c8y --test & sudo tedge connect c8y --test    timeout=5
+
 Non-root users should be able to read the mosquitto configuration files #2154
     [Tags]    \#2154
     Execute Command    sudo tedge connect c8y || true

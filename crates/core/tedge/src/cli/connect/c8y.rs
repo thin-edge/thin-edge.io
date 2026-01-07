@@ -199,8 +199,7 @@ pub(crate) async fn check_device_status_c8y(
 
     let mut mqtt_options = tedge_config
         .mqtt_config()?
-        .with_session_name(CLIENT_ID)
-        .with_clean_session(true)
+        .with_session_prefix(CLIENT_ID)
         .rumqttc_options()?;
 
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
@@ -323,8 +322,7 @@ pub(crate) async fn get_connected_c8y_url(
 
     let mut mqtt_options = tedge_config
         .mqtt_config()?
-        .with_session_name(CLIENT_ID)
-        .with_clean_session(true)
+        .with_session_prefix(CLIENT_ID)
         .rumqttc_options()?;
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
 
