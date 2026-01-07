@@ -316,6 +316,25 @@ The following builtin objects are exported:
 
 ## Builtin transformations
 
-- `{ builtin = "set-topic" }`: assign a topic to messages
-- `{ builtin = "add-timestamp" }`: add a timestamp to JSON messages
-- `{ builtin = "cap-payload-size" }`: filter out messages which payload is too large
+### `set-topic`
+
+Assign a topic to messages
+- Must be configured with the `topic` to be assigned.
+- `{ builtin = "set-topic", config.topic = "c8y/measurement/measurements/create" }`
+
+### `add-timestamp`
+
+Add a timestamp to JSON messages
+- The `format` to be used is either `unix` (the default) or `rfc3339`.
+- Unless specified otherwise the name for the added timestamp `property` is `time`.
+- When the input message already has a timestamp property the default is to let it unchanged.
+  This can be changed with the `reformat` config so any timestamp is reformated to the requested format. 
+- `{ builtin = "add-timestamp", config = { format = "rfc3339", reformat = true }}`
+
+### `cap-payload-size`
+
+Filter out messages which payload is too large
+- Must be configured with the `max_size` for the messages
+- Can be configured to `discard` the messages instead of raising an error (the latter being the default)
+- Expect a single configuration setting, the `topic` to be assigned
+- `{ builtin = "cap-payload-size", config = { max_size = 64000, discard = true }}`
