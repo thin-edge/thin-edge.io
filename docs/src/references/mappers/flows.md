@@ -316,12 +316,6 @@ The following builtin objects are exported:
 
 ## Builtin transformations
 
-### `set-topic`
-
-Assign a topic to messages
-- Must be configured with the `topic` to be assigned.
-- `{ builtin = "set-topic", config.topic = "c8y/measurement/measurements/create" }`
-
 ### `add-timestamp`
 
 Add a timestamp to JSON messages
@@ -338,3 +332,9 @@ Filter out messages which payload is too large
 - Can be configured to `discard` the messages instead of raising an error (the latter being the default)
 - Expect a single configuration setting, the `topic` to be assigned
 - `{ builtin = "cap-payload-size", config = { max_size = 64000, discard = true }}`
+
+### `set-topic`
+
+Assign a topic to messages
+- Must be configured with the `topic` to be assigned.
+- `{ builtin = "set-topic", config.topic = "c8y/measurement/measurements/create" }`
