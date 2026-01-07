@@ -279,8 +279,12 @@ linux*)
   if [ -n "$use_clang" ]; then
     ubuntu_codename=$(lsb_release --codename --short)
     llvm_version=20
-    sudo apt-key add mk/llvm-snapshot.gpg.key
-    sudo add-apt-repository "deb http://apt.llvm.org/$ubuntu_codename/ llvm-toolchain-$ubuntu_codename-$llvm_version main"
+    # Import GPG key
+    sudo mkdir -p /usr/share/keyrings
+    cat mk/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-snapshot.gpg
+    # Add repository to sources.list.d
+    echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/$ubuntu_codename/ llvm-toolchain-$ubuntu_codename-$llvm_version main" | \
+      sudo tee /etc/apt/sources.list.d/llvm-toolchain.list > /dev/null
     sudo apt-get update
     install_packages clang-$llvm_version llvm-$llvm_version
   fi
