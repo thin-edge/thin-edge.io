@@ -18,8 +18,7 @@ Publish events to subscribed topic
 
 Publish measurements to unsubscribed topic
     Execute Command    tedge mqtt pub te/device/main///m/measurement-type '{"temperature": 30}'
-    Sleep    5s    reason=If a message is not published in 5s, it will never be published.
-    Should Have MQTT Messages    aws/td/device:main/m/measurement-type    minimum=0    maximum=0
+    Should Not Have MQTT Messages    aws/td/device:main/m/measurement-type
 
 
 *** Keywords ***
