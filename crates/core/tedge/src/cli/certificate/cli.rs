@@ -34,7 +34,15 @@ use tracing::debug;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeCertCli {
-    /// Create a self-signed device certificate
+    /// Create a self-signed device certificate.
+    ///
+    /// This command creates the device certificate and private key, and persists them, if they
+    /// don't already exist.
+    ///
+    /// If thin-edge is configured to use private key from an HSM (see
+    /// https://thin-edge.github.io/thin-edge.io/references/hsm-support), the key needs to be
+    /// present on the token (see `tedge cert create-key-hsm` command if you need to create it) and
+    /// selected. After invoking the command, only the new certificate will be persisted.
     Create {
         /// The device identifier to be used as the common name for the certificate
         #[clap(long = "device-id", global = true)]

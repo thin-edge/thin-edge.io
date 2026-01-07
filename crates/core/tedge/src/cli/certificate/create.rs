@@ -2,6 +2,8 @@ use super::error::CertError;
 use crate::cli::certificate::show::ShowCertCmd;
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use crate::warning;
+use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
@@ -11,11 +13,14 @@ use certificate::PemCertificate;
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use tedge_config::tedge_toml::DynCloudConfig;
 use tedge_config::TEdgeConfig;
+use tedge_p11_server::CryptokiConfig;
 use tokio::fs::File;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use tracing::debug;
+use tracing::instrument;
 
 /// Create a self-signed device certificate
 pub struct CreateCertCmd {
@@ -42,8 +47,17 @@ impl Command for CreateCertCmd {
         format!("create a test certificate for the device {}.", self.id)
     }
 
-    async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        self.create_test_certificate(&self.csr_template).await?;
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        let cryptoki = config.device.cryptoki_config(None::<&DynCloudConfig>)?;
+        match cryptoki {
+            None => {
+                self.create_test_certificate(&self.csr_template).await?;
+            }
+            Some(c) => {
+                self.create_test_certificate_with_hsm(&self.csr_template, c)
+                    .await?;
+            }
+        }
         eprintln!("Certificate created successfully");
         eprintln!("    => the certificate has to be uploaded to the cloud");
         eprintln!("    => before the device can be connected\n");
@@ -53,8 +67,8 @@ impl Command for CreateCertCmd {
 }
 
 impl CreateCertCmd {
-    pub async fn create_test_certificate(&self, config: &CsrTemplate) -> Result<(), CertError> {
-        let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id, &KeyKind::New)?;
+    pub async fn create_test_certificate(&self, template: &CsrTemplate) -> Result<(), CertError> {
+        let cert = KeyCertPair::new_selfsigned_certificate(template, &self.id, &KeyKind::New)?;
 
         let cert_path = &self.cert_path;
         persist_new_public_key(
@@ -75,6 +89,44 @@ impl CreateCertCmd {
         )
         .await
         .map_err(|err| err.key_context(key_path.clone()))?;
+
+        Ok(())
+    }
+
+    /// Create a self-signed certificate using an HSM (Cryptoki).
+    ///
+    /// Using this method, the keypair needs to be already present on the HSM. After CSR is generated and signed by the
+    /// HSM, we persist only the certificate.
+    #[instrument(skip(self))]
+    pub async fn create_test_certificate_with_hsm(
+        &self,
+        template: &CsrTemplate,
+        cryptoki: CryptokiConfig,
+    ) -> Result<(), CertError> {
+        let key_kind = KeyKind::from_cryptoki(cryptoki.clone(), None)
+            .context("can't use HSM private key to sign the certificate")
+            .inspect_err(|e| {
+                let e = format!("{e:#}");
+                // TODO: replace string comparisons with proper error type comparisons once those are implemented
+                if e.contains("Didn't find a slot to use") || e.contains("Failed to find a key") {
+                    warning!("When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge cert create-key-hsm` to create the key first.");
+                }
+            })?;
+
+        let cert = KeyCertPair::new_selfsigned_certificate(template, &self.id, &key_kind)?;
+
+        let cert_path = &self.cert_path;
+        persist_new_public_key(
+            cert_path,
+            cert.certificate_pem_string()?,
+            &self.user,
+            &self.group,
+        )
+        .await
+        .map_err(|err| err.cert_context(cert_path.clone()))?;
+
+        debug!("Using HSM, not persisting private key to the filesystem");
+
         Ok(())
     }
 }
