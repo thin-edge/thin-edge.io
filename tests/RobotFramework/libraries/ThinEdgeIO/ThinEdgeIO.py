@@ -1005,6 +1005,76 @@ class ThinEdgeIO(DeviceLibrary):
         )
         return result
 
+    @keyword("Should Not Have MQTT Messages")
+    def mqtt_should_not_have_topic(
+        self,
+        topic: str,
+        date_from: Optional[timestamp.Timestamp] = None,
+        date_to: Optional[timestamp.Timestamp] = None,
+        message_pattern: Optional[str] = None,
+        message_contains: Optional[str] = None,
+        wait_seconds: int = 2,
+        **kwargs,
+    ) -> List[str]:
+        """
+        Verify that NO MQTT messages exist matching the given criteria.
+
+        This keyword asserts that there are zero messages on the specified topic
+        that match the given filters. It will fail if any matching messages are found.
+
+        IMPORTANT: This keyword waits for `wait_seconds` before checking messages to ensure
+        that any in-flight messages have been published and logged. This prevents race
+        conditions where messages are still being processed.
+
+        Note: If any argument is set to None, then it will be ignored in the filtering.
+
+        Args:
+            topic (str): Filter by topic. Supports MQTT wildcard patterns
+            date_from (timestamp.Timestamp, optional): Date from filter. Accepts
+                relative or epoch time. If not specified, defaults to the test start time.
+            date_to (timestamp.Timestamp, optional): Date to filter. Accepts
+                relative or epoch time
+            message_pattern (str, optional): Only include MQTT messages matching a regular expression
+            message_contains (str, optional): Only include MQTT messages containing a given string
+            wait_seconds (int, optional): Time in seconds to wait before checking messages.
+                Defaults to 2 seconds. This ensures any in-flight messages have time to be
+                published and logged.
+
+        Returns:
+            List[str]: Empty list (always returns empty list when assertion passes)
+
+        *Examples:*
+
+        Verify no messages on a specific topic:
+        | `Should Not Have MQTT Messages` | topic=tedge/${CHILD_SN}/commands/req/config_snapshot |
+
+        Verify no messages in a time window:
+        | `Should Not Have MQTT Messages` | topic=te/device/main/service/tedge-agent/status/health | date_from=-5s |
+
+        Verify no messages containing specific text:
+        | `Should Not Have MQTT Messages` | topic=te/# | message_contains="error" |
+
+        Verify no messages matching a pattern:
+        | `Should Not Have MQTT Messages` | topic=te/# | message_pattern="status.*down" |
+
+        Verify no messages with custom wait time:
+        | `Should Not Have MQTT Messages` | topic=te/# | message_contains="error" | wait_seconds=5 |
+        """
+        # Wait to ensure any in-flight messages have been published and logged
+        time.sleep(wait_seconds)
+
+        result = self._assert_mqtt_topic_messages(
+            topic,
+            date_from=date_from,
+            date_to=date_to,
+            minimum=0,
+            maximum=0,
+            message_pattern=message_pattern,
+            message_contains=message_contains,
+            **kwargs,
+        )
+        return result
+
     @keyword("Should Have Retained MQTT Messages")
     def should_have_retained_mqtt_messages(
         self,

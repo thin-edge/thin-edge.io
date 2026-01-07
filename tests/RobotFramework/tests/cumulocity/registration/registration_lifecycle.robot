@@ -378,54 +378,38 @@ Entities persisted and restored
         Should Be Equal    ${last_modified_time}    ${original_last_modified_time}
 
         # Assert that the restored entities are not converted again
-        Should Have MQTT Messages
+        Should Not Have MQTT Messages
         ...    c8y/s/us
         ...    message_contains=101
         ...    date_from=${timestamp}
-        ...    minimum=0
-        ...    maximum=0
-        Should Have MQTT Messages
+        Should Not Have MQTT Messages
         ...    c8y/s/us/${DEVICE_SN}:school:shop:plc1
         ...    message_contains=101
         ...    date_from=${timestamp}
-        ...    minimum=0
-        ...    maximum=0
-        Should Have MQTT Messages
+        Should Not Have MQTT Messages
         ...    c8y/s/us/${DEVICE_SN}:school:shop:plc1:sensor1
         ...    message_contains=102
         ...    date_from=${timestamp}
-        ...    minimum=0
-        ...    maximum=0
-        Should Have MQTT Messages
+        Should Not Have MQTT Messages
         ...    c8y/s/us/${DEVICE_SN}:school:shop:plc1:metrics
         ...    message_contains=102
         ...    date_from=${timestamp}
-        ...    minimum=0
-        ...    maximum=0
-        Should Have MQTT Messages
+        Should Not Have MQTT Messages
         ...    c8y/s/us/${prefix}plc1
         ...    message_contains=101
         ...    date_from=${timestamp}
-        ...    minimum=0
-        ...    maximum=0
-        Should Have MQTT Messages
+        Should Not Have MQTT Messages
         ...    c8y/s/us/${prefix}plc2
         ...    message_contains=101
         ...    date_from=${timestamp}
-        ...    minimum=0
-        ...    maximum=0
-        Should Have MQTT Messages
+        Should Not Have MQTT Messages
         ...    c8y/s/us/${prefix}plc1
         ...    message_contains=102
         ...    date_from=${timestamp}
-        ...    minimum=0
-        ...    maximum=0
-        Should Have MQTT Messages
+        Should Not Have MQTT Messages
         ...    c8y/s/us/${prefix}plc2
         ...    message_contains=102
         ...    date_from=${timestamp}
-        ...    minimum=0
-        ...    maximum=0
     END
 
 Entities send to cloud on restart

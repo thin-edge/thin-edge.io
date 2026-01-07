@@ -33,11 +33,9 @@ Run shell custom operation for main device and do not publish the status
 
     Operation Should Be PENDING    ${operation}
 
-    Should Have MQTT Messages
+    Should Not Have MQTT Messages
     ...    c8y/s/us
     ...    message_pattern=^(504|505|506),[0-9]+($|,\\"helloworld2\n\\")
-    ...    minimum=0
-    ...    maximum=0
 
 Run arbitrary shell command
     # See https://github.com/thin-edge/thin-edge.io/issues/3186
