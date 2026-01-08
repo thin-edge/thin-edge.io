@@ -49,7 +49,6 @@ Certificate Renewal with Cloud Profiles
     ...    infrastructure
     [Setup]    Setup With Cumulocity CA Certificate
     ${DEVICE_SN_2}=    Set Variable    ${DEVICE_SN}_2
-    ThinEdgeIO.Register Device With Cumulocity CA    external_id
     ${credentials}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN_2}
 
     Set Cumulocity URLs    profile=customer
