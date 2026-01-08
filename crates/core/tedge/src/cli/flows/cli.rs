@@ -117,7 +117,7 @@ impl BuildCommand for TEdgeFlowsCli {
 
 impl TEdgeFlowsCli {
     fn default_flows_dir(config: &TEdgeConfig) -> Utf8PathBuf {
-        config.root_dir().join("flows")
+        tedge_flows::default_flows_dir(config.root_dir())
     }
 
     pub async fn load_flows(

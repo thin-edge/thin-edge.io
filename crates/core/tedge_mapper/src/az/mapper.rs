@@ -95,7 +95,8 @@ impl TEdgeComponent for AzureMapper {
             az_config.mapper.mqtt.max_payload_size.0,
             az_config.topics.to_string(),
         );
-        let flows_dir = config_dir.join(prefix.as_str()).join("flows");
+        let flows_dir =
+            tedge_flows::flows_dir(config_dir, "az", self.profile.as_ref().map(|p| p.as_ref()));
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
         flows.register_builtin(SkipMosquittoHealthStatus);
         flows

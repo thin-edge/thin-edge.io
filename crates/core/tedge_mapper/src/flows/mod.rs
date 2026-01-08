@@ -20,7 +20,7 @@ impl TEdgeComponent for GenMapper {
 
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();
-        let flows_dir = config_dir.join("flows");
+        let flows_dir = tedge_flows::default_flows_dir(config_dir);
         let flows = ConnectedFlowRegistry::new(flows_dir);
         let mut flows_mapper = FlowsMapperBuilder::try_new(flows).await?;
         flows_mapper.connect(&mut mqtt_actor);

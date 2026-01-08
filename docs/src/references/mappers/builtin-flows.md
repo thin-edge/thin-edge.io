@@ -37,7 +37,7 @@ Currently, only the Azure mapper is defined using flows.
 
 ## The Azure mapper
 
-The Azure mapper behavior is defined by a builtin flow located at `/etc/tedge/az/flows/mea.toml`:
+The Azure mapper behavior is defined by a builtin flow located at `/etc/tedge/mappers/az/flows/mea.toml`:
 
 ```toml
 input.mqtt.topics = ["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
@@ -76,17 +76,17 @@ This file can also be manually edited to:
 :::note
 If the builtin flow is updated, then the Azure mapper will not override its content,
 even if some `tedge config` settings have been updated. In such a case, the Azure mapper only
-update its flow template, i.e. the file `/etc/tedge/az/flows/mea.toml.template`.
+update its flow template, i.e. the file `/etc/tedge/mappers/az/flows/mea.toml.template`.
 :::
 
-If other flow definitions are provided along the builtin flow in the `/etc/tedge/az/flows/` directory,
+If other flow definitions are provided along the builtin flow in the `/etc/tedge/mappers/az/flows/` directory,
 then these flows are loaded by the Azure mapper.
 
 Finally, the builtin flow is disabled when replaced by a file with the same name and a `.toml.disabled` extension
 
 ```
 # Disable the Azure mapper builtin flow:
-$ mv /etc/tedge/az/flows/mea.toml /etc/tedge/az/flows/mea.toml.disabled
+$ mv /etc/tedge/mappers/az/flows/mea.toml /etc/tedge/mappers/az/flows/mea.toml.disabled
 ```
 
 Alternatively, a builtin flow can be disabled by simply removing its definition
