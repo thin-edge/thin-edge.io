@@ -280,12 +280,23 @@ linux*)
     ubuntu_codename=$(lsb_release --codename --short)
     llvm_version=20
     # Import GPG key
+    # check if gpg file already exists and is identical
+    TMP_GPG_FILE=$(mktemp) 
+    cat mk/llvm-snapshot.gpg.key | gpg --yes --dearmor -o "$TMP_GPG_FILE"
+    if ! cmp --silent "$TMP_GPG_FILE" /usr/share/keyrings/llvm-snapshot.gpg; then
     sudo mkdir -p /usr/share/keyrings
-    cat mk/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-snapshot.gpg
+      sudo mv "$TMP_GPG_FILE" /usr/share/keyrings/llvm-snapshot.gpg
+      sudo chmod 0644 /usr/share/keyrings/llvm-snapshot.gpg
+    else
+      rm -f "$TMP_GPG_FILE"
+    fi
     # Add repository to sources.list.d
+    SOURCE_FILE="/etc/apt/sources.list.d/llvm-${llvm_version}-toolchain.list"
+    if [ ! -f "$SOURCE_FILE" ]; then
     echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/$ubuntu_codename/ llvm-toolchain-$ubuntu_codename-$llvm_version main" | \
-      sudo tee /etc/apt/sources.list.d/llvm-toolchain.list > /dev/null
-    sudo apt-get update
+        sudo tee "$SOURCE_FILE" > /dev/null
+    fi
+    sudo apt-get update -y
     install_packages clang-$llvm_version llvm-$llvm_version
   fi
   ;;
