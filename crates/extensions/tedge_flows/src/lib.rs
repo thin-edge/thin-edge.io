@@ -52,6 +52,21 @@ pub use transformers::Transformer;
 
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 
+pub fn default_flows_dir(tedge_config_dir: &Utf8Path) -> Utf8PathBuf {
+    flows_dir(tedge_config_dir, "flows", None)
+}
+
+pub fn flows_dir(tedge_config_dir: &Utf8Path, mapper: &str, profile: Option<&str>) -> Utf8PathBuf {
+    let profiled_name = match profile {
+        None => mapper.to_string(),
+        Some(profile) => format!("{mapper}.{profile}"),
+    };
+    tedge_config_dir
+        .join("mappers")
+        .join(profiled_name)
+        .join("flows")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Tick;
 

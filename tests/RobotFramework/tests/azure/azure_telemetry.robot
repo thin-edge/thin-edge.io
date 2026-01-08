@@ -160,12 +160,12 @@ Update builtin az mapper flows
 
 Updated builtin flows should not be overridden by the az mapper
     # By default the az mapper reformat timestamps which format is not the configured one
-    Execute Command    cmd=grep 'reformat = true' /etc/tedge/az/flows/mea.toml
+    Execute Command    cmd=grep 'reformat = true' /etc/tedge/mappers/az/flows/mea.toml
     # Update the az mapper so message timestamps are not reformated
     Update Builtin Flow    updated_mea.toml
     # Restarting the mapper should not override the user-provided flow
     Execute Command    sudo systemctl restart tedge-mapper-az.service
-    Execute Command    cmd=grep 'reformat = false' /etc/tedge/az/flows/mea.toml
+    Execute Command    cmd=grep 'reformat = false' /etc/tedge/mappers/az/flows/mea.toml
     [Teardown]    Restore Builtin Flow
 
 Disable builtin az mapper flows
@@ -193,11 +193,11 @@ Custom Teardown
 
 Update Builtin Flow
     [Arguments]    ${flow_definition}
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/${flow_definition}    /etc/tedge/az/flows/mea.toml
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/${flow_definition}    /etc/tedge/mappers/az/flows/mea.toml
 
 Disable Builtin Flow
-    Execute Command    mv /etc/tedge/az/flows/mea.toml /etc/tedge/az/flows/mea.toml.disabled
+    Execute Command    mv /etc/tedge/mappers/az/flows/mea.toml /etc/tedge/mappers/az/flows/mea.toml.disabled
 
 Restore Builtin Flow
-    Execute Command    cp /etc/tedge/az/flows/mea.toml.template /etc/tedge/az/flows/mea.toml
-    Execute Command    rm -f /etc/tedge/az/flows/mea.toml.disabled
+    Execute Command    cp /etc/tedge/mappers/az/flows/mea.toml.template /etc/tedge/mappers/az/flows/mea.toml
+    Execute Command    rm -f /etc/tedge/mappers/az/flows/mea.toml.disabled
