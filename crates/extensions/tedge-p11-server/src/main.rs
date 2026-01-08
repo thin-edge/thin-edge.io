@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use camino::Utf8PathBuf;
+use clap::crate_version;
 use clap::Parser;
 use serde::Deserialize;
 use tedge_p11_server::CryptokiConfigDirect;
@@ -241,6 +242,9 @@ async fn main() -> anyhow::Result<()> {
     yansi::whenever(USE_COLOR);
 
     let args = Args::parse();
+
+    info!("Starting tedge-p11-server {}", crate_version!());
+
     let config = try_read_config(args).await?;
     let cryptoki_config = CryptokiConfigDirect {
         module_path: config.module_path,

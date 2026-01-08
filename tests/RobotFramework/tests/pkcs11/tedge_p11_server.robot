@@ -88,6 +88,11 @@ Warn the user if tedge.toml cannot be parsed
     ...    error=PKCS #11 service failed: Failed to find a key
     Execute Command    cmd=tedge config unset c8y.device.key_uri
 
+Prints version on startup
+    Restart Service    tedge-p11-server
+    ${stdout}=    Execute Command    tedge-p11-server --version    strip=True
+    Logs Should Contain    Starting ${stdout}
+
 
 *** Keywords ***
 Custom Setup
