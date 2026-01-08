@@ -41,8 +41,6 @@ mod default_location_mode {
     use super::*;
 
     mod prefers_tedge_toml {
-        use tedge_config::models::CloudType;
-
         use super::*;
 
         #[tokio::test]
@@ -81,7 +79,7 @@ mod default_location_mode {
 
             let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
             tedge_config
-                .migrate_mapper_config(CloudType::C8y)
+                .migrate_mapper_configs()
                 .await
                 .unwrap();
 

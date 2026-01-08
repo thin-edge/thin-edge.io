@@ -18,7 +18,7 @@ Tedge Config Get Works With Migrated C8y Config
     [Documentation]    Verify tedge config get returns values from migrated config
     # Setup and migrate
     Setup Test Config    c8y    test.c8y.io
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: Config get works
     ${url}=    Execute Command    tedge config get c8y.url
@@ -29,7 +29,7 @@ Tedge Config List Shows Migrated C8y Config
     # Setup and migrate
     Setup Test Config    c8y    test.c8y.io
     Execute Command    sudo tedge config set c8y.topics "te/+/+/+/+/e/+"
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: Config list shows migrated values
     ${list}=    Execute Command    tedge config list
@@ -40,7 +40,7 @@ Tedge Config Get Works With C8y Profile
     [Documentation]    Verify tedge config get works with profiled config
     # Setup and migrate profiled config
     Setup Test Config    c8y    production.c8y.io    profile=production
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: Profile config get works
     ${url}=    Execute Command    tedge config get c8y.profiles.production.url
@@ -50,7 +50,7 @@ Tedge Config Set Works With Migrated C8y Config
     [Documentation]    Verify tedge config set updates the migrated config file
     # Setup and migrate
     Setup Test Config    c8y    test.c8y.io
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Set a new value
     Execute Command    sudo tedge config set c8y.url updated.c8y.io
@@ -67,7 +67,7 @@ Tedge Config Unset Works With Migrated C8y Config
     # Setup with topics and migrate
     Setup Test Config    c8y    test.c8y.io
     Execute Command    sudo tedge config set c8y.topics "te/+/+/+/+/e/+"
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Unset topics
     Execute Command    sudo tedge config unset c8y.topics
@@ -81,7 +81,7 @@ Tedge Config Add Works With Migrated C8y Config
     [Documentation]    Verify tedge config add updates array values in migrated config
     # Setup and migrate
     Setup Test Config    c8y    test.c8y.io
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Add smartrest templates
     Execute Command    sudo tedge config add c8y.smartrest.templates template1
@@ -99,7 +99,7 @@ Tedge Config Remove Works With Migrated C8y Config
     Setup Test Config    c8y    test.c8y.io
     Execute Command    sudo tedge config add c8y.smartrest.templates template1
     Execute Command    sudo tedge config add c8y.smartrest.templates template2
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Remove one template
     Execute Command    sudo tedge config remove c8y.smartrest.templates template1
@@ -114,7 +114,7 @@ Tedge Config Set Works With C8y Profile
     [Documentation]    Verify tedge config set works with profiled config
     # Setup and migrate profiled config
     Setup Test Config    c8y    production.c8y.io    profile=production
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Set a new value for profile
     Execute Command    sudo tedge config set c8y.profiles.production.url updated.c8y.io
@@ -126,7 +126,7 @@ Tedge Config Set Works For Non-Cloud Settings
     [Documentation]    Verify tedge config set still works for non-cloud settings
     # Setup and migrate
     Setup Test Config    c8y    test.c8y.io
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Non-cloud config should still work
     Execute Command    sudo tedge config set device.type custom-device
@@ -146,7 +146,7 @@ Tedge Config Set Works Before And After Migration
     Should Be Equal As Strings    ${url}    before-migration.c8y.io\n
 
     # Migrate
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: Still works after migration
     Execute Command    sudo tedge config set c8y.url after-migration.c8y.io
@@ -161,8 +161,7 @@ Tedge Config Works With Multiple Migrated Clouds
     # Setup and migrate c8y and az
     Setup Test Config    c8y    test.c8y.io
     Setup Test Config    az    test.azure.com
-    Migrate Cloud Config    c8y
-    Migrate Cloud Config    az
+    Migrate Cloud Configs
 
     # Verify: Both can be read
     ${c8y_url}=    Execute Command    tedge config get c8y.url
@@ -181,7 +180,7 @@ Tedge Config Set Works With Migrated Azure Config
     [Documentation]    Spot-check: Verify config set works for migrated Azure config
     # Setup and migrate
     Setup Test Config    az    test.azure.com
-    Migrate Cloud Config    az
+    Migrate Cloud Configs
 
     # Set new value
     Execute Command    sudo tedge config set az.url updated.azure.com
@@ -193,7 +192,7 @@ Tedge Config Set Works With Migrated AWS Config
     [Documentation]    Spot-check: Verify config set works for migrated AWS config
     # Setup and migrate
     Setup Test Config    aws    test.amazonaws.com
-    Migrate Cloud Config    aws
+    Migrate Cloud Configs
 
     # Set new value
     Execute Command    sudo tedge config set aws.url updated.amazonaws.com

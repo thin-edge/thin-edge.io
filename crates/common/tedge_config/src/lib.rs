@@ -17,7 +17,9 @@ pub use tedge_toml::tedge_config_location::*;
 pub use camino::Utf8Path as Path;
 pub use camino::Utf8PathBuf as PathBuf;
 pub use certificate::CertificateError;
+use models::CloudType;
 use std::path::Path as StdPath;
+use strum::IntoEnumIterator;
 pub use tedge_config_macros::all_or_nothing;
 pub use tedge_config_macros::OptionalConfig;
 
@@ -50,11 +52,11 @@ impl TEdgeConfig {
         self.location().update_toml(update).await
     }
 
-    pub async fn migrate_mapper_config(
-        self,
-        cloud_type: models::CloudType,
-    ) -> Result<(), TEdgeConfigError> {
-        self.location().migrate_mapper_config(cloud_type).await
+    pub async fn migrate_mapper_configs(self) -> Result<(), TEdgeConfigError> {
+        for cloud_type in CloudType::iter() {
+            self.location().migrate_mapper_config(cloud_type).await?;
+        }
+        Ok(())
     }
 
     #[cfg(feature = "test")]

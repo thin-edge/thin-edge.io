@@ -1,5 +1,5 @@
 *** Settings ***
-Documentation       Test tedge-mapper migrate-config command functionality
+Documentation       Test tedge config upgrade command functionality
 
 Resource            ../../resources/common.resource
 Resource            ./mapper_migration.resource
@@ -20,7 +20,7 @@ Migrate C8y Config Default Profile
     Setup Test Config    c8y    test.c8y.io
 
     # Execute migration
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: Config file created
     Verify Mapper Config File Exists    c8y
@@ -35,7 +35,7 @@ Migrate C8y Named Profile
     Setup Test Config    c8y    production.c8y.io    profile=production
 
     # Execute migration
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: Profile config file created in .d directory
     Verify Mapper Config File Exists    c8y    profile=production
@@ -55,7 +55,7 @@ Migrate Multiple C8y Profiles
     Setup Test Config    c8y    test.c8y.io    profile=test
 
     # Execute migration
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: All three config files created
     Verify Mapper Config File Exists    c8y
@@ -71,10 +71,10 @@ Migration Is Idempotent
     [Documentation]    Verify migration can be run multiple times safely
     # Setup and first migration
     Setup Test Config    c8y    test.c8y.io
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Run migration again
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: Still works correctly
     Verify Mapper Config File Exists    c8y
@@ -87,7 +87,7 @@ Migration Preserves C8y Topics Config
     Execute Command    sudo tedge config set c8y.topics "te/+/+/+/+/e/+"
 
     # Execute migration
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: Topics preserved in migrated config
     Verify Mapper Config File Contains Pattern    c8y    topics = ["te/+/+/+/+/e/+"]
@@ -100,7 +100,7 @@ Migration Preserves C8y Smartrest Templates
     Execute Command    sudo tedge config add c8y.smartrest.templates template2
 
     # Execute migration
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: Templates preserved in migrated config
     ${path}=    Get Expected Mapper Config Path    c8y
@@ -114,7 +114,7 @@ Migration With Empty C8y Config
     Execute Command    sudo tedge config unset c8y.url
 
     # Execute migration
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: File created (even if mostly empty)
     Verify Mapper Config File Exists    c8y
@@ -134,7 +134,7 @@ Migration With No Write Permission On Mappers Directory
 
     # Attempt migration - should fail with permission error referencing the path
     ${result}=    Execute Command
-    ...    sudo -u tedge tedge-mapper migrate-config c8y
+    ...    sudo -u tedge config upgrade
     ...    exp_exit_code=!0
     ...    stderr=${True}
     ...    stdout=${False}
@@ -158,7 +158,7 @@ Migration With Write Protected Tedge Toml
 
     # Attempt migration - should fail with permission error referencing tedge.toml
     ${result}=    Execute Command
-    ...    sudo -u tedge tedge-mapper migrate-config c8y
+    ...    sudo -u tedge tedge config upgrade
     ...    exp_exit_code=!0
     ...    stderr=${True}
     ...    stdout=${False}
@@ -174,7 +174,7 @@ Migrate Azure Config Default Profile
     Setup Test Config    az    test.azure.com
 
     # Execute migration
-    Migrate Cloud Config    az
+    Migrate Cloud Configs
 
     # Verify: Config file created
     Verify Mapper Config File Exists    az
@@ -189,7 +189,7 @@ Migrate AWS Config Default Profile
     Setup Test Config    aws    test.amazonaws.com
 
     # Execute migration
-    Migrate Cloud Config    aws
+    Migrate Cloud Configs
 
     # Verify: Config file created
     Verify Mapper Config File Exists    aws
@@ -206,7 +206,7 @@ Migrating One Cloud Does Not Impact Another
     Setup Test Config    aws    test.amazonaws.com
 
     # Migrate only C8y
-    Migrate Cloud Config    c8y
+    Migrate Cloud Configs
 
     # Verify: C8y migrated
     Verify Mapper Config File Exists    c8y
@@ -236,7 +236,7 @@ Migration Fails When Tedge Dir Not Writable And Mappers Dir Missing
 
     # Attempt migration - should fail
     ${result}=    Execute Command
-    ...    sudo -u tedge tedge-mapper migrate-config c8y
+    ...    sudo -u tedge tedge config upgrade
     ...    exp_exit_code=!0
     ...    stderr=${True}
     ...    stdout=${False}

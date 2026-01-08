@@ -5,11 +5,10 @@ Library             String
 
 
 *** Keywords ***
-Migrate Cloud Config
-    [Documentation]    Execute the migration command for a specific cloud
-    [Arguments]    ${cloud}
-    ${output}=    Execute Command    tedge-mapper migrate-config ${cloud}
-    Should Contain    ${output}    Migrated config for ${cloud}
+Migrate Cloud Configs
+    [Documentation]    Execute the migration command for all mappers
+    ${output}=    Execute Command    tedge config upgrade
+    Should Contain    ${output}    Migrated config for all mappers
     RETURN    ${output}
 
 Verify Mapper Config File Exists
