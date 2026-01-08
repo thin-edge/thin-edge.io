@@ -12,6 +12,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         equivs \
         dpkg-dev \
         fakeroot \
+        # Build tools
+        libclang-dev \
         # Utilities
         ssh \
         sudo \
