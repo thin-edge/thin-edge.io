@@ -1,8 +1,12 @@
+use std::borrow::Cow;
+use std::io::ErrorKind;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use crate::models::CloudType;
 use crate::tedge_toml::mapper_config::ExpectedCloudType;
 use crate::tedge_toml::mapper_config::HasPath;
+use crate::tedge_toml::mapper_config::MapperConfigPath;
 use crate::tedge_toml::DtoKey;
 use crate::ConfigSettingResult;
 use crate::TEdgeConfig;
@@ -12,6 +16,7 @@ use crate::TEdgeConfigReader;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use glob::GlobError;
 use serde::Deserialize as _;
 use serde::Serialize;
 use std::path::PathBuf;
@@ -21,7 +26,6 @@ use tedge_config_macros::ProfileName;
 use tedge_utils::file::change_mode;
 use tedge_utils::file::change_user_and_group;
 use tedge_utils::fs::atomically_write_file_async;
-use tokio::fs::DirEntry;
 use tracing::debug;
 use tracing::subscriber::NoSubscriber;
 use tracing::warn;
@@ -111,6 +115,13 @@ impl TEdgeConfigLocation {
         CloudType::iter().any(|key| tedge_toml.contains_key(key.as_ref()))
     }
 
+    pub(crate) fn config_path<T: ExpectedCloudType>(&self) -> MapperConfigPath<'static> {
+        MapperConfigPath {
+            base_dir: Cow::Owned(self.mappers_config_dir()),
+            cloud_type: T::expected_cloud_type(),
+        }
+    }
+
     /// Decide which configuration source to use for a given cloud and profile
     ///
     /// This function centralizes the decision logic for mapper configuration precedence:
@@ -132,27 +143,39 @@ impl TEdgeConfigLocation {
         use tokio::fs::try_exists;
 
         let mapper_config_dir = self.mappers_config_dir();
-        let ty = T::expected_cloud_type().to_string();
 
-        let filename = profile.map_or_else(|| format!("{ty}.toml"), |p| format!("{ty}.d/{p}.toml"));
+        let config_paths = self.config_path::<T>();
+        let filename = config_paths.path_for(profile);
         let path = mapper_config_dir.join(&filename);
 
-        let default_profile_path = mapper_config_dir.join(format!("{ty}.toml"));
-        let profile_dir_path = mapper_config_dir.join(format!("{ty}.d"));
+        let migrated_config_exists = tokio::task::spawn_blocking({
+            let non_profiled_config = config_paths.path_for(None::<&ProfileName>);
+            let profiled_glob = config_paths.path_for(Some("*"));
+            move || {
+                let non_profiled_configs =
+                    glob::glob(non_profiled_config.as_str()).expect("pattern is valid");
+                let profiled_configs =
+                    glob::glob(profiled_glob.as_str()).expect("pattern is valid");
+                let configs = non_profiled_configs
+                    .into_iter()
+                    .chain(profiled_configs)
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(!configs.is_empty())
+            }
+        });
 
         match (
-            try_exists(&default_profile_path).await,
-            try_exists(&profile_dir_path).await,
+            migrated_config_exists.await.unwrap(),
             try_exists(&path).await,
         ) {
             // The specific config we're looking for exists
-            (_, _, Ok(true)) => ConfigDecision::LoadNew { path },
+            (_, Ok(true)) => ConfigDecision::LoadNew { path },
 
             // New format configs exist for this cloud, but not the specific profile requested
-            (Ok(true), _, _) | (_, Ok(true), _) => ConfigDecision::NotFound { path },
+            (Ok(true), _) => ConfigDecision::NotFound { path },
 
             // No new format configs exist for this cloud, use legacy
-            (Ok(false), Ok(false), _) => {
+            (Ok(false), _) => {
                 if self.mapper_config_default_location == MapperConfigLocation::SeparateFile
                     && !self.tedge_toml_contains_cloud_config().await
                 {
@@ -163,7 +186,7 @@ impl TEdgeConfigLocation {
             }
 
             // Permission error accessing mapper config directory
-            (Err(err), _, _) | (_, Err(err), _) => ConfigDecision::PermissionError {
+            (Err(err), _) => ConfigDecision::PermissionError {
                 mapper_config_dir,
                 error: err,
             },
@@ -253,41 +276,31 @@ impl TEdgeConfigLocation {
 
     pub(crate) async fn mapper_config_profiles<T>(
         &self,
-    ) -> Option<
-        Box<dyn futures::stream::Stream<Item = Option<ProfileName>> + Unpin + Send + Sync + '_>,
-    >
+    ) -> Option<impl Iterator<Item = Option<ProfileName>>>
     where
         T: ExpectedCloudType,
     {
-        use futures::future::ready;
-        use futures::StreamExt;
-
-        fn file_name_string(entry: tokio::io::Result<DirEntry>) -> Option<String> {
-            entry.ok()?.file_name().into_string().ok()
+        fn profile_name_from_filename(tedge_toml_path: &Path) -> Option<ProfileName> {
+            let config_dir =
+                std::str::from_utf8(tedge_toml_path.parent()?.file_name()?.as_bytes()).ok()?;
+            config_dir.split_once(".")?.1.parse().ok()
         }
-
-        fn profile_name_from_filename(filename: &str) -> Option<ProfileName> {
-            ProfileName::try_from(filename.strip_suffix(".toml")?.to_owned()).ok()
-        }
-
-        let ty = T::expected_cloud_type();
 
         match self.decide_config_source::<T>(None).await {
             ConfigDecision::LoadNew { .. }
             | ConfigDecision::NotFound { .. }
             | ConfigDecision::PermissionError { .. } => {
-                let default_profile = futures::stream::once(ready(None));
-                match tokio::fs::read_dir(self.mappers_config_dir().join(format!("{ty}.d"))).await {
-                    Ok(profile_dir) => Some(Box::new(
-                        default_profile.chain(
-                            tokio_stream::wrappers::ReadDirStream::new(profile_dir)
-                                .filter_map(|entry| ready(file_name_string(entry)))
-                                .filter_map(|s| ready(profile_name_from_filename(&s)))
-                                .map(Some),
-                        ),
-                    )),
-                    Err(_) => Some(Box::new(default_profile)),
-                }
+                let default_profile = std::iter::once(None);
+                let config_paths = self.config_path::<T>();
+                let glob_pattern = config_paths.path_for(Some("*"));
+                let profiles = tokio::task::spawn_blocking(move || {
+                    glob::glob(glob_pattern.as_str())
+                        .unwrap()
+                        .flat_map(|path| Ok::<_, GlobError>(profile_name_from_filename(&path?)))
+                })
+                .await
+                .unwrap();
+                Some(default_profile.chain(profiles.filter(Option::is_some)))
             }
             ConfigDecision::LoadLegacy => None,
         }
@@ -373,8 +386,29 @@ impl TEdgeConfigLocation {
         S: Serialize + HasPath + Default + PartialEq,
     {
         if let Some(paths) = cloud.non_profile.config_path() {
-            self.store_in(&paths.path_for(None), &cloud.non_profile)
-                .await?;
+            // TODO correct this
+            if toml::to_string(&cloud.non_profile).is_ok_and(|t| t.trim().is_empty()) {
+                let config_file = paths.path_for(None::<&ProfileName>);
+                match tokio::fs::remove_file(&config_file).await {
+                    Ok(()) => {
+                        let dir = config_file.parent().unwrap();
+                        if tokio::fs::read_dir(dir)
+                            .await
+                            .unwrap()
+                            .next_entry()
+                            .await
+                            .is_ok_and(|x| x.is_none())
+                        {
+                            tokio::fs::remove_dir(dir).await?;
+                        }
+                    }
+                    Err(e) if e.kind() == ErrorKind::NotFound => (),
+                    Err(e) => return Err(e.into()),
+                }
+            } else {
+                self.store_in(&paths.path_for(None::<&ProfileName>), &cloud.non_profile)
+                    .await?;
+            }
             for (name, profile) in &mut cloud.profiles {
                 self.store_in(&paths.path_for(Some(name)), profile).await?;
             }
@@ -412,7 +446,7 @@ pub enum ConfigDecision {
     /// Permission error accessing mapper config directory
     PermissionError {
         mapper_config_dir: Utf8PathBuf,
-        error: std::io::Error,
+        error: glob::GlobError,
     },
 }
 
@@ -702,7 +736,8 @@ type = "a-service-type""#;
     async fn environment_variables_are_read_with_migrated_mapper_config() {
         let (ttd, t) = create_temp_tedge_config("").unwrap();
         ttd.dir("mappers")
-            .file("c8y.toml")
+            .dir("c8y")
+            .file("tedge.toml")
             .with_raw_content("url = \"example.com\"");
         let mut env = EnvSandbox::new().await;
         env.set_var("TEDGE_C8Y_ROOT_CERT_PATH", "/root/cert/path");
@@ -713,7 +748,7 @@ type = "a-service-type""#;
         assert_eq!(
             c8y_config.http().or_none().unwrap().host().to_string(),
             "example.com",
-            "Verify that c8y.toml file has actually been read"
+            "Verify that c8y/tedge.toml file has actually been read"
         );
         assert_eq!(c8y_config.root_cert_path.to_string(), "/root/cert/path");
     }
@@ -894,11 +929,12 @@ type = "a-service-type""#;
             .await
             .unwrap();
 
-        let c8y_toml = tokio::fs::read_to_string(location.mappers_config_dir().join("c8y.toml"))
-            .await
-            .unwrap();
+        let c8y_tedge_toml =
+            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+                .await
+                .unwrap();
         assert_eq!(
-            toml::from_str::<toml::Table>(&c8y_toml).unwrap(),
+            toml::from_str::<toml::Table>(&c8y_tedge_toml).unwrap(),
             toml::toml!(url = "test.c8y.io")
         );
 
@@ -922,20 +958,21 @@ type = "a-service-type""#;
             .await
             .unwrap();
 
-        let test_toml =
-            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y.d/test.toml"))
+        let test_tedge_toml =
+            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y.test/tedge.toml"))
                 .await
                 .unwrap();
         assert_eq!(
-            toml::from_str::<toml::Table>(&test_toml).unwrap(),
+            toml::from_str::<toml::Table>(&test_tedge_toml).unwrap(),
             toml::toml!(url = "test.c8y.io")
         );
 
-        let c8y_toml = tokio::fs::read_to_string(location.mappers_config_dir().join("c8y.toml"))
-            .await
-            .unwrap_or_default();
+        let c8y_tedge_toml =
+            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+                .await
+                .unwrap_or_default();
         assert_eq!(
-            toml::from_str::<toml::Table>(&c8y_toml).unwrap(),
+            toml::from_str::<toml::Table>(&c8y_tedge_toml).unwrap(),
             toml::Table::new()
         );
 
@@ -955,11 +992,12 @@ type = "a-service-type""#;
 
         location.migrate_mapper_config(CloudType::Az).await.unwrap();
 
-        let az_toml = tokio::fs::read_to_string(location.mappers_config_dir().join("az.toml"))
-            .await
-            .unwrap();
+        let az_tedge_toml =
+            tokio::fs::read_to_string(location.mappers_config_dir().join("az/tedge.toml"))
+                .await
+                .unwrap();
         assert_eq!(
-            toml::from_str::<toml::Table>(&az_toml).unwrap(),
+            toml::from_str::<toml::Table>(&az_tedge_toml).unwrap(),
             toml::toml!(url = "example.com")
         );
 
@@ -982,11 +1020,12 @@ type = "a-service-type""#;
             .await
             .unwrap();
 
-        let aws_toml = tokio::fs::read_to_string(location.mappers_config_dir().join("aws.toml"))
-            .await
-            .unwrap();
+        let aws_tedge_toml =
+            tokio::fs::read_to_string(location.mappers_config_dir().join("aws/tedge.toml"))
+                .await
+                .unwrap();
         assert_eq!(
-            toml::from_str::<toml::Table>(&aws_toml).unwrap(),
+            toml::from_str::<toml::Table>(&aws_tedge_toml).unwrap(),
             toml::toml!(url = "example.com")
         );
 

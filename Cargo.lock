@@ -4945,6 +4945,7 @@ dependencies = [
  "doku",
  "figment",
  "futures",
+ "glob",
  "humantime",
  "mqtt_channel",
  "once_cell",

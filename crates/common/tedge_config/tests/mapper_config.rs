@@ -7,7 +7,10 @@ use tedge_test_utils::fs::TempTedgeDir;
 async fn empty_new_config_uses_tedge_toml_defaults() {
     let ttd = TempTedgeDir::new();
 
-    ttd.dir("mappers").file("c8y.toml").with_raw_content("");
+    ttd.dir("mappers")
+        .dir("c8y")
+        .file("tedge.toml")
+        .with_raw_content("");
 
     ttd.file("tedge.toml").with_toml_content(toml::toml! {
         [device]
@@ -78,10 +81,7 @@ mod default_location_mode {
                 .unwrap();
 
             let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
-            tedge_config
-                .migrate_mapper_configs()
-                .await
-                .unwrap();
+            tedge_config.migrate_mapper_configs().await.unwrap();
 
             let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
             tedge_config
@@ -97,10 +97,11 @@ mod default_location_mode {
                 ttd.path().join("mappers").exists(),
                 "mappers dir should exist"
             );
-            let c8y_toml = tokio::fs::read_to_string(ttd.path().join("mappers/c8y.toml"))
-                .await
-                .unwrap();
-            assert_eq!(c8y_toml.trim(), "url = \"example.com\"");
+            let c8y_tedge_toml =
+                tokio::fs::read_to_string(ttd.path().join("mappers/c8y/tedge.toml"))
+                    .await
+                    .unwrap();
+            assert_eq!(c8y_tedge_toml.trim(), "url = \"example.com\"");
         }
     }
 
@@ -131,11 +132,12 @@ mod default_location_mode {
             let tedge_toml = tokio::fs::read_to_string(ttd.path().join("tedge.toml"))
                 .await
                 .unwrap();
-            let c8y_toml = tokio::fs::read_to_string(ttd.path().join("mappers/c8y.toml"))
-                .await
-                .unwrap();
+            let c8y_tedge_toml =
+                tokio::fs::read_to_string(ttd.path().join("mappers/c8y/tedge.toml"))
+                    .await
+                    .unwrap();
             assert_eq!(tedge_toml, "");
-            assert_eq!(c8y_toml.trim(), "url = \"example.com\"");
+            assert_eq!(c8y_tedge_toml.trim(), "url = \"example.com\"");
         }
 
         #[tokio::test]
@@ -165,11 +167,12 @@ mod default_location_mode {
             let tedge_toml = tokio::fs::read_to_string(ttd.path().join("tedge.toml"))
                 .await
                 .unwrap();
-            let c8y_toml = tokio::fs::read_to_string(ttd.path().join("mappers/c8y.toml"))
-                .await
-                .unwrap();
+            let c8y_tedge_toml =
+                tokio::fs::read_to_string(ttd.path().join("mappers/c8y/tedge.toml"))
+                    .await
+                    .unwrap();
             assert!(!tedge_toml.contains("c8y"));
-            assert_eq!(c8y_toml.trim(), "url = \"example.com\"");
+            assert_eq!(c8y_tedge_toml.trim(), "url = \"example.com\"");
         }
 
         #[tokio::test]

@@ -251,9 +251,15 @@ mod tests {
     #[tokio::test]
     async fn profile_completions_include_separate_mapper_config_profile_names() {
         let ttd = TempTedgeDir::new();
-        let c8y_profiles = ttd.dir("mappers").dir("c8y.d");
-        c8y_profiles.file("profile1.toml").with_raw_content("");
-        c8y_profiles.file("profile2.toml").with_raw_content("");
+        let mappers = ttd.dir("mappers");
+        mappers
+            .dir("c8y.profile1")
+            .file("tedge.toml")
+            .with_raw_content("");
+        mappers
+            .dir("c8y.profile2")
+            .file("tedge.toml")
+            .with_raw_content("");
         let completions = completion_names(&ttd).await;
         assert_eq!(completions, ["profile1", "profile2"]);
     }

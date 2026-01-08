@@ -7,9 +7,7 @@ Library             String
 *** Keywords ***
 Migrate Cloud Configs
     [Documentation]    Execute the migration command for all mappers
-    ${output}=    Execute Command    tedge config upgrade
-    Should Contain    ${output}    Migrated config for all mappers
-    RETURN    ${output}
+    Execute Command    tedge config upgrade
 
 Verify Mapper Config File Exists
     [Documentation]    Verify that the mapper config file exists for the given cloud and profile

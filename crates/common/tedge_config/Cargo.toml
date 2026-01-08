@@ -21,6 +21,7 @@ clap_complete = { workspace = true }
 doku = { workspace = true }
 figment = { workspace = true, features = ["env", "toml"] }
 futures = { workspace = true }
+glob = { workspace = true }
 humantime = { workspace = true }
 mqtt_channel = { workspace = true }
 once_cell = { workspace = true }

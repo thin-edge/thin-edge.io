@@ -1230,10 +1230,12 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             ttd.dir("mappers")
-                .file("c8y.toml")
+                .dir("c8y")
+                .file("tedge.toml")
                 .with_raw_content("url = \"example.com\"");
-            ttd.dir("mappers/c8y.d")
-                .file("new.toml")
+            ttd.dir("mappers")
+                .dir("c8y.new")
+                .file("tedge.toml")
                 .with_raw_content("url = \"example.com\"");
             let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
@@ -1251,10 +1253,11 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             ttd.dir("mappers")
-                .file("c8y.toml")
+                .dir("c8y")
+                .file("tedge.toml")
                 .with_raw_content("url = \"example.com\"\ndevice.id = \"my-device\"");
-            ttd.dir("mappers/c8y.d")
-                .file("new.toml")
+            ttd.dir("mappers/c8y.new")
+                .file("tedge.toml")
                 .with_raw_content("url = \"example.com\"\ndevice.id = \"my-device\"");
             let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
