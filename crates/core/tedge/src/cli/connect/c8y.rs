@@ -45,9 +45,6 @@ pub async fn create_device_with_direct_connection(
     // TODO: put into general authentication struct
     mqtt_auth_config: MqttAuthConfigCloudBroker,
 ) -> anyhow::Result<()> {
-    const DEVICE_ALREADY_EXISTS: &[u8] = b"41,100,Device already existing";
-    const DEVICE_CREATE_ERROR_TOPIC: &str = "s/e";
-
     let address = bridge_config.address.clone();
 
     let mut mqtt_options = MqttOptions::new(
@@ -87,14 +84,10 @@ pub async fn create_device_with_direct_connection(
         .network_options
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
 
-    client
-        .subscribe(DEVICE_CREATE_ERROR_TOPIC, QoS::AtLeastOnce)
-        .await?;
-
-    let mut device_create_try: usize = 0;
     loop {
         match eventloop.poll().await {
-            Ok(Event::Incoming(Packet::SubAck(_) | Packet::PubAck(_) | Packet::PubComp(_))) => {
+            Ok(Event::Incoming(Packet::ConnAck(_))) => {
+                // Connection established, publish device creation message
                 publish_device_create_message(
                     &mut client,
                     &bridge_config.remote_clientid.clone(),
@@ -102,30 +95,16 @@ pub async fn create_device_with_direct_connection(
                 )
                 .await?;
             }
-            Ok(Event::Incoming(Packet::Publish(response))) => {
-                // We got a response
-                if response.payload == DEVICE_ALREADY_EXISTS {
-                    return Ok(());
-                }
-            }
-            Ok(Event::Outgoing(Outgoing::PingReq)) => {
-                // If not received any response then resend the device create request again.
-                // else timeout.
-                if device_create_try < 1 {
-                    publish_device_create_message(
-                        &mut client,
-                        &bridge_config.remote_clientid.clone(),
-                        device_type,
-                    )
-                    .await?;
-                    device_create_try += 1;
-                } else {
-                    // No messages have been received for a while
-                    break;
-                }
+            Ok(Event::Incoming(Packet::PubComp(_))) => {
+                // Device creation message acknowledged by the cloud
+                return Ok(());
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
                 bail!("Unexpectedly disconnected from Cumulocity while attempting to create device")
+            }
+            Ok(Event::Outgoing(Outgoing::PingReq)) => {
+                // No acknowledgment received for device creation message even after 5s (keep alive interval)
+                bail!("Timed-out waiting for device creation acknowledgment from Cumulocity")
             }
             Err(ConnectionError::Io(err)) if err.kind() == std::io::ErrorKind::InvalidData => {
                 if let Some(Error::AlertReceived(alert_description)) = err
@@ -162,8 +141,6 @@ pub async fn create_device_with_direct_connection(
             _ => {}
         }
     }
-
-    bail!("Timed-out attempting to create device in Cumulocity")
 }
 
 // Check the connection by using the jwt token retrieval over the mqtt.
