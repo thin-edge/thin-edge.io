@@ -99,12 +99,15 @@ aarch64-unknown-linux-gnu)
   # Clang is needed for code coverage.
   use_clang=1
   install_packages \
-    gcc-multilib \
     qemu-user \
     gcc-aarch64-linux-gnu \
     libc6-arm64-cross \
     libc6-dev-arm64-cross \
     crossbuild-essential-arm64
+
+  # gcc-multilib only exists on amd64 host machines
+  install_packages_on_amd64 \
+    gcc-multilib
   ;;
 aarch64-unknown-linux-musl)
   use_clang=1
@@ -284,7 +287,7 @@ linux*)
     TMP_GPG_FILE=$(mktemp) 
     cat mk/llvm-snapshot.gpg.key | gpg --yes --dearmor -o "$TMP_GPG_FILE"
     if ! cmp --silent "$TMP_GPG_FILE" /usr/share/keyrings/llvm-snapshot.gpg; then
-    sudo mkdir -p /usr/share/keyrings
+      sudo mkdir -p /usr/share/keyrings
       sudo mv "$TMP_GPG_FILE" /usr/share/keyrings/llvm-snapshot.gpg
       sudo chmod 0644 /usr/share/keyrings/llvm-snapshot.gpg
     else
@@ -293,7 +296,7 @@ linux*)
     # Add repository to sources.list.d
     SOURCE_FILE="/etc/apt/sources.list.d/llvm-${llvm_version}-toolchain.list"
     if [ ! -f "$SOURCE_FILE" ]; then
-    echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/$ubuntu_codename/ llvm-toolchain-$ubuntu_codename-$llvm_version main" | \
+      echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/$ubuntu_codename/ llvm-toolchain-$ubuntu_codename-$llvm_version main" | \
         sudo tee "$SOURCE_FILE" > /dev/null
     fi
     sudo apt-get update -y
