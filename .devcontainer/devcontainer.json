@@ -70,7 +70,7 @@
 			]
 		}
 	},
-	"postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
+	"postCreateCommand": "GIT_DIR=/dev/null git config --global --add safe.directory ${containerWorkspaceFolder}",
 
 	// Use root as there are some issues with cross using the docker commands in some environments (e.g. colima on MacOs)
 	"remoteUser": "root"
