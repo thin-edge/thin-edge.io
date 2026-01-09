@@ -1,17 +1,18 @@
-# See here for image contents: https://github.com/microsoft/vscode-dev-containers/tree/v0.195.0/containers/rust/.devcontainer/base.Dockerfile
-# [Choice] Debian OS version (use bullseye on local arm64/Apple Silicon): buster, bullseye
-ARG VARIANT="bookworm"
-FROM mcr.microsoft.com/devcontainers/rust:1-${VARIANT}
+# See here for image contents: https://github.com/devcontainers/images/tree/main/src/rust/history
+ARG VARIANT="trixie"
+FROM mcr.microsoft.com/devcontainers/rust:2-${VARIANT}
 
 # [Optional] Uncomment this section to install additional packages.
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends \
         # apt dependencies
-        apt-transport-https ca-certificates gnupg-agent software-properties-common \
+        apt-transport-https ca-certificates gnupg-agent \
         # Debian packaging utilities
         equivs \
         dpkg-dev \
         fakeroot \
+        # Build tools
+        libclang-dev \
         # Utilities
         ssh \
         sudo \
@@ -28,7 +29,6 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         systemd-sysv \
         dbus \
         # Testing dependencies
-        docker \
         python3 \
         python3-pip \
         python3-venv \
@@ -36,14 +36,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         # JSON tools
         jq \
         jo \
-    # tedge dependencies
-    # Install more recent version of mosquitto >= 2.0.18 from debian backports to avoid mosquitto following bugs:
-    # The mosquitto repo can't be used as it does not included builds for arm64/aarch64 (only amd64 and armhf)
-    # * https://github.com/eclipse/mosquitto/issues/2604 (2.0.11)
-    # * https://github.com/eclipse/mosquitto/issues/2634 (2.0.15)
-    && sh -c "echo 'deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/debian-bookworm-backports.list" \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install -t bookworm-backports \
+        # tedge dependencies
         mosquitto \
         mosquitto-clients \
     #
@@ -75,18 +68,16 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
     && apt-get update \
-    && apt-get install -y docker-ce-cli docker-compose-plugin docker-buildx-plugin \
+    && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin \
     #
     # Node js (for browser based tests and documentation using docusaurus)
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y nodejs \
     && npm install -g yarn \
     #
     # Install just (project task runner)
     && curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/bin/ \
     #
-    # Update python deps
-    && pip3 install --upgrade pip --break-system-packages \
     #
     # Delete the dummy systemctl command added by the base image
     && rm -f /usr/local/bin/systemctl \

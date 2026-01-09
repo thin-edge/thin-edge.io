@@ -25,7 +25,7 @@ version TYPE="all":
 # Publish the dev container to provide more reproducible dev environments
 #
 # docker login ghcr.io
-publish-dev-container TAG="latest" IMAGE="ghcr.io/thin-edge/devcontainer" VARIANT="bookworm" OUTPUT_TYPE="registry":
+publish-dev-container TAG="latest" IMAGE="ghcr.io/thin-edge/devcontainer" VARIANT="trixie" OUTPUT_TYPE="registry":
     docker buildx install
     cd .devcontainer && docker buildx build \
         --platform linux/amd64,linux/arm64 \
