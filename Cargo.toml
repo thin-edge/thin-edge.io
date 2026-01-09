@@ -78,6 +78,7 @@ upload = { path = "crates/common/upload" }
 
 anstyle = "1.0"
 anyhow = "1.0"
+ariadne = "0.6.0"
 asn1-rs = { version = "0.7.0", features = ["bigint"] }
 assert-json-diff = "2.0"
 assert_cmd = "2.0"
@@ -192,6 +193,7 @@ rustls-pki-types = { version = "1.12", features = ["alloc"] }
 sd-listen-fds = "0.2.0"
 serde = "1.0"
 serde_json = "1.0"
+serde_spanned = "1.0"
 sha1 = "0.10"
 sha256 = "1.1"
 shell-words = "1.1"

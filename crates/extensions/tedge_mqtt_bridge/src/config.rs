@@ -6,9 +6,383 @@ use rumqttc::valid_filter;
 use rumqttc::valid_topic;
 use rumqttc::MqttOptions;
 use rumqttc::Transport;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_spanned::Spanned;
 use std::borrow::Cow;
+use std::marker::PhantomData;
 use std::path::Path;
+use std::str::FromStr;
+use tedge_config::models::TemplatesSet;
 use tedge_config::tedge_toml::CloudConfig;
+use tedge_config::tedge_toml::ConfigNotSet;
+use tedge_config::tedge_toml::ParseKeyError;
+use tedge_config::tedge_toml::ReadError;
+use tedge_config::tedge_toml::ReadableKey;
+use tedge_config::TEdgeConfig;
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct PersistedBridgeConfig {
+    local_prefix: Option<Spanned<Template>>,
+    remote_prefix: Option<Spanned<Template>>,
+    #[serde(rename = "rule", default)]
+    rules: Vec<StaticBridgeRule>,
+    #[serde(rename = "template_rule", default)]
+    template_rules: Vec<TemplateBridgeRule>,
+}
+
+#[derive(Debug)]
+pub struct ExpandedBridgeRule {
+    pub local_prefix: String,
+    pub remote_prefix: String,
+    pub direction: Direction,
+    pub topic: String,
+}
+
+impl PersistedBridgeConfig {
+    pub fn expand(self, config: &TEdgeConfig) -> Result<Vec<ExpandedBridgeRule>, ExpandError> {
+        // TODO ensure the source variable is quoted
+        let local_prefix = self
+            .local_prefix
+            .as_ref()
+            .map(|rule| expand_spanned(rule, config, "Failed to expand global local_prefix"))
+            .transpose()?;
+        let remote_prefix = self
+            .remote_prefix
+            .as_ref()
+            .map(|rule| expand_spanned(rule, config, "Failed to expand global remote_prefix"))
+            .transpose()?;
+
+        let mut expanded_rules = Vec::new();
+        for rule in self.rules {
+            expanded_rules.push(ExpandedBridgeRule {
+                // TODO error handle if neither per-rule or global exist
+                local_prefix: rule
+                    .local_prefix
+                    .as_ref()
+                    .map(|spanned| expand_spanned(spanned, config, "Failed to expand local_prefix"))
+                    .transpose()?
+                    .unwrap_or_else(|| local_prefix.clone().unwrap()),
+                remote_prefix: rule
+                    .remote_prefix
+                    .as_ref()
+                    .map(|spanned| expand_spanned(spanned, config, "Failed to expand remote_prefix"))
+                    .transpose()?
+                    .unwrap_or_else(|| remote_prefix.clone().unwrap()),
+                direction: rule.direction,
+                topic: expand_spanned(&rule.topic, config, "Failed to expand topic")?,
+            });
+        }
+
+        for template in self.template_rules {
+            let iterable = expand_spanned(&template.r#for, config, "Failed to expand 'for' reference")?;
+
+            // TODO error handle if neither per-rule or global exist
+            let local_prefix = template
+                .local_prefix
+                .as_ref()
+                .map(|spanned| expand_spanned(spanned, config, "Failed to expand local_prefix"))
+                .transpose()?
+                .unwrap_or_else(|| local_prefix.clone().unwrap());
+            let remote_prefix = template
+                .remote_prefix
+                .as_ref()
+                .map(|spanned| expand_spanned(spanned, config, "Failed to expand remote_prefix"))
+                .transpose()?
+                .unwrap_or_else(|| remote_prefix.clone().unwrap());
+
+            for topic in iterable.0 {
+                let template_config = TemplateConfig {
+                    r#for: &topic,
+                    tedge: config,
+                };
+
+                expanded_rules.push(ExpandedBridgeRule {
+                    local_prefix: local_prefix.clone(),
+                    remote_prefix: remote_prefix.clone(),
+                    direction: template.direction,
+                    topic: expand_spanned(&template.topic, template_config, "Failed to expand topic template")?,
+                });
+            }
+        }
+
+        Ok(expanded_rules)
+    }
+}
+
+#[derive(Debug)]
+pub struct ExpandError {
+    pub message: String,
+    pub help: Option<String>,
+    pub span: std::ops::Range<usize>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+struct StaticBridgeRule {
+    local_prefix: Option<Spanned<Template>>,
+    remote_prefix: Option<Spanned<Template>>,
+    direction: Direction,
+    topic: Spanned<Template>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+struct TemplateBridgeRule {
+    r#for: Spanned<ConfigReference<TemplatesSet>>,
+    topic: Spanned<TemplateTemplate>,
+    local_prefix: Option<Spanned<Template>>,
+    remote_prefix: Option<Spanned<Template>>,
+    direction: Direction,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum Direction {
+    Inbound,
+    Outbound,
+    Bidirectional,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(transparent)]
+struct Template(String);
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(transparent)]
+struct TemplateTemplate(String);
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(try_from = "String")]
+struct ConfigReference<Target>(String, PhantomData<Target>);
+
+impl<Target> FromStr for ConfigReference<Target> {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s
+            .strip_prefix("${.")
+            .ok_or_else(|| anyhow::anyhow!("Config variable must start with ${{."))?;
+        let s = s
+            .strip_suffix("}")
+            .ok_or_else(|| anyhow::anyhow!("Config variable must end with }}"))?;
+        Ok(Self(s.to_owned(), PhantomData))
+    }
+}
+
+trait Expandable {
+    type Target;
+    type Config<'a>
+    where
+        Self: 'a;
+
+    /// Expand the template, returning the result and any error with byte offset
+    fn expand(&self, config: Self::Config<'_>) -> Result<Self::Target, TemplateError>;
+}
+
+#[derive(Debug)]
+struct TemplateError {
+    message: String,
+    help: Option<String>,
+    /// Byte offset within the template string where the error occurred
+    offset: usize,
+}
+
+impl std::fmt::Display for TemplateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for TemplateError {}
+
+/// Adjust a span from serde_spanned (which includes quotes) to exclude them,
+/// and add an offset for errors within the string content
+fn adjust_span_for_error(
+    outer_span: std::ops::Range<usize>,
+    inner_offset: usize,
+) -> std::ops::Range<usize> {
+    // serde_spanned includes the quotes, so we add 1 to skip the opening quote
+    let content_start = outer_span.start + 1;
+    let content_end = outer_span.end.saturating_sub(1).max(content_start);
+
+    // Add the offset within the content
+    let error_start = content_start + inner_offset;
+    let error_end = content_end;
+
+    error_start..error_end
+}
+
+/// Helper to expand a spanned template and convert errors to ExpandError
+fn expand_spanned<T: Expandable>(
+    spanned: &Spanned<T>,
+    config: T::Config<'_>,
+    context: &str,
+) -> Result<T::Target, ExpandError> {
+    let span = spanned.span();
+    spanned.get_ref().expand(config).map_err(|e| ExpandError {
+        message: format!("{context}: {e}"),
+        help: e.help,
+        span: adjust_span_for_error(span, e.offset),
+    })
+}
+
+impl<Target> Expandable for ConfigReference<Target>
+where
+    Target: for<'de> serde::Deserialize<'de> + FromStr + std::fmt::Debug,
+    Target::Err: std::error::Error + Send + Sync + 'static,
+{
+    type Target = Target;
+    type Config<'a>
+        = &'a TEdgeConfig
+    where
+        Self: 'a;
+
+    fn expand(&self, config: &TEdgeConfig) -> Result<Self::Target, TemplateError> {
+        let key: ReadableKey = self.0.parse().map_err(|e: ParseKeyError| TemplateError {
+            message: e.to_string(),
+            help: None,
+            offset: 0,
+        })?;
+        let value = config.read_string(&key).map_err(|e| {
+            let (message, help) = if let ReadError::ConfigNotSet(ConfigNotSet { key }) = e {
+                (
+                    format!("A value for '{key}' is not set"),
+                    Some(format!(
+                        "A value can be set with `tedge config set {key} <value>`"
+                    )),
+                )
+            } else {
+                (e.to_string(), None)
+            };
+            TemplateError {
+                message,
+                help,
+                offset: 0,
+            }
+        })?;
+
+        // Try to deserialize as TOML first (for complex types like TemplatesSet)
+        // If that fails, fall back to FromStr parsing (for simple string types)
+        let deser = toml::de::ValueDeserializer::parse(&value);
+        deser.and_then(Target::deserialize).or_else(|_| value.parse()).map_err(|e: Target::Err| TemplateError {
+            message: e.to_string(),
+            help: None,
+            offset: 0,
+        })
+    }
+}
+
+struct TemplateConfig<'a> {
+    tedge: &'a TEdgeConfig,
+    r#for: &'a str,
+}
+
+/// Helper function to expand a config key reference and return its value
+/// Expects var_name to start with ".", strips it, and reads the config value
+fn expand_config_key(
+    var_name: &str,
+    config: &TEdgeConfig,
+    offset: usize,
+) -> Result<String, TemplateError> {
+    let key_str = var_name.strip_prefix(".").ok_or_else(|| TemplateError {
+        message: format!("Templated variable must start with '.' (got '{var_name}'))"),
+        help: Some(format!("You might have meant '.{var_name}'")),
+        offset,
+    })?;
+
+    let key: ReadableKey = key_str.parse().map_err(|e: ParseKeyError| TemplateError {
+        message: e.to_string(),
+        help: None,
+        offset,
+    })?;
+
+    config.read_string(&key).map_err(|e| {
+        let (message, help) = if let ReadError::ConfigNotSet(ConfigNotSet { key }) = e {
+            (
+                format!("A value for '{key}' is not set"),
+                Some(format!(
+                    "A value can be set with `tedge config set {key} <value>`"
+                )),
+            )
+        } else {
+            (e.to_string(), None)
+        };
+        TemplateError {
+            message,
+            help,
+            offset,
+        }
+    })
+}
+
+/// Generic helper to expand template strings with variable substitution
+/// The `expand_var` closure is called for each ${...} found, with the variable name and offset
+fn expand_template_string(
+    template: &str,
+    mut expand_var: impl FnMut(&str, usize) -> Result<String, TemplateError>,
+) -> Result<String, TemplateError> {
+    let mut result = String::new();
+    let mut byte_offset = 0;
+
+    for segment in template.split('}') {
+        match segment.split_once("${") {
+            None => {
+                result.push_str(segment);
+                byte_offset += segment.len();
+            }
+            Some((prefix, var_name)) => {
+                result.push_str(prefix);
+                let var_start = byte_offset + prefix.len();
+
+                let value = expand_var(var_name, var_start)?;
+                result.push_str(&value);
+                byte_offset += segment.len() + 1; // +1 for the '}'
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+impl Expandable for Template {
+    type Target = String;
+    type Config<'a>
+        = &'a TEdgeConfig
+    where
+        Self: 'a;
+
+    fn expand(&self, config: Self::Config<'_>) -> Result<Self::Target, TemplateError> {
+        expand_template_string(&self.0, |var_name, offset| {
+            expand_config_key(var_name, config, offset)
+        })
+    }
+}
+
+impl Expandable for TemplateTemplate {
+    type Target = String;
+    type Config<'a>
+        = TemplateConfig<'a>
+    where
+        Self: 'a;
+
+    fn expand(&self, config: TemplateConfig) -> Result<Self::Target, TemplateError> {
+        expand_template_string(&self.0, |var_name, offset| {
+            if var_name == "@for" {
+                Ok(config.r#for.to_string())
+            } else {
+                expand_config_key(var_name, config.tedge, offset)
+            }
+        })
+    }
+}
+
+impl<Target> TryFrom<String> for ConfigReference<Target> {
+    type Error = anyhow::Error;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
 
 pub fn use_key_and_cert(
     config: &mut MqttOptions,
@@ -463,6 +837,342 @@ mod tests {
                 err.to_string(),
                 "\"invalid/#/filter\" is not a valid MQTT bridge topic filter"
             );
+        }
+    }
+
+    mod persisted_bridge_config {
+        use super::*;
+
+        #[test]
+        fn deserializes_basic_config_with_static_rules() {
+            let toml = r#"
+                local_prefix = "local/"
+                remote_prefix = "remote/"
+
+                [[rule]]
+                topic = "test/topic"
+                direction = "inbound"
+            "#;
+
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            assert_eq!(config.rules.len(), 1);
+            assert_eq!(config.template_rules.len(), 0);
+        }
+
+        #[test]
+        fn deserializes_config_with_template_rules() {
+            let toml = r#"
+                local_prefix = "local/"
+                remote_prefix = "remote/"
+
+                [[template_rule]]
+                for = "${.c8y.topics.e}"
+                topic = "te/device/main///e/${@for}"
+                direction = "outbound"
+            "#;
+
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            assert_eq!(config.rules.len(), 0);
+            assert_eq!(config.template_rules.len(), 1);
+        }
+
+        #[test]
+        fn deserializes_config_with_mixed_rules() {
+            let toml = r#"
+                local_prefix = "local/"
+                remote_prefix = "remote/"
+
+                [[rule]]
+                topic = "test/topic"
+                direction = "inbound"
+
+                [[template_rule]]
+                for = "${.c8y.topics.e}"
+                topic = "te/device/main///e/${@for}"
+                direction = "outbound"
+            "#;
+
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            assert_eq!(config.rules.len(), 1);
+            assert_eq!(config.template_rules.len(), 1);
+        }
+
+        #[test]
+        fn deserializes_rule_with_per_rule_prefixes() {
+            let toml = r#"
+                [[rule]]
+                local_prefix = "override-local/"
+                remote_prefix = "override-remote/"
+                topic = "test/topic"
+                direction = "bidirectional"
+            "#;
+
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            assert_eq!(config.rules.len(), 1);
+        }
+
+        #[test]
+        fn deserializes_all_direction_types() {
+            let toml = r#"
+                [[rule]]
+                topic = "inbound/topic"
+                direction = "inbound"
+
+                [[rule]]
+                topic = "outbound/topic"
+                direction = "outbound"
+
+                [[rule]]
+                topic = "bidirectional/topic"
+                direction = "bidirectional"
+            "#;
+
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            assert_eq!(config.rules.len(), 3);
+            assert!(matches!(config.rules[0].direction, Direction::Inbound));
+            assert!(matches!(config.rules[1].direction, Direction::Outbound));
+            assert!(matches!(
+                config.rules[2].direction,
+                Direction::Bidirectional
+            ));
+        }
+
+        #[test]
+        fn rejects_unknown_fields() {
+            let toml = r#"
+                local_prefix = "local/"
+                remote_prefix = "remote/"
+                unknown_field = "value"
+
+                [[rule]]
+                topic = "test/topic"
+                direction = "inbound"
+            "#;
+
+            let result: Result<PersistedBridgeConfig, _> = toml::from_str(toml);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn rejects_rule_with_unknown_fields() {
+            let toml = r#"
+                [[rule]]
+                topic = "test/topic"
+                direction = "inbound"
+                unknown_field = "value"
+            "#;
+
+            let result: Result<PersistedBridgeConfig, _> = toml::from_str(toml);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn config_reference_parses_valid_reference() {
+            let reference = "${.c8y.topics.e}";
+            let result: Result<ConfigReference<TemplatesSet>, _> = reference.parse();
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn config_reference_rejects_missing_prefix() {
+            let reference = "c8y.topics.e}";
+            let result: Result<ConfigReference<TemplatesSet>, _> = reference.parse();
+            assert!(result.is_err());
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("must start with ${."));
+        }
+
+        #[test]
+        fn config_reference_rejects_missing_suffix() {
+            let reference = "${.c8y.topics.e";
+            let result: Result<ConfigReference<TemplatesSet>, _> = reference.parse();
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("must end with }"));
+        }
+
+        #[test]
+        fn config_reference_expands_to_templates_set() {
+            let reference: ConfigReference<TemplatesSet> =
+                "${.c8y.smartrest.templates}".parse().unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str(
+                r#"
+[c8y]
+smartrest.templates = ["template1", "template2", "template3"]
+"#,
+            );
+
+            let result = reference.expand(&tedge_config).unwrap();
+            assert_eq!(result.0, vec!["template1", "template2", "template3"]);
+        }
+
+        #[test]
+        fn config_reference_expands_string_value() {
+            let reference: ConfigReference<String> = "${.c8y.bridge.topic_prefix}".parse().unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str(
+                r#"
+[c8y.bridge]
+topic_prefix = "c8y"
+"#,
+            );
+
+            let result = reference.expand(&tedge_config).unwrap();
+            assert_eq!(result, "c8y");
+        }
+
+        #[test]
+        fn span_information_includes_quotes() {
+            let toml = r#"local_prefix = "te/""#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let span = config.local_prefix.unwrap().span();
+
+            // serde_spanned includes the quotes in the span
+            // "local_prefix = "te/""
+            //                ^^^^^ this part (bytes 15..20)
+            assert_eq!(span, 15..20, "Span includes quotes");
+            assert_eq!(&toml[span.clone()], "\"te/\"");
+        }
+
+        #[test]
+        fn span_information_for_topic_field() {
+            let toml = r#"
+[[rule]]
+topic = "test/topic"
+direction = "inbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let span = config.rules[0].topic.span();
+
+            // serde_spanned includes the quotes
+            let topic_str = &toml[span.clone()];
+            assert_eq!(topic_str, "\"test/topic\"", "Span includes quotes");
+        }
+
+        #[test]
+        fn span_information_for_config_reference() {
+            let toml = r#"
+[[template_rule]]
+for = "${.c8y.topics.e}"
+topic = "te/device/main///e/${@for}"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let span = config.template_rules[0].r#for.span();
+
+            // serde_spanned includes the quotes
+            let reference_str = &toml[span.clone()];
+            assert_eq!(
+                reference_str, "\"${.c8y.topics.e}\"",
+                "Span includes quotes"
+            );
+        }
+
+        #[test]
+        fn template_error_offset_points_to_variable() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[rule]]
+topic = "prefix/${.invalid.key}/suffix"
+direction = "inbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            let err = config.expand(&tedge_config).unwrap_err();
+
+            // The error span should point to the ${.invalid.key} part within the topic string
+            let error_text = &toml[err.span.clone()];
+            assert!(
+                error_text.contains("invalid.key") || error_text.starts_with("${.invalid"),
+                "Error span should point to the problematic template variable, got: {:?}",
+                error_text
+            );
+        }
+
+        #[test]
+        fn multiple_variables_in_template() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[rule]]
+topic = "start/${.first}/middle/${.second}/end"
+direction = "inbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            // Save the span before we consume config
+            let topic_span = config.rules[0].topic.span();
+
+            // This should fail on the first variable
+            let err = config.expand(&tedge_config).unwrap_err();
+
+            // The error should be about the first variable
+            assert!(
+                err.message.contains("first"),
+                "Error message should mention 'first': {}",
+                err.message
+            );
+
+            // And the span should point somewhere in the topic string
+            assert!(
+                err.span.start >= topic_span.start && err.span.end <= topic_span.end,
+                "Error span {:?} should be within topic span {:?}",
+                err.span,
+                topic_span
+            );
+        }
+
+        #[test]
+        fn expands_template_rules_with_smartrest_templates() {
+            let toml = r#"
+local_prefix = "c8y/"
+remote_prefix = ""
+
+[[template_rule]]
+for = "${.c8y.smartrest.templates}"
+topic = "s/uc/${@for}"
+direction = "outbound"
+
+[[template_rule]]
+for = "${.c8y.smartrest.templates}"
+topic = "s/dc/${@for}"
+direction = "inbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str(
+                r#"
+[c8y]
+smartrest.templates = ["template1", "template2", "template3"]
+"#,
+            );
+
+            let expanded = config.expand(&tedge_config).unwrap();
+
+            // Should create 6 rules: 3 outbound + 3 inbound
+            assert_eq!(expanded.len(), 6);
+
+            // Check outbound rules (s/uc/${@for})
+            assert_eq!(expanded[0].topic, "s/uc/template1");
+            assert_eq!(expanded[0].local_prefix, "c8y/");
+            assert_eq!(expanded[0].remote_prefix, "");
+            assert!(matches!(expanded[0].direction, Direction::Outbound));
+
+            assert_eq!(expanded[1].topic, "s/uc/template2");
+            assert_eq!(expanded[2].topic, "s/uc/template3");
+
+            // Check inbound rules (s/dc/${@for})
+            assert_eq!(expanded[3].topic, "s/dc/template1");
+            assert_eq!(expanded[3].local_prefix, "c8y/");
+            assert_eq!(expanded[3].remote_prefix, "");
+            assert!(matches!(expanded[3].direction, Direction::Inbound));
+
+            assert_eq!(expanded[4].topic, "s/dc/template2");
+            assert_eq!(expanded[5].topic, "s/dc/template3");
         }
     }
 }
