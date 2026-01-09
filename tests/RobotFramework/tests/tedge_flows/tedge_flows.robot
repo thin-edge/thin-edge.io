@@ -3,7 +3,7 @@ Library             JSONLibrary
 Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
-Suite Teardown       Get Logs
+Suite Teardown      Get Logs
 
 Test Tags           theme:tedge_flows
 
@@ -222,6 +222,14 @@ Publishing transformation errors
     Should Be Equal As Integers    ${message["time"]}    12345
     Should Be Equal As Integers    ${message["b"]["c"]}    6789
     [Teardown]    Uninstall Flow    publish-js-errors.toml
+
+Monitor flow definition updates
+    ${start}    Get Unix Timestamp
+    Execute Command    touch /etc/tedge/mappers/flows/flows/collectd.toml
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    date_from=${start}
+    ...    message_contains=collectd.toml
 
 
 *** Keywords ***

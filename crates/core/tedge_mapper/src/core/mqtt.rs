@@ -1,4 +1,7 @@
 use std::sync::Arc;
+use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::all_or_nothing;
 use tedge_config::models::proxy_scheme::ProxyScheme;
 use tedge_config::TEdgeConfig;
@@ -34,4 +37,16 @@ pub fn configure_proxy(
         });
     }
     Ok(())
+}
+
+pub fn flows_status_topic(
+    mqtt_schema: &MqttSchema,
+    service: &EntityTopicId,
+) -> mqtt_channel::Topic {
+    mqtt_schema.topic_for(
+        service,
+        &Channel::Status {
+            component: "flows".to_string(),
+        },
+    )
 }

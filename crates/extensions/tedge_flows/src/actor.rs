@@ -48,6 +48,7 @@ pub struct FlowsMapper {
     pub(super) watched_commands: HashSet<String>,
     pub(super) processor: MessageProcessor<ConnectedFlowRegistry>,
     pub(super) next_dump: Instant,
+    pub(super) status_topic: Topic,
 }
 
 #[async_trait]
@@ -167,7 +168,7 @@ impl FlowsMapper {
         let status = "enabled";
         let now = OffsetDateTime::now_utc();
         for flow in self.processor.registry.flows() {
-            let status = Self::flow_status(flow.name(), status, &now);
+            let status = self.flow_status(flow.name(), status, &now);
             self.mqtt_sender.send(status).await?;
         }
         Ok(())
@@ -180,19 +181,18 @@ impl FlowsMapper {
         } else {
             "removed"
         };
-        let status = Self::flow_status(flow, status, &now);
+        let status = self.flow_status(flow, status, &now);
         self.mqtt_sender.send(status).await?;
         Ok(())
     }
 
-    fn flow_status(flow: &str, status: &str, time: &OffsetDateTime) -> MqttMessage {
-        let topic = Topic::new_unchecked("te/device/main/service/tedge-flows/status/flows");
+    fn flow_status(&self, flow: &str, status: &str, time: &OffsetDateTime) -> MqttMessage {
         let payload = json!({
             "flow": flow,
             "status": status,
             "time": time.unix_timestamp(),
         });
-        MqttMessage::new(&topic, payload.to_string()).with_qos(QoS::AtLeastOnce)
+        MqttMessage::new(&self.status_topic, payload.to_string()).with_qos(QoS::AtLeastOnce)
     }
 
     async fn on_source_poll(&mut self) -> Result<(), RuntimeError> {

@@ -15,7 +15,7 @@ pub struct AzureConverter {
 impl AzureConverter {
     pub fn new(
         add_timestamp: bool,
-        mqtt_schema: MqttSchema,
+        mqtt_schema: &MqttSchema,
         time_format: TimeFormat,
         topic_prefix: &TopicPrefix,
         max_payload_size: u32,

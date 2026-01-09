@@ -2,10 +2,12 @@ use crate::az::SkipMosquittoHealthStatus;
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use crate::core::mqtt::configure_proxy;
+use crate::core::mqtt::flows_status_topic;
 use anyhow::Context;
 use async_trait::async_trait;
 use az_mapper_ext::AzureConverter;
 use std::borrow::Cow;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::models::TopicPrefix;
@@ -40,6 +42,7 @@ impl TEdgeComponent for AzureMapper {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&az_mapper_name, &tedge_config).await?;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+        let service_topic_id = EntityTopicId::default_main_service(&az_mapper_name)?;
 
         if tedge_config.mqtt.bridge.built_in {
             let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
@@ -86,10 +89,9 @@ impl TEdgeComponent for AzureMapper {
         } else if tedge_config.proxy.address.or_none().is_some() {
             warn!("`proxy.address` is configured without the built-in bridge enabled. The bridge MQTT connection to the cloud will {} communicate via the configured proxy.", "not".bold())
         }
-        let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let az_converter = AzureConverter::new(
             az_config.cloud_specific.mapper.timestamp,
-            mqtt_schema,
+            &mqtt_schema,
             az_config.cloud_specific.mapper.timestamp_format,
             prefix,
             az_config.mapper.mqtt.max_payload_size.0,
@@ -102,11 +104,12 @@ impl TEdgeComponent for AzureMapper {
         flows
             .persist_builtin_flow("mea", az_converter.builtin_flow().as_str())
             .await?;
+        let flows_status = flows_status_topic(&mqtt_schema, &service_topic_id);
 
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();
 
-        let mut flows_mapper = FlowsMapperBuilder::try_new(flows).await?;
+        let mut flows_mapper = FlowsMapperBuilder::try_new(flows, flows_status).await?;
         flows_mapper.connect(&mut mqtt_actor);
         flows_mapper.connect_fs(&mut fs_actor);
         flows_mapper.connect_cmd(&mut cmd_watcher_actor);
