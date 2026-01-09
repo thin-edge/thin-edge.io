@@ -43,6 +43,7 @@ use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::SubscriptionDiff;
+use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchActorBuilder;
 use tedge_watch_ext::WatchEvent;
@@ -75,10 +76,14 @@ pub struct FlowsMapperBuilder {
     mqtt_sender: DynSender<MqttMessage>,
     watch_request_sender: DynSender<WatchRequest>,
     processor: MessageProcessor<ConnectedFlowRegistry>,
+    status_topic: Topic,
 }
 
 impl FlowsMapperBuilder {
-    pub async fn try_new(registry: ConnectedFlowRegistry) -> Result<Self, LoadError> {
+    pub async fn try_new(
+        registry: ConnectedFlowRegistry,
+        status_topic: Topic,
+    ) -> Result<Self, LoadError> {
         let mut processor = MessageProcessor::try_new(registry).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
         let mqtt_sender = NullSender.into();
@@ -91,6 +96,7 @@ impl FlowsMapperBuilder {
             mqtt_sender,
             watch_request_sender,
             processor,
+            status_topic,
         })
     }
 
@@ -153,8 +159,9 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
     }
 
     fn build(self) -> FlowsMapper {
-        let subscriptions = self.topics().clone();
+        let subscriptions = self.topics();
         let watched_commands = HashSet::new();
+        let status_topic = self.status_topic;
         FlowsMapper {
             messages: self.message_box.build(),
             mqtt_sender: self.mqtt_sender,
@@ -163,6 +170,7 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
             watched_commands,
             processor: self.processor,
             next_dump: Instant::now() + STATS_DUMP_INTERVAL,
+            status_topic,
         }
     }
 }

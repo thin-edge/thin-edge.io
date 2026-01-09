@@ -177,6 +177,14 @@ Disable builtin az mapper flows
     Should Be Empty    ${message}
     [Teardown]    Restore Builtin Flow
 
+Monitor flow definition updates
+    ${start}=    Get Unix Timestamp
+    Execute Command    touch /etc/tedge/mappers/az/flows/mea.toml
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-mapper-az/status/flows
+    ...    date_from=${start}
+    ...    message_contains=mea.toml
+
 
 *** Keywords ***
 Custom Setup

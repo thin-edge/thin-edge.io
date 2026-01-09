@@ -14,6 +14,7 @@ use tedge_flows::FlowsMapperBuilder;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
+use tedge_mqtt_ext::Topic;
 use tempfile::TempDir;
 
 #[tokio::test(start_paused = true)]
@@ -412,7 +413,8 @@ type ActorHandle = tokio::task::JoinHandle<Result<(), tedge_actors::RuntimeError
 
 async fn spawn_flows_actor(config_dir: &TempDir, mqtt: &mut MockMqtt) -> ActorHandle {
     let flows = ConnectedFlowRegistry::new(config_dir.path().to_str().unwrap());
-    let mut flows_builder = FlowsMapperBuilder::try_new(flows)
+    let status_topic = Topic::new_unchecked("te/device/main/service/tedge-flows/status/flows");
+    let mut flows_builder = FlowsMapperBuilder::try_new(flows, status_topic)
         .await
         .expect("Failed to create FlowsMapper");
 
