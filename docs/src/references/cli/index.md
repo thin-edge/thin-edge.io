@@ -6,7 +6,7 @@ sidebar_position: 4
 
 # The tedge command
 
-```sh title="tedge"
+```text command="tedge --help" title="tedge"
 Command line interface to interact with thin-edge.io
 
 Usage: tedge [OPTIONS] <COMMAND>

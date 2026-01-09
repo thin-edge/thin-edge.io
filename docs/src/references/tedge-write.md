@@ -73,7 +73,7 @@ provided new values will be ignored.
 
 ## Command help
 
-```sh command="tedge-write --help" title="tedge-write --help"
+```text command="tedge-write --help" title="tedge-write --help"
 tee-like helper for writing to files which `tedge` user does not have write permissions to.
 
 To be used in combination with sudo, passing the file content via standard input.
