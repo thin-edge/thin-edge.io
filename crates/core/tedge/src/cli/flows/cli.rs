@@ -2,6 +2,7 @@ use crate::cli::flows::list::ListCommand;
 use crate::cli::flows::test::TestCommand;
 use crate::command::BuildCommand;
 use crate::command::Command;
+use crate::log::MaybeFancy;
 use crate::ConfigError;
 use anyhow::anyhow;
 use anyhow::Context;
@@ -17,10 +18,18 @@ use tedge_flows::MessageProcessor;
 pub enum TEdgeFlowsCli {
     /// List flows and steps
     List {
+        /// Mapper name
+        #[clap(long, default_value = "flows", global = true)]
+        mapper: String,
+
+        /// Mapper profile
+        #[clap(long, global = true)]
+        profile: Option<String>,
+
         /// Path to the directory of flows and steps
         ///
-        /// Default to /etc/tedge/flows
-        #[clap(long)]
+        /// Default to /etc/tedge/mappers/$MAPPER.$PROFILE/flows
+        #[clap(long, global = true)]
         flows_dir: Option<Utf8PathBuf>,
 
         /// List flows processing messages published on this topic
@@ -32,10 +41,18 @@ pub enum TEdgeFlowsCli {
 
     /// Process message samples
     Test {
+        /// Mapper name
+        #[clap(long, default_value = "flows", global = true)]
+        mapper: String,
+
+        /// Mapper profile
+        #[clap(long, global = true)]
+        profile: Option<String>,
+
         /// Path to the directory of flows and steps
         ///
-        /// Default to /etc/tedge/flows
-        #[clap(long)]
+        /// Default to /etc/tedge/mappers/$MAPPER.$PROFILE/flows
+        #[clap(long, global = true)]
         flows_dir: Option<Utf8PathBuf>,
 
         /// Path to the flow step script or TOML flow definition
@@ -72,18 +89,38 @@ pub enum TEdgeFlowsCli {
         /// If none is provided, payloads are read from stdin
         payload: Option<String>,
     },
+
+    /// Display the path to the directory of flows and steps
+    ConfigDir {
+        /// Mapper name
+        #[clap(long, default_value = "flows", global = true)]
+        mapper: String,
+
+        /// Mapper profile
+        #[clap(long, global = true)]
+        profile: Option<String>,
+    },
 }
 
 #[async_trait::async_trait]
 impl BuildCommand for TEdgeFlowsCli {
     async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
-            TEdgeFlowsCli::List { flows_dir, topic } => {
-                let flows_dir = flows_dir.unwrap_or_else(|| Self::default_flows_dir(config));
+            TEdgeFlowsCli::List {
+                mapper,
+                profile,
+                flows_dir,
+                topic,
+            } => {
+                let flows_dir = flows_dir.unwrap_or_else(|| {
+                    Self::default_flows_dir(config, &mapper, profile.as_deref())
+                });
                 Ok(ListCommand { flows_dir, topic }.into_boxed())
             }
 
             TEdgeFlowsCli::Test {
+                mapper,
+                profile,
                 flows_dir,
                 flow,
                 final_on_interval,
@@ -93,7 +130,9 @@ impl BuildCommand for TEdgeFlowsCli {
                 topic,
                 payload,
             } => {
-                let flows_dir = flows_dir.unwrap_or_else(|| Self::default_flows_dir(config));
+                let flows_dir = flows_dir.unwrap_or_else(|| {
+                    Self::default_flows_dir(config, &mapper, profile.as_deref())
+                });
                 let message = match (topic, payload) {
                     (Some(topic), Some(payload)) => Some(Message::new(topic, payload)),
                     (Some(_), None) => Err(anyhow!("Missing sample payload"))?,
@@ -111,13 +150,18 @@ impl BuildCommand for TEdgeFlowsCli {
                 }
                 .into_boxed())
             }
+
+            TEdgeFlowsCli::ConfigDir { mapper, profile } => {
+                let flows_dir = Self::default_flows_dir(config, &mapper, profile.as_deref());
+                Ok(ConfigDirCommand { flows_dir }.into_boxed())
+            }
         }
     }
 }
 
 impl TEdgeFlowsCli {
-    fn default_flows_dir(config: &TEdgeConfig) -> Utf8PathBuf {
-        tedge_flows::default_flows_dir(config.root_dir())
+    fn default_flows_dir(config: &TEdgeConfig, mapper: &str, profile: Option<&str>) -> Utf8PathBuf {
+        tedge_flows::flows_dir(config.root_dir(), mapper, profile)
     }
 
     pub async fn load_flows(
@@ -144,5 +188,21 @@ impl TEdgeFlowsCli {
             processor.load_single_script(path).await;
         }
         Ok(processor)
+    }
+}
+
+pub struct ConfigDirCommand {
+    pub flows_dir: Utf8PathBuf,
+}
+
+#[async_trait::async_trait]
+impl Command for ConfigDirCommand {
+    fn description(&self) -> String {
+        "display flows config directory".to_string()
+    }
+
+    async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
+        println!("{}", self.flows_dir);
+        Ok(())
     }
 }
