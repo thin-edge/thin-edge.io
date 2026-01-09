@@ -241,7 +241,7 @@ Install Flow
     [Arguments]    ${directory}    ${definition_file}
     ${start}    Get Unix Timestamp
     ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/${definition_file}    /etc/tedge/mappers/flows/flows/
-
+    Restart Service    tedge-flows
     Should Have MQTT Messages
     ...    topic=te/device/main/service/tedge-flows/status/flows
     ...    date_from=${start}
