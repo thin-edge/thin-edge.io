@@ -1,5 +1,5 @@
 mod backoff;
-mod config;
+pub mod config;
 #[cfg(test)]
 mod test_helpers;
 mod topics;

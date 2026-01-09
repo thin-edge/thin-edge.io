@@ -110,6 +110,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69f7f8c3906b62b754cd5326047894316021dcfe5a194c8ea52bdd94934a3457"
 
 [[package]]
+name = "ariadne"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8454c8a44ce2cb9cc7e7fae67fc6128465b343b92c6631e94beca3c8d1524ea5"
+dependencies = [
+ "unicode-width 0.2.2",
+ "yansi",
+]
+
+[[package]]
 name = "arraydeque"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4341,9 +4351,9 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e24345aa0fe688594e73770a5f6d1b216508b4f93484c0026d521acd30134392"
+checksum = "f8bbf91e5a4d6315eee45e704372590b30e260ee83af6639d64557f51b067776"
 dependencies = [
  "serde_core",
 ]
@@ -5210,6 +5220,7 @@ name = "tedge_mqtt_bridge"
 version = "1.7.1"
 dependencies = [
  "anyhow",
+ "ariadne",
  "async-trait",
  "backoff",
  "bytes",
@@ -5223,13 +5234,16 @@ dependencies = [
  "rcgen",
  "rumqttc",
  "rumqttd",
+ "serde",
  "serde_json",
+ "serde_spanned 1.0.4",
  "tedge_actors",
  "tedge_config",
  "tedge_test_utils",
  "thiserror 2.0.12",
  "tokio",
  "tokio-util",
+ "toml 0.9.6",
  "tracing",
  "tracing-subscriber",
 ]
@@ -5646,7 +5660,7 @@ checksum = "ae2a4cf385da23d1d53bc15cdfa5c2109e93d8d362393c801e87da2f72f0e201"
 dependencies = [
  "indexmap",
  "serde_core",
- "serde_spanned 1.0.3",
+ "serde_spanned 1.0.4",
  "toml_datetime 0.7.3",
  "toml_parser",
  "toml_writer",
