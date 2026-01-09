@@ -84,7 +84,7 @@ token will be considered for a key.
 
 ## Relevant configuration
 
-```sh command="tedge config list --doc device.cryptoki" title="tedge config list --doc device.cryptoki"
+```text command="tedge config list --doc device.cryptoki" title="tedge config list --doc device.cryptoki"
        device.cryptoki.mode  Whether to use a Hardware Security Module for authenticating the MQTT connection with the cloud.  "off" to not use the HSM, "module" to use the provided cryptoki dynamic module, "socket" to access the HSM via tedge-p11-server signing service.
                              Examples: off, module, socket
 
@@ -104,7 +104,7 @@ device.cryptoki.socket_path  A path to the tedge-p11-server socket.  Needs to be
 ## Command help
 
 <!-- the command component doesn't generate any output, perhaps because tedge-p11-server binary isn't present? -->
-```sh command="tedge-p11-server --help" title="tedge-p11-server --help"
+```text command="tedge-p11-server --help" title="tedge-p11-server --help"
 thin-edge.io service for passing PKCS#11 cryptographic tokens
 
 Usage: tedge-p11-server [OPTIONS]
