@@ -51,9 +51,9 @@ Get Expected Mapper Config Path
     [Documentation]    Calculate the expected path for mapper config based on cloud and profile
     [Arguments]    ${cloud}    ${profile}=${NONE}
     IF    "${profile}" == "${NONE}"
-        ${path}=    Set Variable    /etc/tedge/mappers/${cloud}.toml
+        ${path}=    Set Variable    /etc/tedge/mappers/${cloud}/tedge.toml
     ELSE
-        ${path}=    Set Variable    /etc/tedge/mappers/${cloud}.d/${profile}.toml
+        ${path}=    Set Variable    /etc/tedge/mappers/${cloud}.${profile}/tedge.toml
     END
     RETURN    ${path}
 
