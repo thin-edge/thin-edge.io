@@ -94,7 +94,7 @@ pub struct MapperOpt {
 }
 
 #[derive(Debug, clap::Subcommand, Clone)]
-#[clap(rename_all = "snake_case")]
+#[clap(rename_all = "kebab-case")]
 pub enum MapperName {
     #[cfg(feature = "azure")]
     Az {

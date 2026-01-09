@@ -108,19 +108,22 @@ pub trait SpecialisedCloudConfig:
     ) -> Self::CloudConfigReader;
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct MapperConfigPath<'a> {
-    base_dir: &'a Utf8Path,
-    cloud_type: CloudType,
+    pub(crate) base_dir: Cow<'a, Utf8Path>,
+    pub(crate) cloud_type: CloudType,
 }
 
 impl MapperConfigPath<'_> {
-    pub fn path_for(&self, profile: Option<&ProfileName>) -> Utf8PathBuf {
-        let dir = self.base_dir;
+    pub fn path_for(&self, profile: Option<&(impl AsRef<str> + ?Sized)>) -> Utf8PathBuf {
+        let dir = &*self.base_dir;
         let ty = self.cloud_type;
         match profile {
-            None => dir.join(format!("{ty}.toml")),
-            Some(profile) => dir.join(format!("{ty}.d/{profile}.toml")),
+            None => dir.join(format!("{ty}/tedge.toml")),
+            Some(profile) => {
+                let profile = profile.as_ref();
+                dir.join(format!("{ty}.{profile}/tedge.toml"))
+            }
         }
     }
 }
@@ -128,6 +131,7 @@ impl MapperConfigPath<'_> {
 pub trait HasPath {
     fn set_mapper_config_dir(&mut self, path: Utf8PathBuf);
     fn config_path(&self) -> Option<MapperConfigPath<'_>>;
+    fn set_mapper_config_file(&mut self, path: Utf8PathBuf);
 }
 
 impl HasPath for TEdgeConfigDtoC8y {
@@ -137,9 +141,13 @@ impl HasPath for TEdgeConfigDtoC8y {
 
     fn config_path(&self) -> Option<MapperConfigPath<'_>> {
         Some(MapperConfigPath {
-            base_dir: self.mapper_config_dir.as_deref()?,
+            base_dir: Cow::Borrowed(self.mapper_config_dir.as_deref()?),
             cloud_type: CloudType::C8y,
         })
+    }
+
+    fn set_mapper_config_file(&mut self, path: Utf8PathBuf) {
+        self.mapper_config_file = Some(path)
     }
 }
 
@@ -150,9 +158,13 @@ impl HasPath for TEdgeConfigDtoAz {
 
     fn config_path(&self) -> Option<MapperConfigPath<'_>> {
         Some(MapperConfigPath {
-            base_dir: self.mapper_config_dir.as_deref()?,
+            base_dir: Cow::Borrowed(self.mapper_config_dir.as_deref()?),
             cloud_type: CloudType::Az,
         })
+    }
+
+    fn set_mapper_config_file(&mut self, path: Utf8PathBuf) {
+        self.mapper_config_file = Some(path)
     }
 }
 
@@ -163,14 +175,20 @@ impl HasPath for TEdgeConfigDtoAws {
 
     fn config_path(&self) -> Option<MapperConfigPath<'_>> {
         Some(MapperConfigPath {
-            base_dir: self.mapper_config_dir.as_deref()?,
+            base_dir: Cow::Borrowed(self.mapper_config_dir.as_deref()?),
             cloud_type: CloudType::Aws,
         })
+    }
+
+    fn set_mapper_config_file(&mut self, path: Utf8PathBuf) {
+        self.mapper_config_file = Some(path)
     }
 }
 
 /// Base mapper configuration with common fields and cloud-specific fields via generics
 pub struct MapperConfig<T: SpecialisedCloudConfig> {
+    pub(crate) location: Utf8PathBuf,
+
     /// Endpoint URL of the cloud tenant
     url: OptionalConfig<ConnectUrl>,
 

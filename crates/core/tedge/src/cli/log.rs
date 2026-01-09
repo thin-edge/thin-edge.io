@@ -267,6 +267,7 @@ pub struct ConfigLogger<'a> {
     cryptoki: &'a str,
     proxy_url: Option<&'a ProxyUrl>,
     proxy_username: Option<&'a str>,
+    mapper_config_location: &'a Utf8Path,
 }
 
 impl<'a> ConfigLogger<'a> {
@@ -281,6 +282,7 @@ impl<'a> ConfigLogger<'a> {
         cryptoki: &'a str,
         proxy_url: Option<&'a ProxyUrl>,
         proxy_username: Option<&'a str>,
+        mapper_config_location: &'a Utf8Path,
     ) {
         eprintln!(
             "{}",
@@ -298,6 +300,7 @@ impl<'a> ConfigLogger<'a> {
                 cryptoki,
                 proxy_url,
                 proxy_username,
+                mapper_config_location,
             }
         )
     }
@@ -320,6 +323,7 @@ impl<'a> ConfigLogger<'a> {
 impl fmt::Display for ConfigLogger<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:", self.title)?;
+        self.log_single_entry(f, "mapper configuration file", &self.mapper_config_location)?;
         self.log_single_entry(f, "device id", &self.device_id)?;
         if let Some(profile) = self.cloud.profile_name() {
             self.log_single_entry(f, "cloud profile", profile)?;

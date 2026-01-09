@@ -55,6 +55,7 @@ pub use topic_prefix::TopicPrefix;
     serde::Serialize,
     serde::Deserialize,
     strum::EnumIter,
+    strum::AsRefStr,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]

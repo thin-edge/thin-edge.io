@@ -500,7 +500,7 @@ mod tests {
         set_config_cmd.assert().success();
 
         let migrated_toml =
-            std::fs::read_to_string(temp_dir.path().join(format!("mappers/{cloud}.toml")))?;
+            std::fs::read_to_string(temp_dir.path().join(format!("mappers/{cloud}/tedge.toml")))?;
         assert_eq!(migrated_toml.trim(), "url = \"new.example.com\"");
 
         // tedge.toml will be created when `tedge config set` runs
@@ -535,7 +535,7 @@ mod tests {
         let migrated_toml = std::fs::read_to_string(
             temp_dir
                 .path()
-                .join(format!("mappers/{cloud}.d/profile.toml")),
+                .join(format!("mappers/{cloud}.profile/tedge.toml")),
         )
         .unwrap();
         assert_eq!(migrated_toml.trim(), "url = \"new.example.com\"");
@@ -572,7 +572,7 @@ mod tests {
         let migrated_toml = std::fs::read_to_string(
             temp_dir
                 .path()
-                .join(format!("mappers/{cloud}.d/profile.toml")),
+                .join(format!("mappers/{cloud}.profile/tedge.toml")),
         )
         .unwrap();
         assert_eq!(migrated_toml.trim(), "url = \"new.example.com\"");
@@ -591,16 +591,19 @@ mod tests {
     }
 
     fn setup_migrated_default(temp_dir: &tempfile::TempDir, cloud: &str) {
-        let mappers_dir = temp_dir.path().join("mappers");
-        std::fs::create_dir_all(&mappers_dir).unwrap();
-        let config_path = mappers_dir.join(format!("{cloud}.toml"));
+        let cloud_dir = temp_dir.path().join("mappers").join(cloud);
+        std::fs::create_dir_all(&cloud_dir).unwrap();
+        let config_path = cloud_dir.join("tedge.toml");
         std::fs::write(config_path, "url = \"example.com\"\n").unwrap();
     }
 
     fn setup_migrated_profile(temp_dir: &tempfile::TempDir, cloud: &str, profile: &str) {
-        let profile_dir = temp_dir.path().join("mappers").join(format!("{cloud}.d"));
+        let profile_dir = temp_dir
+            .path()
+            .join("mappers")
+            .join(format!("{cloud}.{profile}"));
         std::fs::create_dir_all(&profile_dir).unwrap();
-        let config_path = profile_dir.join(format!("{profile}.toml"));
+        let config_path = profile_dir.join("tedge.toml");
         std::fs::write(config_path, "url = \"example.com\"\n").unwrap();
     }
 
