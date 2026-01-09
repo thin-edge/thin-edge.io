@@ -269,7 +269,10 @@ Flows and steps can be tested using the `tedge flows test` command.
 - These tests are done without any interaction with MQTT and `tedge-mapper flows`,
   meaning that tests can safely be run on a device in production
 - By default, tests run against the flows and scripts used by `tedge-mapper flows`.
-  However, a directory of flows under development can be provided using the `--flows-dir <FLOWS_DIR>` option.
+  - However, a directory of flows under development can be provided using the `--flows-dir <FLOWS_DIR>` option.
+  - One can also test flows of a builtin mapper using the `--mapper` and `--profile` options.
+    The tests will then run against the flows of that mapper (and profile if any).
+  - The subcommand `tedge flows config-dir` can be used to get the flows directory for a `--mapper` and a `--profile`.
 - A test can be specific to a flow or script using the `--flow <OPTION>` option.
  
 A test can be given a test message on the command line.

@@ -231,6 +231,10 @@ Monitor flow definition updates
     ...    date_from=${start}
     ...    message_contains=collectd.toml
 
+Display flows definitions directory
+    ${directory}    Execute Command    tedge flows config-dir    strip=${True}
+    Should Be Equal    ${directory}    /etc/tedge/mappers/flows/flows
+
 
 *** Keywords ***
 Custom Setup

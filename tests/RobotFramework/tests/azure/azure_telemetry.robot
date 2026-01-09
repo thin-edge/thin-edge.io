@@ -185,6 +185,26 @@ Monitor flow definition updates
     ...    date_from=${start}
     ...    message_contains=mea.toml
 
+Display az flows definitions directory
+    ${directory}=    Execute Command    tedge flows config-dir --mapper az    strip=${True}
+    Should Be Equal    ${directory}    /etc/tedge/mappers/az/flows
+
+Display az flows definitions directory for a given profile
+    ${directory}=    Execute Command    tedge flows config-dir --mapper az --profile foo    strip=${True}
+    Should Be Equal    ${directory}    /etc/tedge/mappers/az.foo/flows
+
+Azure flows can be tested without actually sending data over MQTT
+    # This is not working yet with transformers that are specific to a mapper => Hence we have to redact a bit the flow
+    Execute Command    sed -i -e /skip-mosquitto-health-status/d /etc/tedge/mappers/az/flows/mea.toml
+    ${transformed_msg}=    Execute Command
+    ...    tedge flows test --mapper az te/device/main///m/environment '{"temperature": -16}'
+    Should Contain
+    ...    ${transformed_msg}
+    ...    item="temperature":-16
+    Should Contain
+    ...    ${transformed_msg}
+    ...    item="time"
+
 
 *** Keywords ***
 Custom Setup
