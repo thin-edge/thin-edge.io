@@ -263,14 +263,24 @@ if [ -z "$ARTIFACT_DIR" ]; then
 fi
 mkdir -p "$ARTIFACT_DIR"
 
-check_clang_version() {
-    CLANG_MAJOR_VERSION=$(clang --version | head -n1 | sed -n 's/.*clang version \([0-9]*\).*/\1/p')
-    if [ -n "$CLANG_MAJOR_VERSION" ] && [ "$CLANG_MAJOR_VERSION" -lt 20 ]; then
-        # add llvm/clang folder to path to override the default Apple clang version which
-        # is older and doesn't support some targets like riscv
-        if command -V brew >/dev/null 2>&1; then
-            HOMEBREW_PATH=$(brew --prefix)
-            export PATH="$HOMEBREW_PATH/opt/llvm/bin:$PATH"
+install_clang_if_required() {
+    # Only install clang if it is not available to keep build times
+    # quicker and avoiding unnecessary usage of sudo which is required to install packages
+    # note: clang is required by bindgen
+    if command -V ldconfig >/dev/null 2>&1; then
+        # linux
+        if ! ldconfig -p 2>/dev/null | grep -q "libclang.*\.so"; then
+            # shellcheck disable=SC2086
+            ./mk/install-build-tools.sh $TOOLCHAIN --target="$BINARY_TARGET"
+        fi
+    elif command -V brew >/dev/null 2>&1; then
+        # macOS
+        if ! brew list llvm >/dev/null 2>&1; then
+            brew install llvm
+        fi
+        LLVM_DIR="$(brew --prefix)/opt/llvm/bin"
+        if [ -d "$LLVM_DIR" ]; then
+            export PATH="$LLVM_DIR:$PATH"
         fi
     fi
 }
@@ -295,7 +305,7 @@ if [ "$BUILD" = 1 ] && [ ${#BINARIES[@]} -gt 0 ]; then
         case "$BUILD_TOOL" in
             zig)
                 install_zig_tools
-                check_clang_version
+                install_clang_if_required
 
                 case "$BINARY_TARGET" in
                     riscv64gc-unknown-linux-musl)
