@@ -10,16 +10,20 @@ mod js_value;
 mod registry;
 mod runtime;
 mod stats;
+mod steps;
+mod transformers;
 
 use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
-use crate::connected_flow::ConnectedFlowRegistry;
+pub use crate::config::ConfigError;
+pub use crate::connected_flow::ConnectedFlowRegistry;
 pub use crate::flow::*;
 pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
 pub use crate::runtime::MessageProcessor;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+pub use js_value::JsonValue;
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::path::PathBuf;
@@ -39,12 +43,30 @@ use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::SubscriptionDiff;
+use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_watch_ext::WatchActorBuilder;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
+pub use transformers::Transformer;
 
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
+
+pub fn default_flows_dir(tedge_config_dir: &Utf8Path) -> Utf8PathBuf {
+    flows_dir(tedge_config_dir, "flows", None)
+}
+
+pub fn flows_dir(tedge_config_dir: &Utf8Path, mapper: &str, profile: Option<&str>) -> Utf8PathBuf {
+    let profiled_name = match profile {
+        None => mapper.to_string(),
+        Some(profile) => format!("{mapper}.{profile}"),
+    };
+    tedge_config_dir
+        .join("mappers")
+        .join(profiled_name)
+        .join("flows")
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Tick;
@@ -54,11 +76,14 @@ pub struct FlowsMapperBuilder {
     mqtt_sender: DynSender<MqttMessage>,
     watch_request_sender: DynSender<WatchRequest>,
     processor: MessageProcessor<ConnectedFlowRegistry>,
+    status_topic: Topic,
 }
 
 impl FlowsMapperBuilder {
-    pub async fn try_new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
-        let registry = ConnectedFlowRegistry::new(config_dir);
+    pub async fn try_new(
+        registry: ConnectedFlowRegistry,
+        status_topic: Topic,
+    ) -> Result<Self, LoadError> {
         let mut processor = MessageProcessor::try_new(registry).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
         let mqtt_sender = NullSender.into();
@@ -71,6 +96,7 @@ impl FlowsMapperBuilder {
             mqtt_sender,
             watch_request_sender,
             processor,
+            status_topic,
         })
     }
 
@@ -96,6 +122,10 @@ impl FlowsMapperBuilder {
             &self.message_box,
             |msg| Some(InputMessage::FsWatchEvent(msg)),
         );
+    }
+
+    pub fn connect_cmd(&mut self, cmd: &mut WatchActorBuilder) {
+        cmd.connect(self);
     }
 
     fn topics(&self) -> TopicFilter {
@@ -129,8 +159,9 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
     }
 
     fn build(self) -> FlowsMapper {
-        let subscriptions = self.topics().clone();
+        let subscriptions = self.topics();
         let watched_commands = HashSet::new();
+        let status_topic = self.status_topic;
         FlowsMapper {
             messages: self.message_box.build(),
             mqtt_sender: self.mqtt_sender,
@@ -139,12 +170,16 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
             watched_commands,
             processor: self.processor,
             next_dump: Instant::now() + STATS_DUMP_INTERVAL,
+            status_topic,
         }
     }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum LoadError {
+    #[error("Builtin transformer not found: {name}")]
+    UnknownTransformer { name: String },
+
     #[error("JavaScript module not found: {module_name}")]
     UnknownModule { module_name: String },
 

@@ -5136,6 +5136,7 @@ dependencies = [
  "tedge_actors",
  "tedge_file_system_ext",
  "tedge_mqtt_ext",
+ "tedge_utils",
  "tedge_watch_ext",
  "tempfile",
  "thiserror 2.0.12",

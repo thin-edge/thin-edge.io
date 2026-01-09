@@ -40,7 +40,7 @@ impl ListCommand {
         let flow_id = flow.name();
         println!("{flow_id}");
         for step in flow.steps.iter() {
-            println!("\t{}", step.script.path);
+            println!("\t{}", step.source());
         }
     }
 }

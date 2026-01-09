@@ -1,9 +1,10 @@
 use crate::flow::Flow;
 use crate::flow::FlowInput;
 use crate::flow::FlowOutput;
-use crate::flow::FlowStep;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
+use crate::steps::FlowStep;
+use crate::transformers::BuiltinTransformers;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -32,19 +33,23 @@ pub struct FlowConfig {
 
 #[derive(Deserialize)]
 pub struct StepConfig {
-    script: ScriptSpec,
+    #[serde(flatten)]
+    step: StepSpec,
 
     #[serde(default)]
     config: Option<Value>,
 
     #[serde(default)]
-    #[serde(deserialize_with = "parse_human_duration")]
-    interval: Duration,
+    #[serde(deserialize_with = "parse_optional_human_duration")]
+    interval: Option<Duration>,
 }
 
 #[derive(Deserialize)]
-#[serde(untagged)]
-pub enum ScriptSpec {
+pub enum StepSpec {
+    #[serde(rename = "builtin")]
+    Transformer(String),
+
+    #[serde(rename = "script")]
     JavaScript(Utf8PathBuf),
 }
 
@@ -100,6 +105,9 @@ pub enum ConfigError {
 
     #[error(transparent)]
     LoadError(#[from] LoadError),
+
+    #[error("Not a valid step configuration: {0}")]
+    IncorrectSetting(String),
 }
 
 impl FlowConfig {
@@ -155,9 +163,9 @@ impl FlowConfig {
     pub fn from_step(script: Utf8PathBuf) -> Self {
         let input_topic = "#".to_string();
         let step = StepConfig {
-            script: ScriptSpec::JavaScript(script),
+            step: StepSpec::JavaScript(script),
             config: None,
-            interval: Duration::default(),
+            interval: None,
         };
         Self {
             input: InputConfig::Mqtt {
@@ -171,6 +179,7 @@ impl FlowConfig {
 
     pub async fn compile(
         self,
+        rs_transformers: &BuiltinTransformers,
         js_runtime: &mut JsRuntime,
         config_dir: &Utf8Path,
         source: Utf8PathBuf,
@@ -180,11 +189,9 @@ impl FlowConfig {
         let errors = self.errors.try_into()?;
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
-            let mut step = step.compile(config_dir, i, &source);
-            js_runtime.load_script(&mut step.script).await?;
-            step.check(&source);
-            step.fix();
-            step.script.init_next_execution();
+            let step = step
+                .compile(rs_transformers, js_runtime, config_dir, i, &source)
+                .await?;
             steps.push(step);
         }
         Ok(Flow {
@@ -198,16 +205,55 @@ impl FlowConfig {
 }
 
 impl StepConfig {
-    pub fn compile(self, config_dir: &Utf8Path, index: usize, flow: &Utf8Path) -> FlowStep {
-        let path = match self.script {
-            ScriptSpec::JavaScript(path) if path.is_absolute() => path,
-            ScriptSpec::JavaScript(path) if path.starts_with(config_dir) => path,
-            ScriptSpec::JavaScript(path) => config_dir.join(path),
+    pub async fn compile(
+        &self,
+        rs_transformers: &BuiltinTransformers,
+        js_runtime: &mut JsRuntime,
+        config_dir: &Utf8Path,
+        index: usize,
+        flow: &Utf8Path,
+    ) -> Result<FlowStep, ConfigError> {
+        let step = match &self.step {
+            StepSpec::JavaScript(path) => {
+                Self::compile_script(js_runtime, config_dir, flow, path, index).await?
+            }
+            StepSpec::Transformer(name) => {
+                Self::instantiate_builtin(rs_transformers, flow, name, index)?
+            }
         };
-        let script = JsScript::new(flow.to_owned(), index, path)
-            .with_config(self.config)
-            .with_interval(self.interval);
-        FlowStep { script }
+        let step = step
+            .with_config(self.config.clone())?
+            .with_interval(self.interval, flow.as_str());
+        Ok(step)
+    }
+
+    async fn compile_script(
+        js_runtime: &mut JsRuntime,
+        config_dir: &Utf8Path,
+        flow: &Utf8Path,
+        path: &Utf8Path,
+        index: usize,
+    ) -> Result<FlowStep, ConfigError> {
+        let path = if path.is_absolute() || path.starts_with(config_dir) {
+            path.to_owned()
+        } else {
+            config_dir.join(path)
+        };
+        let module_name = FlowStep::instance_name(flow, &path, index);
+        let mut script = JsScript::new(module_name, flow.to_owned(), path);
+        js_runtime.load_script(&mut script).await?;
+        Ok(FlowStep::new_script(script))
+    }
+
+    fn instantiate_builtin(
+        rs_transformers: &BuiltinTransformers,
+        flow: &Utf8Path,
+        name: &String,
+        index: usize,
+    ) -> Result<FlowStep, ConfigError> {
+        let instance_name = FlowStep::instance_name(flow, name, index);
+        let transformer = rs_transformers.new_instance(name)?;
+        Ok(FlowStep::new_transformer(instance_name, transformer))
     }
 }
 
@@ -270,22 +316,16 @@ fn into_topic(name: String) -> Result<Topic, ConfigError> {
     Topic::new(&name).map_err(|_| ConfigError::IncorrectTopic(name))
 }
 
-fn topic_filters(patterns: Vec<String>) -> Result<TopicFilter, ConfigError> {
+pub(crate) fn topic_filters<S: AsRef<str> + ToString>(
+    patterns: Vec<S>,
+) -> Result<TopicFilter, ConfigError> {
     let mut topics = TopicFilter::empty();
     for pattern in patterns {
         topics
-            .try_add(pattern.as_str())
-            .map_err(|_| ConfigError::IncorrectTopicFilter(pattern.clone()))?;
+            .try_add(pattern.as_ref())
+            .map_err(|_| ConfigError::IncorrectTopicFilter(pattern.to_string()))?;
     }
     Ok(topics)
-}
-
-fn parse_human_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
-where
-    D: serde::de::Deserializer<'de>,
-{
-    let value = String::deserialize(deserializer)?;
-    humantime::parse_duration(&value).map_err(|_| serde::de::Error::custom("Invalid duration"))
 }
 
 fn parse_optional_human_duration<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>

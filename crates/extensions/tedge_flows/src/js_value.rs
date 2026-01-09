@@ -6,6 +6,7 @@ use rquickjs::FromJs;
 use rquickjs::IntoJs;
 use rquickjs::Value;
 use serde_json::json;
+use serde_json::Number;
 use std::collections::BTreeMap;
 use std::time::SystemTime;
 
@@ -52,6 +53,50 @@ impl JsonValue {
             .map(|(k, v)| (k.to_string(), v))
             .collect();
         JsonValue::Object(object)
+    }
+
+    fn property(&self, property: &str) -> Option<&JsonValue> {
+        match self {
+            JsonValue::Object(map) => map.get(property),
+            _ => None,
+        }
+    }
+
+    pub fn string_property(&self, property: &str) -> Option<&str> {
+        self.property(property).and_then(|v| match v {
+            JsonValue::String(string) => Some(string.as_str()),
+            _ => None,
+        })
+    }
+
+    pub fn strings_property(&self, property: &str) -> Vec<&str> {
+        self.property(property)
+            .map(|v| match v {
+                JsonValue::String(string) => vec![string.as_str()],
+                JsonValue::Array(props) => props
+                    .iter()
+                    .filter_map(|v| match v {
+                        JsonValue::String(s) => Some(s.as_str()),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => vec![],
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn number_property(&self, property: &str) -> Option<&Number> {
+        self.property(property).and_then(|v| match v {
+            JsonValue::Number(n) => Some(n),
+            _ => None,
+        })
+    }
+
+    pub fn bool_property(&self, property: &str) -> Option<bool> {
+        self.property(property).and_then(|v| match v {
+            JsonValue::Bool(n) => Some(*n),
+            _ => None,
+        })
     }
 }
 
