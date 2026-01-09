@@ -102,16 +102,18 @@ impl std::ops::Deref for TEdgeConfig {
     }
 }
 
-async fn read_file_if_exists(path: &Utf8Path) -> anyhow::Result<Option<String>> {
+async fn read_file_if_exists(
+    path: &Utf8Path,
+    config_dir: &Utf8Path,
+) -> anyhow::Result<Option<String>> {
     match tokio::fs::read_to_string(path).await {
         Ok(contents) => Ok(Some(contents)),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
         Err(e) => {
-            let dir = path.parent().unwrap();
             // If the error is actually with the mappers directory as a whole,
             // feed that back to the user
-            if let Err(dir_error) = tokio::fs::read_dir(dir).await {
-                Err(dir_error).context(format!("failed to read {dir}"))
+            if let Err(dir_error) = tokio::fs::read_dir(config_dir).await {
+                Err(dir_error).context(format!("failed to read {config_dir}"))
             } else {
                 Err(e).context(format!("failed to read mapper configuration from {path}"))
             }
@@ -142,7 +144,8 @@ impl TEdgeConfigDto {
                 tracing::warn!("{ty} configuration found in `tedge.toml`, but this will be ignored in favour of configuration in {default_profile_path} and {wildcard_profile_path}")
             }
 
-            let default_profile_toml = read_file_if_exists(&default_profile_path).await?;
+            let default_profile_toml =
+                read_file_if_exists(&default_profile_path, &config_paths.base_dir).await?;
             let mut default_profile_config: T::CloudDto = default_profile_toml.map_or_else(
                 || Ok(<_>::default()),
                 |toml| {

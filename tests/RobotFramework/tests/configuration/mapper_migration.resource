@@ -13,7 +13,25 @@ Verify Mapper Config File Exists
     [Documentation]    Verify that the mapper config file exists for the given cloud and profile
     [Arguments]    ${cloud}    ${profile}=${NONE}
     ${path}=    Get Expected Mapper Config Path    ${cloud}    ${profile}
-    Execute Command    test -f ${path}
+    Execute Command    test -f ${path}    retries=0    timeout=0
+
+Verify Mapper Config Directory Exists
+    [Documentation]    Verify that the mapper config directory exists for the given cloud and profile
+    [Arguments]    ${cloud}    ${profile}=${NONE}
+    ${path}=    Get Expected Mapper Config Directory    ${cloud}    ${profile}
+    Execute Command    test -d ${path}    retries=0    timeout=0
+
+Verify Mapper Config File Does Not Exist
+    [Documentation]    Verify that the mapper config file does not exist for the given cloud and profile
+    [Arguments]    ${cloud}    ${profile}=${NONE}
+    ${path}=    Get Expected Mapper Config Path    ${cloud}    ${profile}
+    Execute Command    test -f ${path}    exp_exit_code=!0    retries=0    timeout=0
+
+Verify Mapper Config Directory Does Not Exist
+    [Documentation]    Verify that the mapper config directory does not exist for the given cloud and profile
+    [Arguments]    ${cloud}    ${profile}=${NONE}
+    ${path}=    Get Expected Mapper Config Directory    ${cloud}    ${profile}
+    Execute Command    test -d ${path}    exp_exit_code=!0    retries=0    timeout=0
 
 Verify Mapper Config File Contains
     [Documentation]    Verify that the mapper config file contains the expected key-value pair
@@ -54,6 +72,16 @@ Get Expected Mapper Config Path
         ${path}=    Set Variable    /etc/tedge/mappers/${cloud}/tedge.toml
     ELSE
         ${path}=    Set Variable    /etc/tedge/mappers/${cloud}.${profile}/tedge.toml
+    END
+    RETURN    ${path}
+
+Get Expected Mapper Config Directory
+    [Documentation]    Calculate the directory for the mapper config based on cloud and profile
+    [Arguments]    ${cloud}    ${profile}=${NONE}
+    IF    "${profile}" == "${NONE}"
+        ${path}=    Set Variable    /etc/tedge/mappers/${cloud}
+    ELSE
+        ${path}=    Set Variable    /etc/tedge/mappers/${cloud}.${profile}
     END
     RETURN    ${path}
 

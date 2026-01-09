@@ -329,7 +329,8 @@ impl TEdgeConfigLocation {
                     .into_iter()
                     .fold(toml, |toml, migration| migration.apply_to(toml));
 
-                self.store_in(self.toml_path(), &migrated_toml).await?;
+                self.store_in(self.toml_path(), &migrated_toml, StoreEmptyConfig::Yes)
+                    .await?;
 
                 (dto, warnings) = deserialize_toml(migrated_toml, toml_path)?;
             }
@@ -348,15 +349,23 @@ impl TEdgeConfigLocation {
         self.store_cloud(&mut config.c8y).await?;
         self.store_cloud(&mut config.az).await?;
         self.store_cloud(&mut config.aws).await?;
-        self.store_in(self.toml_path(), &config).await
+        self.store_in(self.toml_path(), &config, StoreEmptyConfig::Yes)
+            .await
     }
 
     async fn store_in<S: Serialize>(
         &self,
         toml_path: &Utf8Path,
         config: &S,
+        persist_if_empty: StoreEmptyConfig,
     ) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config)?;
+
+        if persist_if_empty == StoreEmptyConfig::No && toml.trim() == "" {
+            return self
+                .cleanup_config_file_and_possibly_parent(toml_path)
+                .await;
+        }
 
         // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
         if !tokio::fs::try_exists(toml_path).await.unwrap_or(false) {
@@ -386,35 +395,39 @@ impl TEdgeConfigLocation {
         S: Serialize + HasPath + Default + PartialEq,
     {
         if let Some(paths) = cloud.non_profile.config_path() {
-            // TODO correct this
-            if toml::to_string(&cloud.non_profile).is_ok_and(|t| t.trim().is_empty()) {
-                let config_file = paths.path_for(None::<&ProfileName>);
-                match tokio::fs::remove_file(&config_file).await {
-                    Ok(()) => {
-                        let dir = config_file.parent().unwrap();
-                        if tokio::fs::read_dir(dir)
-                            .await
-                            .unwrap()
-                            .next_entry()
-                            .await
-                            .is_ok_and(|x| x.is_none())
-                        {
-                            tokio::fs::remove_dir(dir).await?;
-                        }
-                    }
-                    Err(e) if e.kind() == ErrorKind::NotFound => (),
-                    Err(e) => return Err(e.into()),
-                }
-            } else {
-                self.store_in(&paths.path_for(None::<&ProfileName>), &cloud.non_profile)
-                    .await?;
-            }
+            self.store_in(
+                &paths.path_for(None::<&ProfileName>),
+                &cloud.non_profile,
+                StoreEmptyConfig::No,
+            )
+            .await?;
             for (name, profile) in &mut cloud.profiles {
-                self.store_in(&paths.path_for(Some(name)), profile).await?;
+                self.store_in(&paths.path_for(Some(name)), profile, StoreEmptyConfig::No)
+                    .await?;
             }
             std::mem::take(cloud);
         }
         Ok(())
+    }
+
+    async fn cleanup_config_file_and_possibly_parent(
+        &self,
+        config_file: &Utf8Path,
+    ) -> Result<(), TEdgeConfigError> {
+        match tokio::fs::remove_file(&config_file).await {
+            Ok(()) => {}
+            Err(e) if e.kind() == ErrorKind::NotFound => (),
+            Err(e) => return Err(e.into()),
+        }
+
+        match tokio::fs::remove_dir(config_file.parent().unwrap()).await {
+            Ok(()) => Ok(()),
+            // If the directory isn't empty, leave it, it may contain flows or something
+            Err(e) if [ErrorKind::DirectoryNotEmpty, ErrorKind::NotFound].contains(&e.kind()) => {
+                Ok(())
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
@@ -558,6 +571,12 @@ fn keys_in_inner(prefix: &str, table: &toml::map::Map<String, toml::Value>) -> V
         }
     }
     res
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum StoreEmptyConfig {
+    No,
+    Yes,
 }
 
 #[cfg(test)]
@@ -1036,6 +1055,369 @@ type = "a-service-type""#;
         assert!(!toml::from_str::<toml::Table>(&tedge_toml)
             .unwrap()
             .contains_key("aws"));
+    }
+
+    #[tokio::test]
+    async fn az_config_can_be_read_from_main_tedge_toml_even_with_flows_installed() {
+        let (dir, location) = create_temp_tedge_config("az.url = \"example.com\"").unwrap();
+        let _env_lock = EnvSandbox::new().await;
+
+        dir.dir("mappers")
+            .dir("az")
+            .dir("flows")
+            .file("flow.toml")
+            .with_raw_content("# An example flow");
+
+        let config = location.load().await.unwrap();
+        assert_eq!(
+            config
+                .mapper_config::<AzMapperSpecificConfig>(&None::<&ProfileName>)
+                .unwrap()
+                .url()
+                .or_none(),
+            Some(&"example.com".parse().unwrap())
+        );
+    }
+
+    #[tokio::test]
+    async fn profiled_az_config_can_be_read_from_main_tedge_toml_even_with_flows_installed() {
+        let (dir, location) =
+            create_temp_tedge_config("az.profiles.test.url = \"example.com\"").unwrap();
+        let _env_lock = EnvSandbox::new().await;
+
+        dir.dir("mappers")
+            .dir("az.test")
+            .dir("flows")
+            .file("flow.toml")
+            .with_raw_content("# An example flow");
+
+        let config = location.load().await.unwrap();
+        assert_eq!(
+            config
+                .mapper_config::<AzMapperSpecificConfig>(&Some(
+                    "test".parse::<ProfileName>().unwrap()
+                ))
+                .unwrap()
+                .url()
+                .or_none(),
+            Some(&"example.com".parse().unwrap())
+        );
+    }
+
+    mod cleanup_config_file_and_possibly_parent {
+        use super::*;
+
+        #[tokio::test]
+        async fn removes_empty_config_file() {
+            let (dir, location) = create_temp_tedge_config("").unwrap();
+
+            dir.dir("mappers")
+                .dir("c8y")
+                .file("tedge.toml")
+                .with_raw_content("url = \"example.com\"");
+
+            let config_path = location.mappers_config_dir().join("c8y/tedge.toml");
+            assert!(tokio::fs::try_exists(&config_path).await.unwrap());
+
+            location
+                .cleanup_config_file_and_possibly_parent(&config_path)
+                .await
+                .unwrap();
+
+            assert!(!tokio::fs::try_exists(&config_path).await.unwrap());
+        }
+
+        #[tokio::test]
+        async fn removes_parent_directory_when_empty() {
+            let (dir, location) = create_temp_tedge_config("").unwrap();
+
+            dir.dir("mappers")
+                .dir("c8y")
+                .file("tedge.toml")
+                .with_raw_content("url = \"example.com\"");
+
+            let config_path = location.mappers_config_dir().join("c8y/tedge.toml");
+            let parent_dir = location.mappers_config_dir().join("c8y");
+
+            assert!(tokio::fs::try_exists(&config_path).await.unwrap());
+            assert!(tokio::fs::try_exists(&parent_dir).await.unwrap());
+
+            location
+                .cleanup_config_file_and_possibly_parent(&config_path)
+                .await
+                .unwrap();
+
+            assert!(!tokio::fs::try_exists(&config_path).await.unwrap());
+            assert!(!tokio::fs::try_exists(&parent_dir).await.unwrap());
+        }
+
+        #[tokio::test]
+        async fn preserves_parent_directory_with_other_files() {
+            let (dir, location) = create_temp_tedge_config("").unwrap();
+
+            let mapper_dir = dir.dir("mappers").dir("c8y.test");
+            mapper_dir
+                .file("tedge.toml")
+                .with_raw_content("url = \"example.com\"");
+            mapper_dir
+                .file("some-flow.toml")
+                .with_raw_content("# flow content");
+
+            let config_path = location.mappers_config_dir().join("c8y.test/tedge.toml");
+            let flow_path = location
+                .mappers_config_dir()
+                .join("c8y.test/some-flow.toml");
+            let parent_dir = location.mappers_config_dir().join("c8y.test");
+
+            assert!(tokio::fs::try_exists(&config_path).await.unwrap());
+            assert!(tokio::fs::try_exists(&flow_path).await.unwrap());
+
+            location
+                .cleanup_config_file_and_possibly_parent(&config_path)
+                .await
+                .unwrap();
+
+            assert!(!tokio::fs::try_exists(&config_path).await.unwrap());
+            assert!(tokio::fs::try_exists(&parent_dir).await.unwrap());
+            assert!(tokio::fs::try_exists(&flow_path).await.unwrap());
+        }
+
+        #[tokio::test]
+        async fn handles_nonexistent_file_gracefully() {
+            let (_dir, location) = create_temp_tedge_config("").unwrap();
+
+            let config_path = location.mappers_config_dir().join("c8y/tedge.toml");
+
+            let result = location
+                .cleanup_config_file_and_possibly_parent(&config_path)
+                .await;
+
+            assert!(result.is_ok());
+        }
+
+        #[tokio::test]
+        async fn handles_nonexistent_directory_gracefully() {
+            let (_dir, location) = create_temp_tedge_config("").unwrap();
+
+            let config_path = location.mappers_config_dir().join("nonexistent/tedge.toml");
+
+            let result = location
+                .cleanup_config_file_and_possibly_parent(&config_path)
+                .await;
+
+            assert!(result.is_ok());
+        }
+    }
+
+    mod store_cloud_cleanup_integration {
+        use super::*;
+
+        #[tokio::test]
+        async fn main_tedge_toml_stored_even_when_empty() {
+            let (_dir, mut location) = create_temp_tedge_config("").unwrap();
+            location.default_to_mapper_config_dir();
+            let _env_lock = EnvSandbox::new().await;
+
+            location.update_toml(&|_dto, _rdr| Ok(())).await.unwrap();
+
+            let main_config_path = location.tedge_config_file_path.clone();
+            assert!(tokio::fs::try_exists(&main_config_path).await.unwrap());
+        }
+
+        #[tokio::test]
+        async fn empty_default_profile_config_is_removed() {
+            let (_dir, mut location) = create_temp_tedge_config("").unwrap();
+            location.default_to_mapper_config_dir();
+            let _env_lock = EnvSandbox::new().await;
+
+            location
+                .update_toml(&|dto, _rdr| {
+                    dto.try_update_str(&WritableKey::C8yUrl(None), "example.com")?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            let config_path = location.mappers_config_dir().join("c8y/tedge.toml");
+            let parent_dir = location.mappers_config_dir().join("c8y");
+            assert!(tokio::fs::try_exists(&config_path).await.unwrap());
+
+            location
+                .update_toml(&|dto, _rdr| {
+                    dto.try_unset_key(&WritableKey::C8yUrl(None))?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            assert!(!tokio::fs::try_exists(&config_path).await.unwrap());
+            assert!(!tokio::fs::try_exists(&parent_dir).await.unwrap());
+        }
+
+        #[tokio::test]
+        async fn empty_named_profile_config_is_removed() {
+            let (_dir, mut location) = create_temp_tedge_config("").unwrap();
+            location.default_to_mapper_config_dir();
+            let _env_lock = EnvSandbox::new().await;
+
+            location
+                .update_toml(&|dto, _rdr| {
+                    dto.try_update_str(
+                        &WritableKey::C8yUrl(Some("test".into())),
+                        "test.example.com",
+                    )?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            location
+                .migrate_mapper_config(CloudType::C8y)
+                .await
+                .unwrap();
+
+            let config_path = location.mappers_config_dir().join("c8y.test/tedge.toml");
+            let parent_dir = location.mappers_config_dir().join("c8y.test");
+            assert!(tokio::fs::try_exists(&config_path).await.unwrap());
+
+            location
+                .update_toml(&|dto, _rdr| {
+                    dto.try_unset_key(&WritableKey::C8yUrl(Some("test".into())))?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            assert!(!tokio::fs::try_exists(&config_path).await.unwrap());
+            assert!(!tokio::fs::try_exists(&parent_dir).await.unwrap());
+        }
+
+        #[tokio::test]
+        async fn profile_directory_preserved_if_non_empty_after_deleting_config() {
+            let (dir, mut location) = create_temp_tedge_config("").unwrap();
+            location.default_to_mapper_config_dir();
+            let _env_lock = EnvSandbox::new().await;
+
+            location
+                .update_toml(&|dto, _rdr| {
+                    dto.try_update_str(
+                        &WritableKey::C8yUrl(Some("test".into())),
+                        "test.example.com",
+                    )?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            dir.dir("mappers")
+                .dir("c8y.test")
+                .dir("flows")
+                .file("some-flow.toml")
+                .with_raw_content("# flow content");
+
+            let config_path = location.mappers_config_dir().join("c8y.test/tedge.toml");
+            let flow_path = location
+                .mappers_config_dir()
+                .join("c8y.test/flows/some-flow.toml");
+            let parent_dir = location.mappers_config_dir().join("c8y.test");
+
+            assert!(tokio::fs::try_exists(&config_path).await.unwrap());
+            assert!(tokio::fs::try_exists(&flow_path).await.unwrap());
+
+            location
+                .update_toml(&|dto, _rdr| {
+                    dto.try_unset_key(&WritableKey::C8yUrl(Some("test".into())))?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            assert!(!tokio::fs::try_exists(&config_path).await.unwrap());
+            assert!(tokio::fs::try_exists(&parent_dir).await.unwrap());
+            assert!(tokio::fs::try_exists(&flow_path).await.unwrap());
+        }
+
+        #[tokio::test]
+        async fn multiple_profiles_cleaned_up_correctly() {
+            let (_dir, mut location) = create_temp_tedge_config("").unwrap();
+            location.default_to_mapper_config_dir();
+            let _env_lock = EnvSandbox::new().await;
+
+            location
+                .update_toml(&|dto, _rdr| {
+                    dto.try_update_str(&WritableKey::C8yUrl(None), "example.com")
+                        .unwrap();
+                    dto.try_update_str(
+                        &WritableKey::C8yUrl(Some("test".into())),
+                        "test.example.com",
+                    )
+                    .unwrap();
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            let default_config_path = location.mappers_config_dir().join("c8y/tedge.toml");
+            let test_config_path = location.mappers_config_dir().join("c8y.test/tedge.toml");
+            let default_dir = default_config_path.parent().unwrap();
+            let test_dir = test_config_path.parent().unwrap();
+
+            assert!(tokio::fs::try_exists(&default_config_path).await.unwrap());
+            assert!(tokio::fs::try_exists(&test_config_path).await.unwrap());
+
+            location
+                .update_toml(&|dto, _rdr| {
+                    dto.try_unset_key(&WritableKey::C8yUrl(None))?;
+                    dto.try_unset_key(&WritableKey::C8yUrl(Some("test".into())))?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            assert!(!tokio::fs::try_exists(&default_config_path).await.unwrap());
+            assert!(!tokio::fs::try_exists(&test_config_path).await.unwrap());
+            assert!(!tokio::fs::try_exists(&default_dir).await.unwrap());
+            assert!(!tokio::fs::try_exists(&test_dir).await.unwrap());
+        }
+
+        #[tokio::test]
+        async fn multiple_clouds_cleaned_up_independently() {
+            let (_dir, mut location) = create_temp_tedge_config("").unwrap();
+            location.default_to_mapper_config_dir();
+            let _env_lock = EnvSandbox::new().await;
+
+            location
+                .update_toml(&|dto, _rdr| {
+                    dto.try_update_str(&WritableKey::C8yUrl(None), "c8y.example.com")
+                        .unwrap();
+                    dto.try_update_str(&WritableKey::AwsUrl(None), "aws.example.com")
+                        .unwrap();
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            let c8y_config_path = location.mappers_config_dir().join("c8y/tedge.toml");
+            let aws_config_path = location.mappers_config_dir().join("aws/tedge.toml");
+            let c8y_dir = location.mappers_config_dir().join("c8y");
+            let aws_dir = location.mappers_config_dir().join("aws");
+
+            assert!(tokio::fs::try_exists(&c8y_config_path).await.unwrap());
+            assert!(tokio::fs::try_exists(&aws_config_path).await.unwrap());
+
+            location
+                .update_toml(&|dto, _rdr| {
+                    dto.try_unset_key(&WritableKey::C8yUrl(None)).unwrap();
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            assert!(!tokio::fs::try_exists(&c8y_config_path).await.unwrap());
+            assert!(!tokio::fs::try_exists(&c8y_dir).await.unwrap());
+            assert!(tokio::fs::try_exists(&aws_config_path).await.unwrap());
+            assert!(tokio::fs::try_exists(&aws_dir).await.unwrap());
+        }
     }
 
     static LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));

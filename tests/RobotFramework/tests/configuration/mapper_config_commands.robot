@@ -199,3 +199,50 @@ Tedge Config Set Works With Migrated AWS Config
 
     # Verify: Updated in mapper config file
     Verify Mapper Config File Contains    aws    url    updated.amazonaws.com
+
+Creating a new profile with existing profile writes to migrated config
+    [Documentation]    Verify migration creates correct directory structure for named profiles
+    Setup Test Config    c8y    production.c8y.io    profile=production
+
+    Migrate Cloud Configs
+
+    Execute Command    sudo tedge config set c8y.url new.c8y.io --profile new
+
+    Verify Mapper Config File Exists    c8y    profile=new
+
+Deleting a profile cleans up mapper config file
+    [Documentation]    Verify migration cleans up profile configs when they are no longer configured
+    Setup Test Config    c8y    production.c8y.io    profile=production
+
+    Migrate Cloud Configs
+
+    Execute Command    sudo tedge config unset c8y.url --profile production
+
+    Verify Mapper Config File Does Not Exist    c8y    profile=production
+    Verify Mapper Config Directory Does Not Exist    c8y    profile=production
+
+Deleting the default profile cleans up mapper config file
+    [Documentation]    Verify migration cleans up default profile configs when they are no longer configured
+    Setup Test Config    c8y    test.c8y.io
+
+    Migrate Cloud Configs
+
+    Execute Command    sudo tedge config unset c8y.url
+
+    Verify Mapper Config File Does Not Exist    c8y
+    Verify Mapper Config Directory Does Not Exist    c8y
+
+Deleting the default profile leaves directory in tact if non-empty
+    [Documentation]    Verify migration does not clean up config directory if it is non-empty
+    Setup Test Config    c8y    test.c8y.io
+
+    Migrate Cloud Configs
+
+    ${mapper_config_dir}=    Get Expected Mapper Config Directory    c8y
+
+    Execute Command    sudo mkdir "${mapper_config_dir}/flows"
+
+    Execute Command    sudo tedge config unset c8y.url
+
+    Verify Mapper Config File Does Not Exist    c8y
+    Verify Mapper Config Directory Exists    c8y

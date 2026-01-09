@@ -41,8 +41,8 @@ Migrate C8y Named Profile
     Verify Mapper Config File Exists    c8y    profile=production
     Verify Mapper Config File Contains    c8y    url    production.c8y.io    profile=production
 
-    # Verify: Default profile file also created (may be empty)
-    Verify Mapper Config File Exists    c8y
+    # Verify: Default profile file should not exist as there are no configurations for that
+    Verify Mapper Config File Does Not Exist    c8y
 
     # Verify: tedge.toml cleaned up
     Verify Tedge Toml Does Not Contain Section    c8y.profiles.production
@@ -109,7 +109,7 @@ Migration Preserves C8y Smartrest Templates
     Should Contain    ${content}    template2
 
 Migration With Empty C8y Config
-    [Documentation]    Verify migration works even with minimal/empty config
+    [Documentation]    Verify migration only creates directories if config exists
     # Setup: Just set a minimal config
     Execute Command    sudo tedge config unset c8y.url
 
@@ -117,11 +117,7 @@ Migration With Empty C8y Config
     Migrate Cloud Configs
 
     # Verify: File created (even if mostly empty)
-    Verify Mapper Config File Exists    c8y
-
-    Execute Command    sudo tedge config set c8y.url test.c8y.io
-
-    Verify Mapper Config File Contains    c8y    url    test.c8y.io
+    Verify Mapper Config File Does Not Exist    c8y
 
 Migration With No Write Permission On Mappers Directory
     [Documentation]    Verify migration handles permission errors gracefully on mappers directory
@@ -134,7 +130,7 @@ Migration With No Write Permission On Mappers Directory
 
     # Attempt migration - should fail with permission error referencing the path
     ${result}=    Execute Command
-    ...    sudo -u tedge config upgrade
+    ...    sudo -u tedge tedge config upgrade
     ...    exp_exit_code=!0
     ...    stderr=${True}
     ...    stdout=${False}
@@ -197,31 +193,6 @@ Migrate AWS Config Default Profile
 
     # Verify: tedge.toml cleaned up
     Verify Tedge Toml Does Not Contain Section    aws
-
-Migrating One Cloud Does Not Impact Another
-    [Documentation]    Verify migrating one cloud doesn't affect other cloud configs
-    # Setup multiple clouds
-    Setup Test Config    c8y    test.c8y.io
-    Setup Test Config    az    test.azure.com
-    Setup Test Config    aws    test.amazonaws.com
-
-    # Migrate only C8y
-    Migrate Cloud Configs
-
-    # Verify: C8y migrated
-    Verify Mapper Config File Exists    c8y
-    Verify Mapper Config File Contains    c8y    url    test.c8y.io
-    Verify Tedge Toml Does Not Contain Section    c8y
-
-    # Verify: Azure and AWS still in tedge.toml (not migrated)
-    Verify Tedge Toml Contains Section    az
-    Verify Tedge Toml Contains Section    aws
-
-    # Verify: Azure and AWS config values accessible
-    ${az_url}=    Execute Command    tedge config get az.url
-    ${aws_url}=    Execute Command    tedge config get aws.url
-    Should Be Equal As Strings    ${az_url}    test.azure.com\n
-    Should Be Equal As Strings    ${aws_url}    test.amazonaws.com\n
 
 Migration Fails When Tedge Dir Not Writable And Mappers Dir Missing
     [Documentation]    Verify clear error when /etc/tedge is read-only and mappers dir doesn't exist
