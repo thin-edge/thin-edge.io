@@ -27,9 +27,9 @@ pub struct PersistedBridgeConfig {
     local_prefix: Option<Spanned<Template>>,
     remote_prefix: Option<Spanned<Template>>,
     #[serde(rename = "rule", default)]
-    rules: Vec<StaticBridgeRule>,
+    rules: Vec<Spanned<StaticBridgeRule>>,
     #[serde(rename = "template_rule", default)]
-    template_rules: Vec<TemplateBridgeRule>,
+    template_rules: Vec<Spanned<TemplateBridgeRule>>,
 }
 
 #[derive(Debug)]
@@ -40,9 +40,26 @@ pub struct ExpandedBridgeRule {
     pub topic: String,
 }
 
+fn resolve_prefix(
+    per_rule: Option<String>,
+    global: &Option<String>,
+    prefix_name: &str,
+    rule_type: &str,
+    span: std::ops::Range<usize>,
+) -> Result<String, ExpandError> {
+    per_rule
+        .or_else(|| global.clone())
+        .ok_or_else(|| ExpandError {
+            message: format!("Missing '{prefix_name}' for {rule_type}"),
+            help: Some(format!(
+            "Add '{prefix_name}' to this {rule_type}, or define it globally at the top of the file"
+        )),
+            span,
+        })
+}
+
 impl PersistedBridgeConfig {
     pub fn expand(self, config: &TEdgeConfig) -> Result<Vec<ExpandedBridgeRule>, ExpandError> {
-        // TODO ensure the source variable is quoted
         let local_prefix = self
             .local_prefix
             .as_ref()
@@ -55,42 +72,76 @@ impl PersistedBridgeConfig {
             .transpose()?;
 
         let mut expanded_rules = Vec::new();
-        for rule in self.rules {
+        for spanned_rule in self.rules {
+            let rule = spanned_rule.get_ref();
+            let rule_span = spanned_rule.span();
+
+            let rule_local_prefix = rule
+                .local_prefix
+                .as_ref()
+                .map(|spanned| expand_spanned(spanned, config, "Failed to expand local_prefix"))
+                .transpose()?;
+            let rule_remote_prefix = rule
+                .remote_prefix
+                .as_ref()
+                .map(|spanned| expand_spanned(spanned, config, "Failed to expand remote_prefix"))
+                .transpose()?;
+
+            let final_local_prefix = resolve_prefix(
+                rule_local_prefix,
+                &local_prefix,
+                "local_prefix",
+                "rule",
+                rule_span.clone(),
+            )?;
+            let final_remote_prefix = resolve_prefix(
+                rule_remote_prefix,
+                &remote_prefix,
+                "remote_prefix",
+                "rule",
+                rule_span,
+            )?;
+
             expanded_rules.push(ExpandedBridgeRule {
-                // TODO error handle if neither per-rule or global exist
-                local_prefix: rule
-                    .local_prefix
-                    .as_ref()
-                    .map(|spanned| expand_spanned(spanned, config, "Failed to expand local_prefix"))
-                    .transpose()?
-                    .unwrap_or_else(|| local_prefix.clone().unwrap()),
-                remote_prefix: rule
-                    .remote_prefix
-                    .as_ref()
-                    .map(|spanned| expand_spanned(spanned, config, "Failed to expand remote_prefix"))
-                    .transpose()?
-                    .unwrap_or_else(|| remote_prefix.clone().unwrap()),
+                local_prefix: final_local_prefix,
+                remote_prefix: final_remote_prefix,
                 direction: rule.direction,
                 topic: expand_spanned(&rule.topic, config, "Failed to expand topic")?,
             });
         }
 
-        for template in self.template_rules {
-            let iterable = expand_spanned(&template.r#for, config, "Failed to expand 'for' reference")?;
+        for spanned_template in self.template_rules {
+            let template = spanned_template.get_ref();
+            let template_span = spanned_template.span();
 
-            // TODO error handle if neither per-rule or global exist
-            let local_prefix = template
+            let iterable =
+                expand_spanned(&template.r#for, config, "Failed to expand 'for' reference")?;
+
+            let template_local_prefix = template
                 .local_prefix
                 .as_ref()
                 .map(|spanned| expand_spanned(spanned, config, "Failed to expand local_prefix"))
-                .transpose()?
-                .unwrap_or_else(|| local_prefix.clone().unwrap());
-            let remote_prefix = template
+                .transpose()?;
+            let template_remote_prefix = template
                 .remote_prefix
                 .as_ref()
                 .map(|spanned| expand_spanned(spanned, config, "Failed to expand remote_prefix"))
-                .transpose()?
-                .unwrap_or_else(|| remote_prefix.clone().unwrap());
+                .transpose()?;
+
+            let final_local_prefix = resolve_prefix(
+                template_local_prefix,
+                &local_prefix,
+                "local_prefix",
+                "template_rule",
+                template_span.clone(),
+            )?;
+            let final_remote_prefix = resolve_prefix(
+                template_remote_prefix,
+                &remote_prefix,
+                "remote_prefix",
+                "template_rule",
+                template_span,
+            )?;
 
             for topic in iterable.0 {
                 let template_config = TemplateConfig {
@@ -99,10 +150,14 @@ impl PersistedBridgeConfig {
                 };
 
                 expanded_rules.push(ExpandedBridgeRule {
-                    local_prefix: local_prefix.clone(),
-                    remote_prefix: remote_prefix.clone(),
+                    local_prefix: final_local_prefix.clone(),
+                    remote_prefix: final_remote_prefix.clone(),
                     direction: template.direction,
-                    topic: expand_spanned(&template.topic, template_config, "Failed to expand topic template")?,
+                    topic: expand_spanned(
+                        &template.topic,
+                        template_config,
+                        "Failed to expand topic template",
+                    )?,
                 });
             }
         }
@@ -265,11 +320,14 @@ where
         // Try to deserialize as TOML first (for complex types like TemplatesSet)
         // If that fails, fall back to FromStr parsing (for simple string types)
         let deser = toml::de::ValueDeserializer::parse(&value);
-        deser.and_then(Target::deserialize).or_else(|_| value.parse()).map_err(|e: Target::Err| TemplateError {
-            message: e.to_string(),
-            help: None,
-            offset: 0,
-        })
+        deser
+            .and_then(Target::deserialize)
+            .or_else(|_| value.parse())
+            .map_err(|e: Target::Err| TemplateError {
+                message: e.to_string(),
+                help: None,
+                offset: 0,
+            })
     }
 }
 
@@ -278,8 +336,10 @@ struct TemplateConfig<'a> {
     r#for: &'a str,
 }
 
-/// Helper function to expand a config key reference and return its value
-/// Expects var_name to start with ".", strips it, and reads the config value
+/// Expands a tedge.toml config key and return its value
+///
+/// Expects var_name to start with "." (to match tedge-flows config format),
+/// strips it, and reads the config value
 fn expand_config_key(
     var_name: &str,
     config: &TEdgeConfig,
@@ -929,10 +989,16 @@ mod tests {
 
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             assert_eq!(config.rules.len(), 3);
-            assert!(matches!(config.rules[0].direction, Direction::Inbound));
-            assert!(matches!(config.rules[1].direction, Direction::Outbound));
             assert!(matches!(
-                config.rules[2].direction,
+                config.rules[0].get_ref().direction,
+                Direction::Inbound
+            ));
+            assert!(matches!(
+                config.rules[1].get_ref().direction,
+                Direction::Outbound
+            ));
+            assert!(matches!(
+                config.rules[2].get_ref().direction,
                 Direction::Bidirectional
             ));
         }
@@ -1042,7 +1108,7 @@ topic = "test/topic"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
-            let span = config.rules[0].topic.span();
+            let span = config.rules[0].get_ref().topic.span();
 
             // serde_spanned includes the quotes
             let topic_str = &toml[span.clone()];
@@ -1058,7 +1124,7 @@ topic = "te/device/main///e/${@for}"
 direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
-            let span = config.template_rules[0].r#for.span();
+            let span = config.template_rules[0].get_ref().r#for.span();
 
             // serde_spanned includes the quotes
             let reference_str = &toml[span.clone()];
@@ -1106,7 +1172,7 @@ direction = "inbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             // Save the span before we consume config
-            let topic_span = config.rules[0].topic.span();
+            let topic_span = config.rules[0].get_ref().topic.span();
 
             // This should fail on the first variable
             let err = config.expand(&tedge_config).unwrap_err();
