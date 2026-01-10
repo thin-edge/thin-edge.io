@@ -60,7 +60,7 @@ impl<T> From<OptionalConfig<T>> for Option<T> {
 /// [OptionalConfig::or_config_not_set], and this will convert to a descriptive
 /// error message telling the user which key to set.
 pub struct ConfigNotSet {
-    key: Cow<'static, str>,
+    pub key: Cow<'static, str>,
 }
 
 impl<T> OptionalConfig<T> {

@@ -13,8 +13,13 @@ repository = { workspace = true }
 # No features on by default
 default = []
 
+[[bin]]
+name = "test-bridge-rules"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = { workspace = true }
+ariadne = { workspace = true }
 async-trait = { workspace = true }
 backoff = { workspace = true }
 bytes = { workspace = true }
@@ -23,10 +28,13 @@ futures = { workspace = true }
 mqtt_channel = { workspace = true }
 mutants = { workspace = true }
 rumqttc = { workspace = true, features = ["proxy"] }
+serde = { workspace = true }
+serde_spanned = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_config = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["macros"] }
+toml = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
