@@ -1,7 +1,7 @@
 ---
 title: "tedge connect"
 tags: [Reference, CLI]
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # The tedge connect command

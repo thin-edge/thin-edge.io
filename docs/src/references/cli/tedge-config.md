@@ -1,7 +1,7 @@
 ---
 title: "tedge config"
 tags: [Reference, CLI]
-sidebar_position: 2
+sidebar_position: 3
 ---
 
 # The tedge config command

@@ -1,7 +1,7 @@
 ---
 title: "tedge mqtt"
 tags: [Reference, CLI]
-sidebar_position: 5
+sidebar_position: 10
 ---
 
 # The tedge mqtt command

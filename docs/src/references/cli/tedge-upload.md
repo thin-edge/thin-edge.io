@@ -1,7 +1,7 @@
 ---
 title: "tedge upload"
 tags: [Reference, CLI]
-sidebar_position: 7
+sidebar_position: 9
 ---
 
 # The tedge upload command

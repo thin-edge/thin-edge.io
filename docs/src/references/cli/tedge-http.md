@@ -1,7 +1,7 @@
 ---
 title: "tedge http"
 tags: [Reference, CLI]
-sidebar_position: 6
+sidebar_position: 11
 ---
 
 # The tedge http command

@@ -1,7 +1,7 @@
 ---
 title: "tedge disconnect"
 tags: [Reference, CLI]
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # The tedge disconnect command
