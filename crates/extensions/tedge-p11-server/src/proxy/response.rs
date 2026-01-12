@@ -6,7 +6,7 @@ use crate::{
     proxy::{
         frame::{Frame, Frame1},
         frame1::VersionInfo,
-        frame2::{self, Frame2},
+        frame2::Frame2,
     },
     service::{ChooseSchemeResponse, CreateKeyResponse, SignResponse},
 };
@@ -21,9 +21,9 @@ pub enum Response {
     GetTokensUrisResponse(Vec<String>),
 }
 
-trait IntoResponse {
-    type Response;
-}
+// trait IntoResponse {
+//     type Response;
+// }
 
 impl TryFrom<Frame> for Response {
     type Error = ();

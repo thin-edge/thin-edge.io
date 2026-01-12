@@ -21,9 +21,9 @@ pub enum Request {
     GetTokensUrisRequest,
 }
 
-trait IntoRequest {
-    type Response;
-}
+// trait IntoRequest {
+//     type Response;
+// }
 
 impl TryFrom<Frame> for Request {
     type Error = ();

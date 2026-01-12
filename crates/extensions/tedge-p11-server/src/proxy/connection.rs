@@ -11,6 +11,8 @@ use std::os::unix::net::UnixStream;
 use anyhow::Context;
 use tracing::warn;
 
+use crate::proxy::frame::Frame2;
+
 pub use super::frame::Frame;
 pub use super::frame::Frame1;
 pub use super::frame::ProtocolError;
@@ -31,11 +33,11 @@ impl Connection {
         let mut buf = Vec::new();
         self.stream.read_to_end(&mut buf)?;
 
-        // will fail if not version 1
-        let frame: Frame =
-            postcard::from_bytes(&buf).context("Failed to parse the received frame")?;
-
-        // let Frame::Version1(frame) = frame;
+        let frame = match buf.first() {
+            Some(0) => Frame::Version1(postcard::from_bytes(&buf[1..])?),
+            Some(1) => Frame::Version2(serde_json::from_slice(&buf[1..])?),
+            _ => anyhow::bail!("reeee"),
+        };
 
         // by that time the sender should've already closed this connection half, so we ignore
         // ENOTCONN that can possibly be returned on some platforms (MacOS?)
@@ -49,6 +51,22 @@ impl Connection {
     /// NOTE: can only be called once
     pub fn write_frame(&mut self, frame: &Frame1) -> anyhow::Result<()> {
         let frame = Frame::Version1(frame.clone());
+
+        let buf = postcard::to_allocvec(&frame).context("Failed to serialize message")?;
+
+        self.stream.write_all(&buf)?;
+        self.stream.flush()?;
+
+        // shutdown sends an EOF, which is important
+        if let Err(err) = self.stream.shutdown(Shutdown::Write) {
+            warn!("Failed to shutdown connection writing half: {err:?}");
+        }
+
+        Ok(())
+    }
+
+    pub fn write_frame2(&mut self, frame: &Frame2) -> anyhow::Result<()> {
+        let frame = Frame::Version2(frame.clone());
 
         let buf = postcard::to_allocvec(&frame).context("Failed to serialize message")?;
 

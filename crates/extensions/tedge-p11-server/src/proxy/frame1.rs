@@ -40,7 +40,7 @@ pub struct VersionInfo {
 impl Frame1 {
     pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
         match bytes.first() {
-            Some(0x09) => {
+            Some(0x08 | 0x09) => {
                 let version_info: Option<VersionInfo> = match serde_json::from_slice(&bytes[1..]) {
                     Ok(v) => v,
                     Err(e) if e.is_eof() => None,
@@ -206,7 +206,6 @@ mod tests {
         let version_info = br#"{"version": 1}"#;
         let mut input = input;
         input.extend(version_info);
-        dbg!(&input);
         let request: Frame1 = Frame1::from_bytes(&input).unwrap();
         assert_eq!(request, Frame1::Pong(Some(VersionInfo { version: 1 })));
     }

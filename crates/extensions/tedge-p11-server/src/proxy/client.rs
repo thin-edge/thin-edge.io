@@ -11,6 +11,7 @@ use super::connection::Connection;
 use super::connection::Frame1;
 use crate::pkcs11::SigScheme;
 use crate::proxy::frame::Frame;
+use crate::proxy::frame::Frame2;
 use crate::proxy::frame1::VersionInfo;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
@@ -169,14 +170,14 @@ impl TedgeP11Client {
     }
 
     pub fn sign(&self, message: &[u8], uri: Option<String>) -> anyhow::Result<Vec<u8>> {
-        let request = Frame1::SignRequest(SignRequest {
+        let request = Frame2::SignRequest(SignRequest {
             to_sign: message.to_vec(),
             uri,
             pin: self.pin.clone(),
         });
-        let response = self.do_request(request)?;
+        let response = self.do_request2(request)?;
 
-        let Frame1::SignResponse(response) = response else {
+        let Frame2::SignResponse(response) = response else {
             bail!("protocol error: bad response, expected sign, received: {response:?}");
         };
 
@@ -261,6 +262,26 @@ impl TedgeP11Client {
 
         let Frame::Version1(response) = connection.read_frame()? else {
             bail!("protocol error: bad response, expected version 1 frame");
+        };
+
+        Ok(response)
+    }
+
+    fn do_request2(&self, request: Frame2) -> anyhow::Result<Frame2> {
+        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
+            format!(
+                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
+                self.socket_path.display()
+            )
+        })?;
+        let mut connection = Connection::new(stream);
+        debug!("Connected to socket");
+
+        trace!(?request);
+        connection.write_frame2(&request)?;
+
+        let Frame::Version2(response) = connection.read_frame()? else {
+            bail!("protocol error: bad response, expected version 2 frame");
         };
 
         Ok(response)

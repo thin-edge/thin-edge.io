@@ -50,11 +50,17 @@ impl TedgeP11Server {
     }
 
     fn process(&self, mut connection: Connection) -> anyhow::Result<()> {
-        let frame = connection.read_frame().context("read")?;
-        let Ok(request) = Request::try_from(frame) else {
-            let error = ProtocolError("invalid request".to_string());
-            let _ = connection.write_frame(&Frame1::Error(error));
-            anyhow::bail!("protocol error: invalid request")
+        let request = connection
+            .read_frame()
+            .context("read")
+            .map(|f| Request::try_from(f).unwrap())
+            .context("invalid request");
+        let request = match request {
+            Ok(request) => request,
+            Err(err) => {
+                let _ = connection.write_frame(&Frame1::Error(ProtocolError(format!("{err:#}"))));
+                return Err(err);
+            }
         };
 
         // server should read request and respond with response, and connection layer should map to correct frame
@@ -128,7 +134,7 @@ mod tests {
     use crate::pkcs11;
     use crate::proxy::frame::Frame;
     use crate::service::*;
-    use std::io::Read;
+    use std::io::{Read, Write as _};
     use std::os::unix::net::UnixStream;
     use std::time::Duration;
 
@@ -240,5 +246,83 @@ mod tests {
         })
         .await
         .unwrap();
+    }
+
+    #[tokio::test]
+    async fn server_reports_invalid_commands() {
+        let service = TestSigningService;
+        let server = TedgeP11Server::new(service).unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let socket_path = tmpdir.path().join("test_socket.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+
+        tokio::spawn(async move { server.serve(listener).await });
+        // wait until the server calls accept()
+        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        let err_msg = tokio::task::spawn_blocking(move || {
+            let client = TedgeP11Client::with_ready_check(socket_path.into());
+            let mut command = r#"{"NonexistingCommand":{}}"#.as_bytes().to_vec();
+            // frame version2
+            command.insert(0, 1);
+
+            let mut stream = UnixStream::connect(&client.socket_path).unwrap();
+            stream.write_all(&command).unwrap();
+            stream.flush().unwrap();
+            stream.shutdown(std::net::Shutdown::Write).unwrap();
+
+            let mut response = Vec::new();
+            stream.read_to_end(&mut response).unwrap();
+            let response: Frame = postcard::from_bytes(&response).unwrap();
+            let Frame::Version1(Frame1::Error(ProtocolError(err_msg))) = response else {
+                panic!("should be error");
+            };
+            err_msg
+        })
+        .await
+        .unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        assert!(err_msg.contains(
+            "invalid request: read: unknown variant `NonexistingCommand`, expected one of"
+        ));
+    }
+
+    #[tokio::test]
+    async fn server_reports_invalid_arguments() {
+        let service = TestSigningService;
+        let server = TedgeP11Server::new(service).unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let socket_path = tmpdir.path().join("test_socket.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+
+        tokio::spawn(async move { server.serve(listener).await });
+        // wait until the server calls accept()
+        tokio::time::sleep(Duration::from_millis(2)).await;
+
+        let err_msg = tokio::task::spawn_blocking(move || {
+            let client = TedgeP11Client::with_ready_check(socket_path.into());
+            let mut command = r#"{"SignRequest":{"message": [1, 2, 3]}}"#.as_bytes().to_vec();
+            // frame version2
+            command.insert(0, 1);
+
+            let mut stream = UnixStream::connect(&client.socket_path).unwrap();
+            stream.write_all(&command).unwrap();
+            stream.flush().unwrap();
+            stream.shutdown(std::net::Shutdown::Write).unwrap();
+
+            let mut response = Vec::new();
+            stream.read_to_end(&mut response).unwrap();
+            let response: Frame = postcard::from_bytes(&response).unwrap();
+            let Frame::Version1(Frame1::Error(ProtocolError(err_msg))) = response else {
+                panic!("should be error");
+            };
+            err_msg
+        })
+        .await
+        .unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        assert!(err_msg.contains("missing field `to_sign` at line 1 column 37"));
     }
 }
