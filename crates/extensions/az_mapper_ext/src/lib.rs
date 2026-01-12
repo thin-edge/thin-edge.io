@@ -51,7 +51,7 @@ input.mqtt.topics = {input_topics}
 steps = [
     {{ builtin = "skip-mosquitto-health-status" }},
     {timestamp_step}
-    {{ builtin = "cap-payload-size", config = {{ max_size = {max_size} }} }},
+    {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
 output.mqtt.topic = "{output_topic}"

@@ -6,14 +6,14 @@ use crate::Message;
 use std::time::SystemTime;
 
 #[derive(Clone, Default)]
-pub struct CapPayloadSize {
+pub struct LimitPayloadSize {
     max_size: Option<usize>,
     discard: bool,
 }
 
-impl Transformer for CapPayloadSize {
+impl Transformer for LimitPayloadSize {
     fn name(&self) -> &str {
-        "cap-payload-size"
+        "limit-payload-size"
     }
 
     fn set_config(&mut self, config: JsonValue) -> Result<(), ConfigError> {
