@@ -41,8 +41,14 @@ mosquitto_log() {
 }
 
 mosquitto_config() {
-    if command -V tree >/dev/null >&2; then
-        tree /etc/mosquitto > "$OUTPUT_DIR/etc_mosquitto.tree.txt" ||:
+    if [ -d /etc/mosquitto ]; then
+        if command -V tree >/dev/null >&2; then
+            tree /etc/mosquitto > "$OUTPUT_DIR/etc_mosquitto.tree.txt" ||:
+        else
+            ls -l /etc/mosquitto/* > "$OUTPUT_DIR/etc_mosquitto.tree.txt" ||:
+        fi
+    else
+        echo "/etc/mosquitto directory does not exist" >&2
     fi
 
     mkdir -p "$OUTPUT_DIR/mosquitto"
