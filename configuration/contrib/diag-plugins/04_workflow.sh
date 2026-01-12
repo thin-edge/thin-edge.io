@@ -31,9 +31,7 @@ fi
 
 collect() {
     if [ -d "$LOGS_PATH"/agent ]; then
-        for file in "$LOGS_PATH"/agent/*; do
-            cp "$file" "$OUTPUT_DIR"/
-        done
+        find "$LOGS_PATH/agent" -type f -exec cp {} "$OUTPUT_DIR"/ \; ||:
     else 
         echo "${LOGS_PATH} not found" >&2
     fi
