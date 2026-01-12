@@ -142,7 +142,7 @@ jobs:
           - armv5te-unknown-linux-musleabi
           - x86_64-unknown-linux-musl
           - i686-unknown-linux-musl
-          - riscv64gc-unknown-linux-gnu
+          - riscv64gc-unknown-linux-musl
           - aarch64-apple-darwin
           - x86_64-apple-darwin
 
@@ -184,11 +184,10 @@ jobs:
             host_os: ubuntu-24.04
             cargo_options: --no-run
 
-          # Note: riscv64gc-unknown-linux-musl is meant to be supported from 1.82
-          # but there are still some build problems which prevent it from being used.
-          # So stick to gnu build only
-          - target: riscv64gc-unknown-linux-gnu
-            build_with: auto
+          # Note: riscv64gc-unknown-linux-musl currently fails to build
+          # when using clang, but cargo-zigbuild works
+          - target: riscv64gc-unknown-linux-musl
+            build_with: zig
             host_os: ubuntu-24.04
             cargo_options: --no-run
 
@@ -372,7 +371,7 @@ jobs:
           - { target: i686-unknown-linux-musl,        repo_suffix: '',          component: main }
           # Debian also calls this "armel" (conflict with arm-unknown-linux-musleabi)
           # - { target: armv5te-unknown-linux-musleabi, repo_suffix: '',          component: main }
-          - { target: riscv64gc-unknown-linux-gnu,    repo_suffix: '',          component: main }
+          - { target: riscv64gc-unknown-linux-musl,    repo_suffix: '',          component: main }
           - { target: aarch64-apple-darwin,      repo_suffix: '',          component: main }
           - { target: x86_64-apple-darwin,       repo_suffix: '',          component: main }
 

@@ -43,7 +43,7 @@ TARGETS_WITH_BINDGEN=(
     "arm-unknown-linux-musleabihf"
     "arm-unknown-linux-musleabi"
     "armv5te-unknown-linux-musleabi"
-    "riscv64gc-unknown-linux-gnu"
+    "riscv64gc-unknown-linux-musl"
     "i686-unknown-linux-musl"
 )
 
