@@ -7,7 +7,7 @@ Library             String
 *** Keywords ***
 Migrate Cloud Configs
     [Documentation]    Execute the migration command for all mappers
-    Execute Command    tedge config upgrade
+    Execute Command    sudo -u tedge tedge config upgrade
 
 Verify Mapper Config File Exists
     [Documentation]    Verify that the mapper config file exists for the given cloud and profile
