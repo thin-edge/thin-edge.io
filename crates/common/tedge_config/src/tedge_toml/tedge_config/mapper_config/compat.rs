@@ -196,12 +196,12 @@ impl FromCloudConfig for AwsMapperSpecificConfig {
             .unwrap()
             .mapper_config_file
             .clone()
-            .unwrap_or(
+            .unwrap_or_else(|| {
                 tedge_config
                     .location
                     .tedge_config_root_path()
-                    .join("tedge.toml"),
-            );
+                    .join("tedge.toml")
+            });
 
         build_mapper_config(aws_config.clone(), profile, location)
     }

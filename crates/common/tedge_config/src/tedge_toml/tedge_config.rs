@@ -154,7 +154,7 @@ impl TEdgeConfigDto {
                     })
                 },
             )?;
-            default_profile_config.set_mapper_config_dir(mappers_dir.clone());
+            default_profile_config.set_mappers_root_dir(mappers_dir.clone());
             default_profile_config.set_mapper_config_file(default_profile_path);
             dto.non_profile = default_profile_config;
 
@@ -165,7 +165,7 @@ impl TEdgeConfigDto {
                     let profile_toml = tokio::fs::read_to_string(&toml_path).await?;
                     let mut profiled_config: T::CloudDto = toml::from_str(&profile_toml)
                         .context("failed to deserialise mapper config")?;
-                    profiled_config.set_mapper_config_dir(mappers_dir.clone());
+                    profiled_config.set_mappers_root_dir(mappers_dir.clone());
                     profiled_config.set_mapper_config_file(toml_path);
                     Ok::<_, anyhow::Error>((profile, profiled_config))
                 })

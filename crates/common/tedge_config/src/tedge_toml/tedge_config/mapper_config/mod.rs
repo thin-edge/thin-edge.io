@@ -129,13 +129,13 @@ impl MapperConfigPath<'_> {
 }
 
 pub trait HasPath {
-    fn set_mapper_config_dir(&mut self, path: Utf8PathBuf);
+    fn set_mappers_root_dir(&mut self, path: Utf8PathBuf);
     fn config_path(&self) -> Option<MapperConfigPath<'_>>;
     fn set_mapper_config_file(&mut self, path: Utf8PathBuf);
 }
 
 impl HasPath for TEdgeConfigDtoC8y {
-    fn set_mapper_config_dir(&mut self, path: Utf8PathBuf) {
+    fn set_mappers_root_dir(&mut self, path: Utf8PathBuf) {
         self.mapper_config_dir = Some(path)
     }
 
@@ -152,7 +152,7 @@ impl HasPath for TEdgeConfigDtoC8y {
 }
 
 impl HasPath for TEdgeConfigDtoAz {
-    fn set_mapper_config_dir(&mut self, path: Utf8PathBuf) {
+    fn set_mappers_root_dir(&mut self, path: Utf8PathBuf) {
         self.mapper_config_dir = Some(path)
     }
 
@@ -169,7 +169,7 @@ impl HasPath for TEdgeConfigDtoAz {
 }
 
 impl HasPath for TEdgeConfigDtoAws {
-    fn set_mapper_config_dir(&mut self, path: Utf8PathBuf) {
+    fn set_mappers_root_dir(&mut self, path: Utf8PathBuf) {
         self.mapper_config_dir = Some(path)
     }
 

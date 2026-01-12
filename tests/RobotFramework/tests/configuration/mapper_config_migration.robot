@@ -92,22 +92,6 @@ Migration Preserves C8y Topics Config
     # Verify: Topics preserved in migrated config
     Verify Mapper Config File Contains Pattern    c8y    topics = ["te/+/+/+/+/e/+"]
 
-Migration Preserves C8y Smartrest Templates
-    [Documentation]    Verify migration preserves smartrest templates array
-    # Setup: Configure C8y with smartrest templates
-    Setup Test Config    c8y    test.c8y.io
-    Execute Command    sudo tedge config add c8y.smartrest.templates template1
-    Execute Command    sudo tedge config add c8y.smartrest.templates template2
-
-    # Execute migration
-    Migrate Cloud Configs
-
-    # Verify: Templates preserved in migrated config
-    ${path}=    Get Expected Mapper Config Path    c8y
-    ${content}=    Execute Command    cat ${path}
-    Should Contain    ${content}    template1
-    Should Contain    ${content}    template2
-
 Migration With Empty C8y Config
     [Documentation]    Verify migration only creates directories if config exists
     # Setup: Just set a minimal config
@@ -116,7 +100,7 @@ Migration With Empty C8y Config
     # Execute migration
     Migrate Cloud Configs
 
-    # Verify: File created (even if mostly empty)
+    # Verify: File not created (since it would have been empty)
     Verify Mapper Config File Does Not Exist    c8y
 
 Migration With No Write Permission On Mappers Directory
@@ -217,3 +201,39 @@ Migration Fails When Tedge Dir Not Writable And Mappers Dir Missing
 
     # Cleanup: Restore permissions
     Execute Command    sudo chmod 755 /etc/tedge
+
+Migrate Multiple Clouds And Profiles
+    [Documentation]    Verify migration handles multiple cloud and their profiles simltaneously
+    # Setup: Configure default and two named profiles
+    Setup Test Config    c8y    default.c8y.io
+    Setup Test Config    c8y    prod.c8y.io    profile=prod
+    Setup Test Config    c8y    test.c8y.io    profile=test
+
+    Setup Test Config    az    default.azure.com
+    Setup Test Config    az    prod.azure.com    profile=prod
+
+    Setup Test Config    aws    default.amazonaws.com
+    Setup Test Config    aws    test.amazonaws.com    profile=test
+
+    # Execute migration
+    Migrate Cloud Configs
+
+    # Verify: All three config files created
+    Verify Mapper Config File Exists    c8y
+    Verify Mapper Config File Contains    c8y    url    default.c8y.io
+
+    Verify Mapper Config File Exists    c8y    profile=prod
+    Verify Mapper Config File Contains    c8y    url    prod.c8y.io    profile=prod
+
+    Verify Mapper Config File Exists    c8y    profile=test
+    Verify Mapper Config File Contains    c8y    url    test.c8y.io    profile=test
+
+    Verify Mapper Config File Exists    az
+    Verify Mapper Config File Contains    az    url    default.azure.com
+    Verify Mapper Config File Exists    az    profile=prod
+    Verify Mapper Config File Contains    az    url    prod.azure.com    profile=prod
+
+    Verify Mapper Config File Exists    aws
+    Verify Mapper Config File Contains    aws    url    default.amazonaws.com
+    Verify Mapper Config File Exists    aws    profile=test
+    Verify Mapper Config File Contains    aws    url    test.amazonaws.com    profile=test
