@@ -234,12 +234,11 @@ impl TEdgeConfigLocation {
         .await
         .unwrap();
 
-        for path_result in paths {
-            if let Ok(path) = path_result {
-                let path = Utf8PathBuf::from_path_buf(path)
-                    .map_err(|p| anyhow::anyhow!("Invalid UTF-8 path: {}", p.display()))?;
-                self.cleanup_config_file_and_possibly_parent(&path).await?;
-            }
+        // Iterate over only the successfully collected paths
+        for path in paths.into_iter().flatten() {
+            let path = Utf8PathBuf::from_path_buf(path)
+                .map_err(|p| anyhow::anyhow!("Invalid UTF-8 path: {}", p.display()))?;
+            self.cleanup_config_file_and_possibly_parent(&path).await?;
         }
 
         Ok(())
