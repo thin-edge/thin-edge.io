@@ -10,6 +10,8 @@ use tracing::trace;
 use super::connection::Connection;
 use super::connection::Frame1;
 use crate::pkcs11::SigScheme;
+use crate::proxy::frame::Frame;
+use crate::proxy::frame1::VersionInfo;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
@@ -25,6 +27,7 @@ pub struct TedgeP11Client {
     pub(crate) socket_path: Arc<Path>,
     pub(crate) uri: Option<Arc<str>>,
     pub(crate) pin: Option<SecretString>,
+    server_version: Option<VersionInfo>,
 }
 
 impl TedgeP11Service for TedgeP11Client {
@@ -106,14 +109,16 @@ impl TedgeP11Client {
     ///
     /// [unexp-eof]: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
     pub fn with_ready_check(socket_path: Arc<Path>) -> Self {
-        let client = Self {
+        let mut client = Self {
             socket_path,
             uri: None,
             pin: None,
+            server_version: None,
         };
 
         // make any request to make sure the service is online and it will respond
-        let _ = client.ping();
+        let version_info = client.ping().unwrap_or(None);
+        client.server_version = version_info;
 
         client
     }
@@ -216,15 +221,15 @@ impl TedgeP11Client {
         Ok(pubkey_pem)
     }
 
-    pub fn ping(&self) -> anyhow::Result<()> {
+    pub fn ping(&self) -> anyhow::Result<Option<VersionInfo>> {
         let request = Frame1::Ping;
         let response = self.do_request(request)?;
 
-        let Frame1::Pong = response else {
+        let Frame1::Pong(version_info) = response else {
             bail!("protocol error: bad response, expected pong, received: {response:?}");
         };
 
-        Ok(())
+        Ok(version_info)
     }
 
     pub fn create_key(
@@ -254,7 +259,9 @@ impl TedgeP11Client {
         trace!(?request);
         connection.write_frame(&request)?;
 
-        let response = connection.read_frame()?;
+        let Frame::Version1(response) = connection.read_frame()? else {
+            bail!("protocol error: bad response, expected version 1 frame");
+        };
 
         Ok(response)
     }

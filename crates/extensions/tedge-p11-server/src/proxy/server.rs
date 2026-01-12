@@ -7,6 +7,7 @@ use tracing::info;
 use super::connection::Connection;
 use super::connection::Frame1;
 use super::connection::ProtocolError;
+use crate::proxy::request::Request;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::TedgeP11Service;
 
@@ -49,27 +50,21 @@ impl TedgeP11Server {
     }
 
     fn process(&self, mut connection: Connection) -> anyhow::Result<()> {
-        let request = connection.read_frame().context("read")?;
+        let frame = connection.read_frame().context("read")?;
+        let Ok(request) = Request::try_from(frame) else {
+            let error = ProtocolError("invalid request".to_string());
+            let _ = connection.write_frame(&Frame1::Error(error));
+            anyhow::bail!("protocol error: invalid request")
+        };
 
+        // server should read request and respond with response, and connection layer should map to correct frame
         let response = match request {
-            Frame1::Error(_)
-            | Frame1::ChooseSchemeResponse { .. }
-            | Frame1::SignResponse { .. }
-            | Frame1::GetPublicKeyPemResponse(_)
-            | Frame1::Pong
-            | Frame1::CreateKeyResponse { .. }
-            | Frame1::GetTokensUrisResponse(_) => {
-                let error = ProtocolError("invalid request".to_string());
-                let _ = connection.write_frame(&Frame1::Error(error));
-                anyhow::bail!("protocol error: invalid request")
-            }
-
-            Frame1::ChooseSchemeRequest(request) => self
+            Request::ChooseSchemeRequest(request) => self
                 .service
                 .choose_scheme(request)
                 .map(Frame1::ChooseSchemeResponse),
 
-            Frame1::SignRequest(request) => {
+            Request::SignRequest(request) => {
                 let sign_request_2 = SignRequestWithSigScheme {
                     to_sign: request.to_sign,
                     uri: request.uri,
@@ -79,11 +74,11 @@ impl TedgeP11Server {
                 self.service.sign(sign_request_2).map(Frame1::SignResponse)
             }
 
-            Frame1::SignRequestWithSigScheme(request) => {
+            Request::SignRequestWithSigScheme(request) => {
                 self.service.sign(request).map(Frame1::SignResponse)
             }
 
-            Frame1::GetPublicKeyPemRequest(uri) => self
+            Request::GetPublicKeyPemRequest(uri) => self
                 .service
                 .get_public_key_pem(uri.as_deref())
                 .map(Frame1::GetPublicKeyPemResponse),
@@ -94,14 +89,14 @@ impl TedgeP11Server {
             // received on the associated socket, a Ping/Pong request triggers a service start and
             // ensures the PKCS11 library is loaded and ready to serve signing requests. In
             // practice, this only occurs with a client calls TedgeP11Client::with_ready_check.
-            Frame1::Ping => Ok(Frame1::Pong),
+            Request::Ping => Ok(Frame1::Pong(None)),
 
-            Frame1::CreateKeyRequest(request) => self
+            Request::CreateKeyRequest(request) => self
                 .service
                 .create_key(request)
                 .map(Frame1::CreateKeyResponse),
 
-            Frame1::GetTokensUrisRequest => self
+            Request::GetTokensUrisRequest => self
                 .service
                 .get_tokens_uris()
                 .map(Frame1::GetTokensUrisResponse),
@@ -131,6 +126,7 @@ mod tests {
 
     use super::super::client::TedgeP11Client;
     use crate::pkcs11;
+    use crate::proxy::frame::Frame;
     use crate::service::*;
     use std::io::Read;
     use std::os::unix::net::UnixStream;
@@ -216,7 +212,7 @@ mod tests {
         })
         .await
         .unwrap();
-        assert!(matches!(response, Frame1::Error(_)));
+        assert!(matches!(response, Frame::Version1(Frame1::Error(_))));
     }
 
     #[tokio::test]

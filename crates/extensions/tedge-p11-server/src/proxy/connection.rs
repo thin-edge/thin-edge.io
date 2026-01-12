@@ -27,7 +27,7 @@ impl Connection {
     /// Reads a frame and closes the reading half of the connection.
     ///
     /// NOTE: can only be called once
-    pub fn read_frame(&mut self) -> anyhow::Result<Frame1> {
+    pub fn read_frame(&mut self) -> anyhow::Result<Frame> {
         let mut buf = Vec::new();
         self.stream.read_to_end(&mut buf)?;
 
@@ -35,7 +35,7 @@ impl Connection {
         let frame: Frame =
             postcard::from_bytes(&buf).context("Failed to parse the received frame")?;
 
-        let Frame::Version1(frame) = frame;
+        // let Frame::Version1(frame) = frame;
 
         // by that time the sender should've already closed this connection half, so we ignore
         // ENOTCONN that can possibly be returned on some platforms (MacOS?)

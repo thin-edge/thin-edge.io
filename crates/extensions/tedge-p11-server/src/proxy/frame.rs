@@ -4,6 +4,8 @@ use serde::Serialize;
 pub use super::frame1::Frame1;
 pub use super::frame1::ProtocolError;
 
+pub use super::frame2::Frame2;
+
 /// The actual frame that we serialize and send/receive.
 ///
 /// This essentially just adds a version tag and should deal with cases when non-backwards
@@ -17,6 +19,7 @@ pub use super::frame1::ProtocolError;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Frame {
     Version1(Frame1),
+    Version2(Frame2),
 }
 
 /// Documents the properties of the serialization/deserialization format for purposes of adding new requests while
