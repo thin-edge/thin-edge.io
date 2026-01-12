@@ -133,13 +133,13 @@ impl TEdgeConfigLocation {
     /// Decide which configuration source to use for a given cloud and profile
     ///
     /// This function centralizes the decision logic for mapper configuration precedence:
-    /// 1. New format (`mappers/[cloud].toml` or `mappers/[cloud].d/[profile].toml`) takes precedence
+    /// 1. New format (`mappers/[cloud]/tedge.toml` or `mappers/[cloud].[profile]/tedge.toml`) takes precedence
     /// 2. If new format exists for some profiles but not the requested one, returns NotFound
     /// 3. If the config directory is inaccessible due to a permissions error, return Error
     ///
     /// If no new format exists, we then look at the
     /// `mapper_config_default_location` field of [TEdgeConfigLocation]:
-    /// 1. If this is set to [MapperConfigLocation::TedgeToml], we fall back to tedge.toml
+    /// 1. If this is set to [MapperConfigLocation::TedgeToml], we fall back to the root tedge.toml
     /// 2. If this is set to [MapperConfigLocation::SeparateFile] and no cloud configurations
     ///    exist in tedge.toml, we use the new mapper config format
     /// 3. If cloud configurations (for any cloud) do already exist in tedge.toml, we use
@@ -1497,19 +1497,19 @@ type = "a-service-type""#;
                 .unwrap();
 
             // Verify existing files unchanged
-            let content = tokio::fs::read_to_string(
-                location.mappers_config_dir().join("c8y/tedge.toml")
-            )
-            .await
-            .unwrap();
+            let content =
+                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+                    .await
+                    .unwrap();
             assert!(content.contains("test.c8y.io"));
         }
 
         #[tokio::test]
         async fn migration_retries_after_partial_failure() {
-            let (dir, location) =
-                create_temp_tedge_config("c8y.url = \"default.c8y.io\"\nc8y.profiles.prod.url = \"prod.c8y.io\"")
-                    .unwrap();
+            let (dir, location) = create_temp_tedge_config(
+                "c8y.url = \"default.c8y.io\"\nc8y.profiles.prod.url = \"prod.c8y.io\"",
+            )
+            .unwrap();
             let _env_lock = EnvSandbox::new().await;
 
             // Simulate partial migration: create only default profile with wrong data
@@ -1519,9 +1519,11 @@ type = "a-service-type""#;
                 .with_raw_content("url = \"wrong.c8y.io\"");
 
             // Verify tedge.toml still has config (incomplete migration marker)
-            assert!(location
-                .tedge_toml_contains_cloud_config_for(CloudType::C8y)
-                .await);
+            assert!(
+                location
+                    .tedge_toml_contains_cloud_config_for(CloudType::C8y)
+                    .await
+            );
 
             // Retry migration - should clean up and recreate
             location
@@ -1530,24 +1532,25 @@ type = "a-service-type""#;
                 .unwrap();
 
             // Verify both files now exist with correct data
-            let default_toml = tokio::fs::read_to_string(
-                location.mappers_config_dir().join("c8y/tedge.toml")
-            )
-            .await
-            .unwrap();
+            let default_toml =
+                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+                    .await
+                    .unwrap();
             assert!(default_toml.contains("default.c8y.io"));
 
             let prod_toml = tokio::fs::read_to_string(
-                location.mappers_config_dir().join("c8y.prod/tedge.toml")
+                location.mappers_config_dir().join("c8y.prod/tedge.toml"),
             )
             .await
             .unwrap();
             assert!(prod_toml.contains("prod.c8y.io"));
 
             // Verify tedge.toml cleaned up
-            assert!(!location
-                .tedge_toml_contains_cloud_config_for(CloudType::C8y)
-                .await);
+            assert!(
+                !location
+                    .tedge_toml_contains_cloud_config_for(CloudType::C8y)
+                    .await
+            );
         }
 
         #[tokio::test]
@@ -1582,12 +1585,16 @@ type = "a-service-type""#;
             assert!(tokio::fs::try_exists(mappers_dir.join("c8y/tedge.toml"))
                 .await
                 .unwrap());
-            assert!(tokio::fs::try_exists(mappers_dir.join("c8y.prod/tedge.toml"))
-                .await
-                .unwrap());
-            assert!(tokio::fs::try_exists(mappers_dir.join("c8y.test/tedge.toml"))
-                .await
-                .unwrap());
+            assert!(
+                tokio::fs::try_exists(mappers_dir.join("c8y.prod/tedge.toml"))
+                    .await
+                    .unwrap()
+            );
+            assert!(
+                tokio::fs::try_exists(mappers_dir.join("c8y.test/tedge.toml"))
+                    .await
+                    .unwrap()
+            );
 
             // Run cleanup
             location
@@ -1599,12 +1606,16 @@ type = "a-service-type""#;
             assert!(!tokio::fs::try_exists(mappers_dir.join("c8y/tedge.toml"))
                 .await
                 .unwrap());
-            assert!(!tokio::fs::try_exists(mappers_dir.join("c8y.prod/tedge.toml"))
-                .await
-                .unwrap());
-            assert!(!tokio::fs::try_exists(mappers_dir.join("c8y.test/tedge.toml"))
-                .await
-                .unwrap());
+            assert!(
+                !tokio::fs::try_exists(mappers_dir.join("c8y.prod/tedge.toml"))
+                    .await
+                    .unwrap()
+            );
+            assert!(
+                !tokio::fs::try_exists(mappers_dir.join("c8y.test/tedge.toml"))
+                    .await
+                    .unwrap()
+            );
 
             // Verify empty directories removed
             assert!(!tokio::fs::try_exists(mappers_dir.join("c8y"))
@@ -1618,9 +1629,11 @@ type = "a-service-type""#;
             assert!(tokio::fs::try_exists(mappers_dir.join("c8y.prod"))
                 .await
                 .unwrap());
-            assert!(tokio::fs::try_exists(mappers_dir.join("c8y.prod/flows/my-flow.toml"))
-                .await
-                .unwrap());
+            assert!(
+                tokio::fs::try_exists(mappers_dir.join("c8y.prod/flows/my-flow.toml"))
+                    .await
+                    .unwrap()
+            );
         }
 
         #[tokio::test]
@@ -1634,11 +1647,10 @@ type = "a-service-type""#;
                 .await
                 .unwrap();
 
-            let first_content = tokio::fs::read_to_string(
-                location.mappers_config_dir().join("c8y/tedge.toml")
-            )
-            .await
-            .unwrap();
+            let first_content =
+                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+                    .await
+                    .unwrap();
 
             // Run migration again (tedge.toml now has no c8y section)
             location
@@ -1647,11 +1659,10 @@ type = "a-service-type""#;
                 .unwrap();
 
             // Verify file unchanged
-            let second_content = tokio::fs::read_to_string(
-                location.mappers_config_dir().join("c8y/tedge.toml")
-            )
-            .await
-            .unwrap();
+            let second_content =
+                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+                    .await
+                    .unwrap();
             assert_eq!(first_content, second_content);
         }
     }

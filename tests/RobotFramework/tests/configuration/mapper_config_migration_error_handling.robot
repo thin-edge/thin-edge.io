@@ -185,7 +185,6 @@ Migration Handles Corrupted Tedge Toml
     ...
     ...    If tedge.toml is corrupted, the migration should fail with a clear
     ...    error message and not create any mapper config files.
-    [Teardown]     Restore Tedge Toml Backup
 
     Execute Command    sudo cp /etc/tedge/tedge.toml /etc/tedge/tedge.toml.bak
 
@@ -204,6 +203,7 @@ Migration Handles Corrupted Tedge Toml
 
     # No mapper configs should be created
     Execute Command    test ! -d /etc/tedge/mappers/c8y    retries=0    timeout=0
+    [Teardown]    Restore Tedge Toml Backup
 
 Migration Creates Parent Directories With Correct Permissions
     [Documentation]    Verify that created directories have correct ownership and permissions

@@ -34,7 +34,7 @@ impl TEdgeConfig {
     ///
     /// As of 2026-01-05, this is only used for testing how the new default will
     /// work before we fully adopt the new format. When we do this, we should
-    /// probably also include `tedge-mapper config-migrate` commands in the
+    /// probably also include `tedge config upgrade` commands in the
     /// relevant package postinstall scripts.
     #[cfg(feature = "test")]
     pub async fn load_prefer_separate_mapper_config(
