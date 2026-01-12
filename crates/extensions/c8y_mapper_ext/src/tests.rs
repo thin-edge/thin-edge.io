@@ -1671,7 +1671,8 @@ async fn custom_operation_timeout_sigterm() {
 Exit status: 124 (ERROR)
 
 stderr <<EOF
-operation failed due to timeout: duration=1sEOF
+operation failed due to timeout: duration=1s
+EOF
 
 stdout <<EOF
 main 1
@@ -1738,7 +1739,8 @@ async fn custom_operation_timeout_sigkill() {
 Killed by signal: 9
 
 stderr <<EOF
-operation failed due to timeout: duration=1sEOF
+operation failed due to timeout: duration=1s
+EOF
 
 stdout <<EOF
 main 1

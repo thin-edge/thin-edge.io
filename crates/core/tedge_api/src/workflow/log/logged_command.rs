@@ -108,7 +108,7 @@ impl LoggingChild {
 fn update_stderr_message(mut output: Output, timeout: Duration) -> Result<Output, std::io::Error> {
     output.stderr.append(
         &mut format!(
-            "operation failed due to timeout: duration={}s",
+            "operation failed due to timeout: duration={}s\n",
             timeout.as_secs()
         )
         .as_bytes()
