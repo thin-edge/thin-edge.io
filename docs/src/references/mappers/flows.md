@@ -1,6 +1,6 @@
 ---
-title: Extensible mapper and user-provided Flows
-tags: [Reference, Mappers, Cloud]
+title: User-defined mapping rules
+tags: [Reference, Flows, Mappers, Cloud]
 sidebar_position: 2
 ---
 
@@ -137,22 +137,29 @@ A flow script can also export a `onInterval` function
 
 ## Flow configuration
 
-- The generic mapper loads flows and steps stored in `/etc/tedge/flows/`.
+- The generic mapper loads flows and steps stored in `/etc/tedge/mappers/flows/flows`.
 - A flow is defined by a TOML file with `.toml` extension.
 - A step is defined by a JavaScript file with an `.mjs` or `.js` extension.
   - This can also be a TypeScript module with a `.ts` extension.
 - The definition of flow defines its input, output and error sink as well as a list of transformation steps.
-- Each step is built from a javascript and is possibly given a config (arbitrary json that will be passed to the script)
+- Each step is built either from a `script` or a `builtin` transformation
+- A step possibly given a config (arbitrary json that will be passed to the transformation script)
 
 ```toml
 input.mqtt.topics = ["te/+/+/+/+/m/+"]
 
 steps = [
-    { script = "add_timestamp.js" },
+    { builtin = "add-timestamp" },
     { script = "drop_stragglers.js", config = { max_delay = 60 } },
     { script = "te_to_c8y.js" }
 ]
 ```
+
+### Transformation
+
+The transformation applied by a step is defined either by
+- a user-provided `script` implemented in JavaScript
+- a builtin transformation provided by %%te%%.
 
 ### Input connectors
 
@@ -249,7 +256,7 @@ tedge-mapper flows
 
 This mapper:
 
-- loads all the flows defined in `/etc/tedge/flows`
+- loads all the flows defined in `/etc/tedge/mappers/flows/flows`
 - reloads any flow or script that is created, updated or deleted while the mapper is running
 - subscribes to each flow `input.mqtt.topics`, dispatching the messages to the `onMessage` functions
 - triggers at the configured pace the `onInterval` functions
@@ -262,7 +269,10 @@ Flows and steps can be tested using the `tedge flows test` command.
 - These tests are done without any interaction with MQTT and `tedge-mapper flows`,
   meaning that tests can safely be run on a device in production
 - By default, tests run against the flows and scripts used by `tedge-mapper flows`.
-  However, a directory of flows under development can be provided using the `--flows-dir <FLOWS_DIR>` option.
+  - However, a directory of flows under development can be provided using the `--flows-dir <FLOWS_DIR>` option.
+  - One can also test flows of a builtin mapper using the `--mapper` and `--profile` options.
+    The tests will then run against the flows of that mapper (and profile if any).
+  - The subcommand `tedge flows config-dir` can be used to get the flows directory for a `--mapper` and a `--profile`.
 - A test can be specific to a flow or script using the `--flow <OPTION>` option.
  
 A test can be given a test message on the command line.
@@ -306,3 +316,33 @@ The following builtin objects are exported:
 - [`TextDecoder`](https://developer.mozilla.org/en-US/docs/Web/API/TextDecoder)
   - Only `utf-8` is supported 
 - [`TextEncoder`](https://developer.mozilla.org/en-US/docs/Web/API/TextEncoder)
+
+## Builtin transformations
+
+### `add-timestamp`
+
+Add a timestamp to JSON messages
+- The `format` to be used is either `unix` (the default) or `rfc3339`.
+- Unless specified otherwise the name for the added timestamp `property` is `time`.
+- When the input message already has a timestamp property the default is to let it unchanged.
+  This can be changed with the `reformat` config so any timestamp is reformated to the requested format. 
+- `{ builtin = "add-timestamp", config = { format = "rfc3339", reformat = true }}`
+
+### `ignore-topics`
+
+Filter out messages with specific topics
+- Must be configured with a list of `topics` and topic filters to be ignored
+- `{ builtin = "ignore-topics", config.topics = ["te/device/main/service/mosquitto-c8y-bridge/#"] }`
+
+### `limit-payload-size`
+
+Filter out messages which payload is too large
+- Must be configured with the `max_size` for the messages (maximum number of bytes)
+- Can be configured to `discard` the messages instead of raising an error (the latter being the default)
+- `{ builtin = "limit-payload-size", config = { max_size = 64000, discard = true }}`
+
+### `set-topic`
+
+Assign a target topic to messages
+- Must be given the `topic` the messages have to be sent to.
+- `{ builtin = "set-topic", config.topic = "c8y/measurement/measurements/create" }`

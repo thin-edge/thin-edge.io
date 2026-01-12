@@ -2,7 +2,7 @@
 input.mqtt.topics = ["loopback/#"]
 
 [[steps]]
-script = "add_timestamp.js"
+builtin = "add-timestamp"
 
 [[steps]]
 script = "circuit-breaker.js"

@@ -1,9 +1,8 @@
 use crate::input_source::PollingSourceError;
 use crate::js_runtime::JsRuntime;
-use crate::js_script::JsScript;
 use crate::stats::Counter;
+use crate::steps::FlowStep;
 use crate::LoadError;
-use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde_json::json;
 use serde_json::Value;
@@ -16,7 +15,6 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchError;
 use tokio::time::Instant;
-use tracing::warn;
 
 /// A chain of message transformations
 ///
@@ -38,11 +36,6 @@ pub struct Flow {
 
     /// Path to the configuration file for this flow
     pub source: Utf8PathBuf,
-}
-
-/// A message transformation step
-pub struct FlowStep {
-    pub script: JsScript,
 }
 
 pub enum SourceTag {
@@ -190,11 +183,11 @@ impl Flow {
     ) -> Result<Vec<Message>, FlowError> {
         let mut messages = vec![message.clone()];
         for step in self.steps.iter() {
-            let js = step.script.source();
+            let js = step.source().to_string();
             let mut transformed_messages = vec![];
             for message in messages.iter() {
                 let step_started_at = stats.flow_step_start(&js, "onMessage");
-                let step_output = step.script.on_message(js_runtime, timestamp, message).await;
+                let step_output = step.on_message(js_runtime, timestamp, message).await;
                 match &step_output {
                     Ok(messages) => {
                         stats.flow_step_done(&js, "onMessage", step_started_at, messages.len())
@@ -238,12 +231,12 @@ impl Flow {
     ) -> Result<Vec<Message>, FlowError> {
         let mut messages = vec![];
         for step in self.steps.iter_mut() {
-            let js = step.script.source();
+            let js = step.source().to_string();
             // Process first the messages triggered upstream by the tick
             let mut transformed_messages = vec![];
             for message in messages.iter() {
                 let step_started_at = stats.flow_step_start(&js, "onMessage");
-                let step_output = step.script.on_message(js_runtime, timestamp, message).await;
+                let step_output = step.on_message(js_runtime, timestamp, message).await;
                 match &step_output {
                     Ok(messages) => {
                         stats.flow_step_done(&js, "onMessage", step_started_at, messages.len())
@@ -254,9 +247,9 @@ impl Flow {
             }
 
             // Only then process the tick if it's time to execute
-            if step.script.should_execute_interval(now) {
+            if step.should_execute_interval(now) {
                 let step_started_at = stats.flow_step_start(&js, "onInterval");
-                let tick_output = step.script.on_interval(js_runtime, timestamp).await;
+                let tick_output = step.on_interval(js_runtime, timestamp).await;
                 match &tick_output {
                     Ok(messages) => {
                         stats.flow_step_done(&js, "onInterval", step_started_at, messages.len())
@@ -339,26 +332,6 @@ impl FlowInput {
             | FlowInput::PollCommand { topic, .. }
             | FlowInput::StreamFile { topic, .. }
             | FlowInput::StreamCommand { topic, .. } => topic == &message.topic,
-        }
-    }
-}
-
-impl FlowStep {
-    pub(crate) fn check(&self, flow: &Utf8Path) {
-        let script = &self.script;
-        if script.no_js_on_message_fun {
-            warn!(target: "flows", "Flow script with no 'onMessage' function: {}", script.path);
-        }
-        if script.no_js_on_interval_fun && !script.interval.is_zero() {
-            warn!(target: "flows", "Flow script with no 'onInterval' function: {}; but configured with an 'interval' in {flow}", script.path);
-        }
-    }
-
-    pub(crate) fn fix(&mut self) {
-        let script = &mut self.script;
-        if !script.no_js_on_interval_fun && script.interval.is_zero() {
-            // Zero as a default is not appropriate for a script with an onInterval handler
-            script.interval = std::time::Duration::from_secs(1);
         }
     }
 }

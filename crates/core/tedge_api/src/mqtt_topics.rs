@@ -182,6 +182,7 @@ impl MqttSchema {
             ChannelFilter::AnySignal => "/signal/+".to_string(),
             ChannelFilter::Signal(signal_type) => format!("/signal/{signal_type}"),
             ChannelFilter::Health => "/status/health".to_string(),
+            ChannelFilter::Status(component) => format!("/status/{component}"),
         };
 
         TopicFilter::new_unchecked(&format!("{}/{entity}{channel}", self.root))
@@ -626,6 +627,9 @@ pub enum Channel {
         operation: OperationType,
     },
     Health,
+    Status {
+        component: String,
+    },
 }
 
 impl FromStr for Channel {
@@ -669,6 +673,9 @@ impl FromStr for Channel {
                 signal_type: signal_type.into(),
             }),
             ["status", "health"] => Ok(Channel::Health),
+            ["status", component] => Ok(Channel::Status {
+                component: component.to_owned(),
+            }),
 
             _ => Err(ChannelError::InvalidCategory(channel.to_string())),
         }
@@ -696,6 +703,7 @@ impl Display for Channel {
             Channel::CommandMetadata { operation } => write!(f, "cmd/{operation}"),
             Channel::Health => write!(f, "status/health"),
             Channel::Signal { signal_type } => write!(f, "signal/{signal_type}"),
+            Channel::Status { component } => write!(f, "status/{component}"),
         }
     }
 }
@@ -894,6 +902,7 @@ pub enum ChannelFilter {
     AnyCommandMetadata,
     CommandMetadata(OperationType),
     Health,
+    Status(String),
 }
 
 impl From<&Channel> for ChannelFilter {
@@ -920,6 +929,7 @@ impl From<&Channel> for ChannelFilter {
                 ChannelFilter::CommandMetadata(operation.clone())
             }
             Channel::Health => ChannelFilter::Health,
+            Channel::Status { component } => ChannelFilter::Status(component.clone()),
         }
     }
 }
