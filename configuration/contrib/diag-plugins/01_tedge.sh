@@ -41,6 +41,9 @@ collect_logs() {
 }
 
 collect() {
+    # version
+    echo "version: $(tedge --version ||:)" >&2
+
     # tedge-agent
     collect_logs "tedge-agent"
 
