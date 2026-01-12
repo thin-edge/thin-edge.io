@@ -1,12 +1,12 @@
 ---
 title: "tedge config"
 tags: [Reference, CLI]
-sidebar_position: 2
+sidebar_position: 3
 ---
 
 # The tedge config command
 
-```sh title="tedge config"
+```text command="tedge config --help" title="tedge config"
 tedge-config 
 Configure Thin Edge
 
@@ -28,7 +28,7 @@ SUBCOMMANDS:
 
 ## Get
 
-```sh title="tedge config get"
+```text command="tedge config get --help" title="tedge config get"
 tedge-config-get 
 Get the value of the provided configuration key
 
@@ -44,7 +44,7 @@ OPTIONS:
 
 ## Set
 
-```sh title="tedge config set"
+```text command="tedge config set --help" title="tedge config set"
 tedge-config-set 
 Set or update the provided configuration key with the given value
 
@@ -61,7 +61,7 @@ OPTIONS:
 
 ## List
 
-```sh title="tedge config list"
+```text command="tedge config list --help" title="tedge config list"
 tedge-config-list 
 Print the configuration keys and their values
 
@@ -76,7 +76,7 @@ OPTIONS:
 
 ## Unset
 
-```sh title="tedge config unset"
+```text command="tedge config unset --help" title="tedge config unset"
 tedge-config-unset 
 Unset the provided configuration key
 
@@ -92,7 +92,7 @@ OPTIONS:
 
 ## Add
 
-```sh title="tedge config add"
+```text command="tedge config add --help" title="tedge config add"
 Append or set the provided configuration key with the given value
 
 Usage: tedge config add [OPTIONS] <KEY> <VALUE>
@@ -108,7 +108,7 @@ Options:
 
 ## Remove
 
-```sh title="tedge config remove"
+```text command="tedge config remove --help" title="tedge config remove"
 Remove value from the provided configuration key
 
 Usage: tedge config remove [OPTIONS] <KEY> <VALUE>

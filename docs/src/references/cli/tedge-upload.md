@@ -1,12 +1,12 @@
 ---
 title: "tedge upload"
 tags: [Reference, CLI]
-sidebar_position: 7
+sidebar_position: 9
 ---
 
 # The tedge upload command
 
-```sh title="tedge upload c8y"
+```text command="tedge upload c8y --help" title="tedge upload c8y"
 Upload a file to Cumulocity
 
 The command creates a new event for the device, attaches the given file content to this new event, and returns the event ID.

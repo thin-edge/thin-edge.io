@@ -78,7 +78,7 @@ sudo tedge config set firmware.child.update.timeout <value_in_seconds>
 c8y-firmware-plugin --help
 ```
 
-```run command="c8y-firmware-plugin --help" lang="text" title="Output"
+```text command="c8y-firmware-plugin --help" lang="text" title="Output"
 Thin-edge device firmware management for Cumulocity
 
 USAGE:

@@ -1,12 +1,12 @@
 ---
 title: "tedge mqtt"
 tags: [Reference, CLI]
-sidebar_position: 5
+sidebar_position: 10
 ---
 
 # The tedge mqtt command
 
-```sh title="tedge mqtt"
+```text command="tedge mqtt --help" title="tedge mqtt"
 tedge-mqtt 
 Publish a message on a topic and subscribe a topic
 
@@ -24,7 +24,7 @@ SUBCOMMANDS:
 
 ## Pub
 
-```sh title="tedge mqtt pub"
+```text command="tedge mqtt pub --help" title="tedge mqtt pub"
 tedge-mqtt-pub 
 Publish a MQTT message on a topic
 
@@ -43,7 +43,7 @@ OPTIONS:
 
 ## Sub
 
-```sh title="tedge mqtt sub"
+```text command="tedge mqtt sub --help" title="tedge mqtt sub"
 tedge-mqtt-sub 
 Subscribe a MQTT topic
 

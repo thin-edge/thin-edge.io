@@ -1,7 +1,7 @@
 ---
 title: "tedge http"
 tags: [Reference, CLI]
-sidebar_position: 6
+sidebar_position: 11
 ---
 
 # The tedge http command
@@ -15,7 +15,7 @@ A `tedge` sub command to interact with the HTTP services hosted on the device by
 This command uses `tedge config` to get the appropriate host, port and credentials to reach these local HTTP services.
 So the same command can be used unchanged from the main device or a child device, with TLS or mTLS enabled or not.
 
-```sh title="tedge http"
+```text command="tedge http --help" title="tedge http"
 Send HTTP requests to local thin-edge HTTP servers
 
 Usage: tedge http [OPTIONS] <COMMAND>
@@ -148,7 +148,7 @@ http.client.auth.cert_file  Path to the certificate which is used by the agent w
 
 ## tedge http get
 
-```sh title="tedge http get"
+```text command="tedge http get --help" title="tedge http get"
 GET content from thin-edge local HTTP servers
 
 Usage: tedge http get [OPTIONS] <URI>
@@ -167,7 +167,7 @@ Options:
 
 ## tedge http post
 
-```sh title="tedge http post"
+```text command="tedge http post --help" title="tedge http post"
 POST content to thin-edge local HTTP servers
 
 Usage: tedge http post [OPTIONS] <content|--data <DATA>|--file <FILE>> <URI>
@@ -190,7 +190,7 @@ Options:
 
 ## tedge http put
 
-```sh title="tedge http put"
+```text command="tedge http put --help" title="tedge http put"
 PUT content to thin-edge local HTTP servers
 
 Usage: tedge http put [OPTIONS] <content|--data <DATA>|--file <FILE>> <URI>
@@ -213,7 +213,7 @@ Options:
 
 ## tedge http patch
 
-```sh title="tedge http patch"
+```text command="tedge http patch --help" title="tedge http patch"
 PATCH content to thin-edge local HTTP servers
 
 Usage: tedge http patch [OPTIONS] <content|--data <DATA>|--file <FILE>> <URI>
@@ -236,7 +236,7 @@ Options:
 
 ## tedge http delete
 
-```sh title="tedge http delete"
+```text command="tedge http delete --help" title="tedge http delete"
 DELETE resource from thin-edge local HTTP servers
 
 Usage: tedge http delete [OPTIONS] <URI>

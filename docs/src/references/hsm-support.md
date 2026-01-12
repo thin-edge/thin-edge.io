@@ -48,7 +48,7 @@ a consumer does not provide them. In practice, this is only relevant to `tedge-p
 which runs in a separate process and can handle many clients. If desired, it can be configured to
 use a default pin or limit the scope of tokens available to clients.
 
-```sh command="tedge config list --doc device.cryptoki" title="tedge config list --doc device.cryptoki"
+```text command="tedge config list --doc device.cryptoki" title="tedge config list --doc device.cryptoki"
        device.cryptoki.mode  Whether to use a Hardware Security Module for authenticating the MQTT connection with the cloud.  "off" to not use the HSM, "module" to use the provided cryptoki dynamic module, "socket" to access the HSM via tedge-p11-server signing service. 
                              Examples: off, module, socket
 device.cryptoki.module_path  A path to the PKCS#11 module used for interaction with the HSM.  Needs to be set when `device.cryptoki.mode` is set to `module`. 
@@ -65,7 +65,7 @@ The options below are used by the consumer (tedge) to ask `tedge-p11-server` for
 can use different keys for different connection profiles. `tedge-p11-server` may limit what keys and
 tokens are available.
 
-```sh command="tedge config list --doc key_uri" title="tedge config list --doc key_uri"
+```text command="tedge config list --doc key_uri" title="tedge config list --doc key_uri"
     device.key_uri  A PKCS#11 URI of the private key.  See RFC #7512.
                     Example: pkcs11:token=my-pkcs11-token;object=my-key
 
@@ -82,7 +82,7 @@ aws.device.key_uri  A PKCS#11 URI of the private key.  See RFC #7512.
 The options below are used by the consumer (tedge) to use a given PIN with a given key, instead of
 using a default PIN that `tedge-p11-server` is configured to use.
 
-```sh command="tedge config list --doc key_pin" title="tedge config list --doc key_pin"
+```text command="tedge config list --doc key_pin" title="tedge config list --doc key_pin"
     device.key_pin  User PIN value for logging into the PKCS#11 token provided by the consumer.  This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given `key_uri`.  In practice, this can be used to define separate keys and separate PINs for different connection profiles.
                     Examples: 123456, my-pin
 c8y.device.key_pin  User PIN value for logging into the PKCS#11 token provided by the consumer.  This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given `key_uri`.  In practice, this can be used to define separate keys and separate PINs for different connection profiles.
