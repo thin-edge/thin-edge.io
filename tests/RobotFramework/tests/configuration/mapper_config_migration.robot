@@ -130,7 +130,7 @@ Migration With Write Protected Tedge Toml
     Setup Test Config    c8y    test.c8y.io
 
     # Ensure mappers config dir exists (it might not if this test is run on its own)
-    Execute Command    sudo -u tedge mkdir /etc/tedge/mappers
+    Execute Command    sudo -u tedge mkdir -p /etc/tedge/mappers
     Execute Command    sudo chmod 755 /etc/tedge/mappers
 
     # Make tedge directory read-only
