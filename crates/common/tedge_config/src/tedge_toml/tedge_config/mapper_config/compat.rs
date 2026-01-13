@@ -58,8 +58,21 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
         let c8y_config = tedge_config.c8y.try_get(profile).map_err(|_| {
             MapperConfigError::ConfigRead(format!("C8y profile '{}' not found", profile.unwrap()))
         })?;
+        let location = tedge_config
+            .dto
+            .c8y
+            .try_get(profile, "c8y")
+            .unwrap()
+            .mapper_config_file
+            .clone()
+            .unwrap_or(
+                tedge_config
+                    .location
+                    .tedge_config_root_path()
+                    .join("tedge.toml"),
+            );
 
-        build_mapper_config(c8y_config.clone(), profile)
+        build_mapper_config(c8y_config.clone(), profile, location)
     }
 
     fn from_cloud_config(c8y: &Self::CloudConfigReader, profile: Option<&str>) -> Self {
@@ -139,8 +152,21 @@ impl FromCloudConfig for AzMapperSpecificConfig {
         let az_config = tedge_config.az.try_get(profile).map_err(|_| {
             MapperConfigError::ConfigRead(format!("Azure profile '{}' not found", profile.unwrap()))
         })?;
+        let location = tedge_config
+            .dto
+            .az
+            .try_get(profile, "az")
+            .unwrap()
+            .mapper_config_file
+            .clone()
+            .unwrap_or_else(|| {
+                tedge_config
+                    .location
+                    .tedge_config_root_path()
+                    .join("tedge.toml")
+            });
 
-        build_mapper_config(az_config.clone(), profile)
+        build_mapper_config(az_config.clone(), profile, location)
     }
 
     fn from_cloud_config(az: &Self::CloudConfigReader, _profile: Option<&str>) -> Self {
@@ -163,8 +189,21 @@ impl FromCloudConfig for AwsMapperSpecificConfig {
         let aws_config = tedge_config.aws.try_get(profile).map_err(|_| {
             MapperConfigError::ConfigRead(format!("AWS profile '{}' not found", profile.unwrap()))
         })?;
+        let location = tedge_config
+            .dto
+            .aws
+            .try_get(profile, "aws")
+            .unwrap()
+            .mapper_config_file
+            .clone()
+            .unwrap_or_else(|| {
+                tedge_config
+                    .location
+                    .tedge_config_root_path()
+                    .join("tedge.toml")
+            });
 
-        build_mapper_config(aws_config.clone(), profile)
+        build_mapper_config(aws_config.clone(), profile, location)
     }
 
     fn from_cloud_config(aws: &Self::CloudConfigReader, _profile: Option<&str>) -> Self {
@@ -181,6 +220,7 @@ impl FromCloudConfig for AwsMapperSpecificConfig {
 pub fn build_mapper_config<T>(
     cloud_config: T::CloudConfigReader,
     profile: Option<&str>,
+    location: Utf8PathBuf,
 ) -> Result<MapperConfig<T>, MapperConfigError>
 where
     T: SpecialisedCloudConfig,
@@ -213,6 +253,7 @@ where
     let cloud_specific = T::from_cloud_config(&cloud_config, profile);
 
     Ok(MapperConfig {
+        location,
         url,
         root_cert_path,
         device,

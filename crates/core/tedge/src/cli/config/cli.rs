@@ -112,6 +112,9 @@ pub enum ConfigCmd {
         /// Prints only the keys that contain the provided filter string
         filter: Option<String>,
     },
+
+    #[clap(hide = true)]
+    Upgrade,
 }
 
 #[macro_export]
@@ -181,6 +184,7 @@ impl BuildCommand for ConfigCmd {
                 filter,
             }
             .into_boxed()),
+            ConfigCmd::Upgrade => Ok(UpgradeConfigCommand.into_boxed()),
         }
     }
 }

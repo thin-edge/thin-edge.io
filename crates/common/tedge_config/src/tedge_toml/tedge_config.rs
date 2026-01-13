@@ -1,7 +1,6 @@
 mod version;
 use futures::Stream;
 use reqwest::NoProxy;
-use serde::Deserialize;
 use version::TEdgeTomlVersion;
 
 mod append_remove;
@@ -62,7 +61,6 @@ use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::Arc;
-use strum::IntoEnumIterator;
 use tedge_api::mqtt_topics::EntityTopicId;
 pub use tedge_config_macros::ConfigNotSet;
 pub use tedge_config_macros::MultiError;
@@ -104,16 +102,18 @@ impl std::ops::Deref for TEdgeConfig {
     }
 }
 
-async fn read_file_if_exists(path: &Utf8Path) -> anyhow::Result<Option<String>> {
+async fn read_file_if_exists(
+    path: &Utf8Path,
+    config_dir: &Utf8Path,
+) -> anyhow::Result<Option<String>> {
     match tokio::fs::read_to_string(path).await {
         Ok(contents) => Ok(Some(contents)),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
         Err(e) => {
-            let dir = path.parent().unwrap();
             // If the error is actually with the mappers directory as a whole,
             // feed that back to the user
-            if let Err(dir_error) = tokio::fs::read_dir(dir).await {
-                Err(dir_error).context(format!("failed to read {dir}"))
+            if let Err(dir_error) = tokio::fs::read_dir(config_dir).await {
+                Err(dir_error).context(format!("failed to read {config_dir}"))
             } else {
                 Err(e).context(format!("failed to read mapper configuration from {path}"))
             }
@@ -132,34 +132,41 @@ impl TEdgeConfigDto {
         use futures::StreamExt;
         use futures::TryStreamExt;
 
-        let mappers_dir = location.tedge_config_root_path().join("mappers");
+        let mappers_dir = location.mappers_config_dir();
         let all_profiles = location.mapper_config_profiles::<T>().await;
         let ty = T::expected_cloud_type();
         if let Some(profiles) = all_profiles {
+            let config_paths = location.config_path::<T>();
+            let default_profile_path = config_paths.path_for(None::<&ProfileName>);
+
             if !dto.is_default() {
-                tracing::warn!("{ty} configuration found in `tedge.toml`, but this will be ignored in favour of configuration in {mappers_dir}/{ty}.toml and {mappers_dir}/{ty}.d")
+                let wildcard_profile_path = config_paths.path_for(Some("*"));
+                tracing::warn!("{ty} configuration found in `tedge.toml`, but this will be ignored in favour of configuration in {default_profile_path} and {wildcard_profile_path}")
             }
-            let toml_path = mappers_dir.join(format!("{ty}.toml"));
-            let default_profile_toml = read_file_if_exists(&toml_path).await?;
+
+            let default_profile_toml =
+                read_file_if_exists(&default_profile_path, &config_paths.base_dir).await?;
             let mut default_profile_config: T::CloudDto = default_profile_toml.map_or_else(
                 || Ok(<_>::default()),
                 |toml| {
                     toml::from_str(&toml).with_context(|| {
-                        format!("failed to deserialise mapper config in {toml_path}")
+                        format!("failed to deserialise mapper config in {default_profile_path}")
                     })
                 },
             )?;
-            default_profile_config.set_mapper_config_dir(mappers_dir.clone());
+            default_profile_config.set_mappers_root_dir(mappers_dir.clone());
+            default_profile_config.set_mapper_config_file(default_profile_path);
             dto.non_profile = default_profile_config;
 
-            dto.profiles = profiles
+            dto.profiles = futures::stream::iter(profiles)
                 .filter_map(futures::future::ready)
                 .then(|profile| async {
-                    let toml_path = mappers_dir.join(format!("{ty}.d/{profile}.toml"));
+                    let toml_path = config_paths.path_for(Some(&profile));
                     let profile_toml = tokio::fs::read_to_string(&toml_path).await?;
                     let mut profiled_config: T::CloudDto = toml::from_str(&profile_toml)
                         .context("failed to deserialise mapper config")?;
-                    profiled_config.set_mapper_config_dir(mappers_dir.clone());
+                    profiled_config.set_mappers_root_dir(mappers_dir.clone());
+                    profiled_config.set_mapper_config_file(toml_path);
                     Ok::<_, anyhow::Error>((profile, profiled_config))
                 })
                 .try_collect()
@@ -225,10 +232,6 @@ impl TEdgeConfig {
             profile.as_deref(),
             self,
         )?)
-    }
-
-    pub fn profiled_config_directories(&self) -> impl Iterator<Item = Utf8PathBuf> + use<'_> {
-        CloudType::iter().map(|ty| self.location.mappers_config_dir().join(format!("{ty}.d")))
     }
 
     fn all_profiles<'a, T>(&'a self) -> Box<dyn Iterator<Item = Option<ProfileName>> + 'a>
@@ -421,6 +424,12 @@ impl CloudConfig for DynCloudConfig<'_> {
             Self::Borrow(config) => config.key_pin(),
         }
     }
+    fn mapper_config_location(&self) -> &Utf8Path {
+        match self {
+            Self::Arc(config) => config.mapper_config_location(),
+            Self::Borrow(config) => config.mapper_config_location(),
+        }
+    }
 }
 
 /// The keys that can be read from the configuration
@@ -438,12 +447,6 @@ pub static READABLE_KEYS: Lazy<Vec<(Cow<'static, str>, doku::Type)>> = Lazy::new
     };
     struct_field_paths(None, &fields)
 });
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, doku::Document, serde::Serialize)]
-pub enum MapperConfigLocation {
-    TedgeToml,
-    SeparateFile(#[doku(as = "String")] camino::Utf8PathBuf),
-}
 
 define_tedge_config! {
     #[tedge_config(reader(skip))]
@@ -575,6 +578,10 @@ define_tedge_config! {
         #[tedge_config(reader(skip))]
         #[serde(skip)]
         mapper_config_dir: Utf8PathBuf,
+
+        #[tedge_config(reader(skip))]
+        #[serde(skip)]
+        mapper_config_file: Utf8PathBuf,
 
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
@@ -820,6 +827,10 @@ define_tedge_config! {
         #[serde(skip)]
         mapper_config_dir: Utf8PathBuf,
 
+        #[tedge_config(reader(skip))]
+        #[serde(skip)]
+        mapper_config_file: Utf8PathBuf,
+
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
         url: ConnectUrl,
@@ -910,6 +921,10 @@ define_tedge_config! {
         #[tedge_config(reader(skip))]
         #[serde(skip)]
         mapper_config_dir: Utf8PathBuf,
+
+        #[tedge_config(reader(skip))]
+        #[serde(skip)]
+        mapper_config_file: Utf8PathBuf,
 
         /// Endpoint URL of AWS IoT tenant
         #[tedge_config(example = "your-endpoint.amazonaws.com")]
@@ -1411,6 +1426,7 @@ pub trait CloudConfig {
     fn root_cert_path(&self) -> &Utf8Path;
     fn key_uri(&self) -> Option<Arc<str>>;
     fn key_pin(&self) -> Option<Arc<str>>;
+    fn mapper_config_location(&self) -> &Utf8Path;
 }
 
 impl<T: SpecialisedCloudConfig> CloudConfig for MapperConfig<T> {
@@ -1432,6 +1448,10 @@ impl<T: SpecialisedCloudConfig> CloudConfig for MapperConfig<T> {
 
     fn key_pin(&self) -> Option<Arc<str>> {
         self.device.key_pin.clone()
+    }
+
+    fn mapper_config_location(&self) -> &Utf8Path {
+        &self.location
     }
 }
 
@@ -1816,7 +1836,8 @@ mod tests {
     async fn mapper_config_reads_non_profiled_mapper() {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
-            .file("c8y.toml")
+            .dir("c8y")
+            .file("tedge.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -1838,8 +1859,8 @@ mod tests {
     async fn mapper_config_reads_profiled_mapper() {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
-            .dir("c8y.d")
-            .file("myprofile.toml")
+            .dir("c8y.myprofile")
+            .file("tedge.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -1861,8 +1882,8 @@ mod tests {
     async fn mapper_config_fails_if_profile_is_not_migrated_but_directory_exists() {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
-            .dir("c8y.d")
-            .file("myprofile.toml")
+            .dir("c8y.myprofile")
+            .file("tedge.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -1882,7 +1903,8 @@ mod tests {
     async fn mapper_config_fails_if_profile_is_not_migrated_but_default_profile_is() {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
-            .file("c8y.toml")
+            .dir("c8y")
+            .file("tedge.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -1936,7 +1958,7 @@ mod tests {
     async fn mapper_config_falls_back_to_tedge_toml_config_if_only_another_cloud_is_using_new_format(
     ) {
         let ttd = TempTedgeDir::new();
-        ttd.dir("mappers").file("c8y.toml");
+        ttd.dir("mappers").dir("c8y").file("tedge.toml");
         ttd.file("tedge.toml").with_toml_content(toml::toml! {
             az.url = "az.url"
         });
@@ -1987,7 +2009,8 @@ mod tests {
     async fn all_mapper_configs_succeeds_when_profile_directory_does_not_exist() {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
-            .file("c8y.toml")
+            .dir("c8y")
+            .file("tedge.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
             });
@@ -2007,18 +2030,21 @@ mod tests {
     async fn all_mapper_configs_includes_both_default_and_profiles_when_directory_exists() {
         let ttd = TempTedgeDir::new();
         let mappers_dir = ttd.dir("mappers");
-        mappers_dir.file("c8y.toml").with_toml_content(toml::toml! {
-            url = "default.example.com"
-        });
         mappers_dir
-            .dir("c8y.d")
-            .file("profile1.toml")
+            .dir("c8y")
+            .file("tedge.toml")
+            .with_toml_content(toml::toml! {
+                url = "default.example.com"
+            });
+        mappers_dir
+            .dir("c8y.profile1")
+            .file("tedge.toml")
             .with_toml_content(toml::toml! {
                 url = "profile1.example.com"
             });
         mappers_dir
-            .dir("c8y.d")
-            .file("profile2.toml")
+            .dir("c8y.profile2")
+            .file("tedge.toml")
             .with_toml_content(toml::toml! {
                 url = "profile2.example.com"
             });
@@ -2049,13 +2075,15 @@ mod tests {
         let ttd = TempTedgeDir::new();
         // C8y mapper with no profile directory
         ttd.dir("mappers")
-            .file("c8y.toml")
+            .dir("c8y")
+            .file("tedge.toml")
             .with_toml_content(toml::toml! {
                 url = "c8y.example.com"
             });
         // Az mapper with no profile directory
         ttd.dir("mappers")
-            .file("az.toml")
+            .dir("az")
+            .file("tedge.toml")
             .with_toml_content(toml::toml! {
                 url = "az.example.com"
             });
