@@ -1,25 +1,23 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use crate::core::mqtt::configure_proxy;
+use crate::core::mqtt::flows_status_topic;
 use anyhow::Context;
 use async_trait::async_trait;
-use aws_mapper_ext::converter::AwsConverter;
-use clock::WallClock;
-use mqtt_channel::TopicFilter;
-use tedge_actors::ConvertingActor;
-use tedge_actors::MessageSink;
-use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
+use aws_mapper_ext::AwsConverter;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::models::TopicPrefix;
-use tedge_config::tedge_toml::mapper_config::AwsMapperConfig;
 use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
+use tedge_file_system_ext::FsWatchActorBuilder;
+use tedge_flows::FlowsMapperBuilder;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
+use tedge_watch_ext::WatchActorBuilder;
 use tracing::warn;
 use yansi::Paint;
 
@@ -32,15 +30,16 @@ impl TEdgeComponent for AwsMapper {
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
-        _config_dir: &tedge_config::Path,
+        config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
         let aws_config = tedge_config.mapper_config::<AwsMapperSpecificConfig>(&self.profile)?;
         let prefix = &aws_config.bridge.topic_prefix;
         let aws_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&aws_mapper_name, &tedge_config).await?;
-
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+        let service_topic_id = EntityTopicId::default_main_service(&aws_mapper_name)?;
+
         if tedge_config.mqtt.bridge.built_in {
             let device_id = aws_config.device.id()?;
             let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
@@ -78,35 +77,34 @@ impl TEdgeComponent for AwsMapper {
         } else if tedge_config.proxy.address.or_none().is_some() {
             warn!("`proxy.address` is configured without the built-in bridge enabled. The bridge MQTT connection to the cloud will {} communicate via the configured proxy.", "not".bold())
         }
-        let clock = Box::new(WallClock);
         let aws_converter = AwsConverter::new(
             aws_config.cloud_specific.mapper.timestamp,
-            clock,
-            mqtt_schema,
+            &mqtt_schema,
             aws_config.cloud_specific.mapper.timestamp_format,
             prefix.value().clone(),
             aws_config.mapper.mqtt.max_payload_size.0,
+            aws_config.topics.to_string(),
         );
-        let mut aws_converting_actor = ConvertingActor::builder("AwsConverter", aws_converter);
+        let flows_dir =
+            tedge_flows::flows_dir(config_dir, "aws", self.profile.as_ref().map(|p| p.as_ref()));
+        let flows = aws_converter.flow_registry(flows_dir).await?;
+        let flows_status = flows_status_topic(&mqtt_schema, &service_topic_id);
 
-        aws_converting_actor.connect_source(get_topic_filter(&aws_config), &mut mqtt_actor);
-        aws_converting_actor.connect_sink(NoConfig, &mqtt_actor);
+        let mut fs_actor = FsWatchActorBuilder::new();
+        let mut cmd_watcher_actor = WatchActorBuilder::new();
 
-        runtime.spawn(aws_converting_actor).await?;
+        let mut flows_mapper = FlowsMapperBuilder::try_new(flows, flows_status).await?;
+        flows_mapper.connect(&mut mqtt_actor);
+        flows_mapper.connect_fs(&mut fs_actor);
+        flows_mapper.connect_cmd(&mut cmd_watcher_actor);
+
+        runtime.spawn(flows_mapper).await?;
+        runtime.spawn(fs_actor).await?;
+        runtime.spawn(cmd_watcher_actor).await?;
         runtime.spawn(mqtt_actor).await?;
         runtime.run_to_completion().await?;
         Ok(())
     }
-}
-
-fn get_topic_filter(aws_config: &AwsMapperConfig) -> TopicFilter {
-    let mut topics = TopicFilter::empty();
-    for topic in aws_config.topics.0.clone() {
-        if topics.try_add(&topic).is_err() {
-            warn!("The configured topic '{topic}' is invalid and ignored.");
-        }
-    }
-    topics
 }
 
 fn built_in_bridge_rules(
