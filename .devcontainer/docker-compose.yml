@@ -1,7 +1,7 @@
 version: '3'
 services:
   tedge:
-    image: ${DEVCONTAINER_IMAGE:-ghcr.io/thin-edge/devcontainer:latest-bookworm}
+    image: ${DEVCONTAINER_IMAGE:-ghcr.io/thin-edge/devcontainer:latest-trixie}
     environment:
       - DOCKER_HOST=unix:///opt/run/docker.sock
 
