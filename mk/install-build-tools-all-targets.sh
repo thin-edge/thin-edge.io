@@ -9,7 +9,7 @@ TARGETS=(
     arm-unknown-linux-musleabihf
     arm-unknown-linux-musleabi
     armv5te-unknown-linux-musleabi
-    riscv64gc-unknown-linux-gnu
+    riscv64gc-unknown-linux-musl
 )
 
 for TARGET in "${TARGETS[@]}"; do
