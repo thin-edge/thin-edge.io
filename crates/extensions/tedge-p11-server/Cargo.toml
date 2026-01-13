@@ -30,6 +30,7 @@ tokio = { workspace = true, features = [
     "rt-multi-thread",
     "signal",
     "net",
+    "io-util",
 ] }
 toml.workspace = true
 tracing.workspace = true
