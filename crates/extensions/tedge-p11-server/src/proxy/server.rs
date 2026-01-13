@@ -53,7 +53,11 @@ impl TedgeP11Server {
         let request = connection
             .read_frame()
             .context("read")
-            .map(|f| Request::try_from(f).unwrap())
+            .and_then(|f| {
+                Request::try_from(f)
+                    .ok()
+                    .ok_or(anyhow::anyhow!("frame is not a request"))
+            })
             .context("invalid request");
         let request = match request {
             Ok(request) => request,
