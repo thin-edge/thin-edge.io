@@ -23,7 +23,7 @@ pub enum TEdgeMqttCli {
         /// Message to publish
         message: String,
         /// QoS level (0, 1, 2)
-        #[clap(short, long, default_value = "0")]
+        #[clap(short, long, default_value = "1")]
         #[arg(value_parser = parse_qos)]
         #[arg(add = ArgValueCandidates::new(qos_completions))]
         qos: QoS,
