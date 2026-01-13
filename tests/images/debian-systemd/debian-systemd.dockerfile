@@ -36,6 +36,11 @@ RUN apt-get -y update \
     mosquitto \
     mosquitto-clients
 
+# Since vim.tiny is installed, vi command runs it under the hood, but in compatibility mode.
+# Disabling this classic compatibility mode to make it more user friendly (like vim) enabling features like:
+# arrow keys support in insert mode, multiple undo levels, etc.
+RUN echo "set nocompatible" >> /root/.vimrc
+
 # Note: Avoid using mosquitto 2.0.18 due to a session persistence bug when using `per_listener_settings true
 # Only comment out the custom install logic to make it easier to re-enable once the bug is resolved
 # See https://github.com/thin-edge/thin-edge.io/issues/3185 for more details
