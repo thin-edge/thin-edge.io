@@ -258,7 +258,7 @@ impl TedgeP11Client {
         debug!("Connected to socket");
 
         trace!(?request);
-        connection.write_frame(&request)?;
+        connection.write_frame(&Frame::Version1(request))?;
 
         let Frame::Version1(response) = connection.read_frame()? else {
             bail!("protocol error: bad response, expected version 1 frame");

@@ -1,6 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     proxy::{
-        frame::{Frame, Frame1},
+        frame::{Frame, Frame1, Frame2},
         frame2,
     },
     service::{ChooseSchemeRequest, CreateKeyRequest, SignRequest, SignRequestWithSigScheme},
@@ -10,6 +12,7 @@ use crate::{
 //     request: T,
 // }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[expect(clippy::enum_variant_names)]
 pub enum Request {
     ChooseSchemeRequest(ChooseSchemeRequest),
@@ -58,6 +61,34 @@ impl TryFrom<Frame> for Request {
                 frame2::Frame2::GetTokensUrisRequest => Ok(Request::GetTokensUrisRequest),
                 _ => Err(()),
             },
+        }
+    }
+}
+
+impl From<Request> for Frame1 {
+    fn from(request: Request) -> Self {
+        match request {
+            Request::ChooseSchemeRequest(req) => Frame1::ChooseSchemeRequest(req),
+            Request::SignRequest(req) => Frame1::SignRequest(req),
+            Request::SignRequestWithSigScheme(req) => Frame1::SignRequestWithSigScheme(req),
+            Request::GetPublicKeyPemRequest(req) => Frame1::GetPublicKeyPemRequest(req),
+            Request::Ping => Frame1::Ping,
+            Request::CreateKeyRequest(req) => Frame1::CreateKeyRequest(req),
+            Request::GetTokensUrisRequest => Frame1::GetTokensUrisRequest,
+        }
+    }
+}
+
+impl From<Request> for Frame2 {
+    fn from(request: Request) -> Self {
+        match request {
+            Request::ChooseSchemeRequest(req) => Frame2::ChooseSchemeRequest(req),
+            Request::SignRequest(req) => Frame2::SignRequest(req),
+            Request::SignRequestWithSigScheme(req) => Frame2::SignRequestWithSigScheme(req),
+            Request::GetPublicKeyPemRequest(req) => Frame2::GetPublicKeyPemRequest(req),
+            Request::Ping => Frame2::Ping,
+            Request::CreateKeyRequest(req) => Frame2::CreateKeyRequest(req),
+            Request::GetTokensUrisRequest => Frame2::GetTokensUrisRequest,
         }
     }
 }

@@ -15,3 +15,5 @@ mod frame2;
 
 mod request;
 mod response;
+
+mod error;

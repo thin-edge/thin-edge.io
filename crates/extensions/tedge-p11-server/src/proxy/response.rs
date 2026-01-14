@@ -11,6 +11,7 @@ use crate::{
     service::{ChooseSchemeResponse, CreateKeyResponse, SignResponse},
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[expect(clippy::enum_variant_names)]
 pub enum Response {
     ChooseSchemeResponse(ChooseSchemeResponse),
@@ -60,6 +61,32 @@ impl TryFrom<Frame> for Response {
                 }
                 _ => Err(()),
             },
+        }
+    }
+}
+
+impl From<Response> for Frame1 {
+    fn from(response: Response) -> Self {
+        match response {
+            Response::ChooseSchemeResponse(resp) => Frame1::ChooseSchemeResponse(resp),
+            Response::SignResponse(resp) => Frame1::SignResponse(resp),
+            Response::GetPublicKeyPemResponse(resp) => Frame1::GetPublicKeyPemResponse(resp),
+            Response::Pong(resp) => Frame1::Pong(resp),
+            Response::CreateKeyResponse(resp) => Frame1::CreateKeyResponse(resp),
+            Response::GetTokensUrisResponse(resp) => Frame1::GetTokensUrisResponse(resp),
+        }
+    }
+}
+
+impl From<Response> for Frame2 {
+    fn from(response: Response) -> Self {
+        match response {
+            Response::ChooseSchemeResponse(resp) => Frame2::ChooseSchemeResponse(resp),
+            Response::SignResponse(resp) => Frame2::SignResponse(resp),
+            Response::GetPublicKeyPemResponse(resp) => Frame2::GetPublicKeyPemResponse(resp),
+            Response::Pong(resp) => Frame2::Pong(resp),
+            Response::CreateKeyResponse(resp) => Frame2::CreateKeyResponse(resp),
+            Response::GetTokensUrisResponse(resp) => Frame2::GetTokensUrisResponse(resp),
         }
     }
 }

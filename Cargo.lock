@@ -4847,6 +4847,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.12",
  "tokio",
  "toml 0.9.6",
  "tracing",

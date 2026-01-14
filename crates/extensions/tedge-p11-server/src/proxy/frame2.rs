@@ -2,7 +2,7 @@ use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    proxy::{frame::ProtocolError, frame1::VersionInfo},
+    proxy::{error::Error, frame::ProtocolError, frame1::VersionInfo},
     service::{
         ChooseSchemeRequest, ChooseSchemeResponse, CreateKeyRequest, CreateKeyResponse,
         SignRequest, SignRequestWithSigScheme, SignResponse,
@@ -11,7 +11,7 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Frame2 {
-    Error(ProtocolError),
+    Error(Error),
     ChooseSchemeRequest(ChooseSchemeRequest),
     SignRequest(SignRequest),
     ChooseSchemeResponse(ChooseSchemeResponse),
