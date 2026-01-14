@@ -17,6 +17,8 @@ Mapper recovers and processes output of ongoing software update request
     ...    Mean while the agent processes the update message and publishes the software update message
     ...    After some time mapper recovers and pushes the result to c8y cloud
     ...    Verify that the rolldice package is installed or not
+    # Retry test until the root cause is fixed in https://github.com/thin-edge/thin-edge.io/issues/3773
+    [Tags]    test:retry(3)    workaround
     ${timestamp}=    Get Unix Timestamp
     ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
     ${OPERATION}=    Install Software    rolldice,1.0.0::dummy
