@@ -76,7 +76,7 @@ Certificate Renewal with Cloud Profiles
 
     ${cert_after}=    Execute Command    tedge cert show c8y --profile customer | grep Thumbprint
     Should Not Be Equal    ${cert_before}    ${cert_after}
-    [Teardown]    Cumulocity.Delete Managed Object And Device User    external_id=${DEVICE_SN_2}
+    [Teardown]    Disconnect And Delete Device From Cumulocity    profile=customer    external_id=${DEVICE_SN_2}
 
 
 *** Keywords ***
@@ -91,3 +91,8 @@ Setup With Self-Signed Certificate
 Setup With Cumulocity CA Certificate
     ${DEVICE_SN}=    Setup    register_using=c8y-ca
     Set Test Variable    $DEVICE_SN
+
+Disconnect And Delete Device From Cumulocity
+    [Arguments]    ${profile}    ${external_id}
+    Execute Command    tedge disconnect c8y --profile ${profile}    ignore_exit_code=${True}
+    Cumulocity.Delete Managed Object And Device User    ${external_id}
