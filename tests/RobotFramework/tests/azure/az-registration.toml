@@ -1,0 +1,7 @@
+input.mqtt.topics = ["te/+/+/+/+"]
+
+steps = [
+    { script = "az-registration.js" },
+]
+
+output.mqtt.topic = "te/infos"
