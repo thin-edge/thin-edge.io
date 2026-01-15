@@ -15,6 +15,9 @@ use std::fs::File;
 use std::io::stdout;
 use std::io::BufReader;
 use std::io::ErrorKind;
+use tedge_system_services::GeneralServiceManager;
+use tedge_system_services::SystemService;
+use tedge_system_services::SystemServiceManager;
 use tedge_utils::atomic::MaybePermissions;
 use tedge_write::CopyOptions;
 use tedge_write::CreateDirsOptions;
@@ -22,13 +25,19 @@ use tedge_write::CreateDirsOptions;
 pub struct FileConfigPlugin {
     config: PluginConfig,
     use_tedge_write: TedgeWriteStatus,
+    config_dir: Utf8PathBuf,
 }
 
 impl FileConfigPlugin {
-    pub fn new(config: PluginConfig, use_tedge_write: TedgeWriteStatus) -> Self {
+    pub fn new(
+        config: PluginConfig,
+        use_tedge_write: TedgeWriteStatus,
+        config_dir: &Utf8Path,
+    ) -> Self {
         Self {
             config,
             use_tedge_write,
+            config_dir: config_dir.to_path_buf(),
         }
     }
 
@@ -62,7 +71,7 @@ impl FileConfigPlugin {
 
     /// Set the configuration for a specific type
     /// Deploys the new config from source_path to the configured destination
-    pub fn set(&self, config_type: &str, from: &Utf8Path) -> Result<(), PluginError> {
+    pub async fn set(&self, config_type: &str, from: &Utf8Path) -> Result<(), PluginError> {
         let entry = self
             .config
             .get_file_entry(config_type)
@@ -79,6 +88,35 @@ impl FileConfigPlugin {
 
         // Deploy the config file
         self.deploy_config_file(from, entry)?;
+
+        // Restart the service if defined
+        if let Some(service_name) = &entry.service {
+            self.restart_service(service_name)
+                .await
+                .with_context(|| format!("Failed to restart service: {service_name}"))?;
+        }
+
+        Ok(())
+    }
+
+    async fn restart_service(&self, service_name: &str) -> anyhow::Result<()> {
+        // Create the service manager which loads and parses system.toml
+        let service_manager = GeneralServiceManager::try_new(&self.config_dir)
+            .context("Failed to load system.toml")?;
+
+        // Create a custom service variant for the arbitrary service name
+        let service = SystemService::Custom(service_name);
+
+        info!("Restarting service: {service_name}");
+
+        service_manager
+            .restart_service(service)
+            .await
+            .with_context(|| {
+                format!("Failed to run restart command for the service: {service_name}")
+            })?;
+
+        info!("Successfully restarted service: {service_name}");
 
         Ok(())
     }
@@ -205,7 +243,7 @@ type = "service"
             .with_raw_content(toml_content);
         let config = PluginConfig::new(config_file.utf8_path());
 
-        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled);
+        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, ttd.utf8_path());
         let types = plugin.list().unwrap();
 
         assert_eq!(types.len(), 3); // Includes the plugin config itself
@@ -220,7 +258,7 @@ type = "service"
         let config_file = ttd.file("plugin_config.toml").with_raw_content("");
         let config = PluginConfig::new(config_file.utf8_path());
 
-        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled);
+        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, ttd.utf8_path());
         let types = plugin.list().unwrap();
 
         assert_eq!(types.len(), 1); // Only the plugin config itself
@@ -232,7 +270,7 @@ type = "service"
         let ttd = TempTedgeDir::new();
         let config = PluginConfig::new(&ttd.utf8_path().join("no_file.toml"));
 
-        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled);
+        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, ttd.utf8_path());
         let types = plugin.list().unwrap();
 
         assert_eq!(types.len(), 1); // Only the plugin config itself
@@ -252,7 +290,7 @@ type = "app.conf"
             .with_raw_content(toml_content);
         let config = PluginConfig::new(config_file.utf8_path());
 
-        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled);
+        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, ttd.utf8_path());
         let result = plugin.get("unknown`");
 
         assert!(matches!(result, Err(PluginError::InvalidConfigType(_))));
@@ -276,14 +314,14 @@ type = "missing.conf"
             .with_raw_content(&toml_content);
         let config = PluginConfig::new(config_file.utf8_path());
 
-        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled);
+        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, ttd.utf8_path());
         let result = plugin.get("missing.conf");
 
         assert!(matches!(result, Err(PluginError::FileNotFound(_))));
     }
 
-    #[test]
-    fn test_set_unsupported_type() {
+    #[tokio::test]
+    async fn test_set_unsupported_type() {
         let ttd = TempTedgeDir::new();
         let source_file = ttd.file("source.conf").with_raw_content("test content");
 
@@ -297,14 +335,16 @@ type = "app.conf"
             .with_raw_content(toml_content);
         let config = PluginConfig::new(config_file.utf8_path());
 
-        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled);
-        let result = plugin.set("unknown.conf", source_file.path().try_into().unwrap());
+        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, ttd.utf8_path());
+        let result = plugin
+            .set("unknown.conf", source_file.path().try_into().unwrap())
+            .await;
 
         assert!(matches!(result, Err(PluginError::InvalidConfigType(_))));
     }
 
-    #[test]
-    fn test_set_overwrites_existing_file() {
+    #[tokio::test]
+    async fn test_set_overwrites_existing_file() {
         let ttd = TempTedgeDir::new();
 
         // Create destination file with original content
@@ -328,8 +368,10 @@ type = "test.conf"
             .with_raw_content(&toml_content);
         let config = PluginConfig::new(config_file.utf8_path());
 
-        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled);
-        let result = plugin.set("test.conf", source_file.path().try_into().unwrap());
+        let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, ttd.utf8_path());
+        let result = plugin
+            .set("test.conf", source_file.path().try_into().unwrap())
+            .await;
 
         assert!(result.is_ok());
 
