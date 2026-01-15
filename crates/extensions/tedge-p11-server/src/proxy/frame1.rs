@@ -1,3 +1,4 @@
+use anyhow::Context;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -24,11 +25,33 @@ pub enum Frame1 {
     GetPublicKeyPemRequest(Option<String>),
     GetPublicKeyPemResponse(String),
     Ping,
-    Pong,
+    Pong(Option<VersionInfo>),
     CreateKeyRequest(CreateKeyRequest),
     CreateKeyResponse(CreateKeyResponse),
     GetTokensUrisRequest,
     GetTokensUrisResponse(Vec<String>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VersionInfo {
+    pub version: u16,
+}
+
+impl Frame1 {
+    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        match bytes.first() {
+            Some(0x08 | 0x09) => {
+                let version_info: Option<VersionInfo> = match serde_json::from_slice(&bytes[1..]) {
+                    Ok(v) => v,
+                    Err(e) if e.is_eof() => None,
+                    Err(e) => return Err(e).context("failed to deserialize"),
+                };
+                Ok(Self::Pong(version_info))
+            }
+
+            Some(_) | None => postcard::from_bytes(bytes).context("failed to deserialize"),
+        }
+    }
 }
 
 /// An error that can be returned to the client by the server.
@@ -177,8 +200,14 @@ mod tests {
     #[test]
     fn test_deserialize_pong() {
         let input = vec![9];
-        let request: Frame1 = postcard::from_bytes(&input).unwrap();
-        assert_eq!(request, Frame1::Pong);
+        let request: Frame1 = Frame1::from_bytes(&input).unwrap();
+        assert_eq!(request, Frame1::Pong(None));
+
+        let version_info = br#"{"version": 1}"#;
+        let mut input = input;
+        input.extend(version_info);
+        let request: Frame1 = Frame1::from_bytes(&input).unwrap();
+        assert_eq!(request, Frame1::Pong(Some(VersionInfo { version: 1 })));
     }
 
     #[test]

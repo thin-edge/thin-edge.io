@@ -5,8 +5,10 @@ use tracing::error;
 use tracing::info;
 
 use super::connection::Connection;
-use super::connection::Frame1;
-use super::connection::ProtocolError;
+use crate::proxy::error::Error;
+use crate::proxy::frame1::VersionInfo;
+use crate::proxy::request::Request;
+use crate::proxy::response::Response;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::TedgeP11Service;
 
@@ -49,44 +51,52 @@ impl TedgeP11Server {
     }
 
     fn process(&self, mut connection: Connection) -> anyhow::Result<()> {
-        let request = connection.read_frame().context("read")?;
-
-        let response = match request {
-            Frame1::Error(_)
-            | Frame1::ChooseSchemeResponse { .. }
-            | Frame1::SignResponse { .. }
-            | Frame1::GetPublicKeyPemResponse(_)
-            | Frame1::Pong
-            | Frame1::CreateKeyResponse { .. }
-            | Frame1::GetTokensUrisResponse(_) => {
-                let error = ProtocolError("invalid request".to_string());
-                let _ = connection.write_frame(&Frame1::Error(error));
-                anyhow::bail!("protocol error: invalid request")
+        let request = connection
+            .read_frame()
+            .context("read")
+            .and_then(|f| {
+                Request::try_from(f)
+                    .ok()
+                    .ok_or(anyhow::anyhow!("frame is not a request"))
+            })
+            .context("invalid request");
+        let request = match request {
+            Ok(request) => request,
+            Err(err) => {
+                let _ = connection.write_error(Error::InvalidRequest {
+                    description: format!("{err:#}"),
+                });
+                return Err(err);
             }
+        };
 
-            Frame1::ChooseSchemeRequest(request) => self
+        // server should read request and respond with response, and connection layer should map to correct frame
+        let response = match request {
+            Request::ChooseSchemeRequest(request) => self
                 .service
                 .choose_scheme(request)
-                .map(Frame1::ChooseSchemeResponse),
+                .map(Response::ChooseSchemeResponse),
 
-            Frame1::SignRequest(request) => {
+            Request::SignRequest(request) => {
                 let sign_request_2 = SignRequestWithSigScheme {
                     to_sign: request.to_sign,
                     uri: request.uri,
                     sigscheme: None,
                     pin: request.pin,
                 };
-                self.service.sign(sign_request_2).map(Frame1::SignResponse)
+                self.service
+                    .sign(sign_request_2)
+                    .map(Response::SignResponse)
             }
 
-            Frame1::SignRequestWithSigScheme(request) => {
-                self.service.sign(request).map(Frame1::SignResponse)
+            Request::SignRequestWithSigScheme(request) => {
+                self.service.sign(request).map(Response::SignResponse)
             }
 
-            Frame1::GetPublicKeyPemRequest(uri) => self
+            Request::GetPublicKeyPemRequest(uri) => self
                 .service
                 .get_public_key_pem(uri.as_deref())
-                .map(Frame1::GetPublicKeyPemResponse),
+                .map(Response::GetPublicKeyPemResponse),
 
             // The Ping/Pong request does no PKCS11/cryptographic operations and is there only so a
             // client can confirm that tedge-p11-server is running and is ready to serve requests.
@@ -94,28 +104,27 @@ impl TedgeP11Server {
             // received on the associated socket, a Ping/Pong request triggers a service start and
             // ensures the PKCS11 library is loaded and ready to serve signing requests. In
             // practice, this only occurs with a client calls TedgeP11Client::with_ready_check.
-            Frame1::Ping => Ok(Frame1::Pong),
+            Request::Ping => Ok(Response::Pong(Some(VersionInfo { version: 2 }))),
 
-            Frame1::CreateKeyRequest(request) => self
+            Request::CreateKeyRequest(request) => self
                 .service
                 .create_key(request)
-                .map(Frame1::CreateKeyResponse),
+                .map(Response::CreateKeyResponse),
 
-            Frame1::GetTokensUrisRequest => self
+            Request::GetTokensUrisRequest => self
                 .service
                 .get_tokens_uris()
-                .map(Frame1::GetTokensUrisResponse),
+                .map(Response::GetTokensUrisResponse),
         };
 
         match response {
             Ok(response) => connection
-                .write_frame(&response)
+                .write_response(&response)
                 .context("failed to write response")?,
             Err(err) => {
-                let response =
-                    Frame1::Error(ProtocolError(format!("PKCS #11 service failed: {err:#}")));
+                let response = Error::ServiceError(format!("PKCS #11 service failed: {err:#}"));
                 connection
-                    .write_frame(&response)
+                    .write_error(response)
                     .context("failed to write response")?;
                 anyhow::bail!(err);
             }
@@ -127,13 +136,14 @@ impl TedgeP11Server {
 
 #[cfg(test)]
 mod tests {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
     use super::*;
 
     use super::super::client::TedgeP11Client;
     use crate::pkcs11;
+    use crate::proxy::frame::{Frame, Frame1, Frame2, ProtocolError};
     use crate::service::*;
-    use std::io::Read;
-    use std::os::unix::net::UnixStream;
     use std::time::Duration;
 
     const SCHEME: pkcs11::SigScheme = pkcs11::SigScheme::EcdsaNistp256Sha256;
@@ -197,52 +207,115 @@ mod tests {
 
     #[tokio::test]
     async fn server_responds_with_error_to_invalid_request() {
-        let service = TestSigningService;
-        let server = TedgeP11Server::new(service).unwrap();
-        let tmpdir = tempfile::tempdir().unwrap();
-        let socket_path = tmpdir.path().join("test_socket.sock");
-        let listener = UnixListener::bind(&socket_path).unwrap();
-
-        tokio::spawn(async move { server.serve(listener).await });
-        // wait until the server calls accept()
-        tokio::time::sleep(Duration::from_millis(2)).await;
+        let (client, _s) = setup_test().await;
+        let s = client.0.into_std().unwrap();
+        s.set_nonblocking(false).unwrap();
 
         let response = tokio::task::spawn_blocking(move || {
-            let mut client_connection = Connection::new(UnixStream::connect(socket_path).unwrap());
+            let mut client_connection = Connection::new(s);
             client_connection
-                .write_frame(&Frame1::SignResponse(SignResponse(vec![])))
+                .write_response(&Response::SignResponse(SignResponse(vec![])))
                 .unwrap();
             client_connection.read_frame().unwrap()
         })
         .await
         .unwrap();
-        assert!(matches!(response, Frame1::Error(_)));
+        assert!(matches!(response, Frame::Version1(Frame1::Error(_))));
     }
 
     #[tokio::test]
     async fn server_responds_with_error_to_garbage() {
-        use std::io::Write as _;
+        let (mut client, _) = setup_test().await;
 
-        let service = TestSigningService;
-        let server = TedgeP11Server::new(service).unwrap();
+        client.write_and_close("garbage".as_bytes()).await;
+        let response = client.read().await;
+
+        let response: Frame = postcard::from_bytes(&response).unwrap();
+        let Frame::Version1(Frame1::Error(ProtocolError(err_msg))) = response else {
+            panic!("should be error");
+        };
+
+        assert!(err_msg.contains("invalid request"));
+    }
+
+    #[tokio::test]
+    async fn server_reports_invalid_commands() {
+        // tracing_subscriber::fmt::init();
+        let (mut client, _) = setup_test().await;
+
+        let mut command = r#"{"NonexistingCommand":{}}"#.as_bytes().to_vec();
+        // frame version2
+        command.insert(0, 1);
+
+        client.write_and_close(&command).await;
+        let mut response = client.read().await;
+
+        assert_eq!(response.remove(0), 1);
+        let response: Frame2 = serde_json::from_slice(&response).unwrap();
+        let Frame2::Error(Error::InvalidRequest {
+            description: err_msg,
+        }) = response
+        else {
+            panic!("should be error");
+        };
+
+        assert!(err_msg.contains(
+            "invalid request: read: unknown variant `NonexistingCommand`, expected one of"
+        ));
+    }
+
+    #[tokio::test]
+    async fn server_reports_invalid_arguments() {
+        tracing_subscriber::fmt::init();
+        let (mut client, _) = setup_test().await;
+
+        let mut command = r#"{"SignRequest":{"message": [1, 2, 3]}}"#.as_bytes().to_vec();
+        // frame version2
+        command.insert(0, 1);
+
+        client.write_and_close(&command).await;
+        let mut response = client.read().await;
+
+        assert_eq!(response.remove(0), 1);
+        let response: Frame2 = serde_json::from_slice(&response).unwrap();
+        let Frame2::Error(Error::InvalidRequest {
+            description: err_msg,
+        }) = response
+        else {
+            panic!("should be error");
+        };
+
+        assert!(err_msg.contains("missing field `to_sign` at line 1 column 37"));
+    }
+
+    async fn setup_test() -> (TestClient, tokio::task::JoinHandle<anyhow::Result<()>>) {
+        let server = TedgeP11Server::new(TestSigningService).unwrap();
         let tmpdir = tempfile::tempdir().unwrap();
         let socket_path = tmpdir.path().join("test_socket.sock");
+        dbg!(&socket_path);
         let listener = UnixListener::bind(&socket_path).unwrap();
 
-        tokio::spawn(async move { server.serve(listener).await });
+        let server = tokio::spawn(async move { server.serve(listener).await });
         // wait until the server calls accept()
         tokio::time::sleep(Duration::from_millis(2)).await;
 
-        // the reader should exit
-        tokio::task::spawn_blocking(move || {
-            let mut stream = UnixStream::connect(socket_path).unwrap();
-            write!(stream, "garbage").unwrap();
-            stream.shutdown(std::net::Shutdown::Write).unwrap();
-            let mut response = Vec::new();
-            stream.read_to_end(&mut response).unwrap();
-            response
-        })
-        .await
-        .unwrap();
+        let client_socket = TestClient(tokio::net::UnixStream::connect(socket_path).await.unwrap());
+        (client_socket, server)
+    }
+
+    struct TestClient(tokio::net::UnixStream);
+
+    impl TestClient {
+        async fn write_and_close(&mut self, bytes: &[u8]) {
+            self.0.write_all(bytes).await.unwrap();
+            self.0.flush().await.unwrap();
+            self.0.shutdown().await.unwrap();
+        }
+
+        async fn read(&mut self) -> Vec<u8> {
+            let mut bytes = Vec::new();
+            self.0.read_to_end(&mut bytes).await.unwrap();
+            bytes
+        }
     }
 }

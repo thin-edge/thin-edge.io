@@ -11,3 +11,9 @@ mod connection;
 
 mod frame;
 mod frame1;
+mod frame2;
+
+mod request;
+mod response;
+
+mod error;

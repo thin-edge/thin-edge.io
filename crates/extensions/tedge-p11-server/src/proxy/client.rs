@@ -10,6 +10,9 @@ use tracing::trace;
 use super::connection::Connection;
 use super::connection::Frame1;
 use crate::pkcs11::SigScheme;
+use crate::proxy::frame::Frame;
+use crate::proxy::frame::Frame2;
+use crate::proxy::frame1::VersionInfo;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
@@ -25,6 +28,7 @@ pub struct TedgeP11Client {
     pub(crate) socket_path: Arc<Path>,
     pub(crate) uri: Option<Arc<str>>,
     pub(crate) pin: Option<SecretString>,
+    server_version: Option<VersionInfo>,
 }
 
 impl TedgeP11Service for TedgeP11Client {
@@ -106,14 +110,16 @@ impl TedgeP11Client {
     ///
     /// [unexp-eof]: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
     pub fn with_ready_check(socket_path: Arc<Path>) -> Self {
-        let client = Self {
+        let mut client = Self {
             socket_path,
             uri: None,
             pin: None,
+            server_version: None,
         };
 
         // make any request to make sure the service is online and it will respond
-        let _ = client.ping();
+        let version_info = client.ping().unwrap_or(None);
+        client.server_version = version_info;
 
         client
     }
@@ -164,14 +170,14 @@ impl TedgeP11Client {
     }
 
     pub fn sign(&self, message: &[u8], uri: Option<String>) -> anyhow::Result<Vec<u8>> {
-        let request = Frame1::SignRequest(SignRequest {
+        let request = Frame2::SignRequest(SignRequest {
             to_sign: message.to_vec(),
             uri,
             pin: self.pin.clone(),
         });
-        let response = self.do_request(request)?;
+        let response = self.do_request2(request)?;
 
-        let Frame1::SignResponse(response) = response else {
+        let Frame2::SignResponse(response) = response else {
             bail!("protocol error: bad response, expected sign, received: {response:?}");
         };
 
@@ -216,15 +222,15 @@ impl TedgeP11Client {
         Ok(pubkey_pem)
     }
 
-    pub fn ping(&self) -> anyhow::Result<()> {
+    pub fn ping(&self) -> anyhow::Result<Option<VersionInfo>> {
         let request = Frame1::Ping;
         let response = self.do_request(request)?;
 
-        let Frame1::Pong = response else {
+        let Frame1::Pong(version_info) = response else {
             bail!("protocol error: bad response, expected pong, received: {response:?}");
         };
 
-        Ok(())
+        Ok(version_info)
     }
 
     pub fn create_key(
@@ -252,9 +258,31 @@ impl TedgeP11Client {
         debug!("Connected to socket");
 
         trace!(?request);
-        connection.write_frame(&request)?;
+        connection.write_frame(&Frame::Version1(request))?;
 
-        let response = connection.read_frame()?;
+        let Frame::Version1(response) = connection.read_frame()? else {
+            bail!("protocol error: bad response, expected version 1 frame");
+        };
+
+        Ok(response)
+    }
+
+    fn do_request2(&self, request: Frame2) -> anyhow::Result<Frame2> {
+        let stream = UnixStream::connect(&self.socket_path).with_context(|| {
+            format!(
+                "Failed to connect to tedge-p11-server UNIX socket at '{}'",
+                self.socket_path.display()
+            )
+        })?;
+        let mut connection = Connection::new(stream);
+        debug!("Connected to socket");
+
+        trace!(?request);
+        connection.write_frame2(&request)?;
+
+        let Frame::Version2(response) = connection.read_frame()? else {
+            bail!("protocol error: bad response, expected version 2 frame");
+        };
 
         Ok(response)
     }
