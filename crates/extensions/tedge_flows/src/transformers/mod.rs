@@ -10,6 +10,7 @@ mod add_timestamp;
 mod ignore_topics;
 mod limit_payload_size;
 mod set_topic;
+mod skip_mosquitto_health_status;
 
 pub trait Transformer: Send + Sync + 'static {
     fn name(&self) -> &str;
@@ -54,6 +55,7 @@ impl Default for BuiltinTransformers {
         transformers.register(limit_payload_size::LimitPayloadSize::default());
         transformers.register(ignore_topics::IgnoreTopics::default());
         transformers.register(set_topic::SetTopic::default());
+        transformers.register(skip_mosquitto_health_status::SkipMosquittoHealthStatus);
         transformers
     }
 }

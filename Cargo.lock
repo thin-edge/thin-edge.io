@@ -364,17 +364,17 @@ version = "1.7.1"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
- "clock",
- "log",
+ "camino",
  "serde",
  "serde_json",
- "tedge_actors",
  "tedge_api",
  "tedge_config",
+ "tedge_flows",
  "tedge_mqtt_ext",
  "tedge_utils",
- "thiserror 2.0.12",
+ "tempfile",
  "time",
+ "tokio",
 ]
 
 [[package]]
@@ -576,16 +576,12 @@ version = "1.7.1"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
- "clock",
- "log",
  "serde",
  "serde_json",
- "tedge_actors",
  "tedge_api",
  "tedge_config",
  "tedge_mqtt_ext",
  "test-case",
- "thiserror 2.0.12",
  "time",
 ]
 

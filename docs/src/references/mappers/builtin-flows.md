@@ -91,3 +91,61 @@ $ mv /etc/tedge/mappers/az/flows/mea.toml /etc/tedge/mappers/az/flows/mea.toml.d
 
 Alternatively, a builtin flow can be disabled by simply removing its definition
 and keeping the associated `.toml.template` file as a witness.
+
+## The AWS mapper
+
+The AWS mapper behavior is defined by a builtin flow located at `/etc/tedge/mappers/aws/flows/mea.toml`:
+
+```toml
+input.mqtt.topics = ["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
+
+steps = [
+  { builtin = "skip-mosquitto-health-status" },
+  { builtin = "add-timestamp", config = { property = "time", format = "unix", reformat = true } },
+  { builtin = "limit-payload-size", config = { max_size = 131072 } },
+  { builtin = "set-aws-topic", config = { prefix = "aws" } },
+]
+
+errors.mqtt.topic = "te/errors"
+
+```
+
+This file can be tuned using the `tedge config` command and the following settings:
+
+- `aws.topics`: the mapper input topics
+- `aws.mapper.timestamp`: whether the mapper should add a timestamp or not
+- `aws.mapper.timestamp_format`: the date format to be used for the timestamp (`unix` or `rfc-3339`)
+- `aws.mapper.mqtt.max_payload_size`: the maximum payload for a message (`131072` by default)
+- `aws.bridge.topic_prefix`: the prefix used for the bridge local MQTT topic  (`aws` by default)
+
+:::note
+For a change of one of these settings to be effective, the AWS mapper has to be restarted:
+```
+$ sudo tedge config set aws.mapper.timestamp_format rfc-3339
+$ sudo systemctl restart tedge-mapper-aws
+```
+:::
+
+This file can also be manually edited to:
+- Change step configurations
+- Add or remove steps
+- Substitute a JavaScript implementation for the builtin transformation.
+
+:::note
+If the builtin flow is updated, then the AWS mapper will not override its content,
+even if some `tedge config` settings have been updated. In such a case, the AWS mapper only
+update its flow template, i.e. the file `/etc/tedge/mappers/aws/flows/mea.toml.template`.
+:::
+
+If other flow definitions are provided along the builtin flow in the `/etc/tedge/mappers/aws/flows/` directory,
+then these flows are loaded by the AWS mapper.
+
+Finally, the builtin flow is disabled when replaced by a file with the same name and a `.toml.disabled` extension
+
+```
+# Disable the AWS mapper builtin flow:
+$ mv /etc/tedge/mappers/aws/flows/mea.toml /etc/tedge/mappers/aws/flows/mea.toml.disabled
+```
+
+Alternatively, a builtin flow can be disabled by simply removing its definition
+and keeping the associated `.toml.template` file as a witness.

@@ -20,6 +20,7 @@ pub use crate::connected_flow::ConnectedFlowRegistry;
 pub use crate::flow::*;
 pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
+pub use crate::registry::UpdateFlowRegistryError;
 pub use crate::runtime::MessageProcessor;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;

@@ -10,24 +10,21 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-clock = { workspace = true }
-log = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-tedge_actors = { workspace = true }
+camino = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
+tedge_flows = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 tedge_utils = { workspace = true }
-thiserror = { workspace = true }
-time = { workspace = true }
 
 [dev-dependencies]
 assert-json-diff = { workspace = true }
 assert_matches = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tempfile = { workspace = true }
 time = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

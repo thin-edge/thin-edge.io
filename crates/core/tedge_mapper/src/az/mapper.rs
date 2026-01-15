@@ -1,4 +1,3 @@
-use crate::az::SkipMosquittoHealthStatus;
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use crate::core::mqtt::configure_proxy;
@@ -100,7 +99,6 @@ impl TEdgeComponent for AzureMapper {
         let flows_dir =
             tedge_flows::flows_dir(config_dir, "az", self.profile.as_ref().map(|p| p.as_ref()));
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
-        flows.register_builtin(SkipMosquittoHealthStatus);
         flows
             .persist_builtin_flow("mea", az_converter.builtin_flow().as_str())
             .await?;
