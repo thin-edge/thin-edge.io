@@ -4,11 +4,11 @@ use crate::cli::log::Fancy;
 use crate::cli::log::Spinner;
 use crate::command::*;
 use crate::log::MaybeFancy;
-use crate::system_services::*;
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use std::sync::Arc;
 use tedge_config::TEdgeConfig;
+use tedge_system_services::*;
 use which::which;
 
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
@@ -152,7 +152,7 @@ impl DisconnectBridgeCommand {
     // Deviation from specification:
     // Check if mosquitto is running, restart only if it was active before, if not don't do anything.
     async fn apply_changes_to_mosquitto(&self) -> Result<bool, Fancy<DisconnectBridgeError>> {
-        restart_service_if_running(&*self.service_manager, SystemService::Mosquitto)
+        restart_service_if_running(&*self.service_manager, SystemService::new("mosquitto"))
             .await
             .map_err(<_>::into)
     }
