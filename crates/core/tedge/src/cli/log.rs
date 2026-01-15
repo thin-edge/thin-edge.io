@@ -6,13 +6,13 @@ use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::system_services::SystemServiceError;
-use crate::system_services::SystemServiceManager;
 use camino::Utf8Path;
 use tedge_config::models::auth_method::AuthType;
 use tedge_config::models::proxy_url::ProxyUrl;
 use tedge_config::models::AbsolutePath;
 use tedge_config::tedge_toml::MultiError;
+use tedge_system_services::SystemServiceError;
+use tedge_system_services::SystemServiceManager;
 use yansi::Paint as _;
 
 use crate::bridge::BridgeConfig;

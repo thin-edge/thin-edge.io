@@ -4799,6 +4799,7 @@ dependencies = [
  "tedge_api",
  "tedge_config",
  "tedge_flows",
+ "tedge_system_services",
  "tedge_mqtt_bridge",
  "tedge_test_utils",
  "tedge_utils",
@@ -4899,6 +4900,7 @@ dependencies = [
  "serde",
  "tedge-write",
  "tedge_config",
+ "tedge_system_services",
  "tedge_test_utils",
  "tedge_utils",
  "thiserror 2.0.12",
@@ -5381,6 +5383,20 @@ version = "1.7.1"
 dependencies = [
  "async-trait",
  "tedge_actors",
+ "tokio",
+]
+
+[[package]]
+name = "tedge_system_services"
+version = "1.7.1"
+dependencies = [
+ "assert_matches",
+ "async-trait",
+ "camino",
+ "strum_macros",
+ "tedge_config",
+ "test-case",
+ "thiserror 2.0.12",
  "tokio",
 ]
 
