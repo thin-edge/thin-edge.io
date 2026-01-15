@@ -28,15 +28,21 @@ files = [
   { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
   { path = '/etc/tedge/c8y/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o644 },
   { path = '/etc/containers/certs.d/example/ca.crt', type = 'harbor-certificate', user = 'tedge', group = 'tedge', mode = 0o640, parent_user = 'root', parent_group = 'root', parent_mode = 0o755 },
+  { path = '/etc/collectd/collectd.conf', type = 'collectd-conf', service = 'collectd' },
 ]
 ```
 
 * `path` is the full path to the configuration file.
-* `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI.
-* `user`, `group` and `mode` are UNIX file permission settings to be used to create a configuration file. 
+* `type` is an optional unique alias for each file entry which will be used to represent that file in Cumulocity UI.
+  When not specified, defaults to the `path` value.
+* An optional `service` name.
+  When specified, the agent will restart that service after successfully applying a configuration update.
+  For restarts, the service `restart` command defined in the `system.toml` is used,
+  passing the specified `service` name as the argument.
+* `user`, `group` and `mode` are optional UNIX file permission settings to be used to create a configuration file.
   If not provided, the files will be created with the current user and group, and, if not feasible, using `root`.
   If the file exists already, its ownership will be retained.
-* `parent_user`, `parent_group` and `parent_mode` are UNIX file permission settings to be used to create the immediate
+* `parent_user`, `parent_group` and `parent_mode` are optional UNIX file permission settings to be used to create the immediate
   parent directory of the configuration file. It is recommended to set these values if the parent directories are
   expected to be missing initially.
     * If these values are not explicitly provided,

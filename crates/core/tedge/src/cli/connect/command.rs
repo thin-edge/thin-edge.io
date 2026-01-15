@@ -19,7 +19,6 @@ use crate::cli::log::Spinner;
 use crate::cli::CertificateShift;
 use crate::command::Command;
 use crate::log::MaybeFancy;
-use crate::system_services::*;
 use crate::warning;
 use crate::ConfigError;
 use anyhow::anyhow;
@@ -61,6 +60,7 @@ use tedge_config::tedge_toml::TEdgeConfigReaderMqtt;
 use tedge_config::TEdgeConfig;
 #[cfg(any(feature = "aws", feature = "azure"))]
 use tedge_config::TEdgeConfigError;
+use tedge_system_services::*;
 use tedge_utils::file::path_exists;
 use tedge_utils::paths::create_directories;
 use tedge_utils::paths::ok_if_not_found;

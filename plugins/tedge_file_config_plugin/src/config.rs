@@ -30,6 +30,7 @@ pub struct RawFileEntry {
     parent_user: Option<String>,
     parent_group: Option<String>,
     parent_mode: Option<u32>,
+    pub service: Option<String>,
 }
 
 #[derive(Debug, Eq, PartialEq, Default, Clone)]
@@ -43,6 +44,7 @@ pub struct FileEntry {
     pub config_type: String,
     pub file_permissions: PermissionEntry,
     pub parent_permissions: PermissionEntry,
+    pub service: Option<String>,
 }
 
 impl Hash for FileEntry {
@@ -69,6 +71,7 @@ impl FileEntry {
         config_type: impl Into<String>,
         file_permissions: PermissionEntry,
         parent_permissions: PermissionEntry,
+        service: Option<String>,
     ) -> Self {
         let parent_user = parent_permissions
             .user
@@ -86,6 +89,7 @@ impl FileEntry {
                 group: parent_group,
                 mode: parent_permissions.mode,
             },
+            service,
         }
     }
 }
@@ -129,6 +133,7 @@ impl PluginConfig {
             DEFAULT_PLUGIN_CONFIG_TYPE,
             PermissionEntry::default(),
             PermissionEntry::default(),
+            None,
         );
         Self {
             files: HashSet::from([file_entry]),
@@ -159,6 +164,7 @@ impl PluginConfig {
                     raw_entry.parent_group,
                     raw_entry.parent_mode,
                 ),
+                raw_entry.service,
             );
 
             if !self.files.insert(entry) {
@@ -292,7 +298,13 @@ type = "other.conf"
         };
         let parent_perms = PermissionEntry::default();
 
-        let entry = FileEntry::new("/etc/test.conf", "test.conf", file_perms, parent_perms);
+        let entry = FileEntry::new(
+            "/etc/test.conf",
+            "test.conf",
+            file_perms,
+            parent_perms,
+            None,
+        );
 
         // Parent should inherit user and group from file permissions
         assert_eq!(entry.parent_permissions.user, Some("tedge".to_string()));
@@ -313,7 +325,13 @@ type = "other.conf"
             mode: Some(0o755),
         };
 
-        let entry = FileEntry::new("/etc/test.conf", "test.conf", file_perms, parent_perms);
+        let entry = FileEntry::new(
+            "/etc/test.conf",
+            "test.conf",
+            file_perms,
+            parent_perms,
+            None,
+        );
 
         // Parent should use its own explicit permissions, not inherit
         assert_eq!(

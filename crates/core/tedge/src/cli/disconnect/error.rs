@@ -10,7 +10,7 @@ pub enum DisconnectBridgeError {
     IoError(#[from] std::io::Error),
 
     #[error(transparent)]
-    SystemServiceError(#[from] crate::system_services::SystemServiceError),
+    SystemServiceError(#[from] tedge_system_services::SystemServiceError),
 
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
