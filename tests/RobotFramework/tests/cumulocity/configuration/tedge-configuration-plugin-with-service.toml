@@ -1,0 +1,3 @@
+files = [
+    { path = '/etc/lighttpd/lighttpd.conf', type = 'lighttpd-conf', service = 'lighttpd', service_action = 'restart' }
+]

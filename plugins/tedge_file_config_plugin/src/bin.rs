@@ -5,6 +5,7 @@ use camino::Utf8PathBuf;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use tedge_config::SudoCommandBuilder;
+use tedge_system_services::GeneralServiceManager;
 
 #[derive(clap::Parser, Debug)]
 #[clap(
@@ -53,7 +54,7 @@ impl TEdgeConfigView {
     }
 }
 
-pub fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::Result<()> {
+pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::Result<()> {
     if let Err(err) = log_init(
         "tedge-file-config-plugin",
         &cli.common.log_args,
@@ -74,7 +75,9 @@ pub fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::Result<
         sudo: SudoCommandBuilder::enabled(tedge_config.is_sudo_enabled),
     };
 
-    let plugin = FileConfigPlugin::new(plugin_config, use_tedge_write);
+    let service_manager = GeneralServiceManager::try_new(&config_dir)?;
+
+    let plugin = FileConfigPlugin::new(plugin_config, use_tedge_write, service_manager);
 
     match cli.operation {
         PluginOp::List => {
@@ -93,7 +96,7 @@ pub fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::Result<
             config_path,
         } => {
             let source_path = Utf8PathBuf::from(config_path);
-            match plugin.set(&config_type, &source_path) {
+            match plugin.set(&config_type, &source_path).await {
                 Ok(()) => {
                     log::info!("Successfully updated configuration for {}", config_type);
                     Ok(())

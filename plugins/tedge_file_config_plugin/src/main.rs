@@ -11,5 +11,5 @@ async fn main() -> anyhow::Result<()> {
     let tedge_config = TEdgeConfig::load(&cli.common.config_dir).await?;
     let tedge_config_view = TEdgeConfigView::new(tedge_config.sudo.enable);
 
-    tedge_file_config_plugin::bin::run(cli, tedge_config_view)
+    tedge_file_config_plugin::bin::run(cli, tedge_config_view).await
 }

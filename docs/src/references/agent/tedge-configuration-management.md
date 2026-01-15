@@ -66,6 +66,10 @@ Each configuration file is defined by a record with:
   This `type` is used to declare the supported configuration file and then to trigger operations on that file.
   All the configuration `type`s are declared as the supported config list to the local MQTT bus on startup
   and on changes to the `plugins/tedge-configuration-plugin.toml` file.
+* Optional `service` name.
+  When specified, the agent will restart that service after successfully applying a configuration update.
+  For restarts, the service `restart` command defined in the `system.toml` is used.
+  The specified `service` name is passed as the argument to the `restart` command.
 * Optional unix file ownership: `user`, `group` and octal `mode`.
   These are only used when a configuration file pushed via a `config_update` command doesn't exist on the device,
   and a new one is created with these ownership parameters.
@@ -84,9 +88,9 @@ files = [
   { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },
   { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge' },
   { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto' },
+  { path = '/etc/collectd/collectd.conf', type = 'collectd-conf', service = 'collectd' },
   { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto', user = 'mosquitto', group = 'mosquitto', mode = 0o644 },
   { path = '/etc/containers/certs.d/example/ca.crt', type = 'harbor-certificate', user = 'tedge', group = 'tedge', mode = 0o640, parent_user = 'root', parent_group = 'root', parent_mode = 0o755 },
-
 ]
 ```
 

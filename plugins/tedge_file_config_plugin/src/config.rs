@@ -10,6 +10,12 @@ use std::hash::Hasher;
 use tedge_config::SudoCommandBuilder;
 use tedge_utils::file::PermissionEntry;
 
+/// Valid service actions in the context of configuration file management.
+/// Only the actions like and restart (and reload in future) are supported.
+/// Other system.toml actions like "start", "stop", "enable", "disable", "is_active"
+/// are intentionally not supported as they don't make sense in the context of config file changes.
+const VALID_SERVICE_ACTIONS: &[&str] = &["restart"];
+
 pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "tedge-configuration-plugin";
 
 #[derive(Deserialize, Debug, Default)]
@@ -30,6 +36,8 @@ pub struct RawFileEntry {
     parent_user: Option<String>,
     parent_group: Option<String>,
     parent_mode: Option<u32>,
+    pub service: Option<String>,
+    pub service_action: Option<String>,
 }
 
 #[derive(Debug, Eq, PartialEq, Default, Clone)]
@@ -43,6 +51,8 @@ pub struct FileEntry {
     pub config_type: String,
     pub file_permissions: PermissionEntry,
     pub parent_permissions: PermissionEntry,
+    pub service: Option<String>,
+    pub service_action: Option<String>,
 }
 
 impl Hash for FileEntry {
@@ -69,6 +79,8 @@ impl FileEntry {
         config_type: impl Into<String>,
         file_permissions: PermissionEntry,
         parent_permissions: PermissionEntry,
+        service: Option<String>,
+        service_action: Option<String>,
     ) -> Self {
         let parent_user = parent_permissions
             .user
@@ -86,6 +98,8 @@ impl FileEntry {
                 group: parent_group,
                 mode: parent_permissions.mode,
             },
+            service,
+            service_action,
         }
     }
 }
@@ -129,6 +143,8 @@ impl PluginConfig {
             DEFAULT_PLUGIN_CONFIG_TYPE,
             PermissionEntry::default(),
             PermissionEntry::default(),
+            None,
+            None,
         );
         Self {
             files: HashSet::from([file_entry]),
@@ -150,6 +166,31 @@ impl PluginConfig {
                 return original_plugin_config;
             }
 
+            let service_action = match (&raw_entry.service, &raw_entry.service_action) {
+                (Some(_), Some(action)) => {
+                    if !VALID_SERVICE_ACTIONS.contains(&action.as_str()) {
+                        error!(
+                            "The service_action '{}' is not supported. Valid actions are: {}",
+                            action,
+                            VALID_SERVICE_ACTIONS.join(", ")
+                        );
+                        return original_plugin_config;
+                    }
+                    Some(action.clone())
+                }
+                // Service provided but no action - default to "restart"
+                (Some(_), None) => Some("restart".to_string()),
+                // Action provided but no service - error
+                (None, Some(_)) => {
+                    error!(
+                        "The service_action field requires a service field to be specified for config type '{}'.",
+                        config_type
+                    );
+                    return original_plugin_config;
+                }
+                (None, None) => None,
+            };
+
             let entry = FileEntry::new(
                 raw_entry.path,
                 config_type.clone(),
@@ -159,6 +200,8 @@ impl PluginConfig {
                     raw_entry.parent_group,
                     raw_entry.parent_mode,
                 ),
+                raw_entry.service,
+                service_action,
             );
 
             if !self.files.insert(entry) {
@@ -292,7 +335,14 @@ type = "other.conf"
         };
         let parent_perms = PermissionEntry::default();
 
-        let entry = FileEntry::new("/etc/test.conf", "test.conf", file_perms, parent_perms);
+        let entry = FileEntry::new(
+            "/etc/test.conf",
+            "test.conf",
+            file_perms,
+            parent_perms,
+            None,
+            None,
+        );
 
         // Parent should inherit user and group from file permissions
         assert_eq!(entry.parent_permissions.user, Some("tedge".to_string()));
@@ -313,7 +363,14 @@ type = "other.conf"
             mode: Some(0o755),
         };
 
-        let entry = FileEntry::new("/etc/test.conf", "test.conf", file_perms, parent_perms);
+        let entry = FileEntry::new(
+            "/etc/test.conf",
+            "test.conf",
+            file_perms,
+            parent_perms,
+            None,
+            None,
+        );
 
         // Parent should use its own explicit permissions, not inherit
         assert_eq!(
@@ -430,5 +487,94 @@ path = "/etc/myapp.conf"
         assert!(config.get_file_entry("/etc/myapp.conf").is_some());
         let entry = config.get_file_entry("/etc/myapp.conf").unwrap();
         assert_eq!(entry.path, "/etc/myapp.conf");
+    }
+
+    #[test]
+    fn test_plugin_config_accepts_restart_action() {
+        let ttd = TempTedgeDir::new();
+
+        let toml_content = r#"
+[[files]]
+path = "/etc/test.conf"
+type = "test.conf"
+service = "testservice"
+service_action = "restart"
+"#;
+        let config_file = ttd
+            .file("valid_action_restart.toml")
+            .with_raw_content(toml_content);
+
+        let config = PluginConfig::new(config_file.utf8_path());
+
+        assert_eq!(config.files.len(), 2);
+        let entry = config.get_file_entry("test.conf").unwrap();
+        assert_eq!(entry.service, Some("testservice".to_string()));
+        assert_eq!(entry.service_action, Some("restart".to_string()));
+    }
+
+    #[test]
+    fn test_plugin_config_rejects_invalid_service_action() {
+        let ttd = TempTedgeDir::new();
+
+        let toml_content = r#"
+[[files]]
+path = "/etc/test.conf"
+type = "test.conf"
+service = "testservice"
+service_action = "start"
+"#;
+        let config_file = ttd
+            .file("invalid_action.toml")
+            .with_raw_content(toml_content);
+
+        let config = PluginConfig::new(config_file.utf8_path());
+
+        // Should only contain the plugin config itself, invalid service_action rejected
+        assert_eq!(config.files.len(), 1);
+        assert!(config.get_file_entry(DEFAULT_PLUGIN_CONFIG_TYPE).is_some());
+        assert!(config.get_file_entry("test.conf").is_none());
+    }
+
+    #[test]
+    fn test_plugin_config_rejects_service_action_without_service() {
+        let ttd = TempTedgeDir::new();
+
+        let toml_content = r#"
+[[files]]
+path = "/etc/test.conf"
+type = "test.conf"
+service_action = "restart"
+"#;
+        let config_file = ttd
+            .file("action_without_service.toml")
+            .with_raw_content(toml_content);
+
+        let config = PluginConfig::new(config_file.utf8_path());
+
+        assert_eq!(config.files.len(), 1);
+        assert!(config.get_file_entry(DEFAULT_PLUGIN_CONFIG_TYPE).is_some());
+        assert!(config.get_file_entry("test.conf").is_none());
+    }
+
+    #[test]
+    fn test_plugin_config_defaults_action_to_restart() {
+        let ttd = TempTedgeDir::new();
+
+        let toml_content = r#"
+[[files]]
+path = "/etc/test.conf"
+type = "test.conf"
+service = "testservice"
+"#;
+        let config_file = ttd
+            .file("service_without_action.toml")
+            .with_raw_content(toml_content);
+
+        let config = PluginConfig::new(config_file.utf8_path());
+
+        assert_eq!(config.files.len(), 2);
+        let entry = config.get_file_entry("test.conf").unwrap();
+        assert_eq!(entry.service, Some("testservice".to_string()));
+        assert_eq!(entry.service_action, Some("restart".to_string())); // Defaults to "restart"
     }
 }

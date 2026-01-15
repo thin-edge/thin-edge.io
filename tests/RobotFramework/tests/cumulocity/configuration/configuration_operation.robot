@@ -90,6 +90,43 @@ Set configuration with broken url
     Main Device    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    invalid://hellö.zip
     Child Device    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    invalid://hellö.zip
 
+Set Configuration Should Restart Service
+    Cumulocity.Set Device    ${PARENT_SN}
+    ThinEdgeIO.Set Device Context    ${PARENT_SN}
+
+    # Install lighttpd as the test service
+    Execute Command    apt install -y lighttpd
+    Service Should Be Running    lighttpd
+
+    # Config plugin TOML with service restart enabled for lighttpd
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/tedge-configuration-plugin-with-service.toml
+    ...    /etc/tedge/plugins/tedge-configuration-plugin.toml
+    Should Contain Supported Configuration Types    lighttpd-conf
+
+    # Verify initial server tag
+    ${initial_tag}=    Execute Command
+    ...    curl -I http://localhost 2>/dev/null | grep -i '^Server:' || echo 'Server: lighttpd'
+    ...    strip=${True}
+    Should Contain    ${initial_tag}    lighttpd
+
+    # Apply new configuration with custom server tag
+    Cumulocity.Set Device    ${PARENT_SN}
+    ${config_url}=    Cumulocity.Create Inventory Binary
+    ...    lighttpd-config
+    ...    lighttpd-config
+    ...    file=${CURDIR}/plugins/lighttpd.conf
+    ${operation}=    Cumulocity.Set Configuration    lighttpd-conf    url=${config_url}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=60
+
+    # Verify the configuration was applied
+    ${config_content}=    Execute Command    cat /etc/lighttpd/lighttpd.conf    strip=${True}
+    Should Contain    ${config_content}    tedge-lighttpd
+
+    # Verify service was restarted by checking the server tag changed
+    ${updated_tag}=    Execute Command    curl -I http://localhost 2>/dev/null | grep -i '^Server:'
+    Should Contain    ${updated_tag}    tedge-lighttpd
+
 #
 # Get configuration
 #
