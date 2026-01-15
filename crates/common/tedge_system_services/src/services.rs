@@ -19,6 +19,8 @@ pub enum SystemService<'a> {
     #[strum(serialize = "tedge-agent")]
     /// TEdge SM agent
     TEdgeSMAgent,
+    /// Custom service with arbitrary name
+    Custom(&'a str),
 }
 
 impl fmt::Display for SystemService<'_> {
@@ -32,6 +34,7 @@ impl fmt::Display for SystemService<'_> {
             Self::TEdgeMapperC8y(None) => write!(f, "tedge-mapper-c8y"),
             Self::TEdgeMapperC8y(Some(profile)) => write!(f, "tedge-mapper-c8y@{profile}"),
             Self::TEdgeSMAgent => write!(f, "tedge-agent"),
+            Self::Custom(name) => write!(f, "{name}"),
         }
     }
 }

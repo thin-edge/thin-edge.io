@@ -4,11 +4,11 @@ use crate::cli::log::Fancy;
 use crate::cli::log::Spinner;
 use crate::command::*;
 use crate::log::MaybeFancy;
-use crate::system_services::*;
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use std::sync::Arc;
 use tedge_config::TEdgeConfig;
+use tedge_system_services::*;
 use which::which;
 
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";

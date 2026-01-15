@@ -6,8 +6,8 @@ use crate::cli::connect::ConnectCommand;
 use crate::cli::disconnect::disconnect_bridge::DisconnectBridgeCommand;
 use crate::command::Command;
 use crate::log::MaybeFancy;
-use crate::system_services::SystemServiceManager;
 use std::sync::Arc;
+use tedge_system_services::SystemServiceManager;
 
 pub struct ReconnectBridgeCommand {
     pub config_dir: Utf8PathBuf,

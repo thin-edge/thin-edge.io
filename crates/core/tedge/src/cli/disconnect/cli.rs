@@ -1,8 +1,8 @@
 use crate::cli::common::CloudArg;
 use crate::cli::disconnect::disconnect_bridge::*;
 use crate::command::*;
-use crate::system_services::service_manager;
 use tedge_config::TEdgeConfig;
+use tedge_system_services::service_manager;
 
 #[derive(clap::Args, Debug)]
 pub struct TEdgeDisconnectBridgeCli {

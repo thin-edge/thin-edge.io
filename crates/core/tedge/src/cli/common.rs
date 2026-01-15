@@ -1,4 +1,3 @@
-use crate::system_services::SystemService;
 use anyhow::Context;
 use clap_complete::ArgValueCandidates;
 use clap_complete::CompletionCandidate;
@@ -8,6 +7,7 @@ use std::path::Path;
 use tedge_config::get_config_dir;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
+use tedge_system_services::SystemService;
 
 #[derive(clap::Subcommand, Debug, Clone, PartialEq, Eq)]
 #[clap(rename_all = "snake_case")]

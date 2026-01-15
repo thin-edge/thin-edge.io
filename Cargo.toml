@@ -67,6 +67,7 @@ tedge_mqtt_bridge = { path = "crates/extensions/tedge_mqtt_bridge" }
 tedge_mqtt_ext = { path = "crates/extensions/tedge_mqtt_ext" }
 tedge_script_ext = { path = "crates/extensions/tedge_script_ext" }
 tedge_signal_ext = { path = "crates/extensions/tedge_signal_ext" }
+tedge_system_services = { path = "crates/common/tedge_system_services" }
 tedge_test_utils = { path = "crates/tests/tedge_test_utils" }
 tedge_timer_ext = { path = "crates/extensions/tedge_timer_ext" }
 tedge_uploader_ext = { path = "crates/extensions/tedge_uploader_ext" }
