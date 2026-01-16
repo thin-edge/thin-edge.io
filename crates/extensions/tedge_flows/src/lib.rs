@@ -68,7 +68,7 @@ impl FlowsMapperConfig {
     /// Panics if the topic prefix is not a valid MQTT topic name
     pub fn new(topic_prefix: &str) -> Self {
         FlowsMapperConfig {
-            statistics_topic: Topic::new(&format!("{topic_prefix}/statistics")).unwrap(),
+            statistics_topic: Topic::new(&format!("{topic_prefix}/status/metrics")).unwrap(),
             status_topic: Topic::new(&format!("{topic_prefix}/status/flows")).unwrap(),
         }
     }
