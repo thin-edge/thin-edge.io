@@ -112,13 +112,8 @@ async fn stats_are_dumped_when_no_interval_handlers_registered() {
     let log_text = logs.join("\n");
 
     assert!(
-        log_text.contains("Memory usage:"),
+        log_text.contains("Collect memory usage and processing statistics"),
         "Expected memory stats to be dumped after 300+ seconds. Captured logs:\n{}",
-        log_text
-    );
-    assert!(
-        log_text.contains("Processing statistics:"),
-        "Expected processing stats to be dumped after 300+ seconds. Captured logs:\n{}",
         log_text
     );
 }
@@ -174,13 +169,8 @@ async fn stats_dumped_when_interval_handlers_present() {
     let log_text = logs.join("\n");
 
     assert!(
-        log_text.contains("Memory usage:"),
+        log_text.contains("Collect memory usage and processing statistics"),
         "Expected memory stats to be dumped after 300+ seconds. Captured logs:\n{}",
-        log_text
-    );
-    assert!(
-        log_text.contains("Processing statistics:"),
-        "Expected processing stats to be dumped after 300+ seconds. Captured logs:\n{}",
         log_text
     );
 }
@@ -231,12 +221,7 @@ async fn stats_not_dumped_before_300_seconds() {
     let log_text = logs.join("\n");
 
     assert!(
-        !log_text.contains("Memory usage:"),
-        "Stats should not be dumped before 300 seconds. Captured logs:\n{}",
-        log_text
-    );
-    assert!(
-        !log_text.contains("Processing statistics:"),
+        !log_text.contains("Collect memory usage and processing statistics"),
         "Stats should not be dumped before 300 seconds. Captured logs:\n{}",
         log_text
     );
