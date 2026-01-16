@@ -56,8 +56,8 @@ use tokio::time::Instant;
 pub use transformers::Transformer;
 
 pub struct FlowsMapperConfig {
-    pub(crate) statistics_topic: Topic,
     pub(crate) status_topic: Topic,
+    pub(crate) stats_publisher: MqttStatsPublisher,
 }
 
 impl Default for FlowsMapperConfig {
@@ -69,9 +69,16 @@ impl Default for FlowsMapperConfig {
 impl FlowsMapperConfig {
     /// Panics if the topic prefix is not a valid MQTT topic name
     pub fn new(topic_prefix: &str) -> Self {
+        let statistics_topic = format!("{topic_prefix}/status/metrics");
+        let status_topic = format!("{topic_prefix}/status/flows");
+
+        let stats_publisher = MqttStatsPublisher {
+            topic_prefix: statistics_topic,
+        };
+
         FlowsMapperConfig {
-            statistics_topic: Topic::new(&format!("{topic_prefix}/status/metrics")).unwrap(),
-            status_topic: Topic::new(&format!("{topic_prefix}/status/flows")).unwrap(),
+            status_topic: Topic::new(&status_topic).unwrap(),
+            stats_publisher,
         }
     }
 }
@@ -190,9 +197,6 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
     fn build(self) -> FlowsMapper {
         let subscriptions = self.topics();
         let watched_commands = HashSet::new();
-        let stats_publisher = MqttStatsPublisher {
-            topic_prefix: self.config.statistics_topic.to_string(),
-        };
         FlowsMapper {
             config: self.config,
             messages: self.message_box.build(),
@@ -202,7 +206,6 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
             watched_commands,
             processor: self.processor,
             next_dump: Instant::now() + STATS_DUMP_INTERVAL,
-            stats_publisher,
         }
     }
 }

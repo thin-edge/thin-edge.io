@@ -116,7 +116,6 @@ impl Counter {
     }
 
     pub fn dump_processing_stats<P: StatsPublisher>(&self, publisher: &P) -> Vec<P::Record> {
-        tracing::info!(target: "flows", "Processing statistics:");
         self.from_start
             .iter()
             .filter_map(|(dim, stats)| stats.dump_statistics(dim, publisher))
@@ -163,7 +162,7 @@ impl Stats {
             }),
         };
 
-        publisher.publish(dim, stats)
+        publisher.publish_record(dim, stats)
     }
 }
 
@@ -189,9 +188,9 @@ impl Display for Dimension {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Dimension::Runtime => write!(f, "runtime"),
-            Dimension::Flow(toml) => write!(f, "flow {toml}"),
-            Dimension::OnMessage(js) => write!(f, "onMessage step {js}"),
-            Dimension::OnInterval(js) => write!(f, "onInterval step {js}"),
+            Dimension::Flow(toml) => write!(f, "{}", Self::filename(toml)),
+            Dimension::OnMessage(js) => write!(f, "{}", Self::filename(js)),
+            Dimension::OnInterval(js) => write!(f, "{}.onInterval", Self::filename(js)),
         }
     }
 }
@@ -204,28 +203,16 @@ impl Dimension {
             _ => None,
         }
     }
+
+    fn filename(path: &str) -> &str {
+        path.split('/').next_back().unwrap_or(path)
+    }
 }
 
 pub trait StatsPublisher {
     type Record;
 
-    fn publish(&self, dim: &Dimension, stats: serde_json::Value) -> Option<Self::Record>;
-}
-
-pub struct TracingStatsPublisher;
-
-impl StatsPublisher for TracingStatsPublisher {
-    type Record = ();
-
-    fn publish(&self, dim: &Dimension, stats: Value) -> Option<()> {
-        tracing::info!(target: "flows", "  - {dim}");
-        if let Some(stats) = stats.as_object() {
-            for (k, v) in stats {
-                tracing::info!(target: "flows", "    - {k}: {v}");
-            }
-        }
-        None
-    }
+    fn publish_record(&self, dim: &impl Display, stats: Value) -> Option<Self::Record>;
 }
 
 pub struct MqttStatsPublisher {
@@ -235,29 +222,9 @@ pub struct MqttStatsPublisher {
 impl StatsPublisher for MqttStatsPublisher {
     type Record = MqttMessage;
 
-    fn publish(&self, dim: &Dimension, stats: Value) -> Option<Self::Record> {
-        match dim {
-            Dimension::Flow(path) | Dimension::OnMessage(path) => {
-                self.topic_for(path).map(|topic| {
-                    let payload = stats.to_string();
-                    MqttMessage::new(&topic, payload)
-                })
-            }
-
-            Dimension::Runtime => self.topic_for("runtime").map(|topic| {
-                let payload = stats.to_string();
-                MqttMessage::new(&topic, payload)
-            }),
-
-            _ => None,
-        }
-    }
-}
-
-impl MqttStatsPublisher {
-    pub fn topic_for(&self, path: &str) -> Option<Topic> {
-        let name = path.split('/').next_back().unwrap_or(path);
-        let topic = format!("{}/{}", self.topic_prefix, name);
-        Topic::new(&topic).ok()
+    fn publish_record(&self, dim: &impl Display, stats: Value) -> Option<Self::Record> {
+        let topic = Topic::new(&format!("{}/{}", self.topic_prefix, dim)).ok()?;
+        let payload = stats.to_string();
+        Some(MqttMessage::new(&topic, payload))
     }
 }

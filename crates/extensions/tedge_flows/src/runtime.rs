@@ -192,8 +192,9 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
         self.stats.dump_processing_stats(publisher)
     }
 
-    pub async fn dump_memory_stats(&self) {
-        self.js_runtime.dump_memory_stats().await;
+    pub async fn dump_memory_stats<P: StatsPublisher>(&self, publisher: &P) -> Option<P::Record> {
+        let stats = self.js_runtime.dump_memory_stats().await;
+        publisher.publish_record(&"memory", stats)
     }
 
     pub async fn reload_script(&mut self, path: &Utf8Path) -> Vec<Utf8PathBuf> {

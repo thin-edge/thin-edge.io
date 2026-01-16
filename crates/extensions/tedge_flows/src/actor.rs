@@ -7,7 +7,6 @@ use crate::flow::SourceTag;
 use crate::registry::FlowRegistryExt;
 use crate::registry::RegistrationStatus;
 use crate::runtime::MessageProcessor;
-use crate::stats::MqttStatsPublisher;
 use crate::FlowsMapperConfig;
 use crate::InputMessage;
 use crate::Tick;
@@ -52,7 +51,6 @@ pub struct FlowsMapper {
     pub(super) watched_commands: HashSet<Utf8PathBuf>,
     pub(super) processor: MessageProcessor<ConnectedFlowRegistry>,
     pub(super) next_dump: Instant,
-    pub(super) stats_publisher: MqttStatsPublisher,
 }
 
 #[async_trait]
@@ -239,10 +237,17 @@ impl FlowsMapper {
         let now = Instant::now();
         let timestamp = SystemTime::now();
         if self.next_dump <= now {
-            self.processor.dump_memory_stats().await;
+            info!(target: "flows", "Collect memory usage and processing statistics");
+            if let Some(record) = self
+                .processor
+                .dump_memory_stats(&self.config.stats_publisher)
+                .await
+            {
+                self.mqtt_sender.send(record).await?;
+            }
             for record in self
                 .processor
-                .dump_processing_stats(&self.stats_publisher)
+                .dump_processing_stats(&self.config.stats_publisher)
                 .await
             {
                 self.mqtt_sender.send(record).await?;
