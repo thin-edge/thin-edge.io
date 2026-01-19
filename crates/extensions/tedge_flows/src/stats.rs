@@ -212,23 +212,7 @@ impl Dimension {
 pub trait StatsPublisher {
     type Record;
 
-    fn publish(&self, dim: &impl Display, stats: serde_json::Value) -> Option<Self::Record>;
-}
-
-pub struct TracingStatsPublisher;
-
-impl StatsPublisher for TracingStatsPublisher {
-    type Record = ();
-
-    fn publish(&self, dim: &impl Display, stats: Value) -> Option<()> {
-        tracing::info!(target: "flows", "  - {dim}");
-        if let Some(stats) = stats.as_object() {
-            for (k, v) in stats {
-                tracing::info!(target: "flows", "    - {k}: {v}");
-            }
-        }
-        None
-    }
+    fn publish(&self, dim: &impl Display, stats: Value) -> Option<Self::Record>;
 }
 
 pub struct MqttStatsPublisher {
