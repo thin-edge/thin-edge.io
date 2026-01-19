@@ -7,6 +7,7 @@ pub mod converter;
 pub mod dynamic_discovery;
 pub mod entity_cache;
 pub mod error;
+pub mod flows;
 mod fragments;
 mod inventory;
 pub mod json;
