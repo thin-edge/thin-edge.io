@@ -1,7 +1,7 @@
 use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::flow::SourceTag;
-use crate::js_lib::kv_store::MAPPER_NAMESPACE;
+use crate::js_lib::kv_store::FlowContext;
 use crate::js_runtime::JsRuntime;
 use crate::registry::BaseFlowRegistry;
 use crate::registry::FlowRegistryExt;
@@ -159,7 +159,7 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
         if message.payload.is_empty() {
             self.js_runtime
                 .store
-                .remove(MAPPER_NAMESPACE, &message.topic)
+                .remove(&FlowContext::Mapper, &message.topic)
         } else {
             let payload = message.payload_str().ok_or(FlowError::UnsupportedMessage(
                 "Non UFT8 payload".to_string(),
@@ -168,7 +168,7 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
                 .map_err(|err| FlowError::UnsupportedMessage(format!("Non JSON payload: {err}")))?;
             self.js_runtime
                 .store
-                .insert(MAPPER_NAMESPACE, &message.topic, value);
+                .insert(&FlowContext::Mapper, &message.topic, value);
         }
 
         Ok(())

@@ -98,7 +98,7 @@ impl JsScript {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::js_lib::kv_store::MAPPER_NAMESPACE;
+    use crate::js_lib::kv_store::FlowContext;
     use crate::steps::FlowStep;
     use serde_json::json;
     use std::time::Duration;
@@ -498,7 +498,7 @@ export function onMessage(message, context) {
         let (runtime, script) = runtime_with(js).await;
 
         runtime.store.insert(
-            MAPPER_NAMESPACE,
+            &FlowContext::Mapper,
             "foo/bar",
             serde_json::json!({
                 "guess": 42,
@@ -506,7 +506,7 @@ export function onMessage(message, context) {
         );
 
         runtime.store.insert(
-            script.step_name(),
+            &FlowContext::script(script.step_name()),
             "foo/bar",
             serde_json::json!({
                 "hello": "world",
@@ -542,14 +542,14 @@ export function onMessage(message, context) {
         let (runtime, script) = runtime_with(js).await;
 
         runtime.store.insert(
-            MAPPER_NAMESPACE,
+            &FlowContext::Mapper,
             "device/main///",
             serde_json::json!({
                 "external_id": "Raspberry-123",
             }),
         );
         runtime.store.insert(
-            MAPPER_NAMESPACE,
+            &FlowContext::Mapper,
             "device/child-01///",
             serde_json::json!({
                 "external_id": "Raspberry-123:child-01",
@@ -582,13 +582,14 @@ export function onMessage(message, context) {
         let (runtime, script) = runtime_with(js).await;
 
         let input = Message::new("foo/bar", "");
+        let context = FlowContext::script(script.step_name());
 
         script
             .on_message(&runtime, SystemTime::now(), &input)
             .await
             .unwrap();
         assert_eq!(
-            runtime.store.get(script.step_name(), "count"),
+            runtime.store.get(&context, "count"),
             JsonValue::Number(1.into())
         );
 
@@ -597,7 +598,7 @@ export function onMessage(message, context) {
             .await
             .unwrap();
         assert_eq!(
-            runtime.store.get(script.step_name(), "count"),
+            runtime.store.get(&context, "count"),
             JsonValue::Number(2.into())
         );
     }
@@ -614,14 +615,14 @@ export function onMessage(message, context) {
 
         let (runtime, script) = runtime_with(js).await;
         runtime.store.insert(
-            MAPPER_NAMESPACE,
+            &FlowContext::Mapper,
             "foo",
             serde_json::json!({
                 "a": 1,
             }),
         );
         runtime.store.insert(
-            MAPPER_NAMESPACE,
+            &FlowContext::Mapper,
             "bar",
             serde_json::json!({
                 "b": 2,
@@ -634,8 +635,14 @@ export function onMessage(message, context) {
             .on_message(&runtime, SystemTime::now(), &input)
             .await
             .unwrap();
-        assert_eq!(runtime.store.get(MAPPER_NAMESPACE, "foo"), JsonValue::Null);
-        assert_eq!(runtime.store.get(MAPPER_NAMESPACE, "bar"), JsonValue::Null);
+        assert_eq!(
+            runtime.store.get(&FlowContext::Mapper, "foo"),
+            JsonValue::Null
+        );
+        assert_eq!(
+            runtime.store.get(&FlowContext::Mapper, "bar"),
+            JsonValue::Null
+        );
     }
 
     async fn runtime_with(js: &str) -> (JsRuntime, FlowStep) {

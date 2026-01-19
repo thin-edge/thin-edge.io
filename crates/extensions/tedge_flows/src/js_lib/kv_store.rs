@@ -13,13 +13,17 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 #[derive(Clone, Default, JsLifetime)]
-pub struct KVStore {
-    data: Arc<Mutex<HashMap<String, BTreeMap<String, JsonValue>>>>,
+pub struct FlowContextHandle {
+    handle: Arc<Mutex<LayeredKVStore>>,
 }
 
-pub const MAPPER_NAMESPACE: &str = "";
+#[derive(Default)]
+struct LayeredKVStore {
+    global: BTreeMap<String, JsonValue>,
+    scoped: HashMap<FlowContext, BTreeMap<String, JsonValue>>,
+}
 
-impl KVStore {
+impl FlowContextHandle {
     pub fn init(&self, ctx: &Ctx<'_>) {
         self.store_as_userdata(ctx)
     }
@@ -32,46 +36,30 @@ impl KVStore {
     ) -> Result<Value<'js>> {
         let context = Object::new(ctx.clone())?;
 
-        context.set("mapper", FlowStore::new(MAPPER_NAMESPACE))?;
-        context.set("flow", FlowStore::new(flow_name))?;
-        context.set("script", FlowStore::new(script_name))?;
+        context.set("mapper", FlowContext::Mapper)?;
+        context.set("flow", FlowContext::flow(flow_name))?;
+        context.set("script", FlowContext::script(script_name))?;
         context.set("config", config)?;
 
         context.into_js(ctx)
     }
 
-    pub fn get(&self, namespace: &str, key: &str) -> JsonValue {
-        let data = self.data.lock().unwrap();
-        match data.get(namespace) {
-            None => JsonValue::Null,
-            Some(map) => map.get(key).cloned().unwrap_or(JsonValue::Null),
-        }
+    pub fn get(&self, context: &FlowContext, key: &str) -> JsonValue {
+        self.handle.lock().unwrap().get(context, key)
     }
 
-    pub fn insert(&self, namespace: &str, key: &str, value: impl Into<JsonValue>) {
-        match value.into() {
-            JsonValue::Null => self.remove(namespace, key),
-            value => {
-                let mut data = self.data.lock().unwrap();
-                let map = data.entry(namespace.to_string()).or_default();
-                map.insert(key.to_owned(), value);
-            }
-        }
+    pub fn insert(&self, context: &FlowContext, key: &str, value: impl Into<JsonValue>) {
+        let mut data = self.handle.lock().unwrap();
+        data.insert(context, key, value);
     }
 
-    pub fn keys(&self, namespace: &str) -> Vec<String> {
-        let data = self.data.lock().unwrap();
-        match data.get(namespace) {
-            None => vec![],
-            Some(map) => map.keys().cloned().collect(),
-        }
+    pub fn keys(&self, context: &FlowContext) -> Vec<String> {
+        self.handle.lock().unwrap().keys(context)
     }
 
-    pub fn remove(&self, namespace: &str, key: &str) {
-        let mut data = self.data.lock().unwrap();
-        if let Some(map) = data.get_mut(namespace) {
-            map.remove(key);
-        }
+    pub fn remove(&self, context: &FlowContext, key: &str) {
+        let mut data = self.handle.lock().unwrap();
+        data.remove(context, key);
     }
 
     fn store_as_userdata(&self, ctx: &Ctx<'_>) {
@@ -81,7 +69,7 @@ impl KVStore {
     fn get_from_userdata(ctx: &Ctx<'_>) -> Self {
         match ctx.userdata::<Self>() {
             None => {
-                let store = KVStore::default();
+                let store = FlowContextHandle::default();
                 store.store_as_userdata(ctx);
                 store
             }
@@ -90,39 +78,103 @@ impl KVStore {
     }
 }
 
-#[derive(Clone, Trace, JsLifetime)]
-#[rquickjs::class(frozen)]
-struct FlowStore {
-    namespace: String,
-}
+impl LayeredKVStore {
+    fn context(&self, context: &FlowContext) -> Option<&BTreeMap<String, JsonValue>> {
+        if context.is_global() {
+            Some(&self.global)
+        } else {
+            self.scoped.get(context)
+        }
+    }
 
-impl FlowStore {
-    fn new(namespace: &str) -> Self {
-        Self {
-            namespace: namespace.to_owned(),
+    fn context_mut(&mut self, context: &FlowContext) -> Option<&mut BTreeMap<String, JsonValue>> {
+        if context.is_global() {
+            Some(&mut self.global)
+        } else {
+            self.scoped.get_mut(context)
+        }
+    }
+
+    fn entry(&mut self, context: &FlowContext) -> &mut BTreeMap<String, JsonValue> {
+        if context.is_global() {
+            &mut self.global
+        } else {
+            self.scoped.entry(context.clone()).or_default()
+        }
+    }
+
+    fn get(&self, context: &FlowContext, key: &str) -> JsonValue {
+        match self.context(context) {
+            None => JsonValue::Null,
+            Some(map) => map.get(key).cloned().unwrap_or(JsonValue::Null),
+        }
+    }
+
+    fn insert(&mut self, context: &FlowContext, key: &str, value: impl Into<JsonValue>) {
+        match value.into() {
+            JsonValue::Null => self.remove(context, key),
+            value => {
+                let map = self.entry(context);
+                map.insert(key.to_owned(), value);
+            }
+        }
+    }
+
+    fn keys(&self, context: &FlowContext) -> Vec<String> {
+        match self.context(context) {
+            None => vec![],
+            Some(map) => map.keys().cloned().collect(),
+        }
+    }
+
+    pub fn remove(&mut self, context: &FlowContext, key: &str) {
+        if let Some(map) = self.context_mut(context) {
+            map.remove(key);
         }
     }
 }
 
+#[derive(Clone, Trace, JsLifetime, Hash, Eq, PartialEq)]
+#[rquickjs::class(frozen)]
+pub(crate) enum FlowContext {
+    Mapper,
+    Flow(String),
+    Script(String),
+}
+
+impl FlowContext {
+    pub(crate) fn flow(name: &str) -> Self {
+        FlowContext::Flow(name.to_owned())
+    }
+
+    pub(crate) fn script(name: &str) -> Self {
+        FlowContext::Script(name.to_owned())
+    }
+
+    fn is_global(&self) -> bool {
+        self == &FlowContext::Mapper
+    }
+}
+
 #[rquickjs::methods]
-impl<'js> FlowStore {
+impl<'js> FlowContext {
     fn get(&self, ctx: Ctx<'js>, key: String) -> Result<JsonValue> {
-        let data = KVStore::get_from_userdata(&ctx);
-        Ok(data.get(&self.namespace, &key))
+        let data = FlowContextHandle::get_from_userdata(&ctx);
+        Ok(data.get(self, &key))
     }
 
     fn set(&self, ctx: Ctx<'js>, key: String, value: JsonValue) {
-        let data = KVStore::get_from_userdata(&ctx);
-        data.insert(&self.namespace, &key, value)
+        let data = FlowContextHandle::get_from_userdata(&ctx);
+        data.insert(self, &key, value)
     }
 
     fn remove(&self, ctx: Ctx<'js>, key: String) {
-        let data = KVStore::get_from_userdata(&ctx);
-        data.remove(&self.namespace, &key)
+        let data = FlowContextHandle::get_from_userdata(&ctx);
+        data.remove(self, &key)
     }
 
     fn keys(&self, ctx: Ctx<'js>) -> Vec<String> {
-        let data = KVStore::get_from_userdata(&ctx);
-        data.keys(&self.namespace)
+        let data = FlowContextHandle::get_from_userdata(&ctx);
+        data.keys(self)
     }
 }
