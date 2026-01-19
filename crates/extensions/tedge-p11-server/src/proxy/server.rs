@@ -49,7 +49,13 @@ impl TedgeP11Server {
     }
 
     fn process(&self, mut connection: Connection) -> anyhow::Result<()> {
-        let request = connection.read_frame().context("read")?;
+        let request = match connection.read_frame().context("read") {
+            Ok(request) => request,
+            Err(error) => {
+                let _ = connection.write_frame(&Frame1::Error(ProtocolError(format!("{error:#}"))));
+                return Err(error);
+            }
+        };
 
         let response = match request {
             Frame1::Error(_)
@@ -131,6 +137,7 @@ mod tests {
 
     use super::super::client::TedgeP11Client;
     use crate::pkcs11;
+    use crate::proxy::frame::Frame;
     use crate::service::*;
     use std::io::Read;
     use std::os::unix::net::UnixStream;
@@ -234,7 +241,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(2)).await;
 
         // the reader should exit
-        tokio::task::spawn_blocking(move || {
+        let response = tokio::task::spawn_blocking(move || {
             let mut stream = UnixStream::connect(socket_path).unwrap();
             write!(stream, "garbage").unwrap();
             stream.shutdown(std::net::Shutdown::Write).unwrap();
@@ -244,5 +251,15 @@ mod tests {
         })
         .await
         .unwrap();
+
+        let response: Frame = postcard::from_bytes(&response).unwrap();
+        let Frame::Version1(Frame1::Error(ProtocolError(err_msg))) = response else {
+            panic!("should be error");
+        };
+
+        assert_eq!(
+            err_msg.as_str(),
+            "read: Failed to parse the received frame: Serde Deserialization Error"
+        );
     }
 }
