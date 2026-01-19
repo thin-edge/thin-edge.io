@@ -1,5 +1,5 @@
 use crate::js_lib;
-use crate::js_lib::kv_store::KVStore;
+use crate::js_lib::kv_store::FlowContextHandle;
 use crate::js_script::JsScript;
 use crate::js_value::JsonValue;
 use crate::LoadError;
@@ -18,7 +18,7 @@ use tracing::debug;
 
 pub struct JsRuntime {
     runtime: rquickjs::AsyncRuntime,
-    pub(crate) store: KVStore,
+    pub(crate) store: FlowContextHandle,
     worker: mpsc::Sender<JsRequest>,
     execution_timeout: Duration,
 }
@@ -37,7 +37,7 @@ impl JsRuntime {
             })))
             .await;
         let context = rquickjs::AsyncContext::full(&runtime).await?;
-        let store = KVStore::default();
+        let store = FlowContextHandle::default();
         let worker = JsWorker::spawn(context, store.clone()).await;
         let execution_timeout = Duration::from_secs(5);
         Ok(JsRuntime {
@@ -188,7 +188,10 @@ struct JsWorker {
 }
 
 impl JsWorker {
-    pub async fn spawn(context: rquickjs::AsyncContext, store: KVStore) -> mpsc::Sender<JsRequest> {
+    pub async fn spawn(
+        context: rquickjs::AsyncContext,
+        store: FlowContextHandle,
+    ) -> mpsc::Sender<JsRequest> {
         let (sender, requests) = mpsc::channel(100);
         tokio::spawn(async move {
             let worker = JsWorker { context, requests };
@@ -197,7 +200,7 @@ impl JsWorker {
         sender
     }
 
-    async fn run(mut self, store: KVStore) {
+    async fn run(mut self, store: FlowContextHandle) {
         rquickjs::async_with!(self.context => |ctx| {
             js_lib::console::init(&ctx);
             js_lib::text_decoder::init(&ctx);

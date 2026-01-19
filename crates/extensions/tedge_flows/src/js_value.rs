@@ -279,8 +279,8 @@ impl<'js> IntoJs<'js> for JsonValueRef<'_> {
                 Ok(object.into_value())
             }
             JsonValue::Context { flow, step, config } => {
-                use crate::js_lib::kv_store::KVStore;
-                KVStore::js_context(ctx, flow, step, config)
+                use crate::js_lib::kv_store::FlowContextHandle;
+                FlowContextHandle::js_context(ctx, flow, step, config)
             }
         }
     }
