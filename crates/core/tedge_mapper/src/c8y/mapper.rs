@@ -1,6 +1,7 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use crate::core::mqtt::configure_proxy;
+use crate::core::mqtt::flows_status_topic;
 use anyhow::Context;
 use async_trait::async_trait;
 use c8y_api::http_proxy::read_c8y_credentials;
@@ -15,6 +16,7 @@ use mqtt_channel::Config;
 use std::borrow::Cow;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::models::MQTT_CORE_TLS_PORT;
 use tedge_config::models::MQTT_SERVICE_TLS_PORT;
 use tedge_config::tedge_toml::mapper_config;
@@ -22,6 +24,7 @@ use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
+use tedge_flows::FlowsMapperBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_bridge::rumqttc::LastWill;
 use tedge_mqtt_bridge::rumqttc::Publish;
@@ -34,6 +37,7 @@ use tedge_mqtt_bridge::QoS;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
+use tedge_watch_ext::WatchActorBuilder;
 use tracing::warn;
 use yansi::Paint;
 
@@ -53,6 +57,8 @@ impl TEdgeComponent for CumulocityMapper {
         let c8y_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&c8y_mapper_name, &tedge_config).await?;
+        let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+        let service_topic_id = EntityTopicId::default_main_service(&c8y_mapper_name)?;
 
         let c8y_mapper_config =
             C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, &c8y_config)?;
@@ -85,6 +91,7 @@ impl TEdgeComponent for CumulocityMapper {
             C8yAuthProxyBuilder::try_from_config(&tedge_config, &c8y_config).await?;
 
         let mut fs_watch_actor = FsWatchActorBuilder::new();
+        let mut cmd_watcher_actor = WatchActorBuilder::new();
         let mut timer_actor = TimerActor::builder();
 
         let identity = tedge_config.http.client.auth.identity()?;
@@ -130,6 +137,18 @@ impl TEdgeComponent for CumulocityMapper {
             None
         };
 
+        let flows_dir =
+            tedge_flows::flows_dir(cfg_dir, "c8y", self.profile.as_ref().map(|p| p.as_ref()));
+        let flows = c8y_mapper_actor.flow_registry(flows_dir).await?;
+        let flows_status = flows_status_topic(&mqtt_schema, &service_topic_id);
+
+        let mut flows_mapper = FlowsMapperBuilder::try_new(flows, flows_status).await?;
+        flows_mapper.connect(&mut mqtt_actor);
+        flows_mapper.connect_fs(&mut fs_watch_actor);
+        flows_mapper.connect_cmd(&mut cmd_watcher_actor);
+
+        runtime.spawn(flows_mapper).await?;
+        runtime.spawn(cmd_watcher_actor).await?;
         runtime.spawn(mqtt_actor).await?;
         runtime.spawn(http_actor).await?;
         runtime.spawn(c8y_auth_proxy_actor).await?;
