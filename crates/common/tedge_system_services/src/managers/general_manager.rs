@@ -295,9 +295,9 @@ mod tests {
     fn replace_placeholder_with_service(input: Vec<String>, expected_output: Vec<String>) {
         let replaced_config = replace_with_service_name(
             &input,
-            ServiceCommand::Stop(SystemService::Mosquitto),
+            ServiceCommand::Stop(SystemService::Custom("mosquitto")),
             "/dummy/path.toml",
-            SystemService::Mosquitto,
+            SystemService::Custom("mosquitto"),
         )
         .unwrap();
         assert_eq!(replaced_config, expected_output)
@@ -308,9 +308,9 @@ mod tests {
         let input = vec!["bin".to_string(), "arg1".to_string(), "arg2".to_string()];
         let system_config_error = replace_with_service_name(
             &input,
-            ServiceCommand::Stop(SystemService::Mosquitto),
+            ServiceCommand::Stop(SystemService::Custom("mosquitto")),
             "dummy/path.toml",
-            SystemService::Mosquitto,
+            SystemService::Custom("mosquitto"),
         )
         .unwrap_err();
         assert_matches!(
@@ -336,7 +336,7 @@ mod tests {
     fn build_exec_command(config: Vec<String>, expected: ExecCommand) {
         let exec_command = ExecCommand::try_new(
             config,
-            ServiceCommand::Stop(SystemService::Mosquitto),
+            ServiceCommand::Stop(SystemService::Custom("mosquitto")),
             "test/dummy.toml".into(),
         )
         .unwrap();
@@ -348,7 +348,7 @@ mod tests {
         let config = vec![];
         let system_config_error = ExecCommand::try_new(
             config,
-            ServiceCommand::Stop(SystemService::Mosquitto),
+            ServiceCommand::Stop(SystemService::Custom("mosquitto")),
             "test/dummy.toml".into(),
         )
         .unwrap_err();
