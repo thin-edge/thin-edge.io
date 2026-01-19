@@ -899,7 +899,7 @@ impl ConnectCommand {
         spinner.finish(wait_for_mosquitto_listening(&tedge_config.mqtt).await)?;
 
         if let Err(err) = service_manager
-            .enable_service(SystemService::Custom("mosquitto"))
+            .enable_service(SystemService::new("mosquitto"))
             .await
         {
             clean_up(tedge_config, bridge_config)?;
@@ -962,11 +962,11 @@ async fn restart_mosquitto_inner(
     service_manager: &dyn SystemServiceManager,
 ) -> Result<(), ConnectError> {
     service_manager
-        .stop_service(SystemService::Custom("mosquitto"))
+        .stop_service(SystemService::new("mosquitto"))
         .await?;
     chown_certificate_and_key(bridge_config).await;
     service_manager
-        .restart_service(SystemService::Custom("mosquitto"))
+        .restart_service(SystemService::new("mosquitto"))
         .await?;
 
     Ok(())
@@ -996,7 +996,7 @@ async fn enable_software_management(
         if which_async("tedge-agent").await.is_ok() {
             let spinner = Spinner::start("Enabling tedge-agent");
             let _ = spinner.finish(
-                start_and_enable_service(service_manager, SystemService::Custom("tedge-agent")).await,
+                start_and_enable_service(service_manager, SystemService::new("tedge-agent")).await,
             );
         } else {
             println!("Info: Software management is not installed. So, skipping enabling related components.\n");

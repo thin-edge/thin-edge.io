@@ -168,11 +168,20 @@ impl MaybeBorrowedCloud<'_> {
     pub fn mapper_service(&self) -> SystemService<'_> {
         match self {
             #[cfg(feature = "aws")]
-            Self::Aws(profile) => SystemService::TEdgeMapperAws(profile.as_deref()),
+            Self::Aws(profile) => SystemService {
+                name: "tedge-mapper-aws",
+                profile: profile.as_deref(),
+            },
             #[cfg(feature = "azure")]
-            Self::Azure(profile) => SystemService::TEdgeMapperAz(profile.as_deref()),
+            Self::Azure(profile) => SystemService {
+                name: "tedge-mapper-az",
+                profile: profile.as_deref(),
+            },
             #[cfg(feature = "c8y")]
-            Self::C8y(profile) => SystemService::TEdgeMapperC8y(profile.as_deref()),
+            Self::C8y(profile) => SystemService {
+                name: "tedge-mapper-c8y",
+                profile: profile.as_deref(),
+            },
         }
     }
 

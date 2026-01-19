@@ -1,32 +1,29 @@
 use std::fmt;
 use tedge_config::tedge_toml::ProfileName;
 
-/// An enumeration of all supported system services.
-#[derive(Debug, Copy, Clone, strum_macros::IntoStaticStr)]
-pub enum SystemService<'a> {
-    #[strum(serialize = "tedge-mapper-az")]
-    /// Azure TEdge mapper
-    TEdgeMapperAz(Option<&'a ProfileName>),
-    #[strum(serialize = "tedge-mapper-aws")]
-    /// AWS TEdge mapper
-    TEdgeMapperAws(Option<&'a ProfileName>),
-    #[strum(serialize = "tedge-mapper-c8y")]
-    /// Cumulocity TEdge mapper
-    TEdgeMapperC8y(Option<&'a ProfileName>),
-    /// Custom service with arbitrary name
-    Custom(&'a str),
+/// A system service that can optionally have a profile.
+/// When a profile is specified, the service is formatted as "name@profile".
+#[derive(Debug, Copy, Clone)]
+pub struct SystemService<'a> {
+    pub name: &'a str,
+    pub profile: Option<&'a ProfileName>,
+}
+
+impl<'a> SystemService<'a> {
+    /// Creates a new service without a profile.
+    pub const fn new(name: &'a str) -> Self {
+        Self {
+            name,
+            profile: None,
+        }
+    }
 }
 
 impl fmt::Display for SystemService<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::TEdgeMapperAz(None) => write!(f, "tedge-mapper-az"),
-            Self::TEdgeMapperAz(Some(profile)) => write!(f, "tedge-mapper-az@{profile}"),
-            Self::TEdgeMapperAws(None) => write!(f, "tedge-mapper-aws"),
-            Self::TEdgeMapperAws(Some(profile)) => write!(f, "tedge-mapper-aws@{profile}"),
-            Self::TEdgeMapperC8y(None) => write!(f, "tedge-mapper-c8y"),
-            Self::TEdgeMapperC8y(Some(profile)) => write!(f, "tedge-mapper-c8y@{profile}"),
-            Self::Custom(name) => write!(f, "{name}"),
+        match self.profile {
+            Some(profile) => write!(f, "{}@{}", self.name, profile),
+            None => write!(f, "{}", self.name),
         }
     }
 }

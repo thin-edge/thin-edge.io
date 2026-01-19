@@ -152,7 +152,7 @@ impl DisconnectBridgeCommand {
     // Deviation from specification:
     // Check if mosquitto is running, restart only if it was active before, if not don't do anything.
     async fn apply_changes_to_mosquitto(&self) -> Result<bool, Fancy<DisconnectBridgeError>> {
-        restart_service_if_running(&*self.service_manager, SystemService::Custom("mosquitto"))
+        restart_service_if_running(&*self.service_manager, SystemService::new("mosquitto"))
             .await
             .map_err(<_>::into)
     }

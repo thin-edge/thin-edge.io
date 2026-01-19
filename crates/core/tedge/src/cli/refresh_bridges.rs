@@ -77,7 +77,7 @@ impl RefreshBridgesCmd {
 
         eprintln!("Restarting mosquitto service.\n");
         self.service_manager
-            .restart_service(SystemService::Custom("mosquitto"))
+            .restart_service(SystemService::new("mosquitto"))
             .await?;
 
         Ok(())
