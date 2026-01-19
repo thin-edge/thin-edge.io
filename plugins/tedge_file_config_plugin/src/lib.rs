@@ -105,8 +105,8 @@ impl FileConfigPlugin {
     }
 
     async fn execute_service_action(&self, service_name: &str, action: &str) -> anyhow::Result<()> {
-        // Create a custom service variant for the arbitrary service name
-        let service = SystemService::Custom(service_name);
+        // Create a service for the arbitrary service name
+        let service = SystemService::new(service_name);
 
         info!("Executing: {action} on service: {service_name}");
 
