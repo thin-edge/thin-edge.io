@@ -23,12 +23,18 @@ struct LayeredKVStore {
     scoped: HashMap<FlowContext, BTreeMap<String, JsonValue>>,
 }
 
+pub trait KVStore: Send + Sync {
+    fn get_value(&self, key: &str) -> JsonValue;
+    fn set_value(&mut self, key: &str, value: JsonValue);
+    fn get_keys(&self) -> Vec<String>;
+}
+
 impl FlowContextHandle {
-    pub fn init(&self, ctx: &Ctx<'_>) {
+    pub(crate) fn init(&self, ctx: &Ctx<'_>) {
         self.store_as_userdata(ctx)
     }
 
-    pub fn js_context<'js>(
+    pub(crate) fn js_context<'js>(
         ctx: &Ctx<'js>,
         flow_name: &str,
         script_name: &str,
@@ -44,20 +50,20 @@ impl FlowContextHandle {
         context.into_js(ctx)
     }
 
-    pub fn get(&self, context: &FlowContext, key: &str) -> JsonValue {
+    pub(crate) fn get(&self, context: &FlowContext, key: &str) -> JsonValue {
         self.handle.lock().unwrap().get(context, key)
     }
 
-    pub fn insert(&self, context: &FlowContext, key: &str, value: impl Into<JsonValue>) {
+    pub(crate) fn insert(&self, context: &FlowContext, key: &str, value: impl Into<JsonValue>) {
         let mut data = self.handle.lock().unwrap();
         data.insert(context, key, value);
     }
 
-    pub fn keys(&self, context: &FlowContext) -> Vec<String> {
+    pub(crate) fn keys(&self, context: &FlowContext) -> Vec<String> {
         self.handle.lock().unwrap().keys(context)
     }
 
-    pub fn remove(&self, context: &FlowContext, key: &str) {
+    pub(crate) fn remove(&self, context: &FlowContext, key: &str) {
         let mut data = self.handle.lock().unwrap();
         data.remove(context, key);
     }
@@ -68,18 +74,14 @@ impl FlowContextHandle {
 
     fn get_from_userdata(ctx: &Ctx<'_>) -> Self {
         match ctx.userdata::<Self>() {
-            None => {
-                let store = FlowContextHandle::default();
-                store.store_as_userdata(ctx);
-                store
-            }
+            None => panic!("tedge-flows context has not been initialized!"),
             Some(userdata) => userdata.deref().clone(),
         }
     }
 }
 
 impl LayeredKVStore {
-    fn context(&self, context: &FlowContext) -> Option<&BTreeMap<String, JsonValue>> {
+    fn context(&self, context: &FlowContext) -> Option<&impl KVStore> {
         if context.is_global() {
             Some(&self.global)
         } else {
@@ -87,7 +89,7 @@ impl LayeredKVStore {
         }
     }
 
-    fn context_mut(&mut self, context: &FlowContext) -> Option<&mut BTreeMap<String, JsonValue>> {
+    fn context_mut(&mut self, context: &FlowContext) -> Option<&mut impl KVStore> {
         if context.is_global() {
             Some(&mut self.global)
         } else {
@@ -95,7 +97,7 @@ impl LayeredKVStore {
         }
     }
 
-    fn entry(&mut self, context: &FlowContext) -> &mut BTreeMap<String, JsonValue> {
+    fn entry(&mut self, context: &FlowContext) -> &mut impl KVStore {
         if context.is_global() {
             &mut self.global
         } else {
@@ -106,30 +108,27 @@ impl LayeredKVStore {
     fn get(&self, context: &FlowContext, key: &str) -> JsonValue {
         match self.context(context) {
             None => JsonValue::Null,
-            Some(map) => map.get(key).cloned().unwrap_or(JsonValue::Null),
+            Some(map) => map.get_value(key),
         }
     }
 
     fn insert(&mut self, context: &FlowContext, key: &str, value: impl Into<JsonValue>) {
         match value.into() {
             JsonValue::Null => self.remove(context, key),
-            value => {
-                let map = self.entry(context);
-                map.insert(key.to_owned(), value);
-            }
+            value => self.entry(context).set_value(key, value),
         }
     }
 
     fn keys(&self, context: &FlowContext) -> Vec<String> {
         match self.context(context) {
             None => vec![],
-            Some(map) => map.keys().cloned().collect(),
+            Some(map) => map.get_keys(),
         }
     }
 
     pub fn remove(&mut self, context: &FlowContext, key: &str) {
         if let Some(map) = self.context_mut(context) {
-            map.remove(key);
+            map.set_value(key, JsonValue::Null);
         }
     }
 }
@@ -176,5 +175,40 @@ impl<'js> FlowContext {
     fn keys(&self, ctx: Ctx<'js>) -> Vec<String> {
         let data = FlowContextHandle::get_from_userdata(&ctx);
         data.keys(self)
+    }
+}
+
+impl KVStore for BTreeMap<String, JsonValue> {
+    fn get_value(&self, key: &str) -> JsonValue {
+        self.get(key).cloned().unwrap_or(JsonValue::Null)
+    }
+
+    fn set_value(&mut self, key: &str, value: JsonValue) {
+        match value {
+            JsonValue::Null => {
+                self.remove(key);
+            }
+            value => {
+                self.insert(key.to_owned(), value);
+            }
+        }
+    }
+
+    fn get_keys(&self) -> Vec<String> {
+        self.keys().cloned().collect()
+    }
+}
+
+impl KVStore for FlowContextHandle {
+    fn get_value(&self, key: &str) -> JsonValue {
+        self.get(&FlowContext::Mapper, key)
+    }
+
+    fn set_value(&mut self, key: &str, value: JsonValue) {
+        self.insert(&FlowContext::Mapper, key, value);
+    }
+
+    fn get_keys(&self) -> Vec<String> {
+        self.keys(&FlowContext::Mapper)
     }
 }

@@ -26,7 +26,7 @@ pub struct JsRuntime {
 static TIME_CREDITS: AtomicUsize = AtomicUsize::new(1000);
 
 impl JsRuntime {
-    pub async fn try_new() -> Result<Self, LoadError> {
+    pub async fn try_new(store: FlowContextHandle) -> Result<Self, LoadError> {
         let runtime = rquickjs::AsyncRuntime::new()?;
         runtime.set_memory_limit(16 * 1024 * 1024).await;
         runtime.set_max_stack_size(256 * 1024).await;
@@ -37,7 +37,6 @@ impl JsRuntime {
             })))
             .await;
         let context = rquickjs::AsyncContext::full(&runtime).await?;
-        let store = FlowContextHandle::default();
         let worker = JsWorker::spawn(context, store.clone()).await;
         let execution_timeout = Duration::from_secs(5);
         Ok(JsRuntime {

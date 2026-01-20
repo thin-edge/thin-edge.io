@@ -82,6 +82,7 @@ impl BuiltinTransformers {
 mod tests {
     use super::*;
     use crate::config::StepConfig;
+    use crate::js_lib::kv_store::FlowContextHandle;
     use crate::js_runtime::JsRuntime;
     use crate::steps::FlowStep;
     use std::time::Duration;
@@ -144,7 +145,8 @@ config = { property = "time", format = "rfc-3339", reformat = true }
         transformers: &BuiltinTransformers,
         config: &str,
     ) -> (JsRuntime, FlowStep) {
-        let mut runtime = JsRuntime::try_new().await.unwrap();
+        let context = FlowContextHandle::default();
+        let mut runtime = JsRuntime::try_new(context).await.unwrap();
         let step = toml::from_str::<StepConfig>(config)
             .unwrap()
             .compile(

@@ -2,6 +2,7 @@ use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::flow::SourceTag;
 use crate::js_lib::kv_store::FlowContext;
+use crate::js_lib::kv_store::FlowContextHandle;
 use crate::js_runtime::JsRuntime;
 use crate::registry::BaseFlowRegistry;
 use crate::registry::FlowRegistryExt;
@@ -30,7 +31,15 @@ impl MessageProcessor<BaseFlowRegistry> {
 
 impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
     pub async fn try_new(registry: Registry) -> Result<Self, LoadError> {
-        let js_runtime = JsRuntime::try_new().await?;
+        let context = FlowContextHandle::default();
+        MessageProcessor::with_context(registry, context).await
+    }
+
+    pub async fn with_context(
+        registry: Registry,
+        context: FlowContextHandle,
+    ) -> Result<Self, LoadError> {
+        let js_runtime = JsRuntime::try_new(context).await?;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
