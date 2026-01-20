@@ -99,6 +99,7 @@ impl JsScript {
 mod tests {
     use super::*;
     use crate::js_lib::kv_store::FlowContext;
+    use crate::js_lib::kv_store::FlowContextHandle;
     use crate::steps::FlowStep;
     use serde_json::json;
     use std::time::Duration;
@@ -646,7 +647,8 @@ export function onMessage(message, context) {
     }
 
     async fn runtime_with(js: &str) -> (JsRuntime, FlowStep) {
-        let mut runtime = JsRuntime::try_new().await.unwrap();
+        let context = FlowContextHandle::default();
+        let mut runtime = JsRuntime::try_new(context).await.unwrap();
         let mut script = JsScript::new("toml|1|js".to_owned(), "toml".into(), "js".into());
         if let Err(err) = runtime.load_script_literal(&mut script, js).await {
             panic!("{:?}", err);

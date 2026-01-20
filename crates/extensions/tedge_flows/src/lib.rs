@@ -24,6 +24,7 @@ pub use crate::registry::UpdateFlowRegistryError;
 pub use crate::runtime::MessageProcessor;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+pub use js_lib::kv_store::FlowContextHandle;
 pub use js_value::JsonValue;
 use std::collections::HashSet;
 use std::convert::Infallible;
