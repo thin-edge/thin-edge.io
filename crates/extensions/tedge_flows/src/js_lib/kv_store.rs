@@ -12,12 +12,12 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-#[derive(Clone, Default, JsLifetime)]
+#[derive(Clone, Debug, Default, JsLifetime)]
 pub struct FlowContextHandle {
     handle: Arc<Mutex<LayeredKVStore>>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct LayeredKVStore {
     global: BTreeMap<String, JsonValue>,
     scoped: HashMap<FlowContext, BTreeMap<String, JsonValue>>,
@@ -30,6 +30,18 @@ pub trait KVStore: Send + Sync {
 }
 
 impl FlowContextHandle {
+    pub fn get_value(&self, key: &str) -> JsonValue {
+        self.get(&FlowContext::Mapper, key)
+    }
+
+    pub fn set_value(&self, key: &str, value: JsonValue) {
+        self.insert(&FlowContext::Mapper, key, value);
+    }
+
+    pub fn get_keys(&self) -> Vec<String> {
+        self.keys(&FlowContext::Mapper)
+    }
+
     pub(crate) fn init(&self, ctx: &Ctx<'_>) {
         self.store_as_userdata(ctx)
     }
@@ -133,7 +145,7 @@ impl LayeredKVStore {
     }
 }
 
-#[derive(Clone, Trace, JsLifetime, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Trace, JsLifetime, Hash, Eq, PartialEq)]
 #[rquickjs::class(frozen)]
 pub(crate) enum FlowContext {
     Mapper,

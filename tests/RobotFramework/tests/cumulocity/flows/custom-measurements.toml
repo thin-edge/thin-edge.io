@@ -1,0 +1,6 @@
+input.mqtt.topics = ["custom/+/+/+/+/m/+"]
+
+steps = [
+    { script = "custom-measurements.js" },
+    { builtin = "add-timestamp", config = { property = "time", format = "rfc3339", reformat = true } },
+]

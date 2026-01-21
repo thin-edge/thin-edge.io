@@ -18,7 +18,7 @@ use tracing::debug;
 
 pub struct JsRuntime {
     runtime: rquickjs::AsyncRuntime,
-    pub(crate) store: FlowContextHandle,
+    store: FlowContextHandle,
     worker: mpsc::Sender<JsRequest>,
     execution_timeout: Duration,
 }
@@ -45,6 +45,10 @@ impl JsRuntime {
             worker,
             execution_timeout,
         })
+    }
+
+    pub fn context_handle(&self) -> FlowContextHandle {
+        self.store.clone()
     }
 
     pub async fn load_script(&mut self, script: &mut JsScript) -> Result<(), LoadError> {
