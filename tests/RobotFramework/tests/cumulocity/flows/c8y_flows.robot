@@ -18,6 +18,11 @@ Extend C8Y mapper with user-provided flows
 
     ${start}    Get Unix Timestamp
     Execute Command    tedge mqtt pub collectd/a/b/c 12345:6789
+    ${message}    Should Have MQTT Messages
+    ...    topic=c8y/measurement/measurements/create
+    ...    message_contains="type":"collectd"
+
+    Cumulocity.Set Managed Object    ${DEVICE_SN}
     ${measurements}    Device Should Have Measurements
     ...    minimum=1
     ...    maximum=1
@@ -34,7 +39,14 @@ Get entity metadata from the c8y mapper context
 
     ${start}    Get Unix Timestamp
     Execute Command    tedge mqtt pub custom/device/child///m/temperature 23.1
-    Cumulocity.Set Device    ${CHILD_SN}
+    ${message}    Should Have MQTT Messages
+    ...    topic=c8y/measurement/measurements/create
+    ...    message_contains=temperature
+    ...    date_from=${start}
+    Should Contain    ${message}[0]    "type":"custom"
+    Should Contain    ${message}[0]    "externalId":"${CHILD_SN}"
+
+    Cumulocity.Set Managed Object    ${CHILD_SN}
     ${measurements}    Device Should Have Measurements
     ...    minimum=1
     ...    maximum=1
