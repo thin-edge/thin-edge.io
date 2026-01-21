@@ -498,7 +498,7 @@ export function onMessage(message, context) {
         "#;
         let (runtime, script) = runtime_with(js).await;
 
-        runtime.store.insert(
+        runtime.context_handle().insert(
             &FlowContext::Mapper,
             "foo/bar",
             serde_json::json!({
@@ -506,7 +506,7 @@ export function onMessage(message, context) {
             }),
         );
 
-        runtime.store.insert(
+        runtime.context_handle().insert(
             &FlowContext::script(script.step_name()),
             "foo/bar",
             serde_json::json!({
@@ -542,14 +542,14 @@ export function onMessage(message, context) {
         "#;
         let (runtime, script) = runtime_with(js).await;
 
-        runtime.store.insert(
+        runtime.context_handle().insert(
             &FlowContext::Mapper,
             "device/main///",
             serde_json::json!({
                 "external_id": "Raspberry-123",
             }),
         );
-        runtime.store.insert(
+        runtime.context_handle().insert(
             &FlowContext::Mapper,
             "device/child-01///",
             serde_json::json!({
@@ -590,7 +590,7 @@ export function onMessage(message, context) {
             .await
             .unwrap();
         assert_eq!(
-            runtime.store.get(&context, "count"),
+            runtime.context_handle().get(&context, "count"),
             JsonValue::Number(1.into())
         );
 
@@ -599,7 +599,7 @@ export function onMessage(message, context) {
             .await
             .unwrap();
         assert_eq!(
-            runtime.store.get(&context, "count"),
+            runtime.context_handle().get(&context, "count"),
             JsonValue::Number(2.into())
         );
     }
@@ -615,14 +615,14 @@ export function onMessage(message, context) {
         "#;
 
         let (runtime, script) = runtime_with(js).await;
-        runtime.store.insert(
+        runtime.context_handle().insert(
             &FlowContext::Mapper,
             "foo",
             serde_json::json!({
                 "a": 1,
             }),
         );
-        runtime.store.insert(
+        runtime.context_handle().insert(
             &FlowContext::Mapper,
             "bar",
             serde_json::json!({
@@ -637,11 +637,11 @@ export function onMessage(message, context) {
             .await
             .unwrap();
         assert_eq!(
-            runtime.store.get(&FlowContext::Mapper, "foo"),
+            runtime.context_handle().get(&FlowContext::Mapper, "foo"),
             JsonValue::Null
         );
         assert_eq!(
-            runtime.store.get(&FlowContext::Mapper, "bar"),
+            runtime.context_handle().get(&FlowContext::Mapper, "bar"),
             JsonValue::Null
         );
     }
