@@ -1,4 +1,5 @@
 use crate::ConfigError;
+use crate::FlowContextHandle;
 use crate::FlowError;
 use crate::JsonValue;
 use crate::Message;
@@ -26,6 +27,7 @@ impl Transformer for IgnoreTopics {
         &self,
         _timestamp: SystemTime,
         message: &Message,
+        _context: &FlowContextHandle,
     ) -> Result<Vec<Message>, FlowError> {
         if self.topics.accept_topic_name(&message.topic) {
             Ok(vec![])

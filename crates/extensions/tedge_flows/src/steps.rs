@@ -154,7 +154,9 @@ impl FlowStep {
             StepHandler::JsScript(script, config) => {
                 script.on_message(js, timestamp, message, config).await
             }
-            StepHandler::Transformer(_, builtin) => builtin.on_message(timestamp, message),
+            StepHandler::Transformer(_, builtin) => {
+                builtin.on_message(timestamp, message, &js.context_handle())
+            }
         }
     }
 
@@ -172,7 +174,9 @@ impl FlowStep {
             StepHandler::JsScript(script, config) => {
                 script.on_interval(js, timestamp, config).await
             }
-            StepHandler::Transformer(_, builtin) => builtin.on_interval(timestamp),
+            StepHandler::Transformer(_, builtin) => {
+                builtin.on_interval(timestamp, &js.context_handle())
+            }
         }
     }
 }
