@@ -384,7 +384,11 @@ struct EntityIndexes {
 }
 
 impl EntityIndexes {
-    pub fn new(flow_context: FlowContextHandle, main_device_tid: EntityTopicId, main_device_xid: EntityExternalId) -> Self {
+    pub fn new(
+        flow_context: FlowContextHandle,
+        main_device_tid: EntityTopicId,
+        main_device_xid: EntityExternalId,
+    ) -> Self {
         let mut indexes = EntityIndexes {
             main_device_tid: main_device_tid.clone(),
             main_device_xid: main_device_xid.clone(),

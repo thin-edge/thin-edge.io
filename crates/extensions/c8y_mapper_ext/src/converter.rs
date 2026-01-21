@@ -85,6 +85,7 @@ use tedge_api::Jsonify;
 use tedge_api::LoggedCommand;
 use tedge_config::models::TopicPrefix;
 use tedge_config::TEdgeConfigError;
+use tedge_flows::FlowContextHandle;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_uploader_ext::UploadRequest;
@@ -99,7 +100,6 @@ use tracing::error;
 use tracing::info;
 use tracing::trace;
 use tracing::warn;
-use tedge_flows::FlowContextHandle;
 
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "event/events/create";
@@ -3354,9 +3354,15 @@ pub(crate) mod tests {
         let downloader = ClientMessageBox::new(&mut downloader_builder);
 
         let flow_context = FlowContextHandle::default();
-        let converter =
-            CumulocityConverter::new(config, mqtt_publisher, http_proxy, uploader, downloader, flow_context)
-                .unwrap();
+        let converter = CumulocityConverter::new(
+            config,
+            mqtt_publisher,
+            http_proxy,
+            uploader,
+            downloader,
+            flow_context,
+        )
+        .unwrap();
 
         (converter, http_builder.build())
     }
