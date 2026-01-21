@@ -86,6 +86,30 @@ Dynamic plugin install and remove
     ...    timeout=30
     ...    failure_reason=.*Plugin not found.*
 
+Demo Test
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/file
+    ...    /usr/share/tedge/config-plugins/file
+    Execute Command    chmod +x /usr/share/tedge/config-plugins/file
+
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/composite_config_update.toml    /etc/tedge/operations/
+
+    Execute Command    touch /etc/tedge/test.conf
+    Execute Command    echo "original config" >> /etc/tedge/test.conf
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/tedge-configuration-plugin-with-service.toml
+    ...    /etc/tedge/plugins/tedge-configuration-plugin.toml
+    Should Contain Supported Configuration Types    test-conf
+
+    Execute Command
+    ...    curl -X PUT --data-binary 'updated config' "http://localhost:8000/te/v1/files/${DEVICE_SN}/config_update/op-123"
+    Execute Command
+    ...    tedge mqtt pub -r te/device/main///cmd/config_update/op-123 '{"status":"init","tedgeUrl":"http://localhost:8000/te/v1/files/${DEVICE_SN}/config_update/op-123","remoteUrl":"","serverUrl":"","type":"test-conf"}'
+
+    Should Have MQTT Messages
+    ...    topic=te/device/main///cmd/config_update/op-123
+    ...    message_contains="status":"successful"
+
 
 *** Keywords ***
 Custom Setup

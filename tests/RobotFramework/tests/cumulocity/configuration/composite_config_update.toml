@@ -1,0 +1,38 @@
+# Custom config_update operation
+# - use the type as the path for the target file
+# - download the source url to the target
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "download"
+
+[download]
+script = "curl --fail --show-error --output /tmp/config_update_${.topic.cmd_id} ${.payload.tedgeUrl}"
+on_success = "update"
+
+[update]
+script = "sudo /usr/share/tedge/config-plugins/file set ${.payload.type} /tmp/config_update_${.topic.cmd_id}"
+on_success = "apply"
+
+[apply]
+background_script = "sudo /usr/share/tedge/config-plugins/file apply ${.payload.type}"
+on_exec = "verify"
+
+[verify]
+script = "sudo /usr/share/tedge/config-plugins/file verify ${.payload.type}"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
