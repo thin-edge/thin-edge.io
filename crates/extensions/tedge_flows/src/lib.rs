@@ -102,6 +102,10 @@ impl FlowsMapperBuilder {
         })
     }
 
+    pub fn context_handle(&self) -> FlowContextHandle {
+        self.processor.context_handle()
+    }
+
     pub fn connect(
         &mut self,
         mqtt: &mut (impl for<'a> MessageSource<MqttMessage, &'a mut DynSubscriptions>

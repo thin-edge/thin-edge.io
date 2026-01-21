@@ -153,6 +153,7 @@ impl TEdgeComponent for CumulocityMapper {
         flows_mapper.connect(&mut mqtt_actor);
         flows_mapper.connect_fs(&mut fs_watch_actor);
         flows_mapper.connect_cmd(&mut cmd_watcher_actor);
+        c8y_mapper_actor.set_flow_context(flows_mapper.context_handle());
 
         runtime.spawn(flows_mapper).await?;
         runtime.spawn(cmd_watcher_actor).await?;

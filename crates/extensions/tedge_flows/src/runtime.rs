@@ -49,6 +49,10 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
         })
     }
 
+    pub fn context_handle(&self) -> FlowContextHandle {
+        self.js_runtime.context_handle()
+    }
+
     pub async fn load_all_flows(&mut self) {
         self.registry.load_all_flows(&mut self.js_runtime).await;
     }
@@ -167,7 +171,7 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
     pub fn store_context_value(&mut self, message: &Message) -> Result<(), FlowError> {
         if message.payload.is_empty() {
             self.js_runtime
-                .store
+                .context_handle()
                 .remove(&FlowContext::Mapper, &message.topic)
         } else {
             let payload = message.payload_str().ok_or(FlowError::UnsupportedMessage(
@@ -176,7 +180,7 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
             let value: serde_json::Value = serde_json::from_str(payload)
                 .map_err(|err| FlowError::UnsupportedMessage(format!("Non JSON payload: {err}")))?;
             self.js_runtime
-                .store
+                .context_handle()
                 .insert(&FlowContext::Mapper, &message.topic, value);
         }
 

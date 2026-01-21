@@ -85,6 +85,7 @@ use tedge_api::Jsonify;
 use tedge_api::LoggedCommand;
 use tedge_config::models::TopicPrefix;
 use tedge_config::TEdgeConfigError;
+use tedge_flows::FlowContextHandle;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_uploader_ext::UploadRequest;
@@ -202,6 +203,7 @@ impl CumulocityConverter {
         http_proxy: C8YHttpProxy,
         uploader: ClientMessageBox<(String, UploadRequest), (String, UploadResult)>,
         downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+        flow_context: FlowContextHandle,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
 
@@ -244,6 +246,7 @@ impl CumulocityConverter {
         };
 
         let entity_cache = EntityCache::new(
+            flow_context,
             mqtt_schema.clone(),
             EntityTopicId::default_main_device(),
             device_id.clone().into(),
@@ -3361,9 +3364,16 @@ pub(crate) mod tests {
             FakeServerBox::builder();
         let downloader = ClientMessageBox::new(&mut downloader_builder);
 
-        let converter =
-            CumulocityConverter::new(config, mqtt_publisher, http_proxy, uploader, downloader)
-                .unwrap();
+        let flow_context = FlowContextHandle::default();
+        let converter = CumulocityConverter::new(
+            config,
+            mqtt_publisher,
+            http_proxy,
+            uploader,
+            downloader,
+            flow_context,
+        )
+        .unwrap();
 
         (converter, http_builder.build())
     }

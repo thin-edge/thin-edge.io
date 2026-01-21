@@ -8,6 +8,8 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::pending_entity_store::PendingEntityStore;
 use tedge_api::pending_entity_store::RegisteredEntityData;
+use tedge_flows::FlowContextHandle;
+use tedge_flows::JsonValue;
 use tedge_mqtt_ext::MqttMessage;
 use thiserror::Error;
 use tracing::debug;
@@ -95,6 +97,7 @@ pub(crate) struct EntityCache {
 
 impl EntityCache {
     pub(crate) fn new<MF, SF>(
+        flow_context: FlowContextHandle,
         mqtt_schema: MqttSchema,
         main_device_tid: EntityTopicId,
         main_device_xid: EntityExternalId,
@@ -109,7 +112,7 @@ impl EntityCache {
         SF: 'static + Send + Sync,
     {
         Self {
-            entities: EntityIndexes::new(main_device_tid, main_device_xid),
+            entities: EntityIndexes::new(flow_context, main_device_tid, main_device_xid),
             pending_entities: PendingEntityStore::new(mqtt_schema, telemetry_cache_size),
             external_id_mapper_fn: Box::new(external_id_mapper_fn),
             external_id_validator_fn: Box::new(external_id_validator_fn),
@@ -377,15 +380,21 @@ struct EntityIndexes {
     main_device_xid: EntityExternalId,
     entities: HashMap<EntityTopicId, CloudEntityMetadata>,
     external_id_map: HashMap<EntityExternalId, EntityTopicId>,
+    flow_context: FlowContextHandle,
 }
 
 impl EntityIndexes {
-    pub fn new(main_device_tid: EntityTopicId, main_device_xid: EntityExternalId) -> Self {
+    pub fn new(
+        flow_context: FlowContextHandle,
+        main_device_tid: EntityTopicId,
+        main_device_xid: EntityExternalId,
+    ) -> Self {
         let mut indexes = EntityIndexes {
             main_device_tid: main_device_tid.clone(),
             main_device_xid: main_device_xid.clone(),
             entities: HashMap::new(),
             external_id_map: HashMap::new(),
+            flow_context,
         };
         let main_device_metadata = CloudEntityMetadata::new(
             main_device_xid.clone(),
@@ -397,14 +406,16 @@ impl EntityIndexes {
 
     pub fn insert(&mut self, topic_id: EntityTopicId, metadata: CloudEntityMetadata) {
         let external_id = metadata.external_id.clone();
-        self.entities.insert(topic_id.clone(), metadata);
-        self.external_id_map.insert(external_id, topic_id);
+        self.entities.insert(topic_id.clone(), metadata.clone());
+        self.external_id_map.insert(external_id, topic_id.clone());
+        self.update_context(&topic_id, metadata);
     }
 
     pub fn remove(&mut self, topic_id: &EntityTopicId) -> Option<CloudEntityMetadata> {
         let entity = self.entities.remove(topic_id);
         if let Some(entity) = self.entities.remove(topic_id) {
             self.external_id_map.remove(&entity.external_id);
+            self.clear_context(topic_id, &entity.external_id);
         }
         entity
     }
@@ -421,9 +432,9 @@ impl EntityIndexes {
         self.entities.get_mut(entity_topic_id)
     }
 
-    fn get_by_external_id(&self, topic_id: &EntityExternalId) -> Option<&CloudEntityMetadata> {
+    fn get_by_external_id(&self, external_id: &EntityExternalId) -> Option<&CloudEntityMetadata> {
         self.external_id_map
-            .get(topic_id)
+            .get(external_id)
             .and_then(|topic_id| self.entities.get(topic_id))
     }
 
@@ -432,6 +443,23 @@ impl EntityIndexes {
             self.external_id_map.keys().map(Clone::clone).collect();
         ids.sort();
         ids
+    }
+
+    fn update_context(&self, topic_id: &EntityTopicId, mut metadata: CloudEntityMetadata) {
+        let external_id = &metadata.external_id;
+        metadata.metadata.external_id = Some(external_id.clone());
+        if let Ok(json_data) = JsonValue::from_value(metadata.metadata) {
+            self.flow_context
+                .set_value(topic_id.as_str(), json_data.clone());
+            self.flow_context.set_value(external_id.as_ref(), json_data);
+        }
+    }
+
+    fn clear_context(&self, topic_id: &EntityTopicId, external_id: &EntityExternalId) {
+        self.flow_context
+            .set_value(topic_id.as_str(), JsonValue::Null);
+        self.flow_context
+            .set_value(external_id.as_ref(), JsonValue::Null)
     }
 }
 
@@ -450,6 +478,7 @@ mod tests {
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
+    use tedge_flows::FlowContextHandle;
 
     #[test]
     fn external_id_generation() {
@@ -573,7 +602,9 @@ mod tests {
     }
 
     fn new_entity_cache() -> EntityCache {
+        let flow_context = FlowContextHandle::default();
         EntityCache::new(
+            flow_context,
             MqttSchema::default(),
             EntityTopicId::default_main_device(),
             "test-device".into(),

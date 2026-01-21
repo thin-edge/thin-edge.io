@@ -5,6 +5,7 @@ use rquickjs::Ctx;
 use rquickjs::FromJs;
 use rquickjs::IntoJs;
 use rquickjs::Value;
+use serde::Serialize;
 use serde_json::json;
 use serde_json::Number;
 use std::collections::BTreeMap;
@@ -35,6 +36,11 @@ impl Default for JsonValue {
 }
 
 impl JsonValue {
+    pub fn from_value<T: Serialize>(value: T) -> Result<Self, serde_json::Error> {
+        let value: serde_json::Value = serde_json::to_value(value)?;
+        Ok(value.into())
+    }
+
     fn string(value: impl ToString) -> Self {
         JsonValue::String(value.to_string())
     }

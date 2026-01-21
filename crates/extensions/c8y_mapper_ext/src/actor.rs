@@ -35,6 +35,7 @@ use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_flows::FlowContextHandle;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
@@ -374,6 +375,7 @@ pub struct C8yMapperBuilder {
     uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
+    flow_context: Option<FlowContextHandle>,
 }
 
 impl C8yMapperBuilder {
@@ -425,7 +427,12 @@ impl C8yMapperBuilder {
             downloader,
             bridge_monitor_builder,
             message_handlers,
+            flow_context: None,
         })
+    }
+
+    pub fn set_flow_context(&mut self, flow_context: FlowContextHandle) {
+        self.flow_context = Some(flow_context);
     }
 
     pub async fn init(config: &C8yMapperConfig) -> Result<(), FileError> {
@@ -474,6 +481,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             self.http_proxy,
             self.uploader,
             self.downloader,
+            self.flow_context.unwrap_or_default(),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 
