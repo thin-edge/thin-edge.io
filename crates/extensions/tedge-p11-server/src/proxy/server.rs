@@ -3,6 +3,7 @@ use tokio::net::UnixListener;
 use anyhow::Context;
 use tracing::error;
 use tracing::info;
+use tracing::instrument;
 
 use super::connection::Connection;
 use super::connection::Frame1;
@@ -42,12 +43,13 @@ impl TedgeP11Server {
             let connection = Connection::new(stream);
 
             match self.process(connection) {
-                Ok(_) => info!("Incoming request successful"),
+                Ok(_) => {}
                 Err(e) => error!("Incoming request failed: {e:?}"),
             }
         }
     }
 
+    #[instrument(skip_all)]
     fn process(&self, mut connection: Connection) -> anyhow::Result<()> {
         let request = match connection.read_frame().context("read") {
             Ok(request) => request,
@@ -56,6 +58,7 @@ impl TedgeP11Server {
                 return Err(error);
             }
         };
+        let request_value = tracing::field::debug(request.clone());
 
         let response = match request {
             Frame1::Error(_)
@@ -126,6 +129,9 @@ impl TedgeP11Server {
                 anyhow::bail!(err);
             }
         }
+
+        // okay to log because sensitive fields (PIN) are redacted by their Debug impls
+        info!(request = ?request_value, "Incoming request successful");
 
         Ok(())
     }
