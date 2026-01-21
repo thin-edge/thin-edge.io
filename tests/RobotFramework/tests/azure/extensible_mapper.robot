@@ -14,10 +14,10 @@ Test Tags           theme:mqtt    theme:az
 Legacy behavior
     # The legacy az mapper adds a timestamp if missing but ignores message source and measurement type
     ${start}    Get Unix Timestamp
-    Execute Command    tedge mqtt pub te/device/child-az///m/env '{"temperature":10, "time":1768404563.338 }'
+    Execute Command    tedge mqtt pub te/device/child-az///m/env '{"temperature1":10, "time":1768404563.338 }'
     ${message}    Should Have MQTT Messages
     ...    topic=az/messages/events/
-    ...    message_contains=temperature
+    ...    message_contains=temperature1
     ...    date_from=${start}
     Should Contain    ${message}[0]    "time":1768404563.338
     Should Not Contain    ${message}[0]    "type":
@@ -30,10 +30,10 @@ Updating the builtin flow definition
 
     # Now the az mapper reformats the timestamps using rfc3339
     ${start}    Get Unix Timestamp
-    Execute Command    tedge mqtt pub te/device/child-az///m/env '{"temperature":10, "time":1768404563.338 }'
+    Execute Command    tedge mqtt pub te/device/child-az///m/env '{"temperature2":10, "time":1768404563.338 }'
     ${message}    Should Have MQTT Messages
     ...    topic=az/messages/events/
-    ...    message_contains=temperature
+    ...    message_contains=temperature2
     ...    date_from=${start}
     Should Contain    ${message}[0]    "time":"2026-01-14T15:29:23.338Z"
     Should Not Contain    ${message}[0]    "type":
@@ -47,10 +47,10 @@ Adding a step to the builtin flow definition
 
     # Thanks to the custom script the az mapper adds the measurement type
     ${start}    Get Unix Timestamp
-    Execute Command    tedge mqtt pub te/device/child-az///m/env '{"temperature":10, "time":1768404563.338 }'
+    Execute Command    tedge mqtt pub te/device/child-az///m/env '{"temperature3":10, "time":1768404563.338 }'
     ${message}    Should Have MQTT Messages
     ...    topic=az/messages/events/
-    ...    message_contains=temperature
+    ...    message_contains=temperature3
     ...    date_from=${start}
     Should Contain    ${message}[0]    "time":"2026-01-14T15:29:23.338Z"
     Should Contain    ${message}[0]    "type":"env"
@@ -76,10 +76,10 @@ Adding a flow to the builtin mapper
 
     # So the az mapper adds the source name to measurements
     ${start}    Get Unix Timestamp
-    Execute Command    tedge mqtt pub te/device/child-az///m/env '{"temperature":10, "time":1768404563.338 }'
+    Execute Command    tedge mqtt pub te/device/child-az///m/env '{"temperature4":10, "time":1768404563.338 }'
     ${message}    Should Have MQTT Messages
     ...    topic=az/messages/events/
-    ...    message_contains=temperature
+    ...    message_contains=temperature4
     ...    date_from=${start}
     Should Contain    ${message}[0]    "time":"2026-01-14T15:29:23.338Z"
     Should Contain    ${message}[0]    "type":"env"
