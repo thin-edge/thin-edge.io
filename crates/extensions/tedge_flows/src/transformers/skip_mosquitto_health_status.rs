@@ -1,4 +1,5 @@
 use crate::ConfigError;
+use crate::FlowContextHandle;
 use crate::FlowError;
 use crate::JsonValue;
 use crate::Message;
@@ -21,6 +22,7 @@ impl Transformer for SkipMosquittoHealthStatus {
         &self,
         _timestamp: SystemTime,
         message: &Message,
+        _context: &FlowContextHandle,
     ) -> Result<Vec<Message>, FlowError> {
         // don't convert mosquitto bridge notification topic
         // https://github.com/thin-edge/thin-edge.io/issues/2236
