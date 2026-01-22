@@ -5,6 +5,7 @@ use rquickjs::Ctx;
 use rquickjs::FromJs;
 use rquickjs::IntoJs;
 use rquickjs::Value;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::json;
 use serde_json::Number;
@@ -39,6 +40,11 @@ impl JsonValue {
     pub fn from_value<T: Serialize>(value: T) -> Result<Self, serde_json::Error> {
         let value: serde_json::Value = serde_json::to_value(value)?;
         Ok(value.into())
+    }
+
+    pub fn into_value<T: DeserializeOwned>(self) -> Result<T, serde_json::Error> {
+        let value: serde_json::Value = self.into();
+        serde_json::from_value(value)
     }
 
     fn string(value: impl ToString) -> Self {

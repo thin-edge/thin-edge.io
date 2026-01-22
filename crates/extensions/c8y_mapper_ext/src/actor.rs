@@ -203,6 +203,9 @@ impl C8yMapperActor {
 
             // Convert and publish cached data messages
             for pending_data_message in pending_entity.data_messages {
+                // FIXME: The c8y converter is no processing these messages
+                //        - How to forward them to the builtin mea flows?
+                //        - An option is to let the flows manage the pending messages.
                 self.process_message(pending_data_message).await?;
             }
         }
@@ -366,7 +369,7 @@ impl C8yMapperActor {
 }
 
 pub struct C8yMapperBuilder {
-    config: C8yMapperConfig,
+    pub(crate) config: C8yMapperConfig,
     box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput>,
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,

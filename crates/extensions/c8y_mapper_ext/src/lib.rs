@@ -11,6 +11,7 @@ pub mod flows;
 mod fragments;
 mod inventory;
 pub mod json;
+mod mea;
 mod operations;
 mod serializer;
 pub mod service_monitor;
