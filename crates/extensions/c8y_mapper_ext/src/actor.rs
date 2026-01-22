@@ -358,12 +358,6 @@ impl C8yMapperActor {
     }
 
     pub async fn process_sync_timeout(&mut self) -> Result<(), RuntimeError> {
-        // Once the sync phase is complete, retrieve all sync messages from the converter and process them
-        let sync_messages = self.converter.sync_messages();
-        for message in sync_messages {
-            self.process_mqtt_message(message).await?;
-        }
-
         Ok(())
     }
 }

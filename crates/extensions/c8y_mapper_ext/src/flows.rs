@@ -12,7 +12,10 @@ impl C8yMapperBuilder {
     ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
         create_directory_with_defaults(flows_dir.as_ref()).await?;
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
+
         flows.register_builtin(crate::mea::measurements::MeasurementConverter::default());
+        flows.register_builtin(crate::mea::alarms::AlarmConverter::default());
+
         self.persist_builtin_flow(&mut flows).await?;
         Ok(flows)
     }
@@ -26,6 +29,9 @@ impl C8yMapperBuilder {
             .await?;
         flows
             .persist_builtin_flow("measurements", self.measurements_flow().as_str())
+            .await?;
+        flows
+            .persist_builtin_flow("alarms", self.alarms_flow().as_str())
             .await
     }
 
@@ -65,6 +71,31 @@ steps = [
 
 [output.mqtt]
 topic = "{c8y_prefix}/measurement/measurements/create"
+
+[errors.mqtt]
+topic = "{errors_topic}"
+"#
+        )
+    }
+
+    fn alarms_flow(&self) -> String {
+        let mqtt_schema = &self.config.mqtt_schema;
+        let topic_prefix = mqtt_schema.root.as_str();
+        let c8y_prefix = &self.config.bridge_config.c8y_prefix;
+        let errors_topic = mqtt_schema.error_topic();
+        let internal_alarms = crate::alarm_converter::INTERNAL_ALARMS_TOPIC;
+        let max_size = self.config.max_mqtt_payload_size;
+
+        format!(
+            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/a/+", "{internal_alarms}#"]
+
+steps = [
+    {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
+    {{ builtin = "into_c8y_alarms", interval = "3s", config = {{ c8y_prefix = "{c8y_prefix}" }} }},
+    {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
+]
+
+[output.mqtt]
 
 [errors.mqtt]
 topic = "{errors_topic}"

@@ -1,4 +1,3 @@
-use super::alarm_converter::AlarmConverter;
 use super::config::C8yMapperConfig;
 use super::error::CumulocityMapperError;
 use super::service_monitor;
@@ -99,7 +98,6 @@ use tracing::info;
 use tracing::trace;
 use tracing::warn;
 
-const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
@@ -173,7 +171,6 @@ pub struct CumulocityConverter {
     pub config: Arc<C8yMapperConfig>,
     pub(crate) mapper_config: MapperConfig,
     pub device_name: String,
-    alarm_converter: AlarmConverter,
     operation_logs: OperationLogs,
     mqtt_publisher: LoggingSender<MqttMessage>,
     pub http_proxy: C8YHttpProxy,
@@ -226,8 +223,6 @@ impl CumulocityConverter {
             operations_by_xid,
         };
 
-        let alarm_converter = AlarmConverter::new();
-
         let log_dir = config.logs_path.join(TEDGE_AGENT_LOG_DIR);
         let operation_logs = OperationLogs::try_new(log_dir)?;
 
@@ -262,7 +257,6 @@ impl CumulocityConverter {
             config: Arc::new(config),
             mapper_config,
             device_name: device_id,
-            alarm_converter,
             supported_operations: operation_manager,
             operation_logs,
             http_proxy,
@@ -529,27 +523,6 @@ impl CumulocityConverter {
             }
         }
         Ok(messages)
-    }
-
-    pub fn process_alarm_messages(
-        &mut self,
-        source: &EntityTopicId,
-        input: &MqttMessage,
-        alarm_type: &str,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        self.size_threshold.validate(input)?;
-        let entity = self.entity_cache.try_get(source)?;
-
-        let mqtt_messages = self.alarm_converter.try_convert_alarm(
-            source,
-            &entity.external_id,
-            &entity.metadata.r#type,
-            input,
-            alarm_type,
-            &self.config.bridge_config.c8y_prefix,
-        )?;
-
-        Ok(mqtt_messages)
     }
 
     pub async fn process_health_status_message(
@@ -1229,9 +1202,7 @@ impl CumulocityConverter {
                 self.try_convert_event(&source, message, event_type).await
             }
 
-            Channel::Alarm { alarm_type } => {
-                self.process_alarm_messages(&source, message, alarm_type)
-            }
+            Channel::Alarm { .. } => Ok(vec![]),
 
             Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
@@ -1334,10 +1305,6 @@ impl CumulocityConverter {
         }
 
         let messages = match &message.topic {
-            topic if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) => {
-                self.alarm_converter.process_internal_alarm(message);
-                Ok(vec![])
-            }
             topic
                 if C8yDeviceControlTopic::accept(topic, &self.config.bridge_config.c8y_prefix) =>
             {
@@ -1398,9 +1365,8 @@ impl CumulocityConverter {
     }
 
     pub fn sync_messages(&mut self) -> Vec<MqttMessage> {
-        let sync_messages: Vec<MqttMessage> = self.alarm_converter.sync();
-        self.alarm_converter = AlarmConverter::Synced;
-        sync_messages
+        // FIXME clean-up alarm sync on c8y actor
+        vec![]
     }
 
     fn try_process_operation_update_message(
@@ -1586,6 +1552,8 @@ pub(crate) mod tests {
     use crate::config::BridgeConfig;
     use crate::config::C8yMapperConfig;
     use crate::entity_cache::InvalidExternalIdError;
+    use crate::mea::alarms::AlarmConverter;
+    use crate::mea::measurements::MeasurementConverter;
     use crate::supported_operations::operation::ResultFormat;
     use crate::supported_operations::SupportedOperations;
     use crate::tests::spawn_dummy_c8y_http_proxy;
@@ -1636,7 +1604,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_sync_alarms() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<AlarmConverter>::new(&tmp_dir);
 
         let alarm_topic = "te/device/main///a/temperature_alarm";
         let alarm_payload = r#"{ "severity": "critical", "text": "Temperature very high" }"#;
@@ -1657,23 +1625,27 @@ pub(crate) mod tests {
 
         // When sync phase is complete, all pending alarms are returned
         let sync_messages = converter.sync_messages();
-        assert_eq!(sync_messages.len(), 2);
+        // "c8y/s/us" "306,pressure_alarm"
+        // "c8y-internal/alarms/te/device/main///a/pressure_alarm" ""
+        // "c8y/s/us" "301,temperature_alarm,Temperature very high,2026-01-28T08:49:52.508528106Z"
+        // "c8y-internal/alarms/te/device/main///a/temperature_alarm" { "severity": "critical", "text": "Temperature very high" }
+        assert_eq!(sync_messages.len(), 4);
 
         // The first message will be clear alarm message for pressure_alarm
         let alarm_message = sync_messages.get(0).unwrap();
-        assert_eq!(
-            alarm_message.topic.name,
-            "te/device/main///a/pressure_alarm"
-        );
-        assert_eq!(alarm_message.payload_bytes().len(), 0); //Clear messages are empty messages
+        assert_eq!(alarm_message.topic.name, "c8y/s/us");
+        assert_eq!(alarm_message.payload_str().unwrap(), "306,pressure_alarm");
 
         // The second message will be the temperature_alarm
-        let alarm_message = sync_messages.get(1).unwrap();
-        assert_eq!(alarm_message.topic.name, alarm_topic);
-        assert_eq!(alarm_message.payload_str().unwrap(), alarm_payload);
+        let alarm_message = sync_messages.get(2).unwrap();
+        assert_eq!(alarm_message.topic.name, "c8y/s/us");
+        assert!(alarm_message
+            .payload_str()
+            .unwrap()
+            .starts_with("301,temperature_alarm,Temperature very high"));
 
-        // After the sync phase, the conversion of alarms is done immediately
-        assert!(!converter.convert(alarm_message).await.is_empty());
+        // After the sync phase, already known alarms are not forwarded to c8y
+        assert!(converter.convert(alarm_message).await.is_empty());
 
         // But, even after the sync phase, internal alarms are not converted and just ignored, as they are purely internal
         assert!(converter.convert(&internal_alarm_message).await.is_empty());
@@ -1682,13 +1654,13 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_sync_child_alarms() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<AlarmConverter>::new(&tmp_dir);
 
         let alarm_topic = "te/device/external_sensor///a/temperature_alarm";
         let alarm_payload = r#"{ "severity": "critical", "text": "Temperature very high" }"#;
         let alarm_message = MqttMessage::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
 
-        register_source_entities(alarm_topic, &mut converter).await;
+        converter.register_source_entities(alarm_topic).await;
 
         // During the sync phase, alarms are not converted immediately, but only cached to be synced later
         assert!(converter.convert(&alarm_message).await.is_empty());
@@ -1706,23 +1678,33 @@ pub(crate) mod tests {
 
         // When sync phase is complete, all pending alarms are returned
         let sync_messages = converter.sync_messages();
-        assert_eq!(sync_messages.len(), 2);
+        // "c8y/s/us/test-device:device:external_sensor" "306,pressure_alarm"
+        // "c8y-internal/alarms/te/device/external_sensor///a/pressure_alarm"  ""
+        // "c8y/s/us/test-device:device:external_sensor" "301,temperature_alarm,Temperature very high,2026-01-28T08:58:04.34493434Z"
+        // "c8y-internal/alarms/te/device/external_sensor///a/temperature_alarm" { "severity": "critical", "text": "Temperature very high" }
+        assert_eq!(sync_messages.len(), 4);
 
         // The first message will be clear alarm message for pressure_alarm
         let alarm_message = sync_messages.get(0).unwrap();
         assert_eq!(
             alarm_message.topic.name,
-            "te/device/external_sensor///a/pressure_alarm"
+            "c8y/s/us/test-device:device:external_sensor"
         );
-        assert_eq!(alarm_message.payload_bytes().len(), 0); //Clear messages are empty messages
+        assert_eq!(alarm_message.payload_str().unwrap(), "306,pressure_alarm");
 
         // The second message will be the temperature_alarm
-        let alarm_message = sync_messages.get(1).unwrap();
-        assert_eq!(alarm_message.topic.name, alarm_topic);
-        assert_eq!(alarm_message.payload_str().unwrap(), alarm_payload);
+        let alarm_message = sync_messages.get(2).unwrap();
+        assert_eq!(
+            alarm_message.topic.name,
+            "c8y/s/us/test-device:device:external_sensor"
+        );
+        assert!(alarm_message
+            .payload_str()
+            .unwrap()
+            .starts_with("301,temperature_alarm,Temperature very high"));
 
-        // After the sync phase, the conversion of alarms is done immediately
-        assert!(!converter.convert(alarm_message).await.is_empty());
+        // After the sync phase, already known alarms are not forwarded to c8y
+        assert!(converter.convert(alarm_message).await.is_empty());
 
         // But, even after the sync phase, internal alarms are not converted and just ignored, as they are purely internal
         assert!(converter.convert(&internal_alarm_message).await.is_empty());
@@ -1801,7 +1783,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_child_id() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///m/"),
@@ -1843,7 +1825,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_nested_child_device() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let reg_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/immediate_child//"),
             json!({
@@ -1895,7 +1877,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_nested_child_service() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let reg_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/immediate_child//"),
             json!({
@@ -1961,7 +1943,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_for_child_device_service() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/child1/service/app1/m/m_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -1989,7 +1971,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_for_main_device_service() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/main/service/appm/m/m_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -2018,7 +2000,7 @@ pub(crate) mod tests {
     #[ignore = "FIXME: the registration is currently done even if the message is ill-formed"]
     async fn convert_first_measurement_invalid_then_valid_with_child_id() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/child1///m/";
         let in_invalid_payload = r#"{"temp": invalid}"#;
@@ -2059,7 +2041,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_two_measurement_messages_given_different_child_id() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
 
         // First message from "child1"
@@ -2104,7 +2086,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_main_id_with_measurement_type() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/main///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -2130,7 +2112,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_main_id_with_measurement_type_in_payload() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/main///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#;
@@ -2156,7 +2138,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_child_id_with_measurement_type() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/child///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -2182,7 +2164,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_child_id_with_measurement_type_in_payload() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/child2///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#;
@@ -2391,7 +2373,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_big_measurement() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let measurement_topic = "te/device/main///m/";
         let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
 
@@ -2408,7 +2390,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_small_measurement() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let measurement_topic = "te/device/main///m/";
         let big_measurement_payload = create_thin_edge_measurement(20); // Measurement payload size is 20 bytes
 
@@ -2432,7 +2414,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_big_measurement_for_child_device() {
         let tmp_dir = TempTedgeDir::new();
-        let mut converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let measurement_topic = "te/device/child1///m/";
         let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
 
@@ -3326,18 +3308,18 @@ pub(crate) mod tests {
         }
     }
 
-    struct MeasurementConverter {
+    struct MeaConverter<T> {
         c8y_converter: CumulocityConverter,
-        measurement_converter: crate::mea::measurements::MeasurementConverter,
+        mea_converter: T,
         _http: FakeServerBox<HttpRequest, HttpResult>,
     }
 
-    impl MeasurementConverter {
+    impl<T: Default + Transformer> MeaConverter<T> {
         fn new(tmp_dir: &TempTedgeDir) -> Self {
             let (c8y_converter, _http) = create_c8y_converter(tmp_dir);
-            MeasurementConverter {
+            MeaConverter {
                 c8y_converter,
-                measurement_converter: Default::default(),
+                mea_converter: Default::default(),
                 _http,
             }
         }
@@ -3359,10 +3341,21 @@ pub(crate) mod tests {
             let context = self.c8y_converter.entity_cache.flow_context();
             let timestamp = SystemTime::now();
             let message: Message = message.clone().into();
-            match self
-                .measurement_converter
-                .on_message(timestamp, &message, context)
-            {
+            match self.mea_converter.on_message(timestamp, &message, context) {
+                Ok(messages) => messages
+                    .into_iter()
+                    .filter_map(|msg| MqttMessage::try_from(msg).ok())
+                    .collect(),
+                Err(_) => {
+                    vec![]
+                }
+            }
+        }
+
+        fn sync_messages(&mut self) -> Vec<MqttMessage> {
+            let context = self.c8y_converter.entity_cache.flow_context();
+            let timestamp = SystemTime::now();
+            match self.mea_converter.on_interval(timestamp, context) {
                 Ok(messages) => messages
                     .into_iter()
                     .filter_map(|msg| MqttMessage::try_from(msg).ok())

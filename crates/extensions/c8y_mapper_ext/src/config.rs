@@ -285,7 +285,6 @@ impl C8yMapperConfig {
         prefix: &TopicPrefix,
     ) -> Result<TopicFilter, C8yMapperConfigError> {
         let topic_filter: TopicFilter = vec![
-            "c8y-internal/alarms/+/+/+/+/+/a/+",
             C8yTopic::SmartRestRequest.with_prefix(prefix).as_str(),
             &C8yDeviceControlTopic::name(prefix),
         ]
