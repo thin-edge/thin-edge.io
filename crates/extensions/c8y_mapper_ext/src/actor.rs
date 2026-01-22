@@ -366,7 +366,7 @@ impl C8yMapperActor {
 }
 
 pub struct C8yMapperBuilder {
-    config: C8yMapperConfig,
+    pub(crate) config: C8yMapperConfig,
     box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput>,
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
