@@ -74,7 +74,8 @@ impl PersistedBridgeConfig {
         config: &TEdgeConfig,
         auth_method: AuthMethod,
         cloud_profile: Option<&ProfileName>,
-    ) -> Result<Vec<ExpandedBridgeRule>, ExpandError> {
+    ) -> Result<Vec<ExpandedBridgeRule>, Vec<ExpandError>> {
+        let mut errors = Vec::new();
         let file_condition = self
             .r#if
             .as_ref()
@@ -86,8 +87,12 @@ impl PersistedBridgeConfig {
                     "Failed to expand global if",
                 )
             })
-            .transpose()?;
-        let  template_disabled = file_condition == Some(false);
+            .transpose()
+            .unwrap_or_else(|e| {
+                errors.push(e);
+                None
+            });
+        let template_disabled = file_condition == Some(false);
 
         let local_prefix = self
             .local_prefix
@@ -100,7 +105,11 @@ impl PersistedBridgeConfig {
                     "Failed to expand global local_prefix",
                 )
             })
-            .transpose()?;
+            .transpose()
+            .unwrap_or_else(|e| {
+                errors.push(e);
+                None
+            });
         let remote_prefix = self
             .remote_prefix
             .as_ref()
@@ -112,7 +121,11 @@ impl PersistedBridgeConfig {
                     "Failed to expand global remote_prefix",
                 )
             })
-            .transpose()?;
+            .transpose()
+            .unwrap_or_else(|e| {
+                errors.push(e);
+                None
+            });
 
         let mut expanded_rules = Vec::new();
         for spanned_rule in &self.rules {
@@ -126,10 +139,14 @@ impl PersistedBridgeConfig {
                         rule,
                         (config, auth_method),
                         cloud_profile,
-                        "Failed to expand global if",
+                        "Failed to expand if",
                     )
                 })
-                .transpose()?;
+                .transpose()
+                .unwrap_or_else(|e| {
+                    errors.push(e);
+                    None
+                });
             let rule_disabled = template_disabled || rule_condition == Some(false);
 
             let rule_local_prefix = rule
@@ -143,7 +160,12 @@ impl PersistedBridgeConfig {
                         "Failed to expand local_prefix",
                     )
                 })
-                .transpose()?;
+                .transpose()
+                .unwrap_or_else(|e| {
+                    errors.push(e);
+                    None
+                });
+
             let rule_remote_prefix = rule
                 .remote_prefix
                 .as_ref()
@@ -155,7 +177,11 @@ impl PersistedBridgeConfig {
                         "Failed to expand remote_prefix",
                     )
                 })
-                .transpose()?;
+                .transpose()
+                .unwrap_or_else(|e| {
+                    errors.push(e);
+                    None
+                });
 
             let final_local_prefix = resolve_prefix(
                 rule_local_prefix,
@@ -163,32 +189,40 @@ impl PersistedBridgeConfig {
                 "local_prefix",
                 "rule",
                 rule_span.clone(),
-            )?;
+            )
+            .unwrap_or_else(|e| {
+                errors.push(e);
+                String::new()
+            });
             let final_remote_prefix = resolve_prefix(
                 rule_remote_prefix,
                 &remote_prefix,
                 "remote_prefix",
                 "rule",
                 rule_span,
-            )?;
+            )
+            .unwrap_or_else(|e| {
+                errors.push(e);
+                String::new()
+            });
 
             let expanded = ExpandedBridgeRule {
-                    local_prefix: final_local_prefix,
-                    remote_prefix: final_remote_prefix,
-                    direction: rule.direction,
-                    topic: expand_spanned(
-                        &rule.topic,
-                        config,
-                        cloud_profile,
-                        "Failed to expand topic",
-                    )?,
-                };
+                local_prefix: final_local_prefix,
+                remote_prefix: final_remote_prefix,
+                direction: rule.direction,
+                topic: expand_spanned(&rule.topic, config, cloud_profile, "Failed to expand topic")
+                    .unwrap_or_else(|e| {
+                        errors.push(e);
+                        String::new()
+                    }),
+            };
             if !rule_disabled {
                 expanded_rules.push(expanded);
             }
         }
 
-        for spanned_template in &self.template_rules {
+        'template_rules: for spanned_template in &self.template_rules {
+            let error_count = errors.len();
             let template = spanned_template.get_ref();
             let template_span = spanned_template.span();
             let template_condition = template
@@ -199,10 +233,14 @@ impl PersistedBridgeConfig {
                         rule,
                         (config, auth_method),
                         cloud_profile,
-                        "Failed to expand global if",
+                        "Failed to expand if",
                     )
                 })
-                .transpose()?;
+                .transpose()
+                .unwrap_or_else(|e| {
+                    errors.push(e);
+                    None
+                });
             let template_rule_disabled = template_disabled || template_condition == Some(false);
 
             let iterable = expand_spanned(
@@ -210,7 +248,11 @@ impl PersistedBridgeConfig {
                 config,
                 cloud_profile,
                 "Failed to expand 'for' reference",
-            )?;
+            )
+            .unwrap_or_else(|e| {
+                errors.push(e);
+                <_>::default()
+            });
 
             let template_local_prefix = template
                 .local_prefix
@@ -223,7 +265,11 @@ impl PersistedBridgeConfig {
                         "Failed to expand local_prefix",
                     )
                 })
-                .transpose()?;
+                .transpose()
+                .unwrap_or_else(|e| {
+                    errors.push(e);
+                    None
+                });
             let template_remote_prefix = template
                 .remote_prefix
                 .as_ref()
@@ -235,7 +281,11 @@ impl PersistedBridgeConfig {
                         "Failed to expand remote_prefix",
                     )
                 })
-                .transpose()?;
+                .transpose()
+                .unwrap_or_else(|e| {
+                    errors.push(e);
+                    None
+                });
 
             let final_local_prefix = resolve_prefix(
                 template_local_prefix,
@@ -243,14 +293,40 @@ impl PersistedBridgeConfig {
                 "local_prefix",
                 "template_rule",
                 template_span.clone(),
-            )?;
+            )
+            .unwrap_or_else(|e| {
+                errors.push(e);
+                <_>::default()
+            });
             let final_remote_prefix = resolve_prefix(
                 template_remote_prefix,
                 &remote_prefix,
                 "remote_prefix",
                 "template_rule",
                 template_span,
-            )?;
+            )
+            .unwrap_or_else(|e| {
+                errors.push(e);
+                <_>::default()
+            });
+
+            if iterable.0.is_empty() {
+                let template_config = TemplateConfig {
+                    r#for: "",
+                    tedge: config,
+                };
+                // Verify the topic is valid even if there are no rules to generate
+                expand_spanned(
+                    &template.topic,
+                    template_config,
+                    cloud_profile,
+                    "Failed to expand topic template",
+                )
+                .unwrap_or_else(|e| {
+                    errors.push(e);
+                    <_>::default()
+                });
+            }
 
             for topic in iterable.0 {
                 let template_config = TemplateConfig {
@@ -267,15 +343,29 @@ impl PersistedBridgeConfig {
                         template_config,
                         cloud_profile,
                         "Failed to expand topic template",
-                    )?,
+                    )
+                    .unwrap_or_else(|e| {
+                        errors.push(e);
+                        <_>::default()
+                    }),
                 };
+
+                if errors.len() > error_count {
+                    // We've already registered an error for this template continue to the next
+                    continue 'template_rules;
+                }
+
                 if !template_rule_disabled {
-expanded_rules.push(expanded);
+                    expanded_rules.push(expanded);
                 }
             }
         }
 
-        Ok(expanded_rules)
+        if errors.is_empty() {
+            Ok(expanded_rules)
+        } else {
+            Err(errors)
+        }
     }
 }
 
@@ -950,8 +1040,10 @@ impl BridgeConfig {
         })?;
         let rules = config
             .expand(tedge_config, auth_method, cloud_profile)
-            .map_err(|e| {
-                print_expansion_error(file_path.as_str(), toml_template, &e);
+            .map_err(|errors| {
+                for error in errors {
+                    print_expansion_error(file_path.as_str(), toml_template, &error);
+                }
                 InvalidBridgeRule::Template
             })?;
         for rule in rules {
@@ -1510,9 +1602,12 @@ direction = "inbound"
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
-            let err = config
+            let errs = config
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap_err();
+
+            assert_eq!(errs.len(), 1);
+            let err = &errs[0];
 
             // The error span should point to the ${.invalid.key} part within the topic string
             let error_text = &toml[err.span.clone()];
@@ -1535,11 +1630,15 @@ topic = "prefix/${.invalid.key}/suffix"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
-            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
+            let tedge_config =
+                tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
 
-            let err = config
+            let errs = config
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap_err();
+
+            assert_eq!(errs.len(), 1);
+            let err = &errs[0];
 
             // The error span should point to the ${.invalid.key} part within the topic string
             let error_text = &toml[err.span.clone()];
@@ -1562,11 +1661,15 @@ topic = "prefix/${.invalid.key}/suffix"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
-            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
+            let tedge_config =
+                tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
 
-            let err = config
+            let errs = config
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap_err();
+
+            assert_eq!(errs.len(), 1);
+            let err = &errs[0];
 
             // The error span should point to the ${.invalid.key} part within the topic string
             let error_text = &toml[err.span.clone()];
@@ -1590,11 +1693,15 @@ topic = "${@for}/${.invalid.key}/suffix"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
-            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
+            let tedge_config =
+                tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
 
-            let err = config
+            let errs = config
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap_err();
+
+            assert_eq!(dbg!(&errs).len(), 1);
+            let err = &errs[0];
 
             // The error span should point to the ${.invalid.key} part within the topic string
             let error_text = &toml[err.span.clone()];
@@ -1678,9 +1785,12 @@ direction = "inbound"
             let topic_span = config.rules[0].get_ref().topic.span();
 
             // This should fail on the first variable
-            let err = config
+            let errs = config
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap_err();
+
+            assert_eq!(errs.len(), 1);
+            let err = &errs[0];
 
             // The error should be about the first variable
             assert!(
@@ -1695,6 +1805,107 @@ direction = "inbound"
                 "Error span {:?} should be within topic span {:?}",
                 err.span,
                 topic_span
+            );
+        }
+
+        #[test]
+        fn template_rule_detects_errors_even_if_not_generating_values() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[template_rule]]
+for = "${.c8y.smartrest.templates}"
+topic = "${.something.unknown}/${@for}"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config =
+                tedge_config::TEdgeConfig::load_toml_str("c8y.smartrest.templates = []");
+
+            // Save the span before we consume config
+            let topic_span = config.template_rules[0].get_ref().topic.span();
+
+            // This should fail on the first variable
+            let errs = config
+                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .unwrap_err();
+
+            assert_eq!(errs.len(), 1);
+            let err = &errs[0];
+
+            assert!(
+                err.message.contains("something.unknown"),
+                "Error message should mention 'something.unknown': {}",
+                err.message
+            );
+
+            assert!(
+                err.span.start >= topic_span.start && err.span.end <= topic_span.end,
+                "Error span {:?} should be within topic span {:?}",
+                err.span,
+                topic_span
+            );
+        }
+
+        #[test]
+        fn errors_in_multiple_parts_of_template_are_detected_simultaneously() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[rule]]
+topic = "${.first}"
+direction = "inbound"
+
+[[template_rule]]
+for = "${.c8y.smartrest.templates}"
+topic = "${.second}/${@for}"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            // Save the span before we consume config
+            let topic_span = config.rules[0].get_ref().topic.span();
+            let template_topic_span = config.template_rules[0].get_ref().topic.span();
+
+            // This should fail on the first variable
+            let errs = config
+                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .unwrap_err();
+
+            assert_eq!(errs.len(), 2);
+            let first = &errs[0];
+
+            // The error should be about the first variable
+            assert!(
+                first.message.contains("first"),
+                "Error message should mention 'first': {}",
+                first.message
+            );
+
+            // And the span should point somewhere in the topic string
+            assert!(
+                first.span.start >= topic_span.start && first.span.end <= topic_span.end,
+                "Error span {:?} should be within topic span {:?}",
+                first.span,
+                topic_span
+            );
+
+            let second = &errs[1];
+            assert!(
+                second.message.contains("second"),
+                "Error message should mention 'second': {}",
+                second.message
+            );
+
+            assert!(
+                second.span.start >= template_topic_span.start
+                    && second.span.end <= template_topic_span.end,
+                "Error span {:?} should be within topic span {:?}",
+                second.span,
+                template_topic_span
             );
         }
 
