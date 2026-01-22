@@ -4,6 +4,7 @@ use tedge_api::entity::EntityMetadata;
 use tedge_flows::FlowContextHandle;
 use tedge_flows::JsonValue;
 
+pub mod alarms;
 pub mod measurements;
 
 fn get_entity_metadata(context: &FlowContextHandle, entity: &str) -> Option<CloudEntityMetadata> {

@@ -1,4 +1,3 @@
-use super::alarm_converter::AlarmConverter;
 use super::config::C8yMapperConfig;
 use super::error::CumulocityMapperError;
 use super::service_monitor;
@@ -99,7 +98,6 @@ use tracing::info;
 use tracing::trace;
 use tracing::warn;
 
-const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
@@ -173,7 +171,6 @@ pub struct CumulocityConverter {
     pub config: Arc<C8yMapperConfig>,
     pub(crate) mapper_config: MapperConfig,
     pub device_name: String,
-    alarm_converter: AlarmConverter,
     operation_logs: OperationLogs,
     mqtt_publisher: LoggingSender<MqttMessage>,
     pub http_proxy: C8YHttpProxy,
@@ -226,8 +223,6 @@ impl CumulocityConverter {
             operations_by_xid,
         };
 
-        let alarm_converter = AlarmConverter::new();
-
         let log_dir = config.logs_path.join(TEDGE_AGENT_LOG_DIR);
         let operation_logs = OperationLogs::try_new(log_dir)?;
 
@@ -262,7 +257,6 @@ impl CumulocityConverter {
             config: Arc::new(config),
             mapper_config,
             device_name: device_id,
-            alarm_converter,
             supported_operations: operation_manager,
             operation_logs,
             http_proxy,
@@ -529,27 +523,6 @@ impl CumulocityConverter {
             }
         }
         Ok(messages)
-    }
-
-    pub fn process_alarm_messages(
-        &mut self,
-        source: &EntityTopicId,
-        input: &MqttMessage,
-        alarm_type: &str,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        self.size_threshold.validate(input)?;
-        let entity = self.entity_cache.try_get(source)?;
-
-        let mqtt_messages = self.alarm_converter.try_convert_alarm(
-            source,
-            &entity.external_id,
-            &entity.metadata.r#type,
-            input,
-            alarm_type,
-            &self.config.bridge_config.c8y_prefix,
-        )?;
-
-        Ok(mqtt_messages)
     }
 
     pub async fn process_health_status_message(
@@ -1219,9 +1192,7 @@ impl CumulocityConverter {
                 self.try_convert_event(&source, message, event_type).await
             }
 
-            Channel::Alarm { alarm_type } => {
-                self.process_alarm_messages(&source, message, alarm_type)
-            }
+            Channel::Alarm { .. } => Ok(vec![]),
 
             Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
@@ -1324,10 +1295,6 @@ impl CumulocityConverter {
         }
 
         let messages = match &message.topic {
-            topic if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) => {
-                self.alarm_converter.process_internal_alarm(message);
-                Ok(vec![])
-            }
             topic
                 if C8yDeviceControlTopic::accept(topic, &self.config.bridge_config.c8y_prefix) =>
             {
@@ -1388,9 +1355,8 @@ impl CumulocityConverter {
     }
 
     pub fn sync_messages(&mut self) -> Vec<MqttMessage> {
-        let sync_messages: Vec<MqttMessage> = self.alarm_converter.sync();
-        self.alarm_converter = AlarmConverter::Synced;
-        sync_messages
+        // FIXME clean-up alarm sync on c8y actor
+        vec![]
     }
 
     fn try_process_operation_update_message(
