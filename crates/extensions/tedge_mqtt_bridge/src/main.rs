@@ -9,6 +9,8 @@ use std::fs;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_bridge::config::ExpandError;
 use tedge_mqtt_bridge::config::PersistedBridgeConfig;
+use tedge_mqtt_bridge::BridgeConfig;
+use tedge_mqtt_bridge::Direction;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -34,13 +36,38 @@ async fn main() -> anyhow::Result<()> {
         .context("Failed to load TEdgeConfig")?;
 
     // Expand the bridge rules
-    let expanded_rules = persisted_config.expand(&tedge_config).map_err(|e| {
-        print_expansion_error(toml_path, &toml_content, &e);
-        anyhow::anyhow!("Failed to expand bridge rules")
-    })?;
+    let expanded_rules = persisted_config
+        .expand(
+            &tedge_config,
+            tedge_mqtt_bridge::AuthMethod::Certificate,
+            None,
+        )
+        .map_err(|e| {
+            print_expansion_error(toml_path, &toml_content, &e);
+            anyhow::anyhow!("Failed to expand bridge rules")
+        })?;
+
+    let mut config = BridgeConfig::new();
+    for rule in expanded_rules {
+        match rule.direction {
+            Direction::Outbound => {
+                config.forward_from_local(rule.topic, rule.local_prefix, rule.remote_prefix)?;
+            }
+            Direction::Inbound => {
+                config.forward_from_remote(rule.topic, rule.local_prefix, rule.remote_prefix)?;
+            }
+            Direction::Bidirectional => {
+                config.forward_bidirectionally(
+                    rule.topic,
+                    rule.local_prefix,
+                    rule.remote_prefix,
+                )?;
+            }
+        }
+    }
 
     // Debug print the expanded rules
-    println!("{:#?}", expanded_rules);
+    println!("{:#?}", config);
 
     Ok(())
 }

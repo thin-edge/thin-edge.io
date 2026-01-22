@@ -1,0 +1,90 @@
+local_prefix = "${.c8y.bridge.topic_prefix}/"
+remote_prefix = ""
+
+[[template_rule]]
+for = "${.c8y.smartrest1.templates}"
+topic = "s/dl/${@for}"
+direction = "inbound"
+
+[[template_rule]]
+for = "${.c8y.smartrest.templates}"
+topic = "s/dc/${@for}"
+direction = "inbound"
+
+[[rule]]
+if = "auth_method(certificate)"
+topic = "s/dat"
+direction = "inbound"
+
+[[rule]]
+if = "auth_method(certificate)"
+topic = "s/uat"
+direction = "outbound"
+
+[[rule]]
+topic = "s/dt"
+direction = "inbound"
+
+[[rule]]
+topic = "s/ds"
+direction = "inbound"
+
+[[rule]]
+topic = "s/e"
+direction = "inbound"
+
+[[rule]]
+topic = "devicecontrol/notifications"
+direction = "inbound"
+
+[[rule]]
+topic = "error"
+direction = "inbound"
+
+[[rule]]
+topic = "s/ut/#"
+direction = "outbound"
+
+[[template_rule]]
+for = ['s', 't', 'q', 'c']
+topic = "${@for}/us/#"
+direction = "outbound"
+
+[[template_rule]]
+if = "auth_method(password)"
+for = ['s', 't', 'q', 'c']
+topic = "${@for}/ul/#"
+direction = "outbound"
+
+[[template_rule]]
+for = ['s', 't', 'q', 'c']
+topic = "${@for}/uc/#"
+direction = "outbound"
+
+[[rule]]
+topic = "inventory/managedObjects/update/#"
+direction = "outbound"
+
+[[rule]]
+topic = "measurement/measurements/create/#"
+direction = "outbound"
+
+[[rule]]
+topic = "measurement/measurements/createBulk/#"
+direction = "outbound"
+
+[[rule]]
+topic = "event/events/create/#"
+direction = "outbound"
+
+[[rule]]
+topic = "event/events/createBulk/#"
+direction = "outbound"
+
+[[rule]]
+topic = "alarm/alarms/create/#"
+direction = "outbound"
+
+[[rule]]
+topic = "alarm/alarms/createBulk/#"
+direction = "outbound"

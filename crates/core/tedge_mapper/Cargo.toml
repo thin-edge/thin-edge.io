@@ -18,6 +18,7 @@ batcher = { workspace = true }
 c8y_api = { workspace = true, optional = true }
 c8y_auth_proxy = { workspace = true, optional = true }
 c8y_mapper_ext = { workspace = true, optional = true }
+camino = { workspace = true }
 clap = { workspace = true }
 clock = { workspace = true }
 collectd_ext = { workspace = true }
@@ -39,6 +40,9 @@ tedge_uploader_ext = { workspace = true }
 tedge_watch_ext = { workspace = true }
 tracing = { workspace = true }
 yansi = { workspace = true }
+
+[dev-dependencies]
+tedge_config = { workspace = true, features = ["test"] }
 
 [features]
 default = ["aws", "azure", "c8y", "tedge-flows"]
