@@ -107,7 +107,7 @@ mod tests {
     #[tokio::test]
     async fn identity_script() {
         let js = "export function onMessage(msg) { return [msg]; };";
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         let output = input.clone();
@@ -123,7 +123,7 @@ mod tests {
     #[tokio::test]
     async fn identity_script_no_array() {
         let js = "export function onMessage(msg) { return msg; };";
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         let output = input.clone();
@@ -139,7 +139,7 @@ mod tests {
     #[tokio::test]
     async fn script_returning_null() {
         let js = "export function onMessage(msg) { return null; };";
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         assert_eq!(
@@ -154,7 +154,7 @@ mod tests {
     #[tokio::test]
     async fn script_returning_nothing() {
         let js = "export function onMessage(msg) { return; };";
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         assert_eq!(
@@ -169,7 +169,7 @@ mod tests {
     #[tokio::test]
     async fn error_script() {
         let js = r#"export function onMessage(msg) { throw new Error("Cannot process that message"); };"#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("te/main/device///m/", "hello world");
         let error = script
@@ -200,7 +200,7 @@ export function onMessage(message, context) {
 }
         "#;
         let (runtime, script) = runtime_with(js).await;
-        let script = script
+        let mut script = script
             .with_config(Some(json!({
                 "topic": "te/device/main///m/collectd"
             })))
@@ -230,7 +230,7 @@ export async function onMessage(message) {
     return [{topic:"foo/bar",payload:`{foo:"bar"}`}];
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("dummy", "content");
         let output = Message::new("foo/bar", r#"{foo:"bar"}"#);
@@ -257,7 +257,7 @@ export function onMessage(message) {
     }
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
         let input = Message::new("clock", "");
@@ -279,7 +279,7 @@ export function onMessage(message) {
     return setTimeout(transform, 1000, message);
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("dummy", "content");
         let err = script.on_message(&runtime, SystemTime::now(), &input).await;
@@ -289,7 +289,7 @@ export function onMessage(message) {
     #[tokio::test]
     async fn while_loop() {
         let js = r#"export function onMessage(msg) { while(true); };"#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("topic", "payload");
         let error = script
@@ -303,7 +303,7 @@ export function onMessage(message) {
     #[tokio::test]
     async fn memory_eager_loop() {
         let js = r#"export function onMessage(msg) { var s = "foo"; while(true) { s += s; }; };"#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("topic", "payload");
         let error = script
@@ -317,7 +317,7 @@ export function onMessage(message) {
     #[tokio::test]
     async fn stack_eager_loop() {
         let js = r#"export function onMessage(msg) { return onMessage(msg); };"#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("topic", "payload");
         let error = script
@@ -342,7 +342,7 @@ export async function onMessage(message) {
     return [{topic:"decoded", payload: decodedText}];
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("encoded", [240, 159, 146, 150]);
         let output = Message::new("decoded", "💖");
@@ -366,7 +366,7 @@ export async function onMessage(message) {
     return [{topic:"encoded", payload: encodedText}];
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("decoded", "💖");
         let output = Message::new("encoded", [240, 159, 146, 150]);
@@ -389,7 +389,7 @@ export async function onMessage(message) {
     return [{topic:"decoded", payload: decodedText}];
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let utf8_with_bom_and_invalid_chars = b"\xEF\xBB\xBFHello \xF0\x90\x80World";
         let input = Message::new("encoded", utf8_with_bom_and_invalid_chars);
@@ -415,7 +415,7 @@ export async function onMessage(message) {
     return [{topic:"encoded", payload: u8array}];
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("decoded", "💖");
         let output = Message::new("encoded", [240, 159, 146, 150, 240, 159, 146, 150]);
@@ -441,7 +441,7 @@ export async function onMessage(message) {
     return [{topic:"decoded", payload: finalPayload}];
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("encoded", [240, 159, 146, 150]);
         let output = Message::new("decoded", [240, 159, 146, 150, 240, 159, 146, 150]);
@@ -468,7 +468,7 @@ export async function onMessage(message) {
     return [{topic:"decoded", payload: JSON.stringify(tedge_json)}];
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let time = 1758212648u32.to_le_bytes();
         let value = 12345u32.to_le_bytes();
@@ -496,7 +496,7 @@ export function onMessage(message, context) {
     }
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         runtime.context_handle().insert(
             &FlowContext::Mapper,
@@ -540,7 +540,7 @@ export function onMessage(message, context) {
     }
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         runtime.context_handle().insert(
             &FlowContext::Mapper,
@@ -580,7 +580,7 @@ export function onMessage(message, context) {
     return message
 }
         "#;
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
 
         let input = Message::new("foo/bar", "");
         let context = FlowContext::script(script.step_name());
@@ -614,7 +614,7 @@ export function onMessage(message, context) {
 }
         "#;
 
-        let (runtime, script) = runtime_with(js).await;
+        let (runtime, mut script) = runtime_with(js).await;
         runtime.context_handle().insert(
             &FlowContext::Mapper,
             "foo",

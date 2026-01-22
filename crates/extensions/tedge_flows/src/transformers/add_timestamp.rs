@@ -50,7 +50,7 @@ impl Transformer for AddTimestamp {
     }
 
     fn on_message(
-        &self,
+        &mut self,
         time: SystemTime,
         message: &Message,
         _context: &FlowContextHandle,

@@ -145,12 +145,12 @@ impl FlowStep {
 
     /// Transform an input message into zero, one or more output messages
     pub async fn on_message(
-        &self,
+        &mut self,
         js: &JsRuntime,
         timestamp: SystemTime,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
-        match &self.handler {
+        match &mut self.handler {
             StepHandler::JsScript(script, config) => {
                 script.on_message(js, timestamp, message, config).await
             }
@@ -166,11 +166,11 @@ impl FlowStep {
     ///
     /// Note: Caller should check should_execute_interval() before calling this
     pub async fn on_interval(
-        &self,
+        &mut self,
         js: &JsRuntime,
         timestamp: SystemTime,
     ) -> Result<Vec<Message>, FlowError> {
-        match &self.handler {
+        match &mut self.handler {
             StepHandler::JsScript(script, config) => {
                 script.on_interval(js, timestamp, config).await
             }
