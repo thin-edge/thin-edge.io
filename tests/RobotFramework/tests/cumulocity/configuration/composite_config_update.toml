@@ -20,7 +20,7 @@ on_success = "download"
 
 [download]
 script = "curl --fail --show-error --output ${.payload.workdir}/config_update_${.topic.cmd_id} ${.payload.tedgeUrl}"
-on_success = "update"
+on_success = "prepare"
 on_error = "failed"
 
 [prepare]
@@ -38,7 +38,7 @@ on_error = "rollback"
 
 [verify]
 script = "sudo /usr/share/tedge/config-plugins/file verify ${.payload.type} ${.payload.workdir}"
-on_success = "commit"
+on_success = "finalize"
 on_error = "rollback"
 
 [finalize]
