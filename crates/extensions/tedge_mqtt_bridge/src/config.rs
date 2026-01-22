@@ -87,9 +87,7 @@ impl PersistedBridgeConfig {
                 )
             })
             .transpose()?;
-        if let Some(false) = file_condition {
-            return Ok(vec![]);
-        }
+        let  template_disabled = file_condition == Some(false);
 
         let local_prefix = self
             .local_prefix
@@ -132,9 +130,7 @@ impl PersistedBridgeConfig {
                     )
                 })
                 .transpose()?;
-            if let Some(false) = rule_condition {
-                continue;
-            }
+            let rule_disabled = template_disabled || rule_condition == Some(false);
 
             let rule_local_prefix = rule
                 .local_prefix
@@ -176,17 +172,20 @@ impl PersistedBridgeConfig {
                 rule_span,
             )?;
 
-            expanded_rules.push(ExpandedBridgeRule {
-                local_prefix: final_local_prefix,
-                remote_prefix: final_remote_prefix,
-                direction: rule.direction,
-                topic: expand_spanned(
-                    &rule.topic,
-                    config,
-                    cloud_profile,
-                    "Failed to expand topic",
-                )?,
-            });
+            let expanded = ExpandedBridgeRule {
+                    local_prefix: final_local_prefix,
+                    remote_prefix: final_remote_prefix,
+                    direction: rule.direction,
+                    topic: expand_spanned(
+                        &rule.topic,
+                        config,
+                        cloud_profile,
+                        "Failed to expand topic",
+                    )?,
+                };
+            if !rule_disabled {
+                expanded_rules.push(expanded);
+            }
         }
 
         for spanned_template in &self.template_rules {
@@ -204,10 +203,7 @@ impl PersistedBridgeConfig {
                     )
                 })
                 .transpose()?;
-            if let Some(false) = template_condition {
-                println!("skipping {:?}", template.local_prefix);
-                continue;
-            }
+            let template_rule_disabled = template_disabled || template_condition == Some(false);
 
             let iterable = expand_spanned(
                 &template.r#for,
@@ -262,7 +258,7 @@ impl PersistedBridgeConfig {
                     tedge: config,
                 };
 
-                expanded_rules.push(ExpandedBridgeRule {
+                let expanded = ExpandedBridgeRule {
                     local_prefix: final_local_prefix.clone(),
                     remote_prefix: final_remote_prefix.clone(),
                     direction: template.direction,
@@ -272,7 +268,10 @@ impl PersistedBridgeConfig {
                         cloud_profile,
                         "Failed to expand topic template",
                     )?,
-                });
+                };
+                if !template_rule_disabled {
+expanded_rules.push(expanded);
+                }
             }
         }
 
@@ -1510,6 +1509,88 @@ direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            let err = config
+                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .unwrap_err();
+
+            // The error span should point to the ${.invalid.key} part within the topic string
+            let error_text = &toml[err.span.clone()];
+            assert!(
+                error_text.contains("invalid.key") || error_text.starts_with("${.invalid"),
+                "Error span should point to the problematic template variable, got: {:?}",
+                error_text
+            );
+        }
+
+        #[test]
+        fn template_errors_are_detected_even_if_template_is_disabled() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+if = "${.c8y.mqtt_service.enabled}"
+
+[[rule]]
+topic = "prefix/${.invalid.key}/suffix"
+direction = "inbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
+
+            let err = config
+                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .unwrap_err();
+
+            // The error span should point to the ${.invalid.key} part within the topic string
+            let error_text = &toml[err.span.clone()];
+            assert!(
+                error_text.contains("invalid.key") || error_text.starts_with("${.invalid"),
+                "Error span should point to the problematic template variable, got: {:?}",
+                error_text
+            );
+        }
+
+        #[test]
+        fn template_errors_are_detected_even_if_rule_is_disabled() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[rule]]
+if = "${.c8y.mqtt_service.enabled}"
+topic = "prefix/${.invalid.key}/suffix"
+direction = "inbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
+
+            let err = config
+                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .unwrap_err();
+
+            // The error span should point to the ${.invalid.key} part within the topic string
+            let error_text = &toml[err.span.clone()];
+            assert!(
+                error_text.contains("invalid.key") || error_text.starts_with("${.invalid"),
+                "Error span should point to the problematic template variable, got: {:?}",
+                error_text
+            );
+        }
+
+        #[test]
+        fn template_errors_are_detected_even_if_template_rule_is_disabled() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[template_rule]]
+for = ['a', 'b']
+if = "${.c8y.mqtt_service.enabled}"
+topic = "${@for}/${.invalid.key}/suffix"
+direction = "inbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
 
             let err = config
                 .expand(&tedge_config, AuthMethod::Certificate, None)
