@@ -28,7 +28,7 @@ impl Transformer for SetTopic {
     }
 
     fn on_message(
-        &self,
+        &mut self,
         _timestamp: SystemTime,
         message: &Message,
         _context: &FlowContextHandle,
