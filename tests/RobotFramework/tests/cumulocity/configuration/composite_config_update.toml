@@ -23,10 +23,13 @@ script = "curl --fail --show-error --output ${.payload.workdir}/config_update_${
 on_success = "update"
 on_error = "failed"
 
-[update]
+[prepare]
+script = "sudo /usr/share/tedge/config-plugins/file prepare ${.payload.type} ${.payload.workdir}"
+on_success = "set"
+
+[set]
 script = "sudo /usr/share/tedge/config-plugins/file set ${.payload.type} ${.payload.workdir}/config_update_${.topic.cmd_id}"
 on_success = "apply"
-on_error = "rollback"
 
 [apply]
 background_script = "sudo /usr/share/tedge/config-plugins/file apply ${.payload.type} ${.payload.workdir}"
