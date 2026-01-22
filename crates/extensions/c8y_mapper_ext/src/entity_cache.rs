@@ -372,6 +372,11 @@ impl EntityCache {
     pub fn get_all_external_ids(&self) -> Vec<EntityExternalId> {
         self.entities.external_ids()
     }
+
+    #[cfg(test)]
+    pub fn flow_context(&self) -> &FlowContextHandle {
+        &self.entities.flow_context
+    }
 }
 
 #[derive(Debug)]
