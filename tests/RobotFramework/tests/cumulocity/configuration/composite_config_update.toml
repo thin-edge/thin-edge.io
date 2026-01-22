@@ -1,6 +1,9 @@
 # Custom config_update operation
 # - use the type as the path for the target file
 # - download the source url to the target
+#
+# The `workdir` can be used to exchange any transient metadata between the states
+#
 operation = "config_update"
 
 [init]
@@ -12,24 +15,41 @@ action = "proceed"
 on_success = "executing"
 
 [executing]
-action = "proceed"
+script = "/etc/tedge/operations/workdir.sh"
 on_success = "download"
 
 [download]
-script = "curl --fail --show-error --output /tmp/config_update_${.topic.cmd_id} ${.payload.tedgeUrl}"
-on_success = "update"
+script = "curl --fail --show-error --output ${.payload.workdir}/config_update_${.topic.cmd_id} ${.payload.tedgeUrl}"
+on_success = "prepare"
+on_error = "failed"
 
-[update]
-script = "sudo /usr/share/tedge/config-plugins/file set ${.payload.type} /tmp/config_update_${.topic.cmd_id}"
+[prepare]
+script = "sudo /usr/share/tedge/config-plugins/file prepare ${.payload.type} ${.payload.workdir}"
+on_success = "set"
+
+[set]
+script = "sudo /usr/share/tedge/config-plugins/file set ${.payload.type} ${.payload.workdir}/config_update_${.topic.cmd_id}"
 on_success = "apply"
 
 [apply]
-background_script = "sudo /usr/share/tedge/config-plugins/file apply ${.payload.type}"
+background_script = "sudo /usr/share/tedge/config-plugins/file apply ${.payload.type} ${.payload.workdir}"
 on_exec = "verify"
+on_error = "rollback"
 
 [verify]
-script = "sudo /usr/share/tedge/config-plugins/file verify ${.payload.type}"
+script = "sudo /usr/share/tedge/config-plugins/file verify ${.payload.type} ${.payload.workdir}"
+on_success = "finalize"
+on_error = "rollback"
+
+[finalize]
+script = "sudo /usr/share/tedge/config-plugins/file finalize ${.payload.type} ${.payload.workdir}"
 on_success = "successful"
+on_error = "successful"
+
+[rollback]
+script = "sudo /usr/share/tedge/config-plugins/file rollback ${.payload.type} ${.payload.workdir}"
+on_success = "failed"
+on_error = "failed"
 
 [successful]
 action = "cleanup"

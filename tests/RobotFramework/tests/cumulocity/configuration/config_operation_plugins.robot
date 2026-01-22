@@ -92,6 +92,8 @@ Demo Test
     ...    /usr/share/tedge/config-plugins/file
     Execute Command    chmod +x /usr/share/tedge/config-plugins/file
 
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/scripts/workdir.sh    /etc/tedge/operations/workdir.sh
+    Execute Command    chmod +x /etc/tedge/operations/workdir.sh
     ThinEdgeIO.Transfer To Device    ${CURDIR}/composite_config_update.toml    /etc/tedge/operations/
 
     Execute Command    touch /etc/tedge/test.conf
