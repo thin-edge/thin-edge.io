@@ -20,7 +20,7 @@ pub trait Transformer: Send + Sync + 'static {
     fn set_config(&mut self, config: JsonValue) -> Result<(), ConfigError>;
 
     fn on_message(
-        &self,
+        &mut self,
         timestamp: SystemTime,
         message: &Message,
         context: &FlowContextHandle,
@@ -31,7 +31,7 @@ pub trait Transformer: Send + Sync + 'static {
     }
 
     fn on_interval(
-        &self,
+        &mut self,
         _timestamp: SystemTime,
         _context: &FlowContextHandle,
     ) -> Result<Vec<Message>, FlowError> {
@@ -103,7 +103,7 @@ builtin = "add-timestamp"
 config = { property = "time", format = "unix" }
         "#;
         let transformers = BuiltinTransformers::new();
-        let (runtime, step) = step_instance(&transformers, step).await;
+        let (runtime, mut step) = step_instance(&transformers, step).await;
 
         let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
         let input = Message::new("clock", "{}");
@@ -121,7 +121,7 @@ builtin = "add-timestamp"
 config = { property = "time", format = "rfc-3339" }
         "#;
         let transformers = BuiltinTransformers::new();
-        let (runtime, step) = step_instance(&transformers, step).await;
+        let (runtime, mut step) = step_instance(&transformers, step).await;
 
         let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
         let input = Message::new("clock", "{}");
@@ -139,7 +139,7 @@ builtin = "add-timestamp"
 config = { property = "time", format = "rfc-3339", reformat = true }
         "#;
         let transformers = BuiltinTransformers::new();
-        let (runtime, step) = step_instance(&transformers, step).await;
+        let (runtime, mut step) = step_instance(&transformers, step).await;
 
         let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
         let input = Message::new("clock", r#"{"time":1765555467}"#);
@@ -157,7 +157,7 @@ builtin = "update-context"
 config = { topics = ["units/#"] }
 "#;
         let transformers = BuiltinTransformers::new();
-        let (runtime, step) = step_instance(&transformers, step).await;
+        let (runtime, mut step) = step_instance(&transformers, step).await;
         let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
 
         // Updating the context

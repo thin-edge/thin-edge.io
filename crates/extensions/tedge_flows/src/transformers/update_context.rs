@@ -32,7 +32,7 @@ impl Transformer for UpdateContext {
     }
 
     fn on_message(
-        &self,
+        &mut self,
         _timestamp: SystemTime,
         message: &Message,
         context: &FlowContextHandle,

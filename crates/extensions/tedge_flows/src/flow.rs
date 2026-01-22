@@ -182,7 +182,7 @@ impl Flow {
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         let mut messages = vec![message.clone()];
-        for step in self.steps.iter() {
+        for step in self.steps.iter_mut() {
             let js = step.source().to_string();
             let mut transformed_messages = vec![];
             for message in messages.iter() {

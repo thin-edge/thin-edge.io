@@ -2018,7 +2018,7 @@ pub(crate) mod tests {
     #[ignore = "FIXME: the registration is currently done even if the message is ill-formed"]
     async fn convert_first_measurement_invalid_then_valid_with_child_id() {
         let tmp_dir = TempTedgeDir::new();
-        let converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeasurementConverter::new(&tmp_dir);
 
         let in_topic = "te/device/child1///m/";
         let in_invalid_payload = r#"{"temp": invalid}"#;
@@ -2391,7 +2391,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_big_measurement() {
         let tmp_dir = TempTedgeDir::new();
-        let converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeasurementConverter::new(&tmp_dir);
         let measurement_topic = "te/device/main///m/";
         let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
 
@@ -2408,7 +2408,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_small_measurement() {
         let tmp_dir = TempTedgeDir::new();
-        let converter = MeasurementConverter::new(&tmp_dir);
+        let mut converter = MeasurementConverter::new(&tmp_dir);
         let measurement_topic = "te/device/main///m/";
         let big_measurement_payload = create_thin_edge_measurement(20); // Measurement payload size is 20 bytes
 
@@ -3355,7 +3355,7 @@ pub(crate) mod tests {
                 .await
         }
 
-        async fn convert(&self, message: &MqttMessage) -> Vec<MqttMessage> {
+        async fn convert(&mut self, message: &MqttMessage) -> Vec<MqttMessage> {
             let context = self.c8y_converter.entity_cache.flow_context();
             let timestamp = SystemTime::now();
             let message: Message = message.clone().into();
