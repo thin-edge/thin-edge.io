@@ -1,4 +1,3 @@
-use nix::NixPath;
 use std::fs as std_fs;
 use std::io::Read;
 use std::io::Write;
@@ -170,7 +169,7 @@ pub async fn atomically_write_file_async(
 fn parent_dir(file: &Path) -> PathBuf {
     match file.parent() {
         None => Path::new("/").into(),
-        Some(path) if path.is_empty() => Path::new(".").into(),
+        Some(path) if nix::NixPath::is_empty(path) => Path::new(".").into(),
         Some(dir) => dir.into(),
     }
 }
