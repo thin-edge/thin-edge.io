@@ -1,4 +1,5 @@
 pub mod partial_response;
+use crate::download::partial_response::PartialResponse;
 use crate::error::DownloadError;
 use crate::error::ErrContext;
 use anyhow::anyhow;
@@ -187,7 +188,7 @@ impl Downloader {
 
     /// If interrupted, continues ongoing download.
     ///
-    /// If the server supports is, a range request is used to download only the
+    /// If the server supports it, a range request is used to download only the
     /// remaining range of the file. Otherwise, progress is restarted and we
     /// download full range of the file again.
     async fn download_continue(
@@ -197,9 +198,17 @@ impl Downloader {
         mut prev_response: Response,
     ) -> Result<(), DownloadError> {
         loop {
-            let offset = next_request_offset(&prev_response, file);
-            let mut response = self.request_range_from(url, offset).await?;
-            let offset = partial_response::response_range_start(&response)?;
+            let request_offset = next_request_offset(&prev_response, file)?;
+            let mut response = self.request_range_from(url, request_offset).await?;
+            let offset = match partial_response::response_range_start(&response, &prev_response)? {
+                PartialResponse::CompleteContent => 0,
+                PartialResponse::PartialContent(pos) => pos,
+                PartialResponse::ResourceModified => {
+                    file.seek(SeekFrom::Start(0))
+                        .context("failed to seek in file".to_string())?;
+                    continue;
+                }
+            };
 
             if offset != 0 {
                 info!("Resuming file download at position={offset}");
@@ -211,9 +220,7 @@ impl Downloader {
                 Ok(()) => break,
 
                 Err(SaveChunksError::Network(err)) => {
-                    prev_response = response;
                     warn!("Error while downloading response: {err}.\nRetrying...");
-                    continue;
                 }
 
                 Err(SaveChunksError::Io(err)) => {
@@ -223,6 +230,7 @@ impl Downloader {
                     })
                 }
             }
+            prev_response = response;
         }
 
         Ok(())
@@ -424,20 +432,22 @@ pub fn try_pre_allocate_space(
     Ok(())
 }
 
-fn next_request_offset(prev_response: &Response, file: &mut File) -> u64 {
+fn next_request_offset(prev_response: &Response, file: &mut File) -> Result<u64, DownloadError> {
     use hyper::header;
     use hyper::StatusCode;
     use std::io::Seek;
-    let pos = file.stream_position().unwrap();
+    let pos = file
+        .stream_position()
+        .context("failed to get cursor position".to_string())?;
     if prev_response.status() == StatusCode::PARTIAL_CONTENT
         || prev_response
             .headers()
             .get(header::ACCEPT_RANGES)
             .is_some_and(|unit| unit == "bytes")
     {
-        pos
+        Ok(pos)
     } else {
-        0
+        Ok(0)
     }
 }
 
