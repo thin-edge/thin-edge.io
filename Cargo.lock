@@ -4862,6 +4862,8 @@ dependencies = [
  "collectd_ext",
  "flockfile",
  "mqtt_channel",
+ "serde",
+ "serde_json",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
@@ -4876,6 +4878,8 @@ dependencies = [
  "tedge_timer_ext",
  "tedge_uploader_ext",
  "tedge_watch_ext",
+ "thiserror 2.0.12",
+ "tokio",
  "tracing",
  "yansi",
 ]

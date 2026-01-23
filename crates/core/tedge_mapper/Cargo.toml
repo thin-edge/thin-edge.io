@@ -24,7 +24,10 @@ clock = { workspace = true }
 collectd_ext = { workspace = true }
 flockfile = { workspace = true }
 mqtt_channel = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 tedge_actors = { workspace = true }
+thiserror = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 tedge_downloader_ext = { workspace = true }
@@ -43,6 +46,7 @@ yansi = { workspace = true }
 
 [dev-dependencies]
 tedge_config = { workspace = true, features = ["test"] }
+tokio = { workspace = true }
 
 [features]
 default = ["aws", "azure", "c8y", "tedge-flows"]
