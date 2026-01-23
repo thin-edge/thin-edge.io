@@ -5,6 +5,8 @@ mod tests;
 pub mod trie;
 
 use async_trait::async_trait;
+pub use mqtt_channel::deserialize_qos;
+pub use mqtt_channel::serialize_qos;
 pub use mqtt_channel::DebugPayload;
 pub use mqtt_channel::MqttError;
 pub use mqtt_channel::MqttMessage;

@@ -200,6 +200,7 @@ impl TryFrom<BTreeMap<String, JsonValue>> for Message {
             topic: topic.to_owned(),
             payload,
             timestamp: None,
+            transport: None,
         })
     }
 }
