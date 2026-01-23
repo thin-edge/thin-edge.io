@@ -1,5 +1,6 @@
 use super::*;
 use axum::Router;
+use http::StatusCode;
 use hyper::header::AUTHORIZATION;
 use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::PrivateKeyDer;
@@ -431,6 +432,29 @@ async fn downloader_error_shows_certificate_required_error_when_appropriate() {
     let err = anyhow::Error::new(err);
 
     assert!(dbg!(format!("{err:#}")).contains("received fatal alert: CertificateRequired"));
+}
+
+#[test_case::test_case(Some(r#""xyzzy"#), Some(r#""xyzzy"#), false)]
+#[test_case::test_case(Some(r#"W/"xyzzy"#), Some(r#""xyzzy"#), true)]
+#[test_case::test_case(Some(r#""xyzzy"#), Some(r#"W/"xyzzy"#), true)]
+#[test_case::test_case(Some(r#""xyzzy1"#), Some(r#""xyzzy2"#), true)]
+#[test_case::test_case(None, None, false)]
+#[test_case::test_case(Some(r#""xyzzy1"#), None, true)]
+#[test_case::test_case(None, Some(r#""xyzzy2"#), true)]
+fn verifies_etags(etag1: Option<&'static str>, etag2: Option<&'static str>, modified: bool) {
+    let mut response1 = http::Response::builder().status(StatusCode::PARTIAL_CONTENT);
+    if let Some(etag) = etag1 {
+        response1 = response1.header(http::header::ETAG, etag);
+    }
+    let response1 = response1.body("").unwrap().into();
+
+    let mut response2 = http::Response::builder().status(StatusCode::PARTIAL_CONTENT);
+    if let Some(etag) = etag2 {
+        response2 = response2.header(http::header::ETAG, etag);
+    }
+    let response2 = response2.body("").unwrap().into();
+
+    assert_eq!(was_resource_modified(&response1, &response2), modified);
 }
 
 fn create_file_with_size(size: usize) -> Result<NamedTempFile, anyhow::Error> {

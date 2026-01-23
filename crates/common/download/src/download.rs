@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use backoff::future::retry_notify;
 use backoff::ExponentialBackoff;
 use certificate::CloudHttpConfig;
+use hyper::header;
 use log::debug;
 use log::info;
 use log::warn;
@@ -199,6 +200,11 @@ impl Downloader {
         loop {
             let offset = next_request_offset(&prev_response, file);
             let mut response = self.request_range_from(url, offset).await?;
+            if was_resource_modified(&response, &prev_response) {
+                file.seek(SeekFrom::Start(0)).unwrap();
+                prev_response = response;
+                continue;
+            }
             let offset = partial_response::response_range_start(&response)?;
 
             if offset != 0 {
@@ -211,9 +217,7 @@ impl Downloader {
                 Ok(()) => break,
 
                 Err(SaveChunksError::Network(err)) => {
-                    prev_response = response;
                     warn!("Error while downloading response: {err}.\nRetrying...");
-                    continue;
                 }
 
                 Err(SaveChunksError::Io(err)) => {
@@ -223,6 +227,7 @@ impl Downloader {
                     })
                 }
             }
+            prev_response = response;
         }
 
         Ok(())
@@ -349,6 +354,46 @@ impl Downloader {
             warn!("Temporary failure: {err}. Retrying in {dur}s",)
         })
         .await
+    }
+}
+
+/// Checks if the resource was modified between the current and previous response.
+///
+/// If the resource was updated, we should restart download and request full range of the new
+/// resource. Otherwise, a partial request can be used to resume the download.
+fn was_resource_modified(response: &Response, prev_response: &Response) -> bool {
+    // etags in current and previous request must match
+    let etag = response
+        .headers()
+        .get(header::ETAG)
+        .and_then(|h| h.to_str().ok());
+    let prev_etag = prev_response
+        .headers()
+        .get(header::ETAG)
+        .and_then(|h| h.to_str().ok());
+
+    match (etag, prev_etag) {
+        (None, None) => {
+            // no etags in either request, assume resource is unchanged
+            false
+        }
+        (None, Some(_)) | (Some(_), None) => {
+            // previous request didn't have etag and this does or vice versa, abort
+            true
+        }
+        (Some(etag), Some(prev_etag)) => {
+            // Examples:
+            // ETag: "xyzzy"
+            // ETag: W/"xyzzy"
+            // ETag: ""
+            if etag.starts_with("W/") {
+                // validator is weak, but in range requests tags must match using strong comparison
+                // https://www.rfc-editor.org/rfc/rfc9110#entity.tag.comparison
+                return true;
+            }
+
+            etag != prev_etag
+        }
     }
 }
 
