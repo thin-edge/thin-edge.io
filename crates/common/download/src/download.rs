@@ -1,4 +1,4 @@
-mod partial_response;
+pub mod partial_response;
 use crate::error::DownloadError;
 use crate::error::ErrContext;
 use anyhow::anyhow;
@@ -10,10 +10,10 @@ use log::info;
 use log::warn;
 use nix::sys::statvfs;
 pub use partial_response::InvalidResponseError;
-use reqwest::header;
 use reqwest::header::HeaderMap;
 use reqwest::Client;
 use reqwest::Identity;
+use reqwest::Response;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
@@ -160,14 +160,8 @@ impl Downloader {
                 SaveChunksError::Network(err) => {
                     warn!("Error while downloading response: {err}.\nRetrying...");
 
-                    match response.headers().get(header::ACCEPT_RANGES) {
-                        Some(unit) if unit == "bytes" => {
-                            self.download_remaining(url, file.as_file_mut()).await?;
-                        }
-                        _ => {
-                            self.retry(url, file.as_file_mut()).await?;
-                        }
-                    }
+                    self.download_continue(url, file.as_file_mut(), response)
+                        .await?;
                 }
                 SaveChunksError::Io(err) => {
                     return Err(DownloadError::FromIo {
@@ -191,26 +185,24 @@ impl Downloader {
         Ok(())
     }
 
-    /// Retries the download requesting only the remaining file part.
+    /// If interrupted, continues ongoing download.
     ///
-    /// If the server does support it, a range request is used to download only
-    /// the remaining range of the file. If the range request could not be used,
-    /// [`retry`](Downloader::retry) is used instead.
-    async fn download_remaining(
+    /// If the server supports is, a range request is used to download only the
+    /// remaining range of the file. Otherwise, progress is restarted and we
+    /// download full range of the file again.
+    async fn download_continue(
         &self,
         url: &DownloadInfo,
         file: &mut File,
+        mut prev_response: Response,
     ) -> Result<(), DownloadError> {
         loop {
-            let file_pos = file
-                .stream_position()
-                .context("Can't get file cursor position".to_string())?;
-
-            let mut response = self.request_range_from(url, file_pos).await?;
+            let offset = next_request_offset(&prev_response, file);
+            let mut response = self.request_range_from(url, offset).await?;
             let offset = partial_response::response_range_start(&response)?;
 
             if offset != 0 {
-                info!("Resuming file download at position={file_pos}");
+                info!("Resuming file download at position={offset}");
             } else {
                 info!("Could not resume download, restarting");
             }
@@ -219,36 +211,7 @@ impl Downloader {
                 Ok(()) => break,
 
                 Err(SaveChunksError::Network(err)) => {
-                    warn!("Error while downloading response: {err}.\nRetrying...");
-                    continue;
-                }
-
-                Err(SaveChunksError::Io(err)) => {
-                    return Err(DownloadError::FromIo {
-                        source: err,
-                        context: "Error while saving to file".to_string(),
-                    })
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Retries downloading the file.
-    ///
-    /// Retries initial request and downloads the entire file once again. If
-    /// upon the initial request server signaled support for range requests,
-    /// [`download_remaining`](Downloader::download_remaining) is used instead.
-    async fn retry(&self, url: &DownloadInfo, file: &mut File) -> Result<(), DownloadError> {
-        loop {
-            info!("Could not resume download, restarting");
-            let mut response = self.request_range_from(url, 0).await?;
-
-            match save_chunks_to_file_at(&mut response, file, 0).await {
-                Ok(()) => break,
-
-                Err(SaveChunksError::Network(err)) => {
+                    prev_response = response;
                     warn!("Error while downloading response: {err}.\nRetrying...");
                     continue;
                 }
@@ -359,7 +322,7 @@ impl Downloader {
     /// We use a half-open range with only a lower bound, because we expect to use
     /// it to download static resources which do not change, and only as a recovery
     /// mechanism in case of network failures.
-    async fn request_range_from(
+    pub async fn request_range_from(
         &self,
         url: &DownloadInfo,
         range_start: u64,
@@ -427,7 +390,11 @@ enum SaveChunksError {
 }
 
 #[allow(clippy::unnecessary_cast)]
-fn try_pre_allocate_space(file: &File, path: &Path, file_len: u64) -> Result<(), DownloadError> {
+pub fn try_pre_allocate_space(
+    file: &File,
+    path: &Path,
+    file_len: u64,
+) -> Result<(), DownloadError> {
     if file_len == 0 {
         return Ok(());
     }
@@ -455,6 +422,23 @@ fn try_pre_allocate_space(file: &File, path: &Path, file_len: u64) -> Result<(),
     );
 
     Ok(())
+}
+
+fn next_request_offset(prev_response: &Response, file: &mut File) -> u64 {
+    use hyper::header;
+    use hyper::StatusCode;
+    use std::io::Seek;
+    let pos = file.stream_position().unwrap();
+    if prev_response.status() == StatusCode::PARTIAL_CONTENT
+        || prev_response
+            .headers()
+            .get(header::ACCEPT_RANGES)
+            .is_some_and(|unit| unit == "bytes")
+    {
+        pos
+    } else {
+        0
+    }
 }
 
 #[cfg(test)]
