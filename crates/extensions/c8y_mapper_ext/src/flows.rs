@@ -81,6 +81,7 @@ topic = "{errors_topic}"
     fn alarms_flow(&self) -> String {
         let mqtt_schema = &self.config.mqtt_schema;
         let topic_prefix = mqtt_schema.root.as_str();
+        let c8y_prefix = &self.config.bridge_config.c8y_prefix;
         let errors_topic = mqtt_schema.error_topic();
         let internal_alarms = crate::alarm_converter::INTERNAL_ALARMS_TOPIC;
         let max_size = self.config.max_mqtt_payload_size;
@@ -90,7 +91,7 @@ topic = "{errors_topic}"
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
-    {{ builtin = "into_c8y_alarms", interval = "3s" }},
+    {{ builtin = "into_c8y_alarms", interval = "3s", config = {{ c8y_prefix = "{c8y_prefix}" }} }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
