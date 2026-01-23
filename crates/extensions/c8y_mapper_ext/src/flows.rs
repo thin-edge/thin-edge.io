@@ -82,22 +82,19 @@ topic = "{errors_topic}"
         let mqtt_schema = &self.config.mqtt_schema;
         let topic_prefix = mqtt_schema.root.as_str();
         let errors_topic = mqtt_schema.error_topic();
-        let c8y_prefix = &self.config.bridge_config.c8y_prefix;
         let internal_alarms = crate::alarm_converter::INTERNAL_ALARMS_TOPIC;
-        let c8y_alarms = crate::alarm_converter::C8Y_JSON_MQTT_ALARMS_TOPIC;
         let max_size = self.config.max_mqtt_payload_size;
 
         format!(
             r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/a/+", "{internal_alarms}#"]
 
 steps = [
-    {{ builtin = "add-timestamp", config = {{ property = "time", format = "unix", reformat = false }} }},
+    {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
     {{ builtin = "into_c8y_alarms", interval = "3s" }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
 [output.mqtt]
-topic = "{c8y_prefix}/{c8y_alarms}"
 
 [errors.mqtt]
 topic = "{errors_topic}"
