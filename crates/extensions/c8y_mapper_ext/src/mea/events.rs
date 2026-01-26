@@ -1,4 +1,6 @@
+use crate::entity_cache::CloudEntityMetadata;
 use crate::mea::get_entity_metadata;
+use crate::mea::take_cached_telemetry_data;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::smartrest::topic::C8yTopic;
 use std::time::SystemTime;
@@ -6,8 +8,8 @@ use tedge_api::entity::EntityExternalId;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::mqtt_topics::Channel;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::store::RingBuffer;
 use tedge_config::models::TopicPrefix;
 use tedge_flows::ConfigError;
 use tedge_flows::FlowContextHandle;
@@ -26,6 +28,7 @@ pub struct EventConverter {
     mqtt_schema: MqttSchema,
     c8y_prefix: TopicPrefix,
     max_mqtt_payload_size: Option<usize>,
+    cache: RingBuffer<Message>,
 }
 
 impl Default for EventConverter {
@@ -34,6 +37,7 @@ impl Default for EventConverter {
             mqtt_schema: MqttSchema::default(),
             c8y_prefix: TopicPrefix::try_new("c8y").unwrap(),
             max_mqtt_payload_size: None,
+            cache: RingBuffer::default(),
         }
     }
 }
@@ -66,8 +70,16 @@ impl tedge_flows::Transformer for EventConverter {
         context: &FlowContextHandle,
     ) -> Result<Vec<Message>, FlowError> {
         match self.mqtt_schema.entity_channel_of(&message.topic) {
-            Ok((entity, Channel::Event { event_type })) => {
-                self.convert(context, &entity, &event_type, message.clone())
+            Ok((entity_id, Channel::Event { event_type })) => {
+                let Some(entity) = get_entity_metadata(context, entity_id.as_str()) else {
+                    self.cache.push(message.clone());
+                    return Ok(vec![]);
+                };
+                let event = self.convert(entity, &event_type, message)?;
+                Ok(vec![event])
+            }
+            Ok((_, Channel::Status { component })) if component == "entities" => {
+                self.process_cached_messages(context, message)
             }
             _ => Err(FlowError::UnsupportedMessage(format!(
                 "Not an event topic: {}",
@@ -80,15 +92,10 @@ impl tedge_flows::Transformer for EventConverter {
 impl EventConverter {
     fn convert(
         &mut self,
-        context: &FlowContextHandle,
-        source: &EntityTopicId,
+        entity: CloudEntityMetadata,
         event_type: &str,
-        event: Message,
-    ) -> Result<Vec<Message>, FlowError> {
-        let Some(entity) = get_entity_metadata(context, source.as_str()) else {
-            return Ok(vec![]);
-        };
-
+        event: &Message,
+    ) -> Result<Message, FlowError> {
         let event_type = match event_type.is_empty() {
             true => DEFAULT_EVENT_TYPE,
             false => event_type,
@@ -134,7 +141,7 @@ impl EventConverter {
 
         if self.can_send_over_mqtt(&message) {
             // The message can be sent via MQTT
-            Ok(vec![message])
+            Ok(message)
         } else {
             // The message must be sent over HTTP
             // Actually this converter forwards this message over MQTT to the c8y converter which does the HTTP request
@@ -143,7 +150,7 @@ impl EventConverter {
             })?;
             let http_topic = self.http_event_topic(&entity.external_id);
 
-            Ok(vec![Message::new(http_topic, http_event)])
+            Ok(Message::new(http_topic, http_event))
         }
     }
 
@@ -178,5 +185,48 @@ impl EventConverter {
             return true;
         };
         message.payload.len() < max_size
+    }
+
+    pub fn process_cached_messages(
+        &mut self,
+        context: &FlowContextHandle,
+        message: &Message,
+    ) -> Result<Vec<Message>, FlowError> {
+        let birth_message = message.payload_str().ok_or_else(|| {
+            FlowError::UnsupportedMessage(format!(
+                "Not an UTF8 event payload received on: {}",
+                message.topic
+            ))
+        })?;
+
+        let pending_messages = take_cached_telemetry_data(&mut self.cache, birth_message);
+
+        let mut messages = vec![];
+        for pending in pending_messages {
+            messages.push(self.process_cached_message(context, pending)?);
+        }
+        Ok(messages)
+    }
+
+    pub fn process_cached_message(
+        &mut self,
+        context: &FlowContextHandle,
+        message: Message,
+    ) -> Result<Message, FlowError> {
+        match self.mqtt_schema.entity_channel_of(&message.topic) {
+            Ok((entity_id, Channel::Event { event_type })) => {
+                let Some(entity) = get_entity_metadata(context, entity_id.as_str()) else {
+                    return Err(FlowError::UnsupportedMessage(format!(
+                        "Unknown entity: {entity_id}"
+                    )));
+                };
+
+                self.convert(entity, &event_type, &message)
+            }
+            _ => Err(FlowError::UnsupportedMessage(format!(
+                "Not a measurement topic: {}",
+                message.topic
+            ))),
+        }
     }
 }

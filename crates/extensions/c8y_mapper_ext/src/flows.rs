@@ -59,13 +59,14 @@ topic = "{errors_topic}"
 
     fn measurements_flow(&self) -> String {
         let mqtt_schema = &self.config.mqtt_schema;
+        let mapper_topic_id = &self.config.service_topic_id;
         let topic_prefix = mqtt_schema.root.as_str();
         let errors_topic = mqtt_schema.error_topic();
         let c8y_prefix = &self.config.bridge_config.c8y_prefix;
         let max_size = self.config.max_mqtt_payload_size;
 
         format!(
-            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/m/+"]
+            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/m/+", "{topic_prefix}/{mapper_topic_id}/status/entities"]
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "unix", reformat = false }} }},
@@ -84,13 +85,14 @@ topic = "{errors_topic}"
 
     fn events_flow(&self) -> String {
         let mqtt_schema = &self.config.mqtt_schema;
+        let mapper_topic_id = &self.config.service_topic_id;
         let topic_prefix = mqtt_schema.root.as_str();
         let errors_topic = mqtt_schema.error_topic();
         let c8y_prefix = &self.config.bridge_config.c8y_prefix;
         let max_mqtt_payload_size = self.config.max_mqtt_payload_size;
 
         format!(
-            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/e/+"]
+            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/e/+", "{topic_prefix}/{mapper_topic_id}/status/entities"]
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
@@ -107,6 +109,7 @@ topic = "{errors_topic}"
 
     fn alarms_flow(&self) -> String {
         let mqtt_schema = &self.config.mqtt_schema;
+        let mapper_topic_id = &self.config.service_topic_id;
         let topic_prefix = mqtt_schema.root.as_str();
         let c8y_prefix = &self.config.bridge_config.c8y_prefix;
         let errors_topic = mqtt_schema.error_topic();
@@ -114,7 +117,7 @@ topic = "{errors_topic}"
         let max_size = self.config.max_mqtt_payload_size;
 
         format!(
-            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/a/+", "{internal_alarms}#"]
+            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/a/+", "{internal_alarms}#", "{topic_prefix}/{mapper_topic_id}/status/entities"]
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},

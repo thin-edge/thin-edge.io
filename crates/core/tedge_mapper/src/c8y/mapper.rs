@@ -65,8 +65,12 @@ impl TEdgeComponent for CumulocityMapper {
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let service_topic_id = EntityTopicId::default_main_service(&c8y_mapper_name)?;
 
-        let c8y_mapper_config =
-            C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, &c8y_config)?;
+        let c8y_mapper_config = C8yMapperConfig::from_tedge_config(
+            cfg_dir,
+            &tedge_config,
+            &c8y_config,
+            service_topic_id.clone(),
+        )?;
         if tedge_config.mqtt.bridge.built_in {
             let (tc, cloud_config, reconnect_message_mapper) = mqtt_bridge_config(
                 &tedge_config,

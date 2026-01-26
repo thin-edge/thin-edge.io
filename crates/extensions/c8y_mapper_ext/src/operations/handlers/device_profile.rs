@@ -183,7 +183,7 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
+        mqtt.skip(2).await; // Skip the mapped registration message
 
         // Simulate device_profile cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -348,7 +348,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(1).await; // Skip child device registration messages
+        mqtt.skip(2).await; // Skip child device registration messages
 
         // Simulate c8y_DeviceProfile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
@@ -1207,7 +1207,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(1).await; // Skip child device registration messages
+        mqtt.skip(2).await; // Skip child device registration messages
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -1612,7 +1612,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(1).await; // Skip child device registration messages
+        mqtt.skip(2).await; // Skip child device registration messages
 
         // Simulate config_update command with "successful" state
         mqtt.send(MqttMessage::new(

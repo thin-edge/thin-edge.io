@@ -46,6 +46,7 @@ const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 pub struct C8yMapperConfig {
     pub device_id: String,
     pub device_topic_id: EntityTopicId,
+    pub service_topic_id: EntityTopicId,
     pub service: TEdgeConfigReaderService,
     pub c8y_host: String,
     pub c8y_mqtt: String,
@@ -88,6 +89,7 @@ impl C8yMapperConfig {
 
         device_id: String,
         device_topic_id: EntityTopicId,
+        service_topic_id: EntityTopicId,
         service: TEdgeConfigReaderService,
         c8y_host: String,
         c8y_mqtt: String,
@@ -127,6 +129,7 @@ impl C8yMapperConfig {
             data_dir,
             device_id,
             device_topic_id,
+            service_topic_id,
             service,
             c8y_host,
             c8y_mqtt,
@@ -163,6 +166,7 @@ impl C8yMapperConfig {
         config_dir: impl AsRef<Utf8Path>,
         tedge_config: &TEdgeConfig,
         c8y_config: &mapper_config::C8yMapperConfig,
+        service_topic_id: EntityTopicId,
     ) -> Result<C8yMapperConfig, C8yMapperConfigBuildError> {
         let config_dir: Arc<Utf8Path> = config_dir.as_ref().into();
 
@@ -260,6 +264,7 @@ impl C8yMapperConfig {
             tmp_dir,
             device_id,
             device_topic_id,
+            service_topic_id,
             service,
             c8y_host,
             c8y_mqtt,

@@ -21,15 +21,23 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
+use tedge_actors::futures::channel::mpsc;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ChannelError;
+use tedge_actors::CloneSender;
+use tedge_actors::DynSender;
+use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::NoMessage;
+use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -44,13 +52,17 @@ use tedge_config::tedge_toml::C8Y_MQTT_PAYLOAD_LIMIT;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_flows::FlowsMapperBuilder;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
+use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::Topic;
+use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_timer_ext::Timeout;
@@ -95,9 +107,12 @@ async fn child_device_registration_mapping() {
     let ttd = TempTedgeDir::new();
     let test_handle =
         spawn_c8y_mapper_actor_with_config(&ttd, test_mapper_config(&ttd), true).await;
-    let mut mqtt = test_handle.mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let mut mqtt = test_handle.mqtt;
     let mut timer = test_handle.timer;
     let mut avail = test_handle.avail.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
@@ -184,8 +199,11 @@ async fn custom_topic_scheme_registration_mapping() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
 
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
@@ -249,8 +267,12 @@ async fn service_registration_mapping() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
 
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
@@ -385,8 +407,12 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
 
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
@@ -480,9 +506,12 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
 
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
 
@@ -593,8 +622,12 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
 
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
@@ -652,9 +685,12 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
 
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
 
@@ -755,9 +791,12 @@ async fn c8y_mapper_child_alarm_empty_payload() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
 
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
 
@@ -852,8 +891,11 @@ async fn c8y_mapper_child_event() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
 
@@ -906,8 +948,11 @@ async fn c8y_mapper_child_service_event() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
 
@@ -967,8 +1012,12 @@ async fn c8y_mapper_main_service_event() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
+
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
 
@@ -1021,8 +1070,12 @@ async fn c8y_mapper_child_service_alarm() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
+
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
 
@@ -1074,8 +1127,12 @@ async fn c8y_mapper_main_service_alarm() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
+
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
 
@@ -1249,7 +1306,10 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     create_thin_edge_operations(&ttd, vec!["c8y_TestOp1", "c8y_TestOp2"]);
 
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, mut fs, .. } = test_handle;
+    let TestHandle {
+        mut mqtt, mut fs, ..
+    } = test_handle;
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
@@ -1352,7 +1412,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
+    mqtt.skip(2).await; // Skip the mapped registration message
 
     // Add a new operation for the child device
     // Simulate FsEvent for the creation of a new operation file
@@ -1447,8 +1507,16 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
         [
             ("c8y/s/us", "101,child1,child1,thin-edge.io-child,false"),
             (
+                "te/device/main/service/tedge-mapper-c8y/status/entities",
+                "te/device/child1//",
+            ),
+            (
                 "c8y/s/us/child1",
                 "101,child11,child11,thin-edge.io-child,false",
+            ),
+            (
+                "te/device/main/service/tedge-mapper-c8y/status/entities",
+                "te/device/child11//",
             ),
         ],
     )
@@ -2384,7 +2452,17 @@ async fn mapper_converts_custom_operation_for_child_device() {
 
     mqtt.send(capability_message).await.unwrap();
 
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us/child1", "114,c8y_Command")]).await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "te/device/main/service/tedge-mapper-c8y/status/entities",
+                "te/device/child1//",
+            ),
+            ("c8y/s/us/child1", "114,c8y_Command"),
+        ],
+    )
+    .await;
 
     assert!(ttd
         .path()
@@ -2429,8 +2507,11 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
 
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
@@ -2493,8 +2574,11 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
 
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
@@ -2566,8 +2650,11 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
 
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
@@ -2634,8 +2721,11 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle {
-        mqtt, mut timer, ..
+        mut mqtt,
+        mut timer,
+        ..
     } = test_handle;
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
 
     // Complete sync phase so that alarm mapping starts
     trigger_timeout(&mut timer).await;
@@ -3033,6 +3123,10 @@ async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device()
         &mut mqtt,
         [
             (
+                "te/device/main/service/tedge-mapper-c8y/status/entities",
+                "te/device/child1//",
+            ),
+            (
                 "c8y/s/us/test-device:device:child1",
                 "114,c8y_UploadConfigFile",
             ),
@@ -3151,6 +3245,7 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
     .await
     .expect("Send failed");
     mqtt.skip(1).await; // Skip 102 message
+    mqtt.skip(1).await; // Skip c8y mapper birth message
 
     // Also register other entities
     mqtt.send(MqttMessage::new(
@@ -3172,6 +3267,7 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
     .await
     .expect("Send failed");
     mqtt.skip(3).await; // Skip registration messages
+    mqtt.skip(3).await; // Skip entity birth messages
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/tedge-mapper-c8y/signal/sync"),
@@ -3268,7 +3364,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(tmp_dir: &TempTedgeDir, init: bool) -
 }
 
 pub(crate) struct TestHandle {
-    pub mqtt: SimpleMessageBox<MqttMessage, MqttMessage>,
+    pub mqtt: MockMqttBox,
     pub http: FakeServerBox<HttpRequest, HttpResult>,
     pub fs: SimpleMessageBox<NoMessage, FsWatchEvent>,
     pub timer: FakeServerBox<SyncStart, SyncComplete>,
@@ -3284,11 +3380,11 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 ) -> TestHandle {
     if init {
         tmp_dir.dir("operations").dir("c8y");
+        tmp_dir.dir("mappers").dir("c8y");
         tmp_dir.dir(".tedge-mapper-c8y");
     }
 
-    let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
-        SimpleMessageBoxBuilder::new("MQTT", 10);
+    let mut mqtt_builder = MockMqtt::new();
     let mut http_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
         FakeServerBoxBuilder::default();
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
@@ -3322,7 +3418,22 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         .connect_source(AvailabilityBuilder::channels(), &mut c8y_mapper_builder);
     c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
 
+    let flows_dir = tedge_flows::flows_dir(tmp_dir.utf8_path(), "c8y", None);
+    let flows = c8y_mapper_builder.flow_registry(flows_dir).await.unwrap();
+    let flows_status = Topic::new_unchecked("te/device/main/service/tedge-mapper-c8y/status/flows");
+
+    let mut flows_mapper = FlowsMapperBuilder::try_new(flows, flows_status)
+        .await
+        .unwrap();
+    flows_mapper.connect(&mut mqtt_builder);
+    // The fs_watcher_builder is a fake actor which can only handle at most one peer
+    // => for these tests, the flows mapper is only connected to mqtt ignoring all fs events
+    c8y_mapper_builder.set_flow_context(flows_mapper.context_handle());
+
     let actor = c8y_mapper_builder.build();
+    tokio::spawn(async move { actor.run().await });
+
+    let actor = flows_mapper.build();
     tokio::spawn(async move { actor.run().await });
 
     let mut service_monitor_box = service_monitor_builder.build();
@@ -3343,6 +3454,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     let device_name = "test-device".into();
     let device_topic_id = EntityTopicId::default_main_device();
+    let service_topic_id = EntityTopicId::default_main_service("tedge-mapper-c8y").unwrap();
     let config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
     let c8y_host = "test.c8y.io".to_owned();
     let tedge_http_host = "localhost:8888".into();
@@ -3358,6 +3470,10 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     let custom_operation_topics =
         C8yMapperConfig::get_topics_from_custom_operations(tmp_dir.path(), &bridge_config).unwrap();
     topics.add_all(custom_operation_topics);
+    topics.add_unchecked("te/+/+/+/+/cmd/software_update");
+    topics.add_unchecked("te/+/+/+/+/cmd/software_update/+");
+    topics.add_unchecked("te/+/+/+/+/cmd/+");
+    topics.add_unchecked("te/+/+/+/+/cmd/+/+");
 
     let capabilities = Capabilities::default();
 
@@ -3379,6 +3495,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         tmp_dir.utf8_path().into(),
         device_name,
         device_topic_id,
+        service_topic_id,
         config.service.clone(),
         c8y_host.clone(),
         c8y_host,
@@ -3452,4 +3569,134 @@ pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<HttpRequest, Ht
             }
         }
     });
+}
+
+struct MockMqtt {
+    input_sender: mpsc::Sender<MqttRequest>,
+    signal_sender: mpsc::Sender<RuntimeRequest>,
+    output_sender: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+    input_receiver: LoggingReceiver<MqttRequest>,
+}
+
+impl MockMqtt {
+    pub fn new() -> Self {
+        let (input_sender, input_receiver) = mpsc::channel(16);
+        let (signal_sender, signal_receiver) = mpsc::channel(4);
+        let output_sender = Vec::new();
+        let input_receiver =
+            LoggingReceiver::new("MockMQTT".to_string(), input_receiver, signal_receiver);
+
+        MockMqtt {
+            input_sender,
+            signal_sender,
+            output_sender,
+            input_receiver,
+        }
+    }
+
+    pub fn build(self) -> MockMqttBox {
+        let mut ignore_topics = TopicFilter::empty();
+        ignore_topics.add_unchecked("te/+/+/+/+/status/flows");
+
+        MockMqttBox {
+            ignore_topics,
+            receiver: self.input_receiver,
+            senders: self.output_sender,
+        }
+    }
+}
+
+impl MessageSource<MqttMessage, TopicFilter> for MockMqtt {
+    fn connect_sink(&mut self, config: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
+        self.output_sender.push((config, peer.get_sender()));
+    }
+}
+
+impl MessageSink<MqttMessage> for MockMqtt {
+    fn get_sender(&self) -> DynSender<MqttMessage> {
+        self.input_sender.sender_clone()
+    }
+}
+
+impl MessageSource<MqttMessage, &mut DynSubscriptions> for MockMqtt {
+    fn connect_sink(
+        &mut self,
+        config: &mut DynSubscriptions,
+        peer: &impl MessageSink<MqttMessage>,
+    ) {
+        let client_id = self.output_sender.len();
+        config.set_client_id_usize(client_id);
+        self.output_sender
+            .push((TopicFilter::new_unchecked("#"), peer.get_sender()));
+    }
+}
+
+impl MessageSink<MqttRequest> for MockMqtt {
+    fn get_sender(&self) -> DynSender<MqttRequest> {
+        self.input_sender.sender_clone()
+    }
+}
+
+impl RuntimeRequestSink for MockMqtt {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        self.signal_sender.sender_clone()
+    }
+}
+
+pub struct MockMqttBox {
+    pub(crate) ignore_topics: TopicFilter,
+    pub(crate) receiver: LoggingReceiver<MqttRequest>,
+    pub(crate) senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+}
+
+impl MockMqttBox {
+    pub fn ignore(&mut self, topic: &str) {
+        self.ignore_topics.add_unchecked(topic);
+    }
+}
+
+#[async_trait::async_trait]
+impl MessageReceiver<MqttMessage> for MockMqttBox {
+    async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
+        loop {
+            let message = self.receiver.try_recv().await;
+            match message {
+                Ok(Some(MqttRequest::Publish(publish))) => {
+                    if !self.ignore_topics.accept(&publish) {
+                        return Ok(Some(publish));
+                    }
+                }
+                Ok(None) => return Ok(None),
+                Err(e) => return Err(e),
+
+                Ok(Some(MqttRequest::Subscribe(_))) => {
+                    // Ignored
+                }
+                Ok(Some(MqttRequest::RetrieveRetain(sender, _))) => {
+                    // No retained messages
+                    sender.close_channel();
+                }
+            }
+        }
+    }
+
+    async fn recv(&mut self) -> Option<MqttMessage> {
+        self.try_recv().await.unwrap_or_default()
+    }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        self.receiver.recv_signal().await
+    }
+}
+
+#[async_trait::async_trait]
+impl Sender<MqttMessage> for MockMqttBox {
+    async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
+        for (topic, sender) in self.senders.iter_mut() {
+            if topic.accept(&message) {
+                sender.send(message.clone()).await?;
+            }
+        }
+        Ok(())
+    }
 }
