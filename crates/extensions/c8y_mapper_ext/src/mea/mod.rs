@@ -1,8 +1,10 @@
 use crate::entity_cache::CloudEntityMetadata;
 use crate::json::Units;
 use tedge_api::entity::EntityMetadata;
+use tedge_api::store::RingBuffer;
 use tedge_flows::FlowContextHandle;
 use tedge_flows::JsonValue;
+use tedge_flows::Message;
 
 pub mod alarms;
 pub mod events;
@@ -34,4 +36,22 @@ fn get_measurement_units(
     }
     let metadata = json.into_value().ok()?;
     Some(Units::from_metadata(metadata))
+}
+
+fn take_cached_telemetry_data(
+    cache: &mut RingBuffer<Message>,
+    birth_payload: &str,
+) -> Vec<Message> {
+    let new_entity_topic_prefix = birth_payload; // TODO use proper JSON payload
+
+    let mut messages = vec![];
+    let pending_messages = cache.take();
+    for message in pending_messages.into_iter() {
+        if message.topic.starts_with(new_entity_topic_prefix) {
+            messages.push(message);
+        } else {
+            cache.push(message);
+        }
+    }
+    messages
 }

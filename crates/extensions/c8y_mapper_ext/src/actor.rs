@@ -39,6 +39,7 @@ use tedge_flows::FlowContextHandle;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
@@ -196,10 +197,18 @@ impl C8yMapperActor {
         pending_entities: Vec<RegisteredEntityData>,
     ) -> Result<(), RuntimeError> {
         for pending_entity in pending_entities {
+            let entity_topic_id = pending_entity.reg_message.topic_id.to_string();
             let mut reg_message = pending_entity.reg_message;
             self.converter.append_id_if_not_given(&mut reg_message);
             let reg_message = reg_message.to_mqtt_message(&self.converter.mqtt_schema);
             self.process_message(reg_message).await?;
+
+            // TODO use proper JSON payload
+            let birth_message = MqttMessage::new(
+                &Topic::new_unchecked("te/device/main///status/entities"),
+                format!("te/{}", entity_topic_id),
+            );
+            self.mqtt_publisher.send(birth_message).await?;
 
             // Convert and publish cached data messages
             for pending_data_message in pending_entity.data_messages {

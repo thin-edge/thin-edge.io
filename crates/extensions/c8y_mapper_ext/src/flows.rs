@@ -65,7 +65,7 @@ topic = "{errors_topic}"
         let max_size = self.config.max_mqtt_payload_size;
 
         format!(
-            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/m/+"]
+            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/m/+", "{topic_prefix}/device/main///status/entities"]
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "unix", reformat = false }} }},
@@ -90,7 +90,7 @@ topic = "{errors_topic}"
         let max_mqtt_payload_size = self.config.max_mqtt_payload_size;
 
         format!(
-            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/e/+"]
+            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/e/+", "{topic_prefix}/device/main///status/entities"]
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
@@ -114,7 +114,7 @@ topic = "{errors_topic}"
         let max_size = self.config.max_mqtt_payload_size;
 
         format!(
-            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/a/+", "{internal_alarms}#"]
+            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/a/+", "{internal_alarms}#", "{topic_prefix}/device/main///status/entities"]
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
