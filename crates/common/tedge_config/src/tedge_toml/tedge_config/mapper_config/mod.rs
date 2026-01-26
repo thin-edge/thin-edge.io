@@ -384,6 +384,9 @@ pub struct EnableConfig {
 
     /// Enable device_profile feature
     pub device_profile: bool,
+
+    /// Enable device restart feature
+    pub device_restart: bool,
 }
 
 /// Bridge include configuration

@@ -657,7 +657,12 @@ impl CumulocityConverter {
 
         let msgs = match C8yDeviceControlOperation::from_json_object(extras)? {
             C8yDeviceControlOperation::Restart(_) => {
-                self.forward_restart_request(device_xid, cmd_id)?
+                if self.config.capabilities.device_restart {
+                    self.forward_restart_request(device_xid, cmd_id)?
+                } else {
+                    warn!("Received a c8y_Restart operation, however, device_restart feature is disabled");
+                    vec![]
+                }
             }
             C8yDeviceControlOperation::SoftwareUpdate(request) => {
                 self.forward_software_request(device_xid, cmd_id, request)
@@ -1540,6 +1545,11 @@ impl CumulocityConverter {
         &mut self,
         target: &EntityTopicId,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if !self.config.capabilities.device_restart {
+            warn!("Received restart metadata, however, device restart feature is disabled");
+            return Ok(vec![]);
+        }
+
         match self.register_operation(target, "c8y_Restart").await {
             Err(_) => {
                 error!("Fail to register `restart` operation for unknown device: {target}");
