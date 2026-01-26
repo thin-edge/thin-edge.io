@@ -14,6 +14,7 @@ impl C8yMapperBuilder {
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
 
         flows.register_builtin(crate::mea::measurements::MeasurementConverter::default());
+        flows.register_builtin(crate::mea::events::EventConverter::default());
         flows.register_builtin(crate::mea::alarms::AlarmConverter::default());
 
         self.persist_builtin_flow(&mut flows).await?;
@@ -29,6 +30,9 @@ impl C8yMapperBuilder {
             .await?;
         flows
             .persist_builtin_flow("measurements", self.measurements_flow().as_str())
+            .await?;
+        flows
+            .persist_builtin_flow("events", self.events_flow().as_str())
             .await?;
         flows
             .persist_builtin_flow("alarms", self.alarms_flow().as_str())
@@ -65,12 +69,35 @@ topic = "{errors_topic}"
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "unix", reformat = false }} }},
-    {{ builtin = "into_c8y_measurements" }},
+    {{ builtin = "into_c8y_measurements", config = {{ topic_root = "{topic_prefix}" }} }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
 [output.mqtt]
 topic = "{c8y_prefix}/measurement/measurements/create"
+
+[errors.mqtt]
+topic = "{errors_topic}"
+"#
+        )
+    }
+
+    fn events_flow(&self) -> String {
+        let mqtt_schema = &self.config.mqtt_schema;
+        let topic_prefix = mqtt_schema.root.as_str();
+        let errors_topic = mqtt_schema.error_topic();
+        let c8y_prefix = &self.config.bridge_config.c8y_prefix;
+        let max_mqtt_payload_size = self.config.max_mqtt_payload_size;
+
+        format!(
+            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/e/+"]
+
+steps = [
+    {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
+    {{ builtin = "into_c8y_events", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}", max_mqtt_payload_size = {max_mqtt_payload_size} }} }},
+]
+
+[output.mqtt]
 
 [errors.mqtt]
 topic = "{errors_topic}"
@@ -91,7 +118,7 @@ topic = "{errors_topic}"
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
-    {{ builtin = "into_c8y_alarms", interval = "3s", config = {{ c8y_prefix = "{c8y_prefix}" }} }},
+    {{ builtin = "into_c8y_alarms", interval = "3s", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }} }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
