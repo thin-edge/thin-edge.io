@@ -1,13 +1,13 @@
-local_prefix = "${.c8y.bridge.topic_prefix}/"
+local_prefix = "${config.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 
 [[template_rule]]
-for = "${.c8y.smartrest1.templates}"
+for = "${config.c8y.smartrest1.templates}"
 topic = "s/dl/${@for}"
 direction = "inbound"
 
 [[template_rule]]
-for = "${.c8y.smartrest.templates}"
+for = "${config.c8y.smartrest.templates}"
 topic = "s/dc/${@for}"
 direction = "inbound"
 

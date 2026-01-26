@@ -1,13 +1,13 @@
 remote_prefix = ""
-if = "${.c8y.mqtt_service.enabled}"
+if = "${config.c8y.mqtt_service.enabled}"
 
 [[rule]]
-local_prefix = "${.c8y.bridge.topic_prefix}/mqtt/out/"
+local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/out/"
 topic = "#"
 direction = "outbound"
 
 [[template_rule]]
-for = "${.c8y.mqtt_service.topics}"
-local_prefix = "${.c8y.bridge.topic_prefix}/mqtt/in/"
+for = "${config.c8y.mqtt_service.topics}"
+local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/in/"
 topic = "${@for}"
 direction = "inbound"

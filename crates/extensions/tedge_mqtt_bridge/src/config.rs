@@ -425,7 +425,7 @@ impl FromStr for Condition {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         fn parse_auth_method(s: &str) -> Result<Condition, anyhow::Error> {
             let s = s.strip_prefix("auth_method(")
-        .ok_or_else(|| anyhow::anyhow!("Unknown condition. Currently supported conditions: auth_method(...), ${{.some.boolean.config}}"))?;
+        .ok_or_else(|| anyhow::anyhow!("Unknown condition. Currently supported conditions: auth_method(...), ${{config.some.boolean.config}}"))?;
             let s = s
                 .strip_suffix(")")
                 .ok_or_else(|| anyhow::anyhow!("Condition must end with ')'"))?;
@@ -511,8 +511,8 @@ impl<Target> FromStr for ConfigReference<Target> {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s
-            .strip_prefix("${.")
-            .ok_or_else(|| anyhow::anyhow!("Config variable must start with ${{."))?;
+            .strip_prefix("${config.")
+            .ok_or_else(|| anyhow::anyhow!("Config variable must start with ${{config."))?;
         let s = s
             .strip_suffix("}")
             .ok_or_else(|| anyhow::anyhow!("Config variable must end with }}"))?;
@@ -522,7 +522,7 @@ impl<Target> FromStr for ConfigReference<Target> {
 
 impl<Target> fmt::Display for ConfigReference<Target> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "${{.{}}}", self.0)
+        write!(f, "${{config.{}}}", self.0)
     }
 }
 
@@ -692,9 +692,9 @@ fn expand_config_key(
     cloud_profile: Option<&ProfileName>,
     offset: usize,
 ) -> Result<String, TemplateError> {
-    let key_str = var_name.strip_prefix(".").ok_or_else(|| TemplateError {
-        message: format!("Templated variable must start with '.' (got '{var_name}'))"),
-        help: Some(format!("You might have meant '.{var_name}'")),
+    let key_str = var_name.strip_prefix("config.").ok_or_else(|| TemplateError {
+        message: format!("Templated variable must start with 'config.' (got '{var_name}'))"),
+        help: Some(format!("You might have meant 'config.{var_name}'")),
         offset,
     })?;
 
@@ -1365,7 +1365,7 @@ mod tests {
                 remote_prefix = "remote/"
 
                 [[template_rule]]
-                for = "${.c8y.topics}"
+                for = "${config.c8y.topics}"
                 topic = "${@for}"
                 direction = "outbound"
             "#;
@@ -1386,7 +1386,7 @@ mod tests {
                 direction = "inbound"
 
                 [[template_rule]]
-                for = "${.c8y.topics}"
+                for = "${config.c8y.topics}"
                 topic = "${@for}"
                 direction = "outbound"
             "#;
@@ -1473,7 +1473,7 @@ mod tests {
 
         #[test]
         fn config_reference_parses_valid_reference() {
-            let reference = "${.c8y.topics.e}";
+            let reference = "${config.c8y.topics.e}";
             let result: Result<ConfigReference<TemplatesSet>, _> = reference.parse();
             assert!(result.is_ok());
         }
@@ -1486,12 +1486,12 @@ mod tests {
             assert!(result
                 .unwrap_err()
                 .to_string()
-                .contains("must start with ${."));
+                .contains("must start with ${config."));
         }
 
         #[test]
         fn config_reference_rejects_missing_suffix() {
-            let reference = "${.c8y.mqtt_service.topics";
+            let reference = "${config.c8y.mqtt_service.topics";
             let result: Result<ConfigReference<TemplatesSet>, _> = reference.parse();
             assert!(result.is_err());
             assert!(result.unwrap_err().to_string().contains("must end with }"));
@@ -1500,7 +1500,7 @@ mod tests {
         #[test]
         fn config_reference_expands_to_templates_set() {
             let reference: ConfigReference<TemplatesSet> =
-                "${.c8y.smartrest.templates}".parse().unwrap();
+                "${config.c8y.smartrest.templates}".parse().unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str(
                 r#"
 [c8y]
@@ -1514,7 +1514,7 @@ smartrest.templates = ["template1", "template2", "template3"]
 
         #[test]
         fn config_reference_expands_string_value() {
-            let reference: ConfigReference<String> = "${.c8y.bridge.topic_prefix}".parse().unwrap();
+            let reference: ConfigReference<String> = "${config.c8y.bridge.topic_prefix}".parse().unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str(
                 r#"
 [c8y.bridge]
@@ -1528,7 +1528,7 @@ topic_prefix = "changed"
 
         #[test]
         fn config_reference_is_profile_aware() {
-            let reference: ConfigReference<String> = "${.c8y.bridge.topic_prefix}".parse().unwrap();
+            let reference: ConfigReference<String> = "${config.c8y.bridge.topic_prefix}".parse().unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str(
                 r#"
 [c8y.profiles.new.bridge]
@@ -1574,7 +1574,7 @@ direction = "inbound"
         fn span_information_for_config_reference() {
             let toml = r#"
 [[template_rule]]
-for = "${.c8y.topics.e}"
+for = "${config.c8y.topics.e}"
 topic = "te/device/main///e/${@for}"
 direction = "outbound"
 "#;
@@ -1584,7 +1584,7 @@ direction = "outbound"
             // serde_spanned includes the quotes
             let reference_str = &toml[span.clone()];
             assert_eq!(
-                reference_str, "\"${.c8y.topics.e}\"",
+                reference_str, "\"${config.c8y.topics.e}\"",
                 "Span includes quotes"
             );
         }
@@ -1596,7 +1596,7 @@ local_prefix = ""
 remote_prefix = ""
 
 [[rule]]
-topic = "prefix/${.invalid.key}/suffix"
+topic = "prefix/${config.invalid.key}/suffix"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1609,10 +1609,10 @@ direction = "inbound"
             assert_eq!(errs.len(), 1);
             let err = &errs[0];
 
-            // The error span should point to the ${.invalid.key} part within the topic string
+            // The error span should point to the ${config.invalid.key} part within the topic string
             let error_text = &toml[err.span.clone()];
             assert!(
-                error_text.contains("invalid.key") || error_text.starts_with("${.invalid"),
+                error_text.contains("invalid.key") || error_text.starts_with("${config.invalid"),
                 "Error span should point to the problematic template variable, got: {:?}",
                 error_text
             );
@@ -1623,10 +1623,10 @@ direction = "inbound"
             let toml = r#"
 local_prefix = ""
 remote_prefix = ""
-if = "${.c8y.mqtt_service.enabled}"
+if = "${config.c8y.mqtt_service.enabled}"
 
 [[rule]]
-topic = "prefix/${.invalid.key}/suffix"
+topic = "prefix/${config.invalid.key}/suffix"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1640,10 +1640,10 @@ direction = "inbound"
             assert_eq!(errs.len(), 1);
             let err = &errs[0];
 
-            // The error span should point to the ${.invalid.key} part within the topic string
+            // The error span should point to the ${config.invalid.key} part within the topic string
             let error_text = &toml[err.span.clone()];
             assert!(
-                error_text.contains("invalid.key") || error_text.starts_with("${.invalid"),
+                error_text.contains("invalid.key") || error_text.starts_with("${config.invalid"),
                 "Error span should point to the problematic template variable, got: {:?}",
                 error_text
             );
@@ -1656,8 +1656,8 @@ local_prefix = ""
 remote_prefix = ""
 
 [[rule]]
-if = "${.c8y.mqtt_service.enabled}"
-topic = "prefix/${.invalid.key}/suffix"
+if = "${config.c8y.mqtt_service.enabled}"
+topic = "prefix/${config.invalid.key}/suffix"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1671,10 +1671,10 @@ direction = "inbound"
             assert_eq!(errs.len(), 1);
             let err = &errs[0];
 
-            // The error span should point to the ${.invalid.key} part within the topic string
+            // The error span should point to the ${config.invalid.key} part within the topic string
             let error_text = &toml[err.span.clone()];
             assert!(
-                error_text.contains("invalid.key") || error_text.starts_with("${.invalid"),
+                error_text.contains("invalid.key") || error_text.starts_with("${config.invalid"),
                 "Error span should point to the problematic template variable, got: {:?}",
                 error_text
             );
@@ -1688,8 +1688,8 @@ remote_prefix = ""
 
 [[template_rule]]
 for = ['a', 'b']
-if = "${.c8y.mqtt_service.enabled}"
-topic = "${@for}/${.invalid.key}/suffix"
+if = "${config.c8y.mqtt_service.enabled}"
+topic = "${@for}/${config.invalid.key}/suffix"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1703,10 +1703,10 @@ direction = "inbound"
             assert_eq!(dbg!(&errs).len(), 1);
             let err = &errs[0];
 
-            // The error span should point to the ${.invalid.key} part within the topic string
+            // The error span should point to the ${config.invalid.key} part within the topic string
             let error_text = &toml[err.span.clone()];
             assert!(
-                error_text.contains("invalid.key") || error_text.starts_with("${.invalid"),
+                error_text.contains("invalid.key") || error_text.starts_with("${config.invalid"),
                 "Error span should point to the problematic template variable, got: {:?}",
                 error_text
             );
@@ -1715,11 +1715,11 @@ direction = "inbound"
         #[test]
         fn template_rules_can_expand_config_templatesets() {
             let toml = r#"
-local_prefix = "${.c8y.bridge.topic_prefix}/"
+local_prefix = "${config.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 
 [[template_rule]]
-for = "${.c8y.smartrest.templates}"
+for = "${config.c8y.smartrest.templates}"
 topic = "s/dc/${@for}"
 direction = "inbound"
 "#;
@@ -1742,7 +1742,7 @@ c8y.smartrest.templates = ["a", "b"]
         #[test]
         fn template_rules_can_expand_literal_arrays() {
             let toml = r#"
-local_prefix = "${.c8y.bridge.topic_prefix}/"
+local_prefix = "${config.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 
 [[template_rule]]
@@ -1775,7 +1775,7 @@ local_prefix = ""
 remote_prefix = ""
 
 [[rule]]
-topic = "start/${.first}/middle/${.second}/end"
+topic = "start/${config.first}/middle/${config.second}/end"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1815,8 +1815,8 @@ local_prefix = ""
 remote_prefix = ""
 
 [[template_rule]]
-for = "${.c8y.smartrest.templates}"
-topic = "${.something.unknown}/${@for}"
+for = "${config.c8y.smartrest.templates}"
+topic = "${config.something.unknown}/${@for}"
 direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1855,12 +1855,12 @@ local_prefix = ""
 remote_prefix = ""
 
 [[rule]]
-topic = "${.first}"
+topic = "${config.first}"
 direction = "inbound"
 
 [[template_rule]]
-for = "${.c8y.smartrest.templates}"
-topic = "${.second}/${@for}"
+for = "${config.c8y.smartrest.templates}"
+topic = "${config.second}/${@for}"
 direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1916,12 +1916,12 @@ local_prefix = "c8y/"
 remote_prefix = ""
 
 [[template_rule]]
-for = "${.c8y.smartrest.templates}"
+for = "${config.c8y.smartrest.templates}"
 topic = "s/uc/${@for}"
 direction = "outbound"
 
 [[template_rule]]
-for = "${.c8y.smartrest.templates}"
+for = "${config.c8y.smartrest.templates}"
 topic = "s/dc/${@for}"
 direction = "inbound"
 "#;
@@ -1962,7 +1962,7 @@ smartrest.templates = ["template1", "template2", "template3"]
         #[test]
         fn templates_are_profile_aware() {
             let toml = r#"
-local_prefix = "${.c8y.bridge.topic_prefix}/"
+local_prefix = "${config.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 
 [[rule]]
@@ -1996,11 +1996,11 @@ bridge.topic_prefix = "test"
         #[test]
         fn entire_templates_can_be_conditionally_disabled() {
             let toml = r##"
-if = "${.c8y.mqtt_service.enabled}"
+if = "${config.c8y.mqtt_service.enabled}"
 remote_prefix = ""
 
 [[rule]]
-local_prefix = "${.c8y.bridge.topic_prefix}/mqtt/out"
+local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/out"
 topic = "#"
 direction = "outbound"
 "##;
@@ -2021,11 +2021,11 @@ c8y.mqtt_service.enabled = false
         #[test]
         fn entire_templates_can_be_conditionally_enabled() {
             let toml = r##"
-if = "${.c8y.mqtt_service.enabled}"
+if = "${config.c8y.mqtt_service.enabled}"
 remote_prefix = ""
 
 [[rule]]
-local_prefix = "${.c8y.bridge.topic_prefix}/mqtt/out"
+local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/out"
 topic = "#"
 direction = "outbound"
 "##;
@@ -2046,7 +2046,7 @@ c8y.mqtt_service.enabled = true
         #[test]
         fn rules_can_be_conditionally_enabled() {
             let toml = r##"
-local_prefix = "${.c8y.bridge.topic_prefix}/"
+local_prefix = "${config.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 
 [[rule]]
@@ -2073,7 +2073,7 @@ direction = "outbound"
         #[test]
         fn template_rules_can_be_conditionally_enabled() {
             let toml = r##"
-local_prefix = "${.c8y.bridge.topic_prefix}/"
+local_prefix = "${config.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 
 [[template_rule]]
