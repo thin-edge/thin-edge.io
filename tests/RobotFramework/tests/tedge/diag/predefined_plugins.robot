@@ -73,8 +73,11 @@ Test Tags           theme:troubleshooting    theme:cli    theme:plugins
     FOR    ${log_name}    IN    @{log_names}
         File Size Is Not Zero    ${log_name}
     END
+    ${log_line_count}=    Execute Command
+    ...    cmd=wc -l /results/test/07_mosquitto/mosquitto.log | awk '{print $1}'
+    ...    strip=${True}
+    Should Be True    int(${log_line_count}) <= 1000
     Execute Command    diff /var/log/mosquitto/mosquitto.log /results/test/07_mosquitto/mosquitto.log
-    Log Should Contain    mosquitto-journal.log    Starting mosquitto.service
 
 
 *** Keywords ***
