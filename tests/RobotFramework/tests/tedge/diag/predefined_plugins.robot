@@ -79,6 +79,15 @@ Test Tags           theme:troubleshooting    theme:cli    theme:plugins
     Should Be True    int(${log_line_count}) <= 1000
     Execute Command    diff /var/log/mosquitto/mosquitto.log /results/test/07_mosquitto/mosquitto.log
 
+08_truststore
+    ${log_names}=    Create List
+    ...    output.log
+    ...    etc_ssl_certs.txt
+    ...    ca-certificates.crt
+    FOR    ${log_name}    IN    @{log_names}
+        File Size Is Not Zero    ${log_name}
+    END
+
 
 *** Keywords ***
 File Size Is Not Zero
