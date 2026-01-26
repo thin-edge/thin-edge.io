@@ -34,7 +34,11 @@ mosquitto_journal() {
 
 mosquitto_log() {
     if [ -f /var/log/mosquitto/mosquitto.log ]; then
-        cp /var/log/mosquitto/mosquitto.log "$OUTPUT_DIR"/
+        # avoid copying the full file as it could be very large if logrotate is not installed and configured
+        # but still log the details as it could be helpful to diagnose
+        echo "mosquitto log file details:" >&2
+        ls -l /var/log/mosquitto/mosquitto.log >&2 ||:
+        tail -n 1000 /var/log/mosquitto/mosquitto.log > "$OUTPUT_DIR"/mosquitto.log ||:
     else
         echo "mosquitto.log not found" >&2
     fi
