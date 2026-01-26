@@ -1,7 +1,10 @@
 export function onMessage(message, context) {
     let topic = message.topic.split('/')
     let name = topic[6];
-    let value = message.payload
+    let value = JSON.parse(message.payload);
+    if (!Number.isFinite(value)) {
+        throw new Error("Invalid payload. Only numbers are accepted");
+    }
 
     let c8y_msg = {
         "type": "custom",
