@@ -1,3 +1,4 @@
+use crate::mea::events::EventConverter;
 use crate::supported_operations::C8yPrefix;
 use crate::supported_operations::Operations;
 use crate::supported_operations::OperationsError;
@@ -9,6 +10,7 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::C8YHttpConfig;
 use camino::Utf8Path;
 use serde_json::Value;
+use std::ops::Add;
 use std::path::Path;
 use std::sync::Arc;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
@@ -291,6 +293,7 @@ impl C8yMapperConfig {
         .try_into()
         .expect("topics that mapper should subscribe to");
 
+        let topic_filter = topic_filter.add(EventConverter::http_event_topic_filter(prefix));
         Ok(topic_filter)
     }
 
