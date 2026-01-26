@@ -53,8 +53,9 @@ install-tools:
     rustup component add rust-analyzer rust-analysis rust-src rustfmt clippy
     rustup toolchain install nightly
     rustup component add rustfmt --toolchain nightly
-    cargo +stable install taplo-cli cargo-nextest
-    cargo +stable install cargo-deny
+    cargo +stable install --locked taplo-cli
+    cargo +stable install --locked cargo-nextest
+    cargo +stable install --locked cargo-deny
 
 # Check if necessary tools are installed
 [private]
