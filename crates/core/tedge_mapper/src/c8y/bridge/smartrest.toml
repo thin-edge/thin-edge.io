@@ -2,22 +2,22 @@ local_prefix = "${config.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 
 [[template_rule]]
-for = "${config.c8y.smartrest1.templates}"
-topic = "s/dl/${@for}"
+for = { item = "template", in = "${config.c8y.smartrest1.templates}" }
+topic = "s/dl/${template}"
 direction = "inbound"
 
 [[template_rule]]
-for = "${config.c8y.smartrest.templates}"
-topic = "s/dc/${@for}"
+for = { item = "template", in = "${config.c8y.smartrest.templates}" }
+topic = "s/dc/${template}"
 direction = "inbound"
 
 [[rule]]
-if = "auth_method(certificate)"
+if = "${connection.auth_method} == 'certificate'"
 topic = "s/dat"
 direction = "inbound"
 
 [[rule]]
-if = "auth_method(certificate)"
+if = "${connection.auth_method} == 'certificate'"
 topic = "s/uat"
 direction = "outbound"
 
@@ -46,19 +46,19 @@ topic = "s/ut/#"
 direction = "outbound"
 
 [[template_rule]]
-for = ['s', 't', 'q', 'c']
-topic = "${@for}/us/#"
+for = { item = "mode", in = ['s', 't', 'q', 'c'] }
+topic = "${mode}/us/#"
 direction = "outbound"
 
 [[template_rule]]
-if = "auth_method(password)"
-for = ['s', 't', 'q', 'c']
-topic = "${@for}/ul/#"
+if = "${connection.auth_method} == 'password'"
+for = { item = "mode", in = ['s', 't', 'q', 'c'] }
+topic = "${mode}/ul/#"
 direction = "outbound"
 
 [[template_rule]]
-for = ['s', 't', 'q', 'c']
-topic = "${@for}/uc/#"
+for = { item = "mode", in = ['s', 't', 'q', 'c'] }
+topic = "${mode}/uc/#"
 direction = "outbound"
 
 [[rule]]
