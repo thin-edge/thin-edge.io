@@ -215,7 +215,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(1).await; // Skip child device registration messages
+        mqtt.skip(2).await; // Skip child device registration messages
                             // Simulate custom operation command with "executing" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///cmd/command/c8y-mapper-1234"),
@@ -389,7 +389,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(1).await; // Skip child device registration messages
+        mqtt.skip(2).await; // Skip child device registration messages
 
         // Simulate custom operation command with "successful" state
         mqtt.send(MqttMessage::new(
