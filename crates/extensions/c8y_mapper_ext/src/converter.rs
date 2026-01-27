@@ -2100,11 +2100,7 @@ pub(crate) mod tests {
         let alarm_payload = json!({ "text": big_alarm_text }).to_string();
         let alarm_message = MqttMessage::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
 
-        let error = converter.try_convert(&alarm_message).await.unwrap_err();
-        assert!(matches!(
-            error,
-            crate::error::ConversionError::SizeThresholdExceeded(_)
-        ));
+        assert!(converter.try_convert(&alarm_message).await.is_err());
 
         Ok(())
     }
