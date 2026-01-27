@@ -103,11 +103,12 @@ impl ExternalPlugin {
         &self,
         config_type: &str,
         target_file_path: &Utf8Path,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<(), ConfigManagementError> {
         let mut command = self.command(GET)?;
         command.arg(config_type);
 
-        let output = self.execute(command, None).await?;
+        let output = self.execute(command, command_log).await?;
 
         let mut file = File::create(target_file_path).map_err(|err| {
             self.plugin_error(format!(
@@ -123,12 +124,13 @@ impl ExternalPlugin {
         &self,
         config_type: &str,
         config_file_path: &Utf8Path,
+        command_log: Option<&mut CommandLog>,
     ) -> Result<(), ConfigManagementError> {
         let mut command = self.command(SET)?;
         command.arg(config_type);
         command.arg(config_file_path);
 
-        self.execute(command, None).await?;
+        self.execute(command, command_log).await?;
 
         Ok(())
     }
