@@ -10,7 +10,6 @@ use tedge_api::measurement::ThinEdgeJsonSerializationError;
 use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::MqttError;
 use tedge_utils::file::FileError;
-use tedge_utils::size_threshold::SizeThresholdExceededError;
 
 // allowing enum_variant_names due to a False positive where it is
 // detected that "all variants have the same prefix: `From`"
@@ -67,9 +66,6 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromThinEdgeJsonParser(#[from] tedge_api::measurement::ThinEdgeJsonParserError),
-
-    #[error(transparent)]
-    SizeThresholdExceeded(#[from] SizeThresholdExceededError),
 
     #[error(transparent)]
     FromMqttClient(#[from] MqttError),
