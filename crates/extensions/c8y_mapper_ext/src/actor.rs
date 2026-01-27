@@ -2,6 +2,7 @@ use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::entity_cache::UpdateOutcome;
+use crate::mea::entities::C8yEntityBirth;
 use crate::service_monitor::is_c8y_bridge_established;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -39,7 +40,6 @@ use tedge_flows::FlowContextHandle;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
@@ -197,24 +197,24 @@ impl C8yMapperActor {
         pending_entities: Vec<RegisteredEntityData>,
     ) -> Result<(), RuntimeError> {
         for pending_entity in pending_entities {
-            let entity_topic_id = pending_entity.reg_message.topic_id.to_string();
+            let entity_topic_id = &pending_entity.reg_message.topic_id;
+            let birth_message = C8yEntityBirth::birth_message(
+                &self.converter.mqtt_schema,
+                &self.converter.config.service_topic_id,
+                entity_topic_id,
+            );
+
             let mut reg_message = pending_entity.reg_message;
             self.converter.append_id_if_not_given(&mut reg_message);
             let reg_message = reg_message.to_mqtt_message(&self.converter.mqtt_schema);
             self.process_message(reg_message).await?;
 
-            // TODO use proper JSON payload
-            let birth_message = MqttMessage::new(
-                &Topic::new_unchecked("te/device/main///status/entities"),
-                format!("te/{}", entity_topic_id),
-            );
             self.mqtt_publisher.send(birth_message).await?;
 
             // Convert and publish cached data messages
             for pending_data_message in pending_entity.data_messages {
-                // FIXME: The c8y converter is no processing these messages
-                //        - How to forward them to the builtin mea flows?
-                //        - An option is to let the flows manage the pending messages.
+                // TODO: Is this still useful?
+                //       MEA messages are no more cached by the c8y converter but by the flows
                 self.process_message(pending_data_message).await?;
             }
         }
