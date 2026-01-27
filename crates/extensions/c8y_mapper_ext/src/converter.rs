@@ -3086,6 +3086,7 @@ pub(crate) mod tests {
 
         let device_id = "test-device".into();
         let device_topic_id = EntityTopicId::default_main_device();
+        let service_topic_id = EntityTopicId::default_main_service("tedge-mapper-c8y").unwrap();
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
         let c8y_host = "test.c8y.io".to_owned();
         let tedge_http_host = "127.0.0.1".into();
@@ -3111,6 +3112,7 @@ pub(crate) mod tests {
             tmp_dir.utf8_path().into(),
             device_id,
             device_topic_id,
+            service_topic_id,
             tedge_config.service.clone(),
             c8y_host.clone(),
             c8y_host,

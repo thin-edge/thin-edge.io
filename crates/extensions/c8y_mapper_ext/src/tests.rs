@@ -3343,6 +3343,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     let device_name = "test-device".into();
     let device_topic_id = EntityTopicId::default_main_device();
+    let service_topic_id = EntityTopicId::default_main_service("tedge-mapper-c8y").unwrap();
     let config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
     let c8y_host = "test.c8y.io".to_owned();
     let tedge_http_host = "localhost:8888".into();
@@ -3379,6 +3380,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         tmp_dir.utf8_path().into(),
         device_name,
         device_topic_id,
+        service_topic_id,
         config.service.clone(),
         c8y_host.clone(),
         c8y_host,
