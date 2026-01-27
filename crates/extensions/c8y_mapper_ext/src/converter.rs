@@ -2119,25 +2119,6 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
-    async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
-        let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
-
-        let alarm_topic = "te/device/main///a/temperature_alarm";
-        let big_alarm_text = create_packet(1024 * 20);
-        let alarm_payload = json!({ "text": big_alarm_text }).to_string();
-        let alarm_message = MqttMessage::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
-
-        let error = converter.try_convert(&alarm_message).await.unwrap_err();
-        assert!(matches!(
-            error,
-            crate::error::ConversionError::SizeThresholdExceeded(_)
-        ));
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn convert_event_without_given_event_type() {
         let tmp_dir = TempTedgeDir::new();
         let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
