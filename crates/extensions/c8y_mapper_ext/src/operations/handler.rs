@@ -251,6 +251,12 @@ impl OperationHandler {
                 (AnyEntity, CommandMetadata(OperationType::DeviceProfile)),
             ]);
         }
+        if capabilities.device_restart {
+            topics.extend([
+                (AnyEntity, Command(OperationType::Restart)),
+                (AnyEntity, CommandMetadata(OperationType::Restart)),
+            ]);
+        }
 
         topics
     }

@@ -32,6 +32,23 @@ tedge-mapper-c8y does not react to local restart operations transitions
     topic=te/device/main///cmd/restart/local-2222    payload={"status":"failed"}    expected_status=failed    c8y_fragment=c8y_Restart
     topic=te/device/main///cmd/restart/local-3333    payload={"status":"successful"}    expected_status=successful    c8y_fragment=c8y_Restart
 
+Supports disabling the Cumulocity c8y_Restart Command
+    Execute Command    tedge config set c8y.enable.device_restart false
+    Execute Command    rm -f /etc/tedge/operations/c8y/c8y_Restart
+
+    Restart Service    tedge-mapper-c8y
+    Service Health Status Should Be Up    tedge-mapper-c8y
+    File Should Not Exist    /etc/tedge/operations/c8y/c8y_Restart
+    Should Not Contain Supported Operations    c8y_Restart
+    ${operation}=    Cumulocity.Restart Device
+    Operation Should Be PENDING    ${operation}    timeout=30
+
+    # Cleanup operation for cleaner logs (as pending operations pollute the test report output)
+    # Note: It does not need to be run under a TearDown hook as this code will only run
+    # if the operation is not processed, otherwise it would of been processed and thus not need cleaning up
+    Execute Command    tedge mqtt pub c8y/s/us '505,${operation.to_json()["id"]},Cancelled operation'
+    Operation Should Be FAILED    ${operation}
+
 
 *** Keywords ***
 Set Service User

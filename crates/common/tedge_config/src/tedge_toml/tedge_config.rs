@@ -699,6 +699,10 @@ define_tedge_config! {
             /// Enable device_profile feature
             #[tedge_config(example = "true", default(value = true))]
             device_profile: bool,
+
+            /// Enable device restart feature
+            #[tedge_config(example = "true", default(value = true))]
+            device_restart: bool,
         },
 
         mapper: {
