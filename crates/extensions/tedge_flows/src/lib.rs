@@ -18,6 +18,8 @@ use crate::actor::STATS_DUMP_INTERVAL;
 pub use crate::config::ConfigError;
 pub use crate::connected_flow::ConnectedFlowRegistry;
 pub use crate::flow::*;
+pub use crate::js_runtime::JsRuntime;
+pub use crate::js_script::JsScript;
 pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
 pub use crate::registry::UpdateFlowRegistryError;
