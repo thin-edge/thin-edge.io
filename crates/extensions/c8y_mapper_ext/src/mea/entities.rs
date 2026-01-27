@@ -10,10 +10,11 @@ use time::OffsetDateTime;
 pub struct C8yEntityBirth {
     pub topic: String,
     pub status: C8yEntityStatus,
-    pub time: OffsetDateTime,
+    pub time: f64,
 }
 
 #[derive(Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum C8yEntityStatus {
     Registered,
     Unregistered,
@@ -35,7 +36,7 @@ impl C8yEntityBirth {
         let birth = C8yEntityBirth {
             topic: entity_topic.to_string(),
             status: C8yEntityStatus::Registered,
-            time: OffsetDateTime::now_utc(),
+            time: OffsetDateTime::now_utc().unix_timestamp_nanos() as f64 / 1e9,
         };
         MqttMessage::new(&message_topic, birth.to_json())
     }
