@@ -6,6 +6,7 @@ use crate::js_runtime::JsRuntime;
 use crate::registry::BaseFlowRegistry;
 use crate::registry::FlowRegistryExt;
 use crate::stats::Counter;
+use crate::stats::StatsPublisher;
 use crate::FlowError;
 use crate::FlowOutput;
 use crate::LoadError;
@@ -174,12 +175,13 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
         Ok(())
     }
 
-    pub async fn dump_processing_stats(&self) {
-        self.stats.dump_processing_stats();
+    pub async fn dump_processing_stats<P: StatsPublisher>(&self, publisher: &P) -> Vec<P::Record> {
+        self.stats.dump_processing_stats(publisher)
     }
 
-    pub async fn dump_memory_stats(&self) {
-        self.js_runtime.dump_memory_stats().await;
+    pub async fn dump_memory_stats<P: StatsPublisher>(&self, publisher: &P) -> Option<P::Record> {
+        let stats = self.js_runtime.dump_memory_stats().await;
+        publisher.publish(&"memory", stats)
     }
 
     pub async fn reload_script(&mut self, path: Utf8PathBuf) {
