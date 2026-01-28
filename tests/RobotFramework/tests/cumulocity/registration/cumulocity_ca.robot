@@ -25,6 +25,22 @@ Register Device Using Cumulocity CA with url flag
     Set Cumulocity URLs
     Execute Command    tedge connect c8y
 
+Reuse existing Device ID whilst downloading
+    [Documentation]    Re-registering the device shouldn't require providing the device-id again
+    [Setup]    Custom Setup
+    ${credentials}=    Bulk Register Device With Cumulocity CA    ${DEVICE_SN}
+    ${DOMAIN}=    Cumulocity.Get Domain
+    Execute Command
+    ...    tedge cert download c8y --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --url ${DOMAIN} --retry-every 5s --max-timeout 30s
+    Set Cumulocity URLs
+    Execute Command    tedge connect c8y
+
+    # re-register the device (ensure that the DEVICE_ID env is also not set)
+    ${credentials}=    Bulk Register Device With Cumulocity CA    ${DEVICE_SN}
+    Execute Command
+    ...    cmd=env DEVICE_ID= tedge cert download c8y --one-time-password '${credentials.one_time_password}' --retry-every 5s --max-timeout 30s
+    Execute Command    tedge reconnect c8y
+
 Certificate Renewal Service Using Cumulocity Certificate Authority
     [Setup]    Setup With Self-Signed Certificate
     ${cert_before}=    Execute Command    tedge cert show | grep -v Status:

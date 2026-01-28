@@ -434,8 +434,13 @@ impl BuildCommand for TEdgeCertCli {
                             )))?
                             .into(),
                     ));
+                let device_id = if id.is_empty() {
+                    c8y_config.device.id().unwrap_or(id)
+                } else {
+                    id
+                };
                 let cmd = c8y::DownloadCertCmd {
-                    device_id: id,
+                    device_id,
                     one_time_password: token,
                     c8y_url,
                     root_certs: config.cloud_root_certs().await?,
@@ -603,7 +608,8 @@ pub enum DownloadCertCli {
     C8y {
         /// The device identifier to be used as the common name for the certificate
         ///
-        /// You will be prompted for input if the value is not provided or is empty
+        /// You will be prompted for input if an existing device id is not set,
+        /// or if the value is not provided or is empty
         #[clap(long = "device-id")]
         #[arg(
             env = "DEVICE_ID",
