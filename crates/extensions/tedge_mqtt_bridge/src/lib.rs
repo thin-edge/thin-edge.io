@@ -1,5 +1,6 @@
 mod backoff;
 pub mod config;
+pub mod config_toml;
 #[cfg(test)]
 mod test_helpers;
 mod topics;
@@ -56,6 +57,7 @@ use crate::backoff::CustomBackoff;
 use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 pub use config::*;
+pub use config_toml::AuthMethod;
 
 const MAX_PACKET_SIZE: usize = 268435455; // maximum allowed MQTT payload size
 

@@ -99,6 +99,7 @@ base64 = "0.22"
 bytes = "1.11"
 camino = "1.1"
 cap = "0.1"
+chumsky = "0.12"
 clap = { version = "4.5", features = [
     "cargo",
     "derive",

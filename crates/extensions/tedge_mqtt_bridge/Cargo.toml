@@ -38,6 +38,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["macros"] }
 toml = { workspace = true }
 tracing = { workspace = true }
+chumsky = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
