@@ -1499,6 +1499,7 @@ pub(crate) mod tests {
     use tedge_config::models::SoftwareManagementApiFlag;
     use tedge_config::models::TopicPrefix;
     use tedge_config::TEdgeConfig;
+    use tedge_flows::ConfigError;
     use tedge_flows::Message;
     use tedge_flows::Transformer;
     use tedge_http_ext::HttpRequest;
@@ -2114,7 +2115,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_without_given_event_type() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
         let event_topic = "te/device/main///e/";
         let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2133,7 +2134,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_use_event_type_from_payload_to_c8y_smartrest() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
         let event_topic = "te/device/main///e/topic_event";
         let event_payload = r#"{ "type": "payload event", "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2152,7 +2153,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_use_event_type_from_payload_to_c8y_json() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "type": "payload event", "text": "tick", "foo": "bar" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2176,7 +2177,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_with_known_fields_to_c8y_smartrest() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2195,12 +2196,11 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_with_custom_c8y_topic_prefix() {
         let tmp_dir = TempTedgeDir::new();
-        let mut config = c8y_converter_config(&tmp_dir);
-        let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
-        config.service = tedge_config.service.clone();
-        config.bridge_config.c8y_prefix = "custom-topic".try_into().unwrap();
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
+        converter
+            .set_config(json!({ "c8y_prefix": "custom-topic"}))
+            .unwrap();
 
-        let (mut converter, _) = create_c8y_converter_from_config(config);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2219,7 +2219,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_with_extra_fields_to_c8y_json() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "text": "tick", "foo": "bar" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -3229,6 +3229,10 @@ pub(crate) mod tests {
                 mea_converter: Default::default(),
                 _http,
             }
+        }
+
+        fn set_config(&mut self, config: Value) -> Result<(), ConfigError> {
+            self.mea_converter.set_config(config.into())
         }
 
         async fn register_source_entities(&mut self, topic: &str) {
