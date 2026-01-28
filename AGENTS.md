@@ -93,7 +93,7 @@ just prepare-dev
 ### High-Level Design
 
 thin-edge.io uses a **distributed actor-based architecture** where components communicate via:
-1. **Local MQTT broker** (rumqttd) - primary IPC mechanism on localhost:1883
+1. **Local MQTT broker** - primary IPC mechanism on localhost:1883
 2. **Actor message passing** - type-safe async channels within processes
 
 **Core concepts:**
@@ -113,7 +113,7 @@ crates/
 │   ├── tedge_agent/    # Cloud-agnostic operations handler
 │   ├── tedge_api/      # Domain models and APIs
 │   ├── plugin_sm/      # Plugin manager for software operations
-│   ├── tedge_write/    # File writing service
+│   ├── tedge_write/    # File writing utility
 │   └── tedge_watchdog/ # Process monitoring
 ├── common/             # Utility libraries
 │   ├── mqtt_channel/   # MQTT client wrapper
@@ -121,7 +121,7 @@ crates/
 │   ├── download/       # File download utilities
 │   ├── upload/         # File upload utilities
 │   └── ...
-├── extensions/         # Optional feature modules (26+ crates)
+├── extensions/         # Optional feature modules
 │   ├── *_mapper_ext/   # Cloud provider mappers (c8y, aws, az)
 │   ├── tedge_mqtt_ext/ # MQTT actor
 │   ├── tedge_flows/    # JavaScript flow engine (QuickJS)
@@ -159,12 +159,12 @@ The project builds a **multicall binary** that acts as different executables bas
 ### MQTT Topic Hierarchy
 
 ```
-te/device/main/                       # Main device
-te/device/main/service/tedge-agent/   # Service registration
-te/device/main/cmd/restart/+          # Commands (inbound)
-te/device/main/status/restart/+       # Status (outbound)
-tedge/commands/req/operation/+        # Cloud-agnostic commands
-tedge/commands/res/operation/+        # Cloud-agnostic responses
+te/device/main//                      # Main device
+te/device/child01//                   # Child device
+te/device/main/service/tedge-agent    # Service registration
+te/device/main///m/temperature/+      # Telemetry (outbound)
+te/device/main///cmd/restart/+        # Commands (inbound)
+te/device/main///status/health/+      # Status (outbound)
 
 # Cloud-specific topics are handled by mappers
 c8y/...                               # Cumulocity topics
@@ -223,22 +223,7 @@ Plugins are **separate executables** (not dynamically loaded libraries) that han
 
 ### General Guidelines
 
-- Follow [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
-- **Avoid unsafe code** unless absolutely necessary
-- Prefer standard library and established crates over custom implementations
-- Use declarative builder patterns for actor composition
-
-### Error Handling
-
-From CODING_GUIDELINES.md:
-- Use `Result<T, E>` for recoverable errors
-- **DO NOT use `panic!()`** - code should not panic
-- **Avoid `unwrap()`** except for:
-  - Mutexes: `lock().unwrap()` is acceptable
-  - Test code
-  - Custom error messages: `.unwrap_or_else(|| panic!("error: {}", foo))`
-- **Prefer `expect()`** over `unwrap()` with detailed error messages
-- Use `assert!()` to protect system invariants (kept in release builds)
+Refer to @CODING_GUIDELINES.md
 
 ### Actor Development Patterns
 
