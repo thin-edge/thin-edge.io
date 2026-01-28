@@ -137,10 +137,10 @@ impl TEdgeConfigDto {
         let ty = T::expected_cloud_type();
         if let Some(profiles) = all_profiles {
             let config_paths = location.config_path::<T>();
-            let default_profile_path = config_paths.path_for(None::<&ProfileName>);
+            let default_profile_path = config_paths.toml_path_for(None::<&ProfileName>);
 
             if !dto.is_default() {
-                let wildcard_profile_path = config_paths.path_for(Some("*"));
+                let wildcard_profile_path = config_paths.toml_path_for(Some("*"));
                 tracing::warn!("{ty} configuration found in `tedge.toml`, but this will be ignored in favour of configuration in {default_profile_path} and {wildcard_profile_path}")
             }
 
@@ -161,7 +161,7 @@ impl TEdgeConfigDto {
             dto.profiles = futures::stream::iter(profiles)
                 .filter_map(futures::future::ready)
                 .then(|profile| async {
-                    let toml_path = config_paths.path_for(Some(&profile));
+                    let toml_path = config_paths.toml_path_for(Some(&profile));
                     let profile_toml = tokio::fs::read_to_string(&toml_path).await?;
                     let mut profiled_config: T::CloudDto = toml::from_str(&profile_toml)
                         .context("failed to deserialise mapper config")?;
