@@ -25,6 +25,7 @@ backoff = { workspace = true }
 bytes = { workspace = true }
 camino = { workspace = true }
 certificate = { workspace = true }
+chumsky = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }
 mutants = { workspace = true }
@@ -38,7 +39,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["macros"] }
 toml = { workspace = true }
 tracing = { workspace = true }
-chumsky = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
