@@ -3696,7 +3696,6 @@ impl Sender<MqttMessage> for MockMqttBox {
         for (topic, sender) in self.senders.iter_mut() {
             if topic.accept(&message) {
                 sender.send(message.clone()).await?;
-            } else {
             }
         }
         Ok(())
