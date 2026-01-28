@@ -115,7 +115,7 @@ pub struct MapperConfigPath<'a> {
 }
 
 impl MapperConfigPath<'_> {
-    pub fn path_for(&self, profile: Option<&(impl AsRef<str> + ?Sized)>) -> Utf8PathBuf {
+    pub fn toml_path_for(&self, profile: Option<&(impl AsRef<str> + ?Sized)>) -> Utf8PathBuf {
         let dir = &*self.base_dir;
         let ty = self.cloud_type;
         match profile {
@@ -123,6 +123,18 @@ impl MapperConfigPath<'_> {
             Some(profile) => {
                 let profile = profile.as_ref();
                 dir.join(format!("{ty}.{profile}/tedge.toml"))
+            }
+        }
+    }
+
+    pub fn dir_for(&self, profile: Option<&(impl AsRef<str> + ?Sized)>) -> Utf8PathBuf {
+        let dir = &*self.base_dir;
+        let ty = self.cloud_type;
+        match profile {
+            None => dir.join(format!("{ty}")),
+            Some(profile) => {
+                let profile = profile.as_ref();
+                dir.join(format!("{ty}.{profile}"))
             }
         }
     }

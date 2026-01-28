@@ -122,13 +122,12 @@ impl PersistedBridgeConfig {
             });
         let template_disabled = file_condition == Some(false);
 
-        let local_prefix =
-            expand_prefix(&self.local_prefix, "local_prefix").unwrap_or_else(|e| {
-                errors.push(e);
-                PrefixExpansionState::Error
-            });
-        let remote_prefix = expand_prefix(&self.remote_prefix, "remote_prefix")
-            .unwrap_or_else(|e| {
+        let local_prefix = expand_prefix(&self.local_prefix, "local_prefix").unwrap_or_else(|e| {
+            errors.push(e);
+            PrefixExpansionState::Error
+        });
+        let remote_prefix =
+            expand_prefix(&self.remote_prefix, "remote_prefix").unwrap_or_else(|e| {
                 errors.push(e);
                 PrefixExpansionState::Error
             });
@@ -219,20 +218,16 @@ impl PersistedBridgeConfig {
                 <_>::default()
             });
 
-            let template_local_prefix =
-                expand_prefix(&template.local_prefix, "local_prefix").unwrap_or_else(
-                    |e| {
-                        errors.push(e);
-                        PrefixExpansionState::Error
-                    },
-                );
-            let template_remote_prefix =
-                expand_prefix(&template.remote_prefix, "remote_prefix").unwrap_or_else(
-                    |e| {
-                        errors.push(e);
-                        PrefixExpansionState::Error
-                    },
-                );
+            let template_local_prefix = expand_prefix(&template.local_prefix, "local_prefix")
+                .unwrap_or_else(|e| {
+                    errors.push(e);
+                    PrefixExpansionState::Error
+                });
+            let template_remote_prefix = expand_prefix(&template.remote_prefix, "remote_prefix")
+                .unwrap_or_else(|e| {
+                    errors.push(e);
+                    PrefixExpansionState::Error
+                });
 
             let final_local_prefix = resolve_prefix(
                 template_local_prefix,
@@ -1149,7 +1144,11 @@ direction = "inbound"
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap_err();
 
-            assert_eq!(errs.len(), 1, "There should be precisely 1 error, got: {errs:?}");
+            assert_eq!(
+                errs.len(),
+                1,
+                "There should be precisely 1 error, got: {errs:?}"
+            );
             let err = &errs[0];
 
             // The error span should point to the ${config.invalid.key} part within the topic string

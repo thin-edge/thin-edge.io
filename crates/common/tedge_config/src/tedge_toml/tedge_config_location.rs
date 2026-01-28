@@ -123,6 +123,10 @@ impl TEdgeConfigLocation {
         tedge_toml.contains_key(cloud_type.as_ref())
     }
 
+    pub fn config_dir<T: ExpectedCloudType>(&self, profile: Option<&ProfileName>) -> Utf8PathBuf {
+        self.config_path::<T>().dir_for(profile)
+    }
+
     pub(crate) fn config_path<T: ExpectedCloudType>(&self) -> MapperConfigPath<'static> {
         MapperConfigPath {
             base_dir: Cow::Owned(self.mappers_config_dir()),
@@ -153,12 +157,12 @@ impl TEdgeConfigLocation {
         let mapper_config_dir = self.mappers_config_dir();
 
         let config_paths = self.config_path::<T>();
-        let filename = config_paths.path_for(profile);
+        let filename = config_paths.toml_path_for(profile);
         let path = mapper_config_dir.join(&filename);
 
         let migrated_config_exists = tokio::task::spawn_blocking({
-            let non_profiled_config = config_paths.path_for(None::<&ProfileName>);
-            let profiled_glob = config_paths.path_for(Some("*"));
+            let non_profiled_config = config_paths.toml_path_for(None::<&ProfileName>);
+            let profiled_glob = config_paths.toml_path_for(Some("*"));
             move || {
                 let non_profiled_configs =
                     glob::glob(non_profiled_config.as_str()).expect("pattern is valid");
@@ -347,7 +351,7 @@ impl TEdgeConfigLocation {
             | ConfigDecision::PermissionError { .. } => {
                 let default_profile = std::iter::once(None);
                 let config_paths = self.config_path::<T>();
-                let glob_pattern = config_paths.path_for(Some("*"));
+                let glob_pattern = config_paths.toml_path_for(Some("*"));
                 let profiles = tokio::task::spawn_blocking(move || {
                     glob::glob(glob_pattern.as_str())
                         .unwrap()
@@ -449,14 +453,18 @@ impl TEdgeConfigLocation {
     {
         if let Some(paths) = cloud.non_profile.config_path() {
             self.store_in(
-                &paths.path_for(None::<&ProfileName>),
+                &paths.toml_path_for(None::<&ProfileName>),
                 &cloud.non_profile,
                 StoreEmptyConfig::No,
             )
             .await?;
             for (name, profile) in &mut cloud.profiles {
-                self.store_in(&paths.path_for(Some(name)), profile, StoreEmptyConfig::No)
-                    .await?;
+                self.store_in(
+                    &paths.toml_path_for(Some(name)),
+                    profile,
+                    StoreEmptyConfig::No,
+                )
+                .await?;
             }
             std::mem::take(cloud);
         }

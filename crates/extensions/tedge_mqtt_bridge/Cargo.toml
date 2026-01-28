@@ -35,8 +35,12 @@ serde_spanned = { workspace = true }
 strum = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_config = { workspace = true }
+tedge_utils = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, default-features = false, features = ["macros"] }
+tokio = { workspace = true, default-features = false, features = [
+    "macros",
+    "fs",
+] }
 toml = { workspace = true }
 tracing = { workspace = true }
 

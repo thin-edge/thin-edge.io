@@ -37,12 +37,15 @@ tedge_mqtt_ext = { workspace = true }
 tedge_signal_ext = { workspace = true }
 tedge_timer_ext = { workspace = true }
 tedge_uploader_ext = { workspace = true }
+tedge_utils = { workspace = true }
 tedge_watch_ext = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 yansi = { workspace = true }
 
 [dev-dependencies]
 tedge_config = { workspace = true, features = ["test"] }
+tedge_test_utils = { workspace = true }
 
 [features]
 default = ["aws", "azure", "c8y", "tedge-flows"]

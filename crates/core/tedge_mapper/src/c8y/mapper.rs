@@ -11,18 +11,20 @@ use c8y_mapper_ext::availability::AvailabilityConfig;
 use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
-use camino::Utf8Path;
 use mqtt_channel::Config;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::models::MQTT_CORE_TLS_PORT;
 use tedge_config::models::MQTT_SERVICE_TLS_PORT;
 use tedge_config::tedge_toml::mapper_config;
+use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
+use tedge_mqtt_bridge::load_bridge_rules_from_directory;
+use tedge_mqtt_bridge::persist_bridge_config_file;
 use tedge_mqtt_bridge::rumqttc::LastWill;
 use tedge_mqtt_bridge::rumqttc::Publish;
 use tedge_mqtt_bridge::rumqttc::Transport;
@@ -64,7 +66,8 @@ impl TEdgeComponent for CumulocityMapper {
                 &c8y_mapper_config,
                 &c8y_mapper_name,
                 self.profile.as_ref(),
-            )?;
+            )
+            .await?;
             runtime
                 .spawn(
                     MqttBridgeActorBuilder::new(
@@ -195,7 +198,7 @@ pub fn service_monitor_client_config(
     Ok(mqtt_config)
 }
 
-fn mqtt_bridge_config(
+async fn mqtt_bridge_config(
     tedge_config: &TEdgeConfig,
     c8y_config: &mapper_config::C8yMapperConfig,
     c8y_mapper_config: &C8yMapperConfig,
@@ -207,7 +210,7 @@ fn mqtt_bridge_config(
         .auth_method
         .is_certificate(&c8y_config.cloud_specific.credentials_path);
     let use_mqtt_service = c8y_config.cloud_specific.mqtt_service.enabled;
-    let bridge_config = template_rules(tedge_config, cloud_profile)?;
+    let bridge_config = bridge_rules(tedge_config, cloud_profile).await?;
 
     let c8y = &c8y_config.mqtt().or_config_not_set()?;
     let mut c8y_port = c8y.port().into();
@@ -304,12 +307,28 @@ fn mqtt_bridge_config(
     Ok((bridge_config, cloud_config, reconnect_message_mapper))
 }
 
-fn template_rules(
+async fn bridge_rules(
     tedge_config: &TEdgeConfig,
     cloud_profile: Option<&ProfileName>,
 ) -> anyhow::Result<BridgeConfig> {
-    let smartrest_config = include_str!("bridge/smartrest.toml");
-    let mqtt_service_config = include_str!("bridge/mqtt-service.toml");
+    let bridge_config_dir = tedge_config
+        .mapper_config_dir::<C8yMapperSpecificConfig>(cloud_profile)
+        .join("bridge");
+
+    // Persist the built-in bridge configuration templates
+    persist_bridge_config_file(
+        &bridge_config_dir,
+        "smartrest",
+        include_str!("bridge/smartrest.toml"),
+    )
+    .await?;
+    persist_bridge_config_file(
+        &bridge_config_dir,
+        "mqtt-service",
+        include_str!("bridge/mqtt-service.toml"),
+    )
+    .await?;
+
     let c8y_config = tedge_config.c8y_mapper_config(&cloud_profile)?;
     let use_certificate = c8y_config
         .cloud_specific
@@ -322,22 +341,8 @@ fn template_rules(
         AuthMethod::Password
     };
 
-    let mut tc = BridgeConfig::new();
-    tc.add_rules_from_template(
-        Utf8Path::new("bridge/smartrest.toml"),
-        smartrest_config,
-        tedge_config,
-        auth_method,
-        cloud_profile,
-    )?;
-    tc.add_rules_from_template(
-        Utf8Path::new("bridge/mqtt-service.toml"),
-        mqtt_service_config,
-        tedge_config,
-        auth_method,
-        cloud_profile,
-    )?;
-    Ok(tc)
+    load_bridge_rules_from_directory(&bridge_config_dir, tedge_config, auth_method, cloud_profile)
+        .await
 }
 
 #[cfg(test)]
@@ -346,6 +351,7 @@ mod tests {
     use std::borrow::Cow;
     use std::collections::BTreeSet;
     use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+    use tedge_test_utils::fs::TempTedgeDir;
 
     /// The static rules that were used before the templates were added, used as a reference point for verifying the templates are correct
     fn static_rules(c8y_config: &mapper_config::C8yMapperConfig) -> anyhow::Result<BridgeConfig> {
@@ -511,9 +517,12 @@ mod tests {
         }
     }
 
-    /// Helper to create TEdgeConfig from TOML string
-    fn load_config(toml: &str) -> TEdgeConfig {
-        TEdgeConfig::load_toml_str(toml)
+    /// Helper to create TEdgeConfig from TOML string using a temp directory
+    async fn load_config(toml: &str) -> (TempTedgeDir, TEdgeConfig) {
+        let ttd = TempTedgeDir::new();
+        ttd.file("tedge.toml").with_raw_content(toml);
+        let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        (ttd, config)
     }
 
     /// Helper to create C8yMapperConfig from TEdgeConfig
@@ -528,18 +537,19 @@ mod tests {
 
         /// Test with certificate auth, no smartrest templates, mqtt_service disabled
         /// This is the minimal configuration
-        #[test]
-        fn certificate_auth_no_templates_no_mqtt_service() {
-            let tedge_config = load_config(
+        #[tokio::test]
+        async fn certificate_auth_no_templates_no_mqtt_service() {
+            let (_ttd, tedge_config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
 "#,
-            );
+            )
+            .await;
             let c8y_config = mapper_config(&tedge_config);
 
             let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = template_rules(&tedge_config, None).unwrap();
+            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
 
             let (static_local, static_remote) = get_subscriptions(&static_config);
             let (template_local, template_remote) = get_subscriptions(&template_config);
@@ -557,19 +567,20 @@ url = "example.com"
         }
 
         /// Test with password auth (no certificate), no smartrest templates, mqtt_service disabled
-        #[test]
-        fn password_auth_no_templates_no_mqtt_service() {
-            let tedge_config = load_config(
+        #[tokio::test]
+        async fn password_auth_no_templates_no_mqtt_service() {
+            let (_ttd, tedge_config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
 auth_method = "basic"
 "#,
-            );
+            )
+            .await;
             let c8y_config = mapper_config(&tedge_config);
 
             let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = template_rules(&tedge_config, None).unwrap();
+            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
 
             let (static_local, static_remote) = get_subscriptions(&static_config);
             let (template_local, template_remote) = get_subscriptions(&template_config);
@@ -587,19 +598,20 @@ auth_method = "basic"
         }
 
         /// Test with certificate auth and SmartREST 2 templates
-        #[test]
-        fn certificate_auth_with_smartrest2_templates() {
-            let tedge_config = load_config(
+        #[tokio::test]
+        async fn certificate_auth_with_smartrest2_templates() {
+            let (_ttd, tedge_config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
 smartrest.templates = ["template1", "template2"]
 "#,
-            );
+            )
+            .await;
             let c8y_config = mapper_config(&tedge_config);
 
             let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = template_rules(&tedge_config, None).unwrap();
+            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
 
             let (static_local, static_remote) = get_subscriptions(&static_config);
             let (template_local, template_remote) = get_subscriptions(&template_config);
@@ -617,19 +629,20 @@ smartrest.templates = ["template1", "template2"]
         }
 
         /// Test with certificate auth and SmartREST 1 templates
-        #[test]
-        fn certificate_auth_with_smartrest1_templates() {
-            let tedge_config = load_config(
+        #[tokio::test]
+        async fn certificate_auth_with_smartrest1_templates() {
+            let (_ttd, tedge_config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
 smartrest1.templates = ["legacy1", "legacy2"]
 "#,
-            );
+            )
+            .await;
             let c8y_config = mapper_config(&tedge_config);
 
             let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = template_rules(&tedge_config, None).unwrap();
+            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
 
             let (static_local, static_remote) = get_subscriptions(&static_config);
             let (template_local, template_remote) = get_subscriptions(&template_config);
@@ -647,20 +660,21 @@ smartrest1.templates = ["legacy1", "legacy2"]
         }
 
         /// Test with both SmartREST 1 and SmartREST 2 templates
-        #[test]
-        fn certificate_auth_with_both_smartrest_templates() {
-            let tedge_config = load_config(
+        #[tokio::test]
+        async fn certificate_auth_with_both_smartrest_templates() {
+            let (_ttd, tedge_config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
 smartrest.templates = ["sr2_a", "sr2_b"]
 smartrest1.templates = ["sr1_a"]
 "#,
-            );
+            )
+            .await;
             let c8y_config = mapper_config(&tedge_config);
 
             let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = template_rules(&tedge_config, None).unwrap();
+            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
 
             let (static_local, static_remote) = get_subscriptions(&static_config);
             let (template_local, template_remote) = get_subscriptions(&template_config);
@@ -678,20 +692,21 @@ smartrest1.templates = ["sr1_a"]
         }
 
         /// Test with mqtt_service enabled (certificate auth)
-        #[test]
-        fn certificate_auth_with_mqtt_service_enabled() {
-            let tedge_config = load_config(
+        #[tokio::test]
+        async fn certificate_auth_with_mqtt_service_enabled() {
+            let (_ttd, tedge_config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
 mqtt_service.enabled = true
 mqtt_service.topics = ["custom/topic1", "custom/topic2/#"]
 "#,
-            );
+            )
+            .await;
             let c8y_config = mapper_config(&tedge_config);
 
             let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = template_rules(&tedge_config, None).unwrap();
+            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
 
             let (static_local, static_remote) = get_subscriptions(&static_config);
             let (template_local, template_remote) = get_subscriptions(&template_config);
@@ -709,19 +724,20 @@ mqtt_service.topics = ["custom/topic1", "custom/topic2/#"]
         }
 
         /// Test with custom bridge topic prefix
-        #[test]
-        fn custom_bridge_topic_prefix() {
-            let tedge_config = load_config(
+        #[tokio::test]
+        async fn custom_bridge_topic_prefix() {
+            let (_ttd, tedge_config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
 bridge.topic_prefix = "custom-c8y"
 "#,
-            );
+            )
+            .await;
             let c8y_config = mapper_config(&tedge_config);
 
             let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = template_rules(&tedge_config, None).unwrap();
+            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
 
             let (static_local, static_remote) = get_subscriptions(&static_config);
             let (template_local, template_remote) = get_subscriptions(&template_config);
@@ -749,9 +765,9 @@ bridge.topic_prefix = "custom-c8y"
         }
 
         /// Test password auth with mqtt_service enabled
-        #[test]
-        fn password_auth_with_mqtt_service() {
-            let tedge_config = load_config(
+        #[tokio::test]
+        async fn password_auth_with_mqtt_service() {
+            let (_ttd, tedge_config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
@@ -759,11 +775,12 @@ auth_method = "basic"
 mqtt_service.enabled = true
 mqtt_service.topics = ["topic/#"]
 "#,
-            );
+            )
+            .await;
             let c8y_config = mapper_config(&tedge_config);
 
             let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = template_rules(&tedge_config, None).unwrap();
+            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
 
             let (static_local, static_remote) = get_subscriptions(&static_config);
             let (template_local, template_remote) = get_subscriptions(&template_config);
@@ -781,23 +798,24 @@ mqtt_service.topics = ["topic/#"]
         }
 
         /// Test with cloud profile
-        #[test]
-        fn with_cloud_profile() {
-            let tedge_config = load_config(
+        #[tokio::test]
+        async fn with_cloud_profile() {
+            let (_ttd, tedge_config) = load_config(
                 r#"
 [c8y.profiles.secondary]
 url = "secondary.example.com"
 bridge.topic_prefix = "c8y-secondary"
 smartrest.templates = ["profile_template"]
 "#,
-            );
+            )
+            .await;
             let profile: ProfileName = "secondary".parse().unwrap();
             let c8y_config = tedge_config
                 .mapper_config::<C8yMapperSpecificConfig>(&Some(profile.clone()))
                 .unwrap();
 
             let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = template_rules(&tedge_config, Some(&profile)).unwrap();
+            let template_config = bridge_rules(&tedge_config, Some(&profile)).await.unwrap();
 
             let (static_local, static_remote) = get_subscriptions(&static_config);
             let (template_local, template_remote) = get_subscriptions(&template_config);
@@ -827,9 +845,9 @@ smartrest.templates = ["profile_template"]
         }
 
         /// Comprehensive test with all features enabled
-        #[test]
-        fn all_features_certificate_auth() {
-            let tedge_config = load_config(
+        #[tokio::test]
+        async fn all_features_certificate_auth() {
+            let (_ttd, tedge_config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
@@ -839,11 +857,12 @@ smartrest1.templates = ["legacy"]
 mqtt_service.enabled = true
 mqtt_service.topics = ["custom/#", "another/topic"]
 "#,
-            );
+            )
+            .await;
             let c8y_config = mapper_config(&tedge_config);
 
             let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = template_rules(&tedge_config, None).unwrap();
+            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
 
             let (static_local, static_remote) = get_subscriptions(&static_config);
             let (template_local, template_remote) = get_subscriptions(&template_config);
@@ -861,9 +880,9 @@ mqtt_service.topics = ["custom/#", "another/topic"]
         }
 
         /// Comprehensive test with all features enabled and password auth
-        #[test]
-        fn all_features_password_auth() {
-            let tedge_config = load_config(
+        #[tokio::test]
+        async fn all_features_password_auth() {
+            let (_ttd, tedge_config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
@@ -874,11 +893,12 @@ smartrest1.templates = ["legacy1", "legacy2"]
 mqtt_service.enabled = true
 mqtt_service.topics = ["custom/#"]
 "#,
-            );
+            )
+            .await;
             let c8y_config = mapper_config(&tedge_config);
 
             let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = template_rules(&tedge_config, None).unwrap();
+            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
 
             let (static_local, static_remote) = get_subscriptions(&static_config);
             let (template_local, template_remote) = get_subscriptions(&template_config);
