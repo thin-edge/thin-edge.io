@@ -37,21 +37,49 @@ pub struct ExpandedBridgeRule {
 }
 
 fn resolve_prefix(
-    per_rule: Option<String>,
-    global: &Option<String>,
+    per_rule: PrefixExpansionState,
+    global: &PrefixExpansionState,
     prefix_name: &str,
     rule_type: &str,
     span: std::ops::Range<usize>,
-) -> Result<String, ExpandError> {
-    per_rule
-        .or_else(|| global.clone())
-        .ok_or_else(|| ExpandError {
+) -> Result<String, Option<ExpandError>> {
+    let expanded = per_rule.or_else(|| global.clone());
+    match expanded {
+        PrefixExpansionState::Expanded(expanded) => Ok(expanded),
+        // We don't have the prefix because it failed to parse, don't generate another error here
+        PrefixExpansionState::Error => Err(None),
+        PrefixExpansionState::NotDefined => Err(Some(ExpandError {
             message: format!("Missing '{prefix_name}' for {rule_type}"),
             help: Some(format!(
             "Add '{prefix_name}' to this {rule_type}, or define it globally at the top of the file"
         )),
             span,
-        })
+        })),
+    }
+}
+
+#[derive(Clone, Debug)]
+enum PrefixExpansionState {
+    NotDefined,
+    Error,
+    Expanded(String),
+}
+
+impl PrefixExpansionState {
+    fn or_else(self, f: impl FnOnce() -> Self) -> Self {
+        match self {
+            Self::Expanded(s) => Self::Expanded(s),
+            Self::NotDefined => f(),
+            Self::Error => {
+                let fallback = f();
+                if let Self::NotDefined = fallback {
+                    Self::Error
+                } else {
+                    fallback
+                }
+            }
+        }
+    }
 }
 
 impl PersistedBridgeConfig {
@@ -61,6 +89,16 @@ impl PersistedBridgeConfig {
         auth_method: AuthMethod,
         cloud_profile: Option<&ProfileName>,
     ) -> Result<Vec<ExpandedBridgeRule>, Vec<ExpandError>> {
+        let expand_prefix = |prefix: &Option<_>, name| match prefix.as_ref() {
+            Some(prefix) => expand_spanned(
+                prefix,
+                config,
+                cloud_profile,
+                &format!("Failed to expand {name}"),
+            )
+            .map(PrefixExpansionState::Expanded),
+            None => Ok(PrefixExpansionState::NotDefined),
+        };
         let mut errors = Vec::new();
         let expand_condition = |condition: Option<&Spanned<String>>, context: &str| {
             condition
@@ -84,37 +122,15 @@ impl PersistedBridgeConfig {
             });
         let template_disabled = file_condition == Some(false);
 
-        let local_prefix = self
-            .local_prefix
-            .as_ref()
-            .map(|rule| {
-                expand_spanned(
-                    rule,
-                    config,
-                    cloud_profile,
-                    "Failed to expand global local_prefix",
-                )
-            })
-            .transpose()
-            .unwrap_or_else(|e| {
+        let local_prefix =
+            expand_prefix(&self.local_prefix, "local_prefix").unwrap_or_else(|e| {
                 errors.push(e);
-                None
+                PrefixExpansionState::Error
             });
-        let remote_prefix = self
-            .remote_prefix
-            .as_ref()
-            .map(|rule| {
-                expand_spanned(
-                    rule,
-                    config,
-                    cloud_profile,
-                    "Failed to expand global remote_prefix",
-                )
-            })
-            .transpose()
+        let remote_prefix = expand_prefix(&self.remote_prefix, "remote_prefix")
             .unwrap_or_else(|e| {
                 errors.push(e);
-                None
+                PrefixExpansionState::Error
             });
 
         let mut expanded_rules = Vec::new();
@@ -128,38 +144,15 @@ impl PersistedBridgeConfig {
                 });
             let rule_disabled = template_disabled || rule_condition == Some(false);
 
-            let rule_local_prefix = rule
-                .local_prefix
-                .as_ref()
-                .map(|spanned| {
-                    expand_spanned(
-                        spanned,
-                        config,
-                        cloud_profile,
-                        "Failed to expand local_prefix",
-                    )
-                })
-                .transpose()
+            let rule_local_prefix = expand_prefix(&rule.local_prefix, "local_prefix")
                 .unwrap_or_else(|e| {
                     errors.push(e);
-                    None
+                    PrefixExpansionState::Error
                 });
-
-            let rule_remote_prefix = rule
-                .remote_prefix
-                .as_ref()
-                .map(|spanned| {
-                    expand_spanned(
-                        spanned,
-                        config,
-                        cloud_profile,
-                        "Failed to expand remote_prefix",
-                    )
-                })
-                .transpose()
+            let rule_remote_prefix = expand_prefix(&rule.remote_prefix, "remote_prefix")
                 .unwrap_or_else(|e| {
                     errors.push(e);
-                    None
+                    PrefixExpansionState::Error
                 });
 
             let final_local_prefix = resolve_prefix(
@@ -170,7 +163,9 @@ impl PersistedBridgeConfig {
                 rule_span.clone(),
             )
             .unwrap_or_else(|e| {
-                errors.push(e);
+                if let Some(e) = e {
+                    errors.push(e);
+                }
                 String::new()
             });
             let final_remote_prefix = resolve_prefix(
@@ -181,7 +176,9 @@ impl PersistedBridgeConfig {
                 rule_span,
             )
             .unwrap_or_else(|e| {
-                errors.push(e);
+                if let Some(e) = e {
+                    errors.push(e);
+                }
                 String::new()
             });
 
@@ -222,38 +219,20 @@ impl PersistedBridgeConfig {
                 <_>::default()
             });
 
-            let template_local_prefix = template
-                .local_prefix
-                .as_ref()
-                .map(|spanned| {
-                    expand_spanned(
-                        spanned,
-                        config,
-                        cloud_profile,
-                        "Failed to expand local_prefix",
-                    )
-                })
-                .transpose()
-                .unwrap_or_else(|e| {
-                    errors.push(e);
-                    None
-                });
-            let template_remote_prefix = template
-                .remote_prefix
-                .as_ref()
-                .map(|spanned| {
-                    expand_spanned(
-                        spanned,
-                        config,
-                        cloud_profile,
-                        "Failed to expand remote_prefix",
-                    )
-                })
-                .transpose()
-                .unwrap_or_else(|e| {
-                    errors.push(e);
-                    None
-                });
+            let template_local_prefix =
+                expand_prefix(&template.local_prefix, "local_prefix").unwrap_or_else(
+                    |e| {
+                        errors.push(e);
+                        PrefixExpansionState::Error
+                    },
+                );
+            let template_remote_prefix =
+                expand_prefix(&template.remote_prefix, "remote_prefix").unwrap_or_else(
+                    |e| {
+                        errors.push(e);
+                        PrefixExpansionState::Error
+                    },
+                );
 
             let final_local_prefix = resolve_prefix(
                 template_local_prefix,
@@ -263,7 +242,9 @@ impl PersistedBridgeConfig {
                 template_span.clone(),
             )
             .unwrap_or_else(|e| {
-                errors.push(e);
+                if let Some(e) = e {
+                    errors.push(e);
+                }
                 <_>::default()
             });
             let final_remote_prefix = resolve_prefix(
@@ -274,7 +255,9 @@ impl PersistedBridgeConfig {
                 template_span,
             )
             .unwrap_or_else(|e| {
-                errors.push(e);
+                if let Some(e) = e {
+                    errors.push(e);
+                }
                 <_>::default()
             });
 
@@ -381,8 +364,15 @@ pub(crate) enum Condition {
     IsTrue(ConfigReference<bool>),
 }
 
-#[derive(//strum::EnumString, 
-    strum::Display, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    //strum::EnumString,
+    strum::Display,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 #[strum(serialize_all = "snake_case")]
 pub enum AuthMethod {
     Certificate,
@@ -790,7 +780,7 @@ impl<Target> TryFrom<String> for ConfigReference<Target> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     mod persisted_bridge_config {
         use super::*;
 
@@ -1159,7 +1149,7 @@ direction = "inbound"
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap_err();
 
-            assert_eq!(dbg!(&errs).len(), 1);
+            assert_eq!(errs.len(), 1, "There should be precisely 1 error, got: {errs:?}");
             let err = &errs[0];
 
             // The error span should point to the ${config.invalid.key} part within the topic string
@@ -1169,6 +1159,72 @@ direction = "inbound"
                 "Error span should point to the problematic template variable, got: {:?}",
                 error_text
             );
+        }
+
+        #[test]
+        fn local_prefix_parse_failure_does_not_cause_spillover_error() {
+            let templates = [
+                r#"
+                
+[[rule]]
+local_prefix = "${"
+                
+                "#
+                .trim(),
+                r#"
+                
+[[template_rule]]
+local_prefix = "${"
+for = { item = "template", in = "${config.c8y.smartrest.templates}" }
+                
+                "#
+                .trim(),
+                r#"
+                
+local_prefix = "${"
+[[rule]]
+                
+                "#
+                .trim(),
+                r#"
+                
+local_prefix = "${"
+[[template_rule]]
+for = { item = "template", in = "${config.c8y.smartrest.templates}" }
+                
+                "#
+                .trim(),
+            ];
+            for template_start in templates {
+                let toml = format!(
+                    r#"
+{template_start}
+remote_prefix = ""
+topic = "${{config.c8y.bridge.topic_prefix}}/something/"
+direction = "inbound"
+"#
+                );
+                let config: PersistedBridgeConfig = toml::from_str(&toml).unwrap();
+                let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+                let errs = config
+                    .expand(&tedge_config, AuthMethod::Certificate, None)
+                    .unwrap_err();
+
+                assert_eq!(
+                    errs.len(),
+                    1,
+                    "Expected 1 error, got {}. Input toml below:\n\n{toml}",
+                    errs.len()
+                );
+                let err = &errs[0];
+
+                assert!(
+                err.message.contains("Failed to expand local_prefix"),
+                "Error message should be about non-parsed prefix, not about a missing one, got: {:?}",
+                err.message
+            );
+            }
         }
 
         #[test]

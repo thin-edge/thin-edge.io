@@ -4,12 +4,15 @@
 //! 1. Lexer: converts input string into a sequence of tokens with spans
 //! 2. Parser: parses tokens into a Condition expression
 
+use super::AuthMethod;
+use super::Condition;
+use super::ConfigReference;
+use super::ExpandError;
 use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 use std::fmt;
 use std::marker::PhantomData;
 use toml::Spanned;
-use super::{AuthMethod, Condition, ConfigReference, ExpandError};
 
 pub type Span<T> = (T, SimpleSpan);
 
@@ -43,7 +46,8 @@ impl fmt::Display for Token<'_> {
 }
 
 fn lexer<'src>(
-) -> impl Parser<'src, &'src str, Vec<Span<Token<'src>>>, extra::Err<Rich<'src, char, SimpleSpan>>> {
+) -> impl Parser<'src, &'src str, Vec<Span<Token<'src>>>, extra::Err<Rich<'src, char, SimpleSpan>>>
+{
     let var_start = just("${").to(Token::VarStart);
     let var_end = just('}').to(Token::VarEnd);
     let dot = just('.').to(Token::Dot);
@@ -299,7 +303,11 @@ mod tests {
         let result = parse_with_spans("${connection.auth_method} == 'invalid'");
         assert!(result.is_err());
         let err = result.unwrap_err();
-        let err_str: String = err.iter().map(|(msg, _)| msg.as_str()).collect::<Vec<_>>().join("; ");
+        let err_str: String = err
+            .iter()
+            .map(|(msg, _)| msg.as_str())
+            .collect::<Vec<_>>()
+            .join("; ");
         assert!(
             err_str.contains("certificate") || err_str.contains("password"),
             "Error should mention valid options: {err_str}"
@@ -449,10 +457,7 @@ mod tests {
         );
 
         // Span should be at end of input
-        assert_eq!(
-            span.start, input.len(),
-            "Span should be at end of input"
-        );
+        assert_eq!(span.start, input.len(), "Span should be at end of input");
     }
 
     #[test]
@@ -470,10 +475,7 @@ mod tests {
         );
 
         // Span should be at end of input
-        assert_eq!(
-            span.start, input.len(),
-            "Span should be at end of input"
-        );
+        assert_eq!(span.start, input.len(), "Span should be at end of input");
     }
 
     /// Test helper that parses and returns errors with their spans

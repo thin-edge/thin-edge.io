@@ -1,5 +1,8 @@
+use crate::config_toml::Direction;
+use crate::config_toml::ExpandError;
 use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
+use crate::AuthMethod;
 use ariadne::Color;
 use ariadne::Label;
 use ariadne::Report;
@@ -17,10 +20,6 @@ use std::path::Path;
 use tedge_config::tedge_toml::CloudConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
-use crate::config_toml::ExpandError;
-use crate::config_toml::Direction;
-use crate::AuthMethod;
-
 
 pub fn use_key_and_cert(
     config: &mut MqttOptions,
@@ -247,10 +246,11 @@ impl BridgeConfig {
         auth_method: AuthMethod,
         cloud_profile: Option<&ProfileName>,
     ) -> Result<(), InvalidBridgeRule> {
-        let config: crate::config_toml::PersistedBridgeConfig = toml::from_str(toml_template).map_err(|e| {
-            print_toml_error(file_path.as_str(), toml_template, &e);
-            InvalidBridgeRule::Template
-        })?;
+        let config: crate::config_toml::PersistedBridgeConfig = toml::from_str(toml_template)
+            .map_err(|e| {
+                print_toml_error(file_path.as_str(), toml_template, &e);
+                InvalidBridgeRule::Template
+            })?;
         let rules = config
             .expand(tedge_config, auth_method, cloud_profile)
             .map_err(|errors| {
