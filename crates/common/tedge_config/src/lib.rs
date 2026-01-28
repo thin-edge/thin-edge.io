@@ -6,6 +6,7 @@ mod system_toml;
 pub use system_toml::*;
 
 pub mod tedge_toml;
+use tedge_config_macros::ProfileName;
 pub use tedge_toml::error::*;
 pub use tedge_toml::models;
 pub use tedge_toml::tedge_config::TEdgeConfig;
@@ -22,6 +23,8 @@ use std::path::Path as StdPath;
 use strum::IntoEnumIterator;
 pub use tedge_config_macros::all_or_nothing;
 pub use tedge_config_macros::OptionalConfig;
+
+use crate::tedge_toml::mapper_config::ExpectedCloudType;
 
 impl TEdgeConfig {
     pub async fn load(config_dir: impl AsRef<StdPath>) -> Result<Self, TEdgeConfigError> {
@@ -57,6 +60,13 @@ impl TEdgeConfig {
             self.location().migrate_mapper_config(cloud_type).await?;
         }
         Ok(())
+    }
+
+    pub fn mapper_config_dir<T: ExpectedCloudType>(
+        &self,
+        profile: Option<&ProfileName>,
+    ) -> camino::Utf8PathBuf {
+        self.location().config_dir::<T>(profile)
     }
 
     #[cfg(feature = "test")]
