@@ -1,0 +1,25 @@
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "download"
+
+[download]
+action = "download"
+on_success = "set"
+on_error = "failed"
+
+[set]
+action = "builtin:config_update:set"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

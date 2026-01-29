@@ -2,7 +2,7 @@ mod actor;
 mod config;
 mod error;
 mod plugin;
-mod plugin_manager;
+pub mod plugin_manager;
 
 #[cfg(test)]
 mod tests;
@@ -13,6 +13,7 @@ pub use config::*;
 use log::error;
 use serde_json::json;
 use std::path::PathBuf;
+use std::vec;
 use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::CloneSender;
@@ -22,6 +23,7 @@ use tedge_actors::MappingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_actors::RequestEnvelope;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
@@ -35,12 +37,17 @@ use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
+use tedge_api::workflow::OperationStep;
+use tedge_api::workflow::OperationStepHandler;
+use tedge_api::workflow::OperationStepRequest;
+use tedge_api::workflow::OperationStepResponse;
 use tedge_api::workflow::SyncOnCommand;
 use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
+use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
@@ -99,6 +106,13 @@ impl ConfigManagerBuilder {
     }
 
     pub async fn init(config: &ConfigManagerConfig) -> Result<(), FileError> {
+        let workflow_file = config.ops_dir.join("config_update.toml");
+        if !workflow_file.exists() {
+            let workflow_definition = include_str!("resources/config_update.toml");
+
+            create_file_with_defaults(workflow_file, Some(workflow_definition)).await?;
+        }
+
         if config.plugin_config_path.exists() {
             return Ok(());
         }
@@ -291,5 +305,21 @@ impl SyncOnCommand for ConfigManagerBuilder {
     /// Return the list of operations for which this actor wants to receive sync signals
     fn sync_on_commands(&self) -> Vec<OperationType> {
         vec![OperationType::SoftwareUpdate]
+    }
+}
+
+impl OperationStepHandler for ConfigManagerBuilder {
+    fn supported_operation_steps(&self) -> Vec<(OperationType, OperationStep)> {
+        vec![(OperationType::ConfigUpdate, "set".into())]
+    }
+}
+
+impl MessageSink<RequestEnvelope<OperationStepRequest, OperationStepResponse>>
+    for ConfigManagerBuilder
+{
+    fn get_sender(
+        &self,
+    ) -> DynSender<RequestEnvelope<OperationStepRequest, OperationStepResponse>> {
+        self.box_builder.get_sender().sender_clone()
     }
 }

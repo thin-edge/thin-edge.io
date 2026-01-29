@@ -8,6 +8,7 @@ use crate::workflow::ExitHandlers;
 use crate::workflow::OperationName;
 use crate::workflow::StateExcerptError;
 use crate::workflow::WorkflowExecutionError;
+use crate::CommandLog;
 use crate::CommandStatus;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -239,6 +240,23 @@ impl GenericCommandState {
         handlers: ExitHandlers,
     ) -> Self {
         let json_update = handlers.state_update(&script, output);
+        self.update_with_json(json_update)
+    }
+
+    /// Update the command state with the result of a builtin action
+    pub async fn update_with_builtin_action_result(
+        self,
+        action: &str,
+        result: Result<Value, String>,
+        handlers: ExitHandlers,
+        log_file: &mut CommandLog,
+    ) -> Self {
+        if let Err(error) = result.as_ref() {
+            log_file
+                .log_error(&format!("builtin action '{}' failed: {}", action, error))
+                .await;
+        }
+        let json_update = handlers.state_update_on_result(action, result);
         self.update_with_json(json_update)
     }
 

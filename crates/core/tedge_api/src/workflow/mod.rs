@@ -17,6 +17,7 @@ pub use handlers::*;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::json;
 pub use state::*;
 use std::collections::HashMap;
@@ -25,10 +26,26 @@ use std::fmt::Formatter;
 pub use supervisor::*;
 
 pub type OperationName = String;
+pub type OperationStep = String;
 pub type StateName = String;
 pub type CommandId = String;
 pub type JsonPath = String;
 pub type WorkflowVersion = String;
+
+/// Request to perform a specific step within a builtin operation.
+///
+/// This request carries the step name and the entire `GenericCommandState` as its payload.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct OperationStepRequest {
+    pub command_step: OperationStep,
+    pub command_state: GenericCommandState,
+}
+
+pub type OperationStepResponse = Result<(), String>;
+
+pub trait OperationStepHandler {
+    fn supported_operation_steps(&self) -> Vec<(OperationType, OperationStep)>;
+}
 
 const BUILT_IN: &str = "builtin";
 
@@ -102,6 +119,18 @@ pub enum OperationAction {
     /// ```
     BgScript(ShellScript, ExecHandlers),
 
+    /// Generic download action (reusable across operations)
+    ///
+    /// Downloads a file from `url` or `remoteUrl` or `tedgeUrl` in the payload and adds the `downloaded_path` to the payload.
+    /// This action is operation-agnostic and can be used by config_update, software_update, etc.
+    ///
+    /// ```toml
+    /// action = "download"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
+    /// ```
+    Download(ExitHandlers),
+
     /// Trigger an operation and move to the next state from where the outcome of the operation will be awaited
     ///
     /// ```toml
@@ -124,6 +153,15 @@ pub enum OperationAction {
     /// on_exec = "<state>"
     /// ```
     BuiltInOperation(OperationName, ExecHandlers),
+
+    /// Trigger a built-in operation step
+    ///
+    /// ```toml
+    /// action = "builtin:config_update:set"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
+    /// ```
+    BuiltInOperationStep(OperationName, OperationStep, ExitHandlers),
 
     /// Await the completion of a sub-operation
     ///
@@ -163,6 +201,7 @@ impl Display for OperationAction {
             OperationAction::AwaitingAgentRestart { .. } => "await agent restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
+            OperationAction::Download(_) => "builtin download action".to_string(),
             OperationAction::Operation(operation, maybe_script, _, _) => match maybe_script {
                 None => format!("execute {operation} as sub-operation"),
                 Some(script) => format!(
@@ -172,6 +211,9 @@ impl Display for OperationAction {
             },
             OperationAction::BuiltInOperation(operation, _) => {
                 format!("execute builtin:{operation}")
+            }
+            OperationAction::BuiltInOperationStep(operation, step, _) => {
+                format!("execute builtin:{operation} action: {step}")
             }
             OperationAction::AwaitOperationCompletion { .. } => {
                 "await sub-operation completion".to_string()

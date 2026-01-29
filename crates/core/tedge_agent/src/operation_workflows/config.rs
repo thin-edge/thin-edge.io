@@ -12,6 +12,7 @@ pub struct OperationConfig {
     pub config_dir: Utf8PathBuf,
     pub state_dir: Utf8PathBuf,
     pub operations_dir: Utf8PathBuf,
+    pub tmp_dir: Utf8PathBuf,
 }
 
 impl OperationConfig {
@@ -31,6 +32,7 @@ impl OperationConfig {
             config_dir: config_dir.to_owned(),
             state_dir: tedge_config.agent.state.path.clone().into(),
             operations_dir: config_dir.join("operations"),
+            tmp_dir: tedge_config.tmp.path.clone().into(),
         })
     }
 }
