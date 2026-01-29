@@ -1,5 +1,6 @@
 use crate::config::ConfigError;
 use crate::js_value::JsonValue;
+use crate::FlowContextHandle;
 use crate::FlowError;
 use crate::LoadError;
 use crate::Message;
@@ -11,6 +12,7 @@ mod ignore_topics;
 mod limit_payload_size;
 mod set_topic;
 mod skip_mosquitto_health_status;
+mod update_context;
 
 pub trait Transformer: Send + Sync + 'static {
     fn name(&self) -> &str;
@@ -18,16 +20,21 @@ pub trait Transformer: Send + Sync + 'static {
     fn set_config(&mut self, config: JsonValue) -> Result<(), ConfigError>;
 
     fn on_message(
-        &self,
+        &mut self,
         timestamp: SystemTime,
         message: &Message,
+        context: &FlowContextHandle,
     ) -> Result<Vec<Message>, FlowError>;
 
     fn is_periodic(&self) -> bool {
         false
     }
 
-    fn on_interval(&self, _timestamp: SystemTime) -> Result<Vec<Message>, FlowError> {
+    fn on_interval(
+        &mut self,
+        _timestamp: SystemTime,
+        _context: &FlowContextHandle,
+    ) -> Result<Vec<Message>, FlowError> {
         Ok(vec![])
     }
 }
@@ -56,6 +63,7 @@ impl Default for BuiltinTransformers {
         transformers.register(ignore_topics::IgnoreTopics::default());
         transformers.register(set_topic::SetTopic::default());
         transformers.register(skip_mosquitto_health_status::SkipMosquittoHealthStatus);
+        transformers.register(update_context::UpdateContext::default());
         transformers
     }
 }
@@ -82,8 +90,10 @@ impl BuiltinTransformers {
 mod tests {
     use super::*;
     use crate::config::StepConfig;
+    use crate::js_lib::kv_store::FlowContextHandle;
     use crate::js_runtime::JsRuntime;
     use crate::steps::FlowStep;
+    use serde_json::json;
     use std::time::Duration;
 
     #[tokio::test]
@@ -93,7 +103,7 @@ builtin = "add-timestamp"
 config = { property = "time", format = "unix" }
         "#;
         let transformers = BuiltinTransformers::new();
-        let (runtime, step) = step_instance(&transformers, step).await;
+        let (runtime, mut step) = step_instance(&transformers, step).await;
 
         let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
         let input = Message::new("clock", "{}");
@@ -111,7 +121,7 @@ builtin = "add-timestamp"
 config = { property = "time", format = "rfc-3339" }
         "#;
         let transformers = BuiltinTransformers::new();
-        let (runtime, step) = step_instance(&transformers, step).await;
+        let (runtime, mut step) = step_instance(&transformers, step).await;
 
         let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
         let input = Message::new("clock", "{}");
@@ -129,7 +139,7 @@ builtin = "add-timestamp"
 config = { property = "time", format = "rfc-3339", reformat = true }
         "#;
         let transformers = BuiltinTransformers::new();
-        let (runtime, step) = step_instance(&transformers, step).await;
+        let (runtime, mut step) = step_instance(&transformers, step).await;
 
         let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
         let input = Message::new("clock", r#"{"time":1765555467}"#);
@@ -140,11 +150,53 @@ config = { property = "time", format = "rfc-3339", reformat = true }
         );
     }
 
+    #[tokio::test]
+    async fn updating_the_context() {
+        let step = r#"
+builtin = "update-context"
+config = { topics = ["units/#"] }
+"#;
+        let transformers = BuiltinTransformers::new();
+        let (runtime, mut step) = step_instance(&transformers, step).await;
+        let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
+
+        // Updating the context
+        let input = Message::new("units/temperature", r#""°C""#);
+        let expected = json!("°C");
+        assert_eq!(
+            step.on_message(&runtime, datetime, &input).await.unwrap(),
+            vec![]
+        );
+        assert_eq!(
+            runtime.context_handle().get_value("units/temperature"),
+            expected.into()
+        );
+
+        // Clearing the context
+        let input = Message::new("units/temperature", "");
+        assert_eq!(
+            step.on_message(&runtime, datetime, &input).await.unwrap(),
+            vec![]
+        );
+        assert_eq!(
+            runtime.context_handle().get_value("units/temperature"),
+            JsonValue::Null
+        );
+
+        // Filtering out messages with a non-relevant topic
+        let input = Message::new("must/not/be/stored/in/the/context", "Garbage");
+        assert_eq!(
+            step.on_message(&runtime, datetime, &input).await.unwrap(),
+            vec![input]
+        );
+    }
+
     async fn step_instance(
         transformers: &BuiltinTransformers,
         config: &str,
     ) -> (JsRuntime, FlowStep) {
-        let mut runtime = JsRuntime::try_new().await.unwrap();
+        let context = FlowContextHandle::default();
+        let mut runtime = JsRuntime::try_new(context).await.unwrap();
         let step = toml::from_str::<StepConfig>(config)
             .unwrap()
             .compile(

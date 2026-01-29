@@ -2,6 +2,7 @@ use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::entity_cache::UpdateOutcome;
+use crate::mea::entities::C8yEntityBirth;
 use crate::service_monitor::is_c8y_bridge_established;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -35,6 +36,7 @@ use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_flows::FlowContextHandle;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
@@ -195,13 +197,24 @@ impl C8yMapperActor {
         pending_entities: Vec<RegisteredEntityData>,
     ) -> Result<(), RuntimeError> {
         for pending_entity in pending_entities {
+            let entity_topic_id = &pending_entity.reg_message.topic_id;
+            let birth_message = C8yEntityBirth::birth_message(
+                &self.converter.mqtt_schema,
+                &self.converter.config.service_topic_id,
+                entity_topic_id,
+            );
+
             let mut reg_message = pending_entity.reg_message;
             self.converter.append_id_if_not_given(&mut reg_message);
             let reg_message = reg_message.to_mqtt_message(&self.converter.mqtt_schema);
             self.process_message(reg_message).await?;
 
+            self.mqtt_publisher.send(birth_message).await?;
+
             // Convert and publish cached data messages
             for pending_data_message in pending_entity.data_messages {
+                // TODO: Is this still useful?
+                //       MEA messages are no more cached by the c8y converter but by the flows
                 self.process_message(pending_data_message).await?;
             }
         }
@@ -354,18 +367,12 @@ impl C8yMapperActor {
     }
 
     pub async fn process_sync_timeout(&mut self) -> Result<(), RuntimeError> {
-        // Once the sync phase is complete, retrieve all sync messages from the converter and process them
-        let sync_messages = self.converter.sync_messages();
-        for message in sync_messages {
-            self.process_mqtt_message(message).await?;
-        }
-
         Ok(())
     }
 }
 
 pub struct C8yMapperBuilder {
-    config: C8yMapperConfig,
+    pub(crate) config: C8yMapperConfig,
     box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput>,
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
@@ -374,6 +381,7 @@ pub struct C8yMapperBuilder {
     uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
+    flow_context: Option<FlowContextHandle>,
 }
 
 impl C8yMapperBuilder {
@@ -425,7 +433,12 @@ impl C8yMapperBuilder {
             downloader,
             bridge_monitor_builder,
             message_handlers,
+            flow_context: None,
         })
+    }
+
+    pub fn set_flow_context(&mut self, flow_context: FlowContextHandle) {
+        self.flow_context = Some(flow_context);
     }
 
     pub async fn init(config: &C8yMapperConfig) -> Result<(), FileError> {
@@ -474,6 +487,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             self.http_proxy,
             self.uploader,
             self.downloader,
+            self.flow_context.unwrap_or_default(),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 

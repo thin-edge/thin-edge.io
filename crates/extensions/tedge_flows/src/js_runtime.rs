@@ -1,5 +1,5 @@
 use crate::js_lib;
-use crate::js_lib::kv_store::KVStore;
+use crate::js_lib::kv_store::FlowContextHandle;
 use crate::js_script::JsScript;
 use crate::js_value::JsonValue;
 use crate::LoadError;
@@ -18,7 +18,7 @@ use tracing::debug;
 
 pub struct JsRuntime {
     runtime: rquickjs::AsyncRuntime,
-    pub(crate) store: KVStore,
+    store: FlowContextHandle,
     worker: mpsc::Sender<JsRequest>,
     execution_timeout: Duration,
 }
@@ -26,7 +26,7 @@ pub struct JsRuntime {
 static TIME_CREDITS: AtomicUsize = AtomicUsize::new(1000);
 
 impl JsRuntime {
-    pub async fn try_new() -> Result<Self, LoadError> {
+    pub async fn try_new(store: FlowContextHandle) -> Result<Self, LoadError> {
         let runtime = rquickjs::AsyncRuntime::new()?;
         runtime.set_memory_limit(16 * 1024 * 1024).await;
         runtime.set_max_stack_size(256 * 1024).await;
@@ -37,7 +37,6 @@ impl JsRuntime {
             })))
             .await;
         let context = rquickjs::AsyncContext::full(&runtime).await?;
-        let store = KVStore::default();
         let worker = JsWorker::spawn(context, store.clone()).await;
         let execution_timeout = Duration::from_secs(5);
         Ok(JsRuntime {
@@ -46,6 +45,10 @@ impl JsRuntime {
             worker,
             execution_timeout,
         })
+    }
+
+    pub fn context_handle(&self) -> FlowContextHandle {
+        self.store.clone()
     }
 
     pub async fn load_script(&mut self, script: &mut JsScript) -> Result<(), LoadError> {
@@ -188,7 +191,10 @@ struct JsWorker {
 }
 
 impl JsWorker {
-    pub async fn spawn(context: rquickjs::AsyncContext, store: KVStore) -> mpsc::Sender<JsRequest> {
+    pub async fn spawn(
+        context: rquickjs::AsyncContext,
+        store: FlowContextHandle,
+    ) -> mpsc::Sender<JsRequest> {
         let (sender, requests) = mpsc::channel(100);
         tokio::spawn(async move {
             let worker = JsWorker { context, requests };
@@ -197,7 +203,7 @@ impl JsWorker {
         sender
     }
 
-    async fn run(mut self, store: KVStore) {
+    async fn run(mut self, store: FlowContextHandle) {
         rquickjs::async_with!(self.context => |ctx| {
             js_lib::console::init(&ctx);
             js_lib::text_decoder::init(&ctx);
