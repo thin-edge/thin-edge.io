@@ -1,6 +1,5 @@
 use super::config::C8yMapperConfig;
 use super::error::CumulocityMapperError;
-use super::service_monitor;
 use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
@@ -51,7 +50,6 @@ use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
 use serde_json::json;
 use serde_json::Value;
-use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
@@ -469,24 +467,6 @@ impl CumulocityConverter {
         };
         self.http_proxy.send_event(create_event).await?;
         Ok(())
-    }
-
-    pub async fn process_health_status_message(
-        &mut self,
-        entity_tid: &EntityTopicId,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let entity = self.entity_cache.try_get(entity_tid)?;
-        let parent_xid = self.entity_cache.parent_external_id(entity_tid)?;
-
-        Ok(convert_health_status_message(
-            &self.config.mqtt_schema,
-            entity,
-            parent_xid,
-            self.entity_cache.main_device_external_id(),
-            message,
-            &self.config.bridge_config.c8y_prefix,
-        ))
     }
 
     async fn parse_c8y_devicecontrol_topic(
@@ -1194,7 +1174,7 @@ impl CumulocityConverter {
 
             Channel::Signal { signal_type } => self.process_signal_message(&source, signal_type),
 
-            Channel::Health => self.process_health_status_message(&source, message).await,
+            Channel::Health => Ok(vec![]),
 
             _ => Ok(vec![]),
         }
@@ -1483,6 +1463,7 @@ pub(crate) mod tests {
     use crate::config::C8yMapperConfig;
     use crate::entity_cache::InvalidExternalIdError;
     use crate::mea::alarms::AlarmConverter;
+    use crate::mea::health::HealthStatusConverter;
     use crate::mea::measurements::MeasurementConverter;
     use crate::supported_operations::operation::ResultFormat;
     use crate::supported_operations::SupportedOperations;
@@ -2776,14 +2757,16 @@ pub(crate) mod tests {
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
         config.service = tedge_config.service.clone();
 
-        let (mut converter, _) = create_c8y_converter_from_config(config);
+        let mut converter = MeaConverter::<HealthStatusConverter>::from_c8y_config(config);
 
         let service_health_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/service1/status/health"),
             serde_json::to_string(&json!({"status": "up"})).unwrap(),
         );
 
-        register_source_entities(&service_health_message.topic.name, &mut converter).await;
+        converter
+            .register_source_entities(&service_health_message.topic.name)
+            .await;
 
         let output = converter.convert(&service_health_message).await;
         let service_creation_message = output
@@ -2796,7 +2779,10 @@ pub(crate) mod tests {
         assert_eq!(smartrest_fields.next().unwrap(), "102");
         assert_eq!(
             smartrest_fields.next().unwrap(),
-            format!("{}:device:main:service:service1", converter.device_name)
+            format!(
+                "{}:device:main:service:service1",
+                converter.c8y_converter.device_name
+            )
         );
         assert_eq!(smartrest_fields.next().unwrap(), "service");
         assert_eq!(smartrest_fields.next().unwrap(), "service1");
@@ -3230,6 +3216,15 @@ pub(crate) mod tests {
     impl<T: Default + Transformer> MeaConverter<T> {
         fn new(tmp_dir: &TempTedgeDir) -> Self {
             let (c8y_converter, _http) = create_c8y_converter(tmp_dir);
+            MeaConverter {
+                c8y_converter,
+                mea_converter: Default::default(),
+                _http,
+            }
+        }
+
+        fn from_c8y_config(config: C8yMapperConfig) -> Self {
+            let (c8y_converter, _http) = create_c8y_converter_from_config(config);
             MeaConverter {
                 c8y_converter,
                 mea_converter: Default::default(),
