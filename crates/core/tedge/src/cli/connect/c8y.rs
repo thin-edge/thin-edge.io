@@ -35,6 +35,7 @@ use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
+use tracing::debug;
 
 const CONNECTION_ERROR_CONTEXT: &str = "Connection error while creating device in Cumulocity";
 
@@ -86,7 +87,11 @@ pub async fn create_device_with_direct_connection(
 
     loop {
         match eventloop.poll().await {
-            Ok(Event::Incoming(Packet::ConnAck(_))) => {
+            Ok(Event::Incoming(Packet::ConnAck(connack))) => {
+                debug!(
+                    "Received ConnAck ({:?}), session_present={:?}",
+                    connack.code, connack.session_present
+                );
                 // Connection established, publish device creation message
                 publish_device_create_message(
                     &mut client,
@@ -96,11 +101,16 @@ pub async fn create_device_with_direct_connection(
                 .await?;
             }
             Ok(Event::Incoming(Packet::PubAck(_))) => {
+                debug!("Received PubAck");
                 // Device creation message acknowledged by the cloud
                 return Ok(());
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
+                debug!("Received Disconnect");
                 bail!("Unexpectedly disconnected from Cumulocity while attempting to create device")
+            }
+            Ok(Event::Incoming(Incoming::PingResp)) => {
+                debug!("Received PingResp");
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No acknowledgment received for device creation message even after 5s (keep alive interval)
@@ -277,12 +287,16 @@ async fn publish_device_create_message(
 ) -> Result<(), ConnectError> {
     use c8y_api::smartrest::message_ids::DEVICE_CREATION;
     const DEVICE_CREATE_PUBLISH_TOPIC: &str = "s/us";
+    let payload = format!("{DEVICE_CREATION},{device_id},{device_type}");
+    debug!(
+        "Registering device in Cumulocity. topic={DEVICE_CREATE_PUBLISH_TOPIC}, payload={payload}"
+    );
     client
         .publish(
             DEVICE_CREATE_PUBLISH_TOPIC,
             QoS::AtLeastOnce,
             false,
-            format!("{DEVICE_CREATION},{},{}", device_id, device_type).as_bytes(),
+            payload.as_bytes(),
         )
         .await?;
     Ok(())
