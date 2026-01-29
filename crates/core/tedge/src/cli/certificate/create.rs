@@ -177,9 +177,7 @@ async fn create_new_file(
     // Ignore errors - This was the behavior with the now deprecated user manager.
     // - When `tedge cert create` is not run as root, a certificate is created but owned by the user running the command.
     // - A better approach could be to remove this `chown` and run the command as mosquitto.
-    let _ =
-        tedge_utils::file::change_user_and_group(path.into(), user.to_string(), group.to_string())
-            .await;
+    let _ = tedge_utils::file::change_user_and_group(path, user, group).await;
 
     Ok(file)
 }

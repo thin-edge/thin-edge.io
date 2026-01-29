@@ -73,15 +73,15 @@ pub enum FileError {
     },
 }
 
-pub async fn create_directory<P: AsRef<Path>>(
-    dir: P,
+pub async fn create_directory(
+    dir: impl AsRef<Path>,
     permissions: &PermissionEntry,
 ) -> Result<(), FileError> {
     permissions.create_directory(dir.as_ref()).await
 }
 
 /// Create the directory owned by the user running this API with default directory permissions
-pub async fn create_directory_with_defaults<P: AsRef<Path>>(dir: P) -> Result<(), FileError> {
+pub async fn create_directory_with_defaults(dir: impl AsRef<Path>) -> Result<(), FileError> {
     create_directory(dir, &PermissionEntry::default()).await
 }
 
@@ -95,8 +95,8 @@ pub async fn create_directory_with_user_group(
     perm_entry.create_directory(dir.as_ref()).await
 }
 
-pub async fn create_file<P: AsRef<Path>>(
-    file: P,
+pub async fn create_file(
+    file: impl AsRef<Path>,
     content: Option<&str>,
     permissions: PermissionEntry,
 ) -> Result<(), FileError> {
@@ -104,8 +104,8 @@ pub async fn create_file<P: AsRef<Path>>(
 }
 
 /// Create the directory owned by the user running this API with default file permissions
-pub async fn create_file_with_defaults<P: AsRef<Path>>(
-    file: P,
+pub async fn create_file_with_defaults(
+    file: impl AsRef<Path>,
     content: Option<&str>,
 ) -> Result<(), FileError> {
     create_file(file, content, PermissionEntry::default()).await
@@ -247,13 +247,13 @@ impl PermissionEntry {
     pub async fn apply(self, path: &Path) -> Result<(), FileError> {
         match (self.user, self.group) {
             (Some(user), Some(group)) => {
-                change_user_and_group(path.to_owned(), user, group).await?;
+                change_user_and_group(path, user, group).await?;
             }
             (Some(user), None) => {
-                change_user(path.to_owned(), user).await?;
+                change_user(path, user).await?;
             }
             (None, Some(group)) => {
-                change_group(path.to_owned(), group).await?;
+                change_group(path, group).await?;
             }
             (None, None) => {}
         }
@@ -329,10 +329,11 @@ impl PermissionEntry {
     ///     Err(_) When it can not create the file with the appropriate owner and access permissions.
     async fn create_file(
         &self,
-        file: &Path,
+        file: impl AsRef<Path>,
         default_content: Option<&str>,
     ) -> Result<(), FileError> {
         let mut options = fs::OpenOptions::new();
+        let file = file.as_ref();
         match options.create_new(true).write(true).open(file).await {
             Ok(mut f) => {
                 self.clone().apply(file).await?;
@@ -362,7 +363,8 @@ impl PermissionEntry {
 }
 
 /// Overwrite the content of existing file. The file permissions will be kept.
-pub async fn overwrite_file(file: &Path, content: &str) -> Result<(), FileError> {
+pub async fn overwrite_file(file: impl AsRef<Path>, content: &str) -> Result<(), FileError> {
+    let file = file.as_ref();
     match fs::OpenOptions::new()
         .write(true)
         .truncate(true)
@@ -393,13 +395,13 @@ pub async fn overwrite_file(file: &Path, content: &str) -> Result<(), FileError>
 }
 
 pub async fn change_user_and_group(
-    file: PathBuf,
-    user: String,
-    group: String,
+    file: impl AsRef<Path>,
+    user: impl Into<String>,
+    group: impl Into<String>,
 ) -> Result<(), FileError> {
-    let file = file.to_owned();
-    let user = user.to_owned();
-    let group = group.to_owned();
+    let file = file.as_ref().to_owned();
+    let user = user.into();
+    let group = group.into();
     tokio::task::spawn_blocking(move || change_user_and_group_sync(&file, &user, &group))
         .await
         .unwrap()
@@ -438,15 +440,18 @@ pub fn change_user_and_group_sync(path: &Path, user: &str, group: &str) -> Resul
     Ok(())
 }
 
-async fn change_user(file: PathBuf, user: String) -> Result<(), FileError> {
+async fn change_user(file: impl Into<PathBuf>, user: impl Into<String>) -> Result<(), FileError> {
+    let file = file.into();
+    let user = user.into();
     tokio::task::spawn_blocking(move || change_user_sync(&file, &user))
         .await
         .unwrap()
 }
 
-fn change_user_sync(file: &Path, user: &str) -> Result<(), FileError> {
+fn change_user_sync(file: impl AsRef<Path>, user: &str) -> Result<(), FileError> {
+    let file = file.as_ref();
     let metadata = get_metadata_sync(file)?;
-    let ud = get_user_by_name(&user)
+    let ud = get_user_by_name(user)
         .map(|u| u.uid())
         .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
 
@@ -466,24 +471,25 @@ fn change_user_sync(file: &Path, user: &str) -> Result<(), FileError> {
 async fn change_group(file: impl Into<PathBuf>, group: impl Into<String>) -> Result<(), FileError> {
     let file = file.into();
     let group = group.into();
-    tokio::task::spawn_blocking(move || change_group_sync(file, group))
+    tokio::task::spawn_blocking(move || change_group_sync(&file, &group))
         .await
         .unwrap()
 }
 
-fn change_group_sync(file: impl Into<PathBuf>, group: impl Into<String>) -> Result<(), FileError> {
-    let file = file.into();
-    let group = group.into();
-    let metadata = get_metadata_sync(&file)?;
-    let gd = get_group_by_name(&group)
+fn change_group_sync(file: impl AsRef<Path>, group: &str) -> Result<(), FileError> {
+    let file = file.as_ref();
+    let metadata = get_metadata_sync(file)?;
+    let gd = get_group_by_name(group)
         .map(|g| g.gid())
-        .ok_or_else(|| FileError::GroupNotFound { group })?;
+        .ok_or_else(|| FileError::GroupNotFound {
+            group: group.to_owned(),
+        })?;
 
     let gid = metadata.gid();
 
     // if group is same as existing, then do not change
     if gd != gid {
-        chown(&file, None, Some(Gid::from_raw(gd))).map_err(|e| FileError::MetaDataError {
+        chown(file, None, Some(Gid::from_raw(gd))).map_err(|e| FileError::MetaDataError {
             name: file.display().to_string(),
             from: e.into(),
         })?;
@@ -492,15 +498,16 @@ fn change_group_sync(file: impl Into<PathBuf>, group: impl Into<String>) -> Resu
     Ok(())
 }
 
-pub async fn change_mode(file: &Path, mode: u32) -> Result<(), FileError> {
-    let file = file.to_owned();
+pub async fn change_mode(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
+    let file = file.as_ref().to_owned();
     tokio::task::spawn_blocking(move || change_mode_sync(&file, mode))
         .await
         .unwrap()
 }
 
-pub fn change_mode_sync(file: &Path, mode: u32) -> Result<(), FileError> {
-    let mut permissions = get_metadata_sync(Path::new(file))?.permissions();
+pub fn change_mode_sync(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
+    let file = file.as_ref();
+    let mut permissions = get_metadata_sync(file)?.permissions();
 
     if permissions.mode() & 0o777 != mode {
         permissions.set_mode(mode);
@@ -519,7 +526,8 @@ pub fn change_mode_sync(file: &Path, mode: u32) -> Result<(), FileError> {
 }
 
 /// Return metadata when the given path exists and accessible by user
-pub async fn get_metadata(path: &Path) -> Result<std::fs::Metadata, FileError> {
+pub async fn get_metadata(path: impl AsRef<Path>) -> Result<std::fs::Metadata, FileError> {
+    let path = path.as_ref();
     fs::metadata(path)
         .await
         .map_err(|_| FileError::PathNotAccessible {
@@ -527,15 +535,16 @@ pub async fn get_metadata(path: &Path) -> Result<std::fs::Metadata, FileError> {
         })
 }
 
-fn get_metadata_sync(path: &Path) -> Result<std::fs::Metadata, FileError> {
+fn get_metadata_sync(path: impl AsRef<Path>) -> Result<std::fs::Metadata, FileError> {
+    let path = path.as_ref();
     std::fs::metadata(path).map_err(|_| FileError::PathNotAccessible {
         path: path.to_path_buf(),
     })
 }
 
 /// Return filename if the given path contains a filename
-pub fn get_filename(path: PathBuf) -> Option<String> {
-    let filename = path.file_name()?.to_str()?.to_string();
+pub fn get_filename(path: impl AsRef<Path>) -> Option<String> {
+    let filename = path.as_ref().file_name()?.to_str()?.to_string();
     Some(filename)
 }
 
@@ -679,9 +688,9 @@ mod tests {
     #[tokio::test]
     async fn create_directory_with_wrong_user() {
         let temp_dir = TempDir::new().unwrap();
-        let dir_path = temp_dir.path().join("dir").display().to_string();
+        let dir_path = temp_dir.path().join("dir");
 
-        let err = create_directory_with_user_group(dir_path, "nonexistent_user", &GROUP, 0o775)
+        let err = create_directory_with_user_group(&dir_path, "nonexistent_user", &GROUP, 0o775)
             .await
             .unwrap_err();
 
@@ -691,9 +700,9 @@ mod tests {
     #[tokio::test]
     async fn create_directory_with_wrong_group() {
         let temp_dir = TempDir::new().unwrap();
-        let dir_path = temp_dir.path().join("dir").display().to_string();
+        let dir_path = temp_dir.path().join("dir");
 
-        let err = create_directory_with_user_group(dir_path, &USER, "nonexistent_group", 0o775)
+        let err = create_directory_with_user_group(&dir_path, &USER, "nonexistent_group", 0o775)
             .await
             .unwrap_err();
 

@@ -99,12 +99,7 @@ impl TEdgeInitCmd {
         let entity_store_file = config_dir.join(".agent").join("entity_store.jsonl");
 
         if entity_store_file.exists() {
-            change_user_and_group(
-                entity_store_file.into(),
-                self.user.to_string(),
-                self.group.to_string(),
-            )
-            .await?;
+            change_user_and_group(entity_store_file, &self.user, &self.group).await?;
         }
 
         Ok(())
