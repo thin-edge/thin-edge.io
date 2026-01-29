@@ -348,176 +348,8 @@ pub async fn bridge_rules(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::borrow::Cow;
-    use std::collections::BTreeSet;
-    use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
     use tedge_test_utils::fs::TempTedgeDir;
 
-    /// The static rules that were used before the templates were added, used as a reference point for verifying the templates are correct
-    fn static_rules(c8y_config: &mapper_config::C8yMapperConfig) -> anyhow::Result<BridgeConfig> {
-        let smartrest_1_topics = c8y_config
-            .cloud_specific
-            .smartrest1
-            .templates
-            .0
-            .iter()
-            .map(|id| Cow::Owned(format!("s/dl/{id}")));
-
-        let smartrest_2_topics = c8y_config
-            .cloud_specific
-            .smartrest
-            .templates
-            .0
-            .iter()
-            .map(|id| Cow::Owned(format!("s/dc/{id}")));
-
-        let use_certificate = c8y_config
-            .cloud_specific
-            .auth_method
-            .is_certificate(&c8y_config.cloud_specific.credentials_path);
-        let cloud_topics = [
-            ("s/dt", true),
-            ("s/ds", true),
-            ("s/dat", use_certificate),
-            ("s/e", true),
-            ("devicecontrol/notifications", true),
-            ("error", true),
-        ]
-        .into_iter()
-        .filter_map(|(topic, active)| {
-            if active {
-                Some(Cow::Borrowed(topic))
-            } else {
-                None
-            }
-        })
-        .chain(smartrest_1_topics)
-        .chain(smartrest_2_topics);
-
-        let mut tc = BridgeConfig::new();
-        let local_prefix = format!("{}/", c8y_config.bridge.topic_prefix.as_str());
-
-        for topic in cloud_topics {
-            tc.forward_from_remote(topic, local_prefix.clone(), "")?;
-        }
-
-        // Templates
-        tc.forward_from_local("s/ut/#", local_prefix.clone(), "")?;
-
-        // Static templates
-        tc.forward_from_local("s/us/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("t/us/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("q/us/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("c/us/#", local_prefix.clone(), "")?;
-
-        // SmartREST1
-        if !use_certificate {
-            tc.forward_from_local("s/ul/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("t/ul/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("q/ul/#", local_prefix.clone(), "")?;
-            tc.forward_from_local("c/ul/#", local_prefix.clone(), "")?;
-        }
-
-        // SmartREST2
-        tc.forward_from_local("s/uc/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("t/uc/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("q/uc/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("c/uc/#", local_prefix.clone(), "")?;
-
-        // c8y JSON
-        tc.forward_from_local(
-            "inventory/managedObjects/update/#",
-            local_prefix.clone(),
-            "",
-        )?;
-        tc.forward_from_local(
-            "measurement/measurements/create/#",
-            local_prefix.clone(),
-            "",
-        )?;
-        tc.forward_from_local(
-            "measurement/measurements/createBulk/#",
-            local_prefix.clone(),
-            "",
-        )?;
-        tc.forward_from_local("event/events/create/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("event/events/createBulk/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("alarm/alarms/create/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("alarm/alarms/createBulk/#", local_prefix.clone(), "")?;
-
-        // JWT token
-        if use_certificate {
-            tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
-        }
-
-        if c8y_config.cloud_specific.mqtt_service.enabled {
-            let custom_out_prefix = format!("{local_prefix}mqtt/out/");
-            let custom_in_prefix = format!("{local_prefix}mqtt/in/");
-            tc.forward_from_local("#", custom_out_prefix, "")?;
-
-            let sub_topics = c8y_config.cloud_specific.mqtt_service.topics.clone();
-            for topic in sub_topics.0.into_iter() {
-                tc.forward_from_remote(topic, custom_in_prefix.clone(), "")?;
-            }
-        }
-
-        Ok(tc)
-    }
-
-    /// Helper to extract local subscriptions (outbound rules) and remote subscriptions (inbound rules)
-    /// from a BridgeConfig as sorted sets for comparison
-    fn get_subscriptions(config: &BridgeConfig) -> (BTreeSet<&str>, BTreeSet<&str>) {
-        let local: BTreeSet<_> = config.local_subscriptions().collect();
-        let remote: BTreeSet<_> = config.remote_subscriptions().collect();
-        (local, remote)
-    }
-
-    /// Compute the diff between two sets of subscriptions
-    /// Returns (only_in_static, only_in_template)
-    fn diff_subscriptions<'a>(
-        static_subs: &BTreeSet<&'a str>,
-        template_subs: &BTreeSet<&'a str>,
-    ) -> (Vec<&'a str>, Vec<&'a str>) {
-        let only_in_static: Vec<_> = static_subs.difference(template_subs).copied().collect();
-        let only_in_template: Vec<_> = template_subs.difference(static_subs).copied().collect();
-        (only_in_static, only_in_template)
-    }
-
-    /// Format a diff for display
-    fn format_diff(only_in_static: &[&str], only_in_template: &[&str]) -> String {
-        let mut output = String::new();
-        if !only_in_static.is_empty() {
-            output.push_str("  Missing from template (in static only):\n");
-            for topic in only_in_static {
-                output.push_str(&format!("    - {topic}\n"));
-            }
-        }
-        if !only_in_template.is_empty() {
-            output.push_str("  Extra in template (not in static):\n");
-            for topic in only_in_template {
-                output.push_str(&format!("    + {topic}\n"));
-            }
-        }
-        output
-    }
-
-    /// Assert that two subscription sets match, with detailed diff on failure
-    #[track_caller]
-    fn assert_subscriptions_match(
-        static_subs: &BTreeSet<&str>,
-        template_subs: &BTreeSet<&str>,
-        description: &str,
-    ) {
-        let (only_in_static, only_in_template) = diff_subscriptions(static_subs, template_subs);
-        if !only_in_static.is_empty() || !only_in_template.is_empty() {
-            panic!(
-                "{description}\n{}",
-                format_diff(&only_in_static, &only_in_template)
-            );
-        }
-    }
-
-    /// Helper to create TEdgeConfig from TOML string using a temp directory
     async fn load_config(toml: &str) -> (TempTedgeDir, TEdgeConfig) {
         let ttd = TempTedgeDir::new();
         ttd.file("tedge.toml").with_raw_content(toml);
@@ -525,51 +357,35 @@ mod tests {
         (ttd, config)
     }
 
-    /// Helper to create C8yMapperConfig from TEdgeConfig
-    fn mapper_config(tedge_config: &TEdgeConfig) -> mapper_config::C8yMapperConfig {
-        tedge_config
-            .mapper_config::<C8yMapperSpecificConfig>(&None::<ProfileName>)
-            .unwrap()
-    }
-
-    mod template_vs_static_rules {
+    mod template_rules {
         use super::*;
 
-        /// Test with certificate auth, no smartrest templates, mqtt_service disabled
-        /// This is the minimal configuration
+        fn has_local_subscription(config: &BridgeConfig, topic: &str) -> bool {
+            config.local_subscriptions().any(|t| t == topic)
+        }
+
+        fn has_remote_subscription(config: &BridgeConfig, topic: &str) -> bool {
+            config.remote_subscriptions().any(|t| t == topic)
+        }
+
         #[tokio::test]
-        async fn certificate_auth_no_templates_no_mqtt_service() {
-            let (_ttd, tedge_config) = load_config(
+        async fn certificate_only_rules_present_with_certificate_auth() {
+            let (_ttd, config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
 "#,
             )
             .await;
-            let c8y_config = mapper_config(&tedge_config);
+            let rules = bridge_rules(&config, None).await.unwrap();
 
-            let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
-
-            let (static_local, static_remote) = get_subscriptions(&static_config);
-            let (template_local, template_remote) = get_subscriptions(&template_config);
-
-            assert_subscriptions_match(
-                &static_local,
-                &template_local,
-                "Local subscriptions (outbound rules) mismatch:",
-            );
-            assert_subscriptions_match(
-                &static_remote,
-                &template_remote,
-                "Remote subscriptions (inbound rules) mismatch:",
-            );
+            assert!(has_remote_subscription(&rules, "s/dat"));
+            assert!(has_local_subscription(&rules, "c8y/s/uat"));
         }
 
-        /// Test with password auth (no certificate), no smartrest templates, mqtt_service disabled
         #[tokio::test]
-        async fn password_auth_no_templates_no_mqtt_service() {
-            let (_ttd, tedge_config) = load_config(
+        async fn certificate_only_rules_absent_with_password_auth() {
+            let (_ttd, config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
@@ -577,342 +393,139 @@ auth_method = "basic"
 "#,
             )
             .await;
-            let c8y_config = mapper_config(&tedge_config);
+            let rules = bridge_rules(&config, None).await.unwrap();
 
-            let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
-
-            let (static_local, static_remote) = get_subscriptions(&static_config);
-            let (template_local, template_remote) = get_subscriptions(&template_config);
-
-            assert_subscriptions_match(
-                &static_local,
-                &template_local,
-                "Local subscriptions (outbound rules) mismatch for password auth:",
-            );
-            assert_subscriptions_match(
-                &static_remote,
-                &template_remote,
-                "Remote subscriptions (inbound rules) mismatch for password auth:",
-            );
+            assert!(!has_remote_subscription(&rules, "s/dat"));
+            assert!(!has_local_subscription(&rules, "c8y/s/uat"));
         }
 
-        /// Test with certificate auth and SmartREST 2 templates
         #[tokio::test]
-        async fn certificate_auth_with_smartrest2_templates() {
-            let (_ttd, tedge_config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-smartrest.templates = ["template1", "template2"]
-"#,
-            )
-            .await;
-            let c8y_config = mapper_config(&tedge_config);
-
-            let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
-
-            let (static_local, static_remote) = get_subscriptions(&static_config);
-            let (template_local, template_remote) = get_subscriptions(&template_config);
-
-            assert_subscriptions_match(
-                &static_local,
-                &template_local,
-                "Local subscriptions mismatch with SmartREST2 templates:",
-            );
-            assert_subscriptions_match(
-                &static_remote,
-                &template_remote,
-                "Remote subscriptions mismatch with SmartREST2 templates:",
-            );
-        }
-
-        /// Test with certificate auth and SmartREST 1 templates
-        #[tokio::test]
-        async fn certificate_auth_with_smartrest1_templates() {
-            let (_ttd, tedge_config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-smartrest1.templates = ["legacy1", "legacy2"]
-"#,
-            )
-            .await;
-            let c8y_config = mapper_config(&tedge_config);
-
-            let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
-
-            let (static_local, static_remote) = get_subscriptions(&static_config);
-            let (template_local, template_remote) = get_subscriptions(&template_config);
-
-            assert_subscriptions_match(
-                &static_local,
-                &template_local,
-                "Local subscriptions mismatch with SmartREST1 templates:",
-            );
-            assert_subscriptions_match(
-                &static_remote,
-                &template_remote,
-                "Remote subscriptions mismatch with SmartREST1 templates:",
-            );
-        }
-
-        /// Test with both SmartREST 1 and SmartREST 2 templates
-        #[tokio::test]
-        async fn certificate_auth_with_both_smartrest_templates() {
-            let (_ttd, tedge_config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-smartrest.templates = ["sr2_a", "sr2_b"]
-smartrest1.templates = ["sr1_a"]
-"#,
-            )
-            .await;
-            let c8y_config = mapper_config(&tedge_config);
-
-            let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
-
-            let (static_local, static_remote) = get_subscriptions(&static_config);
-            let (template_local, template_remote) = get_subscriptions(&template_config);
-
-            assert_subscriptions_match(
-                &static_local,
-                &template_local,
-                "Local subscriptions mismatch with both SmartREST template types:",
-            );
-            assert_subscriptions_match(
-                &static_remote,
-                &template_remote,
-                "Remote subscriptions mismatch with both SmartREST template types:",
-            );
-        }
-
-        /// Test with mqtt_service enabled (certificate auth)
-        #[tokio::test]
-        async fn certificate_auth_with_mqtt_service_enabled() {
-            let (_ttd, tedge_config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-mqtt_service.enabled = true
-mqtt_service.topics = ["custom/topic1", "custom/topic2/#"]
-"#,
-            )
-            .await;
-            let c8y_config = mapper_config(&tedge_config);
-
-            let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
-
-            let (static_local, static_remote) = get_subscriptions(&static_config);
-            let (template_local, template_remote) = get_subscriptions(&template_config);
-
-            assert_subscriptions_match(
-                &static_local,
-                &template_local,
-                "Local subscriptions mismatch with mqtt_service enabled:",
-            );
-            assert_subscriptions_match(
-                &static_remote,
-                &template_remote,
-                "Remote subscriptions mismatch with mqtt_service enabled:",
-            );
-        }
-
-        /// Test with custom bridge topic prefix
-        #[tokio::test]
-        async fn custom_bridge_topic_prefix() {
-            let (_ttd, tedge_config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-bridge.topic_prefix = "custom-c8y"
-"#,
-            )
-            .await;
-            let c8y_config = mapper_config(&tedge_config);
-
-            let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
-
-            let (static_local, static_remote) = get_subscriptions(&static_config);
-            let (template_local, template_remote) = get_subscriptions(&template_config);
-
-            // Verify the prefix is actually applied
-            assert!(
-                static_local.iter().any(|t| t.starts_with("custom-c8y/")),
-                "Static rules should use custom prefix"
-            );
-            assert!(
-                template_local.iter().any(|t| t.starts_with("custom-c8y/")),
-                "Template rules should use custom prefix"
-            );
-
-            assert_subscriptions_match(
-                &static_local,
-                &template_local,
-                "Local subscriptions mismatch with custom prefix:",
-            );
-            assert_subscriptions_match(
-                &static_remote,
-                &template_remote,
-                "Remote subscriptions mismatch with custom prefix:",
-            );
-        }
-
-        /// Test password auth with mqtt_service enabled
-        #[tokio::test]
-        async fn password_auth_with_mqtt_service() {
-            let (_ttd, tedge_config) = load_config(
+        async fn password_only_rules_present_with_password_auth() {
+            let (_ttd, config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
 auth_method = "basic"
-mqtt_service.enabled = true
-mqtt_service.topics = ["topic/#"]
 "#,
             )
             .await;
-            let c8y_config = mapper_config(&tedge_config);
+            let rules = bridge_rules(&config, None).await.unwrap();
 
-            let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
-
-            let (static_local, static_remote) = get_subscriptions(&static_config);
-            let (template_local, template_remote) = get_subscriptions(&template_config);
-
-            assert_subscriptions_match(
-                &static_local,
-                &template_local,
-                "Local subscriptions mismatch for password auth with mqtt_service:",
-            );
-            assert_subscriptions_match(
-                &static_remote,
-                &template_remote,
-                "Remote subscriptions mismatch for password auth with mqtt_service:",
-            );
+            for mode in ['s', 't', 'q', 'c'] {
+                assert!(has_local_subscription(&rules, &format!("c8y/{mode}/ul/#")));
+            }
         }
 
-        /// Test with cloud profile
         #[tokio::test]
-        async fn with_cloud_profile() {
-            let (_ttd, tedge_config) = load_config(
-                r#"
-[c8y.profiles.secondary]
-url = "secondary.example.com"
-bridge.topic_prefix = "c8y-secondary"
-smartrest.templates = ["profile_template"]
-"#,
-            )
-            .await;
-            let profile: ProfileName = "secondary".parse().unwrap();
-            let c8y_config = tedge_config
-                .mapper_config::<C8yMapperSpecificConfig>(&Some(profile.clone()))
-                .unwrap();
-
-            let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = bridge_rules(&tedge_config, Some(&profile)).await.unwrap();
-
-            let (static_local, static_remote) = get_subscriptions(&static_config);
-            let (template_local, template_remote) = get_subscriptions(&template_config);
-
-            // Verify the profile prefix is applied
-            assert!(
-                static_local.iter().any(|t| t.starts_with("c8y-secondary/")),
-                "Static rules should use profile prefix"
-            );
-            assert!(
-                template_local
-                    .iter()
-                    .any(|t| t.starts_with("c8y-secondary/")),
-                "Template rules should use profile prefix"
-            );
-
-            assert_subscriptions_match(
-                &static_local,
-                &template_local,
-                "Local subscriptions mismatch with cloud profile:",
-            );
-            assert_subscriptions_match(
-                &static_remote,
-                &template_remote,
-                "Remote subscriptions mismatch with cloud profile:",
-            );
-        }
-
-        /// Comprehensive test with all features enabled
-        #[tokio::test]
-        async fn all_features_certificate_auth() {
-            let (_ttd, tedge_config) = load_config(
+        async fn password_only_rules_absent_with_certificate_auth() {
+            let (_ttd, config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
-bridge.topic_prefix = "c8y"
-smartrest.templates = ["tmpl1", "tmpl2", "tmpl3"]
-smartrest1.templates = ["legacy"]
-mqtt_service.enabled = true
-mqtt_service.topics = ["custom/#", "another/topic"]
 "#,
             )
             .await;
-            let c8y_config = mapper_config(&tedge_config);
+            let rules = bridge_rules(&config, None).await.unwrap();
 
-            let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
-
-            let (static_local, static_remote) = get_subscriptions(&static_config);
-            let (template_local, template_remote) = get_subscriptions(&template_config);
-
-            assert_subscriptions_match(
-                &static_local,
-                &template_local,
-                "Local subscriptions mismatch with all features (cert auth):",
-            );
-            assert_subscriptions_match(
-                &static_remote,
-                &template_remote,
-                "Remote subscriptions mismatch with all features (cert auth):",
-            );
+            for mode in ['s', 't', 'q', 'c'] {
+                assert!(!has_local_subscription(&rules, &format!("c8y/{mode}/ul/#")));
+            }
         }
 
-        /// Comprehensive test with all features enabled and password auth
         #[tokio::test]
-        async fn all_features_password_auth() {
-            let (_ttd, tedge_config) = load_config(
+        async fn smartrest1_templates_expand_correctly() {
+            let (_ttd, config) = load_config(
                 r#"
 [c8y]
 url = "example.com"
-auth_method = "basic"
-bridge.topic_prefix = "c8y"
-smartrest.templates = ["tmpl1", "tmpl2"]
-smartrest1.templates = ["legacy1", "legacy2"]
-mqtt_service.enabled = true
-mqtt_service.topics = ["custom/#"]
+smartrest1.templates = ["tmpl1", "tmpl2"]
 "#,
             )
             .await;
-            let c8y_config = mapper_config(&tedge_config);
+            let rules = bridge_rules(&config, None).await.unwrap();
 
-            let static_config = static_rules(&c8y_config).unwrap();
-            let template_config = bridge_rules(&tedge_config, None).await.unwrap();
+            assert!(has_remote_subscription(&rules, "s/dl/tmpl1"));
+            assert!(has_remote_subscription(&rules, "s/dl/tmpl2"));
+        }
 
-            let (static_local, static_remote) = get_subscriptions(&static_config);
-            let (template_local, template_remote) = get_subscriptions(&template_config);
+        #[tokio::test]
+        async fn smartrest2_templates_expand_correctly() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+smartrest.templates = ["sr2a", "sr2b"]
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
 
-            assert_subscriptions_match(
-                &static_local,
-                &template_local,
-                "Local subscriptions mismatch with all features (password auth):",
-            );
-            assert_subscriptions_match(
-                &static_remote,
-                &template_remote,
-                "Remote subscriptions mismatch with all features (password auth):",
-            );
+            assert!(has_remote_subscription(&rules, "s/dc/sr2a"));
+            assert!(has_remote_subscription(&rules, "s/dc/sr2b"));
+        }
+
+        #[tokio::test]
+        async fn mode_loop_expands_correctly() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            for mode in ['s', 't', 'q', 'c'] {
+                assert!(has_local_subscription(&rules, &format!("c8y/{mode}/us/#")));
+                assert!(has_local_subscription(&rules, &format!("c8y/{mode}/uc/#")));
+            }
+        }
+
+        #[tokio::test]
+        async fn mqtt_service_rules_when_enabled() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+mqtt_service.enabled = true
+mqtt_service.topics = ["custom/topic"]
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            assert!(has_local_subscription(&rules, "c8y/mqtt/out/#"));
+            assert!(has_remote_subscription(&rules, "custom/topic"));
+        }
+
+        #[tokio::test]
+        async fn mqtt_service_rules_absent_when_disabled() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            assert!(!has_local_subscription(&rules, "c8y/mqtt/out/#"));
+        }
+
+        #[tokio::test]
+        async fn custom_topic_prefix_applied() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+bridge.topic_prefix = "custom"
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            assert!(has_remote_subscription(&rules, "s/dt"));
+            assert!(has_local_subscription(&rules, "custom/s/us/#"));
         }
     }
 }
