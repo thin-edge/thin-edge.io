@@ -95,7 +95,7 @@ pub async fn create_device_with_direct_connection(
                 )
                 .await?;
             }
-            Ok(Event::Incoming(Packet::PubComp(_))) => {
+            Ok(Event::Incoming(Packet::PubAck(_))) => {
                 // Device creation message acknowledged by the cloud
                 return Ok(());
             }
@@ -280,7 +280,7 @@ async fn publish_device_create_message(
     client
         .publish(
             DEVICE_CREATE_PUBLISH_TOPIC,
-            QoS::ExactlyOnce,
+            QoS::AtLeastOnce,
             false,
             format!("{DEVICE_CREATION},{},{}", device_id, device_type).as_bytes(),
         )
