@@ -160,7 +160,7 @@ impl TopicFilter {
     }
 
     /// Check if the given pattern is already matched by this filter pattern.
-    fn include_topic(&self, sub_pattern: &str) -> bool {
+    pub fn include_topic(&self, sub_pattern: &str) -> bool {
         self.patterns
             .iter()
             .any(|pattern| rumqttc::matches(sub_pattern, pattern))
