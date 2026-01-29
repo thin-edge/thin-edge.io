@@ -1352,7 +1352,6 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
         [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3")],
     )
     .await;
-    /*
 
     // Then the agent start adding it's own set of capabilities
     mqtt.send(
@@ -1387,7 +1386,6 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
         )],
     )
     .await;
-    */
 }
 
 #[tokio::test]
@@ -3428,7 +3426,8 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         .await
         .unwrap();
     flows_mapper.connect(&mut mqtt_builder);
-    flows_mapper.connect_fs(&mut fs_watcher_builder);
+    // The fs_watcher_builder is a fake actor which can only handle at most one peer
+    // => for these tests, the flows mapper is only connected to mqtt ignoring all fs events
     c8y_mapper_builder.set_flow_context(flows_mapper.context_handle());
 
     let actor = c8y_mapper_builder.build();
