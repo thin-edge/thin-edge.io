@@ -193,6 +193,14 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                     ))?;
                     Ok(OperationAction::BuiltIn(exec_handlers, await_handlers))
                 }
+                "download" => {
+                    let handlers = ExitHandlers::try_from(input.handlers)?;
+                    Ok(OperationAction::Download(handlers))
+                }
+                "config_set" => {
+                    let handlers = ExitHandlers::try_from(input.handlers)?;
+                    Ok(OperationAction::ConfigSet(handlers))
+                }
                 _ => Err(WorkflowDefinitionError::UnknownAction { action: command }),
             },
         }
@@ -822,5 +830,75 @@ on_error = "failed"
         let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
         let res = OperationWorkflow::try_from(input);
         assert_matches!(res, Err(WorkflowDefinitionError::InvalidPathExpression(_)));
+    }
+
+    #[test]
+    fn parse_download_action() {
+        let file = r#"
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "download"
+
+[download]
+action = "download"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let workflow = OperationWorkflow::try_from(input).unwrap();
+
+        match workflow.states.get("download").unwrap() {
+            OperationAction::Download(handlers) => {
+                // Verify handlers are present
+                assert_eq!(
+                    handlers.state_update_on_exit("download", 0).status,
+                    "successful"
+                );
+            }
+            other => panic!("Expected Download action, but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_config_set_action() {
+        let file = r#"
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "set"
+
+[set]
+action = "config_set"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let workflow = OperationWorkflow::try_from(input).unwrap();
+
+        match workflow.states.get("set").unwrap() {
+            OperationAction::ConfigSet(handlers) => {
+                // Verify handlers are present
+                assert_eq!(
+                    handlers.state_update_on_exit("config_set", 0).status,
+                    "successful"
+                );
+            }
+            other => panic!("Expected ConfigSet action, but got {:?}", other),
+        }
     }
 }

@@ -33,10 +33,17 @@ use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
 use tedge_api::workflow::SyncOnCommand;
+use tedge_config_manager::ConfigSetRequest;
+use tedge_config_manager::ConfigSetResponse;
+use tedge_downloader_ext::DownloadRequest;
+use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::Execute;
+
+pub type DownloaderRequest = (String, DownloadRequest);
+pub type DownloaderResult = (String, DownloadResult);
 
 pub struct WorkflowActorBuilder {
     config: OperationConfig,
@@ -48,6 +55,8 @@ pub struct WorkflowActorBuilder {
     mqtt_publisher: LoggingSender<MqttMessage>,
     script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
+    downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
+    config_manager: Option<ClientMessageBox<ConfigSetRequest, ConfigSetResponse>>,
 }
 
 impl WorkflowActorBuilder {
@@ -56,6 +65,7 @@ impl WorkflowActorBuilder {
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         script_runner: &mut impl Service<Execute, std::io::Result<Output>>,
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
+        downloader: &mut impl Service<DownloaderRequest, DownloaderResult>,
     ) -> Self {
         let (input_sender, input_receiver) = mpsc::unbounded();
         let (signal_sender, signal_receiver) = mpsc::channel(10);
@@ -85,6 +95,8 @@ impl WorkflowActorBuilder {
 
         let script_runner = ClientMessageBox::new(script_runner);
 
+        let downloader = ClientMessageBox::new(downloader);
+
         fs_notify.connect_sink(config.operations_dir.clone().into(), &input_sender);
 
         Self {
@@ -97,6 +109,8 @@ impl WorkflowActorBuilder {
             mqtt_publisher,
             signal_sender,
             script_runner,
+            downloader,
+            config_manager: None,
         }
     }
 
@@ -129,6 +143,15 @@ impl WorkflowActorBuilder {
             self.sync_signal_dispatcher
                 .register_operation_listener(operation, sender.sender_clone());
         }
+    }
+
+    /// Connect config manager for builtin config_set action
+    pub fn connect_config_manager(
+        &mut self,
+        config_manager: &mut impl Service<ConfigSetRequest, ConfigSetResponse>,
+    ) {
+        let config_manager_client = ClientMessageBox::new(config_manager);
+        self.config_manager = Some(config_manager_client);
     }
 
     pub fn subscriptions(
@@ -181,6 +204,9 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             mqtt_publisher: self.mqtt_publisher,
             command_sender: self.command_sender,
             script_runner: self.script_runner,
+            downloader: self.downloader,
+            config_manager: self.config_manager,
+            tmp_dir: self.config.tmp_dir,
         }
     }
 }

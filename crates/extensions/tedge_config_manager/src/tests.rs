@@ -1,4 +1,5 @@
 use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::sync::Arc;
@@ -109,6 +110,7 @@ async fn new_config_manager_builder(
         .map(Topic::new_unchecked)
         .collect(),
         tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
+        ops_dir: Utf8PathBuf::from_path_buf(temp_dir.join("operations")).unwrap(),
         mqtt_schema: MqttSchema::new(),
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),

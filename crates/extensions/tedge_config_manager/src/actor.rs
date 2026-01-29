@@ -22,6 +22,8 @@ use tedge_api::commands::ConfigSnapshotCmdPayload;
 use tedge_api::commands::ConfigUpdateCmdPayload;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicError;
+use tedge_api::mqtt_topics::OperationType;
+use tedge_api::CommandLog;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
@@ -34,6 +36,7 @@ use tedge_uploader_ext::UploadResult;
 use time::OffsetDateTime;
 
 use crate::plugin::ExternalPlugin;
+use crate::plugin_manager::parse_config_type;
 use crate::plugin_manager::ExternalPlugins;
 
 use super::error::ConfigManagementError;
@@ -225,7 +228,7 @@ impl ConfigManagerWorker {
         topic: &Topic,
         request: &mut ConfigSnapshotCmdPayload,
     ) -> Result<Utf8PathBuf, ConfigManagementError> {
-        let (config_type, plugin_name) = split_cloud_config_type(&request.config_type);
+        let (config_type, plugin_name) = parse_config_type(&request.config_type);
         let plugin = self.get_plugin(plugin_name)?;
 
         let config_path = self.config.tmp_path.join(format!(
@@ -235,11 +238,26 @@ impl ConfigManagerWorker {
             OffsetDateTime::now_utc().unix_timestamp()
         ));
 
+        // Extract cmd_id from topic for CommandLog
+        let cmd_id = match self.config.mqtt_schema.entity_channel_of(topic) {
+            Ok((_, Channel::Command { cmd_id, .. })) => cmd_id,
+            _ => {
+                return Err(ConfigManagementError::InvalidTopicError);
+            }
+        };
+
+        // Create CommandLog from log_path if present
+        let mut command_log = request.log_path.clone().map(|path| {
+            CommandLog::from_log_path(path, OperationType::ConfigSnapshot.to_string(), cmd_id)
+        });
+
         info!(
             target: "config plugins",
             "Retrieving config type: {} to file: {}", config_type, config_path
         );
-        plugin.get(config_type, &config_path).await?;
+        plugin
+            .get(config_type, &config_path, command_log.as_mut())
+            .await?;
 
         let tedge_url = match &request.tedge_url {
             Some(tedge_url) => tedge_url,
@@ -363,16 +381,31 @@ impl ConfigManagerWorker {
         let from_path = Utf8Path::from_path(&from)
             .with_context(|| format!("path is not utf-8: '{}'", from.to_string_lossy()))?;
 
-        let (config_type, plugin_name) = split_cloud_config_type(&request.config_type);
+        let (config_type, plugin_name) = parse_config_type(&request.config_type);
 
         let plugin = self.get_plugin(plugin_name)?;
+
+        // Extract cmd_id from topic for CommandLog
+        let cmd_id = match self.config.mqtt_schema.entity_channel_of(topic) {
+            Ok((_, Channel::Command { cmd_id, .. })) => cmd_id,
+            _ => {
+                return Err(ConfigManagementError::InvalidTopicError);
+            }
+        };
+
+        // Create CommandLog from log_path if present
+        let mut command_log = request.log_path.clone().map(|path| {
+            CommandLog::from_log_path(path, OperationType::ConfigUpdate.to_string(), cmd_id)
+        });
 
         info!(
             target: "config plugins",
             "Setting config type: {} from file: {}", config_type, from_path
         );
 
-        plugin.set(config_type, from_path).await?;
+        plugin
+            .set(config_type, from_path, command_log.as_mut())
+            .await?;
 
         Ok(None)
     }
@@ -409,7 +442,7 @@ impl ConfigManagerWorker {
 
     async fn reload_supported_config_types(&mut self) -> Result<(), RuntimeError> {
         info!(target: "config plugins", "Reloading supported config types");
-        self.external_plugins.load().await?;
+        self.external_plugins.load();
 
         self.publish_supported_config_types().await?;
         Ok(())
@@ -478,12 +511,6 @@ impl ConfigManagerWorker {
         let state = ConfigOperationData::State(operation);
         self.output_sender.send(state).await
     }
-}
-
-fn split_cloud_config_type(config_type: &str) -> (&str, &str) {
-    config_type
-        .split_once("::")
-        .unwrap_or((config_type, "file"))
 }
 
 fn build_cloud_config_type(config_type: &str, plugin_name: &str) -> String {

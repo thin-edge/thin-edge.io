@@ -56,6 +56,7 @@ use tedge_config::tedge_toml::TEdgeConfigReaderService;
 use tedge_config_manager::ConfigManagerBuilder;
 use tedge_config_manager::ConfigManagerConfig;
 use tedge_config_manager::ConfigManagerOptions;
+use tedge_config_manager::ConfigPluginServer;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
@@ -306,6 +307,14 @@ impl Agent {
         // Mqtt actor
         let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config.clone());
 
+        let mut downloader_actor_builder = DownloaderActor::new(
+            self.config.identity.clone(),
+            self.config.cloud_root_certs.clone(),
+        )
+        .builder();
+        let mut uploader_actor_builder =
+            UploaderActor::new(self.config.identity, self.config.cloud_root_certs).builder();
+
         // Software update actor
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
 
@@ -315,6 +324,7 @@ impl Agent {
             &mut mqtt_actor_builder,
             &mut script_runner,
             &mut fs_watch_actor_builder,
+            &mut downloader_actor_builder,
         );
         converter_actor_builder.register_builtin_operation(&mut restart_actor_builder);
         converter_actor_builder.register_builtin_operation(&mut software_update_builder);
@@ -348,14 +358,6 @@ impl Agent {
             &self.config.service,
         );
 
-        let mut downloader_actor_builder = DownloaderActor::new(
-            self.config.identity.clone(),
-            self.config.cloud_root_certs.clone(),
-        )
-        .builder();
-        let mut uploader_actor_builder =
-            UploaderActor::new(self.config.identity, self.config.cloud_root_certs).builder();
-
         // Instantiate config manager actor if config_snapshot or both operations are enabled
         let config_actor_builder: Option<ConfigManagerBuilder> =
             if self.config.capabilities.config_snapshot {
@@ -365,12 +367,14 @@ impl Agent {
                     mqtt_device_topic_id: device_topic_id.clone(),
                     tedge_http_host: self.config.tedge_http_host,
                     tmp_path: self.config.tmp_dir.clone(),
+                    ops_dir: self.config.operations_dir.clone(),
                     is_sudo_enabled: self.config.is_sudo_enabled,
                     config_update_enabled: self.config.capabilities.config_update,
                     plugin_dirs: self.config.config_plugin_dirs,
                 })?;
+
                 let mut config_manager = ConfigManagerBuilder::try_new(
-                    manager_config,
+                    manager_config.clone(),
                     &mut fs_watch_actor_builder,
                     &mut downloader_actor_builder,
                     &mut uploader_actor_builder,
@@ -381,6 +385,12 @@ impl Agent {
                     .register_sync_signal_sink(OperationType::ConfigSnapshot, &config_manager);
                 converter_actor_builder
                     .register_sync_signal_sink(OperationType::ConfigUpdate, &config_manager);
+
+                // For builtin config_set action using plugins
+                let mut config_set_actor = ConfigPluginServer::new(manager_config).builder();
+                converter_actor_builder.connect_config_manager(&mut config_set_actor);
+                runtime.spawn(config_set_actor).await?;
+
                 Some(config_manager)
             } else if self.config.capabilities.config_update {
                 warn!("Config_snapshot operation must be enabled to run config_update!");

@@ -7,6 +7,8 @@ use camino::Utf8PathBuf;
 use log::error;
 use log::info;
 use log::warn;
+use serde_json::json;
+use serde_json::Value;
 use std::process::Output;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -35,11 +37,18 @@ use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::OperationName;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::CommandLog;
+use tedge_config_manager::ConfigSetRequest;
+use tedge_config_manager::ConfigSetResponse;
+use tedge_downloader_ext::DownloadRequest;
+use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_script_ext::Execute;
 use tokio::time::sleep;
+
+type DownloaderRequest = (String, DownloadRequest);
+type DownloaderResult = (String, DownloadResult);
 
 /// A generic command state that is published by the [TedgeOperationConverterActor]
 /// to itself for further processing .i.e. after a state update
@@ -60,6 +69,9 @@ pub struct WorkflowActor {
     pub(crate) command_sender: DynSender<InternalCommandState>,
     pub(crate) mqtt_publisher: LoggingSender<MqttMessage>,
     pub(crate) script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
+    pub(crate) downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
+    pub(crate) config_manager: Option<ClientMessageBox<ConfigSetRequest, ConfigSetResponse>>,
+    pub(crate) tmp_dir: Utf8PathBuf,
 }
 
 #[async_trait]
@@ -368,6 +380,128 @@ impl WorkflowActor {
                 let output = self.script_runner.await_response(command).await?;
                 log_file.log_script_output(&output).await;
                 Ok(())
+            }
+            OperationAction::Download(handlers) => {
+                let step = &state.status;
+                info!("Processing {operation} operation {step} step with download builtin action");
+
+                let Some(tedge_url) = state
+                    .payload
+                    .get("url")
+                    .or_else(|| state.payload.get("remoteUrl"))
+                    .or_else(|| state.payload.get("tedgeUrl"))
+                    .and_then(|v| v.as_str())
+                else {
+                    let err = "Missing `url` or `remoteUrl` or `tedgeUrl` in payload".to_string();
+                    log_file.log_error(&err).await;
+                    let err_state =
+                        state.update_with_builtin_action_result("download", Err(err), handlers);
+                    return self.publish_command_state(err_state, &mut log_file).await;
+                };
+
+                let temp_filename = format!("{operation}_{cmd_id}");
+                let temp_path = self.tmp_dir.join(&temp_filename);
+
+                let download_request = DownloadRequest::new(tedge_url, temp_path.as_std_path());
+                let (_topic, download_result) = self
+                    .downloader
+                    .await_response((state.topic.name.clone(), download_request))
+                    .await?;
+
+                match download_result {
+                    Ok(download_response) => {
+                        let downloaded_path = download_response.file_path;
+                        log_file
+                            .log_info(&format!("Downloaded to: {}", downloaded_path.display()))
+                            .await;
+
+                        let new_state = state.update_with_builtin_action_result(
+                            "download",
+                            Ok(json!({"downloaded_path": downloaded_path})),
+                            handlers,
+                        );
+                        self.publish_command_state(new_state, &mut log_file).await
+                    }
+                    Err(err) => {
+                        let err = format!("Download failed: {}", err);
+                        log_file.log_error(&err).await;
+
+                        let err_state =
+                            state.update_with_builtin_action_result("download", Err(err), handlers);
+                        self.publish_command_state(err_state, &mut log_file).await
+                    }
+                }
+            }
+            OperationAction::ConfigSet(handlers) => {
+                let step = &state.status;
+                info!(
+                    "Processing {operation} operation {step} step with config_set builtin action"
+                );
+
+                // Extract parameters from state payload
+                let Some(config_type) = state
+                    .payload
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                else {
+                    let err = "Missing `type` in payload".to_string();
+                    log_file.log_error(&err).await;
+                    let err_state =
+                        state.update_with_builtin_action_result("config_set", Err(err), handlers);
+                    return self.publish_command_state(err_state, &mut log_file).await;
+                };
+
+                let Some(downloaded_path) = state
+                    .payload
+                    .get("downloaded_path")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                else {
+                    let err = "Missing `downloaded_path` in payload".to_string();
+                    log_file.log_error(&err).await;
+                    let err_state =
+                        state.update_with_builtin_action_result("config_set", Err(err), handlers);
+                    return self.publish_command_state(err_state, &mut log_file).await;
+                };
+
+                let Some(ref mut config_manager) = self.config_manager else {
+                    let err = "Config manager not available".to_string();
+                    log_file.log_error(&err).await;
+                    let err_state =
+                        state.update_with_builtin_action_result("config_set", Err(err), handlers);
+                    return self.publish_command_state(err_state, &mut log_file).await;
+                };
+
+                let request = ConfigSetRequest {
+                    config_type,
+                    downloaded_path,
+                    log_path: Some(log_file.path.to_string()),
+                };
+                let response = config_manager.await_response(request).await?;
+
+                match response {
+                    ConfigSetResponse::Success => {
+                        log_file.log_info("Config set successful").await;
+                        let new_state = state.update_with_builtin_action_result(
+                            "config_set",
+                            Ok(Value::Null),
+                            handlers,
+                        );
+                        self.publish_command_state(new_state, &mut log_file).await
+                    }
+                    ConfigSetResponse::Error(err) => {
+                        log_file
+                            .log_error(&format!("Config set failed: {}", err))
+                            .await;
+                        let err_state = state.update_with_builtin_action_result(
+                            "config_set",
+                            Err(err),
+                            handlers,
+                        );
+                        self.publish_command_state(err_state, &mut log_file).await
+                    }
+                }
             }
             OperationAction::Operation(sub_operation, input_script, input_excerpt, handlers) => {
                 let next_state = &handlers.on_exec.status;

@@ -26,6 +26,12 @@ pub enum ConfigManagementError {
     #[error("Directory {path} is not found.")]
     DirectoryNotFound { path: std::path::PathBuf },
 
+    #[error("File '{0}' not found.")]
+    FileNotFound(String),
+
+    #[error("Plugin '{0}' not found.")]
+    PluginNotFound(String),
+
     #[error(transparent)]
     FromEntityTopicError(#[from] tedge_api::mqtt_topics::EntityTopicError),
 

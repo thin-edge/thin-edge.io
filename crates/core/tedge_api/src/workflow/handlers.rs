@@ -178,6 +178,27 @@ impl ExitHandlers {
         })
     }
 
+    pub(crate) fn state_update_on_result(
+        &self,
+        action: &str,
+        result: Result<Value, String>,
+    ) -> Value {
+        match result {
+            Ok(json) => self
+                .on_success
+                .clone()
+                .unwrap_or_else(GenericStateUpdate::successful)
+                .inject_into_json(json),
+            Err(reason) => self
+                .on_error
+                .clone()
+                .unwrap_or_else(|| {
+                    GenericStateUpdate::failed(format!("{action} failed with {reason}"))
+                })
+                .into_json(),
+        }
+    }
+
     pub fn graceful_timeout(&self) -> Option<Duration> {
         self.timeout
     }

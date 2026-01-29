@@ -102,6 +102,30 @@ pub enum OperationAction {
     /// ```
     BgScript(ShellScript, ExecHandlers),
 
+    /// Generic download action (reusable across operations)
+    ///
+    /// Downloads a file from `url` or `remoteUrl` or `tedgeUrl` in the payload and adds the `downloaded_path` to the payload.
+    /// This action is operation-agnostic and can be used by config_update, software_update, etc.
+    ///
+    /// ```toml
+    /// action = "download"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
+    /// ```
+    Download(ExitHandlers),
+
+    /// Config-specific set action
+    ///
+    /// Deploys a config file using the appropriate config plugin.
+    /// Expects `downloaded_path` and config `type` in the payload.
+    ///
+    /// ```toml
+    /// action = "config_set"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
+    /// ```
+    ConfigSet(ExitHandlers),
+
     /// Trigger an operation and move to the next state from where the outcome of the operation will be awaited
     ///
     /// ```toml
@@ -163,6 +187,8 @@ impl Display for OperationAction {
             OperationAction::AwaitingAgentRestart { .. } => "await agent restart".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
+            OperationAction::Download(_) => "builtin download action".to_string(),
+            OperationAction::ConfigSet(_) => "builtin set config action".to_string(),
             OperationAction::Operation(operation, maybe_script, _, _) => match maybe_script {
                 None => format!("execute {operation} as sub-operation"),
                 Some(script) => format!(

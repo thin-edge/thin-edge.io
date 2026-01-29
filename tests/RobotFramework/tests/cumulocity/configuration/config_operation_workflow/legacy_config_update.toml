@@ -1,0 +1,19 @@
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+operation = "builtin:config_update"
+on_exec = "executing"
+
+[executing]
+action = "await-operation-completion"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

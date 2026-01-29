@@ -1,3 +1,5 @@
+use crate::operation_workflows::builder::DownloaderRequest;
+use crate::operation_workflows::builder::DownloaderResult;
 use crate::operation_workflows::builder::WorkflowActorBuilder;
 use crate::operation_workflows::config::OperationConfig;
 use crate::software_manager::actor::SoftwareCommand;
@@ -358,6 +360,10 @@ async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHan
     > = SimpleMessageBoxBuilder::new("Script", 5);
     let mut inotify_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("Inotify", 5);
+    let mut downloade_builder: SimpleMessageBoxBuilder<
+        RequestEnvelope<DownloaderRequest, DownloaderResult>,
+        NoMessage,
+    > = SimpleMessageBoxBuilder::new("Downloader", 5);
 
     let tmp_dir = tempfile::TempDir::new().unwrap();
     let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
@@ -375,12 +381,14 @@ async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHan
         config_dir: tmp_path.into(),
         state_dir: tmp_path.join("running-operations"),
         operations_dir: tmp_path.join("operations"),
+        tmp_dir: tmp_path.into(),
     };
     let mut converter_actor_builder = WorkflowActorBuilder::new(
         config,
         &mut mqtt_builder,
         &mut script_builder,
         &mut inotify_builder,
+        &mut downloade_builder,
     );
     converter_actor_builder.register_builtin_operation(&mut restart_builder);
     converter_actor_builder.register_builtin_operation(&mut software_builder);
