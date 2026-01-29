@@ -10,6 +10,7 @@ use tedge_flows::Message;
 pub mod alarms;
 pub mod entities;
 pub mod events;
+pub mod health;
 pub mod measurements;
 
 fn get_entity_metadata(context: &FlowContextHandle, entity: &str) -> Option<CloudEntityMetadata> {
@@ -23,6 +24,17 @@ fn get_entity_metadata(context: &FlowContextHandle, entity: &str) -> Option<Clou
         external_id,
         metadata,
     })
+}
+
+fn get_entity_parent_metadata(
+    context: &FlowContextHandle,
+    entity: &CloudEntityMetadata,
+) -> Option<CloudEntityMetadata> {
+    entity
+        .metadata
+        .parent
+        .as_ref()
+        .and_then(|parent_tid| get_entity_metadata(context, parent_tid.as_str()))
 }
 
 fn get_measurement_units(

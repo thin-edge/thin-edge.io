@@ -16,6 +16,7 @@ impl C8yMapperBuilder {
         flows.register_builtin(crate::mea::measurements::MeasurementConverter::default());
         flows.register_builtin(crate::mea::events::EventConverter::default());
         flows.register_builtin(crate::mea::alarms::AlarmConverter::default());
+        flows.register_builtin(crate::mea::health::HealthStatusConverter::default());
 
         self.persist_builtin_flow(&mut flows).await?;
         Ok(flows)
@@ -65,6 +66,18 @@ impl C8yMapperBuilder {
                 .await?
         } else {
             flows.disable_builtin_flow("alarms").await?;
+        }
+
+        if self
+            .config
+            .topics
+            .include_topic(&format!("{topic_prefix}/+/+/+/+/status/health"))
+        {
+            flows
+                .persist_builtin_flow("health", self.health_flow().as_str())
+                .await?
+        } else {
+            flows.disable_builtin_flow("health").await?;
         }
 
         Ok(())
@@ -154,6 +167,30 @@ steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
     {{ builtin = "into_c8y_alarms", interval = "3s", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }} }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
+]
+
+[output.mqtt]
+
+[errors.mqtt]
+topic = "{errors_topic}"
+"#
+        )
+    }
+
+    fn health_flow(&self) -> String {
+        let mqtt_schema = &self.config.mqtt_schema;
+        let topic_prefix = mqtt_schema.root.as_str();
+        let c8y_prefix = &self.config.bridge_config.c8y_prefix;
+        let main_device = &self.config.device_topic_id;
+        let mapper_topic_id = &self.config.service_topic_id;
+        let errors_topic = mqtt_schema.error_topic();
+
+        format!(
+            r#"
+input.mqtt.topics = ["{topic_prefix}/+/+/+/+/status/health", "{topic_prefix}/{mapper_topic_id}/status/entities"]
+
+steps = [
+    {{ builtin = "into_c8y_health_status", config = {{ topic_root = "{topic_prefix}", main_device = "{main_device}", c8y_prefix = "{c8y_prefix}" }} }},
 ]
 
 [output.mqtt]
