@@ -37,6 +37,8 @@ use tedge_mqtt_bridge::QoS;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
+use tedge_utils::file::change_mode;
+use tedge_utils::file::change_user_and_group;
 use tracing::warn;
 use yansi::Paint;
 
@@ -328,6 +330,14 @@ pub async fn bridge_rules(
         include_str!("bridge/mqtt-service.toml"),
     )
     .await?;
+
+    if let Err(err) = change_user_and_group(&bridge_config_dir, "tedge", "tedge").await {
+        warn!("failed to set file ownership for '{bridge_config_dir}': {err}");
+    }
+
+    if let Err(err) = change_mode(&bridge_config_dir, 0o755).await {
+        warn!("failed to set file permissions for '{bridge_config_dir}': {err}");
+    }
 
     let c8y_config = tedge_config.c8y_mapper_config(&cloud_profile)?;
     let use_certificate = c8y_config

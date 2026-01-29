@@ -7,8 +7,11 @@ use anyhow::Context;
 use camino::Utf8Path;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
-use tedge_utils::file;
+use tedge_utils::file::change_mode;
+use tedge_utils::file::change_user_and_group;
+use tedge_utils::file::{self};
 use tedge_utils::fs;
+use tracing::warn;
 
 use crate::config::BridgeConfig;
 use crate::config_toml::AuthMethod;
@@ -43,10 +46,25 @@ pub async fn persist_bridge_config_file(
 
     // Persist a copy of bridge config definition to be used by users as a template
     file::create_directory_with_defaults(dir).await?;
-    fs::atomically_write_file_async(template_path, content.as_bytes()).await?;
+    fs::atomically_write_file_async(&template_path, content.as_bytes()).await?;
+
+    if let Err(err) = change_user_and_group(&template_path, "tedge", "tedge").await {
+        warn!("failed to set file ownership for '{template_path}': {err}");
+    }
+
+    if let Err(err) = change_mode(&template_path, 0o644).await {
+        warn!("failed to set file permissions for '{template_path}': {err}");
+    }
 
     if update_flow {
-        fs::atomically_write_file_async(config_path, content.as_bytes()).await?;
+        fs::atomically_write_file_async(&config_path, content.as_bytes()).await?;
+        if let Err(err) = change_user_and_group(&config_path, "tedge", "tedge").await {
+            warn!("failed to set file ownership for '{config_path}': {err}");
+        }
+
+        if let Err(err) = change_mode(&config_path, 0o644).await {
+            warn!("failed to set file permissions for '{config_path}': {err}");
+        }
     }
 
     Ok(())
