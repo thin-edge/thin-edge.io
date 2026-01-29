@@ -307,7 +307,7 @@ async fn mqtt_bridge_config(
     Ok((bridge_config, cloud_config, reconnect_message_mapper))
 }
 
-async fn bridge_rules(
+pub async fn bridge_rules(
     tedge_config: &TEdgeConfig,
     cloud_profile: Option<&ProfileName>,
 ) -> anyhow::Result<BridgeConfig> {

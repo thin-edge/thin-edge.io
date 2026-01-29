@@ -847,6 +847,16 @@ impl ConnectCommand {
         match &self.cloud {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile_name) => {
+                // Create bridge rules so the user gets feedback on whether it worked not just within the service
+                if tedge_config.mqtt.bridge.built_in {
+                    let spinner = Spinner::start("Updating bridge rule templates");
+                    let res = tedge_mapper::c8y::mapper::bridge_rules(
+                        tedge_config,
+                        profile_name.as_deref(),
+                    )
+                    .await;
+                    spinner.finish(res)?;
+                }
                 if self.offline_mode {
                     eprintln!("Offline mode. Skipping device creation in Cumulocity cloud.")
                 } else {
