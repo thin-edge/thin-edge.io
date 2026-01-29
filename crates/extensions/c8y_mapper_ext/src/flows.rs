@@ -25,18 +25,49 @@ impl C8yMapperBuilder {
         &self,
         flows: &mut ConnectedFlowRegistry,
     ) -> Result<(), UpdateFlowRegistryError> {
+        let topic_prefix = &self.config.mqtt_schema.root;
+
         flows
             .persist_builtin_flow("units", self.units_flow().as_str())
             .await?;
-        flows
-            .persist_builtin_flow("measurements", self.measurements_flow().as_str())
-            .await?;
-        flows
-            .persist_builtin_flow("events", self.events_flow().as_str())
-            .await?;
-        flows
-            .persist_builtin_flow("alarms", self.alarms_flow().as_str())
-            .await
+
+        if self
+            .config
+            .topics
+            .include_topic(&format!("{topic_prefix}/+/+/+/+/m/+"))
+        {
+            flows
+                .persist_builtin_flow("measurements", self.measurements_flow().as_str())
+                .await?;
+        } else {
+            flows.disable_builtin_flow("measurements").await?;
+        }
+
+        if self
+            .config
+            .topics
+            .include_topic(&format!("{topic_prefix}/+/+/+/+/e/+"))
+        {
+            flows
+                .persist_builtin_flow("events", self.events_flow().as_str())
+                .await?;
+        } else {
+            flows.disable_builtin_flow("events").await?;
+        }
+
+        if self
+            .config
+            .topics
+            .include_topic(&format!("{topic_prefix}/+/+/+/+/a/+"))
+        {
+            flows
+                .persist_builtin_flow("alarms", self.alarms_flow().as_str())
+                .await?
+        } else {
+            flows.disable_builtin_flow("alarms").await?;
+        }
+
+        Ok(())
     }
 
     fn units_flow(&self) -> String {
