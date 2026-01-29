@@ -225,7 +225,7 @@ Update Builtin Flow
     ThinEdgeIO.Transfer To Device    ${CURDIR}/${flow_definition}    /etc/tedge/mappers/az/flows/mea.toml
 
 Disable Builtin Flow
-    ${start}    Get Unix Timestamp
+    ${start}=    Get Unix Timestamp
     Execute Command    mv /etc/tedge/mappers/az/flows/mea.toml /etc/tedge/mappers/az/flows/mea.toml.disabled
     Should Have MQTT Messages
     ...    topic=te/device/main/service/tedge-mapper-az/status/flows
