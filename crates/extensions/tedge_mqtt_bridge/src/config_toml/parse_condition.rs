@@ -4,9 +4,10 @@
 //! 1. Lexer: converts input string into a sequence of tokens with spans
 //! 2. Parser: parses tokens into a Condition expression
 
+use crate::config_toml::ConfigReference;
+
 use super::AuthMethod;
 use super::Condition;
-use super::ConfigReference;
 use super::ExpandError;
 use chumsky::input::ValueInput;
 use chumsky::prelude::*;
@@ -54,6 +55,7 @@ fn lexer<'src>(
 
     // Operators: any combination of `!` and `=` (e.g., `==`, `!=`, `=`)
     // We don't currently support != but may wish to in the future, and users may try this
+    // so recognising it but explicitly rejecting it is sensible
     let op = one_of("!=")
         .repeated()
         .at_least(1)
@@ -108,14 +110,17 @@ fn config_condition<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = SimpleSpan>,
 {
-    just(Token::VarStart)
-        .ignore_then(just(Token::Ident("config")))
-        .ignore_then(just(Token::Dot))
-        .ignore_then(dotted_path())
+    just(Token::Op("!"))
+        .or_not()
+        .then_ignore(just(Token::VarStart))
+        .then_ignore(just(Token::Ident("config")))
+        .then_ignore(just(Token::Dot))
+        .then(dotted_path())
         .then_ignore(just(Token::VarEnd))
-        .map(|parts: Vec<&str>| {
+        .map(|(negation, parts)| {
             let key = parts.join(".");
-            Condition::IsTrue(ConfigReference(key, PhantomData))
+            let target = negation.is_none();
+            Condition::Is(target, ConfigReference(key, PhantomData))
         })
         .labelled("config reference")
 }
@@ -273,10 +278,22 @@ mod tests {
         let result = parse_with_spans("${config.c8y.mqtt_service.enabled}").unwrap();
         assert_eq!(
             result,
-            Condition::IsTrue(ConfigReference(
-                "c8y.mqtt_service.enabled".to_owned(),
-                PhantomData
-            ))
+            Condition::Is(
+                true,
+                ConfigReference("c8y.mqtt_service.enabled".to_owned(), PhantomData)
+            )
+        );
+    }
+
+    #[test]
+    fn parses_negated_config_reference() {
+        let result = parse_with_spans("!${config.c8y.mqtt_service.enabled}").unwrap();
+        assert_eq!(
+            result,
+            Condition::Is(
+                false,
+                ConfigReference("c8y.mqtt_service.enabled".to_owned(), PhantomData)
+            )
         );
     }
 

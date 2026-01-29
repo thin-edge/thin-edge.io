@@ -356,7 +356,7 @@ pub enum Direction {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Condition {
     AuthMethod(AuthMethod),
-    IsTrue(ConfigReference<bool>),
+    Is(bool, ConfigReference<bool>),
 }
 
 #[derive(
@@ -391,7 +391,8 @@ impl Expandable for Condition {
     ) -> Result<Self::Target, TemplateError> {
         match self {
             Self::AuthMethod(auth_method) => Ok(*auth_method == config.1),
-            Self::IsTrue(config_ref) => config_ref.expand(config.0, cloud_profile),
+            Self::Is(true, config_ref) => config_ref.expand(config.0, cloud_profile),
+            Self::Is(false, config_ref) => Ok(!config_ref.expand(config.0, cloud_profile)?),
         }
     }
 }
@@ -400,7 +401,8 @@ impl fmt::Display for Condition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::AuthMethod(method) => write!(f, "auth_method({method})"),
-            Self::IsTrue(config) => write!(f, "{config}"),
+            Self::Is(true, config) => write!(f, "{config}"),
+            Self::Is(false, config) => write!(f, "!{config}"),
         }
     }
 }
@@ -962,6 +964,32 @@ topic_prefix = "changed"
 
             let result = reference.expand(&tedge_config, None).unwrap();
             assert_eq!(result, "changed");
+        }
+
+        #[test]
+        fn expands_config_reference() {
+            let condition = Condition::Is(
+                true,
+                ConfigReference("c8y.mqtt_service.enabled".to_owned(), PhantomData),
+            );
+            let tedge_config =
+                tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = true");
+            assert!(condition
+                .expand((&tedge_config, AuthMethod::Certificate), None)
+                .unwrap());
+        }
+
+        #[test]
+        fn expands_negated_config_reference() {
+            let condition = Condition::Is(
+                false,
+                ConfigReference("c8y.mqtt_service.enabled".to_owned(), PhantomData),
+            );
+            let tedge_config =
+                tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = true");
+            assert!(!condition
+                .expand((&tedge_config, AuthMethod::Certificate), None)
+                .unwrap());
         }
 
         #[test]
