@@ -147,13 +147,7 @@ config = { property = "time", format = "rfc-3339", reformat = true }
         let mut runtime = JsRuntime::try_new().await.unwrap();
         let step = toml::from_str::<StepConfig>(config)
             .unwrap()
-            .compile(
-                transformers,
-                &mut runtime,
-                "/tmp".into(),
-                0,
-                "test-flow".into(),
-            )
+            .compile(transformers, &mut runtime, 0, "test-flow".into())
             .await
             .unwrap();
         (runtime, step)
