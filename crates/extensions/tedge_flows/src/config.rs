@@ -189,7 +189,6 @@ impl FlowConfig {
         self,
         rs_transformers: &BuiltinTransformers,
         js_runtime: &mut JsRuntime,
-        config_dir: &Utf8Path,
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
         let input = self.input.try_into()?;
@@ -198,7 +197,7 @@ impl FlowConfig {
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
             let step = step
-                .compile(rs_transformers, js_runtime, config_dir, i, &source)
+                .compile(rs_transformers, js_runtime, i, &source)
                 .await?;
             steps.push(step);
         }
@@ -217,13 +216,12 @@ impl StepConfig {
         &self,
         rs_transformers: &BuiltinTransformers,
         js_runtime: &mut JsRuntime,
-        config_dir: &Utf8Path,
         index: usize,
         flow: &Utf8Path,
     ) -> Result<FlowStep, ConfigError> {
         let step = match &self.step {
             StepSpec::JavaScript(path) => {
-                Self::compile_script(js_runtime, config_dir, flow, path, index).await?
+                Self::compile_script(js_runtime, flow, path, index).await?
             }
             StepSpec::Transformer(name) => {
                 Self::instantiate_builtin(rs_transformers, flow, name, index)?
@@ -237,16 +235,21 @@ impl StepConfig {
 
     async fn compile_script(
         js_runtime: &mut JsRuntime,
-        config_dir: &Utf8Path,
         flow: &Utf8Path,
         path: &Utf8Path,
         index: usize,
     ) -> Result<FlowStep, ConfigError> {
-        let path = if path.is_absolute() || path.starts_with(config_dir) {
+        let path = if path.is_absolute() {
             path.to_owned()
         } else {
-            config_dir.join(path)
+            // path relative to the flow definition, fallback to existing path
+            flow.parent()
+                .map(|parent| parent.join(path))
+                .unwrap_or_else(|| path.to_owned())
         };
+        let path = path
+            .canonicalize_utf8()
+            .unwrap_or_else(|_| path.to_path_buf());
         let module_name = FlowStep::instance_name(flow, &path, index);
         let mut script = JsScript::new(module_name, flow.to_owned(), path);
         js_runtime.load_script(&mut script).await?;

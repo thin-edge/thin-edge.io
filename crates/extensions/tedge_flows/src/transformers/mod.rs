@@ -199,13 +199,7 @@ config = { topics = ["units/#"] }
         let mut runtime = JsRuntime::try_new(context).await.unwrap();
         let step = toml::from_str::<StepConfig>(config)
             .unwrap()
-            .compile(
-                transformers,
-                &mut runtime,
-                "/tmp".into(),
-                0,
-                "test-flow".into(),
-            )
+            .compile(transformers, &mut runtime, 0, "test-flow".into())
             .await
             .unwrap();
         (runtime, step)
