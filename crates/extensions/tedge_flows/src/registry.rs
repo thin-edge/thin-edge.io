@@ -221,12 +221,7 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         config: FlowConfig,
     ) {
         match config
-            .compile(
-                self.builtins(),
-                js_runtime,
-                self.store().config_dir(),
-                path.to_owned(),
-            )
+            .compile(self.builtins(), js_runtime, path.to_owned())
             .await
             .and_then(Self::compile)
         {

@@ -150,7 +150,6 @@ config = { property = "time", format = "rfc-3339", reformat = true }
             .compile(
                 transformers,
                 &mut runtime,
-                "/tmp".into(),
                 0,
                 "test-flow".into(),
             )
