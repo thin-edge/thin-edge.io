@@ -208,3 +208,125 @@ async fn resume_download_with_etag_changed() {
 
     server_task.abort();
 }
+
+/// If after retrying ETag of the resource is different, we should download it
+/// from scratch again.
+#[tokio::test]
+async fn resumed_download_doesnt_leave_leftovers() {
+    let file_v1 = "AAAABBBBCCCCDDDD";
+    let file_v2 = "XXXXYYYY";
+
+    let listener = TcpListener::bind("localhost:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    // server should do 3 things:
+    // - only send a portion of the first request
+    // - after the first request update the resource
+    // - serve 2nd request normally (but we expect it to be a range request)
+    let server_task = tokio::spawn(async move {
+        let mut request_count = 0;
+        while let Ok((mut stream, _addr)) = listener.accept().await {
+            let response_task = async move {
+                let (reader, mut writer) = stream.split();
+                let mut lines = BufReader::new(reader).lines();
+                let mut range: Option<std::ops::Range<usize>> = None;
+
+                // We got an HTTP request, read the lines of the request
+                while let Ok(Some(line)) = lines.next_line().await {
+                    if line.to_ascii_lowercase().contains("range:") {
+                        let (_, bytes) = line.split_once('=').unwrap();
+                        let (start, end) = bytes.split_once('-').unwrap();
+                        let start = start.parse().unwrap_or(0);
+                        let end = end.parse().unwrap_or(file_v2.len());
+                        range = Some(start..end)
+                    }
+                    // On `\r\n\r\n` (empty line) stop reading the request
+                    // and start responding
+                    if line.is_empty() {
+                        break;
+                    }
+                }
+
+                let file = if request_count == 0 { file_v1 } else { file_v2 };
+                let etag = if request_count == 0 {
+                    "v1-initial"
+                } else {
+                    "v2-changed"
+                };
+
+                if let Some(range) = range {
+                    let start = range.start;
+                    let end = range.end;
+                    let msg = if start >= end || end >= file.len() {
+                        let header = format!(
+                            "HTTP/1.1 416 Range Not Satisfiable\r\n\
+                            content-range: bytes */{}\r\n",
+                            file.len()
+                        );
+                        format!("{header}\r\n")
+                    } else {
+                        // Return range for both first and subsequent requests
+                        let header = format!(
+                            "HTTP/1.1 206 Partial Content\r\n\
+                            transfer-encoding: chunked\r\n\
+                            connection: close\r\n\
+                            content-type: application/octet-stream\r\n\
+                            content-range: bytes {start}-{end}/*\r\n\
+                            accept-ranges: bytes\r\n\
+                            etag: \"{etag}\"\r\n"
+                        );
+                        let body = &file[start..end];
+                        let size = body.len();
+                        format!("{header}\r\n{size:x}\r\n{body}\r\n0\r\n\r\n")
+                    };
+
+                    writer.write_all(msg.as_bytes()).await.unwrap();
+                    writer.flush().await.unwrap();
+                } else {
+                    let header = format!(
+                        "HTTP/1.1 200 OK\r\n\
+                        transfer-encoding: chunked\r\n\
+                        connection: close\r\n\
+                        content-type: application/octet-stream\r\n\
+                        accept-ranges: bytes\r\n\
+                        etag: \"{etag}\"\r\n"
+                    );
+
+                    let msg = if request_count == 0 {
+                        let body = &file[0..12];
+                        let size = body.len();
+                        format!("{header}\r\n{size:x}\r\n{body}\r\n")
+                    } else {
+                        let body = file;
+                        let size = body.len();
+                        format!("{header}\r\n{size:x}\r\n{body}\r\n0\r\n\r\n")
+                    };
+                    dbg!(&msg);
+                    writer.write_all(msg.as_bytes()).await.unwrap();
+                    writer.flush().await.unwrap();
+                    // Connection drops here without sending final chunk
+                }
+            };
+            request_count += 1;
+            tokio::spawn(response_task);
+        }
+    });
+
+    // Wait until task binds a listener on the TCP port
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let tmpdir = TempDir::new().unwrap();
+    let target_path = tmpdir.path().join("partial_download_remains");
+
+    let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
+    let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
+
+    downloader.download(&url).await.unwrap();
+    let saved_file = std::fs::read_to_string(downloader.filename()).unwrap();
+    // Should have the complete new file content since ETag changed
+    assert_eq!(saved_file, file_v2);
+
+    downloader.cleanup().await.unwrap();
+
+    server_task.abort();
+}

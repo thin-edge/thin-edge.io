@@ -6,6 +6,7 @@ use anyhow::anyhow;
 use backoff::future::retry_notify;
 use backoff::ExponentialBackoff;
 use certificate::CloudHttpConfig;
+use http::StatusCode;
 use log::debug;
 use log::info;
 use log::warn;
@@ -348,7 +349,15 @@ impl Downloader {
             request
                 .send()
                 .await
-                .and_then(|response| response.error_for_status())
+                .and_then(|response| {
+                    if response.status() != StatusCode::RANGE_NOT_SATISFIABLE {
+                        response.error_for_status()
+                    } else {
+                        // if range not satisfiable, request should be retried with different range
+                        // (or without)
+                        Ok(response)
+                    }
+                })
                 .map_err(reqwest_err_to_backoff)
         };
 
@@ -385,6 +394,8 @@ async fn save_chunks_to_file_at(
         writer.write_all(&bytes)?;
     }
     writer.flush()?;
+    let end_pos = writer.stream_position()?;
+    writer.set_len(end_pos)?;
     Ok(())
 }
 

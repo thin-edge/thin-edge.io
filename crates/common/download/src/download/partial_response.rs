@@ -43,6 +43,10 @@ pub(super) fn response_range_start(
             Ok(PartialResponse::PartialContent(pos))
         }
 
+        // Resource could've been modified such that range we requested is invalid (e.g. because new resource is
+        // smaller)
+        StatusCode::RANGE_NOT_SATISFIABLE => Ok(PartialResponse::ResourceModified),
+
         // We don't expect to receive any other 200-299 status code, but if we
         // do, treat it the same as OK
         status_code if status_code.is_success() => Ok(PartialResponse::CompleteContent),
