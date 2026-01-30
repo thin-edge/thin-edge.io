@@ -8,6 +8,7 @@ use crate::transformers::BuiltinTransformers;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use glob::glob;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -15,7 +16,6 @@ use std::fmt::Debug;
 use std::time::Duration;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
-use tokio::fs::read_dir;
 use tokio::fs::read_to_string;
 use tracing::error;
 use tracing::info;
@@ -112,27 +112,35 @@ pub enum ConfigError {
 
 impl FlowConfig {
     pub async fn load_all_flows(config_dir: &Utf8Path) -> HashMap<Utf8PathBuf, FlowConfig> {
-        let mut flows = HashMap::new();
-        let Ok(mut entries) = read_dir(config_dir).await.map_err(
-            |err| error!(target: "flows", "Failed to read flows from {config_dir}: {err}"),
-        ) else {
-            return flows;
-        };
-
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let Some(path) = Utf8Path::from_path(&entry.path()).map(|p| p.to_path_buf()) else {
-                error!(target: "flows", "Skipping non UTF8 path: {}", entry.path().display());
-                continue;
-            };
-            if let Ok(file_type) = entry.file_type().await {
-                if file_type.is_file() {
-                    if let Some("toml") = path.extension() {
-                        info!(target: "flows", "Loading flow: {path}");
-                        if let Some(flow) = FlowConfig::load_single_flow(&path).await {
-                            flows.insert(path.clone(), flow);
+        let pattern = format!("{}/**/*.toml", config_dir);
+        let paths = tokio::task::spawn_blocking(move || {
+            let mut paths = Vec::new();
+            match glob(&pattern) {
+                Ok(entries) => {
+                    for entry in entries.filter_map(Result::ok) {
+                        let Some(path) = Utf8Path::from_path(entry.as_path()).map(|p| p.to_path_buf()) else {
+                            error!(target: "flows", "Skipping non UTF8 path: {}", entry.as_path().display());
+                            continue;
+                        };
+                        if path.is_file() {
+                            paths.push(path);
                         }
                     }
                 }
+                Err(err) => {
+                    error!(target: "flows", "Failed to glob pattern {}: {}", pattern, err);
+                }
+            }
+            paths
+        })
+        .await
+        .unwrap_or_default();
+
+        let mut flows = HashMap::new();
+        for path in paths {
+            info!(target: "flows", "Loading flow: {path}");
+            if let Some(flow) = FlowConfig::load_single_flow(&path).await {
+                flows.insert(path, flow);
             }
         }
         flows
