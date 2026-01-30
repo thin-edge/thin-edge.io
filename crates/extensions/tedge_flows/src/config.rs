@@ -22,6 +22,12 @@ use tracing::info;
 
 #[derive(Deserialize)]
 pub struct FlowConfig {
+    // meta info
+    name: Option<String>,
+    version: Option<String>,
+    description: Option<String>,
+    tags: Option<Vec<String>>,
+
     input: InputConfig,
     #[serde(default)]
     steps: Vec<StepConfig>,
@@ -178,6 +184,10 @@ impl FlowConfig {
             interval: None,
         };
         Self {
+            name: None,
+            version: None,
+            description: None,
+            tags: None,
             input: InputConfig::Mqtt {
                 topics: vec![input_topic],
             },
@@ -204,6 +214,10 @@ impl FlowConfig {
             steps.push(step);
         }
         Ok(Flow {
+            name: self.name,
+            version: self.version,
+            description: self.description,
+            tags: self.tags,
             input,
             steps,
             output,
