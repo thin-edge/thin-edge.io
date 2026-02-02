@@ -10,7 +10,7 @@ import BrowserWindow from '@site/src/components/BrowserWindow';
 
 To access a device remotely that runs %%te%%, a plugin of the operation plugin concept is used. The tedge-mapper is checking for cloud remote access operation and is triggering the particular plugin. You can use the remote access tab in device management to access the device via SSH or VNC.
 
-Background information on the remote access feature provided by Cumulocity can be found in their [official documentation](https://cumulocity.com/docs/cloud-remote-access/using-cloud-remote-access/).
+Background information on the remote access feature provided by Cumulocity can be found in their [official documentation](https://cumulocity.com/docs/cloud-remote-access/).
 
 ## Requirements
 
