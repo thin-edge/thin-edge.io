@@ -1,6 +1,4 @@
 use super::actor::C8yMapperBuilder;
-use super::actor::SyncComplete;
-use super::actor::SyncStart;
 use super::config::C8yMapperConfig;
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
@@ -65,7 +63,6 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
-use tedge_timer_ext::Timeout;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
@@ -108,14 +105,11 @@ async fn child_device_registration_mapping() {
     let test_handle =
         spawn_c8y_mapper_actor_with_config(&ttd, test_mapper_config(&ttd), true).await;
     let mut mqtt = test_handle.mqtt;
-    let mut timer = test_handle.timer;
     let mut avail = test_handle.avail.with_timeout(TEST_TIMEOUT_MS);
 
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
     skip_init_messages(&mut mqtt).await;
 
     mqtt.send(MqttMessage::new(
@@ -198,15 +192,8 @@ async fn child_device_registration_mapping() {
 async fn custom_topic_scheme_registration_mapping() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -266,16 +253,9 @@ async fn custom_topic_scheme_registration_mapping() {
 async fn service_registration_mapping() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
 
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -378,12 +358,7 @@ async fn mapper_publishes_supported_software_types() {
 async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mqtt, mut timer, ..
-    } = test_handle;
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -406,16 +381,9 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
 
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -451,12 +419,7 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
 async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mqtt, mut timer, ..
-    } = test_handle;
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -505,15 +468,9 @@ async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
 async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
 
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -575,12 +532,7 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
 async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mqtt, mut timer, ..
-    } = test_handle;
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -621,16 +573,9 @@ async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() 
 async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
 
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -684,15 +629,9 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
 async fn c8y_mapper_child_alarm_with_custom_message() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
 
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -745,12 +684,7 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
 async fn c8y_mapper_alarm_with_custom_message() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mqtt, mut timer, ..
-    } = test_handle;
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -790,15 +724,9 @@ async fn c8y_mapper_alarm_with_custom_message() {
 async fn c8y_mapper_child_alarm_empty_payload() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
 
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -834,12 +762,7 @@ async fn c8y_mapper_child_alarm_empty_payload() {
 async fn c8y_mapper_alarm_empty_payload() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mqtt, mut timer, ..
-    } = test_handle;
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -859,12 +782,7 @@ async fn c8y_mapper_alarm_empty_payload() {
 async fn c8y_mapper_alarm_empty_json_payload() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mqtt, mut timer, ..
-    } = test_handle;
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -890,14 +808,8 @@ async fn c8y_mapper_alarm_empty_json_payload() {
 async fn c8y_mapper_child_event() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -947,14 +859,8 @@ async fn c8y_mapper_child_event() {
 async fn c8y_mapper_child_service_event() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1011,15 +917,8 @@ async fn c8y_mapper_child_service_event() {
 async fn c8y_mapper_main_service_event() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1069,15 +968,8 @@ async fn c8y_mapper_main_service_event() {
 async fn c8y_mapper_child_service_alarm() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1126,15 +1018,8 @@ async fn c8y_mapper_child_service_alarm() {
 async fn c8y_mapper_main_service_alarm() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -1177,12 +1062,7 @@ async fn c8y_mapper_main_service_alarm() {
 async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mqtt, mut timer, ..
-    } = test_handle;
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2506,15 +2386,8 @@ async fn mapper_converts_custom_operation_for_child_device() {
 async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2573,15 +2446,8 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
 async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2649,15 +2515,8 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
 async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2720,15 +2579,8 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
 async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mut mqtt,
-        mut timer,
-        ..
-    } = test_handle;
+    let TestHandle { mut mqtt, .. } = test_handle;
     mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2813,19 +2665,10 @@ async fn mapper_processes_operations_concurrently() {
     let host_port = fts_server.host_with_port();
 
     let cfg_dir = TempTedgeDir::new();
-    let TestHandle {
-        mqtt,
-        http,
-        dl,
-        mut timer,
-        ..
-    } = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let TestHandle { mqtt, http, dl, .. } = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     let mut dl = dl.with_timeout(TEST_TIMEOUT_MS);
 
     spawn_dummy_c8y_http_proxy(http);
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2871,20 +2714,12 @@ async fn mapper_processes_operations_concurrently() {
 async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoing() {
     let cfg_dir = TempTedgeDir::new();
     let TestHandle {
-        mqtt,
-        http,
-        dl,
-        ul,
-        mut timer,
-        ..
+        mqtt, http, dl, ul, ..
     } = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     let mut dl = dl.with_timeout(TEST_TIMEOUT_MS);
     let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
 
     spawn_dummy_c8y_http_proxy(http);
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2972,12 +2807,7 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
 async fn mapper_doesnt_update_status_of_subworkflow_commands_3048() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mqtt, mut timer, ..
-    } = test_handle;
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -2999,12 +2829,7 @@ async fn mapper_doesnt_update_status_of_subworkflow_commands_3048() {
 async fn mapper_doesnt_send_duplicate_operation_status() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle {
-        mqtt, mut timer, ..
-    } = test_handle;
-
-    // Complete sync phase so that alarm mapping starts
-    trigger_timeout(&mut timer).await;
+    let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
@@ -3354,11 +3179,6 @@ fn create_thin_edge_child_operations(ttd: &TempTedgeDir, child_id: &str, ops: Ve
     }
 }
 
-async fn trigger_timeout(timer: &mut FakeServerBox<SyncStart, SyncComplete>) {
-    timer.recv().await.unwrap();
-    timer.send(Timeout::new(())).await.unwrap();
-}
-
 pub(crate) async fn spawn_c8y_mapper_actor(tmp_dir: &TempTedgeDir, init: bool) -> TestHandle {
     spawn_c8y_mapper_actor_with_config(tmp_dir, test_mapper_config(tmp_dir), init).await
 }
@@ -3367,7 +3187,6 @@ pub(crate) struct TestHandle {
     pub mqtt: MockMqttBox,
     pub http: FakeServerBox<HttpRequest, HttpResult>,
     pub fs: SimpleMessageBox<NoMessage, FsWatchEvent>,
-    pub timer: FakeServerBox<SyncStart, SyncComplete>,
     pub ul: FakeServerBox<IdUploadRequest, IdUploadResult>,
     pub dl: FakeServerBox<IdDownloadRequest, IdDownloadResult>,
     pub avail: SimpleMessageBox<MqttMessage, MqttMessage>,
@@ -3393,8 +3212,6 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         FakeServerBoxBuilder::default();
     let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
         FakeServerBoxBuilder::default();
-    let mut timer_builder: FakeServerBoxBuilder<SyncStart, SyncComplete> =
-        FakeServerBoxBuilder::default();
     let mut service_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
 
@@ -3404,7 +3221,6 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         config,
         &mut mqtt_builder,
         &mut http_builder,
-        &mut timer_builder,
         &mut uploader_builder,
         &mut downloader_builder,
         &mut fs_watcher_builder,
@@ -3444,7 +3260,6 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         mqtt: mqtt_builder.build(),
         http: http_builder.build(),
         fs: fs_watcher_builder.build(),
-        timer: timer_builder.build(),
         ul: uploader_builder.build(),
         dl: downloader_builder.build(),
         avail: availability_box_builder.build(),

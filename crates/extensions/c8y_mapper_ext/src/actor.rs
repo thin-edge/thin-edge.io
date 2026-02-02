@@ -9,7 +9,6 @@ use async_trait::async_trait;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -41,17 +40,10 @@ use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_timer_ext::SetTimeout;
-use tedge_timer_ext::Timeout;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
-
-const SYNC_WINDOW: Duration = Duration::from_secs(3);
-
-pub type SyncStart = SetTimeout<()>;
-pub type SyncComplete = Timeout<()>;
 
 pub(crate) type CmdId = String;
 pub(crate) type IdUploadRequest = (CmdId, UploadRequest);
@@ -59,7 +51,7 @@ pub(crate) type IdUploadResult = (CmdId, UploadResult);
 pub(crate) type IdDownloadResult = (CmdId, DownloadResult);
 pub(crate) type IdDownloadRequest = (CmdId, DownloadRequest);
 
-fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete] : Debug);
+fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent] : Debug);
 
 type C8yMapperOutput = MqttMessage;
 
@@ -67,7 +59,6 @@ pub struct C8yMapperActor {
     converter: CumulocityConverter,
     messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
     mqtt_publisher: LoggingSender<MqttMessage>,
-    timer_sender: LoggingSender<SyncStart>,
     bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
 }
@@ -97,11 +88,6 @@ impl Actor for C8yMapperActor {
             self.mqtt_publisher.send(init_message).await?;
         }
 
-        // Start the sync phase
-        self.timer_sender
-            .send(SyncStart::new(SYNC_WINDOW, ()))
-            .await?;
-
         while let Some(event) = self.messages.recv().await {
             match event {
                 C8yMapperInput::MqttMessage(message) => {
@@ -109,9 +95,6 @@ impl Actor for C8yMapperActor {
                 }
                 C8yMapperInput::FsWatchEvent(event) => {
                     self.process_file_watch_event(event).await?;
-                }
-                C8yMapperInput::SyncComplete(_) => {
-                    self.process_sync_timeout().await?;
                 }
             }
         }
@@ -124,7 +107,6 @@ impl C8yMapperActor {
         converter: CumulocityConverter,
         messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
         mqtt_publisher: LoggingSender<MqttMessage>,
-        timer_sender: LoggingSender<SyncStart>,
         bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
         message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
     ) -> Self {
@@ -132,7 +114,6 @@ impl C8yMapperActor {
             converter,
             messages,
             mqtt_publisher,
-            timer_sender,
             bridge_status_messages,
             message_handlers,
         }
@@ -365,10 +346,6 @@ impl C8yMapperActor {
 
         Ok(())
     }
-
-    pub async fn process_sync_timeout(&mut self) -> Result<(), RuntimeError> {
-        Ok(())
-    }
 }
 
 pub struct C8yMapperBuilder {
@@ -376,7 +353,6 @@ pub struct C8yMapperBuilder {
     box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput>,
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
-    timer_sender: DynSender<SyncStart>,
     downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
@@ -390,7 +366,6 @@ impl C8yMapperBuilder {
         config: C8yMapperConfig,
         mqtt: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         http: &mut impl Service<HttpRequest, HttpResult>,
-        timer: &mut impl Service<SyncStart, SyncComplete>,
         uploader: &mut impl Service<IdUploadRequest, IdUploadResult>,
         downloader: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
@@ -404,7 +379,6 @@ impl C8yMapperBuilder {
 
         let http_proxy = C8YHttpProxy::new(&config, http);
 
-        let timer_sender = timer.connect_client(box_builder.get_sender().sender_clone());
         let downloader = ClientMessageBox::new(downloader);
         let uploader = ClientMessageBox::new(uploader);
 
@@ -428,7 +402,6 @@ impl C8yMapperBuilder {
             box_builder,
             mqtt_publisher,
             http_proxy,
-            timer_sender,
             uploader,
             downloader,
             bridge_monitor_builder,
@@ -479,7 +452,6 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
 
     fn try_build(self) -> Result<C8yMapperActor, Self::Error> {
         let mqtt_publisher = LoggingSender::new("C8yMapper => Mqtt".into(), self.mqtt_publisher);
-        let timer_sender = LoggingSender::new("C8yMapper => Timer".into(), self.timer_sender);
 
         let converter = CumulocityConverter::new(
             self.config,
@@ -498,7 +470,6 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             converter,
             message_box,
             mqtt_publisher,
-            timer_sender,
             bridge_monitor_box,
             self.message_handlers,
         ))
