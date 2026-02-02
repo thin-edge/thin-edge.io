@@ -388,11 +388,25 @@ impl WorkflowActor {
                 let Some(tedge_url) = state
                     .payload
                     .get("url")
-                    .or_else(|| state.payload.get("remoteUrl"))
-                    .or_else(|| state.payload.get("tedgeUrl"))
                     .and_then(|v| v.as_str())
+                    .filter(|v| !v.is_empty())
+                    .or_else(|| {
+                        state
+                            .payload
+                            .get("remoteUrl")
+                            .and_then(|v| v.as_str())
+                            .filter(|v| !v.is_empty())
+                    })
+                    .or_else(|| {
+                        state
+                            .payload
+                            .get("tedgeUrl")
+                            .and_then(|v| v.as_str())
+                            .filter(|v| !v.is_empty())
+                    })
                 else {
-                    let err = "Missing `url` or `remoteUrl` or `tedgeUrl` in payload".to_string();
+                    let err = "Missing or empty `url` or `remoteUrl` or `tedgeUrl` in payload"
+                        .to_string();
                     log_file.log_error(&err).await;
                     let err_state =
                         state.update_with_builtin_action_result("download", Err(err), handlers);
@@ -456,7 +470,7 @@ impl WorkflowActor {
                     .payload
                     .get("downloaded_path")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
+                    .map(Utf8PathBuf::from)
                 else {
                     let err = "Missing `downloaded_path` in payload".to_string();
                     log_file.log_error(&err).await;
@@ -474,9 +488,10 @@ impl WorkflowActor {
                 };
 
                 let request = ConfigSetRequest {
+                    topic: state.topic.clone(),
                     config_type,
                     downloaded_path,
-                    log_path: Some(log_file.path.to_string()),
+                    log_path: Some(log_file.path.clone()),
                 };
                 let response = config_manager.await_response(request).await?;
 

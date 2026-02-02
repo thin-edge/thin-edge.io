@@ -1,6 +1,5 @@
 mod actor;
 mod config;
-mod config_plugins;
 mod error;
 mod plugin;
 pub mod plugin_manager;
@@ -8,10 +7,11 @@ pub mod plugin_manager;
 #[cfg(test)]
 mod tests;
 
+pub use crate::actor::ConfigSetRequest;
+pub use crate::actor::ConfigSetResponse;
 use crate::plugin_manager::ExternalPlugins;
 use actor::*;
 pub use config::*;
-pub use config_plugins::ConfigPluginServer;
 use log::error;
 use serde_json::json;
 use std::path::PathBuf;
@@ -24,6 +24,7 @@ use tedge_actors::MappingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_actors::RequestEnvelope;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
@@ -50,21 +51,6 @@ use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
 use tedge_utils::fs::AtomFileError;
 use toml::toml;
-
-/// Request to set a config file using a plugin
-#[derive(Debug, Clone)]
-pub struct ConfigSetRequest {
-    pub config_type: String,
-    pub downloaded_path: String,
-    pub log_path: Option<String>,
-}
-
-/// Response from a config set operation
-#[derive(Debug, Clone)]
-pub enum ConfigSetResponse {
-    Success,
-    Error(String),
-}
 
 /// An instance of the config manager
 ///
@@ -316,5 +302,11 @@ impl SyncOnCommand for ConfigManagerBuilder {
     /// Return the list of operations for which this actor wants to receive sync signals
     fn sync_on_commands(&self) -> Vec<OperationType> {
         vec![OperationType::SoftwareUpdate]
+    }
+}
+
+impl MessageSink<RequestEnvelope<ConfigSetRequest, ConfigSetResponse>> for ConfigManagerBuilder {
+    fn get_sender(&self) -> DynSender<RequestEnvelope<ConfigSetRequest, ConfigSetResponse>> {
+        self.box_builder.get_sender().sender_clone()
     }
 }

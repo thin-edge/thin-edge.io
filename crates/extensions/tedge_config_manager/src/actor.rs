@@ -13,6 +13,7 @@ use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
+use tedge_actors::RequestEnvelope;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_api::commands::CmdMetaSyncSignal;
@@ -51,7 +52,25 @@ pub type ConfigDownloadResult = (MqttTopic, DownloadResult);
 pub type ConfigUploadRequest = (MqttTopic, UploadRequest);
 pub type ConfigUploadResult = (MqttTopic, UploadResult);
 
-fan_in_message_type!(ConfigInput[ConfigOperation, CmdMetaSyncSignal, FsWatchEvent] : Debug);
+pub type ConfigSetRequestEnvelope = RequestEnvelope<ConfigSetRequest, ConfigSetResponse>;
+
+/// Request to set a config file using a plugin
+#[derive(Debug, Clone)]
+pub struct ConfigSetRequest {
+    pub topic: Topic,
+    pub config_type: String,
+    pub downloaded_path: Utf8PathBuf,
+    pub log_path: Option<Utf8PathBuf>,
+}
+
+/// Response from a config set operation
+#[derive(Debug, Clone)]
+pub enum ConfigSetResponse {
+    Success,
+    Error(String),
+}
+
+fan_in_message_type!(ConfigInput[ConfigOperation, CmdMetaSyncSignal, FsWatchEvent, ConfigSetRequestEnvelope] : Debug);
 
 pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
@@ -88,6 +107,13 @@ impl Actor for ConfigManagerActor {
                 }
                 ConfigInput::FsWatchEvent(event) => worker.process_file_watch_events(event).await,
                 ConfigInput::CmdMetaSyncSignal(_) => worker.reload_supported_config_types().await,
+                ConfigInput::ConfigSetRequestEnvelope(request) => {
+                    let mut worker = worker.clone();
+                    tokio::spawn(async move {
+                        worker.process_config_set_request(request).await;
+                    });
+                    Ok(())
+                }
             };
 
             if let Err(err) = result {
@@ -381,33 +407,73 @@ impl ConfigManagerWorker {
         let from_path = Utf8Path::from_path(&from)
             .with_context(|| format!("path is not utf-8: '{}'", from.to_string_lossy()))?;
 
-        let (config_type, plugin_name) = parse_config_type(&request.config_type);
+        self.execute_config_set_request(
+            topic,
+            &request.config_type,
+            from_path,
+            request.log_path.clone(),
+        )
+        .await?;
 
-        let plugin = self.get_plugin(plugin_name)?;
+        Ok(None)
+    }
 
-        // Extract cmd_id from topic for CommandLog
-        let cmd_id = match self.config.mqtt_schema.entity_channel_of(topic) {
-            Ok((_, Channel::Command { cmd_id, .. })) => cmd_id,
-            _ => {
-                return Err(ConfigManagementError::InvalidTopicError);
-            }
+    async fn process_config_set_request(&mut self, mut req: ConfigSetRequestEnvelope) {
+        let topic = req.request.topic.clone();
+        let result = match self
+            .execute_config_set_request(
+                &topic,
+                &req.request.config_type,
+                &req.request.downloaded_path,
+                req.request.log_path.clone(),
+            )
+            .await
+        {
+            Ok(()) => ConfigSetResponse::Success,
+            Err(err) => ConfigSetResponse::Error(err.to_string()),
         };
+        if let Err(error) = req.reply_to.send(result).await {
+            error!(
+                "Failed to send ConfigSetResponse for command on topic: {} due to: {}",
+                topic, error
+            );
+        }
+    }
 
-        // Create CommandLog from log_path if present
-        let mut command_log = request.log_path.clone().map(|path| {
+    async fn execute_config_set_request(
+        &mut self,
+        topic: &Topic,
+        config_type: &str,
+        from_path: &Utf8Path,
+        log_path: Option<Utf8PathBuf>,
+    ) -> Result<(), ConfigManagementError> {
+        if !from_path.exists() {
+            return Err(ConfigManagementError::FileNotFound(from_path.to_string()));
+        }
+
+        let (config_type, plugin_type) = parse_config_type(config_type);
+        let plugin = self
+            .external_plugins
+            .by_plugin_type(plugin_type)
+            .ok_or_else(|| ConfigManagementError::PluginNotFound(plugin_type.to_string()))?;
+
+        let cmd_id = self.extract_command_id(topic)?;
+        let mut command_log = log_path.clone().map(|path| {
             CommandLog::from_log_path(path, OperationType::ConfigUpdate.to_string(), cmd_id)
         });
-
-        info!(
-            target: "config plugins",
-            "Setting config type: {} from file: {}", config_type, from_path
-        );
 
         plugin
             .set(config_type, from_path, command_log.as_mut())
             .await?;
 
-        Ok(None)
+        Ok(())
+    }
+
+    fn extract_command_id(&self, topic: &Topic) -> Result<String, ConfigManagementError> {
+        match self.config.mqtt_schema.entity_channel_of(topic) {
+            Ok((_, Channel::Command { cmd_id, .. })) => Ok(cmd_id),
+            _ => Err(ConfigManagementError::InvalidTopicError),
+        }
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), RuntimeError> {

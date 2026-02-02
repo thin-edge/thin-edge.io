@@ -347,6 +347,9 @@ struct TestHandler {
     mqtt_box: TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
     software_box: TimedMessageBox<SimpleMessageBox<SoftwareCommand, SoftwareCommand>>,
     restart_box: TimedMessageBox<SimpleMessageBox<RestartCommand, RestartCommand>>,
+    _downloader_box: TimedMessageBox<
+        SimpleMessageBox<RequestEnvelope<DownloaderRequest, DownloaderResult>, NoMessage>,
+    >,
 }
 
 async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHandler, DynError> {
@@ -396,6 +399,7 @@ async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHan
     let software_box = software_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
     let restart_box = restart_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
     let mqtt_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
+    let _downloader_box = downloade_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
     let converter_actor = converter_actor_builder.build();
     tokio::spawn(async move { converter_actor.run().await });
@@ -405,6 +409,7 @@ async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHan
         mqtt_box,
         software_box,
         restart_box,
+        _downloader_box,
     })
 }
 

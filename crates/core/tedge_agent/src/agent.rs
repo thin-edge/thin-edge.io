@@ -56,7 +56,6 @@ use tedge_config::tedge_toml::TEdgeConfigReaderService;
 use tedge_config_manager::ConfigManagerBuilder;
 use tedge_config_manager::ConfigManagerConfig;
 use tedge_config_manager::ConfigManagerOptions;
-use tedge_config_manager::ConfigPluginServer;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
@@ -386,10 +385,7 @@ impl Agent {
                 converter_actor_builder
                     .register_sync_signal_sink(OperationType::ConfigUpdate, &config_manager);
 
-                // For builtin config_set action using plugins
-                let mut config_set_actor = ConfigPluginServer::new(manager_config).builder();
-                converter_actor_builder.connect_config_manager(&mut config_set_actor);
-                runtime.spawn(config_set_actor).await?;
+                converter_actor_builder.connect_config_manager(&mut config_manager);
 
                 Some(config_manager)
             } else if self.config.capabilities.config_update {
