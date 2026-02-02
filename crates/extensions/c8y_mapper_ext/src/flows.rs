@@ -90,10 +90,14 @@ impl C8yMapperBuilder {
 
         format!(
             r#"
-[input.mqtt]
-topics = ["{topic_prefix}/+/+/+/+/m/+/meta"]
+input.mqtt.topics = ["{topic_prefix}/+/+/+/+/m/+/meta"]
 
-[output.context]
+steps = [
+    {{ builtin = "update-context" }}
+]
+
+[output.mqtt]
+topic = "{errors_topic}"
 
 [errors.mqtt]
 topic = "{errors_topic}"
