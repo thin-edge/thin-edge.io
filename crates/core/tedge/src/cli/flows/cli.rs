@@ -182,12 +182,39 @@ impl TEdgeFlowsCli {
             .await
             .with_context(|| format!("loading flow {path}"))?;
 
-        if let Some("toml") = path.extension() {
-            processor.load_single_flow(path).await;
+        let resolved_path = if path.is_absolute() {
+            path.clone()
+        } else if tokio::fs::try_exists(path).await.unwrap_or(false) {
+            // Exists relative to current working directory
+            path.canonicalize_utf8().unwrap_or(path.clone())
         } else {
-            processor.load_single_script(path).await;
+            // Try to find the file under flows_dir using glob
+            Self::find_in_flows_dir(flows_dir, path)
+                .await
+                .unwrap_or(path.clone())
+        };
+
+        match resolved_path.extension() {
+            Some("toml") => processor.load_single_flow(&resolved_path).await,
+            _ => processor.load_single_script(&resolved_path).await,
         }
         Ok(processor)
+    }
+
+    async fn find_in_flows_dir(
+        flows_dir: &Utf8PathBuf,
+        filename: &Utf8PathBuf,
+    ) -> Option<Utf8PathBuf> {
+        let pattern = format!("{}/**/{}", flows_dir, filename);
+        tokio::task::spawn_blocking(move || {
+            glob::glob(&pattern)
+                .ok()?
+                .filter_map(Result::ok)
+                .find_map(|p| Utf8PathBuf::try_from(p).ok())
+        })
+        .await
+        .ok()
+        .flatten()
     }
 }
 
