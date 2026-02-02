@@ -41,8 +41,8 @@ impl C8yEntityBirth {
         MqttMessage::new(&message_topic, birth.to_json())
     }
 
-    pub fn from_json(payload: &str) -> Result<Self, String> {
-        serde_json::from_str(payload)
+    pub fn from_json(payload: &[u8]) -> Result<Self, String> {
+        serde_json::from_slice(payload)
             .map_err(|e| format!("Not a C8Y entity registration message: {:?}", e))
     }
 
