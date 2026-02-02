@@ -1,4 +1,4 @@
-mod parse_condition;
+mod parsing;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_spanned::Spanned;
@@ -13,7 +13,13 @@ use tedge_config::tedge_toml::ReadError;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::TEdgeConfig;
 
-use parse_condition::parse_condition_with_error;
+use parsing::parse_condition_with_error;
+use parsing::template::expand_config_template;
+use parsing::template::expand_loop_template;
+use parsing::template::TemplateContext;
+
+#[cfg(test)]
+mod test_helpers;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -215,7 +221,11 @@ impl PersistedBridgeConfig {
             )
             .unwrap_or_else(|e| {
                 errors.push(e);
-                <_>::default()
+
+                (
+                    <_>::default(),
+                    template.r#for.get_ref().item.get_ref().to_owned(),
+                )
             });
 
             let template_local_prefix = expand_prefix(&template.local_prefix, "local_prefix")
@@ -338,7 +348,7 @@ struct StaticBridgeRule {
 #[serde(deny_unknown_fields)]
 struct TemplateBridgeRule {
     r#for: Spanned<IterationRule>,
-    topic: Spanned<TemplateTemplate>,
+    topic: Spanned<LoopTemplate>,
     local_prefix: Option<Spanned<Template>>,
     remote_prefix: Option<Spanned<Template>>,
     direction: Direction,
@@ -374,12 +384,6 @@ pub enum AuthMethod {
     Password,
 }
 
-impl From<Condition> for String {
-    fn from(val: Condition) -> String {
-        val.to_string()
-    }
-}
-
 impl Expandable for Condition {
     type Target = bool;
     type Config<'a> = (&'a TEdgeConfig, AuthMethod);
@@ -388,7 +392,7 @@ impl Expandable for Condition {
         &self,
         config: Self::Config<'_>,
         cloud_profile: Option<&ProfileName>,
-    ) -> Result<Self::Target, TemplateError> {
+    ) -> Result<Self::Target, ExpandError> {
         match self {
             Self::AuthMethod(auth_method) => Ok(*auth_method == config.1),
             Self::Is(true, config_ref) => config_ref.expand(config.0, cloud_profile),
@@ -397,23 +401,13 @@ impl Expandable for Condition {
     }
 }
 
-impl fmt::Display for Condition {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::AuthMethod(method) => write!(f, "auth_method({method})"),
-            Self::Is(true, config) => write!(f, "{config}"),
-            Self::Is(false, config) => write!(f, "!{config}"),
-        }
-    }
-}
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(transparent)]
+struct Template(Spanned<String>);
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(transparent)]
-struct Template(String);
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(transparent)]
-struct TemplateTemplate(String);
+struct LoopTemplate(Spanned<String>);
 
 #[derive(Serialize, Deserialize, Debug)]
 struct IterationRule {
@@ -422,16 +416,53 @@ struct IterationRule {
     r#in: Spanned<Iterable>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(untagged)]
+#[derive(Serialize, Debug)]
 enum Iterable {
     Config(ConfigReference<TemplatesSet>),
     Literal(Vec<String>),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[serde(try_from = "String", into = "String", bound = "")]
-pub(crate) struct ConfigReference<Target>(pub(crate) String, pub(crate) PhantomData<Target>);
+/// Helper enum for deserializing Iterable - we wrap this in Spanned to get span info
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum IterableHelper {
+    Literal(Vec<String>),
+    Config(String),
+}
+
+impl Iterable {
+    fn from_spanned_helper(spanned: Spanned<IterableHelper>) -> Result<Self, anyhow::Error> {
+        let span = spanned.span();
+        match spanned.into_inner() {
+            IterableHelper::Literal(values) => Ok(Iterable::Literal(values)),
+            IterableHelper::Config(s) => {
+                // Create a Spanned<String> with the span info, then convert to ConfigReference
+                let spanned_string = Spanned::new(span, s);
+                let config_ref: ConfigReference<TemplatesSet> = spanned_string.try_into()?;
+                Ok(Iterable::Config(config_ref))
+            }
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Iterable {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        let spanned_helper = Spanned::<IterableHelper>::deserialize(deserializer)?;
+        Iterable::from_spanned_helper(spanned_helper).map_err(D::Error::custom)
+    }
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(into = "String")]
+pub(crate) struct ConfigReference<Target>(
+    pub(crate) Spanned<String>,
+    pub(crate) PhantomData<Target>,
+);
 
 impl<Target> Clone for ConfigReference<Target> {
     fn clone(&self) -> Self {
@@ -439,16 +470,39 @@ impl<Target> Clone for ConfigReference<Target> {
     }
 }
 
+#[cfg(test)]
 impl<Target> FromStr for ConfigReference<Target> {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut ser = String::new();
+        serde::Serialize::serialize(s, toml::ser::ValueSerializer::new(&mut ser)).unwrap();
+        Spanned::<String>::deserialize(toml::de::ValueDeserializer::parse(&ser).unwrap())
+            .unwrap()
+            .try_into()
+    }
+}
+
+impl<Target> TryFrom<Spanned<String>> for ConfigReference<Target> {
+    type Error = anyhow::Error;
+    fn try_from(s: Spanned<String>) -> Result<Self, Self::Error> {
+        let span = s.span();
+        // TODO chumskyify
         let s = s
+            .get_ref()
             .strip_prefix("${config.")
             .ok_or_else(|| anyhow::anyhow!("Config variable must start with ${{config."))?;
         let s = s
             .strip_suffix("}")
             .ok_or_else(|| anyhow::anyhow!("Config variable must end with }}"))?;
-        Ok(Self(s.to_owned(), PhantomData))
+        let start_offset = "${config.".len() + 1;
+        let end_offset = "}".len() + 1;
+        Ok(Self(
+            Spanned::new(
+                span.start + start_offset..span.end - end_offset,
+                s.to_owned(),
+            ),
+            PhantomData,
+        ))
     }
 }
 
@@ -475,40 +529,7 @@ trait Expandable {
         &self,
         config: Self::Config<'_>,
         cloud_profile: Option<&ProfileName>,
-    ) -> Result<Self::Target, TemplateError>;
-}
-
-#[derive(Debug)]
-struct TemplateError {
-    message: String,
-    help: Option<String>,
-    /// Byte offset within the template string where the error occurred
-    offset: usize,
-}
-
-impl std::fmt::Display for TemplateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl std::error::Error for TemplateError {}
-
-/// Adjust a span from serde_spanned (which includes quotes) to exclude them,
-/// and add an offset for errors within the string content
-fn adjust_span_for_error(
-    outer_span: std::ops::Range<usize>,
-    inner_offset: usize,
-) -> std::ops::Range<usize> {
-    // serde_spanned includes the quotes, so we add 1 to skip the opening quote
-    let content_start = outer_span.start + 1;
-    let content_end = outer_span.end.saturating_sub(1).max(content_start);
-
-    // Add the offset within the content
-    let error_start = content_start + inner_offset;
-    let error_end = content_end;
-
-    error_start..error_end
+    ) -> Result<Self::Target, ExpandError>;
 }
 
 /// Helper to expand a spanned template and convert errors to ExpandError
@@ -518,14 +539,13 @@ fn expand_spanned<T: Expandable>(
     cloud_profile: Option<&ProfileName>,
     context: &str,
 ) -> Result<T::Target, ExpandError> {
-    let span = spanned.span();
     spanned
         .get_ref()
         .expand(config, cloud_profile)
         .map_err(|e| ExpandError {
-            message: format!("{context}: {e}"),
+            message: format!("{context}: {}", e.message),
             help: e.help,
-            span: adjust_span_for_error(span, e.offset),
+            span: e.span,
         })
 }
 
@@ -540,7 +560,7 @@ impl Expandable for IterationRule {
         &self,
         tedge_config: &TEdgeConfig,
         cloud_profile: Option<&ProfileName>,
-    ) -> Result<Self::Target, TemplateError> {
+    ) -> Result<Self::Target, ExpandError> {
         Ok((
             self.r#in.get_ref().expand(tedge_config, cloud_profile)?,
             self.item.get_ref().clone(),
@@ -559,7 +579,7 @@ impl Expandable for Iterable {
         &self,
         tedge_config: &TEdgeConfig,
         cloud_profile: Option<&ProfileName>,
-    ) -> Result<Self::Target, TemplateError> {
+    ) -> Result<Self::Target, ExpandError> {
         match self {
             Self::Config(config_ref) => config_ref.expand(tedge_config, cloud_profile),
             Self::Literal(values) => Ok(TemplatesSet(values.clone())),
@@ -581,12 +601,16 @@ where
         &self,
         config: &TEdgeConfig,
         cloud_profile: Option<&ProfileName>,
-    ) -> Result<Self::Target, TemplateError> {
-        let key: ReadableKey = self.0.parse().map_err(|e: ParseKeyError| TemplateError {
-            message: e.to_string(),
-            help: None,
-            offset: 0,
-        })?;
+    ) -> Result<Self::Target, ExpandError> {
+        let key: ReadableKey =
+            self.0
+                .get_ref()
+                .parse()
+                .map_err(|e: ParseKeyError| ExpandError {
+                    message: e.to_string(),
+                    help: None,
+                    span: self.0.span(),
+                })?;
         let key = if let Some(profile) = cloud_profile {
             // Key might potentially not be a profiled configuration
             // If it isn't, just ignore the profile
@@ -607,10 +631,10 @@ where
             } else {
                 (e.to_string(), None)
             };
-            TemplateError {
+            ExpandError {
                 message,
                 help,
-                offset: 0,
+                span: self.0.span(),
             }
         })?;
 
@@ -620,10 +644,10 @@ where
         deser
             .and_then(Target::deserialize)
             .or_else(|_| value.parse())
-            .map_err(|e: Target::Err| TemplateError {
+            .map_err(|e: Target::Err| ExpandError {
                 message: e.to_string(),
                 help: None,
-                offset: 0,
+                span: self.0.span(),
             })
     }
 }
@@ -636,26 +660,21 @@ struct TemplateConfig<'a> {
 
 /// Expands a tedge.toml config key and return its value
 ///
-/// Expects var_name to start with "." (to match tedge-flows config format),
+/// Expects var_name to start with "config." (e.g., "config.c8y.url"),
 /// strips it, and reads the config value
-fn expand_config_key(
+pub(crate) fn expand_config_key(
     var_name: &str,
     config: &TEdgeConfig,
     cloud_profile: Option<&ProfileName>,
-    offset: usize,
-) -> Result<String, TemplateError> {
-    let key_str = var_name
-        .strip_prefix("config.")
-        .ok_or_else(|| TemplateError {
-            message: format!("Templated variable must start with 'config.' (got '{var_name}'))"),
-            help: Some(format!("You might have meant 'config.{var_name}'")),
-            offset,
-        })?;
-
-    let key: ReadableKey = key_str.parse().map_err(|e: ParseKeyError| TemplateError {
-        message: e.to_string(),
-        help: None,
-        offset,
+    span: std::ops::Range<usize>,
+) -> Result<String, ExpandError> {
+    let key: ReadableKey = var_name.parse().map_err({
+        let span = span.clone();
+        |e: ParseKeyError| ExpandError {
+            message: e.to_string(),
+            help: None,
+            span,
+        }
     })?;
 
     let key = if let Some(profile) = cloud_profile {
@@ -679,41 +698,12 @@ fn expand_config_key(
         } else {
             (e.to_string(), None)
         };
-        TemplateError {
+        ExpandError {
             message,
             help,
-            offset,
+            span,
         }
     })
-}
-
-/// Generic helper to expand template strings with variable substitution
-/// The `expand_var` closure is called for each ${...} found, with the variable name and offset
-fn expand_template_string(
-    template: &str,
-    mut expand_var: impl FnMut(&str, usize) -> Result<String, TemplateError>,
-) -> Result<String, TemplateError> {
-    let mut result = String::new();
-    let mut byte_offset = 0;
-
-    for segment in template.split('}') {
-        match segment.split_once("${") {
-            None => {
-                result.push_str(segment);
-                byte_offset += segment.len();
-            }
-            Some((prefix, var_name)) => {
-                result.push_str(prefix);
-                let var_start = byte_offset + prefix.len();
-
-                let value = expand_var(var_name, var_start)?;
-                result.push_str(&value);
-                byte_offset += segment.len() + 1; // +1 for the '}'
-            }
-        }
-    }
-
-    Ok(result)
 }
 
 impl Expandable for Template {
@@ -727,14 +717,12 @@ impl Expandable for Template {
         &self,
         config: Self::Config<'_>,
         cloud_profile: Option<&ProfileName>,
-    ) -> Result<Self::Target, TemplateError> {
-        expand_template_string(&self.0, |var_name, offset| {
-            expand_config_key(var_name, config, cloud_profile, offset)
-        })
+    ) -> Result<Self::Target, ExpandError> {
+        expand_config_template(&self.0, config, cloud_profile)
     }
 }
 
-impl Expandable for TemplateTemplate {
+impl Expandable for LoopTemplate {
     type Target = String;
     type Config<'a>
         = TemplateConfig<'a>
@@ -745,32 +733,15 @@ impl Expandable for TemplateTemplate {
         &self,
         config: TemplateConfig,
         cloud_profile: Option<&ProfileName>,
-    ) -> Result<Self::Target, TemplateError> {
+    ) -> Result<Self::Target, ExpandError> {
         // TODO warn if there is no reference to the iterated variable
         // TODO maybe add warnings if there are duplicate rules
-        expand_template_string(&self.0, |var_name, offset| {
-            if var_name == config.for_ident {
-                Ok(config.r#for.to_string())
-            } else if var_name.contains(".") {
-                expand_config_key(var_name, config.tedge, cloud_profile, offset)
-            } else {
-                Err(TemplateError {
-                    message: "Unknown variable".to_owned(),
-                    help: Some(format!(
-                        "You might have meant '{}' or 'config.{}'",
-                        config.for_ident, var_name
-                    )),
-                    offset,
-                })
-            }
-        })
-    }
-}
-
-impl<Target> TryFrom<String> for ConfigReference<Target> {
-    type Error = anyhow::Error;
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        value.parse()
+        let ctx = TemplateContext {
+            tedge: config.tedge,
+            loop_var_name: config.for_ident,
+            loop_var_value: config.r#for,
+        };
+        expand_loop_template(&self.0, &ctx, cloud_profile)
     }
 }
 
@@ -968,10 +939,9 @@ topic_prefix = "changed"
 
         #[test]
         fn expands_config_reference() {
-            let condition = Condition::Is(
-                true,
-                ConfigReference("c8y.mqtt_service.enabled".to_owned(), PhantomData),
-            );
+            let reference: ConfigReference<_> =
+                "${config.c8y.mqtt_service.enabled}".parse().unwrap();
+            let condition = Condition::Is(true, reference);
             let tedge_config =
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = true");
             assert!(condition
@@ -981,10 +951,9 @@ topic_prefix = "changed"
 
         #[test]
         fn expands_negated_config_reference() {
-            let condition = Condition::Is(
-                false,
-                ConfigReference("c8y.mqtt_service.enabled".to_owned(), PhantomData),
-            );
+            let reference: ConfigReference<_> =
+                "${config.c8y.mqtt_service.enabled}".parse().unwrap();
+            let condition = Condition::Is(false, reference);
             let tedge_config =
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = true");
             assert!(!condition
@@ -1638,6 +1607,45 @@ direction = "outbound"
                 .unwrap();
 
             assert_eq!(with_password.len(), 0);
+        }
+
+        #[test]
+        fn topic_does_not_error_when_for_does() {
+            let toml = r##"
+local_prefix = "${config.c8y.bridge.topic_prefix}/"
+remote_prefix = ""
+
+[[template_rule]]
+for = { item = "template", in = "${config.c8y.unknown.key}" }
+topic = "s/uc/${template}"
+direction = "outbound"
+"##;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            let errors = config
+                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .unwrap_err();
+
+            assert_eq!(
+                errors.len(),
+                1,
+                "Expected only 1 error, actual errors were {errors:?}"
+            );
+
+            assert_eq!(&toml[errors[0].span.clone()], "c8y.unknown.key");
+        }
+
+        #[test]
+        fn config_reference_serializes_to_original_value() {
+            let original: ConfigReference<String> = "${config.c8y.url}".parse().unwrap();
+            let mut value = String::new();
+            original
+                .serialize(toml::ser::ValueSerializer::new(&mut value))
+                .unwrap();
+            let deserialized: Spanned<String> =
+                <_>::deserialize(toml::de::ValueDeserializer::parse(&value).unwrap()).unwrap();
+            assert_eq!(ConfigReference::try_from(deserialized).unwrap(), original);
         }
     }
 }

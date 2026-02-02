@@ -6,9 +6,9 @@
 
 use crate::config_toml::ConfigReference;
 
-use super::AuthMethod;
-use super::Condition;
-use super::ExpandError;
+use super::super::AuthMethod;
+use super::super::Condition;
+use super::super::ExpandError;
 use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 use std::fmt;
@@ -115,13 +115,19 @@ where
         .then_ignore(just(Token::VarStart))
         .then_ignore(just(Token::Ident("config")))
         .then_ignore(just(Token::Dot))
-        .then(dotted_path())
+        .then(dotted_path().spanned())
         .then_ignore(just(Token::VarEnd))
-        .map(|(negation, parts)| {
-            let key = parts.join(".");
-            let target = negation.is_none();
-            Condition::Is(target, ConfigReference(key, PhantomData))
-        })
+        .map(
+            |(negation, parts): (_, chumsky::prelude::Spanned<Vec<&str>>)| {
+                let span = parts.span;
+                let key = parts.inner.join(".");
+                let target = negation.is_none();
+                Condition::Is(
+                    target,
+                    ConfigReference(Spanned::new(span.into_range(), key), PhantomData),
+                )
+            },
+        )
         .labelled("config reference")
 }
 
@@ -179,7 +185,7 @@ impl std::str::FromStr for AuthMethod {
 }
 
 /// Parse a condition string, formatting errors with span information for ariadne
-pub(crate) fn parse_condition_with_error(
+pub fn parse_condition_with_error(
     input: &Spanned<impl AsRef<str>>,
 ) -> Result<Spanned<Condition>, Vec<ExpandError>> {
     let src = input.get_ref().as_ref();
@@ -231,6 +237,8 @@ pub(crate) fn parse_condition_with_error(
 
 #[cfg(test)]
 mod tests {
+    use crate::config_toml::test_helpers::*;
+
     use super::*;
 
     #[test]
@@ -275,54 +283,48 @@ mod tests {
 
     #[test]
     fn parses_config_reference() {
-        let result = parse_with_spans("${config.c8y.mqtt_service.enabled}").unwrap();
+        let result = parse_condition_str("${config.c8y.mqtt_service.enabled}").unwrap();
         assert_eq!(
             result,
-            Condition::Is(
-                true,
-                ConfigReference("c8y.mqtt_service.enabled".to_owned(), PhantomData)
-            )
+            Condition::Is(true, "${config.c8y.mqtt_service.enabled}".parse().unwrap(),)
         );
     }
 
     #[test]
     fn parses_negated_config_reference() {
-        let result = parse_with_spans("!${config.c8y.mqtt_service.enabled}").unwrap();
+        let result = parse_condition_str("!${config.c8y.mqtt_service.enabled}").unwrap();
         assert_eq!(
             result,
-            Condition::Is(
-                false,
-                ConfigReference("c8y.mqtt_service.enabled".to_owned(), PhantomData)
-            )
+            Condition::Is(false, "${config.c8y.mqtt_service.enabled}".parse().unwrap(),)
         );
     }
 
     #[test]
     fn parses_auth_method_certificate() {
-        let result = parse_with_spans("${connection.auth_method} == 'certificate'").unwrap();
+        let result = parse_condition_str("${connection.auth_method} == 'certificate'").unwrap();
         assert_eq!(result, Condition::AuthMethod(AuthMethod::Certificate));
     }
 
     #[test]
     fn parses_auth_method_password() {
-        let result = parse_with_spans("${connection.auth_method} == 'password'").unwrap();
+        let result = parse_condition_str("${connection.auth_method} == 'password'").unwrap();
         assert_eq!(result, Condition::AuthMethod(AuthMethod::Password));
     }
 
     #[test]
     fn handles_whitespace_around_equals() {
-        let result = parse_with_spans("${connection.auth_method}   ==   'password'").unwrap();
+        let result = parse_condition_str("${connection.auth_method}   ==   'password'").unwrap();
         assert_eq!(result, Condition::AuthMethod(AuthMethod::Password));
     }
 
     #[test]
     fn rejects_invalid_auth_method() {
-        let result = parse_with_spans("${connection.auth_method} == 'invalid'");
+        let result = parse_condition_str("${connection.auth_method} == 'invalid'");
         assert!(result.is_err());
         let err = result.unwrap_err();
         let err_str: String = err
             .iter()
-            .map(|(msg, _)| msg.as_str())
+            .map(|error| error.message.as_str())
             .collect::<Vec<_>>()
             .join("; ");
         assert!(
@@ -333,13 +335,13 @@ mod tests {
 
     #[test]
     fn rejects_missing_closing_brace() {
-        let result = parse_with_spans("${config.some.key");
+        let result = parse_condition_str("${config.some.key");
         assert!(result.is_err());
     }
 
     #[test]
     fn rejects_unknown_variable_type() {
-        let result = parse_with_spans("${unknown.variable}");
+        let result = parse_condition_str("${unknown.variable}");
         assert!(result.is_err());
     }
 
@@ -368,7 +370,7 @@ mod tests {
     #[test]
     fn error_for_wrong_operator() {
         // Single `=` instead of `==`
-        let result = parse_with_spans("${connection.auth_method} = 'password'");
+        let result = parse_condition_str("${connection.auth_method} = 'password'");
         assert!(result.is_err());
     }
 
@@ -395,11 +397,11 @@ mod tests {
 
     #[test]
     fn error_span_for_invalid_auth_method_typo() {
-        let input = "${connection.auth_method} == 'certifcate'";
-        let err = parse_with_spans(input).unwrap_err();
+        let input = toml_spanned("${connection.auth_method} == 'certifcate'");
+        let err = parse_condition_with_error(&input).unwrap_err();
 
         assert_eq!(err.len(), 1);
-        let (message, span) = &err[0];
+        let ExpandError { message, span, .. } = &err[0];
 
         // Error message should mention valid options
         assert!(
@@ -408,7 +410,7 @@ mod tests {
         );
 
         // Span should highlight the typo'd string 'certifcate'
-        let highlighted = &input[span.clone()];
+        let highlighted = extract_toml_span(&input, span.clone());
         assert_eq!(
             highlighted, "'certifcate'",
             "Span should highlight the invalid string literal, got: {highlighted}"
@@ -417,11 +419,11 @@ mod tests {
 
     #[test]
     fn error_span_for_unknown_variable_type() {
-        let input = "${unknown.variable}";
-        let err = parse_with_spans(input).unwrap_err();
+        let input = toml_spanned("${unknown.variable}");
+        let err = parse_condition_with_error(&input).unwrap_err();
 
         assert_eq!(err.len(), 1);
-        let (message, span) = &err[0];
+        let ExpandError { message, span, .. } = &err[0];
 
         // Error message should say what was expected
         assert!(
@@ -430,7 +432,7 @@ mod tests {
         );
 
         // Span should highlight 'unknown'
-        let highlighted = &input[span.clone()];
+        let highlighted = extract_toml_span(&input, span.clone());
         assert_eq!(
             highlighted, "unknown",
             "Span should highlight the unknown identifier, got: {highlighted}"
@@ -439,11 +441,11 @@ mod tests {
 
     #[test]
     fn error_span_for_wrong_operator() {
-        let input = "${connection.auth_method} = 'password'";
-        let err = parse_with_spans(input).unwrap_err();
+        let input = toml_spanned("${connection.auth_method} = 'password'");
+        let err = parse_condition_with_error(&input).unwrap_err();
 
         assert_eq!(err.len(), 1);
-        let (message, span) = &err[0];
+        let ExpandError { message, span, .. } = &err[0];
 
         // Error should mention expected '==' and what was found
         assert!(
@@ -452,7 +454,7 @@ mod tests {
         );
 
         // Span should highlight the `=` operator
-        let highlighted = &input[span.clone()];
+        let highlighted = extract_toml_span(&input, span.clone());
         assert_eq!(
             highlighted, "=",
             "Span should highlight the wrong operator, got: {highlighted}"
@@ -461,11 +463,11 @@ mod tests {
 
     #[test]
     fn error_span_for_missing_value() {
-        let input = "${connection.auth_method} ==";
-        let err = parse_with_spans(input).unwrap_err();
+        let input = toml_spanned("${connection.auth_method} ==");
+        let err = parse_condition_with_error(&input).unwrap_err();
 
         assert_eq!(err.len(), 1);
-        let (message, span) = &err[0];
+        let ExpandError { message, span, .. } = &err[0];
 
         // Should indicate end of input and what was expected
         assert!(
@@ -474,16 +476,25 @@ mod tests {
         );
 
         // Span should be at end of input
-        assert_eq!(span.start, input.len(), "Span should be at end of input");
+        assert_eq!(
+            extract_toml_span(&input, span.start..span.end + 1),
+            "\"",
+            "Span should point at the closing \" in toml"
+        );
+        assert_eq!(
+            span.start,
+            input.get_ref().len() + 1,
+            "Span should be at end of input"
+        );
     }
 
     #[test]
     fn error_span_for_unclosed_string() {
-        let input = "${connection.auth_method} == 'certificate";
-        let err = parse_with_spans(input).unwrap_err();
+        let input = toml_spanned("${connection.auth_method} == 'certificate");
+        let err = parse_condition_with_error(&input).unwrap_err();
 
         assert_eq!(err.len(), 1);
-        let (message, span) = &err[0];
+        let ExpandError { message, span, .. } = &err[0];
 
         // This should be a lexer error about unclosed string
         assert!(
@@ -492,43 +503,20 @@ mod tests {
         );
 
         // Span should be at end of input
-        assert_eq!(span.start, input.len(), "Span should be at end of input");
+        assert_eq!(
+            extract_toml_span(&input, span.start..span.end + 1),
+            "\"",
+            "Span should point at the closing \" in toml"
+        );
+        assert_eq!(
+            span.start,
+            input.get_ref().len() + 1,
+            "Span should be at end of input"
+        );
     }
 
-    /// Test helper that parses and returns errors with their spans
-    fn parse_with_spans(input: &str) -> Result<Condition, Vec<(String, std::ops::Range<usize>)>> {
-        // Stage 1: Lexing
-        let (tokens, lex_errs) = lexer().parse(input).into_output_errors();
-
-        if !lex_errs.is_empty() {
-            return Err(lex_errs
-                .into_iter()
-                .map(|e| {
-                    let range = e.span().into_range();
-                    (format!("Lexer error: {e}"), range)
-                })
-                .collect());
-        }
-
-        let tokens = tokens.expect("tokens should exist if no errors");
-
-        // Stage 2: Parsing
-        let len = input.len();
-
-        let (ast, parse_errs) = condition_parser()
-            .parse(tokens.as_slice().map((len..len).into(), |(t, s)| (t, s)))
-            .into_output_errors();
-
-        if !parse_errs.is_empty() {
-            return Err(parse_errs
-                .into_iter()
-                .map(|e| {
-                    let range = e.span().into_range();
-                    (format!("{e}"), range)
-                })
-                .collect());
-        }
-
-        Ok(ast.expect("ast should exist if no errors"))
+    fn parse_condition_str(input: &str) -> Result<Condition, Vec<ExpandError>> {
+        let spanned = toml_spanned(input);
+        parse_condition_with_error(&spanned).map(|condition| condition.into_inner())
     }
 }
