@@ -126,7 +126,6 @@ impl TEdgeComponent for CumulocityMapper {
             c8y_mapper_config,
             &mut mqtt_actor,
             &mut http_actor,
-            &mut timer_actor,
             &mut uploader_actor,
             &mut downloader_actor,
             &mut fs_watch_actor,
