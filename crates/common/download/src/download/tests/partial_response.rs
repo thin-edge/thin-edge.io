@@ -1,5 +1,7 @@
 use super::*;
 
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
@@ -63,7 +65,13 @@ async fn resume_download_when_disconnected() {
                     let body = &file[start..next];
 
                     let size = body.len();
-                    let msg = format!("{header}\r\n{size}\r\n{body}\r\n");
+                    let msg = format!("{header}\r\n{size:x}\r\n{body}\r\n");
+                    // if this is the last chunk, send also terminating 0-length chunk
+                    let msg = if next == file.len() {
+                        format!("{msg}0\r\n\r\n")
+                    } else {
+                        msg
+                    };
                     debug!("sending message = {msg}");
                     writer.write_all(msg.as_bytes()).await.unwrap();
                     writer.flush().await.unwrap();
@@ -329,4 +337,113 @@ async fn resumed_download_doesnt_leave_leftovers() {
     downloader.cleanup().await.unwrap();
 
     server_task.abort();
+}
+
+#[tokio::test]
+async fn resume_max_5_times() {
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let rc = request_count.clone();
+
+    let listener = TcpListener::bind("localhost:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server_task = tokio::spawn(async move {
+        while let Ok((mut stream, _addr)) = listener.accept().await {
+            let response_task = async move {
+                let (_, mut writer) = stream.split();
+                // Always respond with only first chunk, never completing the response, triggering retries
+                let header = "\
+                            HTTP/1.1 200 OK\r\n\
+                            transfer-encoding: chunked\r\n\
+                            connection: close\r\n\
+                            content-type: application/octet-stream\r\n\
+                            accept-ranges: bytes\r\n";
+
+                let body = "AAAA";
+                let msg = format!("{header}\r\n4\r\n{body}\r\n");
+                writer.write_all(msg.as_bytes()).await.unwrap();
+                writer.flush().await.unwrap();
+            };
+            tokio::spawn(response_task);
+            rc.fetch_add(1, Ordering::SeqCst);
+        }
+    });
+
+    // Wait until task binds a listener on the TCP port
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let tmpdir = TempDir::new().unwrap();
+    let target_path = tmpdir.path().join("partial_download");
+
+    let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
+    let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
+
+    let err = downloader.download(&url).await.unwrap_err();
+    assert!(matches!(err, DownloadError::Request(_)));
+    assert!(err.to_string().contains("error decoding response body"));
+
+    downloader.cleanup().await.unwrap();
+
+    server_task.abort();
+
+    assert_eq!(request_count.load(Ordering::SeqCst), 5);
+}
+
+// If we succeed before max retries, we should not do more requests.
+#[tokio::test]
+async fn only_retry_until_success() {
+    let file = "AAAABBBBCCCCDDDD";
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let rc = request_count.clone();
+
+    let listener = TcpListener::bind("localhost:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server_task = tokio::spawn(async move {
+        while let Ok((mut stream, _addr)) = listener.accept().await {
+            let rc_num = rc.load(Ordering::SeqCst);
+            let response_task = async move {
+                let (_, mut writer) = stream.split();
+                // Always respond with only first chunk, never completing the response, triggering retries
+                let header = "\
+                            HTTP/1.1 200 OK\r\n\
+                            transfer-encoding: chunked\r\n\
+                            connection: close\r\n\
+                            content-type: application/octet-stream\r\n\
+                            accept-ranges: bytes\r\n";
+
+                // On the 2nd request, send the full response, should trigger only 1 retry
+                let msg = if rc_num == 0 {
+                    let body = "AAAA";
+                    format!("{header}\r\n4\r\n{body}\r\n")
+                } else {
+                    let body = file;
+                    let len = file.len();
+                    format!("{header}\r\n{len:x}\r\n{body}\r\n0\r\n\r\n")
+                };
+
+                writer.write_all(msg.as_bytes()).await.unwrap();
+                writer.flush().await.unwrap();
+            };
+            tokio::spawn(response_task);
+            rc.fetch_add(1, Ordering::SeqCst);
+        }
+    });
+
+    // Wait until task binds a listener on the TCP port
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let tmpdir = TempDir::new().unwrap();
+    let target_path = tmpdir.path().join("partial_download");
+
+    let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
+    let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
+
+    downloader.download(&url).await.unwrap();
+    let saved_file = std::fs::read_to_string(downloader.filename()).unwrap();
+    assert_eq!(saved_file, file);
+
+    downloader.cleanup().await.unwrap();
+
+    server_task.abort();
+
+    assert_eq!(request_count.load(Ordering::SeqCst), 2);
 }
