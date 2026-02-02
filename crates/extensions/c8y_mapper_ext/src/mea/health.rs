@@ -1,14 +1,12 @@
 use crate::entity_cache::CloudEntityMetadata;
 use crate::mea::get_entity_metadata;
 use crate::mea::get_entity_parent_metadata;
-use crate::mea::take_cached_telemetry_data;
 use crate::service_monitor::convert_health_status_message;
 use std::str::FromStr;
 use std::time::SystemTime;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::store::RingBuffer;
 use tedge_config::models::TopicPrefix;
 use tedge_flows::ConfigError;
 use tedge_flows::FlowContextHandle;
@@ -21,7 +19,6 @@ pub struct HealthStatusConverter {
     mqtt_schema: MqttSchema,
     main_device: EntityTopicId,
     c8y_prefix: TopicPrefix,
-    cache: RingBuffer<Message>,
 }
 
 impl Default for HealthStatusConverter {
@@ -30,7 +27,6 @@ impl Default for HealthStatusConverter {
             mqtt_schema: MqttSchema::default(),
             main_device: EntityTopicId::default_main_device(),
             c8y_prefix: TopicPrefix::try_new("c8y").unwrap(),
-            cache: RingBuffer::default(),
         }
     }
 }
@@ -66,19 +62,9 @@ impl tedge_flows::Transformer for HealthStatusConverter {
         match self.mqtt_schema.entity_channel_of(&message.topic) {
             Ok((entity_id, Channel::Health)) => {
                 let Some(entity) = get_entity_metadata(context, entity_id.as_str()) else {
-                    self.cache.push(message.clone());
                     return Ok(vec![]);
                 };
                 self.convert(context, entity, message)
-            }
-
-            Ok((_, Channel::Status { component })) if component == "entities" => {
-                let Some(payload) = message.payload_str() else {
-                    return Err(FlowError::UnsupportedMessage(
-                        "Not an UTF8 payload".to_string(),
-                    ));
-                };
-                self.process_cached_messages(context, payload)
             }
 
             _ => Err(FlowError::UnsupportedMessage(format!(
@@ -118,40 +104,5 @@ impl HealthStatusConverter {
             &self.c8y_prefix,
         );
         Ok(mqtt_output.into_iter().map(Message::from).collect())
-    }
-
-    pub fn process_cached_messages(
-        &mut self,
-        context: &FlowContextHandle,
-        birth_message: &str,
-    ) -> Result<Vec<Message>, FlowError> {
-        let pending_messages = take_cached_telemetry_data(&mut self.cache, birth_message);
-
-        let mut messages = vec![];
-        for pending in pending_messages {
-            messages.extend(self.process_cached_message(context, pending)?);
-        }
-        Ok(messages)
-    }
-
-    pub fn process_cached_message(
-        &mut self,
-        context: &FlowContextHandle,
-        message: Message,
-    ) -> Result<Vec<Message>, FlowError> {
-        match self.mqtt_schema.entity_channel_of(&message.topic) {
-            Ok((entity_id, Channel::Health)) => {
-                let Some(entity) = get_entity_metadata(context, entity_id.as_str()) else {
-                    return Ok(vec![]);
-                };
-
-                self.convert(context, entity, &message)
-            }
-
-            _ => Err(FlowError::UnsupportedMessage(format!(
-                "Not a health status topic: {}",
-                message.topic
-            ))),
-        }
     }
 }

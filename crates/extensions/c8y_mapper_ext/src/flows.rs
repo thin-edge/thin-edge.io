@@ -13,6 +13,10 @@ impl C8yMapperBuilder {
         create_directory_with_defaults(flows_dir.as_ref()).await?;
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
 
+        let mapper_topic_id = self.config.service_topic_id.clone();
+        flows.register_builtin(crate::mea::message_cache::MessageCache::new(
+            mapper_topic_id,
+        ));
         flows.register_builtin(crate::mea::measurements::MeasurementConverter::default());
         flows.register_builtin(crate::mea::events::EventConverter::default());
         flows.register_builtin(crate::mea::alarms::AlarmConverter::default());
@@ -118,6 +122,7 @@ topic = "{errors_topic}"
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "unix", reformat = false }} }},
+    {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
     {{ builtin = "into_c8y_measurements", config = {{ topic_root = "{topic_prefix}" }} }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
@@ -144,6 +149,7 @@ topic = "{errors_topic}"
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
+    {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
     {{ builtin = "into_c8y_events", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}", max_mqtt_payload_size = {max_mqtt_payload_size} }} }},
 ]
 
@@ -169,6 +175,7 @@ topic = "{errors_topic}"
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
+    {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
     {{ builtin = "into_c8y_alarms", interval = "3s", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }} }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
@@ -194,6 +201,7 @@ topic = "{errors_topic}"
 input.mqtt.topics = ["{topic_prefix}/+/+/+/+/status/health", "{topic_prefix}/{mapper_topic_id}/status/entities"]
 
 steps = [
+    {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
     {{ builtin = "into_c8y_health_status", config = {{ topic_root = "{topic_prefix}", main_device = "{main_device}", c8y_prefix = "{c8y_prefix}" }} }},
 ]
 

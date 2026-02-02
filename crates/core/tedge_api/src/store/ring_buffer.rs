@@ -36,6 +36,12 @@ impl<T> RingBuffer<T> {
     }
 }
 
+impl<T> From<RingBuffer<T>> for Vec<T> {
+    fn from(value: RingBuffer<T>) -> Self {
+        value.buffer.into()
+    }
+}
+
 impl<T> IntoIterator for RingBuffer<T> {
     type Item = T;
     type IntoIter = vec_deque::IntoIter<T>;

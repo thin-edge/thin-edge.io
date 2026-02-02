@@ -1,10 +1,8 @@
 use crate::entity_cache::CloudEntityMetadata;
 use crate::mea::get_entity_metadata;
-use crate::mea::take_cached_telemetry_data;
 use std::time::SystemTime;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::store::RingBuffer;
 use tedge_config::models::TopicPrefix;
 use tedge_flows::ConfigError;
 use tedge_flows::FlowContextHandle;
@@ -18,7 +16,6 @@ pub struct AlarmConverter {
     mqtt_schema: MqttSchema,
     c8y_prefix: TopicPrefix,
     state: crate::alarm_converter::AlarmConverter,
-    cache: RingBuffer<Message>,
 }
 
 impl Default for AlarmConverter {
@@ -27,7 +24,6 @@ impl Default for AlarmConverter {
             mqtt_schema: MqttSchema::default(),
             c8y_prefix: TopicPrefix::try_new("c8y").unwrap(),
             state: crate::alarm_converter::AlarmConverter::new(),
-            cache: RingBuffer::default(),
         }
     }
 }
@@ -65,19 +61,11 @@ impl tedge_flows::Transformer for AlarmConverter {
         match self.mqtt_schema.entity_channel_of(&message.topic) {
             Ok((entity_id, Channel::Alarm { alarm_type })) => {
                 let Some(entity) = get_entity_metadata(context, entity_id.as_str()) else {
-                    self.cache.push(message.clone());
                     return Ok(vec![]);
                 };
                 self.convert(entity, &alarm_type, message.clone())
             }
-            Ok((_, Channel::Status { component })) if component == "entities" => {
-                let Some(payload) = message.payload_str() else {
-                    return Err(FlowError::UnsupportedMessage(
-                        "Not an UTF8 payload".to_string(),
-                    ));
-                };
-                self.process_cached_messages(context, payload)
-            }
+
             _ => Err(FlowError::UnsupportedMessage(format!(
                 "Not an alarm topic: {}",
                 message.topic
@@ -140,40 +128,5 @@ impl AlarmConverter {
             })?;
 
         Ok(mqtt_messages.into_iter().map(Message::from).collect())
-    }
-
-    pub fn process_cached_messages(
-        &mut self,
-        context: &FlowContextHandle,
-        birth_message: &str,
-    ) -> Result<Vec<Message>, FlowError> {
-        let pending_messages = take_cached_telemetry_data(&mut self.cache, birth_message);
-
-        let mut messages = vec![];
-        for pending in pending_messages {
-            messages.extend(self.process_cached_message(context, pending)?);
-        }
-        Ok(messages)
-    }
-
-    pub fn process_cached_message(
-        &mut self,
-        context: &FlowContextHandle,
-        message: Message,
-    ) -> Result<Vec<Message>, FlowError> {
-        match self.mqtt_schema.entity_channel_of(&message.topic) {
-            Ok((entity_id, Channel::Alarm { alarm_type })) => {
-                let Some(entity) = get_entity_metadata(context, entity_id.as_str()) else {
-                    return Err(FlowError::UnsupportedMessage(format!(
-                        "Unknown entity: {entity_id}"
-                    )));
-                };
-                self.convert(entity, &alarm_type, message)
-            }
-            _ => Err(FlowError::UnsupportedMessage(format!(
-                "Not an alarm topic: {}",
-                message.topic
-            ))),
-        }
     }
 }

@@ -8,7 +8,7 @@ use time::OffsetDateTime;
 
 #[derive(Deserialize, Serialize)]
 pub struct C8yEntityBirth {
-    pub topic: String,
+    pub entity: EntityTopicId,
     pub status: C8yEntityStatus,
     pub time: f64,
 }
@@ -32,17 +32,16 @@ impl C8yEntityBirth {
                 component: "entities".to_string(),
             },
         );
-        let entity_topic = te.topic_for(entity, &Channel::EntityMetadata);
         let birth = C8yEntityBirth {
-            topic: entity_topic.to_string(),
+            entity: entity.clone(),
             status: C8yEntityStatus::Registered,
             time: OffsetDateTime::now_utc().unix_timestamp_nanos() as f64 / 1e9,
         };
         MqttMessage::new(&message_topic, birth.to_json())
     }
 
-    pub fn from_json(payload: &str) -> Result<Self, String> {
-        serde_json::from_str(payload)
+    pub fn from_json(payload: &[u8]) -> Result<Self, String> {
+        serde_json::from_slice(payload)
             .map_err(|e| format!("Not a C8Y entity registration message: {:?}", e))
     }
 

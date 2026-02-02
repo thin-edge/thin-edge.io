@@ -1388,7 +1388,7 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
             ("c8y/s/us", "101,child1,child1,thin-edge.io-child,false"),
             (
                 "te/device/main/service/tedge-mapper-c8y/status/entities",
-                "te/device/child1//",
+                "device/child1//",
             ),
             (
                 "c8y/s/us/child1",
@@ -1396,7 +1396,7 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
             ),
             (
                 "te/device/main/service/tedge-mapper-c8y/status/entities",
-                "te/device/child11//",
+                "device/child11//",
             ),
         ],
     )
@@ -2337,7 +2337,7 @@ async fn mapper_converts_custom_operation_for_child_device() {
         [
             (
                 "te/device/main/service/tedge-mapper-c8y/status/entities",
-                "te/device/child1//",
+                "device/child1//",
             ),
             ("c8y/s/us/child1", "114,c8y_Command"),
         ],
@@ -2949,7 +2949,7 @@ async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device()
         [
             (
                 "te/device/main/service/tedge-mapper-c8y/status/entities",
-                "te/device/child1//",
+                "device/child1//",
             ),
             (
                 "c8y/s/us/test-device:device:child1",
