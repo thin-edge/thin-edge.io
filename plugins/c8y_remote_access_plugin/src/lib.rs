@@ -104,14 +104,10 @@ async fn declare_supported_operation(
     .context("Creating supported operations directory")?;
 
     if supported_operation_path.exists() {
-        change_user_and_group(
-            supported_operation_path.into(),
-            user.to_string(),
-            group.to_string(),
-        )
-        .await
-        .into_diagnostic()
-        .context("Changing permissions of supported operations")
+        change_user_and_group(&supported_operation_path, user, group)
+            .await
+            .into_diagnostic()
+            .context("Changing permissions of supported operations")
     } else {
         create_file_with_user_group(
             supported_operation_path,

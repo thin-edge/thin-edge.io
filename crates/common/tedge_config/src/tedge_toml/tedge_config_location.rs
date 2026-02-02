@@ -432,13 +432,11 @@ impl TEdgeConfigLocation {
 
         atomically_write_file_async(toml_path, toml.as_bytes()).await?;
 
-        if let Err(err) =
-            change_user_and_group(toml_path.into(), "tedge".into(), "tedge".into()).await
-        {
+        if let Err(err) = change_user_and_group(toml_path, "tedge", "tedge").await {
             warn!("failed to set file ownership for '{toml_path}': {err}");
         }
 
-        if let Err(err) = change_mode(toml_path.as_ref(), 0o644).await {
+        if let Err(err) = change_mode(toml_path, 0o644).await {
             warn!("failed to set file permissions for '{toml_path}': {err}");
         }
 
