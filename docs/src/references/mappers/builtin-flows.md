@@ -86,6 +86,7 @@ input.mqtt.topics = ["te/+/+/+/+/m/+", "te/device/main/service/tedge-mapper-c8y/
 
 steps = [
     { builtin = "add-timestamp", config = { property = "time", format = "unix", reformat = false } },
+    { builtin = "cache-early-messages", config = { topic_root = "te" } },
     { builtin = "into_c8y_measurements", config = { topic_root = "te" } },
     { builtin = "limit-payload-size", config = { max_size = 16184 } },
 ]
@@ -99,6 +100,9 @@ topic = "te/errors"
 
 Any modification to this file (adding, editing, removing a step as well as editing input and output)
 is dynamically reloaded and immediately made effective by the mapper.
+
+As an example, the `cache-early-messages` can be removed.
+Doing so any measurements received from a child device or a service that has not been properly registered yet.
 
 Each builtin flow `.toml` definition has a companion file with a `.toml.template` extension.
 
