@@ -173,7 +173,7 @@ Disable builtin az mapper flows
     ${start}=    Get Unix Timestamp
     Execute Command    tedge mqtt pub te/device/main///e/ '{"text": "az builtin flow as been turned off"}'
     Should Not Have MQTT Messages
-    ...    topic=az
+    ...    topic=az/#
     ...    date_from=${start}
     ...    message_contains=az builtin flow as been turned off
     [Teardown]    Restore Builtin Flow
