@@ -71,7 +71,6 @@ feature-depth = 1
 # output a note when they are encountered.
 ignore = [
     { id = "RUSTSEC-2024-0384", reason = "crate: instant. Used by backoff and requires refactoring to remove this dependency" },
-    { id = "RUSTSEC-2024-0320", reason = "crate: yaml-rust. Only used for tests but rumqttd needs updating to remove this dependency" },
     { id = "RUSTSEC-2025-0012", reason = "crate: backoff. Needs refactoring to remove dependency" },
     { id = "RUSTSEC-2024-0436", reason = "crate: paste. Used by cryptoki dependency" },
     { id = "RUSTSEC-2023-0071", reason = "crate: rsa. No patch available, not using affected API, added rules to clippy to forbid using these APIs" },
@@ -102,7 +101,6 @@ allow = [
     "BSD-3-Clause",
     "CC0-1.0",
     "MPL-2.0",
-    "Unicode-DFS-2016",
     "Zlib",
 ]
 # The confidence threshold for detecting a license from license text.
@@ -237,7 +235,6 @@ unknown-git = "warn"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # List of URLs for allowed Git repositories
 allow-git = [
-    "git+https://github.com/jarhodes314/rumqtt",
     "git+https://github.com/Bravo555/rust_libloading.git",
 ]
 
