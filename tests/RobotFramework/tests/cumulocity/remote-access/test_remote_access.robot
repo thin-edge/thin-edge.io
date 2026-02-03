@@ -28,7 +28,7 @@ Init c8y-remote-access-plugin with the custom user and group
     Device Should Have Installed Software    c8y-remote-access-plugin
 
     Execute Command    sudo c8y-remote-access-plugin --init --user petertest --group petertest
-    Path Should Have Permissions    /etc/tedge/operations/c8y    mode=755    owner_group=petertest:petertest
+    Path Should Have Permissions    /etc/tedge/operations/c8y    mode=775    owner_group=petertest:petertest
     Path Should Have Permissions
     ...    /etc/tedge/operations/c8y/c8y_RemoteAccessConnect
     ...    mode=644

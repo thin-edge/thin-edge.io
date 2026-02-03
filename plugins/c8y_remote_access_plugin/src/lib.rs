@@ -97,7 +97,7 @@ async fn declare_supported_operation(
         supported_operation_path.parent().unwrap(),
         user,
         group,
-        0o755,
+        0o775,
     )
     .await
     .into_diagnostic()
