@@ -198,7 +198,8 @@ impl Downloader {
         file: &mut File,
         mut prev_response: Response,
     ) -> Result<(), DownloadError> {
-        loop {
+        let mut last_result = Ok(());
+        for _ in 0..4 {
             let request_offset = next_request_offset(&prev_response, file)?;
             let mut response = self.request_range_from(url, request_offset).await?;
             let offset = match partial_response::response_range_start(&response, &prev_response)? {
@@ -218,10 +219,14 @@ impl Downloader {
             }
 
             match save_chunks_to_file_at(&mut response, file, offset).await {
-                Ok(()) => break,
+                Ok(()) => {
+                    last_result = Ok(());
+                    break;
+                }
 
                 Err(SaveChunksError::Network(err)) => {
                     warn!("Error while downloading response: {err}.\nRetrying...");
+                    last_result = Err(DownloadError::Request(err));
                 }
 
                 Err(SaveChunksError::Io(err)) => {
@@ -230,11 +235,11 @@ impl Downloader {
                         context: "Error while saving to file".to_string(),
                     })
                 }
-            }
+            };
             prev_response = response;
         }
 
-        Ok(())
+        last_result
     }
 
     /// Returns the filename.

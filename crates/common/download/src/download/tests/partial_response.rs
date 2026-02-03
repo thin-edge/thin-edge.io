@@ -1,5 +1,9 @@
 use super::*;
 
+use std::future::Future;
+use std::ops::Range;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
@@ -63,7 +67,13 @@ async fn resume_download_when_disconnected() {
                     let body = &file[start..next];
 
                     let size = body.len();
-                    let msg = format!("{header}\r\n{size}\r\n{body}\r\n");
+                    let msg = format!("{header}\r\n{size:x}\r\n{body}\r\n");
+                    // if this is the last chunk, send also terminating 0-length chunk
+                    let msg = if next == file.len() {
+                        format!("{msg}0\r\n\r\n")
+                    } else {
+                        msg
+                    };
                     debug!("sending message = {msg}");
                     writer.write_all(msg.as_bytes()).await.unwrap();
                     writer.flush().await.unwrap();
@@ -329,4 +339,148 @@ async fn resumed_download_doesnt_leave_leftovers() {
     downloader.cleanup().await.unwrap();
 
     server_task.abort();
+}
+
+#[tokio::test]
+async fn resume_max_5_times() {
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let rc = request_count.clone();
+
+    let handler = move |_, _| {
+        let rc = rc.clone();
+        async move {
+            rc.fetch_add(1, Ordering::SeqCst);
+            // Always respond with only first chunk, never completing the response, triggering retries
+            let header = "\
+                            HTTP/1.1 200 OK\r\n\
+                            transfer-encoding: chunked\r\n\
+                            connection: close\r\n\
+                            content-type: application/octet-stream\r\n\
+                            accept-ranges: bytes\r\n";
+
+            let body = "AAAA";
+            format!("{header}\r\n4\r\n{body}\r\n")
+        }
+    };
+    let (port, server_task) = spawn_server(handler).await;
+
+    // Wait until task binds a listener on the TCP port
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let tmpdir = TempDir::new().unwrap();
+    let target_path = tmpdir.path().join("partial_download");
+
+    let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
+    let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
+
+    let err = downloader.download(&url).await.unwrap_err();
+    assert!(matches!(err, DownloadError::Request(_)));
+    assert!(err.to_string().contains("error decoding response body"));
+
+    downloader.cleanup().await.unwrap();
+
+    server_task.abort();
+
+    assert_eq!(request_count.load(Ordering::SeqCst), 5);
+}
+
+// If we succeed before max retries, we should not do more requests.
+#[tokio::test]
+async fn only_retry_until_success() {
+    let file = "AAAABBBBCCCCDDDD";
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let rc = request_count.clone();
+
+    let handler = move |_, request_count| {
+        let rc = rc.clone();
+        async move {
+            rc.fetch_add(1, Ordering::SeqCst);
+            // Always respond with only first chunk, never completing the response, triggering retries
+            let header = "\
+                            HTTP/1.1 200 OK\r\n\
+                            transfer-encoding: chunked\r\n\
+                            connection: close\r\n\
+                            content-type: application/octet-stream\r\n\
+                            accept-ranges: bytes\r\n";
+
+            // On the 2nd request, send the full response, should trigger only 1 retry
+            if request_count == 0 {
+                let body = "AAAA";
+                format!("{header}\r\n4\r\n{body}\r\n")
+            } else {
+                let body = file;
+                let len = file.len();
+                format!("{header}\r\n{len:x}\r\n{body}\r\n0\r\n\r\n")
+            }
+        }
+    };
+    let (port, server_task) = spawn_server(handler).await;
+
+    // Wait until task binds a listener on the TCP port
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let tmpdir = TempDir::new().unwrap();
+    let target_path = tmpdir.path().join("partial_download");
+
+    let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
+    let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
+
+    downloader.download(&url).await.unwrap();
+    let saved_file = std::fs::read_to_string(downloader.filename()).unwrap();
+    assert_eq!(saved_file, file);
+
+    downloader.cleanup().await.unwrap();
+
+    server_task.abort();
+
+    assert_eq!(request_count.load(Ordering::SeqCst), 2);
+}
+
+async fn spawn_server<F, Fut>(handle_request: F) -> (u16, tokio::task::JoinHandle<()>)
+where
+    F: Fn(Option<Range<usize>>, u32) -> Fut + 'static + Send + Sync + Clone,
+    Fut: Future<Output = String> + Send + Sync + 'static,
+{
+    let listener = TcpListener::bind("localhost:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server_task = tokio::spawn(async move {
+        let mut request_count = 0;
+        while let Ok((mut stream, _addr)) = listener.accept().await {
+            let handler = handle_request.clone();
+            tokio::spawn(async move {
+                let (reader, mut writer) = stream.split();
+                let request_range = parse_request_range(reader).await;
+
+                let response: String = handler(request_range, request_count).await;
+
+                writer.write_all(response.as_bytes()).await.unwrap();
+                writer.flush().await.unwrap();
+            });
+            request_count += 1;
+        }
+    });
+    (port, server_task)
+}
+
+/// Parse HTTP request from a BufReader, stopping at empty line
+async fn parse_request_range(reader: tokio::net::tcp::ReadHalf<'_>) -> Option<Range<usize>> {
+    let reader = BufReader::new(reader);
+    let mut lines = reader.lines();
+    let mut range = None;
+
+    while let Ok(Some(line)) = lines.next_line().await {
+        if line.to_ascii_lowercase().contains("range:") {
+            let (_, bytes) = line.split_once('=').unwrap();
+            let (start, end) = bytes.split_once('-').unwrap();
+            let start = start.parse().unwrap_or(0);
+            let end = end.parse().unwrap_or(0);
+            range = Some(start..end)
+        }
+        // On `\r\n\r\n` (empty line) stop reading the request
+        if line.is_empty() {
+            break;
+        }
+    }
+
+    range
 }
