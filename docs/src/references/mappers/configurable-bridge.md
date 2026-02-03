@@ -102,13 +102,13 @@ You may wish to define multiple rules using a pattern:
 ```toml
 [[template_rule]]
 # Iterating over an array in tedge config
-for = { item = "template", in = "${config.c8y.smartrest.templates}" }
-topic = "s/uc/${template}"
+for = "${config.c8y.smartrest.templates}"
+topic = "s/uc/${item}"
 
 [[template_rule]]
 # We can also iterate over an array of strings
-for = { item = "mode", in = ['s', 'c', 'q', 't'] }
-topic = "${mode}/us"
+for = ['s', 'c', 'q', 't']
+topic = "${item}/us"
 ```
 
 ### Conditional rules
@@ -135,8 +135,8 @@ direction = "inbound"
 
 [[template_rule]]
 if = "${connection.auth_method} == 'password'"
-for = { item = "mode", in = ['s', 't', 'q', 'c'] }
-topic = "${mode}/ul/#"
+for = ['s', 't', 'q', 'c']
+topic = "${item}/ul/#"
 direction = "outbound"
 ```
 
