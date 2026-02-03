@@ -400,7 +400,6 @@ pub fn expand_config_template(
 /// Context for expanding template rule topics
 pub struct TemplateContext<'a> {
     pub tedge: &'a TEdgeConfig,
-    pub loop_var_name: &'a str,
     pub loop_var_value: &'a str,
 }
 
@@ -421,19 +420,15 @@ pub fn expand_loop_template(
                     super::super::expand_config_key(&key, ctx.tedge, cloud_profile, span.into())?;
                 result.push_str(&value);
             }
+            TemplateComponent::Variable("item") => {
+                result.push_str(ctx.loop_var_value);
+            }
             TemplateComponent::Variable(var) => {
-                if var == ctx.loop_var_name {
-                    result.push_str(ctx.loop_var_value);
-                } else {
-                    return Err(ExpandError {
-                        message: format!("Unknown variable '{var}'"),
-                        help: Some(format!(
-                            "Did you mean '{}' or 'config.{}'?",
-                            ctx.loop_var_name, var
-                        )),
-                        span: span.into(),
-                    });
-                }
+                return Err(ExpandError {
+                    message: format!("Unknown variable '{var}'"),
+                    help: Some(format!("Did you mean 'item' or 'config.{var}'?",)),
+                    span: span.into(),
+                });
             }
         }
     }
@@ -512,10 +507,9 @@ mod tests {
         let config = TEdgeConfig::load_toml_str("");
         let ctx = TemplateContext {
             tedge: &config,
-            loop_var_name: "topic",
             loop_var_value: "my-topic",
         };
-        let result = expand_loop_template(&toml_spanned("s/uc/${topic}"), &ctx, None).unwrap();
+        let result = expand_loop_template(&toml_spanned("s/uc/${item}"), &ctx, None).unwrap();
         assert_eq!(result, "s/uc/my-topic");
     }
 
@@ -524,14 +518,13 @@ mod tests {
         let config = TEdgeConfig::load_toml_str("");
         let ctx = TemplateContext {
             tedge: &config,
-            loop_var_name: "topic",
             loop_var_value: "my-topic",
         };
         let result = expand_loop_template(&toml_spanned("${unknown}"), &ctx, None);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.message.contains("Unknown variable"));
-        assert!(err.help.as_ref().unwrap().contains("topic")); // suggests the loop var
+        assert!(err.help.as_ref().unwrap().contains("item")); // suggests the loop var
     }
 
     // ========================================================================
@@ -623,7 +616,6 @@ mod tests {
         let config = TEdgeConfig::load_toml_str("");
         let ctx = TemplateContext {
             tedge: &config,
-            loop_var_name: "topic",
             loop_var_value: "value",
         };
         let input = toml_spanned("start/${wrong}/end");
@@ -637,11 +629,10 @@ mod tests {
         let config = TEdgeConfig::load_toml_str("");
         let ctx = TemplateContext {
             tedge: &config,
-            loop_var_name: "topic",
             loop_var_value: "value",
         };
         // First variable is valid, second is invalid
-        let input = toml_spanned("${topic}/${unknown}");
+        let input = toml_spanned("${item}/${unknown}");
         let err = expand_loop_template(&input, &ctx, None).unwrap_err();
 
         assert_eq!(extract_toml_span(&input, err.span), "${unknown}");

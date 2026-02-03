@@ -215,20 +215,14 @@ impl PersistedBridgeConfig {
                 });
             let template_rule_disabled = template_disabled || template_condition == Some(false);
 
-            let (iterable, ident) = expand_spanned(
-                &template.r#for,
-                config,
-                cloud_profile,
-                "Failed to expand 'for' reference",
-            )
-            .unwrap_or_else(|e| {
-                errors.push(e);
-
-                (
-                    <_>::default(),
-                    template.r#for.get_ref().item.get_ref().to_owned(),
-                )
-            });
+            let iterable = template
+                .r#for
+                .expand(config, cloud_profile)
+                .unwrap_or_else(|mut e| {
+                    e.message = format!("Failed to expand 'for' reference: {}", e.message);
+                    errors.push(e);
+                    <_>::default()
+                });
 
             let template_local_prefix = expand_prefix(&template.local_prefix, "local_prefix")
                 .unwrap_or_else(|e| {
@@ -271,7 +265,6 @@ impl PersistedBridgeConfig {
             if iterable.0.is_empty() {
                 let template_config = TemplateConfig {
                     r#for: "",
-                    for_ident: &ident,
                     tedge: config,
                 };
                 // Verify the topic is valid even if there are no rules to generate
@@ -290,7 +283,6 @@ impl PersistedBridgeConfig {
             for topic in iterable.0 {
                 let template_config = TemplateConfig {
                     r#for: &topic,
-                    for_ident: &ident,
                     tedge: config,
                 };
 
@@ -349,7 +341,7 @@ struct StaticBridgeRule {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 struct TemplateBridgeRule {
-    r#for: Spanned<IterationRule>,
+    r#for: Spanned<Iterable>,
     topic: Spanned<LoopTemplate>,
     local_prefix: Option<Spanned<Template>>,
     remote_prefix: Option<Spanned<Template>>,
@@ -410,13 +402,6 @@ struct Template(Spanned<String>);
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(transparent)]
 struct LoopTemplate(Spanned<String>);
-
-#[derive(Serialize, Deserialize, Debug)]
-struct IterationRule {
-    // TODO ensure this doesn't contain `.`
-    item: Spanned<String>,
-    r#in: Spanned<Iterable>,
-}
 
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(untagged)]
@@ -489,25 +474,6 @@ fn expand_spanned<T: Expandable>(
             help: e.help,
             span: e.span,
         })
-}
-
-impl Expandable for IterationRule {
-    type Target = (TemplatesSet, String);
-    type Config<'a>
-        = &'a TEdgeConfig
-    where
-        Self: 'a;
-
-    fn expand(
-        &self,
-        tedge_config: &TEdgeConfig,
-        cloud_profile: Option<&ProfileName>,
-    ) -> Result<Self::Target, ExpandError> {
-        Ok((
-            self.r#in.expand(tedge_config, cloud_profile)?,
-            self.item.get_ref().clone(),
-        ))
-    }
 }
 
 impl Expandable for Spanned<Iterable> {
@@ -600,7 +566,6 @@ where
 struct TemplateConfig<'a> {
     tedge: &'a TEdgeConfig,
     r#for: &'a str,
-    for_ident: &'a str,
 }
 
 /// Expands a tedge.toml config key and return its value
@@ -683,7 +648,6 @@ impl Expandable for LoopTemplate {
         // TODO maybe add warnings if there are duplicate rules
         let ctx = TemplateContext {
             tedge: config.tedge,
-            loop_var_name: config.for_ident,
             loop_var_value: config.r#for,
         };
         expand_loop_template(&self.0, &ctx, cloud_profile)
@@ -720,8 +684,8 @@ mod tests {
                 remote_prefix = "remote/"
 
                 [[template_rule]]
-                for = { item = "topic", in = "${config.c8y.topics}" }
-                topic = "${topic}"
+                for = "${config.c8y.topics}"
+                topic = "${item}"
                 direction = "outbound"
             "#;
 
@@ -741,8 +705,8 @@ mod tests {
                 direction = "inbound"
 
                 [[template_rule]]
-                for = { item = "topic", in = "${config.c8y.topics}" }
-                topic = "${topic}"
+                for = "${config.c8y.topics}"
+                topic = "${item}"
                 direction = "outbound"
             "#;
 
@@ -968,17 +932,12 @@ direction = "inbound"
         fn span_information_for_config_reference() {
             let toml = r#"
 [[template_rule]]
-for = { item = "suffix", in = "${config.c8y.topics.e}" }
+for = "${config.c8y.topics.e}"
 topic = "te/device/main///e/${suffix}"
 direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
-            let span = config.template_rules[0]
-                .get_ref()
-                .r#for
-                .get_ref()
-                .r#in
-                .span();
+            let span = config.template_rules[0].get_ref().r#for.span();
 
             // serde_spanned includes the quotes
             let reference_str = &toml[span.clone()];
@@ -1086,9 +1045,9 @@ local_prefix = ""
 remote_prefix = ""
 
 [[template_rule]]
-for = { item = "prefix", in = ['a', 'b'] }
+for = ['a', 'b']
 if = "${config.c8y.mqtt_service.enabled}"
-topic = "${prefix}/${config.invalid.key}/suffix"
+topic = "${item}/${config.invalid.key}/suffix"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1129,7 +1088,7 @@ local_prefix = "${"
                 
 [[template_rule]]
 local_prefix = "${"
-for = { item = "template", in = "${config.c8y.smartrest.templates}" }
+for = "${config.c8y.smartrest.templates}"
                 
                 "#
                 .trim(),
@@ -1144,7 +1103,7 @@ local_prefix = "${"
                 
 local_prefix = "${"
 [[template_rule]]
-for = { item = "template", in = "${config.c8y.smartrest.templates}" }
+for = "${config.c8y.smartrest.templates}"
                 
                 "#
                 .trim(),
@@ -1188,8 +1147,8 @@ local_prefix = "${config.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 
 [[template_rule]]
-for = { item = "template", in = "${config.c8y.smartrest.templates}" }
-topic = "s/dc/${template}"
+for = "${config.c8y.smartrest.templates}"
+topic = "s/dc/${item}"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1215,8 +1174,8 @@ local_prefix = "${config.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 
 [[template_rule]]
-for = { item = "mode", in = ['s', 't', 'q', 'c'] }
-topic = "${mode}/us/#"
+for = ['s', 't', 'q', 'c']
+topic = "${item}/us/#"
 direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1284,8 +1243,8 @@ local_prefix = ""
 remote_prefix = ""
 
 [[template_rule]]
-for = { item = "template", in = "${config.c8y.smartrest.templates}" }
-topic = "${config.something.unknown}/${template}"
+for = "${config.c8y.smartrest.templates}"
+topic = "${config.something.unknown}/${item}"
 direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1328,8 +1287,8 @@ topic = "${config.first}"
 direction = "inbound"
 
 [[template_rule]]
-for = { item = "template", in = "${config.c8y.smartrest.templates}" }
-topic = "${config.second}/${template}"
+for = "${config.c8y.smartrest.templates}"
+topic = "${config.second}/${item}"
 direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1385,13 +1344,13 @@ local_prefix = "c8y/"
 remote_prefix = ""
 
 [[template_rule]]
-for = { item = "template", in = "${config.c8y.smartrest.templates}" }
-topic = "s/uc/${template}"
+for = "${config.c8y.smartrest.templates}"
+topic = "s/uc/${item}"
 direction = "outbound"
 
 [[template_rule]]
-for = { item = "template", in = "${config.c8y.smartrest.templates}" }
-topic = "s/dc/${template}"
+for = "${config.c8y.smartrest.templates}"
+topic = "s/dc/${item}"
 direction = "inbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1547,8 +1506,8 @@ remote_prefix = ""
 
 [[template_rule]]
 if = "${connection.auth_method} == 'certificate'"
-for = { item = "mode", in = ['s', 't', 'q', 'c'] }
-topic = "${mode}/us/#"
+for = ['s', 't', 'q', 'c']
+topic = "${item}/us/#"
 direction = "outbound"
 "##;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
@@ -1574,8 +1533,8 @@ local_prefix = "${config.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 
 [[template_rule]]
-for = { item = "template", in = "${config.c8y.unknown.key}" }
-topic = "s/uc/${template}"
+for = "${config.c8y.unknown.key}"
+topic = "s/uc/${item}"
 direction = "outbound"
 "##;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
