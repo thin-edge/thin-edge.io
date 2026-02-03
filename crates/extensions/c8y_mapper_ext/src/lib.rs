@@ -27,6 +27,7 @@ pub struct Capabilities {
     pub firmware_update: bool,
     pub device_profile: bool,
     pub device_restart: bool,
+    pub software_update: bool,
 }
 
 #[cfg(test)]
@@ -39,6 +40,7 @@ impl Default for Capabilities {
             firmware_update: true,
             device_profile: true,
             device_restart: true,
+            software_update: true,
         }
     }
 }

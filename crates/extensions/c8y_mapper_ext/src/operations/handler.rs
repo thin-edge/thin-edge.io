@@ -258,6 +258,13 @@ impl OperationHandler {
             ]);
         }
 
+        if capabilities.software_update {
+            topics.extend([
+                (AnyEntity, Command(OperationType::SoftwareUpdate)),
+                (AnyEntity, CommandMetadata(OperationType::SoftwareUpdate)),
+            ]);
+        }
+
         topics
     }
 }

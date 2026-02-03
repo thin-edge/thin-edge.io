@@ -129,6 +129,7 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
                 firmware_update: c8y.enable.firmware_update,
                 device_profile: c8y.enable.device_profile,
                 device_restart: c8y.enable.device_restart,
+                software_update: c8y.enable.software_update,
             },
             mqtt_service: MqttServiceConfig {
                 enabled: c8y.mqtt_service.enabled,

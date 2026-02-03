@@ -703,6 +703,10 @@ define_tedge_config! {
             /// Enable device restart feature
             #[tedge_config(example = "true", default(value = true))]
             device_restart: bool,
+
+            /// Enable software update feature
+            #[tedge_config(example = "true", default(value = true))]
+            software_update: bool,
         },
 
         mapper: {

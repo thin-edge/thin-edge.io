@@ -665,8 +665,13 @@ impl CumulocityConverter {
                 }
             }
             C8yDeviceControlOperation::SoftwareUpdate(request) => {
-                self.forward_software_request(device_xid, cmd_id, request)
-                    .await?
+                if self.config.capabilities.software_update {
+                    self.forward_software_request(device_xid, cmd_id, request)
+                        .await?
+                } else {
+                    warn!("Received a c8y_SoftwareUpdate operation, however, software_update feature is disabled");
+                    vec![]
+                }
             }
             C8yDeviceControlOperation::LogfileRequest(request) => {
                 if self.config.capabilities.log_upload {
@@ -1603,6 +1608,12 @@ impl CumulocityConverter {
         &mut self,
         target: &EntityTopicId,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if !self.config.capabilities.software_update {
+            warn!(
+                "Received software update metadata, however, software update feature is disabled"
+            );
+            return Ok(vec![]);
+        }
         let mut registration = match self.register_operation(target, "c8y_SoftwareUpdate").await {
             Err(_) => {
                 error!("Fail to register `software-list` operation for unknown device: {target}");

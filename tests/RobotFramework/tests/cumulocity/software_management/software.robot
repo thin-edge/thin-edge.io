@@ -185,6 +185,24 @@ Agent should ignore unknown software-update fields
     ...    message_pattern=.*"status":"successful".*
     ...    timeout=60
 
+Supports disabling the Cumulocity c8y_SoftwareUpdate Command
+    Execute Command    tedge config set c8y.enable.software_update false
+    Execute Command    rm -f /etc/tedge/operations/c8y/c8y_SoftwareUpdate
+
+    Restart Service    tedge-mapper-c8y
+    Service Health Status Should Be Up    tedge-mapper-c8y
+    File Should Not Exist    /etc/tedge/operations/c8y/c8y_SoftwareUpdate
+    Should Not Contain Supported Operations    c8y_SoftwareUpdate
+    ${operation}=    Cumulocity.Install Software    dummy
+    Sleep    5s    reason=Allow time for the message to be delivered
+    Operation Should Be PENDING    ${operation}    timeout=30
+
+    # Cleanup operation for cleaner logs (as pending operations pollute the test report output)
+    # Note: It does not need to be run under a TearDown hook as this code will only run
+    # if the operation is not processed, otherwise it would of been processed and thus not need cleaning up
+    Execute Command    tedge mqtt pub c8y/s/us '505,${operation.to_json()["id"]},Cancelled operation'
+    Operation Should Be FAILED    ${operation}
+
 
 *** Keywords ***
 Custom Setup

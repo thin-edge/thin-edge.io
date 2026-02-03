@@ -387,6 +387,9 @@ pub struct EnableConfig {
 
     /// Enable device restart feature
     pub device_restart: bool,
+
+    /// Enable software_update feature
+    pub software_update: bool,
 }
 
 /// Bridge include configuration
