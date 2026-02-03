@@ -18,6 +18,8 @@ use parsing::template::expand_config_template;
 use parsing::template::expand_loop_template;
 use parsing::template::TemplateContext;
 
+use crate::config_toml::parsing::template::parse_config_reference;
+
 #[cfg(test)]
 mod test_helpers;
 
@@ -416,53 +418,16 @@ struct IterationRule {
     r#in: Spanned<Iterable>,
 }
 
-#[derive(Serialize, Debug)]
-enum Iterable {
-    Config(ConfigReference<TemplatesSet>),
-    Literal(Vec<String>),
-}
-
-/// Helper enum for deserializing Iterable - we wrap this in Spanned to get span info
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(untagged)]
-enum IterableHelper {
-    Literal(Vec<String>),
+enum Iterable {
     Config(String),
-}
-
-impl Iterable {
-    fn from_spanned_helper(spanned: Spanned<IterableHelper>) -> Result<Self, anyhow::Error> {
-        let span = spanned.span();
-        match spanned.into_inner() {
-            IterableHelper::Literal(values) => Ok(Iterable::Literal(values)),
-            IterableHelper::Config(s) => {
-                // Create a Spanned<String> with the span info, then convert to ConfigReference
-                let spanned_string = Spanned::new(span, s);
-                let config_ref: ConfigReference<TemplatesSet> = spanned_string.try_into()?;
-                Ok(Iterable::Config(config_ref))
-            }
-        }
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for Iterable {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::Error;
-
-        let spanned_helper = Spanned::<IterableHelper>::deserialize(deserializer)?;
-        Iterable::from_spanned_helper(spanned_helper).map_err(D::Error::custom)
-    }
+    Literal(Vec<String>),
 }
 
 #[derive(Serialize, Debug, PartialEq, Eq)]
 #[serde(into = "String")]
-pub(crate) struct ConfigReference<Target>(
-    pub(crate) Spanned<String>,
-    pub(crate) PhantomData<Target>,
-);
+pub(crate) struct ConfigReference<Target>(Spanned<String>, PhantomData<Target>);
 
 impl<Target> Clone for ConfigReference<Target> {
     fn clone(&self) -> Self {
@@ -472,37 +437,14 @@ impl<Target> Clone for ConfigReference<Target> {
 
 #[cfg(test)]
 impl<Target> FromStr for ConfigReference<Target> {
-    type Err = anyhow::Error;
+    type Err = ExpandError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut ser = String::new();
         serde::Serialize::serialize(s, toml::ser::ValueSerializer::new(&mut ser)).unwrap();
-        Spanned::<String>::deserialize(toml::de::ValueDeserializer::parse(&ser).unwrap())
-            .unwrap()
-            .try_into()
-    }
-}
-
-impl<Target> TryFrom<Spanned<String>> for ConfigReference<Target> {
-    type Error = anyhow::Error;
-    fn try_from(s: Spanned<String>) -> Result<Self, Self::Error> {
-        let span = s.span();
-        // TODO chumskyify
-        let s = s
-            .get_ref()
-            .strip_prefix("${config.")
-            .ok_or_else(|| anyhow::anyhow!("Config variable must start with ${{config."))?;
-        let s = s
-            .strip_suffix("}")
-            .ok_or_else(|| anyhow::anyhow!("Config variable must end with }}"))?;
-        let start_offset = "${config.".len() + 1;
-        let end_offset = "}".len() + 1;
-        Ok(Self(
-            Spanned::new(
-                span.start + start_offset..span.end - end_offset,
-                s.to_owned(),
-            ),
-            PhantomData,
-        ))
+        parse_config_reference(
+            &Spanned::<String>::deserialize(toml::de::ValueDeserializer::parse(&ser).unwrap())
+                .unwrap(),
+        )
     }
 }
 
@@ -562,13 +504,13 @@ impl Expandable for IterationRule {
         cloud_profile: Option<&ProfileName>,
     ) -> Result<Self::Target, ExpandError> {
         Ok((
-            self.r#in.get_ref().expand(tedge_config, cloud_profile)?,
+            self.r#in.expand(tedge_config, cloud_profile)?,
             self.item.get_ref().clone(),
         ))
     }
 }
 
-impl Expandable for Iterable {
+impl Expandable for Spanned<Iterable> {
     type Target = TemplatesSet;
     type Config<'a>
         = &'a TEdgeConfig
@@ -580,9 +522,12 @@ impl Expandable for Iterable {
         tedge_config: &TEdgeConfig,
         cloud_profile: Option<&ProfileName>,
     ) -> Result<Self::Target, ExpandError> {
-        match self {
-            Self::Config(config_ref) => config_ref.expand(tedge_config, cloud_profile),
-            Self::Literal(values) => Ok(TemplatesSet(values.clone())),
+        match self.get_ref() {
+            Iterable::Config(config_ref) => {
+                parse_config_reference(&toml::Spanned::new(self.span(), config_ref.clone()))?
+                    .expand(tedge_config, cloud_profile)
+            }
+            Iterable::Literal(values) => Ok(TemplatesSet(values.clone())),
         }
     }
 }
@@ -889,14 +834,27 @@ mod tests {
         }
 
         #[test]
-        fn config_reference_rejects_missing_prefix() {
+        fn config_reference_rejects_missing_opening_dollar() {
             let reference = "c8y.topics.e}";
             let result: Result<ConfigReference<TemplatesSet>, _> = reference.parse();
-            assert!(result.is_err());
-            assert!(result
-                .unwrap_err()
-                .to_string()
-                .contains("must start with ${config."));
+            let err = result.unwrap_err();
+            assert!(
+                err.message.contains("expected config reference"),
+                "{}",
+                err.message
+            );
+        }
+
+        #[test]
+        fn config_reference_rejects_missing_config_prefix() {
+            let reference = "${c8y.topics.e}";
+            let result: Result<ConfigReference<TemplatesSet>, _> = reference.parse();
+            let err = result.unwrap_err();
+            assert!(
+                err.message.contains("expected config reference"),
+                "{}",
+                err.message
+            );
         }
 
         #[test]
@@ -904,7 +862,7 @@ mod tests {
             let reference = "${config.c8y.mqtt_service.topics";
             let result: Result<ConfigReference<TemplatesSet>, _> = reference.parse();
             assert!(result.is_err());
-            assert!(result.unwrap_err().to_string().contains("must end with }"));
+            assert!(result.unwrap_err().message.contains("must end with }"));
         }
 
         #[test]
@@ -1637,6 +1595,33 @@ direction = "outbound"
         }
 
         #[test]
+        fn unknown_keys_have_correct_span_info() {
+            let toml = r##"
+local_prefix = "${config.c8y.bridge.topic_prefix}/"
+remote_prefix = ""
+
+[[rule]]
+if = "${config.not.a.real.key}"
+topic = "a/b"
+direction = "outbound"
+"##;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            let errors = config
+                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .unwrap_err();
+
+            assert_eq!(
+                errors.len(),
+                1,
+                "Expected only 1 error, actual errors were {errors:?}"
+            );
+
+            assert_eq!(&toml[errors[0].span.clone()], "not.a.real.key");
+        }
+
+        #[test]
         fn config_reference_serializes_to_original_value() {
             let original: ConfigReference<String> = "${config.c8y.url}".parse().unwrap();
             let mut value = String::new();
@@ -1645,7 +1630,50 @@ direction = "outbound"
                 .unwrap();
             let deserialized: Spanned<String> =
                 <_>::deserialize(toml::de::ValueDeserializer::parse(&value).unwrap()).unwrap();
-            assert_eq!(ConfigReference::try_from(deserialized).unwrap(), original);
+            assert_eq!(parse_config_reference(&deserialized).unwrap(), original);
+        }
+
+        #[test]
+        fn missing_config_prefix_in_local_prefix_gives_useful_error() {
+            // User wrote ${c8y.bridge.topic_prefix} instead of ${config.c8y.bridge.topic_prefix}
+            let toml = r#"
+local_prefix = "${c8y.bridge.topic_prefix}/"
+remote_prefix = ""
+
+[[rule]]
+topic = "foo"
+direction = "inbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            let errs = config
+                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .unwrap_err();
+
+            assert_eq!(errs.len(), 1, "Expected 1 error, got: {errs:?}");
+            let err = &errs[0];
+
+            // Error message should be useful
+            assert!(
+                err.message.contains("Unknown variable"),
+                "Error message should mention unknown variable, got: {}",
+                err.message
+            );
+
+            // Help should suggest using config. prefix
+            assert!(
+                err.help.as_ref().is_some_and(|h| h.contains("config.")),
+                "Help should suggest using config. prefix, got: {:?}",
+                err.help
+            );
+
+            // Span should point to the problematic variable reference in the toml
+            let error_text = &toml[err.span.clone()];
+            assert_eq!(
+                error_text, "c8y.bridge.topic_prefix",
+                "Span should point to the variable reference"
+            );
         }
     }
 }

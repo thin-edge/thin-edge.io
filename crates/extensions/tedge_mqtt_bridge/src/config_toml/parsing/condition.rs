@@ -4,18 +4,21 @@
 //! 1. Lexer: converts input string into a sequence of tokens with spans
 //! 2. Parser: parses tokens into a Condition expression
 
+use crate::config_toml::parsing::OffsetSpan;
 use crate::config_toml::ConfigReference;
 
 use super::super::AuthMethod;
 use super::super::Condition;
 use super::super::ExpandError;
 use chumsky::input::ValueInput;
+use chumsky::input::WithContext;
 use chumsky::prelude::*;
 use std::fmt;
 use std::marker::PhantomData;
 use toml::Spanned;
 
-pub type Span<T> = (T, SimpleSpan);
+pub type Span<T> = (T, OffsetSpan);
+type OffsetInput<'src> = WithContext<OffsetSpan, &'src str>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Token<'src> {
@@ -47,7 +50,7 @@ impl fmt::Display for Token<'_> {
 }
 
 fn lexer<'src>(
-) -> impl Parser<'src, &'src str, Vec<Span<Token<'src>>>, extra::Err<Rich<'src, char, SimpleSpan>>>
+) -> impl Parser<'src, OffsetInput<'src>, Vec<Span<Token<'src>>>, extra::Err<Rich<'src, char, OffsetSpan>>>
 {
     let var_start = just("${").to(Token::VarStart);
     let var_end = just('}').to(Token::VarEnd);
@@ -91,9 +94,9 @@ fn lexer<'src>(
 
 /// Parser for a dotted path like `c8y.mqtt_service.enabled`
 fn dotted_path<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Vec<&'src str>, extra::Err<Rich<'tokens, Token<'src>, SimpleSpan>>> + Clone
+) -> impl Parser<'tokens, I, Vec<&'src str>, extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>> + Clone
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = SimpleSpan>,
+    I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
 {
     let ident = select! { Token::Ident(s) => s }.labelled("identifier");
 
@@ -106,9 +109,9 @@ where
 
 /// Parser for `${config.some.key}` - a boolean config reference
 fn config_condition<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Condition, extra::Err<Rich<'tokens, Token<'src>, SimpleSpan>>> + Clone
+) -> impl Parser<'tokens, I, Condition, extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>> + Clone
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = SimpleSpan>,
+    I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
 {
     just(Token::Op("!"))
         .or_not()
@@ -117,25 +120,22 @@ where
         .then_ignore(just(Token::Dot))
         .then(dotted_path().spanned())
         .then_ignore(just(Token::VarEnd))
-        .map(
-            |(negation, parts): (_, chumsky::prelude::Spanned<Vec<&str>>)| {
-                let span = parts.span;
-                let key = parts.inner.join(".");
-                let target = negation.is_none();
-                Condition::Is(
-                    target,
-                    ConfigReference(Spanned::new(span.into_range(), key), PhantomData),
-                )
-            },
-        )
+        .map(move |(negation, (parts, span)): (_, Span<Vec<&str>>)| {
+            let key = parts.join(".");
+            let target = negation.is_none();
+            Condition::Is(
+                target,
+                ConfigReference(Spanned::new(span.into_range(), key), PhantomData),
+            )
+        })
         .labelled("config reference")
 }
 
 /// Parser for `${connection.auth_method} == 'value'`
 fn auth_condition<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Condition, extra::Err<Rich<'tokens, Token<'src>, SimpleSpan>>> + Clone
+) -> impl Parser<'tokens, I, Condition, extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>> + Clone
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = SimpleSpan>,
+    I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
 {
     let auth_method_var = just(Token::VarStart)
         .ignore_then(just(Token::Ident("connection")))
@@ -163,9 +163,9 @@ where
 
 /// Main condition parser
 fn condition_parser<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Condition, extra::Err<Rich<'tokens, Token<'src>, SimpleSpan>>> + Clone
+) -> impl Parser<'tokens, I, Condition, extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>> + Clone
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = SimpleSpan>,
+    I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
 {
     choice((config_condition(), auth_condition())).labelled("condition")
 }
@@ -193,18 +193,15 @@ pub fn parse_condition_with_error(
     // by 1 to get the start of the input
     let offset = input.span().start + 1;
 
-    let (tokens, lex_errs) = lexer().parse(src).into_output_errors();
+    let (tokens, lex_errs) = lexer().parse(src.with_context(offset)).into_output_errors();
 
     if !lex_errs.is_empty() {
         return Err(lex_errs
             .into_iter()
-            .map(|e| {
-                let range = e.span().into_range();
-                ExpandError {
-                    message: format!("Lexer error: {e}"),
-                    span: (range.start + offset)..(range.end + offset),
-                    help: None,
-                }
+            .map(|e| ExpandError {
+                message: format!("Lexer error: {e}"),
+                span: e.span().into_range(),
+                help: None,
             })
             .collect());
     }
@@ -212,21 +209,23 @@ pub fn parse_condition_with_error(
     let tokens = tokens.expect("tokens should exist if no errors");
 
     let len = src.len();
+    let eoi = offset + len;
 
     let (ast, parse_errs) = condition_parser()
-        .parse(tokens.as_slice().map((0..len).into(), |(t, s)| (t, s)))
+        .parse(
+            tokens
+                .as_slice()
+                .map(OffsetSpan::new(0, eoi..eoi), |(t, s)| (t, s)),
+        )
         .into_output_errors();
 
     if !parse_errs.is_empty() {
         return Err(parse_errs
             .into_iter()
-            .map(|e| {
-                let range = e.span().into_range();
-                ExpandError {
-                    message: format!("{e}"),
-                    span: (range.start + offset)..(range.end + offset),
-                    help: None,
-                }
+            .map(|e| ExpandError {
+                message: format!("{e}"),
+                span: e.span().into_range(),
+                help: None,
             })
             .collect());
     }
@@ -244,7 +243,7 @@ mod tests {
     #[test]
     fn lexer_tokenizes_config_reference() {
         let input = "${config.c8y.enabled}";
-        let (tokens, errs) = lexer().parse(input).into_output_errors();
+        let (tokens, errs) = lexer().parse(input.with_context(0)).into_output_errors();
         assert!(errs.is_empty(), "Lexer errors: {errs:?}");
         let tokens: Vec<_> = tokens.unwrap().into_iter().map(|(t, _)| t).collect();
         assert_eq!(
@@ -264,7 +263,7 @@ mod tests {
     #[test]
     fn lexer_tokenizes_auth_condition() {
         let input = "${connection.auth_method} == 'certificate'";
-        let (tokens, errs) = lexer().parse(input).into_output_errors();
+        let (tokens, errs) = lexer().parse(input.with_context(0)).into_output_errors();
         assert!(errs.is_empty(), "Lexer errors: {errs:?}");
         let tokens: Vec<_> = tokens.unwrap().into_iter().map(|(t, _)| t).collect();
         assert_eq!(
@@ -350,7 +349,7 @@ mod tests {
         // Single `=` instead of `==` - should still tokenize
         // This allows us to give clearer error messages if someone inputs a slightly wrong operator
         let input = "${connection.auth_method} = 'password'";
-        let (tokens, errs) = lexer().parse(input).into_output_errors();
+        let (tokens, errs) = lexer().parse(input.with_context(0)).into_output_errors();
         assert!(errs.is_empty(), "Lexer errors: {errs:?}");
         let tokens: Vec<_> = tokens.unwrap().into_iter().map(|(t, _)| t).collect();
         assert_eq!(
@@ -377,7 +376,7 @@ mod tests {
     #[test]
     fn tokens_preserve_spans() {
         let input = "${config.key}";
-        let (tokens, _) = lexer().parse(input).into_output_errors();
+        let (tokens, _) = lexer().parse(input.with_context(0)).into_output_errors();
         let tokens = tokens.unwrap();
 
         // Check that VarStart span is correct
