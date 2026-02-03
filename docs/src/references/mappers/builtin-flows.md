@@ -31,10 +31,6 @@ Their definitions can be customized in the same way as any user-defined flow.
 
 - A builtin flow can also be disabled and fully replaced by user-defined flows.
 
-:::note
-Currently, only the Azure mapper is defined using flows.
-:::
-
 ## The Cumulocity mapper
 
 The behavior of the Cumulocity mapper is driven by a set of flows located in `/etc/tedge/mappers/c8y/flows/`:
@@ -50,7 +46,7 @@ $ ls -lh /etc/tedge/mappers/c8y/flows/*.toml
 
 These files can be customized at different levels:
 
-- Using the `tedge config` command to tune parameters such the maximum payload of messages sent to Cumulocity
+- Using the `tedge config` command to tune parameters such as the maximum payload of messages sent to Cumulocity
 - Editing the builtin flow definitions, to improve, add or remove transformation steps
 - Adding user-defined flows
 - Removing builtin flows
@@ -82,8 +78,8 @@ $ sudo systemctl restart tedge-mapper-c8y
 
 The builtin flows can be edited by users adding extra transformation steps.
 
-For instance, for builtin flow for measurements is defined by the file `/etc/tedge/mappers/c8y/flows/measurements.toml`,
-which default content is the following:
+For instance, the builtin flow for measurements is defined by the file `/etc/tedge/mappers/c8y/flows/measurements.toml`,
+with the default content as follows:
 
 ```toml
 input.mqtt.topics = ["te/+/+/+/+/m/+", "te/device/main/service/tedge-mapper-c8y/status/entities"]
@@ -146,6 +142,10 @@ $ mv /etc/tedge/mappers/c8y/flows/alarms.toml /etc/tedge/mappers/c8y/flows/alarm
 
 Alternatively, a builtin flow can be disabled by simply removing its definition
 and keeping the associated `.toml.template` file as a witness.
+
+:::note
+If the template file is removed, it will be recreated by the mapper on the next restart.
+:::
 
 ## The Azure mapper
 
