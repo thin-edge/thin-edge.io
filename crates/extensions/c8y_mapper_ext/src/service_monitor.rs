@@ -63,7 +63,10 @@ pub(crate) fn convert_health_status_message(
 
     let mut value = vec![status_message];
 
-    if display_name == format!("mosquitto-{prefix}-bridge") && status == Status::Up {
+    if (display_name == format!("mosquitto-{prefix}-bridge")
+        || display_name == format!("tedge-mapper-bridge-{prefix}"))
+        && status == Status::Up
+    {
         // Receiving this message indicates mosquitto has reconnected (following a
         // disconnection) to the cloud. We need to re-request operations in case any
         // were triggered while we were down
@@ -240,5 +243,82 @@ mod tests {
             &C8Y_BRIDGE_HEALTH_TOPIC.try_into().unwrap(),
         );
         assert_eq!(actual, expected);
+    }
+
+    #[test_case(
+        "mosquitto_bridge",
+        "te/device/main/service/mosquitto-c8y-bridge/status/health",
+        "1",
+        true;
+        "mosquitto_bridge_up"
+    )]
+    #[test_case(
+        "mosquitto_bridge",
+        "te/device/main/service/mosquitto-c8y-bridge/status/health",
+        "0",
+        false;
+        "mosquitto_bridge_down"
+    )]
+    #[test_case(
+        "builtin_bridge",
+        "te/device/main/service/tedge-mapper-bridge-c8y/status/health",
+        r#"{"pid":1234,"status":"up"}"#,
+        true;
+        "builtin_bridge_up"
+    )]
+    #[test_case(
+        "builtin_bridge",
+        "te/device/main/service/tedge-mapper-bridge-c8y/status/health",
+        r#"{"status":"down"}"#,
+        false;
+        "builtin_bridge_down"
+    )]
+    fn pending_operations_message_on_bridge_health_status_up(
+        main_device_id: &str,
+        health_topic: &str,
+        health_payload: &str,
+        get_pending: bool,
+    ) {
+        let topic = Topic::new_unchecked(health_topic);
+
+        let mqtt_schema = MqttSchema::new();
+        let (entity_topic_id, _) = mqtt_schema.entity_channel_of(&topic).unwrap();
+
+        let health_message = MqttMessage::new(&topic, health_payload.as_bytes().to_owned());
+
+        let external_id =
+            CumulocityConverter::map_to_c8y_external_id(&entity_topic_id, &"test_device".into());
+
+        let parent = entity_topic_id.default_service_parent_identifier();
+        let parent_xid = parent
+            .clone()
+            .map(|tid| CumulocityConverter::map_to_c8y_external_id(&tid, &"test_device".into()));
+
+        let entity = CloudEntityMetadata::new(
+            external_id.clone(),
+            EntityMetadata {
+                topic_id: entity_topic_id,
+                external_id: Some(external_id),
+                r#type: EntityType::Service,
+                parent,
+                health_endpoint: None,
+                twin_data: Map::new(),
+            },
+        );
+
+        let msgs = convert_health_status_message(
+            &mqtt_schema,
+            &entity,
+            parent_xid.as_ref(),
+            &main_device_id.into(),
+            &health_message,
+            &"c8y".try_into().unwrap(),
+        );
+        if get_pending {
+            assert_eq!(msgs.len(), 2);
+            assert_eq!(msgs[1], ("c8y/s/us", "500").into());
+        } else {
+            assert_eq!(msgs.len(), 1);
+        }
     }
 }
