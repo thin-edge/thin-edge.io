@@ -95,7 +95,7 @@ axum-extra = "0.12"
 axum-server = { version = "0.7.1", features = ["tls-rustls-no-provider"] }
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.22"
-bytes = "1.4"
+bytes = "1.11"
 camino = "1.1"
 cap = "0.1"
 clap = { version = "4.5", features = [
