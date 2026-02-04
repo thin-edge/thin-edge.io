@@ -367,7 +367,6 @@ jobs:
           # Keep arm-unknown-linux-musleabi in separate repo due to armhf conflict between raspbian and debian
           - { target: arm-unknown-linux-musleabi,   repo_suffix: '-armv6',    component: main }
           - { target: armv7-unknown-linux-musleabihf, repo_suffix: '',          component: main }
-          - { target: arm-unknown-linux-musleabi,     repo_suffix: '',          component: main }
           - { target: i686-unknown-linux-musl,        repo_suffix: '',          component: main }
           # Debian also calls this "armel" (conflict with arm-unknown-linux-musleabi)
           # - { target: armv5te-unknown-linux-musleabi, repo_suffix: '',          component: main }
