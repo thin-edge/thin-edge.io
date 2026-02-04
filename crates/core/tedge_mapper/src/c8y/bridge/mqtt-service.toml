@@ -7,7 +7,7 @@ topic = "#"
 direction = "outbound"
 
 [[template_rule]]
-for = { item = "topic", in = "${config.c8y.mqtt_service.topics}" }
+for = "${config.c8y.mqtt_service.topics}"
 local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/in/"
-topic = "${topic}"
+topic = "${item}"
 direction = "inbound"
