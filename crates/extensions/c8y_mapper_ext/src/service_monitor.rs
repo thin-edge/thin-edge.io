@@ -42,8 +42,8 @@ pub(crate) fn convert_health_status_message(
     };
 
     let external_id = entity.external_id.as_ref();
-    let display_name = entity.display_name.as_str();
-    let display_type = entity.display_type.as_str();
+    let display_name = entity.display_name();
+    let display_type = entity.display_type().unwrap_or("service");
 
     let Ok(status_message) = smartrest::inventory::service_creation_message(
         external_id,
