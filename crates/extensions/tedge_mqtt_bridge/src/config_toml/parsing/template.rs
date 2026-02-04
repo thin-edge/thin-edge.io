@@ -5,9 +5,9 @@
 //! - `${varname}` - template variables (for template rules)
 //! - literal text
 //!
-//! This module uses a two-stage approach for variable parsing:
-//! 1. Outer parser: finds `${...}` blocks and literal text
-//! 2. Inner lexer/parser: tokenizes and parses the contents inside `${...}`
+//! This module uses a two-stage lexer/parser approach:
+//! 1. Lexer: converts input string into a sequence of tokens with spans
+//! 2. Parser: parses tokens into template components
 
 use std::fmt;
 use std::marker::PhantomData;
@@ -25,68 +25,109 @@ use tedge_config::TEdgeConfig;
 
 /// Input type that produces OffsetSpan instead of SimpleSpan
 type OffsetInput<'src> = WithContext<OffsetSpan, &'src str>;
+/// Token with span
+type Spanned<T> = (T, OffsetSpan);
 
 // ============================================================================
-// Lexer for variable contents (inside `${...}`)
+// Lexer
 // ============================================================================
-
-/// Token with span for the inner variable parser
-type InnerSpan<T> = (T, OffsetSpan);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Token<'src> {
-    /// `.` - dot separator
+    /// `${` - start of a variable reference
+    VarStart,
+    /// `.` - dot separator (inside variables)
     Dot,
-    /// An identifier like `config`, `c8y`, `url`
+    /// `}` - end of a variable reference
+    VarEnd,
+    /// An identifier in a variable reference like `config`, `c8y`, `url`
     Ident(&'src str),
+    /// Literal text (outside variables)
+    Text(&'src str),
 }
 
 impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Token::VarStart => write!(f, "${{"),
             Token::Dot => write!(f, "."),
+            Token::VarEnd => write!(f, "}}"),
             Token::Ident(s) => write!(f, "{s}"),
+            Token::Text(s) => write!(f, "{s}"),
         }
     }
 }
 
-/// Lexer for the contents inside `${...}`
-fn var_lexer<'src>() -> impl Parser<
+/// Lexer for template strings
+///
+/// Produces a flat token stream including both variable references and literal text.
+/// Uses a recursive approach to handle the inside/outside variable context.
+fn lexer<'src>() -> impl Parser<
     'src,
     OffsetInput<'src>,
-    Vec<InnerSpan<Token<'src>>>,
+    Vec<Spanned<Token<'src>>>,
     extra::Err<Rich<'src, char, OffsetSpan>>,
 > {
-    let dot = just('.').to(Token::Dot);
+    let var_start = just("${")
+        .to(Token::VarStart)
+        .map_with(|t, e| (t, e.span()));
+    let var_end = just('}').to(Token::VarEnd).map_with(|t, e| (t, e.span()));
+    let dot = just('.').to(Token::Dot).map_with(|t, e| (t, e.span()));
 
-    // Identifier: alphanumeric + underscore (no dots - those are separate tokens)
+    // Identifier: alphanumeric + underscore
     let ident = any()
         .filter(|c: &char| c.is_alphanumeric() || *c == '_')
         .repeated()
         .at_least(1)
         .to_slice()
         .map(Token::Ident)
+        .map_with(|t, e| (t, e.span()))
         .labelled("identifier");
 
-    let token = choice((dot, ident));
+    // Inside a variable: dots, identifiers, and closing brace
+    let var_inner = choice((dot, ident));
 
-    token
-        .map_with(|tok, e| (tok, e.span()))
+    // A complete variable: ${contents}
+    // Returns a Vec of spanned tokens
+    let variable = var_start
+        .then(var_inner.repeated().collect::<Vec<_>>())
+        .then(var_end.labelled("closing '}'"))
+        .map(|((start, inner), end)| {
+            let mut tokens = vec![start];
+            tokens.extend(inner);
+            tokens.push(end);
+            tokens
+        });
+
+    // Text outside variables: anything that's not the start of a variable
+    // We need to stop before `${` but allow standalone `$`
+    let text = any()
+        .and_is(just("${").not())
         .repeated()
-        .collect()
+        .at_least(1)
+        .to_slice()
+        .map(Token::Text)
+        .map_with(|tok, e| vec![(tok, e.span())]);
+
+    // Interleave variables and text, accumulating into a flat Vec
+    choice((variable, text))
+        .repeated()
+        .collect::<Vec<_>>()
+        .map(|vecs| vecs.into_iter().flatten().collect())
 }
 
 // ============================================================================
-// Parser for variable contents (tokenized)
+// Parser (operates on token stream)
 // ============================================================================
 
-/// The parsed result of a variable reference
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum ParsedVariable<'src> {
-    /// A config reference like `config.c8y.url` - stores the key part `c8y.url`
-    Config(Vec<&'src str>),
-    /// A template variable like `topic` - stores the variable name
-    Variable(&'src str),
+pub enum TemplateComponent<'src> {
+    /// A config reference like `${config.c8y.url}` - stores just `c8y.url`
+    Config(String, OffsetSpan),
+    /// The loop item variable `${item}`
+    Item,
+    /// Literal text
+    Text(&'src str),
 }
 
 /// Parser for a dotted path like `c8y.mqtt_service.enabled`
@@ -104,31 +145,74 @@ where
         .labelled("dotted path (e.g. 'c8y.url')")
 }
 
-/// Parser for variable contents - either `config.some.key` or `varname`
-fn var_parser<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, ParsedVariable<'src>, extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>>
-       + Clone
+/// Parser for variable contents - either `config.some.key` or `item`
+fn var_content_parser<'tokens, 'src: 'tokens, I>() -> impl Parser<
+    'tokens,
+    I,
+    TemplateComponent<'src>,
+    extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>,
+> + Clone
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
 {
     let config_ref = just(Token::Ident("config"))
         .ignore_then(just(Token::Dot))
-        .ignore_then(dotted_path())
-        .map(ParsedVariable::Config)
+        .ignore_then(
+            dotted_path().map_with(|parts, e| TemplateComponent::Config(parts.join("."), e.span())),
+        )
         .labelled("config reference (e.g. 'config.c8y.url')");
 
-    let template_var = select! { Token::Ident(s) => s }
-        .then_ignore(end())
-        .map(ParsedVariable::Variable)
-        .labelled("variable name (no dots allowed)");
+    let item_var = just(Token::Ident("item"))
+        .to(TemplateComponent::Item)
+        .labelled("'item'");
 
-    choice((config_ref, template_var)).labelled("variable")
+    choice((config_ref, item_var))
 }
 
-/// Parse the contents of a `${...}` block
-fn parse_var_contents(contents: &str, offset: usize) -> Result<ParsedVariable<'_>, ExpandError> {
-    let (tokens, lex_errs) = var_lexer()
-        .parse(contents.with_context(offset))
+/// Parser for a complete variable: VarStart content VarEnd
+fn variable_parser<'tokens, 'src: 'tokens, I>() -> impl Parser<
+    'tokens,
+    I,
+    TemplateComponent<'src>,
+    extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>,
+> + Clone
+where
+    I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
+{
+    just(Token::VarStart)
+        .ignore_then(var_content_parser())
+        .then_ignore(just(Token::VarEnd))
+}
+
+/// Parser for a complete template (operates on token stream)
+fn template_parser<'tokens, 'src: 'tokens, I>() -> impl Parser<
+    'tokens,
+    I,
+    Vec<(TemplateComponent<'src>, OffsetSpan)>,
+    extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>,
+> + Clone
+where
+    I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
+{
+    let text = select! { Token::Text(s) => TemplateComponent::Text(s) };
+
+    choice((variable_parser(), text))
+        .map_with(|component, e| (component, e.span()))
+        .repeated()
+        .collect()
+}
+
+/// Parse a template string, returning components with their spans
+pub fn parse_template(
+    src: &toml::Spanned<String>,
+) -> Result<Vec<(TemplateComponent<'_>, OffsetSpan)>, ExpandError> {
+    // The input span includes the quotes in the original toml string, so bump by 1
+    let offset = src.span().start + 1;
+    let input = src.get_ref();
+
+    // Lexer phase
+    let (tokens, lex_errs) = lexer()
+        .parse(input.as_str().with_context::<OffsetSpan>(offset))
         .into_output_errors();
 
     if let Some(e) = lex_errs.into_iter().next() {
@@ -140,10 +224,12 @@ fn parse_var_contents(contents: &str, offset: usize) -> Result<ParsedVariable<'_
     }
 
     let tokens = tokens.expect("tokens should exist if no errors");
-    let len = contents.len();
+
+    // Parser phase
+    let len = input.len();
     let eoi = offset + len;
 
-    let (parsed, parse_errs) = var_parser()
+    let (components, parse_errs) = template_parser()
         .parse(
             tokens
                 .as_slice()
@@ -152,114 +238,6 @@ fn parse_var_contents(contents: &str, offset: usize) -> Result<ParsedVariable<'_
         .into_output_errors();
 
     if let Some(e) = parse_errs.into_iter().next() {
-        // Check if this looks like a dotted path without the config. prefix
-        let has_dots = tokens.iter().any(|(t, _)| matches!(t, Token::Dot));
-        let starts_with_ident = matches!(tokens.first(), Some((Token::Ident(_), _)));
-
-        let (message, help, span) = if has_dots && starts_with_ident {
-            // User likely forgot the config. prefix
-            (
-                format!("Unknown variable '{contents}'"),
-                Some(format!("You might have meant 'config.{contents}'")),
-                Some(offset..offset + len),
-            )
-        } else {
-            (e.to_string(), None, None)
-        };
-
-        return Err(ExpandError {
-            message,
-            help,
-            span: span.unwrap_or_else(|| e.span().into_range()),
-        });
-    }
-
-    Ok(parsed.expect("parsed should exist if no errors"))
-}
-
-// ============================================================================
-// Template component types and outer parser
-// ============================================================================
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TemplateComponent<'src> {
-    /// A config reference like `${config.c8y.url}` - stores just `c8y.url`
-    Config(String),
-    /// A template variable like `${topic}` - stores just `topic`
-    Variable(&'src str),
-    /// Literal text
-    Text(&'src str),
-}
-
-/// Parser for `${...}` - returns the contents and span of the contents
-fn var_block<'src>() -> impl Parser<
-    'src,
-    OffsetInput<'src>,
-    (&'src str, OffsetSpan),
-    extra::Err<Rich<'src, char, OffsetSpan>>,
-> + Clone {
-    just("${")
-        .ignore_then(
-            any()
-                .and_is(just('}').not())
-                .repeated()
-                .to_slice()
-                .map_with(|s, e| (s, e.span())),
-        )
-        .then_ignore(just('}').labelled("closing '}'"))
-        .labelled("variable reference (e.g. '${config.c8y.url}' or '${topic}')")
-}
-
-/// Parser for a complete template string like `something/${config.key}/else`
-/// This finds `${...}` blocks and literal text, but defers parsing of variable
-/// contents to the lexer/parser.
-fn template_parser<'src>() -> impl Parser<
-    'src,
-    OffsetInput<'src>,
-    Vec<(RawTemplateComponent<'src, OffsetSpan>, OffsetSpan)>,
-    extra::Err<Rich<'src, char, OffsetSpan>>,
-> + Clone {
-    choice((
-        var_block().map(|(contents, contents_span)| RawTemplateComponent::Variable {
-            contents,
-            contents_span,
-        }),
-        any()
-            .and_is(just('$').not())
-            .repeated()
-            .at_least(1)
-            .to_slice()
-            .map(RawTemplateComponent::Text),
-    ))
-    .map_with(|tok, e| (tok, e.span()))
-    .repeated()
-    .collect()
-}
-
-/// Raw template component before variable contents are parsed
-#[derive(Debug, Clone)]
-enum RawTemplateComponent<'src, S> {
-    /// A `${...}` block - contents need to be parsed
-    Variable {
-        contents: &'src str,
-        contents_span: S,
-    },
-    /// Literal text
-    Text(&'src str),
-}
-
-/// Parse a template string, returning components with their spans
-pub fn parse_template(
-    src: &toml::Spanned<String>,
-) -> Result<Vec<(TemplateComponent<'_>, OffsetSpan)>, ExpandError> {
-    // The input span includes the quotes in the original toml string, so bump by 1
-    let offset = src.span().start + 1;
-
-    let (raw_components, errs) = template_parser()
-        .parse(src.get_ref().with_context::<OffsetSpan>(offset))
-        .into_output_errors();
-
-    if let Some(e) = errs.into_iter().next() {
         return Err(ExpandError {
             message: e.to_string(),
             help: None,
@@ -267,29 +245,22 @@ pub fn parse_template(
         });
     }
 
-    let raw_components = raw_components.expect("components should exist if no errors");
+    Ok(components.expect("components should exist if no errors"))
+}
 
-    // Convert raw components to final components by parsing variable contents
-    let mut components = Vec::with_capacity(raw_components.len());
-    for (raw, span) in raw_components {
-        let component = match raw {
-            RawTemplateComponent::Text(text) => TemplateComponent::Text(text),
-            RawTemplateComponent::Variable {
-                contents,
-                contents_span,
-            } => {
-                // contents_span.start() is already absolute due to OffsetSpan
-                let parsed = parse_var_contents(contents, contents_span.start())?;
-                match parsed {
-                    ParsedVariable::Config(parts) => TemplateComponent::Config(parts.join(".")),
-                    ParsedVariable::Variable(name) => TemplateComponent::Variable(name),
-                }
-            }
-        };
-        components.push((component, span));
-    }
-
-    Ok(components)
+/// Parser for a config reference: `${config.key}` - returns (key_string, key_span)
+fn config_ref_parser<'tokens, 'src: 'tokens, I>(
+) -> impl Parser<'tokens, I, (String, OffsetSpan), extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>>
+       + Clone
+where
+    I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
+{
+    just(Token::VarStart)
+        .ignore_then(just(Token::Ident("config")))
+        .ignore_then(just(Token::Dot))
+        .ignore_then(dotted_path().map_with(|parts, e| (parts.join("."), e.span())))
+        .then_ignore(just(Token::VarEnd))
+        .labelled("config reference (e.g. '${config.c8y.url}')")
 }
 
 /// Parse a config reference like `${config.c8y.url}`
@@ -300,17 +271,17 @@ pub fn parse_config_reference<T>(
     let offset = src.span().start + 1;
     let input = src.get_ref();
 
-    // First, parse the outer `${...}` structure
-    let (raw_components, errs) = template_parser()
+    // Lexer phase
+    let (tokens, lex_errs) = lexer()
         .parse(input.as_str().with_context::<OffsetSpan>(offset))
         .into_output_errors();
 
-    if let Some(e) = errs.into_iter().next() {
+    if let Some(e) = lex_errs.into_iter().next() {
         // Improve error message for unclosed braces
         let message = if e.to_string().contains("closing '}'") {
             "config reference must end with }".to_string()
         } else {
-            e.to_string()
+            format!("Invalid character in config reference: {e}")
         };
         return Err(ExpandError {
             message,
@@ -319,52 +290,34 @@ pub fn parse_config_reference<T>(
         });
     }
 
-    let raw_components = raw_components.expect("components should exist if no errors");
+    let tokens = tokens.expect("tokens should exist if no errors");
 
-    // Expect exactly one variable component
-    if raw_components.len() != 1 {
+    // Parser phase
+    let len = input.len();
+    let eoi = offset + len;
+
+    let (result, parse_errs) = config_ref_parser()
+        .then_ignore(end())
+        .parse(
+            tokens
+                .as_slice()
+                .map(OffsetSpan::new(0, eoi..eoi), |(t, s)| (t, s)),
+        )
+        .into_output_errors();
+
+    if let Some(e) = parse_errs.into_iter().next() {
         return Err(ExpandError {
             message: "expected config reference".into(),
             help: Some("Use format: ${config.key}".into()),
-            span: offset..(offset + input.len()),
+            span: e.span().into_range(),
         });
     }
 
-    let (raw, _span) = raw_components.into_iter().next().unwrap();
-
-    match raw {
-        RawTemplateComponent::Variable {
-            contents,
-            contents_span,
-        } => {
-            // contents_span.start() already includes the offset
-            let parsed = parse_var_contents(contents, contents_span.start());
-            match parsed {
-                Ok(ParsedVariable::Config(parts)) => {
-                    let key = parts.join(".");
-                    // The key span should point to the key part inside ${config.KEY}
-                    // contents_span points to the full contents "config.key"
-                    // We want to point to just "key", which starts after "config."
-                    let key_start = contents_span.start() + "config.".len();
-                    let key_end = contents_span.end();
-                    Ok(ConfigReference(
-                        toml::Spanned::new(key_start..key_end, key),
-                        PhantomData,
-                    ))
-                }
-                Ok(ParsedVariable::Variable(_)) | Err(_) => Err(ExpandError {
-                    message: "expected config reference".into(),
-                    help: Some("Use format: ${config.key}".into()),
-                    span: contents_span.into_range(),
-                }),
-            }
-        }
-        RawTemplateComponent::Text(_text) => Err(ExpandError {
-            message: "expected config reference".into(),
-            help: Some("Use format: ${config.key}".into()),
-            span: offset..(offset + input.len()),
-        }),
-    }
+    let (key, key_span) = result.expect("result should exist if no errors");
+    Ok(ConfigReference(
+        toml::Spanned::new(key_span.into_range(), key),
+        PhantomData,
+    ))
 }
 
 /// Expand a template that only contains config references (no template variables)
@@ -379,15 +332,15 @@ pub fn expand_config_template(
     for (component, span) in components {
         match component {
             TemplateComponent::Text(text) => result.push_str(text),
-            TemplateComponent::Config(key) => {
+            TemplateComponent::Config(key, span) => {
                 let value =
                     super::super::expand_config_key(&key, config, cloud_profile, span.into())?;
                 result.push_str(&value);
             }
-            TemplateComponent::Variable(var) => {
+            TemplateComponent::Item => {
                 return Err(ExpandError {
-                    message: format!("Unknown variable '{var}'"),
-                    help: Some(format!("Config references should use 'config.{var}'")),
+                    message: "Variable 'item' is only valid inside template rules".into(),
+                    help: Some("Use 'config.<key>' for config references".into()),
                     span: span.into(),
                 });
             }
@@ -403,7 +356,7 @@ pub struct TemplateContext<'a> {
     pub loop_var_value: &'a str,
 }
 
-/// Expand a template that can contain both config references and a template variable
+/// Expand a template that can contain both config references and the loop item variable
 pub fn expand_loop_template(
     src: &toml::Spanned<String>,
     ctx: &TemplateContext<'_>,
@@ -412,23 +365,16 @@ pub fn expand_loop_template(
     let components = parse_template(src)?;
     let mut result = String::new();
 
-    for (component, span) in components {
+    for (component, _span) in components {
         match component {
             TemplateComponent::Text(text) => result.push_str(text),
-            TemplateComponent::Config(key) => {
+            TemplateComponent::Config(key, span) => {
                 let value =
                     super::super::expand_config_key(&key, ctx.tedge, cloud_profile, span.into())?;
                 result.push_str(&value);
             }
-            TemplateComponent::Variable("item") => {
+            TemplateComponent::Item => {
                 result.push_str(ctx.loop_var_value);
-            }
-            TemplateComponent::Variable(var) => {
-                return Err(ExpandError {
-                    message: format!("Unknown variable '{var}'"),
-                    help: Some(format!("Did you mean 'item' or 'config.{var}'?",)),
-                    span: span.into(),
-                });
             }
         }
     }
@@ -454,41 +400,78 @@ mod tests {
         let input = toml_spanned("${config.c8y.url}");
         let components = parse_template(&input).unwrap();
         assert_eq!(components.len(), 1);
-        assert_eq!(components[0].0, TemplateComponent::Config("c8y.url".into()));
+        let TemplateComponent::Config(ref var_name, span) = components[0].0 else {
+            panic!("Expected config reference, got: {:?}", components[0].0);
+        };
+        assert_eq!(var_name, "c8y.url");
+        assert_eq!(extract_toml_span(&input, span.into_range()), *var_name);
     }
 
     #[test]
-    fn parses_template_variable() {
-        let input = toml_spanned("${topic}");
+    fn parses_item_variable() {
+        let input = toml_spanned("${item}");
         let components = parse_template(&input).unwrap();
         assert_eq!(components.len(), 1);
-        assert_eq!(components[0].0, TemplateComponent::Variable("topic"));
+        assert_eq!(components[0].0, TemplateComponent::Item);
     }
 
     #[test]
     fn parses_mixed_template() {
-        let input = toml_spanned("prefix/${config.c8y.bridge.topic_prefix}/${topic}/suffix");
+        let input = toml_spanned("prefix/${config.c8y.bridge.topic_prefix}/${item}/suffix");
         let components = parse_template(&input).unwrap();
         assert_eq!(components.len(), 5);
         assert_eq!(components[0].0, TemplateComponent::Text("prefix/"));
-        assert_eq!(
-            components[1].0,
-            TemplateComponent::Config("c8y.bridge.topic_prefix".into())
-        );
+        let TemplateComponent::Config(ref var_name, span) = components[1].0 else {
+            panic!("Expected config reference, got: {:?}", components[1].0);
+        };
+        assert_eq!(var_name, "c8y.bridge.topic_prefix");
+        assert_eq!(extract_toml_span(&input, span.into_range()), *var_name);
         assert_eq!(components[2].0, TemplateComponent::Text("/"));
-        assert_eq!(components[3].0, TemplateComponent::Variable("topic"));
+        assert_eq!(components[3].0, TemplateComponent::Item);
         assert_eq!(components[4].0, TemplateComponent::Text("/suffix"));
     }
 
     #[test]
-    fn config_template_rejects_template_variables() {
+    fn template_tokens_can_be_stringified() {
+        let raw_input = "prefix/${config.c8y.bridge.topic_prefix}/${item}/suffix";
+        let components = lexer()
+            .parse(raw_input.with_context(0))
+            .into_result()
+            .unwrap();
+        let stringified = components
+            .into_iter()
+            .map(|(c, _span)| c.to_string())
+            .collect::<String>();
+        assert_eq!(stringified, raw_input);
+    }
+
+    #[test]
+    fn config_template_rejects_item_variable() {
         let config = TEdgeConfig::load_toml_str("");
-        let input = toml_spanned("${topic}");
+        let input = toml_spanned("${item}");
         let result = expand_config_template(&input, &config, None);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.message.contains("Unknown variable"));
-        assert_eq!(extract_toml_span(&input, err.span), "${topic}");
+        assert!(
+            err.message.contains("only valid inside template rules"),
+            "{}",
+            err.message
+        );
+        assert_eq!(extract_toml_span(&input, err.span), "${item}");
+    }
+
+    #[test]
+    fn rejects_unknown_variables_at_parse_time() {
+        let input = toml_spanned("${unknown}");
+        let result = parse_template(&input);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // Error should mention what's valid
+        assert!(
+            err.message.contains("config") || err.message.contains("item"),
+            "Error should mention valid options: {}",
+            err.message
+        );
     }
 
     #[test]
@@ -514,7 +497,7 @@ mod tests {
     }
 
     #[test]
-    fn template_template_rejects_unknown_variables() {
+    fn loop_template_rejects_unknown_variables_at_parse_time() {
         let config = TEdgeConfig::load_toml_str("");
         let ctx = TemplateContext {
             tedge: &config,
@@ -523,8 +506,12 @@ mod tests {
         let result = expand_loop_template(&toml_spanned("${unknown}"), &ctx, None);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.message.contains("Unknown variable"));
-        assert!(err.help.as_ref().unwrap().contains("item")); // suggests the loop var
+        // Error comes from parse time, should mention valid options
+        assert!(
+            err.message.contains("config") || err.message.contains("item"),
+            "Error should mention valid options: {}",
+            err.message
+        );
     }
 
     // ========================================================================
@@ -545,18 +532,18 @@ mod tests {
     }
 
     #[test]
-    fn span_points_to_template_variable() {
-        let input = toml_spanned("${topic}");
+    fn span_points_to_item_variable() {
+        let input = toml_spanned("${item}");
         let components = parse_template(&input).unwrap();
         assert_eq!(components.len(), 1);
 
         let (_, span) = &components[0];
-        assert_eq!(extract_toml_span(&input, span.into_range()), "${topic}");
+        assert_eq!(extract_toml_span(&input, span.into_range()), "${item}");
     }
 
     #[test]
     fn spans_in_mixed_template_point_to_correct_components() {
-        let input = toml_spanned("prefix/${config.key}/${var}/suffix");
+        let input = toml_spanned("prefix/${config.key}/${item}/suffix");
         let components = parse_template(&input).unwrap();
         assert_eq!(components.len(), 5);
 
@@ -572,10 +559,10 @@ mod tests {
         );
         // "/"
         assert_eq!(extract_toml_span(&input, components[2].1.into_range()), "/");
-        // "${var}"
+        // "${item}"
         assert_eq!(
             extract_toml_span(&input, components[3].1.into_range()),
-            "${var}"
+            "${item}"
         );
         // "/suffix"
         assert_eq!(
@@ -586,20 +573,20 @@ mod tests {
 
     #[test]
     fn error_offset_for_unknown_variable_at_start() {
-        let config = TEdgeConfig::load_toml_str("");
+        // Unknown variables are now rejected at parse time
         let input = toml_spanned("${unknown}/rest");
-        let err = expand_config_template(&input, &config, None).unwrap_err();
+        let err = parse_template(&input).unwrap_err();
 
-        assert_eq!(extract_toml_span(&input, err.span), "${unknown}");
+        assert_eq!(extract_toml_span(&input, err.span.clone()), "unknown");
     }
 
     #[test]
     fn error_offset_for_unknown_variable_in_middle() {
-        let config = TEdgeConfig::load_toml_str("");
+        // Unknown variables are now rejected at parse time
         let input = toml_spanned("prefix/${unknown}/suffix");
-        let err = expand_config_template(&input, &config, None).unwrap_err();
+        let err = parse_template(&input).unwrap_err();
 
-        assert_eq!(extract_toml_span(&input, err.span), "${unknown}");
+        assert_eq!(extract_toml_span(&input, err.span.clone()), "unknown");
     }
 
     #[test]
@@ -608,33 +595,24 @@ mod tests {
         let input = toml_spanned("prefix/${config.invalid.key}/suffix");
         let err = expand_config_template(&input, &config, None).unwrap_err();
 
-        assert_eq!(extract_toml_span(&input, err.span), "${config.invalid.key}");
+        assert_eq!(extract_toml_span(&input, err.span), "invalid.key");
     }
 
     #[test]
     fn error_offset_for_unknown_loop_variable() {
-        let config = TEdgeConfig::load_toml_str("");
-        let ctx = TemplateContext {
-            tedge: &config,
-            loop_var_value: "value",
-        };
+        // Unknown variables are now rejected at parse time
         let input = toml_spanned("start/${wrong}/end");
-        let err = expand_loop_template(&input, &ctx, None).unwrap_err();
+        let err = parse_template(&input).unwrap_err();
 
-        assert_eq!(extract_toml_span(&input, err.span), "${wrong}");
+        assert_eq!(extract_toml_span(&input, err.span.clone()), "wrong");
     }
 
     #[test]
     fn error_offset_with_multiple_variables_points_to_failing_one() {
-        let config = TEdgeConfig::load_toml_str("");
-        let ctx = TemplateContext {
-            tedge: &config,
-            loop_var_value: "value",
-        };
-        // First variable is valid, second is invalid
+        // First variable is valid, second is invalid - rejected at parse time
         let input = toml_spanned("${item}/${unknown}");
-        let err = expand_loop_template(&input, &ctx, None).unwrap_err();
+        let err = parse_template(&input).unwrap_err();
 
-        assert_eq!(extract_toml_span(&input, err.span), "${unknown}");
+        assert_eq!(extract_toml_span(&input, err.span.clone()), "unknown");
     }
 }

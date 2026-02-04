@@ -1613,25 +1613,93 @@ direction = "inbound"
             assert_eq!(errs.len(), 1, "Expected 1 error, got: {errs:?}");
             let err = &errs[0];
 
-            // Error message should be useful
-            assert!(
-                err.message.contains("Unknown variable"),
-                "Error message should mention unknown variable, got: {}",
-                err.message
-            );
-
             // Help should suggest using config. prefix
             assert!(
-                err.help.as_ref().is_some_and(|h| h.contains("config.")),
-                "Help should suggest using config. prefix, got: {:?}",
-                err.help
+                err.message.contains("config."),
+                "Message should suggest using config. prefix, got: {:?}",
+                err.message
             );
 
             // Span should point to the problematic variable reference in the toml
             let error_text = &toml[err.span.clone()];
             assert_eq!(
-                error_text, "c8y.bridge.topic_prefix",
+                error_text, "c8y",
                 "Span should point to the variable reference"
+            );
+        }
+
+        #[test]
+        fn unfinished_config_reference_gives_useful_error() {
+            let toml = r#"
+local_prefix = "${config.c8y.bridge.topic_prefix}/"
+remote_prefix = ""
+
+[[template_rule]]
+for = "${config.c8y.smartrest.templates"
+topic = "${item}"
+direction = "inbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            let errs = config
+                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .unwrap_err();
+
+            assert_eq!(errs.len(), 1, "Expected 1 error, got: {errs:?}");
+            let err = &errs[0];
+
+            assert!(
+                err.message.contains("config reference must end with }"),
+                "Message should be an end of input error, got: {:?}",
+                err.message
+            );
+
+            let start = err.span.start;
+            let end = err.span.end;
+
+            // Span should point to the problematic variable reference in the toml
+            let error_text = &toml[start..end + 1];
+            assert_eq!(
+                error_text, "\"",
+                "Span should point to the end of the string"
+            );
+        }
+
+        #[test]
+        fn unfinished_template_variable_gives_useful_error() {
+            let toml = r#"
+local_prefix = "${config.c8y.bridge.topic_prefix"
+remote_prefix = ""
+
+[[rule]]
+topic = "test"
+direction = "inbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            let errs = config
+                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .unwrap_err();
+
+            assert_eq!(errs.len(), 1, "Expected 1 error, got: {errs:?}");
+            let err = &errs[0];
+
+            assert!(
+                err.message.contains("found end of input"),
+                "Message should be an end of input error, got: {:?}",
+                err.message
+            );
+
+            let start = err.span.start;
+            let end = err.span.end;
+
+            // Span should point to the problematic variable reference in the toml
+            let error_text = &toml[start..end + 1];
+            assert_eq!(
+                error_text, "\"",
+                "Span should point to the end of the string"
             );
         }
     }

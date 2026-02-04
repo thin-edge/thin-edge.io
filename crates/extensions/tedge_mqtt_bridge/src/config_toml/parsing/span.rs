@@ -106,4 +106,10 @@ mod tests {
         let span = OffsetSpan::new(42, 0..10);
         assert_eq!(span.context(), 42);
     }
+
+    #[test]
+    fn offsets_can_be_stringified() {
+        let span = OffsetSpan::new(42, 0..10);
+        assert_eq!(span.to_string(), "42..52");
+    }
 }
