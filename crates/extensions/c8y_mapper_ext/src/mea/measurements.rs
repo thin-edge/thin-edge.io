@@ -18,7 +18,7 @@ pub struct MeasurementConverter {
 
 impl tedge_flows::Transformer for MeasurementConverter {
     fn name(&self) -> &str {
-        "into_c8y_measurements"
+        "into-c8y-measurements"
     }
 
     fn set_config(&mut self, config: JsonValue) -> Result<(), ConfigError> {

@@ -30,7 +30,7 @@ impl Default for AlarmConverter {
 
 impl tedge_flows::Transformer for AlarmConverter {
     fn name(&self) -> &str {
-        "into_c8y_alarms"
+        "into-c8y-alarms"
     }
 
     fn set_config(&mut self, config: JsonValue) -> Result<(), ConfigError> {

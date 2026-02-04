@@ -33,7 +33,7 @@ impl Default for HealthStatusConverter {
 
 impl tedge_flows::Transformer for HealthStatusConverter {
     fn name(&self) -> &str {
-        "into_c8y_health_status"
+        "into-c8y-health-status"
     }
 
     fn set_config(&mut self, config: JsonValue) -> Result<(), ConfigError> {
