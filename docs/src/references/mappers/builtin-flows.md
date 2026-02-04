@@ -67,11 +67,16 @@ The flow definitions of the Cumulocity mapper can be tuned using the `tedge conf
   - In the case of events, larger events are published to Cumulocity over HTTP
 
 :::note
-For a change of one of these settings to be effective, the Cumulocity mapper has to be restarted:
+For a change of one of these settings to be effective, the Cumulocity mapper has to be restarted.
+
+For instance, to remove the builtin measurement flow:
+
 ```
 $ sudo tedge config remove c8y.topics "te/+/+/+/+/m/+"
 $ sudo systemctl restart tedge-mapper-c8y
 ```
+
+On restart, the mapper will have removed the `/etc/tedge/mappers/c8y/flows/measurements.toml` file.
 :::
 
 ### Editing builtin flows
@@ -101,8 +106,14 @@ topic = "te/errors"
 Any modification to this file (adding, editing, removing a step as well as editing input and output)
 is dynamically reloaded and immediately made effective by the mapper.
 
-As an example, the `cache-early-messages` can be removed.
-Doing so any measurements received from a child device or a service that has not been properly registered yet.
+As an example, by default, the Cumulocity mapper caches measurements, events and alarms when received too soon,
+i.e. before the source child-device or service has been properly registered.
+These messages are cached till their source has been properly registered.
+The behavior is implemented by the `cache-early-messages` builtin transformation step.
+If this behavior is not desired, one can simply remove that step from the `measurements.toml` flow definition.
+A child device will have then to be properly registered for its measurements to be forwarded to Cumulocity.
+
+### Flow definition templates 
 
 Each builtin flow `.toml` definition has a companion file with a `.toml.template` extension.
 
