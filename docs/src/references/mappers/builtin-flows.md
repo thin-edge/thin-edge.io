@@ -92,7 +92,7 @@ input.mqtt.topics = ["te/+/+/+/+/m/+", "te/device/main/service/tedge-mapper-c8y/
 steps = [
     { builtin = "add-timestamp", config = { property = "time", format = "unix", reformat = false } },
     { builtin = "cache-early-messages", config = { topic_root = "te" } },
-    { builtin = "into_c8y_measurements", config = { topic_root = "te" } },
+    { builtin = "into-c8y-measurements", config = { topic_root = "te" } },
     { builtin = "limit-payload-size", config = { max_size = 16184 } },
 ]
 

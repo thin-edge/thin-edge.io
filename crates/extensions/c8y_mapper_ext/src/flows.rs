@@ -123,7 +123,7 @@ topic = "{errors_topic}"
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "unix", reformat = false }} }},
     {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
-    {{ builtin = "into_c8y_measurements", config = {{ topic_root = "{topic_prefix}" }} }},
+    {{ builtin = "into-c8y-measurements", config = {{ topic_root = "{topic_prefix}" }} }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
@@ -150,7 +150,7 @@ topic = "{errors_topic}"
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
     {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
-    {{ builtin = "into_c8y_events", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}", max_mqtt_payload_size = {max_mqtt_payload_size} }} }},
+    {{ builtin = "into-c8y-events", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}", max_mqtt_payload_size = {max_mqtt_payload_size} }} }},
 ]
 
 [output.mqtt]
@@ -176,7 +176,7 @@ topic = "{errors_topic}"
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
     {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
-    {{ builtin = "into_c8y_alarms", interval = "3s", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }} }},
+    {{ builtin = "into-c8y-alarms", interval = "3s", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }} }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
@@ -202,7 +202,7 @@ input.mqtt.topics = ["{topic_prefix}/+/+/+/+/status/health", "{topic_prefix}/{ma
 
 steps = [
     {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
-    {{ builtin = "into_c8y_health_status", config = {{ topic_root = "{topic_prefix}", main_device = "{main_device}", c8y_prefix = "{c8y_prefix}" }} }},
+    {{ builtin = "into-c8y-health-status", config = {{ topic_root = "{topic_prefix}", main_device = "{main_device}", c8y_prefix = "{c8y_prefix}" }} }},
 ]
 
 [output.mqtt]

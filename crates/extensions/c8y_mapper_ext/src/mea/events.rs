@@ -40,7 +40,7 @@ impl Default for EventConverter {
 
 impl tedge_flows::Transformer for EventConverter {
     fn name(&self) -> &str {
-        "into_c8y_events"
+        "into-c8y-events"
     }
 
     fn set_config(&mut self, config: JsonValue) -> Result<(), ConfigError> {
