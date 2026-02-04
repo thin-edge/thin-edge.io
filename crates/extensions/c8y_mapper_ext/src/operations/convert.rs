@@ -83,9 +83,7 @@ impl CumulocityConverter {
             operation: OperationType::ConfigSnapshot,
             cmd_id: cmd_id.clone(),
         };
-        let topic = self
-            .mqtt_schema
-            .topic_for(&target.metadata.topic_id, &channel);
+        let topic = self.mqtt_schema.topic_for(target.topic_id(), &channel);
 
         // Replace '/' with ':' to avoid creating unexpected directories in file transfer repo
         let tedge_url = format!(
@@ -125,9 +123,7 @@ impl CumulocityConverter {
             operation: OperationType::LogUpload,
             cmd_id: cmd_id.clone(),
         };
-        let topic = self
-            .mqtt_schema
-            .topic_for(&target.metadata.topic_id, &channel);
+        let topic = self.mqtt_schema.topic_for(target.topic_id(), &channel);
 
         let tedge_url = format!(
             "http://{}/te/v1/files/{}/log_upload/{}-{}",
@@ -207,9 +203,7 @@ impl CumulocityConverter {
             operation: OperationType::FirmwareUpdate,
             cmd_id,
         };
-        let topic = self
-            .mqtt_schema
-            .topic_for(&target.metadata.topic_id, &channel);
+        let topic = self.mqtt_schema.topic_for(target.topic_id(), &channel);
 
         let tedge_url = if let Ok(c8y_url) = self.http_proxy.local_proxy_url(&firmware_request.url)
         {
@@ -267,7 +261,7 @@ impl CumulocityConverter {
         let message = self.create_config_update_cmd(
             cmd_id.into(),
             &config_download_request,
-            &target.metadata.topic_id,
+            target.topic_id(),
         );
         Ok(message)
     }
@@ -347,9 +341,7 @@ impl CumulocityConverter {
             operation: OperationType::DeviceProfile,
             cmd_id,
         };
-        let topic = self
-            .mqtt_schema
-            .topic_for(&target.metadata.topic_id, &channel);
+        let topic = self.mqtt_schema.topic_for(target.topic_id(), &channel);
 
         let mut request = DeviceProfileCmdPayload {
             status: CommandStatus::Init,
@@ -447,9 +439,7 @@ impl CumulocityConverter {
             cmd_id,
         };
 
-        let topic = self
-            .mqtt_schema
-            .topic_for(&target.metadata.topic_id, &channel);
+        let topic = self.mqtt_schema.topic_for(target.topic_id(), &channel);
 
         let state = GenericCommandState::from_command_message(message).map_err(|e| {
             CumulocityMapperError::JsonCustomOperationHandlerError {

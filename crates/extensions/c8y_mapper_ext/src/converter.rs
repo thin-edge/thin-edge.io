@@ -380,7 +380,7 @@ impl CumulocityConverter {
         let entity = self.entity_cache.try_get(entity_topic_id)?;
         let topic = C8yTopic::smartrest_response_topic(
             &entity.external_id,
-            &entity.metadata.r#type,
+            &entity.r#type(),
             &self.config.bridge_config.c8y_prefix,
         )
         .expect("Topic must have been valid as the external id is pre-validated");
@@ -805,8 +805,8 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let entity_xid: EntityExternalId = device_xid.into();
         let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
-        let mut command = software_update_request
-            .into_software_update_command(&target.metadata.topic_id, cmd_id)?;
+        let mut command =
+            software_update_request.into_software_update_command(target.topic_id(), cmd_id)?;
 
         command.payload.update_list.iter_mut().for_each(|modules| {
             modules.modules.iter_mut().for_each(|module| {
@@ -829,7 +829,7 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let entity_xid: EntityExternalId = device_xid.into();
         let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
-        let command = RestartCommand::new(&target.metadata.topic_id, cmd_id);
+        let command = RestartCommand::new(target.topic_id(), cmd_id);
         let message = command.command_message(&self.mqtt_schema);
         Ok(vec![message])
     }
@@ -1100,7 +1100,7 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        let entity_type = self.entity_cache.try_get(&source)?.metadata.r#type.clone();
+        let entity_type = self.entity_cache.try_get(&source)?.r#type();
         match &channel {
             Channel::EntityTwinData { fragment_key } => {
                 self.try_convert_entity_twin_data(&source, &entity_type, message, fragment_key)
@@ -1162,10 +1162,10 @@ impl CumulocityConverter {
 
                 let entity = self.entity_cache.try_get(&source)?;
                 let entity = operations::EntityTarget {
-                    topic_id: entity.metadata.topic_id.clone(),
+                    topic_id: entity.topic_id().clone(),
                     external_id: entity.external_id.clone(),
                     smartrest_publish_topic: self
-                        .smartrest_publish_topic_for_entity(&entity.metadata.topic_id)?,
+                        .smartrest_publish_topic_for_entity(entity.topic_id())?,
                 };
 
                 self.operation_handler.handle(entity, message.clone()).await;
@@ -1325,7 +1325,7 @@ impl CumulocityConverter {
             .add_operation(device.external_id.as_ref(), c8y_operation_name)
             .await?;
 
-        let need_cloud_update = match device.metadata.r#type {
+        let need_cloud_update = match device.r#type() {
             // for devices other than the main device and services, dynamic update of supported operations via file events is
             // disabled, so we have to additionally load new operations from the c8y operations for that device
             EntityType::ChildDevice | EntityType::Service => self

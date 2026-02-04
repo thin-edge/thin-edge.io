@@ -67,7 +67,7 @@ impl MeasurementConverter {
         let units = get_measurement_units(
             context,
             &self.mqtt_schema.root,
-            entity.metadata.topic_id.as_str(),
+            entity.topic_id().as_str(),
             measurement_type,
         );
         let Ok(c8y_json_payload) =

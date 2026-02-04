@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
@@ -51,10 +53,12 @@ pub enum Error {
     NonDefaultTopicScheme(EntityTopicId),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "FlowContextEntity")]
+#[serde(into = "FlowContextEntity")]
 pub struct CloudEntityMetadata {
     pub external_id: EntityExternalId,
-    pub metadata: EntityMetadata,
+    metadata: EntityMetadata,
 }
 
 impl CloudEntityMetadata {
@@ -63,6 +67,34 @@ impl CloudEntityMetadata {
             external_id,
             metadata,
         }
+    }
+
+    pub fn topic_id(&self) -> &EntityTopicId {
+        &self.metadata.topic_id
+    }
+
+    pub fn r#type(&self) -> EntityType {
+        self.metadata.r#type
+    }
+
+    pub fn parent(&self) -> Option<&EntityTopicId> {
+        self.metadata.parent.as_ref()
+    }
+
+    pub fn display_name(&self) -> &str {
+        self.metadata
+            .display_name()
+            .unwrap_or_else(|| self.external_id.as_ref())
+    }
+
+    pub fn display_type(&self) -> &str {
+        self.metadata
+            .display_type()
+            .unwrap_or(match self.metadata.r#type {
+                EntityType::MainDevice => "thin-edge.io",
+                EntityType::ChildDevice => "thin-edge.io-child",
+                EntityType::Service => "service",
+            })
     }
 }
 
@@ -236,7 +268,7 @@ impl EntityCache {
         let updated_entity = EntityMetadata {
             topic_id: topic_id.clone(),
             external_id: existing_entity.external_id.clone(),
-            r#type: existing_entity.r#type.clone(),
+            r#type: existing_entity.r#type,
             parent: entity
                 .parent
                 .clone()
@@ -274,22 +306,25 @@ impl EntityCache {
     pub fn update_twin_data(&mut self, twin_message: EntityTwinMessage) -> Result<bool, Error> {
         let fragment_key = twin_message.fragment_key.clone();
         let fragment_value = twin_message.fragment_value.clone();
-        let entity = self.try_get_mut(&twin_message.topic_id)?;
-        if fragment_value.is_null() {
-            let existing = entity.metadata.twin_data.remove(&fragment_key);
-            if existing.is_none() {
-                return Ok(false);
-            }
-        } else {
-            let existing = entity
-                .metadata
-                .twin_data
-                .insert(fragment_key, fragment_value.clone());
-            if existing.is_some_and(|v| v.eq(&fragment_value)) {
-                return Ok(false);
+        {
+            let entity = self.try_get_mut(&twin_message.topic_id)?;
+            if fragment_value.is_null() {
+                let existing = entity.metadata.twin_data.remove(&fragment_key);
+                if existing.is_none() {
+                    return Ok(false);
+                }
+            } else {
+                let existing = entity
+                    .metadata
+                    .twin_data
+                    .insert(fragment_key, fragment_value.clone());
+                if existing.is_some_and(|v| v.eq(&fragment_value)) {
+                    return Ok(false);
+                }
             }
         }
 
+        self.update_flow_context(&twin_message.topic_id);
         Ok(true)
     }
 
@@ -373,6 +408,13 @@ impl EntityCache {
         self.entities.external_ids()
     }
 
+    fn update_flow_context(&self, topic_id: &EntityTopicId) {
+        let Some(entity) = self.get(topic_id) else {
+            return;
+        };
+        self.entities.update_context(topic_id, entity.clone())
+    }
+
     #[cfg(test)]
     pub fn flow_context(&self) -> &FlowContextHandle {
         &self.entities.flow_context
@@ -450,10 +492,9 @@ impl EntityIndexes {
         ids
     }
 
-    fn update_context(&self, topic_id: &EntityTopicId, mut metadata: CloudEntityMetadata) {
-        let external_id = &metadata.external_id;
-        metadata.metadata.external_id = Some(external_id.clone());
-        if let Ok(json_data) = JsonValue::from_value(metadata.metadata) {
+    fn update_context(&self, topic_id: &EntityTopicId, entity: CloudEntityMetadata) {
+        let external_id = entity.external_id.clone();
+        if let Ok(json_data) = JsonValue::from_value(entity) {
             self.flow_context
                 .set_value(topic_id.as_str(), json_data.clone());
             self.flow_context.set_value(external_id.as_ref(), json_data);
@@ -465,6 +506,67 @@ impl EntityIndexes {
             .set_value(topic_id.as_str(), JsonValue::Null);
         self.flow_context
             .set_value(external_id.as_ref(), JsonValue::Null)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct FlowContextEntity {
+    #[serde(rename = "@id")]
+    pub external_id: EntityExternalId,
+
+    #[serde(rename = "@topic-id")]
+    pub topic_id: EntityTopicId,
+
+    #[serde(rename = "@type")]
+    pub r#type: EntityType,
+
+    #[serde(rename = "@parent", skip_serializing_if = "Option::is_none")]
+    pub parent: Option<EntityTopicId>,
+
+    #[serde(rename = "@name")]
+    pub display_name: String,
+
+    #[serde(rename = "@type-name")]
+    pub display_type: String,
+
+    #[serde(rename = "@health", skip_serializing_if = "Option::is_none")]
+    pub health_endpoint: Option<EntityTopicId>,
+}
+
+impl From<FlowContextEntity> for CloudEntityMetadata {
+    fn from(context: FlowContextEntity) -> Self {
+        let external_id = context.external_id;
+        let mut twin_data = serde_json::Map::new();
+
+        twin_data.insert("name".to_string(), context.display_name.into());
+        twin_data.insert("type".to_string(), context.display_type.into());
+
+        let metadata = EntityMetadata {
+            topic_id: context.topic_id,
+            parent: context.parent,
+            r#type: context.r#type,
+            external_id: Some(external_id.clone()),
+            health_endpoint: context.health_endpoint,
+            twin_data,
+        };
+
+        CloudEntityMetadata::new(external_id, metadata)
+    }
+}
+
+impl From<CloudEntityMetadata> for FlowContextEntity {
+    fn from(entity: CloudEntityMetadata) -> Self {
+        let display_name = entity.display_name().to_owned();
+        let display_type = entity.display_type().to_owned();
+        FlowContextEntity {
+            external_id: entity.external_id,
+            topic_id: entity.metadata.topic_id,
+            r#type: entity.metadata.r#type,
+            parent: entity.metadata.parent,
+            display_name,
+            display_type,
+            health_endpoint: entity.metadata.health_endpoint,
+        }
     }
 }
 
