@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
@@ -51,18 +53,31 @@ pub enum Error {
     NonDefaultTopicScheme(EntityTopicId),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CloudEntityMetadata {
     pub external_id: EntityExternalId,
+    pub display_name: String,
+    pub display_type: String,
     pub metadata: EntityMetadata,
 }
 
 impl CloudEntityMetadata {
     pub fn new(external_id: EntityExternalId, metadata: EntityMetadata) -> Self {
+        let display_name = metadata
+            .display_name()
+            .unwrap_or_else(|| external_id.as_ref())
+            .to_owned();
+        let display_type = metadata.display_type().unwrap_or("service").to_owned();
         Self {
             external_id,
+            display_name,
+            display_type,
             metadata,
         }
+    }
+
+    pub fn is_service(&self) -> bool {
+        self.metadata.r#type == EntityType::Service
     }
 }
 
@@ -451,9 +466,9 @@ impl EntityIndexes {
     }
 
     fn update_context(&self, topic_id: &EntityTopicId, mut metadata: CloudEntityMetadata) {
-        let external_id = &metadata.external_id;
-        metadata.metadata.external_id = Some(external_id.clone());
-        if let Ok(json_data) = JsonValue::from_value(metadata.metadata) {
+        let external_id = metadata.external_id.clone();
+        metadata.metadata.external_id = Some(metadata.external_id.clone());
+        if let Ok(json_data) = JsonValue::from_value(metadata) {
             self.flow_context
                 .set_value(topic_id.as_str(), json_data.clone());
             self.flow_context.set_value(external_id.as_ref(), json_data);

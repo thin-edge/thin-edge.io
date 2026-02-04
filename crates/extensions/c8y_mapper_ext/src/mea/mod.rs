@@ -1,6 +1,5 @@
 use crate::entity_cache::CloudEntityMetadata;
 use crate::json::Units;
-use tedge_api::entity::EntityMetadata;
 use tedge_flows::FlowContextHandle;
 use tedge_flows::JsonValue;
 
@@ -16,12 +15,7 @@ fn get_entity_metadata(context: &FlowContextHandle, entity: &str) -> Option<Clou
     if json == JsonValue::Null {
         return None;
     }
-    let metadata: EntityMetadata = json.into_value().ok()?;
-    let external_id = metadata.external_id.as_ref()?.to_owned();
-    Some(CloudEntityMetadata {
-        external_id,
-        metadata,
-    })
+    json.into_value().ok()
 }
 
 fn get_entity_parent_metadata(
