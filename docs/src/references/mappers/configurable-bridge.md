@@ -142,7 +142,7 @@ direction = "outbound"
 
 ## Template file structure
 
-The Cumulocity built-in behavior is configured in two files: `/etc/tedge/mappers/c8y/bridge/smartrest.toml` and `/etc/tedge/mappers/c8y/bridge/mqtt-service.toml`.
+The Cumulocity built-in behavior is configured in the file `/etc/tedge/mappers/c8y/bridge/mqtt-core.toml`.
 
 :::note
 To enable this feature, you need to enable the built-in bridge:
@@ -156,7 +156,7 @@ These files can also be manually edited to add or remove rules
 
 :::note
 If the auto-generated bridge configuration is updated, then the Cumulocity mapper will not override its content.
-In such a case, the Cumulocity mapper will only update its bridge configuration template, i.e. the files `/etc/tedge/mappers/c8y/bridge/smartrest.toml.template` and `mqtt-service.toml.template`.
+In such a case, the Cumulocity mapper will only update its bridge configuration template, i.e. the file `/etc/tedge/mappers/c8y/bridge/mqtt-core.toml.template`.
 :::
 
 If other bridge definitions are provided along the builtin rules in the `/etc/tedge/mappers/c8y/bridge/` directory,
@@ -165,8 +165,8 @@ then these bridge rules are loaded by the Cumulocity mapper.
 Finally, the builtin configurations can be disabled by replacing the file with the same name and a `.toml.disabled` extension
 
 ```
-# Disable the Cumulocity mapper smartrest rules:
-$ mv /etc/tedge/mappers/c8y/bridge/smartrest.toml /etc/tedge/mappers/c8y/bridge/smartrest.toml.disabled
+# Disable the Cumulocity mapper builtin rules:
+$ mv /etc/tedge/mappers/c8y/bridge/mqtt-core.toml /etc/tedge/mappers/c8y/bridge/mqtt-core.toml.disabled
 ```
 
 Alternatively, a builtin bridge configuration can be disabled by simply removing its definition

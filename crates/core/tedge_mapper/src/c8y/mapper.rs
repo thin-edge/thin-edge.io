@@ -320,14 +320,8 @@ pub async fn bridge_rules(
     // Persist the built-in bridge configuration templates
     persist_bridge_config_file(
         &bridge_config_dir,
-        "smartrest",
-        include_str!("bridge/smartrest.toml"),
-    )
-    .await?;
-    persist_bridge_config_file(
-        &bridge_config_dir,
-        "mqtt-service",
-        include_str!("bridge/mqtt-service.toml"),
+        "mqtt-core",
+        include_str!("bridge/mqtt-core.toml"),
     )
     .await?;
 

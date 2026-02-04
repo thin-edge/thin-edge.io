@@ -88,3 +88,16 @@ direction = "outbound"
 [[rule]]
 topic = "alarm/alarms/createBulk/#"
 direction = "outbound"
+
+[[rule]]
+if = "${config.c8y.mqtt_service.enabled}"
+local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/out/"
+topic = "#"
+direction = "outbound"
+
+[[template_rule]]
+if = "${config.c8y.mqtt_service.enabled}"
+for = "${config.c8y.mqtt_service.topics}"
+local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/in/"
+topic = "${item}"
+direction = "inbound"
