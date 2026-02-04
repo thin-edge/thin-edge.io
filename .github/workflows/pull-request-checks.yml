@@ -47,6 +47,9 @@ jobs:
               - 'plugins/**'
               - 'Cargo.*'
               - '**/Cargo.toml'
+              - '.cargo/audit.toml'
+              - 'clippy.toml'
+              - 'deny.toml'
             workflows:
               - '.github/workflows/**'
             docs:
