@@ -141,7 +141,7 @@ impl EntityMetadata {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EntityType {
     #[serde(rename = "device")]
     MainDevice,

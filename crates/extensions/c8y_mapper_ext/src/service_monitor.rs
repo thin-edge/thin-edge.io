@@ -2,6 +2,7 @@ use crate::converter::create_get_pending_operations_message;
 use crate::entity_cache::CloudEntityMetadata;
 use c8y_api::smartrest;
 use tedge_api::entity::EntityExternalId;
+use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::HealthStatus;
 use tedge_api::Status;
@@ -30,7 +31,7 @@ pub(crate) fn convert_health_status_message(
     message: &MqttMessage,
     prefix: &TopicPrefix,
 ) -> Vec<MqttMessage> {
-    if !entity.is_service() {
+    if entity.r#type() != EntityType::Service {
         return vec![];
     }
 

@@ -58,26 +58,48 @@ pub struct CloudEntityMetadata {
     pub external_id: EntityExternalId,
     pub display_name: String,
     pub display_type: String,
-    pub metadata: EntityMetadata,
+
+    #[serde(flatten)]
+    metadata: EntityMetadata,
 }
 
 impl CloudEntityMetadata {
     pub fn new(external_id: EntityExternalId, metadata: EntityMetadata) -> Self {
-        let display_name = metadata
-            .display_name()
-            .unwrap_or_else(|| external_id.as_ref())
-            .to_owned();
-        let display_type = metadata.display_type().unwrap_or("service").to_owned();
-        Self {
+        let display_name = "".to_string();
+        let display_type = "".to_string();
+        let mut entity = Self {
             external_id,
             display_name,
             display_type,
             metadata,
-        }
+        };
+
+        entity.normalize();
+        entity
     }
 
-    pub fn is_service(&self) -> bool {
-        self.metadata.r#type == EntityType::Service
+    pub fn topic_id(&self) -> &EntityTopicId {
+        &self.metadata.topic_id
+    }
+
+    pub fn r#type(&self) -> EntityType {
+        self.metadata.r#type
+    }
+
+    pub fn parent(&self) -> Option<&EntityTopicId> {
+        self.metadata.parent.as_ref()
+    }
+
+    fn normalize(&mut self) {
+        self.metadata.external_id = Some(self.external_id.clone());
+
+        self.display_name = self
+            .metadata
+            .display_name()
+            .unwrap_or_else(|| self.external_id.as_ref())
+            .to_owned();
+
+        self.display_type = self.metadata.display_type().unwrap_or("service").to_owned();
     }
 }
 
@@ -251,7 +273,7 @@ impl EntityCache {
         let updated_entity = EntityMetadata {
             topic_id: topic_id.clone(),
             external_id: existing_entity.external_id.clone(),
-            r#type: existing_entity.r#type.clone(),
+            r#type: existing_entity.r#type,
             parent: entity
                 .parent
                 .clone()
@@ -289,22 +311,27 @@ impl EntityCache {
     pub fn update_twin_data(&mut self, twin_message: EntityTwinMessage) -> Result<bool, Error> {
         let fragment_key = twin_message.fragment_key.clone();
         let fragment_value = twin_message.fragment_value.clone();
-        let entity = self.try_get_mut(&twin_message.topic_id)?;
-        if fragment_value.is_null() {
-            let existing = entity.metadata.twin_data.remove(&fragment_key);
-            if existing.is_none() {
-                return Ok(false);
+        {
+            let entity = self.try_get_mut(&twin_message.topic_id)?;
+            if fragment_value.is_null() {
+                let existing = entity.metadata.twin_data.remove(&fragment_key);
+                if existing.is_none() {
+                    return Ok(false);
+                }
+            } else {
+                let existing = entity
+                    .metadata
+                    .twin_data
+                    .insert(fragment_key, fragment_value.clone());
+                if existing.is_some_and(|v| v.eq(&fragment_value)) {
+                    return Ok(false);
+                }
             }
-        } else {
-            let existing = entity
-                .metadata
-                .twin_data
-                .insert(fragment_key, fragment_value.clone());
-            if existing.is_some_and(|v| v.eq(&fragment_value)) {
-                return Ok(false);
-            }
+
+            entity.normalize();
         }
 
+        self.update_flow_context(&twin_message.topic_id);
         Ok(true)
     }
 
@@ -388,6 +415,13 @@ impl EntityCache {
         self.entities.external_ids()
     }
 
+    fn update_flow_context(&self, topic_id: &EntityTopicId) {
+        let Some(entity) = self.get(topic_id) else {
+            return;
+        };
+        self.entities.update_context(topic_id, entity.clone())
+    }
+
     #[cfg(test)]
     pub fn flow_context(&self) -> &FlowContextHandle {
         &self.entities.flow_context
@@ -465,9 +499,8 @@ impl EntityIndexes {
         ids
     }
 
-    fn update_context(&self, topic_id: &EntityTopicId, mut metadata: CloudEntityMetadata) {
+    fn update_context(&self, topic_id: &EntityTopicId, metadata: CloudEntityMetadata) {
         let external_id = metadata.external_id.clone();
-        metadata.metadata.external_id = Some(metadata.external_id.clone());
         if let Ok(json_data) = JsonValue::from_value(metadata) {
             self.flow_context
                 .set_value(topic_id.as_str(), json_data.clone());

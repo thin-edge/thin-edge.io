@@ -23,9 +23,7 @@ fn get_entity_parent_metadata(
     entity: &CloudEntityMetadata,
 ) -> Option<CloudEntityMetadata> {
     entity
-        .metadata
-        .parent
-        .as_ref()
+        .parent()
         .and_then(|parent_tid| get_entity_metadata(context, parent_tid.as_str()))
 }
 

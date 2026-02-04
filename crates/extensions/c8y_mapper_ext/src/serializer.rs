@@ -66,9 +66,7 @@ impl<'a> C8yJsonSerializer<'a> {
 
         json.write_open_obj();
 
-        if entity.metadata.r#type == EntityType::ChildDevice
-            || entity.metadata.r#type == EntityType::Service
-        {
+        if entity.r#type() == EntityType::ChildDevice || entity.r#type() == EntityType::Service {
             let entity_id = &entity.external_id;
             // In case the measurement is addressed to a child-device or a service, use fragment
             // "externalSource" to tell c8Y identity API to use child-device or for service

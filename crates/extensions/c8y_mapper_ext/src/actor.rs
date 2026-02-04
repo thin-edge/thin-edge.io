@@ -226,7 +226,7 @@ impl C8yMapperActor {
                 .try_get_external_id(&updated_entity.parent.clone().unwrap())
                 .expect("Device external id should be present");
 
-            let res = match entity.metadata.r#type {
+            let res = match entity.r#type() {
                 EntityType::MainDevice => {
                     Err(anyhow!("Main device parent update is not supported").into())
                 }

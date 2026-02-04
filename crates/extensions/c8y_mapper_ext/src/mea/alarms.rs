@@ -116,9 +116,9 @@ impl AlarmConverter {
         let mqtt_messages = self
             .state
             .try_convert_alarm(
-                &entity.metadata.topic_id,
+                entity.topic_id(),
                 &entity.external_id,
-                &entity.metadata.r#type,
+                &entity.r#type(),
                 &alarm,
                 alarm_type,
                 &self.c8y_prefix,

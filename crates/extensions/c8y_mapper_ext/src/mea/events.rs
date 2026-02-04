@@ -103,7 +103,7 @@ impl EventConverter {
 
         let tedge_event = ThinEdgeEvent::try_from(
             event_type,
-            &entity.metadata.r#type,
+            &entity.r#type(),
             &entity.external_id,
             mqtt_payload,
         )
