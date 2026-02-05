@@ -130,7 +130,7 @@ impl EntityMetadata {
             .get("name")
             .and_then(|v| v.as_str())
             .or_else(|| match self.r#type {
-                EntityType::MainDevice => None,
+                EntityType::MainDevice => self.external_id.as_ref().map(|xid| xid.as_ref()),
                 EntityType::ChildDevice => self.topic_id.default_device_name(),
                 EntityType::Service => self.topic_id.default_service_name(),
             })
