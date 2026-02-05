@@ -6,6 +6,7 @@ use crate::flow::Message;
 use crate::flow::SourceTag;
 use crate::registry::FlowRegistryExt;
 use crate::runtime::MessageProcessor;
+use crate::FlowsMapperConfig;
 use crate::InputMessage;
 use crate::Tick;
 use async_trait::async_trait;
@@ -26,7 +27,6 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::SubscriptionDiff;
-use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
@@ -41,6 +41,7 @@ use tracing::warn;
 pub const STATS_DUMP_INTERVAL: Duration = Duration::from_secs(300);
 
 pub struct FlowsMapper {
+    pub(super) config: FlowsMapperConfig,
     pub(super) messages: SimpleMessageBox<InputMessage, SubscriptionDiff>,
     pub(super) mqtt_sender: DynSender<MqttMessage>,
     pub(super) watch_request_sender: DynSender<WatchRequest>,
@@ -48,7 +49,6 @@ pub struct FlowsMapper {
     pub(super) watched_commands: HashSet<String>,
     pub(super) processor: MessageProcessor<ConnectedFlowRegistry>,
     pub(super) next_dump: Instant,
-    pub(super) status_topic: Topic,
 }
 
 #[async_trait]
@@ -192,7 +192,7 @@ impl FlowsMapper {
             "status": status,
             "time": time.unix_timestamp(),
         });
-        MqttMessage::new(&self.status_topic, payload.to_string()).with_qos(QoS::AtLeastOnce)
+        MqttMessage::new(&self.config.status_topic, payload.to_string()).with_qos(QoS::AtLeastOnce)
     }
 
     async fn on_source_poll(&mut self) -> Result<(), RuntimeError> {
@@ -247,8 +247,21 @@ impl FlowsMapper {
         let now = Instant::now();
         let timestamp = SystemTime::now();
         if self.next_dump <= now {
-            self.processor.dump_memory_stats().await;
-            self.processor.dump_processing_stats().await;
+            info!(target: "flows", "Collect memory usage and processing statistics");
+            if let Some(record) = self
+                .processor
+                .dump_memory_stats(&self.config.stats_publisher)
+                .await
+            {
+                self.mqtt_sender.send(record).await?;
+            }
+            for record in self
+                .processor
+                .dump_processing_stats(&self.config.stats_publisher)
+                .await
+            {
+                self.mqtt_sender.send(record).await?;
+            }
             self.next_dump = now + STATS_DUMP_INTERVAL;
         }
         for messages in self.processor.on_interval(timestamp, now).await {
