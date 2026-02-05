@@ -16,6 +16,7 @@ mod transformers;
 use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
 pub use crate::config::ConfigError;
+pub use crate::config::FlowConfig;
 pub use crate::connected_flow::ConnectedFlowRegistry;
 pub use crate::flow::*;
 pub use crate::registry::BaseFlowRegistry;

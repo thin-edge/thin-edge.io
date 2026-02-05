@@ -213,3 +213,61 @@ topic = "{errors_topic}"
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::test_mapper_config;
+    use crate::tests::TestHandleBuilder;
+    use tedge_flows::FlowConfig;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    #[tokio::test]
+    async fn check_measurements_flow() {
+        let tmp_dir = TempTedgeDir::new();
+        let TestHandleBuilder { c8y, .. } = c8y_mapper_builder(&tmp_dir).await;
+        let flow_specs = c8y.measurements_flow();
+
+        let _flow: FlowConfig = toml::from_str(&flow_specs).unwrap();
+    }
+
+    #[tokio::test]
+    async fn check_units_flow() {
+        let tmp_dir = TempTedgeDir::new();
+        let TestHandleBuilder { c8y, .. } = c8y_mapper_builder(&tmp_dir).await;
+        let flow_specs = c8y.units_flow();
+
+        let _flow: FlowConfig = toml::from_str(&flow_specs).unwrap();
+    }
+
+    #[tokio::test]
+    async fn check_events_flow() {
+        let tmp_dir = TempTedgeDir::new();
+        let TestHandleBuilder { c8y, .. } = c8y_mapper_builder(&tmp_dir).await;
+        let flow_specs = c8y.events_flow();
+
+        let _flow: FlowConfig = toml::from_str(&flow_specs).unwrap();
+    }
+
+    #[tokio::test]
+    async fn check_alarms_flow() {
+        let tmp_dir = TempTedgeDir::new();
+        let TestHandleBuilder { c8y, .. } = c8y_mapper_builder(&tmp_dir).await;
+        let flow_specs = c8y.alarms_flow();
+
+        let _flow: FlowConfig = toml::from_str(&flow_specs).unwrap();
+    }
+
+    #[tokio::test]
+    async fn check_health_flow() {
+        let tmp_dir = TempTedgeDir::new();
+        let TestHandleBuilder { c8y, .. } = c8y_mapper_builder(&tmp_dir).await;
+        let flow_specs = c8y.health_flow();
+
+        let _flow: FlowConfig = toml::from_str(&flow_specs).unwrap();
+    }
+
+    async fn c8y_mapper_builder(tmp_dir: &TempTedgeDir) -> TestHandleBuilder {
+        let config = test_mapper_config(tmp_dir);
+        crate::tests::c8y_mapper_builder(tmp_dir, config, true).await
+    }
+}
