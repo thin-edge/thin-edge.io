@@ -3,6 +3,27 @@
 //! This module uses a two-stage lexer/parser approach:
 //! 1. Lexer: converts input string into a sequence of tokens with spans
 //! 2. Parser: parses tokens into a Condition expression
+//!
+//! # Why a separate lexer from `template.rs`?
+//!
+//! Conditions and templates are two distinct mini-languages with fundamentally
+//! different requirements:
+//!
+//! - **Conditions are whitespace-insensitive**: expressions like
+//!   `${connection.auth_method} == 'certificate'` need flexible whitespace
+//!   around operators. This lexer uses `.padded()` to skip whitespace and
+//!   produces fine-grained tokens (operators, strings, identifiers) that enable
+//!   precise error messages like "expected `==`, found `=`".
+//!
+//! - **Templates are whitespace-sensitive**: literal text must be preserved
+//!   exactly as written, so that lexer produces coarse `Text` tokens containing
+//!   arbitrary character sequences.
+//!
+//! The coarse tokenisation the template lexer produces would be unhelpful for
+//! condition parsing. The whole point of introducing separate lexing stages was
+//! to improve error messages by breaking input into meaningful tokens, e.g.
+//! grouping repeated `=` characters into a single operator. Using a lowest-
+//! common-denominator tokenisation for both would defeat that purpose.
 
 use crate::config_toml::parsing::OffsetSpan;
 use crate::config_toml::ConfigReference;
