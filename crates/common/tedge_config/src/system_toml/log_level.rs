@@ -50,9 +50,15 @@ pub fn log_init(
         return Ok(());
     }
 
-    let log_level = get_log_level(sname, config_dir)?;
-    subscriber.with_max_level(log_level).init();
+    if let Some(log_level) = get_log_level_from_config_file(sname, config_dir)
+        .ok()
+        .flatten()
+    {
+        subscriber.with_max_level(log_level).init();
+        return Ok(());
+    }
 
+    subscriber.with_max_level(DEFAULT_MAX_LEVEL).init();
     Ok(())
 }
 
@@ -93,26 +99,34 @@ fn logger(
         ))
     } else {
         let log_level = config_dir
-            .map(|config_dir| get_log_level(sname, config_dir))
-            .unwrap_or(Ok(DEFAULT_MAX_LEVEL))?;
+            .and_then(|config_dir| {
+                get_log_level_from_config_file(sname, config_dir)
+                    .ok()
+                    .flatten()
+            })
+            .unwrap_or(DEFAULT_MAX_LEVEL);
         Ok(Arc::new(subscriber.with_max_level(log_level).finish()))
     }
 }
 
 const DEFAULT_MAX_LEVEL: tracing::Level = tracing::Level::INFO;
 
-pub fn get_log_level(
+/// Return the log level for a given service, if it's defined in the config file. Otherwise return `None`.
+pub fn get_log_level_from_config_file(
     sname: &str,
     config_dir: &Utf8Path,
-) -> Result<tracing::Level, SystemTomlError> {
+) -> Result<Option<tracing::Level>, SystemTomlError> {
     let loglevel = SystemConfig::try_new(config_dir)?.log;
     match loglevel.get(sname) {
-        Some(ll) => tracing::Level::from_str(&ll.to_uppercase()).map_err(|_| {
-            SystemTomlError::InvalidLogLevel {
-                name: ll.to_string(),
-            }
-        }),
-        None => Ok(tracing::Level::INFO),
+        Some(ll) => {
+            let ll = tracing::Level::from_str(&ll.to_uppercase()).map_err(|_| {
+                SystemTomlError::InvalidLogLevel {
+                    name: ll.to_string(),
+                }
+            })?;
+            Ok(Some(ll))
+        }
+        None => Ok(None),
     }
 }
 
@@ -151,8 +165,8 @@ mod tests {
     "#;
 
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", &config_dir)?;
-        assert_eq!(Level::DEBUG, res);
+        let res = get_log_level_from_config_file("tedge_mapper", &config_dir)?;
+        assert_eq!(Some(Level::DEBUG), res);
         Ok(())
     }
 
@@ -163,7 +177,7 @@ mod tests {
         tedge_mapper = "other"
     "#;
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", &config_dir).unwrap_err();
+        let res = get_log_level_from_config_file("tedge_mapper", &config_dir).unwrap_err();
         assert_eq!(
             "Invalid log level: \"other\", supported levels are info, warn, error and debug",
             res.to_string()
@@ -179,7 +193,7 @@ mod tests {
     "#;
 
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", &config_dir).unwrap_err();
+        let res = get_log_level_from_config_file("tedge_mapper", &config_dir).unwrap_err();
 
         assert_eq!(
             "Invalid log level: \"\", supported levels are info, warn, error and debug",
@@ -196,8 +210,8 @@ mod tests {
     "#;
 
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", &config_dir).unwrap();
-        assert_eq!(Level::INFO, res);
+        let res = get_log_level_from_config_file("tedge_mapper", &config_dir).unwrap();
+        assert_eq!(None, res);
         Ok(())
     }
 
