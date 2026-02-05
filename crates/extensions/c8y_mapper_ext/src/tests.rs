@@ -3197,6 +3197,46 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
     config: C8yMapperConfig,
     init: bool,
 ) -> TestHandle {
+    let bridge_health_topic = config.bridge_health_topic.clone();
+    let builders = c8y_mapper_builder(tmp_dir, config, init).await;
+
+    let actor = builders.c8y.build();
+    tokio::spawn(async move { actor.run().await });
+
+    let actor = builders.flows.build();
+    tokio::spawn(async move { actor.run().await });
+
+    let mut service_monitor_box = builders.service_monitor.build();
+    let bridge_status_msg = MqttMessage::new(&bridge_health_topic, "1");
+    service_monitor_box.send(bridge_status_msg).await.unwrap();
+
+    TestHandle {
+        mqtt: builders.mqtt.build(),
+        http: builders.http.build(),
+        fs: builders.fs.build(),
+        ul: builders.ul.build(),
+        dl: builders.dl.build(),
+        avail: builders.avail.build(),
+    }
+}
+
+pub(crate) struct TestHandleBuilder {
+    pub c8y: C8yMapperBuilder,
+    pub flows: FlowsMapperBuilder,
+    pub mqtt: MockMqtt,
+    pub http: FakeServerBoxBuilder<HttpRequest, HttpResult>,
+    pub fs: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent>,
+    pub ul: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult>,
+    pub dl: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult>,
+    pub avail: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
+    pub service_monitor: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
+}
+
+pub(crate) async fn c8y_mapper_builder(
+    tmp_dir: &TempTedgeDir,
+    config: C8yMapperConfig,
+    init: bool,
+) -> TestHandleBuilder {
     if init {
         tmp_dir.dir("operations").dir("c8y");
         tmp_dir.dir("mappers").dir("c8y");
@@ -3215,7 +3255,6 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
     let mut service_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
 
-    let bridge_health_topic = config.bridge_health_topic.clone();
     C8yMapperBuilder::init(&config).await.unwrap();
     let mut c8y_mapper_builder = C8yMapperBuilder::try_new(
         config,
@@ -3246,23 +3285,16 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
     // => for these tests, the flows mapper is only connected to mqtt ignoring all fs events
     c8y_mapper_builder.set_flow_context(flows_mapper.context_handle());
 
-    let actor = c8y_mapper_builder.build();
-    tokio::spawn(async move { actor.run().await });
-
-    let actor = flows_mapper.build();
-    tokio::spawn(async move { actor.run().await });
-
-    let mut service_monitor_box = service_monitor_builder.build();
-    let bridge_status_msg = MqttMessage::new(&bridge_health_topic, "1");
-    service_monitor_box.send(bridge_status_msg).await.unwrap();
-
-    TestHandle {
-        mqtt: mqtt_builder.build(),
-        http: http_builder.build(),
-        fs: fs_watcher_builder.build(),
-        ul: uploader_builder.build(),
-        dl: downloader_builder.build(),
-        avail: availability_box_builder.build(),
+    TestHandleBuilder {
+        c8y: c8y_mapper_builder,
+        flows: flows_mapper,
+        mqtt: mqtt_builder,
+        http: http_builder,
+        fs: fs_watcher_builder,
+        ul: uploader_builder,
+        dl: downloader_builder,
+        avail: availability_box_builder,
+        service_monitor: service_monitor_builder,
     }
 }
 
@@ -3386,7 +3418,7 @@ pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<HttpRequest, Ht
     });
 }
 
-struct MockMqtt {
+pub(crate) struct MockMqtt {
     input_sender: mpsc::Sender<MqttRequest>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     output_sender: Vec<(TopicFilter, DynSender<MqttMessage>)>,
