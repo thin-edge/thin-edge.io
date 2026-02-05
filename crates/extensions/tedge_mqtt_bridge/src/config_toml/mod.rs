@@ -644,8 +644,6 @@ impl Expandable for LoopTemplate {
         config: TemplateConfig,
         cloud_profile: Option<&ProfileName>,
     ) -> Result<Self::Target, ExpandError> {
-        // TODO warn if there is no reference to the iterated variable
-        // TODO maybe add warnings if there are duplicate rules
         let ctx = TemplateContext {
             tedge: config.tedge,
             loop_var_value: config.r#for,

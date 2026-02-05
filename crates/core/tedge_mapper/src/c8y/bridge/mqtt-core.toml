@@ -1,3 +1,8 @@
+# A collection of MQTT bridge rules to convert between thin-edge MQTT and Cumulocity MQTT.
+#
+# Cumulocity MQTT Quick Reference: https://cumulocity.com/docs/smartrest/quick-reference/
+# thin-edge.io Configurable built-in bridge reference: https://thin-edge.github.io/thin-edge.io/next/references/mappers/configurable-bridge/
+
 local_prefix = "${config.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 
