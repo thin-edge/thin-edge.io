@@ -37,10 +37,33 @@ impl Command for ListCommand {
 
 impl ListCommand {
     fn display(flow: &Flow) {
-        let flow_id = flow.name();
-        println!("{flow_id}");
-        for step in flow.steps.iter() {
-            println!("\t{}", step.source());
+        let name = flow.name();
+        let version = flow
+            .version
+            .as_ref()
+            .map(|v| format!("v{v}"))
+            .unwrap_or_else(|| "unversioned".to_string());
+        let location = flow.source.to_string();
+
+        println!("Flow        : {name} ({version})");
+        println!(
+            "Description : {}",
+            flow.description
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "none".to_string())
+        );
+        println!("File        : {location}");
+
+        if let Some(tags) = &flow.tags {
+            println!("Tags        : [{}]", tags.join(","));
         }
+
+        if !flow.steps.is_empty() {
+            for (i, step) in flow.steps.iter().enumerate() {
+                println!("Step {:?}      : {}", i + 1, step.source());
+            }
+        }
+        println!(); // Add a blank line for separation
     }
 }
