@@ -5,6 +5,7 @@ use camino::Utf8Path;
 use std::io::IsTerminal;
 use std::str::FromStr;
 use std::sync::Arc;
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[macro_export]
 /// The basic subscriber
@@ -30,35 +31,8 @@ pub fn log_init(
     flags: &LogConfigArgs,
     config_dir: &Utf8Path,
 ) -> Result<(), SystemTomlError> {
-    let subscriber = subscriber_builder!();
-
-    let log_level = flags
-        .log_level
-        .or(flags.debug.then_some(tracing::Level::DEBUG));
-
-    if let Some(log_level) = log_level {
-        subscriber.with_max_level(log_level).init();
-        return Ok(());
-    }
-
-    if std::env::var("RUST_LOG").is_ok() {
-        subscriber
-            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-            .with_file(true)
-            .with_line_number(true)
-            .init();
-        return Ok(());
-    }
-
-    if let Some(log_level) = get_log_level_from_config_file(sname, config_dir)
-        .ok()
-        .flatten()
-    {
-        subscriber.with_max_level(log_level).init();
-        return Ok(());
-    }
-
-    subscriber.with_max_level(DEFAULT_MAX_LEVEL).init();
+    let logger = logger(sname, flags, Some(config_dir))?;
+    logger.init();
     Ok(())
 }
 
@@ -79,34 +53,37 @@ fn logger(
     flags: &LogConfigArgs,
     config_dir: Option<&Utf8Path>,
 ) -> Result<Arc<dyn tracing::Subscriber + Send + Sync>, SystemTomlError> {
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_ansi(std::io::stderr().is_terminal() && yansi::Condition::no_color())
-        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
+    let subscriber = subscriber_builder!();
+
     let log_level = flags
         .log_level
         .or(flags.debug.then_some(tracing::Level::DEBUG));
 
     if let Some(log_level) = log_level {
-        Ok(Arc::new(subscriber.with_max_level(log_level).finish()))
-    } else if std::env::var("RUST_LOG").is_ok() {
-        Ok(Arc::new(
+        return Ok(Arc::new(subscriber.with_max_level(log_level).finish()));
+    }
+
+    if std::env::var("RUST_LOG").is_ok() {
+        return Ok(Arc::new(
             subscriber
                 .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
                 .with_file(true)
                 .with_line_number(true)
                 .finish(),
-        ))
-    } else {
-        let log_level = config_dir
-            .and_then(|config_dir| {
-                get_log_level_from_config_file(sname, config_dir)
-                    .ok()
-                    .flatten()
-            })
-            .unwrap_or(DEFAULT_MAX_LEVEL);
-        Ok(Arc::new(subscriber.with_max_level(log_level).finish()))
+        ));
     }
+
+    if let Some(log_level) = config_dir.and_then(|config_dir| {
+        get_log_level_from_config_file(sname, config_dir)
+            .ok()
+            .flatten()
+    }) {
+        return Ok(Arc::new(subscriber.with_max_level(log_level).finish()));
+    }
+
+    Ok(Arc::new(
+        subscriber.with_max_level(DEFAULT_MAX_LEVEL).finish(),
+    ))
 }
 
 const DEFAULT_MAX_LEVEL: tracing::Level = tracing::Level::INFO;
