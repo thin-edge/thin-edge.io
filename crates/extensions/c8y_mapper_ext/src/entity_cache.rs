@@ -87,8 +87,14 @@ impl CloudEntityMetadata {
             .unwrap_or_else(|| self.external_id.as_ref())
     }
 
-    pub fn display_type(&self) -> Option<&str> {
-        self.metadata.display_type()
+    pub fn display_type(&self) -> &str {
+        self.metadata
+            .display_type()
+            .unwrap_or(match self.metadata.r#type {
+                EntityType::MainDevice => "thin-edge.io",
+                EntityType::ChildDevice => "thin-edge.io-child",
+                EntityType::Service => "service",
+            })
     }
 }
 
@@ -520,8 +526,8 @@ pub struct FlowContextEntity {
     #[serde(rename = "@name")]
     pub display_name: String,
 
-    #[serde(rename = "@type-name", skip_serializing_if = "Option::is_none")]
-    pub display_type: Option<String>,
+    #[serde(rename = "@type-name")]
+    pub display_type: String,
 
     #[serde(rename = "@health", skip_serializing_if = "Option::is_none")]
     pub health_endpoint: Option<EntityTopicId>,
@@ -533,9 +539,7 @@ impl From<FlowContextEntity> for CloudEntityMetadata {
         let mut twin_data = serde_json::Map::new();
 
         twin_data.insert("name".to_string(), context.display_name.into());
-        if let Some(display_type) = context.display_type {
-            twin_data.insert("type".to_string(), display_type.into());
-        }
+        twin_data.insert("type".to_string(), context.display_type.into());
 
         let metadata = EntityMetadata {
             topic_id: context.topic_id,
@@ -553,7 +557,7 @@ impl From<FlowContextEntity> for CloudEntityMetadata {
 impl From<CloudEntityMetadata> for FlowContextEntity {
     fn from(entity: CloudEntityMetadata) -> Self {
         let display_name = entity.display_name().to_owned();
-        let display_type = entity.display_type().map(ToOwned::to_owned);
+        let display_type = entity.display_type().to_owned();
         FlowContextEntity {
             external_id: entity.external_id,
             topic_id: entity.metadata.topic_id,
