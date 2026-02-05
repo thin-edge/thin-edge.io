@@ -118,8 +118,8 @@ impl EventConverter {
 
         let c8y_event = C8yCreateEvent::from(tedge_event);
 
-        // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
         let message = if c8y_event.extras.is_empty() {
+            // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
             let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
             let smartrest_topic = C8yTopic::upstream_topic(&self.c8y_prefix);
             Message::new(&smartrest_topic, smartrest_event)
@@ -137,7 +137,7 @@ impl EventConverter {
             Ok(message)
         } else {
             // The message must be sent over HTTP
-            // Actually this converter forwards this message over MQTT to the c8y mapper which does the HTTP request
+            // Actually this converter forwards this message over MQTT to the c8y converter which does the HTTP request
             let http_event = serde_json::to_string(&c8y_event).map_err(|e| {
                 FlowError::UnsupportedMessage(format!("Fail to format format event as JSON: {e}"))
             })?;
