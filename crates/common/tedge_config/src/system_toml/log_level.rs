@@ -7,6 +7,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tracing_subscriber::util::SubscriberInitExt;
 
+const DEFAULT_LEVEL: tracing::Level = tracing::Level::INFO;
+
 #[macro_export]
 /// The basic subscriber
 macro_rules! subscriber_builder {
@@ -20,9 +22,11 @@ macro_rules! subscriber_builder {
 
 /// Configures and enables logging taking into account flags, env variables and file config.
 ///
-/// 1. Log config is taken from the file configuration first
-/// 2. If `RUST_LOG` variable is set, it overrides file-based configuration
-/// 3. If `--debug` or `--log-level` flags are set, they override previous steps
+/// Priority order (highest to lowest):
+/// 1. `--debug` or `--log-level` flags
+/// 2. `RUST_LOG` environment variable
+/// 3. File configuration (`system.toml`)
+/// 4. Default level (INFO)
 ///
 /// Reports all the log events sent either with the `log` crate or the `tracing`
 /// crate.
@@ -31,7 +35,16 @@ pub fn log_init(
     flags: &LogConfigArgs,
     config_dir: &Utf8Path,
 ) -> Result<(), SystemTomlError> {
-    let logger = logger(sname, flags, Some(config_dir))?;
+    log_init_with_default_level(sname, flags, config_dir, DEFAULT_LEVEL)
+}
+
+pub fn log_init_with_default_level(
+    sname: &str,
+    flags: &LogConfigArgs,
+    config_dir: &Utf8Path,
+    default_level: tracing::Level,
+) -> Result<(), SystemTomlError> {
+    let logger = logger(sname, flags, Some(config_dir), default_level)?;
     logger.init();
     Ok(())
 }
@@ -44,6 +57,7 @@ pub fn unconfigured_logger() -> Arc<dyn tracing::Subscriber + Send + Sync> {
             log_level: None,
         },
         None,
+        DEFAULT_LEVEL,
     )
     .unwrap()
 }
@@ -52,9 +66,11 @@ fn logger(
     sname: &str,
     flags: &LogConfigArgs,
     config_dir: Option<&Utf8Path>,
+    default_level: tracing::Level,
 ) -> Result<Arc<dyn tracing::Subscriber + Send + Sync>, SystemTomlError> {
     let subscriber = subscriber_builder!();
 
+    // first use log level from flags
     let log_level = flags
         .log_level
         .or(flags.debug.then_some(tracing::Level::DEBUG));
@@ -63,6 +79,7 @@ fn logger(
         return Ok(Arc::new(subscriber.with_max_level(log_level).finish()));
     }
 
+    // if no flags used, use EnvFilter
     if std::env::var("RUST_LOG").is_ok() {
         return Ok(Arc::new(
             subscriber
@@ -73,6 +90,7 @@ fn logger(
         ));
     }
 
+    // if no EnvFilter, get log level from config file
     if let Some(log_level) = config_dir.and_then(|config_dir| {
         get_log_level_from_config_file(sname, config_dir)
             .ok()
@@ -81,12 +99,9 @@ fn logger(
         return Ok(Arc::new(subscriber.with_max_level(log_level).finish()));
     }
 
-    Ok(Arc::new(
-        subscriber.with_max_level(DEFAULT_MAX_LEVEL).finish(),
-    ))
+    // otherwise, use the default log level
+    Ok(Arc::new(subscriber.with_max_level(default_level).finish()))
 }
-
-const DEFAULT_MAX_LEVEL: tracing::Level = tracing::Level::INFO;
 
 /// Return the log level for a given service, if it's defined in the config file. Otherwise return `None`.
 pub fn get_log_level_from_config_file(
