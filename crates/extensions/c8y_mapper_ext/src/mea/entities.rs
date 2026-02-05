@@ -49,8 +49,4 @@ impl C8yEntityBirth {
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap()
     }
-
-    pub fn matches_entity(&self, topic: &str) -> bool {
-        topic.starts_with(&self.entity_topic)
-    }
 }

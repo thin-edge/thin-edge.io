@@ -40,7 +40,15 @@ impl tedge_flows::Transformer for MessageCache {
     ) -> Result<Vec<Message>, FlowError> {
         match self.mqtt_schema.entity_channel_of(&message.topic) {
             Ok((_, Channel::Status { component })) if component == "entities" => {
-                return self.cached_messages(message);
+                let birth_message =
+                    C8yEntityBirth::from_json(message.payload.as_slice()).map_err(|err| {
+                        FlowError::UnsupportedMessage(format!(
+                            "Invalid entity birth message received on {}: {err}",
+                            message.topic
+                        ))
+                    })?;
+
+                Ok(self.restore_messages(birth_message.entity_topic.as_str()))
             }
 
             Ok((entity_id, _)) => {
@@ -48,35 +56,31 @@ impl tedge_flows::Transformer for MessageCache {
                     self.cache.push(message.clone());
                     return Ok(vec![]);
                 };
+
+                // In case the current message has been received before the entity birth message
+                // all the messages cached for that entity have to be processed first
+                let mut messages = self.restore_messages(&message.topic);
+                messages.push(message.clone());
+                Ok(messages)
             }
 
-            _ => (),
+            _ => Ok(vec![message.clone()]),
         }
-
-        Ok(vec![message.clone()])
     }
 }
 
 impl MessageCache {
-    pub fn cached_messages(&mut self, message: &Message) -> Result<Vec<Message>, FlowError> {
-        let birth_message =
-            C8yEntityBirth::from_json(message.payload.as_slice()).map_err(|err| {
-                FlowError::UnsupportedMessage(format!(
-                    "Invalid entity birth message received on {}: {err}",
-                    message.topic
-                ))
-            })?;
-
+    /// Retrieve from the cache all the messages related to the entity with the given topic
+    pub fn restore_messages(&mut self, entity_topic: &str) -> Vec<Message> {
         let mut messages = vec![];
         let pending_messages = self.cache.take();
         for message in pending_messages.into_iter() {
-            if birth_message.matches_entity(&message.topic) {
+            if message.topic.starts_with(entity_topic) {
                 messages.push(message);
             } else {
                 self.cache.push(message);
             }
         }
-
-        Ok(messages)
+        messages
     }
 }
