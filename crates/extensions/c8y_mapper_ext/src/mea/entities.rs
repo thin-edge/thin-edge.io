@@ -8,7 +8,7 @@ use time::OffsetDateTime;
 
 #[derive(Deserialize, Serialize)]
 pub struct C8yEntityBirth {
-    pub topic: String,
+    pub entity_topic: String,
     pub status: C8yEntityStatus,
     pub time: f64,
 }
@@ -34,7 +34,7 @@ impl C8yEntityBirth {
         );
         let entity_topic = te.topic_for(entity, &Channel::EntityMetadata);
         let birth = C8yEntityBirth {
-            topic: entity_topic.to_string(),
+            entity_topic: entity_topic.to_string(),
             status: C8yEntityStatus::Registered,
             time: OffsetDateTime::now_utc().unix_timestamp_nanos() as f64 / 1e9,
         };
@@ -48,5 +48,9 @@ impl C8yEntityBirth {
 
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap()
+    }
+
+    pub fn matches_entity(&self, topic: &str) -> bool {
+        topic.starts_with(&self.entity_topic)
     }
 }

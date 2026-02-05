@@ -70,7 +70,7 @@ impl MessageCache {
         let mut messages = vec![];
         let pending_messages = self.cache.take();
         for message in pending_messages.into_iter() {
-            if message.topic.starts_with(&birth_message.topic) {
+            if birth_message.matches_entity(&message.topic) {
                 messages.push(message);
             } else {
                 self.cache.push(message);
