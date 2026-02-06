@@ -2,12 +2,13 @@ use crate::config::PemReader;
 use anyhow::anyhow;
 use anyhow::Context;
 use camino::Utf8Path;
+use rustls::pki_types::pem::PemObject;
+use rustls::pki_types::pem::SectionKind;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::PrivateKeyDer;
 use rustls::server::WebPkiClientVerifier;
 use rustls::RootCertStore;
 use rustls::ServerConfig;
-use rustls_pemfile::Item;
 use std::fs::File;
 use std::io;
 
@@ -32,7 +33,7 @@ pub fn read_trust_store(ca_dir: &Utf8Path) -> anyhow::Result<RootCertStore> {
             continue;
         };
 
-        ders.extend(rustls_pemfile::certs(&mut pem_file).filter_map(Result::ok));
+        ders.extend(CertificateDer::pem_reader_iter(&mut pem_file).filter_map(Result::ok));
     }
     roots.add_parsable_certificates(ders);
 
@@ -65,7 +66,7 @@ pub fn load_cert(path: &(impl PemReader + ?Sized)) -> anyhow::Result<Vec<Certifi
         .open()
         .with_context(|| format!("cannot open certificate file: {path:?}"))?;
     let mut reader = std::io::BufReader::new(file);
-    rustls_pemfile::certs(&mut reader)
+    CertificateDer::pem_reader_iter(&mut reader)
         .collect::<Result<Vec<_>, _>>()
         .with_context(|| format!("parsing PEM-encoded certificate from {path:?}"))
 }
@@ -83,17 +84,18 @@ pub fn pkey_from_pem(
     reader: &mut dyn io::BufRead,
     filename: &(impl PemReader + ?Sized),
 ) -> anyhow::Result<PrivateKeyDer<'static>> {
-    rustls_pemfile::read_one(reader)
+    rustls::pki_types::pem::from_buf(reader)
         .with_context(|| format!("reading PEM-encoded private key from {filename:?}"))?
         .ok_or(anyhow!(
             "expected private key in {filename:?}, but found no PEM-encoded data"
         ))
-        .and_then(|item| match item {
-            Item::Sec1Key(key) => Ok(PrivateKeyDer::Sec1(key)),
-            Item::Pkcs8Key(key) => Ok(PrivateKeyDer::Pkcs8(key)),
-            Item::Pkcs1Key(key) => Ok(PrivateKeyDer::Pkcs1(key)),
-            Item::Crl(_) => Err(anyhow!("expected private key in {filename:?}, found a CRL")),
-            Item::X509Certificate(_) => Err(anyhow!(
+        .and_then(|(kind, data)| match kind {
+            SectionKind::RsaPrivateKey | SectionKind::EcPrivateKey | SectionKind::PrivateKey => {
+                Ok(PrivateKeyDer::from_pem(kind, data)
+                    .context("Unexpected empty data section when decoding private key")?)
+            }
+            SectionKind::Crl => Err(anyhow!("expected private key in {filename:?}, found a CRL")),
+            SectionKind::Certificate => Err(anyhow!(
                 "expected private key in {filename:?}, found an X509 certificate"
             )),
             _item => Err(anyhow!(
@@ -220,6 +222,8 @@ mod tests {
     }
 
     mod server_accepts {
+        use rustls::pki_types::pem::SectionKind;
+
         use super::*;
 
         #[tokio::test]
@@ -229,7 +233,7 @@ mod tests {
 
             let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(&key), Item::Pkcs8Key(_));
+            assert_matches!(parse_key_to_item(&key), SectionKind::PrivateKey);
             assert_server_works_with(config, cert).await;
         }
 
@@ -240,7 +244,7 @@ mod tests {
 
             let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(&key), Item::Sec1Key(_));
+            assert_matches!(parse_key_to_item(&key), SectionKind::EcPrivateKey);
             assert_server_works_with(config, cert).await;
         }
 
@@ -251,7 +255,7 @@ mod tests {
 
             let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(&key), Item::Pkcs8Key(_));
+            assert_matches!(parse_key_to_item(&key), SectionKind::PrivateKey);
             assert_server_works_with(config, cert).await;
         }
 
@@ -262,7 +266,7 @@ mod tests {
 
             let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(&key), Item::Pkcs8Key(_));
+            assert_matches!(parse_key_to_item(&key), SectionKind::PrivateKey);
             assert_server_works_with(config, cert).await;
         }
 
@@ -273,14 +277,15 @@ mod tests {
 
             let (config, cert) = config_from_pem(&key, &cert).unwrap();
 
-            assert_matches!(parse_key_to_item(&key), Item::Pkcs1Key(_));
+            assert_matches!(parse_key_to_item(&key), SectionKind::RsaPrivateKey);
             assert_server_works_with(config, cert).await;
         }
 
-        fn parse_key_to_item(pem: &str) -> Item {
-            rustls_pemfile::read_one(&mut Cursor::new(pem))
+        fn parse_key_to_item(pem: &str) -> SectionKind {
+            rustls::pki_types::pem::from_buf(&mut Cursor::new(pem))
                 .unwrap()
                 .unwrap()
+                .0
         }
 
         fn test_data(file_name: &str) -> String {
@@ -294,7 +299,7 @@ mod tests {
             key: &str,
             cert: &str,
         ) -> anyhow::Result<(ServerConfig, reqwest::tls::Certificate)> {
-            let chain = rustls_pemfile::certs(&mut Cursor::new(cert))
+            let chain = CertificateDer::pem_reader_iter(&mut Cursor::new(cert))
                 .collect::<Result<Vec<_>, _>>()
                 .context("reading certs")?;
             let key_der = parse_key_to_der(key)?;

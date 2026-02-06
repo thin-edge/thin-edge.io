@@ -2,7 +2,8 @@ use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use reqwest::Certificate;
-use std::io::Cursor;
+use rustls::pki_types::pem::PemObject;
+use rustls::pki_types::CertificateDer;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio_stream::wrappers::ReadDirStream;
@@ -75,7 +76,7 @@ pub async fn read_trust_store(ca_dir_or_file: &Utf8Path) -> anyhow::Result<Vec<C
             Err(_other_unreadable_file) => continue,
         };
 
-        let ders = rustls_pemfile::certs(&mut Cursor::new(pem_bytes))
+        let ders = CertificateDer::pem_slice_iter(&pem_bytes)
             .map(|res| Ok(Certificate::from_der(&res?)?))
             .collect::<anyhow::Result<Vec<_>>>()
             .with_context(|| format!("reading {path}"))?;

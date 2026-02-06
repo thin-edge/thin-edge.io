@@ -3,7 +3,6 @@ use rustls::pki_types::CertificateDer;
 use rustls::pki_types::PrivateKeyDer;
 use rustls::ClientConfig;
 use rustls::RootCertStore;
-use rustls_pemfile::certs;
 use std::ffi::OsString;
 use std::fs;
 use std::fs::File;
@@ -225,11 +224,11 @@ pub fn read_cert_chain(
         path: cert_file.as_ref().to_owned(),
     })?;
     let mut cert_reader = BufReader::new(f);
-    certs(&mut cert_reader)
+    CertificateDer::pem_reader_iter(&mut cert_reader)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| CertificateError::CertificateParseFailed {
             path: cert_file.as_ref().to_path_buf(),
-            source: e,
+            source: e.into(),
         })
 }
 

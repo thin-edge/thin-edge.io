@@ -390,7 +390,7 @@ pub enum CertificateError {
     #[error("Could not parse certificate {path}")]
     CertificateParseFailed {
         path: PathBuf,
-        source: std::io::Error,
+        source: anyhow::Error,
     },
 
     #[error("HTTP Connection Problem: {msg} \nHint: {hint}")]
