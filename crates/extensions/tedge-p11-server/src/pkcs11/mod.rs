@@ -68,6 +68,7 @@ use asn1_rs::ToDer;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use cryptoki::context::CInitializeArgs;
+use cryptoki::context::CInitializeFlags;
 use cryptoki::context::Pkcs11;
 use cryptoki::error::Error;
 use cryptoki::mechanism::Mechanism;
@@ -226,7 +227,7 @@ impl TedgeP11Service for Cryptoki {
 impl Cryptoki {
     pub fn new(config: CryptokiConfigDirect) -> anyhow::Result<Self> {
         let pkcs11client = Self::load(&config.module_path)?;
-        pkcs11client.initialize(CInitializeArgs::OsThreads)?;
+        pkcs11client.initialize(CInitializeArgs::new(CInitializeFlags::OS_LOCKING_OK))?;
 
         Ok(Self {
             context: Arc::new(Mutex::new(pkcs11client)),
@@ -252,10 +253,11 @@ impl Cryptoki {
         // the spec says "(C_Finalize) should be the last Cryptoki call made by an application", so call it on the old
         // client before initializing new client
         // https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/errata01/os/pkcs11-base-v2.40-errata01-os-complete.html#_Toc441755803
-        old_client.finalize();
+        let _ = old_client.finalize();
 
         // can return Error::AlreadyInitialized, but it shouldn't, only warn if it does anyway
-        if let Err(err) = context.initialize(CInitializeArgs::OsThreads) {
+        if let Err(err) = context.initialize(CInitializeArgs::new(CInitializeFlags::OS_LOCKING_OK))
+        {
             warn!(?err, "Initializing cryptoki library failed");
         }
 
@@ -513,17 +515,6 @@ impl CryptokiSession<'_> {
         // ideally we'd simply get a cryptoki mechanism that corresponds to this sigscheme but it's not possible;
         // instead we have to manually parse additional attributes to select a proper sigscheme; currently don't do it
         // and just select the most common sigscheme for both types of keys
-
-        // NOTE: cryptoki has AttributeType::AllowedMechanisms, but when i use it in get_attributes() with opensc-pkcs11
-        // module it gets ignored (not present or supported) and with softhsm2 module it panics(seems to be an issue
-        // with cryptoki, but regardless):
-
-        // thread 'main' panicked at library/core/src/panicking.rs:218:5:
-        // unsafe precondition(s) violated: slice::from_raw_parts requires the pointer to be aligned and non-null, and the total size of the slice not to exceed `isize::MAX`
-        // note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-        // thread caused non-unwinding panic. aborting.
-        // Aborted (core dumped)
-
         let key = match keytype {
             KeyType::EC => {
                 let sigscheme =

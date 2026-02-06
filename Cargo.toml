@@ -108,7 +108,7 @@ clap = { version = "4.5", features = [
     "unstable-styles",
 ] }
 clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
-cryptoki = "0.10.0"
+cryptoki = "0.12.0"
 csv = "1.1"
 darling = "0.21"
 doku = "0.21"
@@ -241,7 +241,7 @@ zeroize = "1.5"
 # dlopen is directly under libc, so we need to modify the extern block to not link libdl
 # TODO: remove once fix is upstreamed to libloading
 [patch.crates-io]
-libloading = { git = "https://github.com/Bravo555/rust_libloading.git", branch = "0.8.8" }
+libloading = { git = "https://github.com/Bravo555/rust_libloading.git", branch = "0.8.9" }
 
 [profile.release]
 codegen-units = 1

@@ -72,7 +72,6 @@ feature-depth = 1
 ignore = [
     { id = "RUSTSEC-2024-0384", reason = "crate: instant. Used by backoff and requires refactoring to remove this dependency" },
     { id = "RUSTSEC-2025-0012", reason = "crate: backoff. Needs refactoring to remove dependency" },
-    { id = "RUSTSEC-2024-0436", reason = "crate: paste. Used by cryptoki dependency" },
     { id = "RUSTSEC-2023-0071", reason = "crate: rsa. No patch available, not using affected API, added rules to clippy to forbid using these APIs" },
     { id = "RUSTSEC-2026-0009", reason = "crate: time. Patching requires updating MSRV, applied workaround in one usage, added rules to clippy to forbid using these APIs elsewhere" },
 

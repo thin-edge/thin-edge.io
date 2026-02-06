@@ -78,7 +78,7 @@ impl SecretString {
 
 impl From<SecretString> for AuthPin {
     fn from(value: SecretString) -> Self {
-        AuthPin::new(value.0)
+        AuthPin::new(value.0.into())
     }
 }
 
