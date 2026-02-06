@@ -1,7 +1,9 @@
 use crate::mea::entities::C8yEntityBirth;
 use crate::mea::get_entity_metadata;
+use std::collections::HashMap;
 use std::time::SystemTime;
 use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::store::RingBuffer;
 use tedge_flows::ConfigError;
@@ -17,7 +19,7 @@ use tedge_flows::Message;
 #[derive(Clone, Default)]
 pub struct MessageCache {
     mqtt_schema: MqttSchema,
-    cache: RingBuffer<Message>,
+    cache: HashMap<EntityTopicId, RingBuffer<Message>>,
 }
 
 impl tedge_flows::Transformer for MessageCache {
@@ -48,18 +50,18 @@ impl tedge_flows::Transformer for MessageCache {
                         ))
                     })?;
 
-                Ok(self.restore_messages(birth_message.entity_topic.as_str()))
+                Ok(self.restore_messages(&birth_message.entity))
             }
 
             Ok((entity_id, _)) => {
                 if get_entity_metadata(context, entity_id.as_str()).is_none() {
-                    self.cache.push(message.clone());
+                    self.cache_message(entity_id, message.clone());
                     return Ok(vec![]);
                 };
 
                 // In case the current message has been received before the entity birth message
                 // all the messages cached for that entity have to be processed first
-                let mut messages = self.restore_messages(&message.topic);
+                let mut messages = self.restore_messages(&entity_id);
                 messages.push(message.clone());
                 Ok(messages)
             }
@@ -70,17 +72,13 @@ impl tedge_flows::Transformer for MessageCache {
 }
 
 impl MessageCache {
-    /// Retrieve from the cache all the messages related to the entity with the given topic
-    pub fn restore_messages(&mut self, entity_topic: &str) -> Vec<Message> {
-        let mut messages = vec![];
-        let pending_messages = self.cache.take();
-        for message in pending_messages.into_iter() {
-            if message.topic.starts_with(entity_topic) {
-                messages.push(message);
-            } else {
-                self.cache.push(message);
-            }
-        }
-        messages
+    /// Cache a messages for an entity
+    pub fn cache_message(&mut self, entity_id: EntityTopicId, message: Message) {
+        self.cache.entry(entity_id).or_default().push(message);
+    }
+
+    /// Retrieve from the cache all the messages related to an entity
+    pub fn restore_messages(&mut self, entity_id: &EntityTopicId) -> Vec<Message> {
+        self.cache.remove(entity_id).unwrap_or_default().into()
     }
 }
