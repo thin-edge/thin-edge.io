@@ -22,7 +22,7 @@ pub enum TEdgeError {
     FromTEdgeConfigSetting(#[from] tedge_config::ConfigSettingError),
 
     #[error(transparent)]
-    FromSystemServiceError(#[from] crate::system_services::SystemServiceError),
+    FromSystemServiceError(#[from] tedge_system_services::SystemServiceError),
 
     #[error(transparent)]
     FromSystemToml(#[from] tedge_config::SystemTomlError),

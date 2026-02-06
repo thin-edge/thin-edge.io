@@ -1,4 +1,3 @@
-use crate::system_services::SystemService;
 use anyhow::Context;
 use clap_complete::ArgValueCandidates;
 use clap_complete::CompletionCandidate;
@@ -8,6 +7,7 @@ use std::path::Path;
 use tedge_config::get_config_dir;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
+use tedge_system_services::SystemService;
 
 #[derive(clap::Subcommand, Debug, Clone, PartialEq, Eq)]
 #[clap(rename_all = "snake_case")]
@@ -168,11 +168,20 @@ impl MaybeBorrowedCloud<'_> {
     pub fn mapper_service(&self) -> SystemService<'_> {
         match self {
             #[cfg(feature = "aws")]
-            Self::Aws(profile) => SystemService::TEdgeMapperAws(profile.as_deref()),
+            Self::Aws(profile) => SystemService {
+                name: "tedge-mapper-aws",
+                profile: profile.as_deref(),
+            },
             #[cfg(feature = "azure")]
-            Self::Azure(profile) => SystemService::TEdgeMapperAz(profile.as_deref()),
+            Self::Azure(profile) => SystemService {
+                name: "tedge-mapper-az",
+                profile: profile.as_deref(),
+            },
             #[cfg(feature = "c8y")]
-            Self::C8y(profile) => SystemService::TEdgeMapperC8y(profile.as_deref()),
+            Self::C8y(profile) => SystemService {
+                name: "tedge-mapper-c8y",
+                profile: profile.as_deref(),
+            },
         }
     }
 
