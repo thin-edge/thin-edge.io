@@ -10,7 +10,7 @@ import ProposalBanner from '@site/src/components/ProposalBanner'
 
 ## Overview
 
-The built-in bridge forwards MQTT messages between the local broker and the cloud. By default, thin-edge provides bridge rules that handle standard communication patterns for Cumulocity, Azure, and AWS. However, you may need to customize this behavior—for example, to bridge additional topics, disable unused rules, or adapt to your cloud tenant's specific topic structure.
+The built-in bridge forwards MQTT messages between the local broker and the cloud. By default, %%te%% provides bridge rules that handle standard communication patterns for Cumulocity, Azure, and AWS. However, you may need to customize this behavior—for example, to bridge additional topics, disable unused rules, or adapt to your cloud tenant's specific topic structure.
 
 When the built-in bridge is enabled, these rules are defined in user-configurable TOML files, giving you full control over which messages are forwarded and how topic names are mapped between local and remote brokers.
 
