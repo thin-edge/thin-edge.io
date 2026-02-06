@@ -48,7 +48,13 @@ where
         date_string = date_part;
     }
 
-    match OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339) {
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "Not vulnerable to RUSTSEC-2026-0009 as not RFC-2822 format"
+    )]
+    let time = OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339);
+
+    match time {
         Ok(result) => Ok(result),
         Err(e) => Err(D::Error::custom(format!("Error: {}", e))),
     }

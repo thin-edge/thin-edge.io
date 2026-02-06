@@ -15,7 +15,8 @@ ignore = [
     # the timings of the decryption operation. We only use the crate to construct the public key
     # from components, so this doesn't affect us. To make sure we don't use affected API,
     # appropriate entries should be added to clippy.toml to disallow these methods.
-    "RUSTSEC-2023-0071"
+    "RUSTSEC-2023-0071",
+    "RUSTSEC-2026-0009"
 ] 
 informational_warnings = ["unmaintained"] # warn for categories of informational advisories
 severity_threshold = "low" # CVSS severity ("none", "low", "medium", "high", "critical")

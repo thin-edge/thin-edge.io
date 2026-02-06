@@ -358,11 +358,7 @@ mod tests {
         use crate::measurement::builder::ThinEdgeJsonBuilder;
 
         let input = "{\n\"time\" : 1701949168,\n\"test\": 1023}";
-        let expected_timestamp = OffsetDateTime::parse(
-            "2023-12-07T11:39:28Z",
-            &time::format_description::well_known::Rfc3339,
-        )
-        .unwrap();
+        let expected_timestamp = parse_timestamp("2023-12-07T11:39:28Z");
 
         let mut builder = ThinEdgeJsonBuilder::default();
 
@@ -376,11 +372,7 @@ mod tests {
         use crate::measurement::builder::ThinEdgeJsonBuilder;
 
         let input = "{\n\"time\" : 1701949168.001,\n\"test\": 1023}";
-        let expected_timestamp = OffsetDateTime::parse(
-            "2023-12-07T11:39:28.001Z",
-            &time::format_description::well_known::Rfc3339,
-        )
-        .unwrap();
+        let expected_timestamp = parse_timestamp("2023-12-07T11:39:28.001Z");
 
         let mut builder = ThinEdgeJsonBuilder::default();
 
@@ -417,5 +409,13 @@ mod tests {
         let mut builder = ThinEdgeJsonBuilder::default();
 
         parse_str(input, &mut builder).unwrap();
+    }
+
+    fn parse_timestamp(timestamp: &str) -> OffsetDateTime {
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "Not vulnerable to RUSTSEC-2026-0009 as not RFC-2822 format"
+        )]
+        OffsetDateTime::parse(timestamp, &time::format_description::well_known::Rfc3339).unwrap()
     }
 }
