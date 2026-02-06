@@ -9,6 +9,7 @@ use log::info;
 use log::warn;
 use serde_json::json;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::process::Output;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -29,16 +30,18 @@ use tedge_api::mqtt_topics::SignalType;
 use tedge_api::workflow::extract_json_output;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::CommandId;
+use tedge_api::workflow::ExitHandlers;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::GenericStateUpdate;
 use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::OperationName;
+use tedge_api::workflow::OperationStep;
+use tedge_api::workflow::OperationStepRequest;
+use tedge_api::workflow::OperationStepResponse;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::CommandLog;
-use tedge_config_manager::ConfigSetRequest;
-use tedge_config_manager::ConfigSetResponse;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -65,12 +68,15 @@ pub struct WorkflowActor {
     pub(crate) log_dir: Utf8PathBuf,
     pub(crate) input_receiver: UnboundedLoggingReceiver<AgentInput>,
     pub(crate) builtin_command_dispatcher: CommandDispatcher,
+    pub(crate) builtin_operation_step_executor: HashMap<
+        (OperationType, OperationStep),
+        ClientMessageBox<OperationStepRequest, OperationStepResponse>,
+    >,
     pub(crate) sync_signal_dispatcher: SyncSignalDispatcher,
     pub(crate) command_sender: DynSender<InternalCommandState>,
     pub(crate) mqtt_publisher: LoggingSender<MqttMessage>,
     pub(crate) script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     pub(crate) downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
-    pub(crate) config_manager: Option<ClientMessageBox<ConfigSetRequest, ConfigSetResponse>>,
     pub(crate) tmp_dir: Utf8PathBuf,
 }
 
@@ -446,77 +452,35 @@ impl WorkflowActor {
                     }
                 }
             }
-            OperationAction::ConfigSet(handlers) => {
-                let step = &state.status;
-                info!(
-                    "Processing {operation} operation {step} step with config_set builtin action"
-                );
-
-                // Extract parameters from state payload
-                let Some(config_type) = state
-                    .payload
-                    .get("type")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-                else {
-                    let err = "Missing `type` in payload".to_string();
-                    log_file.log_error(&err).await;
-                    let err_state =
-                        state.update_with_builtin_action_result("config_set", Err(err), handlers);
-                    return self.publish_command_state(err_state, &mut log_file).await;
+            OperationAction::BuiltInOperationStep(operation_name, operation_step, handlers) => {
+                let action = format!("builtin:{operation_name}:{operation_step}");
+                let step_request = OperationStepRequest {
+                    command_step: operation_step.clone(),
+                    command_state: state.clone(),
                 };
 
-                let Some(downloaded_path) = state
-                    .payload
-                    .get("downloaded_path")
-                    .and_then(|v| v.as_str())
-                    .map(Utf8PathBuf::from)
-                else {
-                    let err = "Missing `downloaded_path` in payload".to_string();
-                    log_file.log_error(&err).await;
-                    let err_state =
-                        state.update_with_builtin_action_result("config_set", Err(err), handlers);
-                    return self.publish_command_state(err_state, &mut log_file).await;
-                };
+                info!("Processing builtin operation step: {action}");
 
-                let Some(ref mut config_manager) = self.config_manager else {
-                    let err = "Config manager not available".to_string();
-                    log_file.log_error(&err).await;
-                    let err_state =
-                        state.update_with_builtin_action_result("config_set", Err(err), handlers);
-                    return self.publish_command_state(err_state, &mut log_file).await;
-                };
-
-                let request = ConfigSetRequest {
-                    topic: state.topic.clone(),
-                    config_type,
-                    downloaded_path,
-                    log_path: Some(log_file.path.clone()),
-                };
-                let response = config_manager.await_response(request).await?;
-
-                match response {
-                    ConfigSetResponse::Success => {
-                        log_file.log_info("Config set successful").await;
-                        let new_state = state.update_with_builtin_action_result(
-                            "config_set",
-                            Ok(Value::Null),
-                            handlers,
-                        );
-                        self.publish_command_state(new_state, &mut log_file).await
+                let operation_type: OperationType = operation_name.as_str().into();
+                let result = if let Some(handle) = self
+                    .builtin_operation_step_executor
+                    .get_mut(&(operation_type, operation_step.clone()))
+                {
+                    match handle.await_response(step_request).await? {
+                        OperationStepResponse::Success => Ok(Value::Null),
+                        OperationStepResponse::Error(err) => Err(err),
                     }
-                    ConfigSetResponse::Error(err) => {
-                        log_file
-                            .log_error(&format!("Config set failed: {}", err))
-                            .await;
-                        let err_state = state.update_with_builtin_action_result(
-                            "config_set",
-                            Err(err),
-                            handlers,
-                        );
-                        self.publish_command_state(err_state, &mut log_file).await
-                    }
-                }
+                } else {
+                    let err = format!(
+                        "No builtin operation step handler registered for {operation} operation {operation_step} step"
+                    );
+                    return self
+                        .fail_command(&action, &err, state, handlers, &mut log_file)
+                        .await;
+                };
+
+                let new_state = state.update_with_builtin_action_result(&action, result, handlers);
+                self.publish_command_state(new_state, &mut log_file).await
             }
             OperationAction::Operation(sub_operation, input_script, input_excerpt, handlers) => {
                 let next_state = &handlers.on_exec.status;
@@ -733,6 +697,20 @@ impl WorkflowActor {
         }
         self.mqtt_publisher.send(new_state.into_message()).await?;
         Ok(())
+    }
+
+    async fn fail_command(
+        &mut self,
+        action: &str,
+        error: &str,
+        state: GenericCommandState,
+        handlers: ExitHandlers,
+        log_file: &mut CommandLog,
+    ) -> Result<(), RuntimeError> {
+        log_file.log_error(&error).await;
+        let err_state =
+            state.update_with_builtin_action_result(action, Err(error.to_string()), handlers);
+        self.publish_command_state(err_state, log_file).await
     }
 
     /// Reload from disk the current state of the pending command requests

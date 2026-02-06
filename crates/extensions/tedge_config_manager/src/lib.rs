@@ -7,14 +7,13 @@ pub mod plugin_manager;
 #[cfg(test)]
 mod tests;
 
-pub use crate::actor::ConfigSetRequest;
-pub use crate::actor::ConfigSetResponse;
 use crate::plugin_manager::ExternalPlugins;
 use actor::*;
 pub use config::*;
 use log::error;
 use serde_json::json;
 use std::path::PathBuf;
+use std::vec;
 use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::CloneSender;
@@ -38,6 +37,10 @@ use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
+use tedge_api::workflow::OperationStep;
+use tedge_api::workflow::OperationStepHandler;
+use tedge_api::workflow::OperationStepRequest;
+use tedge_api::workflow::OperationStepResponse;
 use tedge_api::workflow::SyncOnCommand;
 use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
@@ -305,8 +308,18 @@ impl SyncOnCommand for ConfigManagerBuilder {
     }
 }
 
-impl MessageSink<RequestEnvelope<ConfigSetRequest, ConfigSetResponse>> for ConfigManagerBuilder {
-    fn get_sender(&self) -> DynSender<RequestEnvelope<ConfigSetRequest, ConfigSetResponse>> {
+impl OperationStepHandler for ConfigManagerBuilder {
+    fn supported_operation_steps(&self) -> Vec<(OperationType, OperationStep)> {
+        vec![(OperationType::ConfigUpdate, "set".into())]
+    }
+}
+
+impl MessageSink<RequestEnvelope<OperationStepRequest, OperationStepResponse>>
+    for ConfigManagerBuilder
+{
+    fn get_sender(
+        &self,
+    ) -> DynSender<RequestEnvelope<OperationStepRequest, OperationStepResponse>> {
         self.box_builder.get_sender().sender_clone()
     }
 }

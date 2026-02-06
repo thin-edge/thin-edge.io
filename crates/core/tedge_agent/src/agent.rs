@@ -381,11 +381,11 @@ impl Agent {
                 .await?;
                 converter_actor_builder.register_builtin_operation(&mut config_manager);
                 converter_actor_builder
+                    .register_builtin_operation_step_handler(&mut config_manager);
+                converter_actor_builder
                     .register_sync_signal_sink(OperationType::ConfigSnapshot, &config_manager);
                 converter_actor_builder
                     .register_sync_signal_sink(OperationType::ConfigUpdate, &config_manager);
-
-                converter_actor_builder.connect_config_manager(&mut config_manager);
 
                 Some(config_manager)
             } else if self.config.capabilities.config_update {

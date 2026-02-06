@@ -639,8 +639,8 @@ Customize config operations
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
 Restore config operations
-    Execute Command    rm -f /etc/tedge/operations/custom_config_snapshot.toml
-    Execute Command    rm -f /etc/tedge/operations/custom_config_update.toml
+    Execute Command    rm -f /etc/tedge/operations/config_snapshot.toml
+    Execute Command    rm -f /etc/tedge/operations/config_update.toml
     Execute Command    mv /etc/tedge/operations/config_update.toml.bak /etc/tedge/operations/config_update.toml
     Restart Service    tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent

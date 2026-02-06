@@ -17,6 +17,7 @@ pub use handlers::*;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::json;
 pub use state::*;
 use std::collections::HashMap;
@@ -25,10 +26,33 @@ use std::fmt::Formatter;
 pub use supervisor::*;
 
 pub type OperationName = String;
+pub type OperationStep = String;
 pub type StateName = String;
 pub type CommandId = String;
 pub type JsonPath = String;
 pub type WorkflowVersion = String;
+
+/// Request to perform a specific step within a builtin operation.
+///
+/// This request carries the step name and the entire `GenericCommandState` as its payload.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct OperationStepRequest {
+    pub command_step: OperationStep,
+    pub command_state: GenericCommandState,
+}
+
+/// Response from a builtin operation step.
+///
+/// This enum is identical to `ConfigSetResponse` which it replaces.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum OperationStepResponse {
+    Success,
+    Error(String),
+}
+
+pub trait OperationStepHandler {
+    fn supported_operation_steps(&self) -> Vec<(OperationType, OperationStep)>;
+}
 
 const BUILT_IN: &str = "builtin";
 
@@ -114,18 +138,6 @@ pub enum OperationAction {
     /// ```
     Download(ExitHandlers),
 
-    /// Config-specific set action
-    ///
-    /// Deploys a config file using the appropriate config plugin.
-    /// Expects `downloaded_path` and config `type` in the payload.
-    ///
-    /// ```toml
-    /// action = "config_set"
-    /// on_success = "<state>"
-    /// on_error = "<state>"
-    /// ```
-    ConfigSet(ExitHandlers),
-
     /// Trigger an operation and move to the next state from where the outcome of the operation will be awaited
     ///
     /// ```toml
@@ -148,6 +160,15 @@ pub enum OperationAction {
     /// on_exec = "<state>"
     /// ```
     BuiltInOperation(OperationName, ExecHandlers),
+
+    /// Trigger a built-in operation step
+    ///
+    /// ```toml
+    /// action = "builtin:config_update:set"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
+    /// ```
+    BuiltInOperationStep(OperationName, OperationStep, ExitHandlers),
 
     /// Await the completion of a sub-operation
     ///
@@ -188,7 +209,6 @@ impl Display for OperationAction {
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
             OperationAction::Download(_) => "builtin download action".to_string(),
-            OperationAction::ConfigSet(_) => "builtin set config action".to_string(),
             OperationAction::Operation(operation, maybe_script, _, _) => match maybe_script {
                 None => format!("execute {operation} as sub-operation"),
                 Some(script) => format!(
@@ -198,6 +218,9 @@ impl Display for OperationAction {
             },
             OperationAction::BuiltInOperation(operation, _) => {
                 format!("execute builtin:{operation}")
+            }
+            OperationAction::BuiltInOperationStep(operation, step, _) => {
+                format!("execute builtin:{operation} action: {step}")
             }
             OperationAction::AwaitOperationCompletion { .. } => {
                 "await sub-operation completion".to_string()

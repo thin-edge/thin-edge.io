@@ -197,11 +197,19 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                     let handlers = ExitHandlers::try_from(input.handlers)?;
                     Ok(OperationAction::Download(handlers))
                 }
-                "config_set" => {
-                    let handlers = ExitHandlers::try_from(input.handlers)?;
-                    Ok(OperationAction::ConfigSet(handlers))
+                _ => {
+                    if let Some(builtin) = command.strip_prefix("builtin:") {
+                        if let Some((operation, step)) = builtin.split_once(':') {
+                            let handlers = ExitHandlers::try_from((input.handlers, defaults))?;
+                            return Ok(OperationAction::BuiltInOperationStep(
+                                operation.to_string(),
+                                step.to_string(),
+                                handlers,
+                            ));
+                        }
+                    }
+                    Err(WorkflowDefinitionError::UnknownAction { action: command })
                 }
-                _ => Err(WorkflowDefinitionError::UnknownAction { action: command }),
             },
         }
     }
@@ -877,7 +885,7 @@ action = "proceed"
 on_success = "set"
 
 [set]
-action = "config_set"
+action = "builtin:config_update:set"
 on_success = "successful"
 on_error = "failed"
 
@@ -891,14 +899,17 @@ action = "cleanup"
         let workflow = OperationWorkflow::try_from(input).unwrap();
 
         match workflow.states.get("set").unwrap() {
-            OperationAction::ConfigSet(handlers) => {
+            OperationAction::BuiltInOperationStep(operation, step, handlers) => {
+                // Verify operation and step are correct
+                assert_eq!(operation, "config_update");
+                assert_eq!(step, "set");
                 // Verify handlers are present
                 assert_eq!(
                     handlers.state_update_on_exit("config_set", 0).status,
                     "successful"
                 );
             }
-            other => panic!("Expected ConfigSet action, but got {:?}", other),
+            other => panic!("Expected BuiltInOperationStep action, but got {:?}", other),
         }
     }
 }

@@ -7,6 +7,7 @@ use crate::operation_workflows::message_box::SyncSignalDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
 use crate::state_repository::state::agent_state_dir;
 use crate::state_repository::state::AgentStateRepository;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
@@ -32,9 +33,11 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
+use tedge_api::workflow::OperationStep;
+use tedge_api::workflow::OperationStepHandler;
+use tedge_api::workflow::OperationStepRequest;
+use tedge_api::workflow::OperationStepResponse;
 use tedge_api::workflow::SyncOnCommand;
-use tedge_config_manager::ConfigSetRequest;
-use tedge_config_manager::ConfigSetResponse;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -56,7 +59,10 @@ pub struct WorkflowActorBuilder {
     script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
-    config_manager: Option<ClientMessageBox<ConfigSetRequest, ConfigSetResponse>>,
+    builtin_operation_step_executor: HashMap<
+        (OperationType, OperationStep),
+        ClientMessageBox<OperationStepRequest, OperationStepResponse>,
+    >,
 }
 
 impl WorkflowActorBuilder {
@@ -110,7 +116,7 @@ impl WorkflowActorBuilder {
             signal_sender,
             script_runner,
             downloader,
-            config_manager: None,
+            builtin_operation_step_executor: HashMap::new(),
         }
     }
 
@@ -145,13 +151,15 @@ impl WorkflowActorBuilder {
         }
     }
 
-    /// Connect config manager for builtin config_set action
-    pub fn connect_config_manager(
+    /// Connect a service that handles operation step requests
+    pub fn register_builtin_operation_step_handler(
         &mut self,
-        config_manager: &mut impl Service<ConfigSetRequest, ConfigSetResponse>,
+        service: &mut (impl Service<OperationStepRequest, OperationStepResponse> + OperationStepHandler),
     ) {
-        let config_manager_client = ClientMessageBox::new(config_manager);
-        self.config_manager = Some(config_manager_client);
+        for (operation, step) in service.supported_operation_steps() {
+            self.builtin_operation_step_executor
+                .insert((operation, step), ClientMessageBox::new(service));
+        }
     }
 
     pub fn subscriptions(
@@ -200,12 +208,12 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             log_dir: self.config.log_dir,
             input_receiver: self.input_receiver,
             builtin_command_dispatcher: self.command_dispatcher,
+            builtin_operation_step_executor: self.builtin_operation_step_executor,
             sync_signal_dispatcher: self.sync_signal_dispatcher,
             mqtt_publisher: self.mqtt_publisher,
             command_sender: self.command_sender,
             script_runner: self.script_runner,
             downloader: self.downloader,
-            config_manager: self.config_manager,
             tmp_dir: self.config.tmp_dir,
         }
     }
