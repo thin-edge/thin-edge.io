@@ -80,7 +80,7 @@ fn lexer<'src>(
     // Operators: any combination of `!` and `=` (e.g., `==`, `!=`, `=`)
     // We don't currently support != but may wish to in the future, and users may try this
     // so recognising it but explicitly rejecting it is sensible
-    let op = one_of("!=")
+    let op = one_of("!=&|")
         .repeated()
         .at_least(1)
         .to_slice()
