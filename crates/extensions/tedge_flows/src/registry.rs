@@ -124,6 +124,9 @@ pub trait FlowRegistryExt: FlowRegistry {
     /// Disable a builtin flow definition
     async fn disable_builtin_flow(&mut self, name: &str) -> Result<(), UpdateFlowRegistryError>;
 
+    /// Re-enable a builtin flow definition
+    async fn enable_builtin_flow(&mut self, name: &str) -> Result<(), UpdateFlowRegistryError>;
+
     /// Register a transformer that can be used as a builtin in flow steps
     fn register_builtin(&mut self, transformer: impl TransformerBuilder + Transformer);
 }
@@ -278,6 +281,22 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         let flow_path = dir.join(name).with_extension("toml");
         let disabled_flow_path = flow_path.with_extension("toml.disabled");
         file::move_file(&flow_path, &disabled_flow_path, PermissionEntry::default()).await?;
+
+        Ok(())
+    }
+
+    async fn enable_builtin_flow(&mut self, name: &str) -> Result<(), UpdateFlowRegistryError> {
+        let dir = self.store().config_dir();
+        let flow_path = dir.join(name).with_extension("toml");
+        let disabled_flow_path = flow_path.with_extension("toml.disabled");
+
+        let disabled = tokio::fs::try_exists(&disabled_flow_path)
+            .await
+            .unwrap_or(false);
+
+        if disabled {
+            file::move_file(&disabled_flow_path, &flow_path, PermissionEntry::default()).await?;
+        }
 
         Ok(())
     }

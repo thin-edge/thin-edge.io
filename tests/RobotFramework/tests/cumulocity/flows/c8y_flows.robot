@@ -1,5 +1,6 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
+Resource            ../../azure/azure_telemetry.robot
 Library             Cumulocity
 Library             ThinEdgeIO
 
@@ -54,6 +55,58 @@ Get entity metadata from the c8y mapper context
     ...    series=temperature
     Should Be Equal As Numbers    ${measurements[0]["temperature"]["temperature"]["value"]}    23.1
 
+On start builtin-flows TOML files are generated
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/measurements.toml
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/events.toml
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/alarms.toml
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/units.toml
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/health.toml
+
+The builtin-flows TOML files can disabled
+    Execute Command    tedge config set c8y.topics 'te/+/+/+/+,te/+/+/+/+/twin/+'
+    Restart Service    tedge-mapper-c8y
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/measurements.toml    exp_exit_code=2
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/events.toml    exp_exit_code=2
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/alarms.toml    exp_exit_code=2
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/units.toml    exp_exit_code=2
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/health.toml    exp_exit_code=2
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/measurements.toml.disabled
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/events.toml.disabled
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/alarms.toml.disabled
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/units.toml.disabled
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/health.toml.disabled
+    [Teardown]    Restore Builtin Flows
+
+The builtin-flows TOML files can restored
+    # Updating c8y.topics but not mqtt.topic_root
+    Execute Command
+    ...    tedge config set c8y.topics 'te2/+/+/+/+,te2/+/+/+/+/twin/+,te2/+/+/+/+/m/+,te2/+/+/+/+/m/+/meta,te2/+/+/+/+/e/+,te2/+/+/+/+/a/+,te2/+/+/+/+/status/health'
+    Restart Service    tedge-mapper-c8y
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/measurements.toml    exp_exit_code=2
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/events.toml    exp_exit_code=2
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/alarms.toml    exp_exit_code=2
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/units.toml    exp_exit_code=2
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/health.toml    exp_exit_code=2
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/measurements.toml.disabled
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/events.toml.disabled
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/alarms.toml.disabled
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/units.toml.disabled
+    Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/health.toml.disabled
+
+    # Fixing the mistake
+    Execute Command    tedge config set mqtt.topic_root te2
+    Restart Service    tedge-mapper-c8y
+
+    Execute Command    grep te2/ /etc/tedge/mappers/c8y/flows/measurements.toml
+    Execute Command    grep te2/ /etc/tedge/mappers/c8y/flows/events.toml
+    Execute Command    grep te2/ /etc/tedge/mappers/c8y/flows/alarms.toml
+    Execute Command    grep te2/ /etc/tedge/mappers/c8y/flows/units.toml
+    Execute Command    grep te2/ /etc/tedge/mappers/c8y/flows/health.toml
+
+    [Teardown]    Restore Builtin Flows
+
 
 *** Keywords ***
 Custom Setup
@@ -74,3 +127,9 @@ Wait For The Flow To Reload
     ...    topic=te/device/main/service/tedge-mapper-c8y/status/flows
     ...    date_from=${start}
     ...    message_contains=${flow}
+
+Restore builtin flows
+    Execute Command    tedge config set mqtt.topic_root te
+    Execute Command
+    ...    tedge config set c8y.topics 'te/+/+/+/+,te/+/+/+/+/twin/+,te/+/+/+/+/m/+,te/+/+/+/+/m/+/meta,te/+/+/+/+/e/+,te/+/+/+/+/a/+,te/+/+/+/+/status/health'
+    Restart Service    tedge-mapper-c8y

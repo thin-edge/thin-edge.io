@@ -19,67 +19,72 @@ impl C8yMapperBuilder {
         flows.register_builtin(crate::mea::alarms::AlarmConverter::default());
         flows.register_builtin(crate::mea::health::HealthStatusConverter::default());
 
-        self.persist_builtin_flow(&mut flows).await?;
+        self.persist_builtin_flows(&mut flows).await?;
         Ok(flows)
     }
 
-    async fn persist_builtin_flow(
+    async fn persist_builtin_flows(
         &self,
         flows: &mut ConnectedFlowRegistry,
     ) -> Result<(), UpdateFlowRegistryError> {
         let topic_prefix = &self.config.mqtt_schema.root;
 
-        flows
-            .persist_builtin_flow("units", self.units_flow().as_str())
-            .await?;
+        self.persist_builtin_flow(
+            flows,
+            "units",
+            &format!("{topic_prefix}/+/+/+/+/m/+/meta"),
+            &self.units_flow(),
+        )
+        .await?;
 
-        if self
-            .config
-            .topics
-            .include_topic(&format!("{topic_prefix}/+/+/+/+/m/+"))
-        {
-            flows
-                .persist_builtin_flow("measurements", self.measurements_flow().as_str())
-                .await?;
-        } else {
-            flows.disable_builtin_flow("measurements").await?;
-        }
+        self.persist_builtin_flow(
+            flows,
+            "measurements",
+            &format!("{topic_prefix}/+/+/+/+/m/+"),
+            &self.measurements_flow(),
+        )
+        .await?;
 
-        if self
-            .config
-            .topics
-            .include_topic(&format!("{topic_prefix}/+/+/+/+/e/+"))
-        {
-            flows
-                .persist_builtin_flow("events", self.events_flow().as_str())
-                .await?;
-        } else {
-            flows.disable_builtin_flow("events").await?;
-        }
+        self.persist_builtin_flow(
+            flows,
+            "events",
+            &format!("{topic_prefix}/+/+/+/+/e/+"),
+            &self.events_flow(),
+        )
+        .await?;
 
-        if self
-            .config
-            .topics
-            .include_topic(&format!("{topic_prefix}/+/+/+/+/a/+"))
-        {
-            flows
-                .persist_builtin_flow("alarms", self.alarms_flow().as_str())
-                .await?
-        } else {
-            flows.disable_builtin_flow("alarms").await?;
-        }
+        self.persist_builtin_flow(
+            flows,
+            "alarms",
+            &format!("{topic_prefix}/+/+/+/+/a/+"),
+            &self.alarms_flow(),
+        )
+        .await?;
 
-        if self
-            .config
-            .topics
-            .include_topic(&format!("{topic_prefix}/+/+/+/+/status/health"))
-        {
-            flows
-                .persist_builtin_flow("health", self.health_flow().as_str())
-                .await?
-        } else {
-            flows.disable_builtin_flow("health").await?;
-        }
+        self.persist_builtin_flow(
+            flows,
+            "health",
+            &format!("{topic_prefix}/+/+/+/+/status/health"),
+            &self.health_flow(),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn persist_builtin_flow(
+        &self,
+        flows: &mut ConnectedFlowRegistry,
+        name: &str,
+        topic: &str,
+        specs: &str,
+    ) -> Result<(), UpdateFlowRegistryError> {
+        flows.enable_builtin_flow(name).await?;
+        flows.persist_builtin_flow(name, specs).await?;
+
+        if !self.config.topics.include_topic(topic) {
+            flows.disable_builtin_flow(name).await?;
+        };
 
         Ok(())
     }
