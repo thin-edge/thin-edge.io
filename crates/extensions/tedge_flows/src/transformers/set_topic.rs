@@ -1,6 +1,7 @@
 use crate::config::ConfigError;
 use crate::js_value::JsonValue;
 use crate::transformers::Transformer;
+use crate::FlowContextHandle;
 use crate::FlowError;
 use crate::Message;
 use std::time::SystemTime;
@@ -27,9 +28,10 @@ impl Transformer for SetTopic {
     }
 
     fn on_message(
-        &self,
+        &mut self,
         _timestamp: SystemTime,
         message: &Message,
+        _context: &FlowContextHandle,
     ) -> Result<Vec<Message>, FlowError> {
         let mut transformed_message = message.clone();
         transformed_message.topic = self.topic.clone();

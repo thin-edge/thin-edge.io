@@ -31,22 +31,19 @@ pub(crate) fn convert_health_status_message(
     message: &MqttMessage,
     prefix: &TopicPrefix,
 ) -> Vec<MqttMessage> {
-    // TODO: introduce type to remove entity type guards
-    if entity.metadata.r#type != EntityType::Service {
+    if entity.r#type() != EntityType::Service {
         return vec![];
     }
 
-    let HealthStatus { status } =
-        HealthStatus::try_from_health_status_message(message, mqtt_schema).unwrap();
+    let Ok(HealthStatus { status }) =
+        HealthStatus::try_from_health_status_message(message, mqtt_schema)
+    else {
+        return vec![];
+    };
 
     let external_id = entity.external_id.as_ref();
-    let display_name = entity
-        .metadata
-        .display_name()
-        .or_else(|| entity.metadata.topic_id.default_service_name())
-        .unwrap_or(external_id);
-
-    let display_type = entity.metadata.display_type().unwrap_or("service");
+    let display_name = entity.display_name();
+    let display_type = entity.display_type();
 
     let Ok(status_message) = smartrest::inventory::service_creation_message(
         external_id,
@@ -82,6 +79,7 @@ mod tests {
     use crate::converter::CumulocityConverter;
     use serde_json::Map;
     use tedge_api::entity::EntityMetadata;
+    use tedge_api::entity::EntityType;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_mqtt_ext::Topic;
     use test_case::test_case;

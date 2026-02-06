@@ -16,6 +16,7 @@ mod transformers;
 use crate::actor::FlowsMapper;
 use crate::actor::STATS_DUMP_INTERVAL;
 pub use crate::config::ConfigError;
+pub use crate::config::FlowConfig;
 pub use crate::connected_flow::ConnectedFlowRegistry;
 pub use crate::flow::*;
 pub use crate::registry::BaseFlowRegistry;
@@ -24,6 +25,7 @@ pub use crate::registry::UpdateFlowRegistryError;
 pub use crate::runtime::MessageProcessor;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+pub use js_lib::kv_store::FlowContextHandle;
 pub use js_value::JsonValue;
 use std::collections::HashSet;
 use std::convert::Infallible;
@@ -99,6 +101,10 @@ impl FlowsMapperBuilder {
             processor,
             status_topic,
         })
+    }
+
+    pub fn context_handle(&self) -> FlowContextHandle {
+        self.processor.context_handle()
     }
 
     pub fn connect(

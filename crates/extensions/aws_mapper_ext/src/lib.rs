@@ -4,6 +4,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::models::TopicPrefix;
 use tedge_flows::ConfigError;
 use tedge_flows::ConnectedFlowRegistry;
+use tedge_flows::FlowContextHandle;
 use tedge_flows::FlowError;
 use tedge_flows::FlowRegistryExt;
 use tedge_flows::JsonValue;
@@ -124,9 +125,10 @@ impl tedge_flows::Transformer for SetAwsTopic {
     }
 
     fn on_message(
-        &self,
+        &mut self,
         _timestamp: SystemTime,
         message: &Message,
+        _context: &FlowContextHandle,
     ) -> Result<Vec<Message>, FlowError> {
         let topic_prefix = &self.prefix;
         let source = normalize_source_name(&message.topic);
