@@ -17,7 +17,7 @@ use tedge::TEdgeCli;
 use tedge::TEdgeOpt;
 use tedge::TEdgeOptMulticall;
 use tedge_config::cli::CommonArgs;
-use tedge_config::log_init;
+use tedge_config::log_init_with_default_level;
 use tedge_config::unconfigured_logger;
 use tedge_file_log_plugin::bin::TEdgeConfigView;
 use tracing::log;
@@ -91,10 +91,11 @@ async fn main() -> anyhow::Result<()> {
                 .context("failed to run tedge file log plugin")?
         }
         TEdgeOptMulticall::Tedge(TEdgeCli { cmd, common }) => {
-            log_init(
+            log_init_with_default_level(
                 "tedge",
-                &common.log_args.with_default_level(tracing::Level::WARN),
+                &common.log_args,
                 &common.config_dir,
+                tracing::Level::WARN,
             )?;
 
             let tedge_config = tedge_config::TEdgeConfig::load(&common.config_dir).await?;
