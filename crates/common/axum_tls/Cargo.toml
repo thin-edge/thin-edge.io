@@ -30,7 +30,6 @@ reqwest = { workspace = true, features = [
     "rustls-tls-native-roots",
 ], optional = true }
 rustls = { workspace = true }
-rustls-pemfile = { workspace = true }
 tedge_config = { workspace = true }
 tokio = { workspace = true }
 tokio-rustls = { workspace = true }
