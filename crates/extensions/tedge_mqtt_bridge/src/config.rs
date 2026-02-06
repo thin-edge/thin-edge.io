@@ -1,5 +1,14 @@
+use crate::config_toml::Direction;
+use crate::config_toml::ExpandError;
 use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
+use crate::AuthMethod;
+use ariadne::Color;
+use ariadne::Label;
+use ariadne::Report;
+use ariadne::ReportKind;
+use ariadne::Source;
+use camino::Utf8Path;
 use certificate::parse_root_certificate::create_tls_config;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use rumqttc::valid_filter;
@@ -9,6 +18,8 @@ use rumqttc::Transport;
 use std::borrow::Cow;
 use std::path::Path;
 use tedge_config::tedge_toml::CloudConfig;
+use tedge_config::tedge_toml::ProfileName;
+use tedge_config::TEdgeConfig;
 
 pub fn use_key_and_cert(
     config: &mut MqttOptions,
@@ -87,6 +98,9 @@ pub enum InvalidBridgeRule {
 
     #[error("{0:?} is not a valid MQTT bridge topic filter")]
     InvalidTopicFilter(String),
+
+    #[error("Invalid bridge config template")]
+    Template,
 }
 
 fn validate_topic(topic: &str) -> Result<(), InvalidBridgeRule> {
@@ -223,6 +237,79 @@ impl BridgeConfig {
             (TopicConverter(remote_to_local), bidir_remote_topics),
         ]
     }
+
+    pub fn add_rules_from_template(
+        &mut self,
+        file_path: &Utf8Path,
+        toml_template: &str,
+        tedge_config: &TEdgeConfig,
+        auth_method: AuthMethod,
+        cloud_profile: Option<&ProfileName>,
+    ) -> Result<(), InvalidBridgeRule> {
+        let config: crate::config_toml::PersistedBridgeConfig = toml::from_str(toml_template)
+            .map_err(|e| {
+                print_toml_error(file_path.as_str(), toml_template, &e);
+                InvalidBridgeRule::Template
+            })?;
+        let rules = config
+            .expand(tedge_config, auth_method, cloud_profile)
+            .map_err(|errors| {
+                for error in errors {
+                    print_expansion_error(file_path.as_str(), toml_template, &error);
+                }
+                InvalidBridgeRule::Template
+            })?;
+        for rule in rules {
+            match rule.direction {
+                Direction::Outbound => {
+                    self.forward_from_local(rule.topic, rule.local_prefix, rule.remote_prefix)?;
+                }
+                Direction::Inbound => {
+                    self.forward_from_remote(rule.topic, rule.local_prefix, rule.remote_prefix)?;
+                }
+                Direction::Bidirectional => {
+                    self.forward_bidirectionally(
+                        rule.topic,
+                        rule.local_prefix,
+                        rule.remote_prefix,
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn print_toml_error(path: &str, source: &str, error: &toml::de::Error) {
+    let span = error.span().unwrap_or(0..0);
+
+    Report::build(ReportKind::Error, (path, span.clone()))
+        .with_message("Failed to parse TOML configuration")
+        .with_label(
+            Label::new((path, span))
+                .with_message(error.message())
+                .with_color(Color::Red),
+        )
+        .finish()
+        .eprint((path, Source::from(source)))
+        .unwrap();
+}
+
+fn print_expansion_error(path: &str, source: &str, error: &ExpandError) {
+    let mut report = Report::build(ReportKind::Error, (path, error.span.clone()))
+        .with_message("Failed to expand bridge configuration")
+        .with_label(
+            Label::new((path, error.span.clone()))
+                .with_message(&error.message)
+                .with_color(Color::Red),
+        );
+    if let Some(help) = &error.help {
+        report = report.with_note(help);
+    }
+    report
+        .finish()
+        .eprint((path, Source::from(source)))
+        .unwrap();
 }
 
 #[cfg(test)]
@@ -444,7 +531,7 @@ mod tests {
     }
 
     mod validate_filter {
-        use crate::config::validate_filter;
+        use super::*;
 
         #[test]
         fn accepts_wildcard_filters() {

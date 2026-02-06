@@ -1,0 +1,108 @@
+# A collection of MQTT bridge rules to convert between thin-edge MQTT and Cumulocity MQTT.
+#
+# Cumulocity MQTT Quick Reference: https://cumulocity.com/docs/smartrest/quick-reference/
+# thin-edge.io Configurable built-in bridge reference: https://thin-edge.github.io/thin-edge.io/next/references/mappers/configurable-bridge/
+
+local_prefix = "${config.c8y.bridge.topic_prefix}/"
+remote_prefix = ""
+
+[[template_rule]]
+for = "${config.c8y.smartrest1.templates}"
+topic = "s/dl/${item}"
+direction = "inbound"
+
+[[template_rule]]
+for = "${config.c8y.smartrest.templates}"
+topic = "s/dc/${item}"
+direction = "inbound"
+
+[[rule]]
+if = "${connection.auth_method} == 'certificate'"
+topic = "s/dat"
+direction = "inbound"
+
+[[rule]]
+if = "${connection.auth_method} == 'certificate'"
+topic = "s/uat"
+direction = "outbound"
+
+[[rule]]
+topic = "s/dt"
+direction = "inbound"
+
+[[rule]]
+topic = "s/ds"
+direction = "inbound"
+
+[[rule]]
+topic = "s/e"
+direction = "inbound"
+
+[[rule]]
+topic = "devicecontrol/notifications"
+direction = "inbound"
+
+[[rule]]
+topic = "error"
+direction = "inbound"
+
+[[rule]]
+topic = "s/ut/#"
+direction = "outbound"
+
+[[template_rule]]
+for = ['s', 't', 'q', 'c']
+topic = "${item}/us/#"
+direction = "outbound"
+
+[[template_rule]]
+if = "${connection.auth_method} == 'password'"
+for = ['s', 't', 'q', 'c']
+topic = "${item}/ul/#"
+direction = "outbound"
+
+[[template_rule]]
+for = ['s', 't', 'q', 'c']
+topic = "${item}/uc/#"
+direction = "outbound"
+
+[[rule]]
+topic = "inventory/managedObjects/update/#"
+direction = "outbound"
+
+[[rule]]
+topic = "measurement/measurements/create/#"
+direction = "outbound"
+
+[[rule]]
+topic = "measurement/measurements/createBulk/#"
+direction = "outbound"
+
+[[rule]]
+topic = "event/events/create/#"
+direction = "outbound"
+
+[[rule]]
+topic = "event/events/createBulk/#"
+direction = "outbound"
+
+[[rule]]
+topic = "alarm/alarms/create/#"
+direction = "outbound"
+
+[[rule]]
+topic = "alarm/alarms/createBulk/#"
+direction = "outbound"
+
+[[rule]]
+if = "${config.c8y.mqtt_service.enabled}"
+local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/out/"
+topic = "#"
+direction = "outbound"
+
+[[template_rule]]
+if = "${config.c8y.mqtt_service.enabled}"
+for = "${config.c8y.mqtt_service.topics}"
+local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/in/"
+topic = "${item}"
+direction = "inbound"

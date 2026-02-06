@@ -12,21 +12,24 @@ use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
-use std::borrow::Cow;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::models::MQTT_CORE_TLS_PORT;
 use tedge_config::models::MQTT_SERVICE_TLS_PORT;
 use tedge_config::tedge_toml::mapper_config;
+use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
+use tedge_mqtt_bridge::load_bridge_rules_from_directory;
+use tedge_mqtt_bridge::persist_bridge_config_file;
 use tedge_mqtt_bridge::rumqttc::LastWill;
 use tedge_mqtt_bridge::rumqttc::Publish;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::use_credentials;
+use tedge_mqtt_bridge::AuthMethod;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_bridge::MqttOptions;
@@ -34,6 +37,8 @@ use tedge_mqtt_bridge::QoS;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
+use tedge_utils::file::change_mode;
+use tedge_utils::file::change_user_and_group;
 use tracing::warn;
 use yansi::Paint;
 
@@ -62,7 +67,9 @@ impl TEdgeComponent for CumulocityMapper {
                 &c8y_config,
                 &c8y_mapper_config,
                 &c8y_mapper_name,
-            )?;
+                self.profile.as_ref(),
+            )
+            .await?;
             runtime
                 .spawn(
                     MqttBridgeActorBuilder::new(
@@ -193,119 +200,19 @@ pub fn service_monitor_client_config(
     Ok(mqtt_config)
 }
 
-fn mqtt_bridge_config(
+async fn mqtt_bridge_config(
     tedge_config: &TEdgeConfig,
     c8y_config: &mapper_config::C8yMapperConfig,
     c8y_mapper_config: &C8yMapperConfig,
     c8y_mapper_name: &str,
+    cloud_profile: Option<&ProfileName>,
 ) -> Result<(BridgeConfig, MqttOptions, Publish), anyhow::Error> {
-    let smartrest_1_topics = c8y_config
-        .cloud_specific
-        .smartrest1
-        .templates
-        .0
-        .iter()
-        .map(|id| Cow::Owned(format!("s/dl/{id}")));
-
-    let smartrest_2_topics = c8y_config
-        .cloud_specific
-        .smartrest
-        .templates
-        .0
-        .iter()
-        .map(|id| Cow::Owned(format!("s/dc/{id}")));
-
     let use_certificate = c8y_config
         .cloud_specific
         .auth_method
         .is_certificate(&c8y_config.cloud_specific.credentials_path);
-    let cloud_topics = [
-        ("s/dt", true),
-        ("s/ds", true),
-        ("s/dat", use_certificate),
-        ("s/e", true),
-        ("devicecontrol/notifications", true),
-        ("error", true),
-    ]
-    .into_iter()
-    .filter_map(|(topic, active)| {
-        if active {
-            Some(Cow::Borrowed(topic))
-        } else {
-            None
-        }
-    })
-    .chain(smartrest_1_topics)
-    .chain(smartrest_2_topics);
-
-    let mut tc = BridgeConfig::new();
-    let local_prefix = format!("{}/", c8y_config.bridge.topic_prefix.as_str());
-
-    for topic in cloud_topics {
-        tc.forward_from_remote(topic, local_prefix.clone(), "")?;
-    }
-
-    // Templates
-    tc.forward_from_local("s/ut/#", local_prefix.clone(), "")?;
-
-    // Static templates
-    tc.forward_from_local("s/us/#", local_prefix.clone(), "")?;
-    tc.forward_from_local("t/us/#", local_prefix.clone(), "")?;
-    tc.forward_from_local("q/us/#", local_prefix.clone(), "")?;
-    tc.forward_from_local("c/us/#", local_prefix.clone(), "")?;
-
-    // SmartREST1
-    if !use_certificate {
-        tc.forward_from_local("s/ul/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("t/ul/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("q/ul/#", local_prefix.clone(), "")?;
-        tc.forward_from_local("c/ul/#", local_prefix.clone(), "")?;
-    }
-
-    // SmartREST2
-    tc.forward_from_local("s/uc/#", local_prefix.clone(), "")?;
-    tc.forward_from_local("t/uc/#", local_prefix.clone(), "")?;
-    tc.forward_from_local("q/uc/#", local_prefix.clone(), "")?;
-    tc.forward_from_local("c/uc/#", local_prefix.clone(), "")?;
-
-    // c8y JSON
-    tc.forward_from_local(
-        "inventory/managedObjects/update/#",
-        local_prefix.clone(),
-        "",
-    )?;
-    tc.forward_from_local(
-        "measurement/measurements/create/#",
-        local_prefix.clone(),
-        "",
-    )?;
-    tc.forward_from_local(
-        "measurement/measurements/createBulk/#",
-        local_prefix.clone(),
-        "",
-    )?;
-    tc.forward_from_local("event/events/create/#", local_prefix.clone(), "")?;
-    tc.forward_from_local("event/events/createBulk/#", local_prefix.clone(), "")?;
-    tc.forward_from_local("alarm/alarms/create/#", local_prefix.clone(), "")?;
-    tc.forward_from_local("alarm/alarms/createBulk/#", local_prefix.clone(), "")?;
-
-    // JWT token
-    if use_certificate {
-        tc.forward_from_local("s/uat", local_prefix.clone(), "")?;
-    }
-
     let use_mqtt_service = c8y_config.cloud_specific.mqtt_service.enabled;
-
-    let custom_out_prefix = format!("{}mqtt/out/", local_prefix);
-    let custom_in_prefix = format!("{}mqtt/in/", local_prefix);
-    if c8y_config.cloud_specific.mqtt_service.enabled {
-        tc.forward_from_local("#", custom_out_prefix, "")?;
-
-        let sub_topics = c8y_config.cloud_specific.mqtt_service.topics.clone();
-        for topic in sub_topics.0.into_iter() {
-            tc.forward_from_remote(topic, custom_in_prefix.clone(), "")?;
-        }
-    }
+    let bridge_config = bridge_rules(tedge_config, cloud_profile).await?;
 
     let c8y = &c8y_config.mqtt().or_config_not_set()?;
     let mut c8y_port = c8y.port().into();
@@ -399,5 +306,230 @@ fn mqtt_bridge_config(
     cloud_config.set_keep_alive(c8y_config.bridge.keepalive_interval.duration());
 
     configure_proxy(tedge_config, &mut cloud_config)?;
-    Ok((tc, cloud_config, reconnect_message_mapper))
+    Ok((bridge_config, cloud_config, reconnect_message_mapper))
+}
+
+pub async fn bridge_rules(
+    tedge_config: &TEdgeConfig,
+    cloud_profile: Option<&ProfileName>,
+) -> anyhow::Result<BridgeConfig> {
+    let bridge_config_dir = tedge_config
+        .mapper_config_dir::<C8yMapperSpecificConfig>(cloud_profile)
+        .join("bridge");
+
+    // Persist the built-in bridge configuration templates
+    persist_bridge_config_file(
+        &bridge_config_dir,
+        "mqtt-core",
+        include_str!("bridge/mqtt-core.toml"),
+    )
+    .await?;
+
+    if let Err(err) = change_user_and_group(&bridge_config_dir, "tedge", "tedge").await {
+        warn!("failed to set file ownership for '{bridge_config_dir}': {err}");
+    }
+
+    if let Err(err) = change_mode(&bridge_config_dir, 0o755).await {
+        warn!("failed to set file permissions for '{bridge_config_dir}': {err}");
+    }
+
+    let c8y_config = tedge_config.c8y_mapper_config(&cloud_profile)?;
+    let use_certificate = c8y_config
+        .cloud_specific
+        .auth_method
+        .is_certificate(&c8y_config.cloud_specific.credentials_path);
+
+    let auth_method = if use_certificate {
+        AuthMethod::Certificate
+    } else {
+        AuthMethod::Password
+    };
+
+    load_bridge_rules_from_directory(&bridge_config_dir, tedge_config, auth_method, cloud_profile)
+        .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    async fn load_config(toml: &str) -> (TempTedgeDir, TEdgeConfig) {
+        let ttd = TempTedgeDir::new();
+        ttd.file("tedge.toml").with_raw_content(toml);
+        let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        (ttd, config)
+    }
+
+    mod template_rules {
+        use super::*;
+
+        fn has_local_subscription(config: &BridgeConfig, topic: &str) -> bool {
+            config.local_subscriptions().any(|t| t == topic)
+        }
+
+        fn has_remote_subscription(config: &BridgeConfig, topic: &str) -> bool {
+            config.remote_subscriptions().any(|t| t == topic)
+        }
+
+        #[tokio::test]
+        async fn certificate_only_rules_present_with_certificate_auth() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            assert!(has_remote_subscription(&rules, "s/dat"));
+            assert!(has_local_subscription(&rules, "c8y/s/uat"));
+        }
+
+        #[tokio::test]
+        async fn certificate_only_rules_absent_with_password_auth() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+auth_method = "basic"
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            assert!(!has_remote_subscription(&rules, "s/dat"));
+            assert!(!has_local_subscription(&rules, "c8y/s/uat"));
+        }
+
+        #[tokio::test]
+        async fn password_only_rules_present_with_password_auth() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+auth_method = "basic"
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            for mode in ['s', 't', 'q', 'c'] {
+                assert!(has_local_subscription(&rules, &format!("c8y/{mode}/ul/#")));
+            }
+        }
+
+        #[tokio::test]
+        async fn password_only_rules_absent_with_certificate_auth() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            for mode in ['s', 't', 'q', 'c'] {
+                assert!(!has_local_subscription(&rules, &format!("c8y/{mode}/ul/#")));
+            }
+        }
+
+        #[tokio::test]
+        async fn smartrest1_templates_expand_correctly() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+smartrest1.templates = ["tmpl1", "tmpl2"]
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            assert!(has_remote_subscription(&rules, "s/dl/tmpl1"));
+            assert!(has_remote_subscription(&rules, "s/dl/tmpl2"));
+        }
+
+        #[tokio::test]
+        async fn smartrest2_templates_expand_correctly() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+smartrest.templates = ["sr2a", "sr2b"]
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            assert!(has_remote_subscription(&rules, "s/dc/sr2a"));
+            assert!(has_remote_subscription(&rules, "s/dc/sr2b"));
+        }
+
+        #[tokio::test]
+        async fn mode_loop_expands_correctly() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            for mode in ['s', 't', 'q', 'c'] {
+                assert!(has_local_subscription(&rules, &format!("c8y/{mode}/us/#")));
+                assert!(has_local_subscription(&rules, &format!("c8y/{mode}/uc/#")));
+            }
+        }
+
+        #[tokio::test]
+        async fn mqtt_service_rules_when_enabled() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+mqtt_service.enabled = true
+mqtt_service.topics = ["custom/topic"]
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            assert!(has_local_subscription(&rules, "c8y/mqtt/out/#"));
+            assert!(has_remote_subscription(&rules, "custom/topic"));
+        }
+
+        #[tokio::test]
+        async fn mqtt_service_rules_absent_when_disabled() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            assert!(!has_local_subscription(&rules, "c8y/mqtt/out/#"));
+        }
+
+        #[tokio::test]
+        async fn custom_topic_prefix_applied() {
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.com"
+bridge.topic_prefix = "custom"
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None).await.unwrap();
+
+            assert!(has_remote_subscription(&rules, "s/dt"));
+            assert!(has_local_subscription(&rules, "custom/s/us/#"));
+        }
+    }
 }

@@ -145,7 +145,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         pub enum ParseKeyError {
             #[error("{}", .0.write_error())]
             ReadOnly(ReadOnlyKey),
-            #[error("Unknown key: '{0}'")]
+            #[error("Unknown tedge config key: '{0}'")]
             Unrecognised(String),
         }
 

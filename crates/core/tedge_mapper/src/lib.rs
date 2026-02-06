@@ -24,7 +24,7 @@ mod aws;
 #[cfg(feature = "azure")]
 mod az;
 #[cfg(feature = "c8y")]
-mod c8y;
+pub mod c8y;
 mod collectd;
 mod core;
 #[cfg(feature = "tedge-flows")]
