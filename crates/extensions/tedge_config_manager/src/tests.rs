@@ -1,6 +1,5 @@
 use camino::Utf8Path;
 use std::fs::read_to_string;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_actors::test_helpers::FakeServerBox;
@@ -84,7 +83,7 @@ fn prepare() -> Result<TempTedgeDir, anyhow::Error> {
 
 #[allow(clippy::type_complexity)]
 async fn new_config_manager_builder(
-    temp_dir: &Path,
+    temp_dir: &TempTedgeDir,
 ) -> (
     ConfigManagerBuilder,
     MqttMessageBox,
@@ -100,7 +99,7 @@ async fn new_config_manager_builder(
             .try_into()
             .unwrap()],
         plugin_config_dir: temp_dir.to_path_buf(),
-        plugin_config_path: temp_dir.join("tedge-configuration-plugin.toml"),
+        plugin_config_path: temp_dir.path().join("tedge-configuration-plugin.toml"),
         config_reload_topics: [
             "te/device/main///cmd/config_snapshot",
             "te/device/main///cmd/config_update",
@@ -109,6 +108,7 @@ async fn new_config_manager_builder(
         .map(Topic::new_unchecked)
         .collect(),
         tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
+        ops_dir: temp_dir.dir("operations").utf8_path_buf(),
         mqtt_schema: MqttSchema::new(),
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
@@ -147,7 +147,7 @@ async fn new_config_manager_builder(
 }
 
 async fn spawn_config_manager_actor(
-    temp_dir: &Path,
+    temp_dir: &TempTedgeDir,
 ) -> (
     MqttMessageBox,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
@@ -164,7 +164,7 @@ async fn spawn_config_manager_actor(
 #[tokio::test]
 async fn default_plugin_config() {
     let tempdir = TempTedgeDir::new();
-    let (_mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path()).await;
+    let (_mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(&tempdir).await;
     let plugin_config_content =
         read_to_string(tempdir.path().join("tedge-configuration-plugin.toml")).unwrap();
     let plugin_config_toml: Table = from_str(&plugin_config_content).unwrap();
@@ -193,7 +193,7 @@ async fn default_plugin_config() {
 #[tokio::test]
 async fn config_manager_reloads_config_types() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(&tempdir).await;
 
     let config_snapshot_reload_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot");
     let config_update_reload_topic = Topic::new_unchecked("te/device/main///cmd/config_update");
@@ -226,8 +226,7 @@ async fn config_manager_reloads_config_types() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, mut uploader) =
-        spawn_config_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _downloader, mut uploader) = spawn_config_manager_actor(&tempdir).await;
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
 
@@ -291,8 +290,7 @@ async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn config_manager_creates_tedge_url_for_snapshot_request() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, mut uploader) =
-        spawn_config_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _downloader, mut uploader) = spawn_config_manager_actor(&tempdir).await;
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
 
@@ -355,8 +353,7 @@ async fn config_manager_creates_tedge_url_for_snapshot_request() -> Result<(), a
 #[tokio::test]
 async fn config_manager_download_update() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, mut downloader, _uploader) =
-        spawn_config_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, mut downloader, _uploader) = spawn_config_manager_actor(&tempdir).await;
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_update/1234");
 
@@ -430,7 +427,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn request_config_snapshot_that_does_not_exist() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(&tempdir).await;
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
 
@@ -476,7 +473,7 @@ async fn request_config_snapshot_that_does_not_exist() -> Result<(), anyhow::Err
 #[tokio::test]
 async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(&tempdir).await;
 
     // Check for child device topic
     let another_device_topic = Topic::new_unchecked("te/device/child01///cmd/config-snapshot/1234");
@@ -504,7 +501,7 @@ async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(&tempdir).await;
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
 
@@ -531,8 +528,7 @@ async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn receive_executing_snapshot_request_without_tedge_url() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, mut uploader) =
-        spawn_config_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _downloader, mut uploader) = spawn_config_manager_actor(&tempdir).await;
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
 
@@ -584,8 +580,7 @@ async fn receive_executing_snapshot_request_without_tedge_url() -> Result<(), an
 #[tokio::test]
 async fn config_manager_processes_concurrently() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, mut downloader, mut uploader) =
-        spawn_config_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, mut downloader, mut uploader) = spawn_config_manager_actor(&tempdir).await;
 
     let num_requests = 5;
 

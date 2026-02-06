@@ -242,6 +242,17 @@ impl GenericCommandState {
         self.update_with_json(json_update)
     }
 
+    /// Update the command state with the result of a builtin action
+    pub fn update_with_builtin_action_result(
+        self,
+        action: &str,
+        result: Result<Value, String>,
+        handlers: ExitHandlers,
+    ) -> Self {
+        let json_update = handlers.state_update_on_result(action, result);
+        self.update_with_json(json_update)
+    }
+
     /// Merge this state into a more complete state overriding all values defined both side
     pub fn merge_into(self, mut state: Self) -> Self {
         state.status = self.status;

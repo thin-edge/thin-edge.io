@@ -5,6 +5,7 @@ use camino::Utf8PathBuf;
 use log::error;
 use log::info;
 use serde_json::json;
+use serde_json::Value;
 use std::sync::Arc;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -13,6 +14,7 @@ use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
+use tedge_actors::RequestEnvelope;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_api::commands::CmdMetaSyncSignal;
@@ -22,6 +24,10 @@ use tedge_api::commands::ConfigSnapshotCmdPayload;
 use tedge_api::commands::ConfigUpdateCmdPayload;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicError;
+use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::OperationStepRequest;
+use tedge_api::workflow::OperationStepResponse;
+use tedge_api::CommandLog;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
@@ -34,6 +40,7 @@ use tedge_uploader_ext::UploadResult;
 use time::OffsetDateTime;
 
 use crate::plugin::ExternalPlugin;
+use crate::plugin_manager::parse_config_type;
 use crate::plugin_manager::ExternalPlugins;
 
 use super::error::ConfigManagementError;
@@ -48,7 +55,10 @@ pub type ConfigDownloadResult = (MqttTopic, DownloadResult);
 pub type ConfigUploadRequest = (MqttTopic, UploadRequest);
 pub type ConfigUploadResult = (MqttTopic, UploadResult);
 
-fan_in_message_type!(ConfigInput[ConfigOperation, CmdMetaSyncSignal, FsWatchEvent] : Debug);
+pub type OperationStepRequestEnvelope =
+    RequestEnvelope<OperationStepRequest, OperationStepResponse>;
+
+fan_in_message_type!(ConfigInput[ConfigOperation, CmdMetaSyncSignal, FsWatchEvent, OperationStepRequestEnvelope] : Debug);
 
 pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
@@ -85,6 +95,13 @@ impl Actor for ConfigManagerActor {
                 }
                 ConfigInput::FsWatchEvent(event) => worker.process_file_watch_events(event).await,
                 ConfigInput::CmdMetaSyncSignal(_) => worker.reload_supported_config_types().await,
+                ConfigInput::OperationStepRequestEnvelope(request) => {
+                    let mut worker = worker.clone();
+                    tokio::spawn(async move {
+                        worker.process_operation_step_request(request).await;
+                    });
+                    Ok(())
+                }
             };
 
             if let Err(err) = result {
@@ -225,7 +242,7 @@ impl ConfigManagerWorker {
         topic: &Topic,
         request: &mut ConfigSnapshotCmdPayload,
     ) -> Result<Utf8PathBuf, ConfigManagementError> {
-        let (config_type, plugin_name) = split_cloud_config_type(&request.config_type);
+        let (config_type, plugin_name) = parse_config_type(&request.config_type);
         let plugin = self.get_plugin(plugin_name)?;
 
         let config_path = self.config.tmp_path.join(format!(
@@ -235,11 +252,26 @@ impl ConfigManagerWorker {
             OffsetDateTime::now_utc().unix_timestamp()
         ));
 
+        // Extract cmd_id from topic for CommandLog
+        let cmd_id = match self.config.mqtt_schema.entity_channel_of(topic) {
+            Ok((_, Channel::Command { cmd_id, .. })) => cmd_id,
+            _ => {
+                return Err(ConfigManagementError::InvalidTopicError);
+            }
+        };
+
+        // Create CommandLog from log_path if present
+        let mut command_log = request.log_path.clone().map(|path| {
+            CommandLog::from_log_path(path, OperationType::ConfigSnapshot.to_string(), cmd_id)
+        });
+
         info!(
             target: "config plugins",
             "Retrieving config type: {} to file: {}", config_type, config_path
         );
-        plugin.get(config_type, &config_path).await?;
+        plugin
+            .get(config_type, &config_path, command_log.as_mut())
+            .await?;
 
         let tedge_url = match &request.tedge_url {
             Some(tedge_url) => tedge_url,
@@ -363,18 +395,116 @@ impl ConfigManagerWorker {
         let from_path = Utf8Path::from_path(&from)
             .with_context(|| format!("path is not utf-8: '{}'", from.to_string_lossy()))?;
 
-        let (config_type, plugin_name) = split_cloud_config_type(&request.config_type);
+        let cmd_id = match self.config.mqtt_schema.entity_channel_of(topic) {
+            Ok((_, Channel::Command { cmd_id, .. })) => cmd_id,
+            _ => {
+                return Err(ConfigManagementError::InvalidTopicError);
+            }
+        };
 
-        let plugin = self.get_plugin(plugin_name)?;
-
-        info!(
-            target: "config plugins",
-            "Setting config type: {} from file: {}", config_type, from_path
-        );
-
-        plugin.set(config_type, from_path).await?;
+        self.execute_config_set_request(
+            topic,
+            &request.config_type,
+            from_path,
+            request.log_path.clone(),
+            &cmd_id,
+        )
+        .await?;
 
         Ok(None)
+    }
+
+    async fn process_operation_step_request(
+        &mut self,
+        mut req: RequestEnvelope<OperationStepRequest, OperationStepResponse>,
+    ) {
+        let topic = req.request.command_state.topic.clone();
+        let command_step = req.request.command_step;
+        let command = req.request.command_state;
+        let result = match command_step.as_str() {
+            "set" => {
+                let topic = command.topic.clone();
+                let log_path = command.get_log_path();
+
+                let config_type = command
+                    .payload
+                    .get("type")
+                    .and_then(|v: &Value| v.as_str())
+                    .map(|s: &str| s.to_string());
+                let downloaded_path = command
+                    .payload
+                    .get("downloaded_path")
+                    .and_then(|v: &Value| v.as_str())
+                    .map(|s: &str| Utf8PathBuf::from(s));
+
+                match (config_type, downloaded_path) {
+                    (Some(config_type_str), Some(downloaded_path_buf)) => {
+                        self.execute_config_set_request(
+                            &topic,
+                            config_type_str.as_str(),
+                            downloaded_path_buf.as_ref(),
+                            log_path,
+                            command.cmd_id().unwrap_or_default().as_str(),
+                        )
+                        .await
+                    }
+                    (None, _) => Err(ConfigManagementError::MissingKey {
+                        key: "type".to_string(),
+                    }),
+                    (_, None) => Err(ConfigManagementError::MissingKey {
+                        key: "downloaded_path".to_string(),
+                    }),
+                }
+            }
+            _ => Err(ConfigManagementError::InvalidOperationStep {
+                step: "set".to_string(),
+            }),
+        };
+
+        let response = match result {
+            Ok(_) => OperationStepResponse::Success,
+            Err(err) => OperationStepResponse::Error(err.to_string()),
+        };
+
+        if let Err(error) = req.reply_to.send(response).await {
+            error!(
+                "Failed to send OperationStepResponse for command on topic: {} due to: {}",
+                topic, error
+            );
+        }
+    }
+
+    async fn execute_config_set_request(
+        &mut self,
+        _topic: &Topic,
+        config_type: &str,
+        from_path: &Utf8Path,
+        log_path: Option<Utf8PathBuf>,
+        cmd_id: &str,
+    ) -> Result<(), ConfigManagementError> {
+        if !from_path.exists() {
+            return Err(ConfigManagementError::FileNotFound(from_path.to_string()));
+        }
+
+        let (config_type, plugin_type) = parse_config_type(config_type);
+        let plugin = self
+            .external_plugins
+            .by_plugin_type(plugin_type)
+            .ok_or_else(|| ConfigManagementError::PluginNotFound(plugin_type.to_string()))?;
+
+        let mut command_log = log_path.clone().map(|path| {
+            CommandLog::from_log_path(
+                path,
+                OperationType::ConfigUpdate.to_string(),
+                cmd_id.to_string(),
+            )
+        });
+
+        plugin
+            .set(config_type, from_path, command_log.as_mut())
+            .await?;
+
+        Ok(())
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), RuntimeError> {
@@ -409,7 +539,7 @@ impl ConfigManagerWorker {
 
     async fn reload_supported_config_types(&mut self) -> Result<(), RuntimeError> {
         info!(target: "config plugins", "Reloading supported config types");
-        self.external_plugins.load().await?;
+        self.external_plugins.load();
 
         self.publish_supported_config_types().await?;
         Ok(())
@@ -478,12 +608,6 @@ impl ConfigManagerWorker {
         let state = ConfigOperationData::State(operation);
         self.output_sender.send(state).await
     }
-}
-
-fn split_cloud_config_type(config_type: &str) -> (&str, &str) {
-    config_type
-        .split_once("::")
-        .unwrap_or((config_type, "file"))
 }
 
 fn build_cloud_config_type(config_type: &str, plugin_name: &str) -> String {

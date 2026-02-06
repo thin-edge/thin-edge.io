@@ -26,6 +26,12 @@ pub enum ConfigManagementError {
     #[error("Directory {path} is not found.")]
     DirectoryNotFound { path: std::path::PathBuf },
 
+    #[error("File '{0}' not found.")]
+    FileNotFound(String),
+
+    #[error("Plugin '{0}' not found.")]
+    PluginNotFound(String),
+
     #[error(transparent)]
     FromEntityTopicError(#[from] tedge_api::mqtt_topics::EntityTopicError),
 
@@ -34,6 +40,12 @@ pub enum ConfigManagementError {
 
     #[error("Config plugin '{plugin_name}' error: {reason}")]
     PluginError { plugin_name: String, reason: String },
+
+    #[error("Invalid operation step: {step}")]
+    InvalidOperationStep { step: String },
+
+    #[error("Missing key: {key} in payload")]
+    MissingKey { key: String },
 
     #[error("{0:#}")]
     Other(#[from] anyhow::Error),
