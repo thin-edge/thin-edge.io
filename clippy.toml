@@ -13,5 +13,12 @@ disallowed-methods = [
     { path = "reqwest::Client::new", reason = "Use `certificate::CloudRootCerts` type instead to take root_cert_path configurations into account" },
     { path = "hyper_rustls::HttpsConnectorBuilder::with_native_roots", reason = "Use .with_tls_config(tedge_config.cloud_client_tls_config()) instead to use configured root certificate paths for the connected cloud" },
     {path = "rsa::RsaPrivateKey::decrypt"},
+    { path = "time::Date::parse", reason = "RUSTSEC-2026-0009" },
+    { path = "time::OffsetDateTime::parse", reason = "RUSTSEC-2026-0009" },
+    { path = "time::PrimitiveDateTime::parse", reason = "RUSTSEC-2026-0009" },
+    { path = "time::Time::parse", reason = "RUSTSEC-2026-0009" },
+    { path = "time::UtcDateTime::parse", reason = "RUSTSEC-2026-0009" },
+    { path = "time::UtcOffset::parse", reason = "RUSTSEC-2026-0009" },
+    { path = "time::parsing::Parsed::parse_item", reason = "RUSTSEC-2026-0009" },
 ]
 large-error-threshold = 256

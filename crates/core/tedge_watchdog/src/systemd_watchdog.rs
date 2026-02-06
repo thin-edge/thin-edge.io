@@ -364,11 +364,8 @@ mod tests {
         let (mut sender, mut receiver) = mpsc::unbounded::<MqttMessage>();
         let health_topic =
             Topic::new("te/device/main/service/test-service/status/health").expect("Valid topic");
-        let request_timestamp = OffsetDateTime::parse(
-            "2023-12-15T14:31:03.234Z",
-            &time::format_description::well_known::Rfc3339,
-        )
-        .unwrap();
+
+        let request_timestamp = parse_timestamp("2023-12-15T14:31:03.234Z");
         let incremented_datetime = request_timestamp + Duration::from_secs(3);
         let payload_timestamp = TimeFormat::Unix.to_json(incremented_datetime).unwrap();
 
@@ -385,5 +382,13 @@ mod tests {
         let health_status =
             get_latest_health_status_message(request_timestamp, &mut receiver).await;
         assert_eq!(health_status.unwrap().time, Some(payload_timestamp));
+    }
+
+    fn parse_timestamp(timestamp: &str) -> OffsetDateTime {
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "Not vulnerable to RUSTSEC-2026-0009 as not RFC-2822 format"
+        )]
+        OffsetDateTime::parse(timestamp, &time::format_description::well_known::Rfc3339).unwrap()
     }
 }

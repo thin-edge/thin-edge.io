@@ -140,6 +140,10 @@ impl de::Visitor<'_> for IsoOrUnixVisitor {
     where
         E: de::Error,
     {
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "Not vulnerable to RUSTSEC-2026-0009 as not RFC-2822 format"
+        )]
         OffsetDateTime::parse(timestamp_str, &Rfc3339)
             .map(IsoOrUnix)
             .map_err(|err| de::Error::custom(invalid_iso8601(timestamp_str, err)))
