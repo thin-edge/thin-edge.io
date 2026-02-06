@@ -3,6 +3,7 @@ use camino::Utf8Path;
 use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowRegistryExt;
 use tedge_flows::UpdateFlowRegistryError;
+use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
 
 impl C8yMapperBuilder {
@@ -22,79 +23,57 @@ impl C8yMapperBuilder {
         flows.register_builtin(crate::mea::alarms::AlarmConverter::default());
         flows.register_builtin(crate::mea::health::HealthStatusConverter::default());
 
-        self.persist_builtin_flow(&mut flows).await?;
+        self.persist_builtin_flows(&mut flows).await?;
         Ok(flows)
     }
 
-    async fn persist_builtin_flow(
+    async fn persist_builtin_flows(
         &self,
         flows: &mut ConnectedFlowRegistry,
     ) -> Result<(), UpdateFlowRegistryError> {
-        let topic_prefix = &self.config.mqtt_schema.root;
-
         flows
-            .persist_builtin_flow("units", self.units_flow().as_str())
+            .persist_builtin_flow("units", &self.units_flow())
             .await?;
 
-        if self
-            .config
-            .topics
-            .include_topic(&format!("{topic_prefix}/+/+/+/+/m/+"))
-        {
-            flows
-                .persist_builtin_flow("measurements", self.measurements_flow().as_str())
-                .await?;
-        } else {
-            flows.disable_builtin_flow("measurements").await?;
-        }
+        flows
+            .persist_builtin_flow("measurements", &self.measurements_flow())
+            .await?;
 
-        if self
-            .config
-            .topics
-            .include_topic(&format!("{topic_prefix}/+/+/+/+/e/+"))
-        {
-            flows
-                .persist_builtin_flow("events", self.events_flow().as_str())
-                .await?;
-        } else {
-            flows.disable_builtin_flow("events").await?;
-        }
+        flows
+            .persist_builtin_flow("events", &self.events_flow())
+            .await?;
 
-        if self
-            .config
-            .topics
-            .include_topic(&format!("{topic_prefix}/+/+/+/+/a/+"))
-        {
-            flows
-                .persist_builtin_flow("alarms", self.alarms_flow().as_str())
-                .await?
-        } else {
-            flows.disable_builtin_flow("alarms").await?;
-        }
+        flows
+            .persist_builtin_flow("alarms", &self.alarms_flow())
+            .await?;
 
-        if self
-            .config
-            .topics
-            .include_topic(&format!("{topic_prefix}/+/+/+/+/status/health"))
-        {
-            flows
-                .persist_builtin_flow("health", self.health_flow().as_str())
-                .await?
-        } else {
-            flows.disable_builtin_flow("health").await?;
-        }
+        flows
+            .persist_builtin_flow("health", &self.health_flow())
+            .await?;
 
         Ok(())
+    }
+
+    fn configured_topics(&self, filter: &str) -> Vec<String> {
+        let filter = TopicFilter::new_unchecked(filter);
+        self.config
+            .topics
+            .patterns()
+            .iter()
+            .filter(|topic| filter.accept_topic_name(topic))
+            .cloned()
+            .collect()
     }
 
     fn units_flow(&self) -> String {
         let mqtt_schema = &self.config.mqtt_schema;
         let topic_prefix = mqtt_schema.root.as_str();
         let errors_topic = mqtt_schema.error_topic();
+        let input_topics = self.configured_topics(&format!("{topic_prefix}/+/+/+/+/m/+/meta"));
 
         format!(
             r#"
-input.mqtt.topics = ["{topic_prefix}/+/+/+/+/m/+/meta"]
+input.mqtt.topics = {input_topics:?}
 
 steps = [
     {{ builtin = "update-context" }}
@@ -116,9 +95,13 @@ topic = "{errors_topic}"
         let errors_topic = mqtt_schema.error_topic();
         let c8y_prefix = &self.config.bridge_config.c8y_prefix;
         let max_size = self.config.max_mqtt_payload_size;
+        let mut input_topics = self.configured_topics(&format!("{topic_prefix}/+/+/+/+/m/+"));
+        if !input_topics.is_empty() {
+            input_topics.push(format!("{topic_prefix}/{mapper_topic_id}/status/entities"));
+        }
 
         format!(
-            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/m/+", "{topic_prefix}/{mapper_topic_id}/status/entities"]
+            r#"input.mqtt.topics = {input_topics:?}
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "unix", reformat = false }} }},
@@ -143,9 +126,13 @@ topic = "{errors_topic}"
         let errors_topic = mqtt_schema.error_topic();
         let c8y_prefix = &self.config.bridge_config.c8y_prefix;
         let max_mqtt_payload_size = self.config.max_mqtt_payload_size;
+        let mut input_topics = self.configured_topics(&format!("{topic_prefix}/+/+/+/+/e/+"));
+        if !input_topics.is_empty() {
+            input_topics.push(format!("{topic_prefix}/{mapper_topic_id}/status/entities"));
+        }
 
         format!(
-            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/e/+", "{topic_prefix}/{mapper_topic_id}/status/entities"]
+            r#"input.mqtt.topics = {input_topics:?}
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
@@ -169,9 +156,14 @@ topic = "{errors_topic}"
         let errors_topic = mqtt_schema.error_topic();
         let internal_alarms = crate::alarm_converter::INTERNAL_ALARMS_TOPIC;
         let max_size = self.config.max_mqtt_payload_size;
+        let mut input_topics = self.configured_topics(&format!("{topic_prefix}/+/+/+/+/a/+"));
+        if !input_topics.is_empty() {
+            input_topics.push(format!("{internal_alarms}#"));
+            input_topics.push(format!("{topic_prefix}/{mapper_topic_id}/status/entities"));
+        }
 
         format!(
-            r#"input.mqtt.topics = ["{topic_prefix}/+/+/+/+/a/+", "{internal_alarms}#", "{topic_prefix}/{mapper_topic_id}/status/entities"]
+            r#"input.mqtt.topics = {input_topics:?}
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
@@ -195,10 +187,14 @@ topic = "{errors_topic}"
         let main_device = &self.config.device_topic_id;
         let mapper_topic_id = &self.config.service_topic_id;
         let errors_topic = mqtt_schema.error_topic();
+        let mut input_topics =
+            self.configured_topics(&format!("{topic_prefix}/+/+/+/+/status/health"));
+        if !input_topics.is_empty() {
+            input_topics.push(format!("{topic_prefix}/{mapper_topic_id}/status/entities"));
+        }
 
         format!(
-            r#"
-input.mqtt.topics = ["{topic_prefix}/+/+/+/+/status/health", "{topic_prefix}/{mapper_topic_id}/status/entities"]
+            r#"input.mqtt.topics = {input_topics:?}
 
 steps = [
     {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},

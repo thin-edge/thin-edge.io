@@ -10,7 +10,6 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
 use tedge_utils::file;
-use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs;
 use tracing::error;
 use tracing::info;
@@ -120,9 +119,6 @@ pub trait FlowRegistryExt: FlowRegistry {
         name: &str,
         content: &str,
     ) -> Result<(), UpdateFlowRegistryError>;
-
-    /// Disable a builtin flow definition
-    async fn disable_builtin_flow(&mut self, name: &str) -> Result<(), UpdateFlowRegistryError>;
 
     /// Register a transformer that can be used as a builtin in flow steps
     fn register_builtin(&mut self, transformer: impl TransformerBuilder + Transformer);
@@ -269,15 +265,6 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         if update_flow {
             fs::atomically_write_file_async(flow_path.as_std_path(), content.as_bytes()).await?;
         }
-
-        Ok(())
-    }
-
-    async fn disable_builtin_flow(&mut self, name: &str) -> Result<(), UpdateFlowRegistryError> {
-        let dir = self.store().config_dir();
-        let flow_path = dir.join(name).with_extension("toml");
-        let disabled_flow_path = flow_path.with_extension("toml.disabled");
-        file::move_file(&flow_path, &disabled_flow_path, PermissionEntry::default()).await?;
 
         Ok(())
     }
