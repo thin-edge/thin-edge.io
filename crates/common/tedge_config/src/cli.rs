@@ -43,15 +43,6 @@ pub struct LogConfigArgs {
     pub log_level: Option<tracing::Level>,
 }
 
-impl LogConfigArgs {
-    pub fn with_default_level(self, log_level: tracing::Level) -> Self {
-        Self {
-            log_level: self.log_level.or(Some(log_level)),
-            ..self
-        }
-    }
-}
-
 fn log_level_completions() -> Vec<CompletionCandidate> {
     use tracing::Level as L;
     let options = [L::TRACE, L::DEBUG, L::INFO, L::WARN, L::ERROR];

@@ -5,6 +5,9 @@ use camino::Utf8Path;
 use std::io::IsTerminal;
 use std::str::FromStr;
 use std::sync::Arc;
+use tracing_subscriber::util::SubscriberInitExt;
+
+const DEFAULT_LEVEL: tracing::Level = tracing::Level::INFO;
 
 #[macro_export]
 /// The basic subscriber
@@ -19,9 +22,11 @@ macro_rules! subscriber_builder {
 
 /// Configures and enables logging taking into account flags, env variables and file config.
 ///
-/// 1. Log config is taken from the file configuration first
-/// 2. If `RUST_LOG` variable is set, it overrides file-based configuration
-/// 3. If `--debug` or `--log-level` flags are set, they override previous steps
+/// Priority order (highest to lowest):
+/// 1. `--debug` or `--log-level` flags
+/// 2. `RUST_LOG` environment variable
+/// 3. File configuration (`system.toml`)
+/// 4. Default level (INFO)
 ///
 /// Reports all the log events sent either with the `log` crate or the `tracing`
 /// crate.
@@ -30,29 +35,17 @@ pub fn log_init(
     flags: &LogConfigArgs,
     config_dir: &Utf8Path,
 ) -> Result<(), SystemTomlError> {
-    let subscriber = subscriber_builder!();
+    log_init_with_default_level(sname, flags, config_dir, DEFAULT_LEVEL)
+}
 
-    let log_level = flags
-        .log_level
-        .or(flags.debug.then_some(tracing::Level::DEBUG));
-
-    if let Some(log_level) = log_level {
-        subscriber.with_max_level(log_level).init();
-        return Ok(());
-    }
-
-    if std::env::var("RUST_LOG").is_ok() {
-        subscriber
-            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-            .with_file(true)
-            .with_line_number(true)
-            .init();
-        return Ok(());
-    }
-
-    let log_level = get_log_level(sname, config_dir)?;
-    subscriber.with_max_level(log_level).init();
-
+pub fn log_init_with_default_level(
+    sname: &str,
+    flags: &LogConfigArgs,
+    config_dir: &Utf8Path,
+    default_level: tracing::Level,
+) -> Result<(), SystemTomlError> {
+    let logger = logger(sname, flags, Some(config_dir), default_level)?;
+    logger.init();
     Ok(())
 }
 
@@ -64,6 +57,7 @@ pub fn unconfigured_logger() -> Arc<dyn tracing::Subscriber + Send + Sync> {
             log_level: None,
         },
         None,
+        DEFAULT_LEVEL,
     )
     .unwrap()
 }
@@ -72,47 +66,59 @@ fn logger(
     sname: &str,
     flags: &LogConfigArgs,
     config_dir: Option<&Utf8Path>,
+    default_level: tracing::Level,
 ) -> Result<Arc<dyn tracing::Subscriber + Send + Sync>, SystemTomlError> {
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_ansi(std::io::stderr().is_terminal() && yansi::Condition::no_color())
-        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
+    let subscriber = subscriber_builder!();
+
+    // first use log level from flags
     let log_level = flags
         .log_level
         .or(flags.debug.then_some(tracing::Level::DEBUG));
 
     if let Some(log_level) = log_level {
-        Ok(Arc::new(subscriber.with_max_level(log_level).finish()))
-    } else if std::env::var("RUST_LOG").is_ok() {
-        Ok(Arc::new(
+        return Ok(Arc::new(subscriber.with_max_level(log_level).finish()));
+    }
+
+    // if no flags used, use EnvFilter
+    if std::env::var("RUST_LOG").is_ok() {
+        return Ok(Arc::new(
             subscriber
                 .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
                 .with_file(true)
                 .with_line_number(true)
                 .finish(),
-        ))
-    } else {
-        let log_level = config_dir
-            .map(|config_dir| get_log_level(sname, config_dir))
-            .unwrap_or(Ok(DEFAULT_MAX_LEVEL))?;
-        Ok(Arc::new(subscriber.with_max_level(log_level).finish()))
+        ));
     }
+
+    // if no EnvFilter, get log level from config file
+    if let Some(log_level) = config_dir.and_then(|config_dir| {
+        get_log_level_from_config_file(sname, config_dir)
+            .ok()
+            .flatten()
+    }) {
+        return Ok(Arc::new(subscriber.with_max_level(log_level).finish()));
+    }
+
+    // otherwise, use the default log level
+    Ok(Arc::new(subscriber.with_max_level(default_level).finish()))
 }
 
-const DEFAULT_MAX_LEVEL: tracing::Level = tracing::Level::INFO;
-
-pub fn get_log_level(
+/// Return the log level for a given service, if it's defined in the config file. Otherwise return `None`.
+pub fn get_log_level_from_config_file(
     sname: &str,
     config_dir: &Utf8Path,
-) -> Result<tracing::Level, SystemTomlError> {
+) -> Result<Option<tracing::Level>, SystemTomlError> {
     let loglevel = SystemConfig::try_new(config_dir)?.log;
     match loglevel.get(sname) {
-        Some(ll) => tracing::Level::from_str(&ll.to_uppercase()).map_err(|_| {
-            SystemTomlError::InvalidLogLevel {
-                name: ll.to_string(),
-            }
-        }),
-        None => Ok(tracing::Level::INFO),
+        Some(ll) => {
+            let ll = tracing::Level::from_str(&ll.to_uppercase()).map_err(|_| {
+                SystemTomlError::InvalidLogLevel {
+                    name: ll.to_string(),
+                }
+            })?;
+            Ok(Some(ll))
+        }
+        None => Ok(None),
     }
 }
 
@@ -151,8 +157,8 @@ mod tests {
     "#;
 
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", &config_dir)?;
-        assert_eq!(Level::DEBUG, res);
+        let res = get_log_level_from_config_file("tedge_mapper", &config_dir)?;
+        assert_eq!(Some(Level::DEBUG), res);
         Ok(())
     }
 
@@ -163,7 +169,7 @@ mod tests {
         tedge_mapper = "other"
     "#;
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", &config_dir).unwrap_err();
+        let res = get_log_level_from_config_file("tedge_mapper", &config_dir).unwrap_err();
         assert_eq!(
             "Invalid log level: \"other\", supported levels are info, warn, error and debug",
             res.to_string()
@@ -179,7 +185,7 @@ mod tests {
     "#;
 
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", &config_dir).unwrap_err();
+        let res = get_log_level_from_config_file("tedge_mapper", &config_dir).unwrap_err();
 
         assert_eq!(
             "Invalid log level: \"\", supported levels are info, warn, error and debug",
@@ -196,8 +202,8 @@ mod tests {
     "#;
 
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", &config_dir).unwrap();
-        assert_eq!(Level::INFO, res);
+        let res = get_log_level_from_config_file("tedge_mapper", &config_dir).unwrap();
+        assert_eq!(None, res);
         Ok(())
     }
 
