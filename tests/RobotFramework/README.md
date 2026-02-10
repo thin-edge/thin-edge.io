@@ -46,6 +46,35 @@ Before you can run the tests you need to install the pre-requisites:
 
 It is assumed that you are running on either MacOS or Linux. If you are a Windows users then use WSL 2 and follow the **Debian/Ubuntu** instructions, or just use the dev container option (which requires docker which again can be run under WSL 2).
 
+**Important**
+
+You may need to increase the Linux kernel parameters in order to run the system tests successfully. Otherwise, it is likely that you'll run into resource exhaustion limits which will cause the tests to fail.
+
+The following commands show how to change the recommended kernel parameters (though you may change the exact values as needed). Note: these changes are temporary and will reset after a reboot. To make them persistent, add them to `/etc/sysctl.conf`. These commands should be run on the Linux machine where Docker is running (on your local machine if you're running Docker natively, or within the VM which is hosting docker):
+
+```sh
+sysctl -w vm.max_map_count=262144
+sysctl -w fs.inotify.max_user_watches=1048576
+sysctl -w fs.inotify.max_user_instances=2500
+sysctl -w fs.file-max=50000
+```
+
+For MacOS colima users, you change the settings by editing the colima template definition which will ensure the settings are applied when the colima instance starts.
+
+```sh
+colima start --edit
+```
+
+```yaml title="contents"
+provision:
+  - mode: system
+    script: |
+      sysctl -w vm.max_map_count=262144
+      sysctl -w fs.inotify.max_user_watches=1048576
+      sysctl -w fs.inotify.max_user_instances=2500
+      sysctl -w fs.file-max=50000
+```
+
 ### Option 1: Installing the dependencies yourself
 
 1. Install python3 (>= 3.8)
