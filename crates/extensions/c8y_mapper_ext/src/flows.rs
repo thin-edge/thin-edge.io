@@ -5,13 +5,20 @@ use tedge_flows::FlowRegistryExt;
 use tedge_flows::UpdateFlowRegistryError;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
+use tracing::error;
 
 impl C8yMapperBuilder {
     pub async fn flow_registry(
         &self,
         flows_dir: impl AsRef<Utf8Path>,
     ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
-        create_directory_with_defaults(flows_dir.as_ref()).await?;
+        if let Err(err) = create_directory_with_defaults(flows_dir.as_ref()).await {
+            error!(
+                "failed to create flow directory '{}': {err}",
+                flows_dir.as_ref()
+            );
+            return Err(err)?;
+        };
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
 
         let mapper_topic_id = self.config.service_topic_id.clone();

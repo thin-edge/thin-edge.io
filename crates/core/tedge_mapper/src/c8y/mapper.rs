@@ -42,6 +42,7 @@ use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
 use tedge_utils::file::change_mode;
 use tedge_utils::file::change_user_and_group;
+use tedge_utils::file::create_directory_with_user_group;
 use tedge_watch_ext::WatchActorBuilder;
 use tracing::warn;
 use yansi::Paint;
@@ -336,9 +337,15 @@ pub async fn bridge_rules(
     tedge_config: &TEdgeConfig,
     cloud_profile: Option<&ProfileName>,
 ) -> anyhow::Result<BridgeConfig> {
-    let bridge_config_dir = tedge_config
-        .mapper_config_dir::<C8yMapperSpecificConfig>(cloud_profile)
-        .join("bridge");
+    let mapper_config_dir =
+        tedge_config.mapper_config_dir::<C8yMapperSpecificConfig>(cloud_profile);
+    if let Err(err) =
+        create_directory_with_user_group(mapper_config_dir.clone(), "tedge", "tedge", 0o755).await
+    {
+        warn!("failed to set file ownership for '{mapper_config_dir}': {err}");
+    }
+
+    let bridge_config_dir = mapper_config_dir.join("bridge");
 
     // Persist the built-in bridge configuration templates
     persist_bridge_config_file(
