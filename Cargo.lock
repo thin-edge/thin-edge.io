@@ -2617,7 +2617,8 @@ checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
 [[package]]
 name = "libloading"
 version = "0.8.9"
-source = "git+https://github.com/Bravo555/rust_libloading.git?branch=0.8.9#bfc3d31bf4613dd91b6a3394b40ed304ea2c2f31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
 dependencies = [
  "cfg-if",
  "windows-link 0.2.1",
