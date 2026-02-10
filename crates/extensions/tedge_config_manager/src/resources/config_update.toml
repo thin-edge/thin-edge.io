@@ -2,10 +2,6 @@ operation = "config_update"
 
 [init]
 action = "proceed"
-on_success = "scheduled"
-
-[scheduled]
-action = "proceed"
 on_success = "executing"
 
 [executing]

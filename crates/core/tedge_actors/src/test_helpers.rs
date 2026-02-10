@@ -255,12 +255,14 @@ where
         }
     }
 
+    #[track_caller]
     async fn skip(&mut self, count: usize) {
         for _ in 0..count {
             assert!(self.recv().await.is_some());
         }
     }
 
+    #[track_caller]
     async fn assert_received<Item, Samples>(&mut self, expected: Samples)
     where
         Samples: IntoIterator + Send,
@@ -274,6 +276,7 @@ where
         }
     }
 
+    #[track_caller]
     async fn assert_received_unordered<Item, Samples>(&mut self, expected: Samples)
     where
         Samples: IntoIterator + Send,
@@ -285,6 +288,7 @@ where
             .await
     }
 
+    #[track_caller]
     async fn assert_received_matching<Samples, F>(&mut self, matching: F, expected: Samples)
     where
         Samples: IntoIterator + Send,

@@ -41,14 +41,7 @@ pub struct OperationStepRequest {
     pub command_state: GenericCommandState,
 }
 
-/// Response from a builtin operation step.
-///
-/// This enum is identical to `ConfigSetResponse` which it replaces.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum OperationStepResponse {
-    Success,
-    Error(String),
-}
+pub type OperationStepResponse = Result<(), String>;
 
 pub trait OperationStepHandler {
     fn supported_operation_steps(&self) -> Vec<(OperationType, OperationStep)>;

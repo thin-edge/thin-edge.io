@@ -30,7 +30,6 @@ use tedge_api::mqtt_topics::SignalType;
 use tedge_api::workflow::extract_json_output;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::CommandId;
-use tedge_api::workflow::ExitHandlers;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
@@ -411,11 +410,17 @@ impl WorkflowActor {
                             .filter(|v| !v.is_empty())
                     })
                 else {
-                    let err = "Missing or empty `url` or `remoteUrl` or `tedgeUrl` in payload"
-                        .to_string();
-                    log_file.log_error(&err).await;
-                    let err_state =
-                        state.update_with_builtin_action_result("download", Err(err), handlers);
+                    let err_state = state
+                        .update_with_builtin_action_result(
+                            "download",
+                            Err(
+                                "Missing or empty `url` or `remoteUrl` or `tedgeUrl` in payload"
+                                    .to_string(),
+                            ),
+                            handlers,
+                            &mut log_file,
+                        )
+                        .await;
                     return self.publish_command_state(err_state, &mut log_file).await;
                 };
 
@@ -428,29 +433,21 @@ impl WorkflowActor {
                     .await_response((state.topic.name.clone(), download_request))
                     .await?;
 
-                match download_result {
+                let result = match download_result {
                     Ok(download_response) => {
                         let downloaded_path = download_response.file_path;
                         log_file
                             .log_info(&format!("Downloaded to: {}", downloaded_path.display()))
                             .await;
 
-                        let new_state = state.update_with_builtin_action_result(
-                            "download",
-                            Ok(json!({"downloaded_path": downloaded_path})),
-                            handlers,
-                        );
-                        self.publish_command_state(new_state, &mut log_file).await
+                        Ok(json!({"downloaded_path": downloaded_path}))
                     }
-                    Err(err) => {
-                        let err = format!("Download failed: {}", err);
-                        log_file.log_error(&err).await;
-
-                        let err_state =
-                            state.update_with_builtin_action_result("download", Err(err), handlers);
-                        self.publish_command_state(err_state, &mut log_file).await
-                    }
-                }
+                    Err(err) => Err(format!("Download failed: {}", err)),
+                };
+                let new_state = state
+                    .update_with_builtin_action_result("download", result, handlers, &mut log_file)
+                    .await;
+                self.publish_command_state(new_state, &mut log_file).await
             }
             OperationAction::BuiltInOperationStep(operation_name, operation_step, handlers) => {
                 let action = format!("builtin:{operation_name}:{operation_step}");
@@ -466,20 +463,19 @@ impl WorkflowActor {
                     .builtin_operation_step_executor
                     .get_mut(&(operation_type, operation_step.clone()))
                 {
-                    match handle.await_response(step_request).await? {
-                        OperationStepResponse::Success => Ok(Value::Null),
-                        OperationStepResponse::Error(err) => Err(err),
-                    }
+                    handle
+                        .await_response(step_request)
+                        .await?
+                        .map(|_| Value::Null)
                 } else {
-                    let err = format!(
+                    Err(format!(
                         "No builtin operation step handler registered for {operation} operation {operation_step} step"
-                    );
-                    return self
-                        .fail_command(&action, &err, state, handlers, &mut log_file)
-                        .await;
+                    ))
                 };
 
-                let new_state = state.update_with_builtin_action_result(&action, result, handlers);
+                let new_state = state
+                    .update_with_builtin_action_result(&action, result, handlers, &mut log_file)
+                    .await;
                 self.publish_command_state(new_state, &mut log_file).await
             }
             OperationAction::Operation(sub_operation, input_script, input_excerpt, handlers) => {
@@ -697,20 +693,6 @@ impl WorkflowActor {
         }
         self.mqtt_publisher.send(new_state.into_message()).await?;
         Ok(())
-    }
-
-    async fn fail_command(
-        &mut self,
-        action: &str,
-        error: &str,
-        state: GenericCommandState,
-        handlers: ExitHandlers,
-        log_file: &mut CommandLog,
-    ) -> Result<(), RuntimeError> {
-        log_file.log_error(&error).await;
-        let err_state =
-            state.update_with_builtin_action_result(action, Err(error.to_string()), handlers);
-        self.publish_command_state(err_state, log_file).await
     }
 
     /// Reload from disk the current state of the pending command requests
