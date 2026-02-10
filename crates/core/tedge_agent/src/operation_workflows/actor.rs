@@ -2,6 +2,7 @@ use crate::operation_workflows::message_box::CommandDispatcher;
 use crate::operation_workflows::message_box::SyncSignalDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
 use crate::state_repository::state::AgentStateRepository;
+use crate::Capabilities;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use log::error;
@@ -65,6 +66,7 @@ pub struct WorkflowActor {
     pub(crate) workflow_repository: WorkflowRepository,
     pub(crate) state_repository: AgentStateRepository<CommandBoard>,
     pub(crate) log_dir: Utf8PathBuf,
+    pub(crate) capabilities: Capabilities,
     pub(crate) input_receiver: UnboundedLoggingReceiver<AgentInput>,
     pub(crate) builtin_command_dispatcher: CommandDispatcher,
     pub(crate) builtin_operation_step_executor: HashMap<
@@ -224,6 +226,10 @@ impl WorkflowActor {
         operation: OperationType,
         cmd_id: String,
     ) -> Result<(), RuntimeError> {
+        if !self.is_operation_enabled(&operation) {
+            info!("Ignoring {operation} operation because it is disabled in agent capabilities");
+            return Ok(());
+        }
         let Ok(state) = GenericCommandState::from_command_message(&message) else {
             log::error!("Invalid command payload: {}", &message.topic.name);
             return Ok(());
@@ -271,6 +277,10 @@ impl WorkflowActor {
             log::error!("Unknown command channel: {}", state.topic.name);
             return Ok(());
         };
+        if !self.is_operation_enabled(&operation) {
+            info!("Ignoring {operation} operation because it is disabled in agent capabilities");
+            return Ok(());
+        }
         let mut log_file = self.open_command_log(&state, &operation, &cmd_id);
 
         let action = match self.workflow_repository.get_action(&state) {
@@ -743,6 +753,15 @@ impl WorkflowActor {
         match channel {
             Channel::Command { operation, cmd_id } => Ok((operation, cmd_id)),
             _ => Err(CommandTopicError::InvalidCommandTopic),
+        }
+    }
+
+    fn is_operation_enabled(&self, operation: &OperationType) -> bool {
+        match operation {
+            OperationType::ConfigUpdate => self.capabilities.config_update,
+            OperationType::ConfigSnapshot => self.capabilities.config_snapshot,
+            OperationType::LogUpload => self.capabilities.log_upload,
+            _ => true,
         }
     }
 }

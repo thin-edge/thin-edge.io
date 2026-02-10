@@ -206,6 +206,7 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             workflow_repository,
             state_repository,
             log_dir: self.config.log_dir,
+            capabilities: self.config.capabilities,
             input_receiver: self.input_receiver,
             builtin_command_dispatcher: self.command_dispatcher,
             builtin_operation_step_executor: self.builtin_operation_step_executor,

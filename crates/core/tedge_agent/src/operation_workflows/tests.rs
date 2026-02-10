@@ -3,6 +3,7 @@ use crate::operation_workflows::builder::DownloaderResult;
 use crate::operation_workflows::builder::WorkflowActorBuilder;
 use crate::operation_workflows::config::OperationConfig;
 use crate::software_manager::actor::SoftwareCommand;
+use crate::Capabilities;
 use camino::Utf8Path;
 use serde_json::json;
 use std::process::Output;
@@ -385,6 +386,7 @@ async fn spawn_mqtt_operation_converter(device_topic_id: &str) -> Result<TestHan
         state_dir: tmp_path.join("running-operations"),
         operations_dir: tmp_path.join("operations"),
         tmp_dir: tmp_path.into(),
+        capabilities: Capabilities::default(),
     };
     let mut converter_actor_builder = WorkflowActorBuilder::new(
         config,
