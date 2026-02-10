@@ -1,5 +1,6 @@
 use crate::workflow::GenericStateUpdate;
 use crate::workflow::ScriptDefinitionError;
+use serde_json::json;
 use serde_json::Value;
 use std::cmp::max;
 use std::fmt::Display;
@@ -189,13 +190,13 @@ impl ExitHandlers {
                 .clone()
                 .unwrap_or_else(GenericStateUpdate::successful)
                 .inject_into_json(json),
-            Err(reason) => self
-                .on_error
-                .clone()
-                .unwrap_or_else(|| {
-                    GenericStateUpdate::failed(format!("{action} failed with {reason}"))
-                })
-                .into_json(),
+            Err(reason) => {
+                let reason = format!("builtin '{action}' action failed with: {reason}");
+                self.on_error
+                    .clone()
+                    .unwrap_or_else(|| GenericStateUpdate::failed(reason.clone()))
+                    .inject_into_json(json!({ "reason": reason }))
+            }
         }
     }
 
