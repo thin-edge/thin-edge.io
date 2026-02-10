@@ -252,21 +252,10 @@ impl BridgeConfig {
         ]
     }
 
-    pub fn add_rules_from_template(
+    pub fn add_expanded_rules(
         &mut self,
-        file_path: &Utf8Path,
-        toml_template: &str,
-        tedge_config: &TEdgeConfig,
-        auth_method: AuthMethod,
-        cloud_profile: Option<&ProfileName>,
+        rules: Vec<ExpandedBridgeRule>,
     ) -> Result<(), InvalidBridgeRule> {
-        let (rules, _) = expand_bridge_rules(
-            file_path,
-            toml_template,
-            tedge_config,
-            auth_method,
-            cloud_profile,
-        )?;
         for rule in rules {
             match rule.direction {
                 Direction::Outbound => {

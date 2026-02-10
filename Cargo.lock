@@ -4781,6 +4781,7 @@ dependencies = [
  "rumqttc",
  "serde",
  "serde_json",
+ "strum",
  "strum_macros",
  "tar",
  "tedge-agent",

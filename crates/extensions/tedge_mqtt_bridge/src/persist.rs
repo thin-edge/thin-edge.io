@@ -13,8 +13,11 @@ use tedge_utils::file::{self};
 use tedge_utils::fs;
 use tracing::warn;
 
+use crate::config::expand_bridge_rules;
 use crate::config::BridgeConfig;
 use crate::config_toml::AuthMethod;
+use crate::config_toml::ExpandedBridgeRule;
+use crate::config_toml::NonExpansionReason;
 
 /// Persists a bridge config file using the three-file pattern:
 ///
@@ -70,6 +73,75 @@ pub async fn persist_bridge_config_file(
     Ok(())
 }
 
+/// Trait for processing bridge configuration files discovered during directory traversal.
+///
+/// Implementors receive callbacks as `.toml` files are read and expanded.
+pub trait BridgeConfigVisitor {
+    /// Called for each `.toml` file that has a `.toml.disabled` marker.
+    fn on_file_disabled(&mut self, _path: &Utf8Path) {}
+
+    /// Called with the expanded rules from each enabled `.toml` file.
+    fn on_rules_loaded(
+        &mut self,
+        path: &Utf8Path,
+        source: &str,
+        rules: Vec<ExpandedBridgeRule>,
+        non_expansions: Vec<NonExpansionReason>,
+    ) -> anyhow::Result<()>;
+}
+
+/// Walks a bridge configuration directory, expanding each `.toml` file
+/// and notifying the visitor of results.
+///
+/// Files with non-`.toml` extensions (like `.toml.template`) are ignored.
+/// Files with a `.toml.disabled` marker trigger [`BridgeConfigVisitor::on_file_disabled`].
+/// All other `.toml` files are read, expanded, and passed to
+/// [`BridgeConfigVisitor::on_rules_loaded`].
+pub async fn visit_bridge_config_dir(
+    dir: &Utf8Path,
+    tedge_config: &TEdgeConfig,
+    auth_method: AuthMethod,
+    cloud_profile: Option<&ProfileName>,
+    visitor: &mut impl BridgeConfigVisitor,
+) -> anyhow::Result<()> {
+    let mut read_dir = tokio::fs::read_dir(dir)
+        .await
+        .with_context(|| format!("failed to read bridge config directory: {dir}"))?;
+
+    while let Some(entry) = read_dir.next_entry().await? {
+        let path = entry.path();
+        let Some(utf8_path) = path.to_str().map(Utf8Path::new) else {
+            continue;
+        };
+
+        if utf8_path.extension() != Some("toml") {
+            continue;
+        }
+
+        let disabled_path = utf8_path.with_extension("toml.disabled");
+        if tokio::fs::try_exists(&disabled_path).await.unwrap_or(false) {
+            visitor.on_file_disabled(utf8_path);
+            continue;
+        }
+
+        let content = tokio::fs::read_to_string(utf8_path)
+            .await
+            .with_context(|| format!("failed to read {utf8_path}"))?;
+
+        let (rules, non_expansions) = expand_bridge_rules(
+            utf8_path,
+            &content,
+            tedge_config,
+            auth_method,
+            cloud_profile,
+        )?;
+
+        visitor.on_rules_loaded(utf8_path, &content, rules, non_expansions)?;
+    }
+
+    Ok(())
+}
+
 /// Loads all bridge rules from `.toml` files in the specified directory.
 ///
 /// This function reads all `.toml` files in the given directory and expands
@@ -81,34 +153,24 @@ pub async fn load_bridge_rules_from_directory(
     auth_method: AuthMethod,
     cloud_profile: Option<&ProfileName>,
 ) -> anyhow::Result<BridgeConfig> {
-    let mut tc = BridgeConfig::new();
-    let mut read_dir = tokio::fs::read_dir(dir)
-        .await
-        .with_context(|| format!("failed to read bridge config directory: {dir}"))?;
+    struct RuntimeVisitor(BridgeConfig);
 
-    while let Some(file) = read_dir.next_entry().await? {
-        let path = file.path();
-        let Some(utf8_path) = path.to_str().map(Utf8Path::new) else {
-            continue;
-        };
-
-        if utf8_path.extension() == Some("toml") {
-            let disabled_path = utf8_path.with_extension("toml.disabled");
-            let is_disabled = tokio::fs::try_exists(disabled_path).await.unwrap_or(false);
-            if !is_disabled {
-                tc.add_rules_from_template(
-                    utf8_path,
-                    &tokio::fs::read_to_string(file.path())
-                        .await
-                        .with_context(|| format!("failed to read {utf8_path}"))?,
-                    tedge_config,
-                    auth_method,
-                    cloud_profile,
-                )?;
-            }
+    impl BridgeConfigVisitor for RuntimeVisitor {
+        fn on_rules_loaded(
+            &mut self,
+            _path: &Utf8Path,
+            _source: &str,
+            rules: Vec<ExpandedBridgeRule>,
+            _non_expansions: Vec<NonExpansionReason>,
+        ) -> anyhow::Result<()> {
+            self.0.add_expanded_rules(rules)?;
+            Ok(())
         }
     }
-    Ok(tc)
+
+    let mut visitor = RuntimeVisitor(BridgeConfig::new());
+    visit_bridge_config_dir(dir, tedge_config, auth_method, cloud_profile, &mut visitor).await?;
+    Ok(visitor.0)
 }
 
 #[cfg(test)]

@@ -18,6 +18,7 @@ use tedge_config::models::MQTT_CORE_TLS_PORT;
 use tedge_config::models::MQTT_SERVICE_TLS_PORT;
 use tedge_config::tedge_toml::mapper_config;
 use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+use tedge_config::tedge_toml::mapper_config::MapperConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
@@ -46,6 +47,19 @@ pub struct CumulocityMapper {
     pub profile: Option<ProfileName>,
 }
 
+pub fn auth_method(c8y_config: &MapperConfig<C8yMapperSpecificConfig>) -> AuthMethod {
+    let use_certificate = c8y_config
+        .cloud_specific
+        .auth_method
+        .is_certificate(&c8y_config.cloud_specific.credentials_path);
+
+    if use_certificate {
+        AuthMethod::Certificate
+    } else {
+        AuthMethod::Password
+    }
+}
+
 #[async_trait]
 impl TEdgeComponent for CumulocityMapper {
     async fn start(
@@ -61,6 +75,9 @@ impl TEdgeComponent for CumulocityMapper {
 
         let c8y_mapper_config =
             C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config, &c8y_config)?;
+
+        let auth_method = auth_method(&c8y_config);
+
         if tedge_config.mqtt.bridge.built_in {
             let (tc, cloud_config, reconnect_message_mapper) = mqtt_bridge_config(
                 &tedge_config,
@@ -68,6 +85,7 @@ impl TEdgeComponent for CumulocityMapper {
                 &c8y_mapper_config,
                 &c8y_mapper_name,
                 self.profile.as_ref(),
+                auth_method,
             )
             .await?;
             runtime
@@ -206,13 +224,10 @@ async fn mqtt_bridge_config(
     c8y_mapper_config: &C8yMapperConfig,
     c8y_mapper_name: &str,
     cloud_profile: Option<&ProfileName>,
+    auth_method: AuthMethod,
 ) -> Result<(BridgeConfig, MqttOptions, Publish), anyhow::Error> {
-    let use_certificate = c8y_config
-        .cloud_specific
-        .auth_method
-        .is_certificate(&c8y_config.cloud_specific.credentials_path);
     let use_mqtt_service = c8y_config.cloud_specific.mqtt_service.enabled;
-    let bridge_config = bridge_rules(tedge_config, cloud_profile).await?;
+    let bridge_config = bridge_rules(tedge_config, cloud_profile, auth_method).await?;
 
     let c8y = &c8y_config.mqtt().or_config_not_set()?;
     let mut c8y_port = c8y.port().into();
@@ -228,21 +243,24 @@ async fn mqtt_bridge_config(
     // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
     cloud_config.set_clean_session(true);
 
-    if use_certificate {
-        let tls_config = tedge_config
-            .mqtt_client_config_rustls(c8y_config)
-            .context("Failed to create MQTT TLS config")?;
-        cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
-    } else {
-        // TODO(marcel): integrate credentials auth into MqttAuthConfig?
-        let (username, password) =
-            read_c8y_credentials(&c8y_config.cloud_specific.credentials_path)?;
-        use_credentials(
-            &mut cloud_config,
-            &*c8y_config.root_cert_path,
-            username,
-            password,
-        )?;
+    match auth_method {
+        AuthMethod::Certificate => {
+            let tls_config = tedge_config
+                .mqtt_client_config_rustls(c8y_config)
+                .context("Failed to create MQTT TLS config")?;
+            cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
+        }
+        AuthMethod::Password => {
+            // TODO(marcel): integrate credentials auth into MqttAuthConfig?
+            let (username, password) =
+                read_c8y_credentials(&c8y_config.cloud_specific.credentials_path)?;
+            use_credentials(
+                &mut cloud_config,
+                &*c8y_config.root_cert_path,
+                username,
+                password,
+            )?;
+        }
     }
 
     let main_device_xid: EntityExternalId = c8y_config.device.id()?.into();
@@ -312,6 +330,7 @@ async fn mqtt_bridge_config(
 pub async fn bridge_rules(
     tedge_config: &TEdgeConfig,
     cloud_profile: Option<&ProfileName>,
+    auth_method: AuthMethod,
 ) -> anyhow::Result<BridgeConfig> {
     let bridge_config_dir = tedge_config
         .mapper_config_dir::<C8yMapperSpecificConfig>(cloud_profile)
@@ -332,18 +351,6 @@ pub async fn bridge_rules(
     if let Err(err) = change_mode(&bridge_config_dir, 0o755).await {
         warn!("failed to set file permissions for '{bridge_config_dir}': {err}");
     }
-
-    let c8y_config = tedge_config.c8y_mapper_config(&cloud_profile)?;
-    let use_certificate = c8y_config
-        .cloud_specific
-        .auth_method
-        .is_certificate(&c8y_config.cloud_specific.credentials_path);
-
-    let auth_method = if use_certificate {
-        AuthMethod::Certificate
-    } else {
-        AuthMethod::Password
-    };
 
     load_bridge_rules_from_directory(&bridge_config_dir, tedge_config, auth_method, cloud_profile)
         .await
@@ -374,14 +381,10 @@ mod tests {
 
         #[tokio::test]
         async fn certificate_only_rules_present_with_certificate_auth() {
-            let (_ttd, config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-"#,
-            )
-            .await;
-            let rules = bridge_rules(&config, None).await.unwrap();
+            let (_ttd, config) = load_config("").await;
+            let rules = bridge_rules(&config, None, AuthMethod::Certificate)
+                .await
+                .unwrap();
 
             assert!(has_remote_subscription(&rules, "s/dat"));
             assert!(has_local_subscription(&rules, "c8y/s/uat"));
@@ -389,15 +392,10 @@ url = "example.com"
 
         #[tokio::test]
         async fn certificate_only_rules_absent_with_password_auth() {
-            let (_ttd, config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-auth_method = "basic"
-"#,
-            )
-            .await;
-            let rules = bridge_rules(&config, None).await.unwrap();
+            let (_ttd, config) = load_config("").await;
+            let rules = bridge_rules(&config, None, AuthMethod::Password)
+                .await
+                .unwrap();
 
             assert!(!has_remote_subscription(&rules, "s/dat"));
             assert!(!has_local_subscription(&rules, "c8y/s/uat"));
@@ -405,15 +403,10 @@ auth_method = "basic"
 
         #[tokio::test]
         async fn password_only_rules_present_with_password_auth() {
-            let (_ttd, config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-auth_method = "basic"
-"#,
-            )
-            .await;
-            let rules = bridge_rules(&config, None).await.unwrap();
+            let (_ttd, config) = load_config(r#"c8y.auth_method = "basic""#).await;
+            let rules = bridge_rules(&config, None, AuthMethod::Password)
+                .await
+                .unwrap();
 
             for mode in ['s', 't', 'q', 'c'] {
                 assert!(has_local_subscription(&rules, &format!("c8y/{mode}/ul/#")));
@@ -422,14 +415,10 @@ auth_method = "basic"
 
         #[tokio::test]
         async fn password_only_rules_absent_with_certificate_auth() {
-            let (_ttd, config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-"#,
-            )
-            .await;
-            let rules = bridge_rules(&config, None).await.unwrap();
+            let (_ttd, config) = load_config("").await;
+            let rules = bridge_rules(&config, None, AuthMethod::Certificate)
+                .await
+                .unwrap();
 
             for mode in ['s', 't', 'q', 'c'] {
                 assert!(!has_local_subscription(&rules, &format!("c8y/{mode}/ul/#")));
@@ -438,15 +427,11 @@ url = "example.com"
 
         #[tokio::test]
         async fn smartrest1_templates_expand_correctly() {
-            let (_ttd, config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-smartrest1.templates = ["tmpl1", "tmpl2"]
-"#,
-            )
-            .await;
-            let rules = bridge_rules(&config, None).await.unwrap();
+            let (_ttd, config) =
+                load_config(r#"c8y.smartrest1.templates = ["tmpl1", "tmpl2"]"#).await;
+            let rules = bridge_rules(&config, None, AuthMethod::Password)
+                .await
+                .unwrap();
 
             assert!(has_remote_subscription(&rules, "s/dl/tmpl1"));
             assert!(has_remote_subscription(&rules, "s/dl/tmpl2"));
@@ -454,15 +439,10 @@ smartrest1.templates = ["tmpl1", "tmpl2"]
 
         #[tokio::test]
         async fn smartrest2_templates_expand_correctly() {
-            let (_ttd, config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-smartrest.templates = ["sr2a", "sr2b"]
-"#,
-            )
-            .await;
-            let rules = bridge_rules(&config, None).await.unwrap();
+            let (_ttd, config) = load_config(r#"c8y.smartrest.templates = ["sr2a", "sr2b"]"#).await;
+            let rules = bridge_rules(&config, None, AuthMethod::Certificate)
+                .await
+                .unwrap();
 
             assert!(has_remote_subscription(&rules, "s/dc/sr2a"));
             assert!(has_remote_subscription(&rules, "s/dc/sr2b"));
@@ -470,14 +450,10 @@ smartrest.templates = ["sr2a", "sr2b"]
 
         #[tokio::test]
         async fn mode_loop_expands_correctly() {
-            let (_ttd, config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-"#,
-            )
-            .await;
-            let rules = bridge_rules(&config, None).await.unwrap();
+            let (_ttd, config) = load_config("").await;
+            let rules = bridge_rules(&config, None, AuthMethod::Certificate)
+                .await
+                .unwrap();
 
             for mode in ['s', 't', 'q', 'c'] {
                 assert!(has_local_subscription(&rules, &format!("c8y/{mode}/us/#")));
@@ -490,13 +466,14 @@ url = "example.com"
             let (_ttd, config) = load_config(
                 r#"
 [c8y]
-url = "example.com"
 mqtt_service.enabled = true
 mqtt_service.topics = ["custom/topic"]
 "#,
             )
             .await;
-            let rules = bridge_rules(&config, None).await.unwrap();
+            let rules = bridge_rules(&config, None, AuthMethod::Certificate)
+                .await
+                .unwrap();
 
             assert!(has_local_subscription(&rules, "c8y/mqtt/out/#"));
             assert!(has_remote_subscription(&rules, "custom/topic"));
@@ -504,29 +481,20 @@ mqtt_service.topics = ["custom/topic"]
 
         #[tokio::test]
         async fn mqtt_service_rules_absent_when_disabled() {
-            let (_ttd, config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-"#,
-            )
-            .await;
-            let rules = bridge_rules(&config, None).await.unwrap();
+            let (_ttd, config) = load_config("").await;
+            let rules = bridge_rules(&config, None, AuthMethod::Certificate)
+                .await
+                .unwrap();
 
             assert!(!has_local_subscription(&rules, "c8y/mqtt/out/#"));
         }
 
         #[tokio::test]
         async fn custom_topic_prefix_applied() {
-            let (_ttd, config) = load_config(
-                r#"
-[c8y]
-url = "example.com"
-bridge.topic_prefix = "custom"
-"#,
-            )
-            .await;
-            let rules = bridge_rules(&config, None).await.unwrap();
+            let (_ttd, config) = load_config("c8y.bridge.topic_prefix = \"custom\"").await;
+            let rules = bridge_rules(&config, None, AuthMethod::Certificate)
+                .await
+                .unwrap();
 
             assert!(has_remote_subscription(&rules, "s/dt"));
             assert!(has_local_subscription(&rules, "custom/s/us/#"));

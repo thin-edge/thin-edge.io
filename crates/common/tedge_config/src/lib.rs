@@ -80,6 +80,7 @@ impl TEdgeConfig {
     /// // Defaults are preserved
     /// assert_eq!(config.sudo.enable, true);
     /// ```
+    #[track_caller]
     pub fn load_toml_str(toml: &str) -> TEdgeConfig {
         TEdgeConfigLocation::load_toml_str(
             toml,
@@ -88,6 +89,7 @@ impl TEdgeConfig {
     }
 
     #[cfg(feature = "test")]
+    #[track_caller]
     pub fn load_toml_str_with_warnings(toml: &str) -> (TEdgeConfig, UnusedValueWarnings) {
         TEdgeConfigLocation::load_toml_str_with_warnings(
             toml,
@@ -96,6 +98,7 @@ impl TEdgeConfig {
     }
 
     #[cfg(feature = "test")]
+    #[track_caller]
     pub fn load_toml_str_with_root_dir(config_dir: impl AsRef<StdPath>, toml: &str) -> TEdgeConfig {
         TEdgeConfigLocation::load_toml_str(toml, TEdgeConfigLocation::from_custom_root(config_dir))
     }

@@ -1,31 +1,26 @@
 use std::io::Write;
 
-use anyhow::Context;
 use ariadne::Color;
 use ariadne::Config;
 use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
 use ariadne::Source;
-use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use pad::PadStr;
-use tedge_config::models::CloudType;
-use tedge_config::tedge_toml::mapper_config::ExpectedCloudType;
-use tedge_config::tedge_toml::ProfileName;
-use tedge_config::TEdgeConfig;
 use tedge_mqtt_bridge::config_toml::Direction;
 use tedge_mqtt_bridge::config_toml::ExpandedBridgeRule;
 use tedge_mqtt_bridge::config_toml::NonExpansionReason;
-use tedge_mqtt_bridge::expand_bridge_rules;
-use tedge_mqtt_bridge::AuthMethod;
 use yansi::Paint as _;
 
+use super::common::cloud_name;
+use super::common::load_bridge_rules;
+use super::common::print_non_configurable_or_disabled;
+use super::common::NonExpansionContext;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
-use crate::cli::common::MaybeBorrowedCloud;
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use tedge_config::TEdgeConfig;
 
 /// Shows the current bridge configuration
 #[derive(clap::Args, Debug, Eq, PartialEq)]
@@ -62,266 +57,26 @@ async fn run_inspect(
         #[cfg(feature = "c8y")]
         CloudArg::C8y { profile } => {
             use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
-            inspect_bridge::<C8yMapperSpecificConfig>(w, config, profile, &cloud, debug).await?;
+            if let Some((rules, non_expansions)) =
+                load_bridge_rules::<C8yMapperSpecificConfig>(w, config, profile, &cloud).await?
+            {
+                if debug {
+                    print_non_expansions(w, &non_expansions);
+                }
+                print_rules(w, rules);
+            }
         }
         #[cfg(feature = "aws")]
         CloudArg::Aws { .. } => {
-            if !config.mqtt.bridge.built_in {
-                print_built_in_bridge_disabled(w, config, &cloud);
-            } else {
-                print_built_in_bridge_non_configurable(w, &cloud);
-            }
+            print_non_configurable_or_disabled(w, config, &cloud);
         }
         #[cfg(feature = "azure")]
         CloudArg::Az { .. } => {
-            if !config.mqtt.bridge.built_in {
-                print_built_in_bridge_disabled(w, config, &cloud);
-            } else {
-                print_built_in_bridge_non_configurable(w, &cloud);
-            }
+            print_non_configurable_or_disabled(w, config, &cloud);
         }
     }
 
     Ok(())
-}
-
-async fn inspect_bridge<Cloud: ExpectedCloudType>(
-    w: &mut impl Write,
-    config: &TEdgeConfig,
-    profile: &Option<ProfileName>,
-    cloud: &MaybeBorrowedCloud<'_>,
-    debug: bool,
-) -> anyhow::Result<()> {
-    let bridge_config_dir = config
-        .mapper_config_dir::<Cloud>(profile.as_ref())
-        .join("bridge");
-
-    if !config.mqtt.bridge.built_in {
-        print_built_in_bridge_disabled(w, config, cloud);
-        return Ok(());
-    }
-
-    let mosquitto_config_path = config
-        .root_dir()
-        .join("mosquitto-conf")
-        .join(&*cloud.mosquitto_config_filename());
-    if !mosquitto_config_path.exists() {
-        print_not_connected(w, cloud);
-        return Ok(());
-    }
-
-    print_header(w, profile, &bridge_config_dir, cloud);
-
-    if !bridge_config_dir.exists() {
-        writeln!(w, "{}", "No bridge configuration directory found.".yellow())?;
-        writeln!(
-            w,
-            "The bridge configuration will be created when the mapper starts."
-        )?;
-        return Ok(());
-    }
-
-    let auth_method = get_auth_method::<Cloud>(config, profile)?;
-    let (rules, non_expansions) =
-        load_rules_from_directory(&bridge_config_dir, config, auth_method, profile).await?;
-
-    if rules.is_empty() && non_expansions.is_empty() {
-        writeln!(w, "{}", "No bridge configuration files found.".yellow())?;
-        return Ok(());
-    }
-
-    if debug {
-        print_non_expansions(w, &non_expansions);
-    }
-
-    print_rules(w, rules);
-
-    Ok(())
-}
-
-fn print_built_in_bridge_disabled(
-    w: &mut impl Write,
-    config: &TEdgeConfig,
-    cloud: &MaybeBorrowedCloud<'_>,
-) {
-    let _ = writeln!(w, "{}", "Built-in bridge is disabled".yellow());
-    let mosquitto_config_path = config
-        .root_dir()
-        .join("mosquitto-conf")
-        .join(&*cloud.mosquitto_config_filename());
-    if mosquitto_config_path.exists() {
-        let _ = writeln!(
-            w,
-            "The mosquitto bridge config is stored in {}",
-            mosquitto_config_path.bright_blue()
-        );
-    } else {
-        print_not_connected(w, cloud);
-    }
-}
-
-fn print_not_connected(w: &mut impl Write, cloud: &MaybeBorrowedCloud<'_>) {
-    let name = cloud_name(cloud).blue();
-    if let Some(profile) = cloud.profile_name() {
-        let _ = writeln!(
-            w,
-            "Not connected to {name} with profile {}",
-            profile.green()
-        );
-    } else {
-        let _ = writeln!(w, "Not connected to {name}");
-    }
-}
-
-fn print_built_in_bridge_non_configurable(w: &mut impl Write, cloud: &MaybeBorrowedCloud<'_>) {
-    let _ = writeln!(
-        w,
-        "Built-in bridge rules are not yet configurable for {}",
-        cloud_name(cloud).yellow()
-    );
-}
-
-fn print_header(
-    w: &mut impl Write,
-    profile: &Option<ProfileName>,
-    bridge_config_dir: &camino::Utf8PathBuf,
-    cloud: &MaybeBorrowedCloud<'_>,
-) {
-    let _ = writeln!(w, "{} {}", "Bridge configuration for".bold(), cloud.bold());
-    if let Some(profile) = profile {
-        let _ = writeln!(w, "Profile: {}", profile.green());
-    }
-    let _ = writeln!(w, "Reading from: {}", bridge_config_dir.bright_blue());
-    let _ = writeln!(w);
-}
-
-// TODO can this not be duplicated?
-fn get_auth_method<Cloud: ExpectedCloudType>(
-    config: &TEdgeConfig,
-    profile: &Option<ProfileName>,
-) -> anyhow::Result<AuthMethod> {
-    match Cloud::expected_cloud_type() {
-        CloudType::C8y => {
-            let c8y_config = config.c8y_mapper_config(profile)?;
-            let use_certificate = c8y_config
-                .cloud_specific
-                .auth_method
-                .is_certificate(&c8y_config.cloud_specific.credentials_path);
-
-            Ok(if use_certificate {
-                AuthMethod::Certificate
-            } else {
-                AuthMethod::Password
-            })
-        }
-        _ => Ok(AuthMethod::Certificate),
-    }
-}
-
-/// Context needed to display a non-expansion reason with source location
-struct NonExpansionContext {
-    path: Utf8PathBuf,
-    source: String,
-    reason: NonExpansionReason,
-}
-
-async fn load_rules_from_directory(
-    bridge_config_dir: &camino::Utf8PathBuf,
-    config: &TEdgeConfig,
-    auth_method: AuthMethod,
-    profile: &Option<ProfileName>,
-) -> anyhow::Result<(Vec<ExpandedBridgeRule>, Vec<NonExpansionContext>)> {
-    let mut all_rules = Vec::new();
-    let mut all_non_expansions = Vec::new();
-
-    let mut read_dir = tokio::fs::read_dir(bridge_config_dir)
-        .await
-        .with_context(|| format!("Failed to read bridge config directory: {bridge_config_dir}"))?;
-
-    while let Some(entry) = read_dir.next_entry().await? {
-        let path = entry.path();
-        let Some(utf8_path) = path.to_str().map(Utf8Path::new) else {
-            continue;
-        };
-
-        if utf8_path.extension() != Some("toml") {
-            continue;
-        }
-
-        if is_disabled(utf8_path).await {
-            let filename = utf8_path.file_name().unwrap_or("unknown");
-            println!("{} {} (disabled)", "Skipping:".dim(), filename.dim());
-            continue;
-        }
-
-        process_config_file(
-            utf8_path,
-            config,
-            auth_method,
-            profile,
-            &mut all_rules,
-            &mut all_non_expansions,
-        )
-        .await;
-    }
-
-    Ok((all_rules, all_non_expansions))
-}
-
-async fn is_disabled(path: &Utf8Path) -> bool {
-    let disabled_path = path.with_extension("toml.disabled");
-    tokio::fs::try_exists(&disabled_path).await.unwrap_or(false)
-}
-
-async fn process_config_file(
-    utf8_path: &Utf8Path,
-    config: &TEdgeConfig,
-    auth_method: AuthMethod,
-    profile: &Option<ProfileName>,
-    all_rules: &mut Vec<ExpandedBridgeRule>,
-    all_non_expansions: &mut Vec<NonExpansionContext>,
-) {
-    let toml_content = match tokio::fs::read_to_string(utf8_path).await {
-        Ok(content) => content,
-        Err(e) => {
-            let filename = utf8_path.file_name().unwrap_or("unknown");
-            eprintln!(
-                "{} Failed to read {}: {}",
-                "Error:".red().bold(),
-                filename,
-                e
-            );
-            return;
-        }
-    };
-
-    match expand_bridge_rules(
-        utf8_path,
-        &toml_content,
-        config,
-        auth_method,
-        profile.as_ref(),
-    ) {
-        Ok((rules, non_expansions)) => {
-            all_rules.extend(rules);
-            for reason in non_expansions {
-                all_non_expansions.push(NonExpansionContext {
-                    path: utf8_path.to_owned(),
-                    source: toml_content.clone(),
-                    reason,
-                });
-            }
-        }
-        Err(e) => {
-            let filename = utf8_path.file_name().unwrap_or("unknown");
-            eprintln!(
-                "{} Error parsing {}: {}",
-                "Error:".red().bold(),
-                filename,
-                e
-            );
-        }
-    }
 }
 
 fn print_non_expansions(w: &mut impl Write, non_expansions: &[NonExpansionContext]) {
@@ -495,19 +250,10 @@ fn print_bidirectional_rules(w: &mut impl Write, rules: &[ExpandedBridgeRule]) {
     }
 }
 
-fn cloud_name(cloud: &MaybeBorrowedCloud<'_>) -> &'static str {
-    match cloud {
-        #[cfg(feature = "c8y")]
-        MaybeBorrowedCloud::C8y { .. } => "Cumulocity",
-        #[cfg(feature = "aws")]
-        MaybeBorrowedCloud::Aws { .. } => "AWS",
-        #[cfg(feature = "azure")]
-        MaybeBorrowedCloud::Azure { .. } => "Azure",
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use crate::cli::bridge::common::strip_ansi;
+
     use super::*;
 
     #[test]
@@ -554,7 +300,7 @@ mod tests {
         assert!(output.contains("Bidirectional"));
         assert!(output.contains("te/health"));
         let line = output.lines().find(|l| l.contains("te/health")).unwrap();
-        assert_eq!(depad(line), "te/health <-> c8y/health");
+        assert_eq!(depad_line(line), "te/health <-> c8y/health");
     }
 
     #[test]
@@ -600,33 +346,6 @@ mod tests {
         pretty_assertions::assert_eq!(depad_multiline(&output), "Local -> Remote\nte/short -> c8y/short\nte/device/main/longer-topic -> c8y/s/longer-topic\n")
     }
 
-    fn config_with_root(root: &std::path::Path, toml: &str) -> TEdgeConfig {
-        TEdgeConfig::load_toml_str_with_root_dir(root, toml)
-    }
-
-    fn c8y_toml(extra: &str) -> String {
-        format!(
-            "c8y.url = \"example.cumulocity.com\"\n\
-             mqtt.bridge.built_in = true\n\
-             {extra}"
-        )
-    }
-
-    /// Create the mosquitto config file that signals the cloud is connected
-    fn mark_connected(root: &std::path::Path, cloud: &Cloud) {
-        let dir = root.join("mosquitto-conf");
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join(&*cloud.mosquitto_config_filename()), "").unwrap();
-    }
-
-    fn render_inspect(cloud_arg: &CloudArg, config: &TEdgeConfig, debug: bool) -> String {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let mut buf = Vec::new();
-        rt.block_on(run_inspect(&mut buf, cloud_arg, config, debug))
-            .unwrap();
-        strip_ansi(&String::from_utf8(buf).unwrap())
-    }
-
     #[test]
     fn c8y_not_connected() {
         let tmp = tempfile::tempdir().unwrap();
@@ -664,6 +383,72 @@ mod tests {
         assert!(
             output.contains("No bridge configuration files found"),
             "output was: {output}"
+        );
+    }
+
+    #[test]
+    fn c8y_uses_active_auth_method() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &c8y_toml("c8y.auth_method = 'basic'"));
+        let cloud = Cloud::c8y(None);
+        mark_connected(tmp.path(), &cloud);
+        std::fs::create_dir_all(tmp.path().join("mappers/c8y/bridge")).unwrap();
+        std::fs::write(
+            tmp.path().join("mappers/c8y/bridge/test.toml"),
+            r#"
+        [[rule]]
+        if = "${connection.auth_method} == 'password'"
+        topic = "password-only"
+        local_prefix = ""
+        remote_prefix = ""
+        direction = "outbound"
+        "#,
+        )
+        .unwrap();
+
+        let output = render_inspect(&CloudArg::C8y { profile: None }, &config, false);
+        let start = output.find("Local -> Remote").unwrap();
+        let output = depad_multiline(&output[start..]);
+        pretty_assertions::assert_eq!(
+            output,
+            "
+Local -> Remote
+password-only -> password-only
+
+Remote -> Local
+-- No matching rules --
+
+Bidirectional
+-- No matching rules --
+"
+            .trim()
+        );
+    }
+
+    #[test]
+    fn invalid_bridge_toml_prevents_further_output() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &c8y_toml(""));
+        let cloud = Cloud::c8y(None);
+        mark_connected(tmp.path(), &cloud);
+        std::fs::create_dir_all(tmp.path().join("mappers/c8y/bridge")).unwrap();
+        // Not a valid toml file, doesn't have any required keys inside rule
+        std::fs::write(
+            tmp.path().join("mappers/c8y/bridge/test.toml"),
+            r#"
+        [[rule]]
+        "#,
+        )
+        .unwrap();
+
+        let output = render_inspect(&CloudArg::C8y { profile: None }, &config, false);
+        assert!(
+            output.contains("Failed to read bridge config files"),
+            "should show error message, actual output: {output}"
+        );
+        assert!(
+            !output.contains("Local -> Remote"),
+            "should not show any rules, actual output: {output}"
         );
     }
 
@@ -791,41 +576,11 @@ mod tests {
         strip_ansi(&String::from_utf8(buf).unwrap())
     }
 
-    /// A very rudimentary solution for stripping the ansi escape sequences
-    ///
-    /// The code uses yansi to color code bits of output. The tests don't need
-    /// to care about this formatting, so we can remove it.
-    ///
-    /// Warning: This is not a particularly robust way to solve the problem. It
-    /// is some simple code generated by gemini. A better solution would be the
-    /// `strip-ansi-escapes` crate, but this should be fine for the needs of
-    /// these tests.
-    ///
-    /// A possible other solution is calling `yansi::disable()` before rendering
-    /// output, but that means we lose the formatting on [pretty_assertions]. If
-    /// we re-enable after rendering, that breaks when running under `cargo
-    /// test` as that runs the tests in a single process in separate threads.
-    fn strip_ansi(s: &str) -> String {
-        let mut result = String::new();
-        let mut inside_ansi = false;
-
-        for c in s.chars() {
-            if c == '\x1b' {
-                inside_ansi = true;
-            } else if inside_ansi && c == 'm' {
-                inside_ansi = false;
-            } else if !inside_ansi {
-                result.push(c);
-            }
-        }
-        result
-    }
-
     fn depad_multiline(text: &str) -> String {
-        text.lines().map(depad).collect::<Vec<_>>().join("\n")
+        text.lines().map(depad_line).collect::<Vec<_>>().join("\n")
     }
 
-    fn depad(line: &str) -> String {
+    fn depad_line(line: &str) -> String {
         line.trim()
             .chars()
             .scan(false, |was_space, c| {
@@ -843,5 +598,33 @@ mod tests {
             })
             .flatten()
             .collect()
+    }
+
+    #[track_caller]
+    fn config_with_root(root: &std::path::Path, toml: &str) -> TEdgeConfig {
+        TEdgeConfig::load_toml_str_with_root_dir(root, toml)
+    }
+
+    fn c8y_toml(extra: &str) -> String {
+        format!(
+            "c8y.url = \"example.cumulocity.com\"\n\
+             mqtt.bridge.built_in = true\n\
+             {extra}"
+        )
+    }
+
+    /// Create the mosquitto config file that signals the cloud is connected
+    fn mark_connected(root: &std::path::Path, cloud: &Cloud) {
+        let dir = root.join("mosquitto-conf");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(&*cloud.mosquitto_config_filename()), "").unwrap();
+    }
+
+    fn render_inspect(cloud_arg: &CloudArg, config: &TEdgeConfig, debug: bool) -> String {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let mut buf = Vec::new();
+        rt.block_on(run_inspect(&mut buf, cloud_arg, config, debug))
+            .unwrap();
+        strip_ansi(&String::from_utf8(buf).unwrap())
     }
 }

@@ -61,6 +61,8 @@ pub use config::*;
 pub use config_toml::AuthMethod;
 pub use persist::load_bridge_rules_from_directory;
 pub use persist::persist_bridge_config_file;
+pub use persist::visit_bridge_config_dir;
+pub use persist::BridgeConfigVisitor;
 
 const MAX_PACKET_SIZE: usize = 268435455; // maximum allowed MQTT payload size
 
