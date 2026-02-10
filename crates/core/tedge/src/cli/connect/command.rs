@@ -701,7 +701,7 @@ pub async fn bridge_config(
                     az_config.url().or_config_not_set()?.as_str(),
                 )
                 .map_err(TEdgeConfigError::from)?,
-                config_file: cloud.bridge_config_filename(),
+                config_file: cloud.mosquitto_config_filename(),
                 bridge_root_cert_path: az_config.root_cert_path.clone().into(),
                 remote_clientid: az_config.device.id()?.clone(),
                 bridge_certfile: az_config.device.cert_path.clone().into(),
@@ -725,7 +725,7 @@ pub async fn bridge_config(
                     aws_config.url().or_config_not_set()?.as_str(),
                 )
                 .map_err(TEdgeConfigError::from)?,
-                config_file: cloud.bridge_config_filename(),
+                config_file: cloud.mosquitto_config_filename(),
                 bridge_root_cert_path: aws_config.root_cert_path.clone().into(),
                 remote_clientid: aws_config.device.id()?.clone(),
                 bridge_certfile: aws_config.device.cert_path.clone().into(),
@@ -771,7 +771,7 @@ pub async fn bridge_config(
 
             let params = BridgeConfigC8yParams {
                 mqtt_host,
-                config_file: cloud.bridge_config_filename(),
+                config_file: cloud.mosquitto_config_filename(),
                 bridge_root_cert_path: c8y_config.root_cert_path.clone().into(),
                 remote_clientid: c8y_config.device.id()?.clone(),
                 remote_username,

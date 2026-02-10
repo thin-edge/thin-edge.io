@@ -4745,6 +4745,7 @@ version = "1.7.1"
 dependencies = [
  "anstyle",
  "anyhow",
+ "ariadne",
  "asn1-rs 0.7.1",
  "assert_cmd",
  "assert_matches",
@@ -4793,6 +4794,7 @@ dependencies = [
  "tedge_api",
  "tedge_config",
  "tedge_flows",
+ "tedge_mqtt_bridge",
  "tedge_test_utils",
  "tedge_utils",
  "tempfile",
@@ -5334,6 +5336,7 @@ dependencies = [
  "toml 0.9.6",
  "tracing",
  "tracing-subscriber",
+ "yansi",
 ]
 
 [[package]]

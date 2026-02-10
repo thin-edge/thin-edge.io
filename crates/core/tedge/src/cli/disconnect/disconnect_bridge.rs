@@ -89,7 +89,7 @@ impl DisconnectBridgeCommand {
     }
 
     async fn remove_bridge_config_file(&self) -> Result<(), DisconnectBridgeError> {
-        let config_file = self.cloud.bridge_config_filename();
+        let config_file = self.cloud.mosquitto_config_filename();
         let bridge_conf_path = self
             .config_dir
             .join(TEDGE_BRIDGE_CONF_DIR_PATH)
