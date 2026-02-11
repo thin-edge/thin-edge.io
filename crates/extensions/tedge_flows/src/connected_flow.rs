@@ -63,7 +63,7 @@ impl ConnectedFlow {
     }
 
     pub fn next_deadline(&self) -> Option<Instant> {
-        self.polling_source.as_ref().and_then(|p| p.next_deadline())
+        self.polling_source.as_ref().map(|p| p.next_deadline())
     }
 
     pub async fn on_source_poll(&mut self, timestamp: SystemTime, now: Instant) -> FlowResult {

@@ -74,6 +74,70 @@ async fn interval_executes_at_configured_frequency() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn sources_poll_at_configured_frequency() {
+    let config_dir = create_test_flow_dir();
+
+    write_file(
+        &config_dir,
+        "count_ticks.js",
+        r#"
+        let count = 0;
+        export function onMessage() {
+            count++;
+            return [{
+                topic: "test/message/count",
+                payload: JSON.stringify({count: count})
+            }];
+        }
+    "#,
+    );
+
+    let input_file = config_dir.path().join("tick.txt").display().to_string();
+
+    write_file(
+        &config_dir,
+        "ticks.toml",
+        &format!(
+            r#"
+        [input.file]
+        path = "{input_file}"
+        topic = "test/tick"
+        interval = "1s"
+
+        [[steps]]
+        script = "count_ticks.js"
+    "#
+        ),
+    );
+
+    write_file(&config_dir, "tick.txt", "tick");
+
+    let captured_messages = CapturedMessages::default();
+    let mut mqtt = MockMqtt::new(captured_messages.clone());
+    let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
+    let count = || {
+        captured_messages
+            .retain(|msg| !msg.topic.as_ref().contains("status"))
+            .count()
+    };
+
+    tick(Duration::from_secs(1)).await;
+    assert_eq!(count(), 0, "Should not execute before 2s");
+
+    tick(Duration::from_secs(2)).await;
+    assert_eq!(count(), 1, "Should start executing at 2s");
+
+    tick(Duration::from_secs(3)).await;
+    assert_eq!(count(), 2, "Should execute twice at 3s");
+
+    tick(Duration::from_secs(4)).await;
+    assert_eq!(count(), 3, "Should execute three times at 4s");
+
+    actor_handle.abort();
+    let _ = actor_handle.await;
+}
+
+#[tokio::test(start_paused = true)]
 async fn multiple_scripts_execute_at_independent_frequencies() {
     let config_dir = create_test_flow_dir();
 

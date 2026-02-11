@@ -19,8 +19,7 @@ pub trait PollingSource: Send + Sync {
     async fn poll(&mut self, timestamp: SystemTime) -> Result<Vec<Message>, PollingSourceError>;
 
     /// Get the next deadline when this source should be polled
-    /// Returns None if the source doesn't have scheduled polling
-    fn next_deadline(&self) -> Option<Instant>;
+    fn next_deadline(&self) -> Instant;
 
     /// Check if this source is ready to be polled at the current time
     fn is_ready(&self, now: Instant) -> bool;
@@ -68,7 +67,7 @@ impl PollingSource for CommandPollingSource {
         Ok(messages)
     }
 
-    fn next_deadline(&self) -> Option<Instant> {
+    fn next_deadline(&self) -> Instant {
         self.poll.next_deadline
     }
 
@@ -133,7 +132,7 @@ impl PollingSource for FilePollingSource {
         Ok(messages)
     }
 
-    fn next_deadline(&self) -> Option<Instant> {
+    fn next_deadline(&self) -> Instant {
         self.poll.next_deadline
     }
 
@@ -168,7 +167,7 @@ impl StreamingSource for FileStreamingSource {
 
 struct PollInterval {
     polling_interval: Duration,
-    next_deadline: Option<Instant>,
+    next_deadline: Instant,
 }
 
 impl PollInterval {
@@ -179,15 +178,18 @@ impl PollInterval {
         );
         PollInterval {
             polling_interval,
-            next_deadline: None,
+            // Use a small delay before the first interval to
+            // reduce noise when the poller is instantiated in quick succession
+            // but don't wait for entire interval before the first deadline
+            next_deadline: Instant::now() + Duration::from_secs(2),
         }
     }
 
     fn is_ready(&self, now: Instant) -> bool {
-        self.next_deadline.is_none() || self.next_deadline.unwrap() < now
+        self.next_deadline <= now
     }
 
     fn update_after_poll(&mut self, now: Instant) {
-        self.next_deadline = Some(now + self.polling_interval);
+        self.next_deadline = now + self.polling_interval;
     }
 }
