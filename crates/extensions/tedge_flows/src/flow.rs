@@ -22,6 +22,18 @@ use tokio::time::Instant;
 /// processes those along a chain of transformation steps,
 /// and finally produces the derived messages to a sink of type [FlowOutput].
 pub struct Flow {
+    // Name
+    pub name: Option<String>,
+
+    /// Version
+    pub version: Option<String>,
+
+    /// Description of the purpose
+    pub description: Option<String>,
+
+    /// User-defined tags
+    pub tags: Option<Vec<String>>,
+
     /// The message source
     pub input: FlowInput,
 
@@ -143,7 +155,9 @@ impl AsMut<Flow> for Flow {
 
 impl Flow {
     pub fn name(&self) -> &str {
-        self.source.as_str()
+        self.name
+            .as_deref()
+            .unwrap_or_else(|| self.source.file_name().unwrap_or(""))
     }
 
     pub fn topics(&self) -> TopicFilter {
