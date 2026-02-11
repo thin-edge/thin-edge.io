@@ -22,6 +22,7 @@ pub struct BridgeInspectCmd {
     #[clap(subcommand)]
     cloud: CloudArg,
 
+    /// Show skipped rules (e.g. due to unmet conditions or empty template loops)
     #[clap(long, global = true)]
     debug: bool,
 }
