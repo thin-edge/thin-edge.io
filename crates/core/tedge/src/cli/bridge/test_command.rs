@@ -24,6 +24,7 @@ pub struct BridgeTestCmd {
     #[clap(subcommand)]
     cloud: CloudTopicArg,
 
+    /// Show skipped rules (e.g. due to unmet conditions or empty template loops)
     #[clap(long, global = true)]
     debug: bool,
 }
@@ -38,7 +39,7 @@ enum CloudTopicArg {
         #[clap(long)]
         profile: Option<ProfileName>,
 
-        /// The MQTT topic to test
+        /// The MQTT topic to test (local or remote, wildcards are not supported)
         topic: String,
     },
     #[cfg(feature = "aws")]
@@ -49,7 +50,7 @@ enum CloudTopicArg {
         #[clap(long)]
         profile: Option<ProfileName>,
 
-        /// The MQTT topic to test
+        /// The MQTT topic to test (local or remote, wildcards are not supported)
         topic: String,
     },
     #[cfg(feature = "azure")]
@@ -60,7 +61,7 @@ enum CloudTopicArg {
         #[clap(long)]
         profile: Option<ProfileName>,
 
-        /// The MQTT topic to test
+        /// The MQTT topic to test (local or remote, wildcards are not supported)
         topic: String,
     },
 }
@@ -113,8 +114,11 @@ impl Command for BridgeTestCmd {
         } else {
             DetailLevel::Normal
         };
-        run_test(&mut std::io::stdout(), &self.cloud, &config, detail).await?;
-        Ok(())
+        let status = run_test(&mut std::io::stdout(), &self.cloud, &config, detail).await?;
+        match status {
+            Status::MatchesFound => std::process::exit(0),
+            Status::NoMatches => std::process::exit(2),
+        }
     }
 }
 
@@ -123,10 +127,11 @@ async fn run_test(
     cloud_topic: &CloudTopicArg,
     config: &TEdgeConfig,
     detail: DetailLevel,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Status> {
     let cloud_arg = cloud_topic.cloud_arg();
     let cloud = Cloud::try_from(cloud_arg.clone())?;
     let topic = cloud_topic.topic();
+    reject_wildcards(topic)?;
 
     match &cloud_arg {
         #[cfg(feature = "c8y")]
@@ -139,32 +144,51 @@ async fn run_test(
                     print_non_expansions(w, &non_expansions);
                 }
                 if !rules.is_empty() {
-                    print_topic_matches(w, topic, &rules);
+                    Ok(print_topic_matches(w, topic, &rules))
+                } else {
+                    Ok(Status::NoMatches)
                 }
+            } else {
+                Ok(Status::NoMatches)
             }
         }
         #[cfg(feature = "aws")]
         CloudArg::Aws { .. } => {
             print_non_configurable_or_disabled(w, config, &cloud);
+            Ok(Status::NoMatches)
         }
         #[cfg(feature = "azure")]
         CloudArg::Az { .. } => {
             print_non_configurable_or_disabled(w, config, &cloud);
+            Ok(Status::NoMatches)
         }
     }
+}
 
+fn reject_wildcards(topic: &str) -> anyhow::Result<()> {
+    if topic.contains('#') || topic.contains('+') {
+        anyhow::bail!("Wildcard characters (#, +) are not supported. Provide a concrete topic to test against.");
+    }
     Ok(())
 }
 
 struct TopicMatch {
     local: String,
     remote: String,
+    local_rule: String,
+    remote_rule: String,
     direction_label: &'static str,
     /// true when the input topic is local (outbound), false when remote (inbound)
     local_to_remote: bool,
 }
 
-fn print_topic_matches(w: &mut impl Write, topic: &str, rules: &[ExpandedBridgeRule]) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Status {
+    NoMatches,
+    MatchesFound,
+}
+
+fn print_topic_matches(w: &mut impl Write, topic: &str, rules: &[ExpandedBridgeRule]) -> Status {
     let mut matches = Vec::new();
 
     for rule in rules {
@@ -176,7 +200,9 @@ fn print_topic_matches(w: &mut impl Write, topic: &str, rules: &[ExpandedBridgeR
                     matches.push(TopicMatch {
                         local: m.input,
                         remote: m.output,
-                        direction_label: "outbound (local -> remote)",
+                        local_rule: m.rule_input,
+                        remote_rule: m.rule_output,
+                        direction_label: "(outbound)",
                         local_to_remote: true,
                     });
                 }
@@ -188,7 +214,9 @@ fn print_topic_matches(w: &mut impl Write, topic: &str, rules: &[ExpandedBridgeR
                     matches.push(TopicMatch {
                         local: m.output,
                         remote: m.input,
-                        direction_label: "inbound (remote -> local)",
+                        local_rule: m.rule_output,
+                        remote_rule: m.rule_input,
+                        direction_label: "(inbound)",
                         local_to_remote: false,
                     });
                 }
@@ -200,7 +228,9 @@ fn print_topic_matches(w: &mut impl Write, topic: &str, rules: &[ExpandedBridgeR
                     matches.push(TopicMatch {
                         local: m.input,
                         remote: m.output,
-                        direction_label: "bidirectional (local -> remote)",
+                        local_rule: m.rule_input,
+                        remote_rule: m.rule_output,
+                        direction_label: "(bidirectional)",
                         local_to_remote: true,
                     });
                 }
@@ -210,7 +240,9 @@ fn print_topic_matches(w: &mut impl Write, topic: &str, rules: &[ExpandedBridgeR
                     matches.push(TopicMatch {
                         local: m.output,
                         remote: m.input,
-                        direction_label: "bidirectional (remote -> local)",
+                        local_rule: m.rule_output,
+                        remote_rule: m.rule_input,
+                        direction_label: "(bidirectional)",
                         local_to_remote: false,
                     });
                 }
@@ -224,34 +256,62 @@ fn print_topic_matches(w: &mut impl Write, topic: &str, rules: &[ExpandedBridgeR
             "{}",
             format!("No matching bridge rule found for \"{topic}\"").yellow()
         );
+        Status::NoMatches
     } else {
         for m in &matches {
             if m.local_to_remote {
                 let _ = writeln!(
                     w,
-                    "{}  {}  {}  ({})",
+                    "{} {}  {}  {} {} {}",
+                    "[local]".bright_blue(),
                     m.local.bright_blue(),
                     "->".bold(),
+                    "[remote]".green(),
                     m.remote.green(),
-                    m.direction_label.dim()
+                    m.direction_label.dim(),
                 );
+                if m.local_rule != m.local {
+                    let _ = writeln!(
+                        w,
+                        "  {} {} {} {}",
+                        "matched by rule:".dim(),
+                        m.local_rule.dim(),
+                        "->".dim(),
+                        m.remote_rule.dim(),
+                    );
+                }
             } else {
                 let _ = writeln!(
                     w,
-                    "{}  {}  {}  ({})",
+                    "{} {}  {}  {} {} {}",
+                    "[remote]".green(),
                     m.remote.green(),
                     "->".bold(),
+                    "[local]".bright_blue(),
                     m.local.bright_blue(),
-                    m.direction_label.dim()
+                    m.direction_label.dim(),
                 );
+                if m.remote_rule != m.remote {
+                    let _ = writeln!(
+                        w,
+                        "  {} {} {} {}",
+                        "matched by rule:".dim(),
+                        m.remote_rule.dim(),
+                        "->".dim(),
+                        m.local_rule.dim(),
+                    );
+                }
             }
         }
+        Status::MatchesFound
     }
 }
 
 struct MatchResult {
     input: String,
     output: String,
+    rule_input: String,
+    rule_output: String,
 }
 
 fn try_match(
@@ -271,6 +331,8 @@ fn try_match(
     Some(MatchResult {
         input: topic.to_owned(),
         output: output.into_owned(),
+        rule_input: format!("{prefix_to_remove}{base_topic}"),
+        rule_output: format!("{prefix_to_add}{base_topic}"),
     })
 }
 
@@ -563,6 +625,55 @@ topic = "measurements"
         assert!(
             output.contains("No matching bridge rule"),
             "output was: {output}"
+        );
+    }
+
+    fn render_test_err(
+        cloud_topic: &CloudTopicArg,
+        config: &TEdgeConfig,
+        detail: DetailLevel,
+    ) -> String {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let mut buf = Vec::new();
+        let err = rt
+            .block_on(run_test(&mut buf, cloud_topic, config, detail))
+            .unwrap_err();
+        format!("{err}")
+    }
+
+    #[test]
+    fn rejects_hash_wildcard() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &c8y_toml(""));
+        let error = render_test_err(
+            &CloudTopicArg::C8y {
+                profile: None,
+                topic: "c8y/s/us/#".into(),
+            },
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            error.contains("Wildcard"),
+            "should reject # wildcard: {error}"
+        );
+    }
+
+    #[test]
+    fn rejects_plus_wildcard() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &c8y_toml(""));
+        let error = render_test_err(
+            &CloudTopicArg::C8y {
+                profile: None,
+                topic: "c8y/+/us".into(),
+            },
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            error.contains("Wildcard"),
+            "should reject + wildcard: {error}"
         );
     }
 
