@@ -195,7 +195,8 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                 }
                 "download" => {
                     let handlers = ExitHandlers::try_from(input.handlers)?;
-                    Ok(OperationAction::Download(handlers))
+                    let input_excerpt = input.input.try_into()?;
+                    Ok(OperationAction::Download(input_excerpt, handlers))
                 }
                 _ => {
                     if let Some(builtin) = command.strip_prefix("builtin:") {
@@ -517,7 +518,9 @@ impl FromStr for ExitCodes {
 mod tests {
     use super::*;
     use crate::workflow::GenericStateUpdate;
+    use crate::workflow::StateExcerpt;
     use assert_matches::assert_matches;
+    use serde_json::json;
     use ExitCodes::*;
 
     #[test]
@@ -851,6 +854,7 @@ on_success = "download"
 
 [download]
 action = "download"
+input.url = "${.payload.remoteUrl}"
 on_success = "successful"
 on_error = "failed"
 
@@ -864,7 +868,11 @@ action = "cleanup"
         let workflow = OperationWorkflow::try_from(input).unwrap();
 
         match workflow.states.get("download").unwrap() {
-            OperationAction::Download(handlers) => {
+            OperationAction::Download(input_excerpt, handlers) => {
+                let expected_input = StateExcerpt::from(json!({
+                    "url": "${.payload.remoteUrl}"
+                }));
+                assert_eq!(input_excerpt, &expected_input);
                 // Verify handlers are present
                 assert_eq!(
                     handlers.state_update_on_exit("download", 0).status,

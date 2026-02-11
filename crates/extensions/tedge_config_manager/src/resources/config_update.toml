@@ -10,6 +10,7 @@ on_success = "download"
 
 [download]
 action = "download"
+input.url = "${.payload.remoteUrl}"
 on_success = "set"
 on_error = "failed"
 

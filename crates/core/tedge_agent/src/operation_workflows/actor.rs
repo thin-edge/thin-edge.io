@@ -396,37 +396,20 @@ impl WorkflowActor {
                 log_file.log_script_output(&output).await;
                 Ok(())
             }
-            OperationAction::Download(handlers) => {
+            OperationAction::Download(input_excerpt, handlers) => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step with download builtin action");
 
-                let Some(tedge_url) = state
-                    .payload
+                let input = input_excerpt.extract_value_from(&state);
+                let Some(url) = input
                     .get("url")
                     .and_then(|v| v.as_str())
                     .filter(|v| !v.is_empty())
-                    .or_else(|| {
-                        state
-                            .payload
-                            .get("remoteUrl")
-                            .and_then(|v| v.as_str())
-                            .filter(|v| !v.is_empty())
-                    })
-                    .or_else(|| {
-                        state
-                            .payload
-                            .get("tedgeUrl")
-                            .and_then(|v| v.as_str())
-                            .filter(|v| !v.is_empty())
-                    })
                 else {
                     let err_state = state
                         .update_with_builtin_action_result(
                             "download",
-                            Err(
-                                "Missing or empty `url` or `remoteUrl` or `tedgeUrl` in payload"
-                                    .to_string(),
-                            ),
+                            Err("Missing or empty `input.url` for download action".to_string()),
                             handlers,
                             &mut log_file,
                         )
@@ -437,7 +420,7 @@ impl WorkflowActor {
                 let temp_filename = format!("{operation}_{cmd_id}");
                 let temp_path = self.tmp_dir.join(&temp_filename);
 
-                let download_request = DownloadRequest::new(tedge_url, temp_path.as_std_path());
+                let download_request = DownloadRequest::new(url, temp_path.as_std_path());
                 let (_topic, download_result) = self
                     .downloader
                     .await_response((state.topic.name.clone(), download_request))
