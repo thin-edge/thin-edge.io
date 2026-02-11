@@ -1,21 +1,15 @@
 use std::io::Write;
 
-use ariadne::Color;
-use ariadne::Config;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
-use ariadne::Source;
 use pad::PadStr;
 use tedge_mqtt_bridge::config_toml::Direction;
 use tedge_mqtt_bridge::config_toml::ExpandedBridgeRule;
-use tedge_mqtt_bridge::config_toml::NonExpansionReason;
 use yansi::Paint as _;
 
 use super::common::cloud_name;
 use super::common::load_bridge_rules;
 use super::common::print_non_configurable_or_disabled;
-use super::common::NonExpansionContext;
+use super::common::print_non_expansions;
+use super::common::DetailLevel;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::Command;
@@ -39,8 +33,14 @@ impl Command for BridgeInspectCmd {
         format!("inspect the bridge configuration for {cloud_name}")
     }
 
+    #[mutants::skip]
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        run_inspect(&mut std::io::stdout(), &self.cloud, &config, self.debug).await?;
+        let detail = if self.debug {
+            DetailLevel::Debug
+        } else {
+            DetailLevel::Normal
+        };
+        run_inspect(&mut std::io::stdout(), &self.cloud, &config, detail).await?;
         Ok(())
     }
 }
@@ -49,21 +49,23 @@ async fn run_inspect(
     w: &mut impl Write,
     cloud_arg: &CloudArg,
     config: &TEdgeConfig,
-    debug: bool,
+    detail: DetailLevel,
 ) -> anyhow::Result<()> {
     let cloud = Cloud::try_from(cloud_arg.clone())?;
 
     match cloud_arg {
         #[cfg(feature = "c8y")]
-        CloudArg::C8y { profile } => {
+        CloudArg::C8y { .. } => {
             use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
             if let Some((rules, non_expansions)) =
-                load_bridge_rules::<C8yMapperSpecificConfig>(w, config, profile, &cloud).await?
+                load_bridge_rules::<C8yMapperSpecificConfig>(w, config, &cloud, detail).await?
             {
-                if debug {
+                if detail == DetailLevel::Debug {
                     print_non_expansions(w, &non_expansions);
                 }
-                print_rules(w, rules);
+                if !rules.is_empty() {
+                    print_rules(w, rules);
+                }
             }
         }
         #[cfg(feature = "aws")]
@@ -77,66 +79,6 @@ async fn run_inspect(
     }
 
     Ok(())
-}
-
-fn print_non_expansions(w: &mut impl Write, non_expansions: &[NonExpansionContext]) {
-    if non_expansions.is_empty() {
-        return;
-    }
-
-    let _ = writeln!(w, "{}", "Skipped rules:".blue().bold());
-    let _ = writeln!(w);
-
-    for ctx in non_expansions {
-        let (main_message, cause_span, message, rule_span) = match &ctx.reason {
-            NonExpansionReason::ConditionIsFalse {
-                span,
-                message,
-                rule_span,
-            } => (
-                "Rule skipped",
-                span.clone(),
-                message.as_str(),
-                rule_span.clone(),
-            ),
-            NonExpansionReason::LoopSourceEmpty {
-                src,
-                message,
-                rule_span,
-            } => (
-                "Template rule generated no rules",
-                src.span(),
-                message.as_str(),
-                Some(rule_span.clone()),
-            ),
-        };
-
-        let path = &ctx.path;
-        let mut report = Report::build(ReportKind::Advice, (path.as_str(), cause_span.clone()))
-            .with_config(Config::default().with_compact(false))
-            .with_message(main_message);
-
-        // Add label for the entire rule context if available
-        if let Some(rule_span) = rule_span {
-            report = report.with_label(
-                Label::new((path.as_str(), rule_span))
-                    .with_message("this rule was skipped")
-                    .with_color(Color::Blue),
-            );
-        }
-
-        // Add label for the specific cause
-        report = report.with_label(
-            Label::new((path.as_str(), cause_span))
-                .with_message(message)
-                .with_color(Color::Yellow),
-        );
-
-        report
-            .finish()
-            .write((path.as_str(), Source::from(&ctx.source)), &mut *w)
-            .unwrap();
-    }
 }
 
 fn print_rules(w: &mut impl Write, rules: Vec<ExpandedBridgeRule>) {
@@ -252,6 +194,7 @@ fn print_bidirectional_rules(w: &mut impl Write, rules: &[ExpandedBridgeRule]) {
 
 #[cfg(test)]
 mod tests {
+    use crate::cli::bridge::common::render;
     use crate::cli::bridge::common::strip_ansi;
 
     use super::*;
@@ -350,7 +293,11 @@ mod tests {
     fn c8y_not_connected() {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_with_root(tmp.path(), &c8y_toml(""));
-        let output = render_inspect(&CloudArg::C8y { profile: None }, &config, false);
+        let output = render_inspect(
+            &CloudArg::C8y { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
         assert!(
             output.contains("Not connected to Cumulocity"),
             "output was: {output}"
@@ -364,7 +311,11 @@ mod tests {
         let cloud = Cloud::c8y(None);
         mark_connected(tmp.path(), &cloud);
 
-        let output = render_inspect(&CloudArg::C8y { profile: None }, &config, false);
+        let output = render_inspect(
+            &CloudArg::C8y { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
         assert!(
             output.contains("No bridge configuration directory found"),
             "output was: {output}"
@@ -379,7 +330,11 @@ mod tests {
         mark_connected(tmp.path(), &cloud);
         std::fs::create_dir_all(tmp.path().join("mappers/c8y/bridge")).unwrap();
 
-        let output = render_inspect(&CloudArg::C8y { profile: None }, &config, false);
+        let output = render_inspect(
+            &CloudArg::C8y { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
         assert!(
             output.contains("No bridge configuration files found"),
             "output was: {output}"
@@ -406,7 +361,15 @@ mod tests {
         )
         .unwrap();
 
-        let output = render_inspect(&CloudArg::C8y { profile: None }, &config, false);
+        let output = render_inspect(
+            &CloudArg::C8y { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            !output.contains("Skipped rules"),
+            "Output should not mention skipped rules as none were skipped: {output}"
+        );
         let start = output.find("Local -> Remote").unwrap();
         let output = depad_multiline(&output[start..]);
         pretty_assertions::assert_eq!(
@@ -441,7 +404,11 @@ Bidirectional
         )
         .unwrap();
 
-        let output = render_inspect(&CloudArg::C8y { profile: None }, &config, false);
+        let output = render_inspect(
+            &CloudArg::C8y { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
         assert!(
             output.contains("Failed to read bridge config files"),
             "should show error message, actual output: {output}"
@@ -460,7 +427,11 @@ Bidirectional
             "c8y.url = \"example.cumulocity.com\"\n\
              mqtt.bridge.built_in = false\n",
         );
-        let output = render_inspect(&CloudArg::C8y { profile: None }, &config, false);
+        let output = render_inspect(
+            &CloudArg::C8y { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
         assert!(
             output.contains("Built-in bridge is disabled"),
             "output was: {output}"
@@ -482,7 +453,11 @@ Bidirectional
         let cloud = Cloud::c8y(None);
         mark_connected(tmp.path(), &cloud);
 
-        let output = render_inspect(&CloudArg::C8y { profile: None }, &config, false);
+        let output = render_inspect(
+            &CloudArg::C8y { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
         assert!(
             output.contains("Built-in bridge is disabled"),
             "output was: {output}"
@@ -501,7 +476,11 @@ Bidirectional
             "aws.url = \"example.amazonaws.com\"\n\
              mqtt.bridge.built_in = true\n",
         );
-        let output = render_inspect(&CloudArg::Aws { profile: None }, &config, false);
+        let output = render_inspect(
+            &CloudArg::Aws { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
         assert!(
             output.contains("not yet configurable"),
             "output was: {output}"
@@ -517,7 +496,11 @@ Bidirectional
             "aws.url = \"example.amazonaws.com\"\n\
              mqtt.bridge.built_in = false\n",
         );
-        let output = render_inspect(&CloudArg::Aws { profile: None }, &config, false);
+        let output = render_inspect(
+            &CloudArg::Aws { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
         assert!(
             output.contains("Built-in bridge is disabled"),
             "output was: {output}"
@@ -532,7 +515,11 @@ Bidirectional
             "az.url = \"example.azure-devices.net\"\n\
              mqtt.bridge.built_in = true\n",
         );
-        let output = render_inspect(&CloudArg::Az { profile: None }, &config, false);
+        let output = render_inspect(
+            &CloudArg::Az { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
         assert!(
             output.contains("not yet configurable"),
             "output was: {output}"
@@ -548,10 +535,205 @@ Bidirectional
             "az.url = \"example.azure-devices.net\"\n\
              mqtt.bridge.built_in = false\n",
         );
-        let output = render_inspect(&CloudArg::Az { profile: None }, &config, false);
+        let output = render_inspect(
+            &CloudArg::Az { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
         assert!(
             output.contains("Built-in bridge is disabled"),
             "output was: {output}"
+        );
+    }
+
+    #[test]
+    fn non_expansions_are_shown_when_a_rule_is_disabled() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &c8y_toml("c8y.auth_method = 'certificate'"));
+        let cloud = Cloud::c8y(None);
+        mark_connected(tmp.path(), &cloud);
+        std::fs::create_dir_all(tmp.path().join("mappers/c8y/bridge")).unwrap();
+        std::fs::write(
+            tmp.path().join("mappers/c8y/bridge/test.toml"),
+            r#"
+        [[rule]]
+        if = "${connection.auth_method} == 'password'"
+        topic = "password-only"
+        local_prefix = ""
+        remote_prefix = ""
+        direction = "outbound"
+        "#,
+        )
+        .unwrap();
+
+        let output = render_inspect(
+            &CloudArg::C8y { profile: None },
+            &config,
+            DetailLevel::Debug,
+        );
+        assert!(
+            output.contains("Skipped rules"),
+            "Output should mention skipped rules: {output}"
+        );
+    }
+
+    #[test]
+    fn non_expansions_are_not_shown_outside_of_debug_mode() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &c8y_toml("c8y.auth_method = 'certificate'"));
+        let cloud = Cloud::c8y(None);
+        mark_connected(tmp.path(), &cloud);
+        std::fs::create_dir_all(tmp.path().join("mappers/c8y/bridge")).unwrap();
+        std::fs::write(
+            tmp.path().join("mappers/c8y/bridge/test.toml"),
+            r#"
+        [[rule]]
+        if = "${connection.auth_method} == 'password'"
+        topic = "password-only"
+        local_prefix = ""
+        remote_prefix = ""
+        direction = "outbound"
+        "#,
+        )
+        .unwrap();
+
+        let output = render_inspect(
+            &CloudArg::C8y { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            !output.contains("Skipped rules"),
+            "Output should not mention skipped rules: {output}"
+        );
+        assert!(
+            output.contains("--debug"),
+            "Output should suggest running with '--debug': {output}"
+        );
+    }
+
+    #[test]
+    fn disabled_files_are_reported() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &c8y_toml(""));
+        let cloud = Cloud::c8y(None);
+        mark_connected(tmp.path(), &cloud);
+        let bridge_dir = tmp.path().join("mappers/c8y/bridge");
+        std::fs::create_dir_all(&bridge_dir).unwrap();
+        std::fs::write(
+            bridge_dir.join("test.toml"),
+            r#"
+[[rule]]
+topic = "measurements"
+local_prefix = "te/"
+remote_prefix = "c8y/"
+direction = "outbound"
+"#,
+        )
+        .unwrap();
+        // Create the disabled marker
+        std::fs::write(bridge_dir.join("test.toml.disabled"), "").unwrap();
+
+        let output = render_inspect(
+            &CloudArg::C8y { profile: None },
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            output.contains("Skipping:"),
+            "should mention skipped file: {output}"
+        );
+        assert!(
+            output.contains("test.toml"),
+            "should mention the disabled filename: {output}"
+        );
+        assert!(
+            output.contains("disabled"),
+            "should mention disabled: {output}"
+        );
+    }
+
+    #[test]
+    fn outbound_rules_are_correctly_padded() {
+        let rules = vec![
+            rule(Direction::Outbound, "te/", "c8y/", "short"),
+            rule(
+                Direction::Outbound,
+                "te/device/main/",
+                "c8y/s/",
+                "longer-topic",
+            ),
+        ];
+
+        let output = render(|w| print_outbound_rules(w, &rules));
+
+        pretty_assertions::assert_eq!(
+            output,
+            "\
+Local -> Remote
+  te/short                     ->  c8y/short
+  te/device/main/longer-topic  ->  c8y/s/longer-topic
+\n"
+        );
+    }
+
+    #[test]
+    fn inbound_rules_are_correctly_padded() {
+        let rules = vec![
+            rule(Direction::Inbound, "te/", "c8y/", "short"),
+            rule(
+                Direction::Inbound,
+                "te/device/main/",
+                "c8y/s/",
+                "longer-topic",
+            ),
+        ];
+
+        let output = render(|w| print_inbound_rules(w, &rules));
+
+        pretty_assertions::assert_eq!(
+            output,
+            "\
+Remote -> Local
+  c8y/short           ->  te/short
+  c8y/s/longer-topic  ->  te/device/main/longer-topic
+\n"
+        );
+    }
+
+    #[test]
+    fn bidirectional_rules_are_correctly_padded() {
+        let rules = vec![
+            rule(Direction::Bidirectional, "te/", "c8y/", "short"),
+            rule(
+                Direction::Bidirectional,
+                "te/device/main/",
+                "c8y/s/",
+                "longer-topic",
+            ),
+        ];
+
+        let output = render(|w| print_bidirectional_rules(w, &rules));
+
+        pretty_assertions::assert_eq!(
+            output,
+            "\
+Bidirectional
+  te/short                     <->  c8y/short
+  te/device/main/longer-topic  <->  c8y/s/longer-topic
+"
+        );
+    }
+
+    #[test]
+    fn description_includes_cloud_name() {
+        let cmd = BridgeInspectCmd {
+            cloud: CloudArg::C8y { profile: None },
+            debug: false,
+        };
+        assert_eq!(
+            cmd.description(),
+            "inspect the bridge configuration for Cumulocity"
         );
     }
 
@@ -567,13 +749,6 @@ Bidirectional
             remote_prefix: remote_prefix.into(),
             topic: topic.into(),
         }
-    }
-
-    /// Render to a string with yansi colors disabled
-    fn render(f: impl FnOnce(&mut Vec<u8>)) -> String {
-        let mut buf = Vec::new();
-        f(&mut buf);
-        strip_ansi(&String::from_utf8(buf).unwrap())
     }
 
     fn depad_multiline(text: &str) -> String {
@@ -620,10 +795,10 @@ Bidirectional
         std::fs::write(dir.join(&*cloud.mosquitto_config_filename()), "").unwrap();
     }
 
-    fn render_inspect(cloud_arg: &CloudArg, config: &TEdgeConfig, debug: bool) -> String {
+    fn render_inspect(cloud_arg: &CloudArg, config: &TEdgeConfig, detail: DetailLevel) -> String {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let mut buf = Vec::new();
-        rt.block_on(run_inspect(&mut buf, cloud_arg, config, debug))
+        rt.block_on(run_inspect(&mut buf, cloud_arg, config, detail))
             .unwrap();
         strip_ansi(&String::from_utf8(buf).unwrap())
     }

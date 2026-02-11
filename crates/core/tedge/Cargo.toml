@@ -32,6 +32,7 @@ humantime = { workspace = true }
 hyper = { workspace = true, default-features = false }
 mime_guess = { workspace = true }
 mqtt_channel = { workspace = true }
+mutants = { workspace = true }
 nix = { workspace = true }
 pad = { workspace = true }
 pem.workspace = true

@@ -1,5 +1,11 @@
 use std::io::Write;
 
+use ariadne::Color;
+use ariadne::Config;
+use ariadne::Label;
+use ariadne::Report;
+use ariadne::ReportKind;
+use ariadne::Source;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use tedge_config::models::CloudType;
@@ -15,6 +21,15 @@ use yansi::Paint as _;
 
 use crate::cli::common::MaybeBorrowedCloud;
 
+/// Controls how much detail is shown in bridge command output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DetailLevel {
+    /// Show full debug output including skipped rules.
+    Debug,
+    /// Standard output; suggest `--debug` when relevant.
+    Normal,
+}
+
 pub fn cloud_name(cloud: &MaybeBorrowedCloud<'_>) -> &'static str {
     match cloud {
         #[cfg(feature = "c8y")]
@@ -27,6 +42,7 @@ pub fn cloud_name(cloud: &MaybeBorrowedCloud<'_>) -> &'static str {
 }
 
 /// Context needed to display a non-expansion reason with source location
+#[derive(Debug)]
 pub struct NonExpansionContext {
     pub path: Utf8PathBuf,
     pub source: String,
@@ -56,11 +72,11 @@ pub fn print_non_configurable_or_disabled(
 pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
     w: &mut impl Write,
     config: &TEdgeConfig,
-    profile: &Option<ProfileName>,
     cloud: &MaybeBorrowedCloud<'_>,
+    detail: DetailLevel,
 ) -> anyhow::Result<Option<(Vec<ExpandedBridgeRule>, Vec<NonExpansionContext>)>> {
     let bridge_config_dir = config
-        .mapper_config_dir::<Cloud>(profile.as_ref())
+        .mapper_config_dir::<Cloud>(cloud.profile_name())
         .join("bridge");
 
     if !config.mqtt.bridge.built_in {
@@ -77,7 +93,7 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
         return Ok(None);
     }
 
-    print_header(w, profile, &bridge_config_dir, cloud);
+    print_header(w, &bridge_config_dir, cloud);
 
     if !bridge_config_dir.exists() {
         writeln!(w, "{}", "No bridge configuration directory found.".yellow())?;
@@ -88,6 +104,7 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
         return Ok(None);
     }
 
+    let profile = cloud.profile_name();
     let auth_method = get_auth_method::<Cloud>(config, profile)?;
     let mut visitor = InspectVisitor::new();
 
@@ -95,7 +112,7 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
         &bridge_config_dir,
         config,
         auth_method,
-        profile.as_ref(),
+        profile,
         &mut visitor,
     )
     .await
@@ -103,6 +120,10 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
         tracing::error!("{e:#}");
         writeln!(w, "{}", "Failed to read bridge config files".red())?;
         return Ok(None);
+    }
+
+    for filename in &visitor.disabled_files {
+        writeln!(w, "{} {} (disabled)", "Skipping:".dim(), filename.dim())?;
     }
 
     match visitor.status {
@@ -116,14 +137,16 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
                 "{}",
                 "Bridge config files exist, but no rules were generated".yellow()
             )?;
-            writeln!(
-                w,
-                "{} {}",
-                "Help:".blue().bold(),
-                "Try running with the `--debug` flag to see more information on disabled rules"
-                    .blue()
-            )?;
-            return Ok(None);
+
+            if detail == DetailLevel::Normal {
+                writeln!(
+                    w,
+                    "{} {}",
+                    "Help:".blue().bold(),
+                    "Try running with the `--debug` flag to see more information on disabled rules"
+                        .blue()
+                )?;
+            }
         }
         Status::NonEmpty => (),
     }
@@ -173,27 +196,82 @@ fn print_built_in_bridge_non_configurable(w: &mut impl Write, cloud: &MaybeBorro
     );
 }
 
-fn print_header(
-    w: &mut impl Write,
-    profile: &Option<ProfileName>,
-    bridge_config_dir: &camino::Utf8PathBuf,
-    cloud: &MaybeBorrowedCloud<'_>,
-) {
+fn print_header(w: &mut impl Write, bridge_config_dir: &Utf8Path, cloud: &MaybeBorrowedCloud<'_>) {
     let _ = writeln!(w, "{} {}", "Bridge configuration for".bold(), cloud.bold());
-    if let Some(profile) = profile {
+    if let Some(profile) = cloud.profile_name() {
         let _ = writeln!(w, "Profile: {}", profile.green());
     }
     let _ = writeln!(w, "Reading from: {}", bridge_config_dir.bright_blue());
     let _ = writeln!(w);
 }
 
+pub fn print_non_expansions(w: &mut impl Write, non_expansions: &[NonExpansionContext]) {
+    if non_expansions.is_empty() {
+        return;
+    }
+
+    let _ = writeln!(w, "{}", "Skipped rules:".blue().bold());
+    let _ = writeln!(w);
+
+    for ctx in non_expansions {
+        let (main_message, cause_span, message, rule_span) = match &ctx.reason {
+            NonExpansionReason::ConditionIsFalse {
+                span,
+                message,
+                rule_span,
+            } => (
+                "Rule skipped",
+                span.clone(),
+                message.as_str(),
+                rule_span.clone(),
+            ),
+            NonExpansionReason::LoopSourceEmpty {
+                src,
+                message,
+                rule_span,
+            } => (
+                "Template rule generated no rules",
+                src.span(),
+                message.as_str(),
+                Some(rule_span.clone()),
+            ),
+        };
+
+        let path = &ctx.path;
+        let mut report = Report::build(ReportKind::Advice, (path.as_str(), cause_span.clone()))
+            .with_config(Config::default().with_compact(false))
+            .with_message(main_message);
+
+        // Add label for the entire rule context if available
+        if let Some(rule_span) = rule_span {
+            report = report.with_label(
+                Label::new((path.as_str(), rule_span))
+                    .with_message("this rule was skipped")
+                    .with_color(Color::Blue),
+            );
+        }
+
+        // Add label for the specific cause
+        report = report.with_label(
+            Label::new((path.as_str(), cause_span))
+                .with_message(message)
+                .with_color(Color::Yellow),
+        );
+
+        report
+            .finish()
+            .write((path.as_str(), Source::from(&ctx.source)), &mut *w)
+            .unwrap();
+    }
+}
+
 fn get_auth_method<Cloud: ExpectedCloudType>(
     config: &TEdgeConfig,
-    profile: &Option<ProfileName>,
+    profile: Option<&ProfileName>,
 ) -> anyhow::Result<AuthMethod> {
     match Cloud::expected_cloud_type() {
         CloudType::C8y => Ok(tedge_mapper::c8y::mapper::auth_method(
-            &config.c8y_mapper_config(profile)?,
+            &config.c8y_mapper_config(&profile)?,
         )),
         _ => Ok(AuthMethod::Certificate),
     }
@@ -202,6 +280,7 @@ fn get_auth_method<Cloud: ExpectedCloudType>(
 struct InspectVisitor {
     rules: Vec<ExpandedBridgeRule>,
     non_expansions: Vec<NonExpansionContext>,
+    disabled_files: Vec<String>,
     status: Status,
 }
 
@@ -210,6 +289,7 @@ impl InspectVisitor {
         Self {
             rules: Vec::new(),
             non_expansions: Vec::new(),
+            disabled_files: Vec::new(),
             status: Status::default(),
         }
     }
@@ -218,7 +298,7 @@ impl InspectVisitor {
 impl BridgeConfigVisitor for InspectVisitor {
     fn on_file_disabled(&mut self, path: &Utf8Path) {
         let filename = path.file_name().unwrap_or("unknown");
-        println!("{} {} (disabled)", "Skipping:".dim(), filename.dim());
+        self.disabled_files.push(filename.to_owned());
     }
 
     fn on_rules_loaded(
@@ -307,7 +387,17 @@ pub fn strip_ansi(s: &str) -> String {
 }
 
 #[cfg(test)]
+/// Render to a string with yansi colors disabled
+pub fn render(f: impl FnOnce(&mut Vec<u8>)) -> String {
+    let mut buf = Vec::new();
+    f(&mut buf);
+    strip_ansi(&String::from_utf8(buf).unwrap())
+}
+
+#[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use strum::IntoEnumIterator as _;
 
     use super::*;
@@ -345,5 +435,20 @@ mod tests {
             assert_status_add!(Status::Empty, status => status);
             assert_status_add!(status, Status::Empty => status);
         }
+    }
+
+    #[test]
+    fn header_is_printed_with_details_of_bridge_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bridge_config_dir = tmp.path().try_into().unwrap();
+        let output = render(|w| {
+            print_header(
+                w,
+                bridge_config_dir,
+                &MaybeBorrowedCloud::C8y(Some(Cow::Owned("new".parse::<ProfileName>().unwrap()))),
+            )
+        });
+
+        pretty_assertions::assert_eq!(output, format!("Bridge configuration for Cumulocity\nProfile: new\nReading from: {bridge_config_dir}\n\n"));
     }
 }

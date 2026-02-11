@@ -11,6 +11,8 @@ use yansi::Paint as _;
 use super::common::cloud_name;
 use super::common::load_bridge_rules;
 use super::common::print_non_configurable_or_disabled;
+use super::common::print_non_expansions;
+use super::common::DetailLevel;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::Command;
@@ -104,8 +106,14 @@ impl Command for BridgeTestCmd {
         )
     }
 
+    #[mutants::skip]
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        run_test(&mut std::io::stdout(), &self.cloud, &config, self.debug).await?;
+        let detail = if self.debug {
+            DetailLevel::Debug
+        } else {
+            DetailLevel::Normal
+        };
+        run_test(&mut std::io::stdout(), &self.cloud, &config, detail).await?;
         Ok(())
     }
 }
@@ -114,7 +122,7 @@ async fn run_test(
     w: &mut impl Write,
     cloud_topic: &CloudTopicArg,
     config: &TEdgeConfig,
-    _debug: bool,
+    detail: DetailLevel,
 ) -> anyhow::Result<()> {
     let cloud_arg = cloud_topic.cloud_arg();
     let cloud = Cloud::try_from(cloud_arg.clone())?;
@@ -122,12 +130,17 @@ async fn run_test(
 
     match &cloud_arg {
         #[cfg(feature = "c8y")]
-        CloudArg::C8y { profile } => {
+        CloudArg::C8y { .. } => {
             use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
-            if let Some((rules, _non_expansions)) =
-                load_bridge_rules::<C8yMapperSpecificConfig>(w, config, profile, &cloud).await?
+            if let Some((rules, non_expansions)) =
+                load_bridge_rules::<C8yMapperSpecificConfig>(w, config, &cloud, detail).await?
             {
-                print_topic_matches(w, topic, &rules);
+                if detail == DetailLevel::Debug {
+                    print_non_expansions(w, &non_expansions);
+                }
+                if !rules.is_empty() {
+                    print_topic_matches(w, topic, &rules);
+                }
             }
         }
         #[cfg(feature = "aws")]
@@ -291,10 +304,14 @@ mod tests {
         std::fs::write(bridge_dir.join(filename), content).unwrap();
     }
 
-    fn render_test(cloud_topic: &CloudTopicArg, config: &TEdgeConfig, debug: bool) -> String {
+    fn render_test(
+        cloud_topic: &CloudTopicArg,
+        config: &TEdgeConfig,
+        detail: DetailLevel,
+    ) -> String {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let mut buf = Vec::new();
-        rt.block_on(run_test(&mut buf, cloud_topic, config, debug))
+        rt.block_on(run_test(&mut buf, cloud_topic, config, detail))
             .unwrap();
         strip_ansi(&String::from_utf8(buf).unwrap())
     }
@@ -309,7 +326,7 @@ mod tests {
                 topic: "te/measurements".into(),
             },
             &config,
-            false,
+            DetailLevel::Normal,
         );
         assert!(
             output.contains("Not connected to Cumulocity"),
@@ -331,7 +348,7 @@ mod tests {
                 topic: "some/topic".into(),
             },
             &config,
-            false,
+            DetailLevel::Normal,
         );
         assert!(
             output.contains("not yet configurable"),
@@ -363,7 +380,7 @@ topic = "measurements"
                 topic: "te/measurements".into(),
             },
             &config,
-            false,
+            DetailLevel::Normal,
         );
         assert!(
             output.contains("c8y/measurements"),
@@ -399,7 +416,7 @@ topic = "operations"
                 topic: "c8y/operations".into(),
             },
             &config,
-            false,
+            DetailLevel::Normal,
         );
         assert!(
             output.contains("te/operations"),
@@ -435,7 +452,7 @@ topic = "health"
                 topic: "te/health".into(),
             },
             &config,
-            false,
+            DetailLevel::Normal,
         );
         assert!(
             output.contains("c8y/health"),
@@ -444,6 +461,76 @@ topic = "health"
         assert!(
             output.contains("bidirectional"),
             "should show direction: {output}"
+        );
+    }
+
+    #[test]
+    fn non_expansions_are_shown_when_a_rule_is_disabled() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &c8y_toml("c8y.auth_method = 'certificate'"));
+        let cloud = Cloud::c8y(None);
+        mark_connected(tmp.path(), &cloud);
+        write_bridge_toml(
+            tmp.path(),
+            "test.toml",
+            r#"
+[[rule]]
+if = "${connection.auth_method} == 'password'"
+topic = "password-only"
+local_prefix = ""
+remote_prefix = ""
+direction = "outbound"
+"#,
+        );
+
+        let output = render_test(
+            &CloudTopicArg::C8y {
+                profile: None,
+                topic: "password-only".into(),
+            },
+            &config,
+            DetailLevel::Debug,
+        );
+        assert!(
+            output.contains("Skipped rules"),
+            "Output should mention skipped rules: {output}"
+        );
+    }
+
+    #[test]
+    fn non_expansions_are_not_shown_outside_of_debug_mode() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &c8y_toml("c8y.auth_method = 'certificate'"));
+        let cloud = Cloud::c8y(None);
+        mark_connected(tmp.path(), &cloud);
+        write_bridge_toml(
+            tmp.path(),
+            "test.toml",
+            r#"
+[[rule]]
+if = "${connection.auth_method} == 'password'"
+topic = "password-only"
+local_prefix = ""
+remote_prefix = ""
+direction = "outbound"
+"#,
+        );
+
+        let output = render_test(
+            &CloudTopicArg::C8y {
+                profile: None,
+                topic: "password-only".into(),
+            },
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            !output.contains("Skipped rules"),
+            "Output should not mention skipped rules: {output}"
+        );
+        assert!(
+            output.contains("--debug"),
+            "Output should suggest running with '--debug': {output}"
         );
     }
 
@@ -471,11 +558,26 @@ topic = "measurements"
                 topic: "unrelated/topic".into(),
             },
             &config,
-            false,
+            DetailLevel::Normal,
         );
         assert!(
             output.contains("No matching bridge rule"),
             "output was: {output}"
+        );
+    }
+
+    #[test]
+    fn description_includes_cloud_name_and_topic() {
+        let cmd = BridgeTestCmd {
+            cloud: CloudTopicArg::C8y {
+                profile: None,
+                topic: "te/measurements".into(),
+            },
+            debug: false,
+        };
+        assert_eq!(
+            cmd.description(),
+            "test bridge topic routing for Cumulocity: te/measurements"
         );
     }
 }

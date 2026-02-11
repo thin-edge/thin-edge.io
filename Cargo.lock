@@ -4768,6 +4768,7 @@ dependencies = [
  "mockito",
  "mqtt_channel",
  "mqtt_tests",
+ "mutants",
  "nix",
  "pad",
  "pem",
