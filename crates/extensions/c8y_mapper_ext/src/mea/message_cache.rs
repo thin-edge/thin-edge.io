@@ -1,6 +1,7 @@
 use crate::mea::entities::C8yEntityBirth;
 use crate::mea::get_entity_metadata;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::time::SystemTime;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -21,6 +22,7 @@ pub struct MessageCache {
     mqtt_schema: MqttSchema,
     mapper_topic_id: EntityTopicId,
     cache: HashMap<EntityTopicId, RingBuffer<Message>>,
+    birthed: HashSet<EntityTopicId>,
 }
 
 impl MessageCache {
@@ -29,6 +31,7 @@ impl MessageCache {
             mqtt_schema: MqttSchema::default(),
             mapper_topic_id,
             cache: HashMap::default(),
+            birthed: HashSet::default(),
         }
     }
 }
@@ -49,7 +52,7 @@ impl tedge_flows::Transformer for MessageCache {
         &mut self,
         _timestamp: SystemTime,
         message: &Message,
-        context: &FlowContextHandle,
+        _context: &FlowContextHandle,
     ) -> Result<Vec<Message>, FlowError> {
         match self.mqtt_schema.entity_channel_of(&message.topic) {
             Ok((source, Channel::Status { component }))
@@ -66,17 +69,11 @@ impl tedge_flows::Transformer for MessageCache {
                 Ok(self.restore_messages(&birth_message.entity))
             }
 
-            Ok((entity_id, _)) => {
-                if get_entity_metadata(context, entity_id.as_str()).is_none() {
-                    self.cache_message(entity_id, message.clone());
-                    return Ok(vec![]);
-                };
+            Ok((entity_id, _)) if entity_id.is_default_main_device() => Ok(vec![message.clone()]),
 
-                // In case the current message has been received before the entity birth message
-                // all the messages cached for that entity have to be processed first
-                let mut messages = self.restore_messages(&entity_id);
-                messages.push(message.clone());
-                Ok(messages)
+            Ok((entity_id, _)) if !self.birthed.contains(&entity_id) => {
+                self.cache_message(entity_id, message.clone());
+                return Ok(vec![]);
             }
 
             _ => Ok(vec![message.clone()]),
@@ -92,6 +89,7 @@ impl MessageCache {
 
     /// Retrieve from the cache all the messages related to an entity
     pub fn restore_messages(&mut self, entity_id: &EntityTopicId) -> Vec<Message> {
+        self.birthed.insert(entity_id.to_owned());
         self.cache
             .remove(entity_id)
             .map(|q| q.into())
