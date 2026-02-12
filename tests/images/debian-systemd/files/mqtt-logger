@@ -105,6 +105,9 @@ log() {
 }
 
 subscribe() {
+    # Note: Use QoS 2 for subscriptions to ensure the mqtt log output has an accurate record of all messages
+    # as the log is used within tests to validate the function of different components, so the message count
+    # is important.
     if [ -n "$MQTT_CA_FILE" ] && [ -n "$MQTT_KEY_FILE" ] && [ -n "$MQTT_CERT_FILE" ]; then
         log "Connecting to broker using certificate"
         mosquitto_sub \
@@ -115,6 +118,7 @@ subscribe() {
             --key "$MQTT_KEY_FILE" \
             --cert "$MQTT_CERT_FILE" \
             -t '#' \
+            -q 2 \
             -F '{"timestamp":%U,"message":%j,"payload_hex":"%x"}'
     else
         mosquitto_sub \
@@ -122,6 +126,7 @@ subscribe() {
             -h "$MQTT_HOST" \
             -p "$MQTT_PORT" \
             -t '#' \
+            -q 2 \
             -F '{"timestamp":%U,"message":%j,"payload_hex":"%x"}'
     fi
 }
