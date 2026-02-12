@@ -207,7 +207,7 @@ Manual config_update operation request
     # Don't worry about the command failing, that is expected since the tedgeUrl path does not exist
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/local-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/config_update/local-2222","remoteUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","remoteUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/config_update/local-2222","tedgeUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
     ...    expected_status=failed
     ...    c8y_fragment=c8y_DownloadConfigFile
 
@@ -218,7 +218,7 @@ Trigger config_update operation from another workflow
     ...    curl -X PUT --data-binary 'new content for CONFIG1' "http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/sub_config_update/sub-2222"
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/sub_config_update/sub-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/sub_config_update/sub-2222","remoteUrl":"","serverUrl":"","type":"CONFIG1"}
+    ...    payload={"status":"init","remoteUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/sub_config_update/sub-2222","tedgeUrl":"","serverUrl":"","type":"CONFIG1"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_DownloadConfigFile
 
@@ -245,7 +245,7 @@ Config update request not processed when operation is disabled for tedge-agent
     Disable config update capability of tedge-agent
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/local-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/config_update/local-2222","remoteUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","remoteUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/config_update/local-2222","tedgeUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
     ...    expected_status=init
     ...    c8y_fragment=c8y_DownloadConfigFile
     [Teardown]    Enable config update capability of tedge-agent

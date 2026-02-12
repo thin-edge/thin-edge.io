@@ -445,14 +445,14 @@ impl ConfigManagerWorker {
             .and_then(|v: &Value| v.as_str())
             .map(|s: &str| s.to_string())
             .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
-        let downloaded_path = command
+        let from_path = command
             .payload
-            .get("downloaded_path")
+            .get("setFrom")
             .and_then(|v: &Value| v.as_str())
             .map(|s: &str| Utf8PathBuf::from(s))
-            .ok_or_else(|| ConfigManagementError::MissingKey("downloaded_path".to_string()))?;
+            .ok_or_else(|| ConfigManagementError::MissingKey("setFrom".to_string()))?;
 
-        self.execute_config_set_step(&topic, &config_type, &downloaded_path, log_path, &cmd_id)
+        self.execute_config_set_step(&topic, &config_type, &from_path, log_path, &cmd_id)
             .await
     }
 

@@ -202,9 +202,11 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                     if let Some(builtin) = command.strip_prefix("builtin:") {
                         if let Some((operation, step)) = builtin.split_once(':') {
                             let handlers = ExitHandlers::try_from((input.handlers, defaults))?;
+                            let input_excerpt = input.input.try_into()?;
                             return Ok(OperationAction::BuiltInOperationStep(
                                 operation.to_string(),
                                 step.to_string(),
+                                input_excerpt,
                                 handlers,
                             ));
                         }
@@ -907,10 +909,11 @@ action = "cleanup"
         let workflow = OperationWorkflow::try_from(input).unwrap();
 
         match workflow.states.get("set").unwrap() {
-            OperationAction::BuiltInOperationStep(operation, step, handlers) => {
+            OperationAction::BuiltInOperationStep(operation, step, input_excerpt, handlers) => {
                 // Verify operation and step are correct
                 assert_eq!(operation, "config_update");
                 assert_eq!(step, "set");
+                assert_eq!(input_excerpt, &StateExcerpt::try_from(None).unwrap());
                 // Verify handlers are present
                 assert_eq!(
                     handlers.state_update_on_exit("config_set", 0).status,
