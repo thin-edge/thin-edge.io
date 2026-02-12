@@ -21,7 +21,7 @@ on_error = "failed"
 
 # Overridden set
 [set]
-script = "mv ${.payload.downloaded_path} /etc/tedge/test.conf"
+script = "mv ${.payload.downloadedPath} /etc/tedge/test.conf"
 on_success = "successful"
 on_error = "failed"
 

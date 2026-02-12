@@ -16,6 +16,7 @@ on_error = "failed"
 
 [set]
 action = "builtin:config_update:set"
+input.setFrom = "${.payload.downloadedPath}"
 on_success = "successful"
 on_error = "failed"
 

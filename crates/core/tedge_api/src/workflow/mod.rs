@@ -121,7 +121,7 @@ pub enum OperationAction {
 
     /// Generic download action (reusable across operations)
     ///
-    /// Downloads a file from `input.url` extracted from the payload and adds the `downloaded_path` to the payload.
+    /// Downloads a file from `input.url` extracted from the payload and adds the `downloadedPath` to the payload.
     /// This action is operation-agnostic and can be used by config_update, software_update, etc.
     ///
     /// ```toml
@@ -159,10 +159,11 @@ pub enum OperationAction {
     ///
     /// ```toml
     /// action = "builtin:config_update:set"
+    /// input.setFrom = "${.payload.downloadedPath}"
     /// on_success = "<state>"
     /// on_error = "<state>"
     /// ```
-    BuiltInOperationStep(OperationName, OperationStep, ExitHandlers),
+    BuiltInOperationStep(OperationName, OperationStep, StateExcerpt, ExitHandlers),
 
     /// Await the completion of a sub-operation
     ///
@@ -213,7 +214,7 @@ impl Display for OperationAction {
             OperationAction::BuiltInOperation(operation, _) => {
                 format!("execute builtin:{operation}")
             }
-            OperationAction::BuiltInOperationStep(operation, step, _) => {
+            OperationAction::BuiltInOperationStep(operation, step, _, _) => {
                 format!("execute builtin:{operation} action: {step}")
             }
             OperationAction::AwaitOperationCompletion { .. } => {

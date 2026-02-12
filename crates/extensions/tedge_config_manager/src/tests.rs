@@ -683,7 +683,7 @@ async fn execute_config_set_operation_step() -> Result<(), anyhow::Error> {
         "set".to_string(),
         json!({
             "type": "type_two",
-            "downloaded_path": downloaded_path.path(),
+            "setFrom": downloaded_path.path(),
         }),
     );
 
@@ -715,7 +715,7 @@ async fn execute_config_set_operation_step_invalid_step() -> Result<(), anyhow::
         "set".to_string(),
         json!({
             "type": "type_two",
-            "downloaded_path": downloaded_path.path(),
+            "setFrom": downloaded_path.path(),
         }),
     );
 
@@ -746,7 +746,7 @@ async fn execute_config_set_operation_step_missing_type() -> Result<(), anyhow::
         Topic::new_unchecked("te/device/main///cmd/config_update/1234"),
         "set".to_string(),
         json!({
-            "downloaded_path": downloaded_path.path(),
+            "setFrom": downloaded_path.path(),
         }),
     );
 
@@ -783,7 +783,7 @@ async fn execute_config_set_operation_step_missing_downloaded_path() -> Result<(
     };
 
     let response = handle.steps.await_response(step_request).await?;
-    assert_matches!(response, Err(err) if err.contains("Missing key: downloaded_path"));
+    assert_matches!(response, Err(err) if err.contains("Missing key: setFrom"));
 
     Ok(())
 }
@@ -803,7 +803,7 @@ async fn execute_config_set_operation_step_file_not_found() -> Result<(), anyhow
         "set".to_string(),
         json!({
             "type": "type_two",
-            "downloaded_path": missing_path,
+            "setFrom": missing_path,
         }),
     );
 

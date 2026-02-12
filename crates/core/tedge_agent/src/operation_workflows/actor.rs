@@ -433,7 +433,7 @@ impl WorkflowActor {
                             .log_info(&format!("Downloaded to: {}", downloaded_path.display()))
                             .await;
 
-                        Ok(json!({"downloaded_path": downloaded_path}))
+                        Ok(json!({"downloadedPath": downloaded_path}))
                     }
                     Err(err) => Err(format!("Download failed: {}", err)),
                 };
@@ -442,8 +442,15 @@ impl WorkflowActor {
                     .await;
                 self.publish_command_state(new_state, &mut log_file).await
             }
-            OperationAction::BuiltInOperationStep(operation_name, operation_step, handlers) => {
+            OperationAction::BuiltInOperationStep(
+                operation_name,
+                operation_step,
+                input_excerpt,
+                handlers,
+            ) => {
                 let action = format!("builtin:{operation_name}:{operation_step}");
+                let input = input_excerpt.extract_value_from(&state);
+                let state = state.update_with_json(input);
                 let step_request = OperationStepRequest {
                     command_step: operation_step.clone(),
                     command_state: state.clone(),
