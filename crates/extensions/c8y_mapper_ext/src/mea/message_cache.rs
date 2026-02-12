@@ -1,5 +1,4 @@
 use crate::mea::entities::C8yEntityBirth;
-use crate::mea::get_entity_metadata;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::SystemTime;
@@ -73,7 +72,7 @@ impl tedge_flows::Transformer for MessageCache {
 
             Ok((entity_id, _)) if !self.birthed.contains(&entity_id) => {
                 self.cache_message(entity_id, message.clone());
-                return Ok(vec![]);
+                Ok(vec![])
             }
 
             _ => Ok(vec![message.clone()]),

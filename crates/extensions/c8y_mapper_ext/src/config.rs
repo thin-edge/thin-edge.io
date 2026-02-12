@@ -77,6 +77,7 @@ pub struct C8yMapperConfig {
     pub tmp_dir: Arc<Utf8Path>,
 
     pub max_mqtt_payload_size: u32,
+    pub alarm_sync_interval: &'static str,
 }
 
 impl C8yMapperConfig {
@@ -110,6 +111,7 @@ impl C8yMapperConfig {
         smartrest_use_operation_id: bool,
         smartrest_child_device_create_with_device_marker: bool,
         max_mqtt_payload_size: u32,
+        alarm_interval: &'static str,
     ) -> Self {
         let ops_dir = config_dir
             .join(SUPPORTED_OPERATIONS_DIRECTORY)
@@ -159,6 +161,7 @@ impl C8yMapperConfig {
             tmp_dir,
 
             max_mqtt_payload_size,
+            alarm_sync_interval: alarm_interval,
         }
     }
 
@@ -231,6 +234,7 @@ impl C8yMapperConfig {
             .child_device
             .create_with_device_marker;
         let max_mqtt_payload_size = c8y_config.mapper.mqtt.max_payload_size.0;
+        let alarm_interval = "3s";
 
         // Add command topics
         topics.add_all(mqtt_schema.topics(AnyEntity, AnyCommand));
@@ -285,6 +289,7 @@ impl C8yMapperConfig {
             smartrest_use_operation_id,
             smartrest_child_device_create_with_device_marker,
             max_mqtt_payload_size,
+            alarm_interval,
         ))
     }
 

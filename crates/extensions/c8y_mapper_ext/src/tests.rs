@@ -3369,6 +3369,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         false,
         false,
         C8Y_MQTT_PAYLOAD_LIMIT,
+        "100ms",
     )
 }
 

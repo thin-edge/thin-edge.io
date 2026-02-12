@@ -1,8 +1,8 @@
-use crate::tests::c8y_mapper_builder;
 use crate::tests::skip_init_messages;
+use crate::tests::spawn_c8y_mapper_actor;
 use crate::tests::spawn_dummy_c8y_http_proxy;
-use crate::tests::test_mapper_config;
 use crate::tests::MockMqttBox;
+use crate::tests::TestHandle;
 use proptest::test_runner::Config as ProptestConfig;
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -11,12 +11,9 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::time::Duration;
-use tedge_actors::Actor;
-use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeRequest;
-use tedge_actors::Sender;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
@@ -25,6 +22,15 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::TempTedgeDir;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
+fn proptest_config() -> ProptestConfig {
+    ProptestConfig {
+        // These tests are relatively slow compared to what proptest expects, don't run them too many times
+        cases: 30,
+        // The "properties" are all seeds; there isn't any shrinking that can be done on them
+        max_shrink_iters: 0,
+        ..<_>::default()
+    }
+}
 
 /// A wrapper around `MockMqttBox` that simulates realistic MQTT broker
 /// behavior for testing.
@@ -166,7 +172,7 @@ impl<R: Rng + Send> MessageReceiver<MqttMessage> for ShuffledMqttBox<'_, R> {
     }
 }
 
-#[proptest::property_test(config = ProptestConfig { cases: 100, .. ProptestConfig::default() })]
+#[proptest::property_test(config = proptest_config())]
 fn birth_message_with_shuffled_entity_registration(seed: u64) {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -176,36 +182,7 @@ fn birth_message_with_shuffled_entity_registration(seed: u64) {
 }
 
 async fn birth_message_with_shuffled_entity_registration_impl(seed: u64) {
-    let ttd = TempTedgeDir::new();
-    let config = test_mapper_config(&ttd);
-    let bridge_health_topic = config.bridge_health_topic.clone();
-    let builders = c8y_mapper_builder(&ttd, config, true).await;
-
-    let actor = builders.c8y.build();
-    tokio::spawn(async move { actor.run().await });
-
-    let actor = builders.flows.build();
-    tokio::spawn(async move { actor.run().await });
-
-    // Send the bridge health message through the service monitor channel (as in production).
-    // This goes through a separate channel from MQTT.
-    let mut service_monitor_box = builders.service_monitor.build();
-    service_monitor_box
-        .send(MqttMessage::new(&bridge_health_topic, "1"))
-        .await
-        .unwrap();
-
-    let mut mqtt = builders.mqtt.build();
-    let http = builders.http.build();
-    let _fs = builders.fs.build();
-    let _ul = builders.ul.build();
-    let _dl = builders.dl.build();
-    let _avail = builders.avail.build();
-
-    spawn_dummy_c8y_http_proxy(http);
-
-    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
-
+    let (mut mqtt, _keep_alive) = setup_mapper().await;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     let mut mqtt = ShuffledMqttBox::new(&mut mqtt, &mut rng, TEST_TIMEOUT_MS);
 
@@ -258,6 +235,371 @@ async fn birth_message_with_shuffled_entity_registration_impl(seed: u64) {
         ],
     )
     .await;
+}
+
+#[proptest::property_test(config = proptest_config())]
+fn nested_child_registration_with_shuffled_ordering(seed: u64) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(nested_child_registration_with_shuffled_ordering_impl(seed))
+}
+
+async fn nested_child_registration_with_shuffled_ordering_impl(seed: u64) {
+    let (mut mqtt, _keep_alive) = setup_mapper().await;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let mut mqtt = ShuffledMqttBox::new(&mut mqtt, &mut rng, TEST_TIMEOUT_MS);
+
+    // Queue three nested child device births in shuffled order.
+    // child1 is a direct child, child2 parents to child1, child3 parents to child2.
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1//"),
+        r#"{"@type":"child-device","type":"RaspberryPi","name":"Child1"}"#,
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child2//"),
+        r#"{"@type":"child-device","@parent":"device/child1//"}"#,
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child3//"),
+        r#"{"@type":"child-device","@id":"child3","@parent":"device/child2//"}"#,
+    ));
+
+    skip_init_messages(&mut mqtt).await;
+
+    // The mapper must register parents before children, regardless of input order.
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us",
+                "101,test-device:device:child1,Child1,RaspberryPi,false",
+            ),
+            (
+                "c8y/s/us/test-device:device:child1",
+                "101,test-device:device:child2,test-device:device:child2,thin-edge.io-child,false",
+            ),
+            (
+                "c8y/s/us/test-device:device:child2",
+                "101,child3,child3,thin-edge.io-child,false",
+            ),
+        ],
+    )
+    .await;
+}
+
+#[proptest::property_test(config = proptest_config())]
+fn child_service_alarm_with_shuffled_ordering(seed: u64) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(child_service_alarm_with_shuffled_ordering_impl(seed))
+}
+
+async fn child_service_alarm_with_shuffled_ordering_impl(seed: u64) {
+    let (mut mqtt, _keep_alive) = setup_mapper().await;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let mut mqtt = ShuffledMqttBox::new(&mut mqtt, &mut rng, TEST_TIMEOUT_MS);
+
+    // Queue device birth, service birth, and service alarm in shuffled order.
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor//"),
+        r#"{"@type":"child-device"}"#,
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor/service/service_child"),
+        r#"{"@type":"service"}"#,
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor/service/service_child/a/custom_alarm"),
+        json!({
+            "severity": "critical",
+            "text": "temperature alarm",
+            "time": "2023-01-25T18:41:14.776170774Z",
+        })
+        .to_string(),
+    ));
+
+    skip_init_messages(&mut mqtt).await;
+
+    // The mapper must output: device registration → service registration → alarm.
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            ("c8y/s/us", "101,test-device:device:external_sensor,"),
+            (
+                "c8y/s/us/test-device:device:external_sensor",
+                "102,test-device:device:external_sensor:service:service_child,",
+            ),
+            (
+                "c8y/s/us/test-device:device:external_sensor:service:service_child",
+                "301,custom_alarm,temperature alarm,2023-01-25T18:41:14.776170774Z",
+            ),
+        ],
+    )
+    .await;
+}
+
+#[proptest::property_test(config = proptest_config())]
+fn child_alarm_with_shuffled_entity_registration(seed: u64) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(child_alarm_with_shuffled_entity_registration_impl(seed))
+}
+
+async fn child_alarm_with_shuffled_entity_registration_impl(seed: u64) {
+    let (mut mqtt, _keep_alive) = setup_mapper().await;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let mut mqtt = ShuffledMqttBox::new(&mut mqtt, &mut rng, TEST_TIMEOUT_MS);
+
+    // Queue alarms interleaved with entity registration.
+    // If an alarm arrives before the entity is registered, it must be cached.
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor///a/temperature_high"),
+        json!({ "severity": "minor", "text": "Temperature high" }).to_string(),
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor//"),
+        r#"{"@type":"child-device"}"#,
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor///a/temperature_high"),
+        json!({ "severity": "minor", "text": "Still high" }).to_string(),
+    ));
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Registration must come first, then both alarms in topic order.
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            ("c8y/s/us", "101,test-device:device:external_sensor,"),
+            (
+                "c8y/s/us/test-device:device:external_sensor",
+                "303,temperature_high,Still high",
+            ),
+        ],
+    )
+    .await;
+}
+
+#[proptest::property_test(config = proptest_config())]
+fn child_event_with_shuffled_entity_registration(seed: u64) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(child_event_with_shuffled_entity_registration_impl(seed))
+}
+
+async fn child_event_with_shuffled_entity_registration_impl(seed: u64) {
+    let (mut mqtt, _keep_alive) = setup_mapper().await;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let mut mqtt = ShuffledMqttBox::new(&mut mqtt, &mut rng, TEST_TIMEOUT_MS);
+
+    // Queue an event before the entity registration.
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor///e/custom_event"),
+        json!({
+            "text": "Someone logged-in",
+            "time": "2023-01-25T18:41:14.776170774Z",
+        })
+        .to_string(),
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/external_sensor//"),
+        r#"{"@type":"child-device"}"#,
+    ));
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Registration must come before the event.
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            ("c8y/s/us", "101,test-device:device:external_sensor,"),
+            ("c8y/event/events/create", "custom_event"),
+        ],
+    )
+    .await;
+}
+
+#[proptest::property_test(config = proptest_config())]
+fn nested_child_alarm_with_shuffled_ordering(seed: u64) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(nested_child_alarm_with_shuffled_ordering_impl(seed))
+}
+
+async fn nested_child_alarm_with_shuffled_ordering_impl(seed: u64) {
+    let (mut mqtt, _keep_alive) = setup_mapper().await;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let mut mqtt = ShuffledMqttBox::new(&mut mqtt, &mut rng, TEST_TIMEOUT_MS);
+
+    // Queue nested child device births and an alarm from the nested child.
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/immediate_child//"),
+        json!({
+            "@type": "child-device",
+            "@parent": "device/main//",
+            "@id": "immediate_child",
+        })
+        .to_string(),
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/nested_child//"),
+        json!({
+            "@type": "child-device",
+            "@parent": "device/immediate_child//",
+            "@id": "nested_child",
+        })
+        .to_string(),
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/nested_child///a/"),
+        json!({
+            "severity": "minor",
+            "text": "Temperature high",
+            "time": "2023-10-13T15:00:07.172674353Z",
+        })
+        .to_string(),
+    ));
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Parent → child → alarm, in strict dependency order.
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us",
+                "101,immediate_child,immediate_child,thin-edge.io-child,false",
+            ),
+            (
+                "c8y/s/us/immediate_child",
+                "101,nested_child,nested_child,thin-edge.io-child,false",
+            ),
+            (
+                "c8y/s/us/nested_child",
+                "303,ThinEdgeAlarm,Temperature high,2023-10-13T15:00:07.172674353Z",
+            ),
+        ],
+    )
+    .await;
+}
+
+#[proptest::property_test(config = proptest_config())]
+fn nested_child_service_alarm_with_shuffled_ordering(seed: u64) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(nested_child_service_alarm_with_shuffled_ordering_impl(seed))
+}
+
+async fn nested_child_service_alarm_with_shuffled_ordering_impl(seed: u64) {
+    let (mut mqtt, _keep_alive) = setup_mapper().await;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let mut mqtt = ShuffledMqttBox::new(&mut mqtt, &mut rng, TEST_TIMEOUT_MS);
+
+    // Queue the full dependency chain: parent → child → service → alarm.
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/immediate_child//"),
+        json!({
+            "@type": "child-device",
+            "@parent": "device/main//",
+            "@id": "immediate_child",
+        })
+        .to_string(),
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/nested_child//"),
+        json!({
+            "@type": "child-device",
+            "@parent": "device/immediate_child//",
+            "@id": "nested_child",
+        })
+        .to_string(),
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/nested_child/service/nested_service"),
+        json!({
+            "@type": "service",
+            "@parent": "device/nested_child//",
+            "@id": "nested_service",
+        })
+        .to_string(),
+    ));
+
+    mqtt.queue(MqttMessage::new(
+        &Topic::new_unchecked("te/device/nested_child/service/nested_service/a/"),
+        json!({
+            "severity": "minor",
+            "text": "Temperature high",
+            "time": "2023-10-13T15:00:07.172674353Z",
+        })
+        .to_string(),
+    ));
+
+    skip_init_messages(&mut mqtt).await;
+
+    // Full dependency chain must be respected: parent → child → service → alarm.
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            ("c8y/s/us", "101,immediate_child,"),
+            ("c8y/s/us/immediate_child", "101,nested_child,"),
+            ("c8y/s/us/nested_child", "102,nested_service,"),
+            (
+                "c8y/s/us/nested_service",
+                "303,ThinEdgeAlarm,Temperature high,2023-10-13T15:00:07.172674353Z",
+            ),
+        ],
+    )
+    .await;
+}
+
+/// Set up the mapper actors and return the MQTT box ready for shuffled testing.
+///
+/// This handles the common boilerplate: building actors, spawning them,
+/// sending the bridge health message, and ignoring noisy topics.
+/// The caller creates a `ShuffledMqttBox` from the returned `MockMqttBox`.
+///
+/// Returns `(MockMqttBox, KeepAlive)` — the second value must be kept alive
+/// (bound to a `_variable`) for the duration of the test so that actor
+/// channels and the temp directory are not dropped.
+async fn setup_mapper() -> (MockMqttBox, Box<dyn std::any::Any>) {
+    let ttd = TempTedgeDir::new();
+    let TestHandle {
+        mut mqtt,
+        http,
+        fs,
+        ul,
+        dl,
+        avail,
+    } = spawn_c8y_mapper_actor(&ttd, true).await;
+
+    spawn_dummy_c8y_http_proxy(http);
+    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
+
+    (mqtt, Box::new((ttd, fs, ul, dl, avail)))
 }
 
 /// Assert that the expected messages are all received, in any order.
