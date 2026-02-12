@@ -117,6 +117,8 @@ subscribe() {
             --cafile "$MQTT_CA_FILE" \
             --key "$MQTT_KEY_FILE" \
             --cert "$MQTT_CERT_FILE" \
+            -i "mqtt-logger" \
+            -c \
             -t '#' \
             -q 2 \
             -F '{"timestamp":%U,"message":%j,"payload_hex":"%x"}'
@@ -125,6 +127,8 @@ subscribe() {
             --nodelay \
             -h "$MQTT_HOST" \
             -p "$MQTT_PORT" \
+            -i "mqtt-logger" \
+            -c \
             -t '#' \
             -q 2 \
             -F '{"timestamp":%U,"message":%j,"payload_hex":"%x"}'
