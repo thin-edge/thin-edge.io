@@ -81,11 +81,11 @@ impl FileEntry {
             path: path.into(),
             config_type: config_type.into(),
             file_permissions,
-            parent_permissions: PermissionEntry {
-                user: parent_user,
-                group: parent_group,
-                mode: parent_permissions.mode,
-            },
+            parent_permissions: PermissionEntry::new(
+                parent_user,
+                parent_group,
+                parent_permissions.mode,
+            ),
         }
     }
 }
@@ -285,11 +285,11 @@ type = "other.conf"
 
     #[test]
     fn test_file_entry_new_inherits_parent_permissions() {
-        let file_perms = PermissionEntry {
-            user: Some("tedge".to_string()),
-            group: Some("tedge".to_string()),
-            mode: Some(0o644),
-        };
+        let file_perms = PermissionEntry::new(
+            Some("tedge".to_string()),
+            Some("tedge".to_string()),
+            Some(0o644),
+        );
         let parent_perms = PermissionEntry::default();
 
         let entry = FileEntry::new("/etc/test.conf", "test.conf", file_perms, parent_perms);
@@ -302,16 +302,16 @@ type = "other.conf"
 
     #[test]
     fn test_file_entry_new_respects_explicit_parent_permissions() {
-        let file_perms = PermissionEntry {
-            user: Some("user1".to_string()),
-            group: Some("group1".to_string()),
-            mode: Some(0o644),
-        };
-        let parent_perms = PermissionEntry {
-            user: Some("parent_user".to_string()),
-            group: Some("parent_group".to_string()),
-            mode: Some(0o755),
-        };
+        let file_perms = PermissionEntry::new(
+            Some("user1".to_string()),
+            Some("group1".to_string()),
+            Some(0o644),
+        );
+        let parent_perms = PermissionEntry::new(
+            Some("parent_user".to_string()),
+            Some("parent_group".to_string()),
+            Some(0o755),
+        );
 
         let entry = FileEntry::new("/etc/test.conf", "test.conf", file_perms, parent_perms);
 
