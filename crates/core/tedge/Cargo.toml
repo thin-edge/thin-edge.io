@@ -59,6 +59,7 @@ tedge-write = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 tedge_flows = { workspace = true, optional = true }
+tedge_system_services = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }

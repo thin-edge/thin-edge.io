@@ -125,6 +125,64 @@ type = "dest.conf"
 }
 
 #[test]
+fn test_set_command_restarts_service() {
+    let ttd = TempTedgeDir::new();
+
+    let witness_file = ttd.file("restart-witness.txt");
+
+    // system.toml for restart command
+    let system_toml_content = format!(
+        r#"
+[init]
+name = "dummy"
+is_available = ["true"]
+restart = ["sh", "-c", "echo $0 >> {}", "{{}}"]
+start = ["true"]
+stop =  ["true"]
+enable =  ["true"]
+disable =  ["true"]
+is_active = ["true"]
+"#,
+        witness_file.utf8_path()
+    );
+    ttd.file("system.toml")
+        .with_raw_content(&system_toml_content);
+
+    // Original config
+    let dest_file = ttd.file("test.conf");
+
+    // New config
+    let new_content = "new=configuration\n";
+    let source_file = ttd.file("new.conf").with_raw_content(new_content);
+
+    let config_content = format!(
+        r###"
+[[files]]
+path = "{}"
+type = "dest.conf"
+service = "dummy-service"
+"###,
+        dest_file.utf8_path()
+    );
+    ttd.dir("plugins")
+        .file("tedge-configuration-plugin.toml")
+        .with_raw_content(&config_content);
+
+    let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
+    cmd.arg("--config-dir")
+        .arg(ttd.path().to_str().unwrap())
+        .arg("set")
+        .arg("dest.conf")
+        .arg(source_file.path().to_str().unwrap());
+
+    cmd.assert().success();
+
+    // Verify that the restart command was called with the correct service name
+    let witness_content = fs::read_to_string(witness_file.path()).unwrap();
+    assert_eq!(witness_content.trim(), "dummy-service");
+}
+
+#[test]
 fn test_empty_config_file() {
     let ttd = TempTedgeDir::new();
 

@@ -22,6 +22,8 @@ use tedge_api::commands::ConfigSnapshotCmdPayload;
 use tedge_api::commands::ConfigUpdateCmdPayload;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicError;
+use tedge_api::mqtt_topics::OperationType;
+use tedge_api::CommandLog;
 use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
@@ -235,11 +237,26 @@ impl ConfigManagerWorker {
             OffsetDateTime::now_utc().unix_timestamp()
         ));
 
+        // Extract cmd_id from topic for CommandLog
+        let cmd_id = match self.config.mqtt_schema.entity_channel_of(topic) {
+            Ok((_, Channel::Command { cmd_id, .. })) => cmd_id,
+            _ => {
+                return Err(ConfigManagementError::InvalidTopicError);
+            }
+        };
+
+        // Create CommandLog from log_path if present
+        let mut command_log = request.log_path.clone().map(|path| {
+            CommandLog::from_log_path(path, OperationType::ConfigSnapshot.to_string(), cmd_id)
+        });
+
         info!(
             target: "config plugins",
             "Retrieving config type: {} to file: {}", config_type, config_path
         );
-        plugin.get(config_type, &config_path).await?;
+        plugin
+            .get(config_type, &config_path, command_log.as_mut())
+            .await?;
 
         let tedge_url = match &request.tedge_url {
             Some(tedge_url) => tedge_url,
@@ -367,12 +384,27 @@ impl ConfigManagerWorker {
 
         let plugin = self.get_plugin(plugin_name)?;
 
+        // Extract cmd_id from topic for CommandLog
+        let cmd_id = match self.config.mqtt_schema.entity_channel_of(topic) {
+            Ok((_, Channel::Command { cmd_id, .. })) => cmd_id,
+            _ => {
+                return Err(ConfigManagementError::InvalidTopicError);
+            }
+        };
+
+        // Create CommandLog from log_path if present
+        let mut command_log = request.log_path.clone().map(|path| {
+            CommandLog::from_log_path(path, OperationType::ConfigUpdate.to_string(), cmd_id)
+        });
+
         info!(
             target: "config plugins",
             "Setting config type: {} from file: {}", config_type, from_path
         );
 
-        plugin.set(config_type, from_path).await?;
+        plugin
+            .set(config_type, from_path, command_log.as_mut())
+            .await?;
 
         Ok(None)
     }
