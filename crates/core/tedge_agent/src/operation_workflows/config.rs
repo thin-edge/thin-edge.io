@@ -1,3 +1,4 @@
+use crate::Capabilities;
 use camino::Utf8PathBuf;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -12,6 +13,8 @@ pub struct OperationConfig {
     pub config_dir: Utf8PathBuf,
     pub state_dir: Utf8PathBuf,
     pub operations_dir: Utf8PathBuf,
+    pub tmp_dir: Utf8PathBuf,
+    pub capabilities: Capabilities,
 }
 
 impl OperationConfig {
@@ -22,6 +25,11 @@ impl OperationConfig {
         tedge_config: &TEdgeConfig,
     ) -> Result<OperationConfig, tedge_config::TEdgeConfigError> {
         let config_dir = tedge_config.root_dir();
+        let capabilities = Capabilities {
+            config_update: tedge_config.agent.enable.config_update,
+            config_snapshot: tedge_config.agent.enable.config_snapshot,
+            log_upload: tedge_config.agent.enable.log_upload,
+        };
 
         Ok(OperationConfig {
             mqtt_schema: MqttSchema::with_root(topic_root),
@@ -31,6 +39,8 @@ impl OperationConfig {
             config_dir: config_dir.to_owned(),
             state_dir: tedge_config.agent.state.path.clone().into(),
             operations_dir: config_dir.join("operations"),
+            tmp_dir: tedge_config.tmp.path.clone().into(),
+            capabilities,
         })
     }
 }

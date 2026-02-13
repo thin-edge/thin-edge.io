@@ -1,0 +1,3 @@
+files = [
+    { path = '/etc/tedge/test.conf', type = 'test-conf' },
+]

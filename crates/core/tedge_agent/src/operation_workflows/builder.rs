@@ -7,6 +7,7 @@ use crate::operation_workflows::message_box::SyncSignalDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
 use crate::state_repository::state::agent_state_dir;
 use crate::state_repository::state::AgentStateRepository;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Output;
 use tedge_actors::futures::channel::mpsc;
@@ -32,11 +33,20 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
+use tedge_api::workflow::OperationStep;
+use tedge_api::workflow::OperationStepHandler;
+use tedge_api::workflow::OperationStepRequest;
+use tedge_api::workflow::OperationStepResponse;
 use tedge_api::workflow::SyncOnCommand;
+use tedge_downloader_ext::DownloadRequest;
+use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::Execute;
+
+pub type DownloaderRequest = (String, DownloadRequest);
+pub type DownloaderResult = (String, DownloadResult);
 
 pub struct WorkflowActorBuilder {
     config: OperationConfig,
@@ -48,6 +58,11 @@ pub struct WorkflowActorBuilder {
     mqtt_publisher: LoggingSender<MqttMessage>,
     script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
+    downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
+    builtin_operation_step_executor: HashMap<
+        (OperationType, OperationStep),
+        ClientMessageBox<OperationStepRequest, OperationStepResponse>,
+    >,
 }
 
 impl WorkflowActorBuilder {
@@ -56,6 +71,7 @@ impl WorkflowActorBuilder {
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
         script_runner: &mut impl Service<Execute, std::io::Result<Output>>,
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
+        downloader: &mut impl Service<DownloaderRequest, DownloaderResult>,
     ) -> Self {
         let (input_sender, input_receiver) = mpsc::unbounded();
         let (signal_sender, signal_receiver) = mpsc::channel(10);
@@ -85,6 +101,8 @@ impl WorkflowActorBuilder {
 
         let script_runner = ClientMessageBox::new(script_runner);
 
+        let downloader = ClientMessageBox::new(downloader);
+
         fs_notify.connect_sink(config.operations_dir.clone().into(), &input_sender);
 
         Self {
@@ -97,6 +115,8 @@ impl WorkflowActorBuilder {
             mqtt_publisher,
             signal_sender,
             script_runner,
+            downloader,
+            builtin_operation_step_executor: HashMap::new(),
         }
     }
 
@@ -128,6 +148,17 @@ impl WorkflowActorBuilder {
         for operation in actor.sync_on_commands() {
             self.sync_signal_dispatcher
                 .register_operation_listener(operation, sender.sender_clone());
+        }
+    }
+
+    /// Connect a service that handles operation step requests
+    pub fn register_builtin_operation_step_handler(
+        &mut self,
+        service: &mut (impl Service<OperationStepRequest, OperationStepResponse> + OperationStepHandler),
+    ) {
+        for (operation, step) in service.supported_operation_steps() {
+            self.builtin_operation_step_executor
+                .insert((operation, step), ClientMessageBox::new(service));
         }
     }
 
@@ -175,12 +206,16 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             workflow_repository,
             state_repository,
             log_dir: self.config.log_dir,
+            capabilities: self.config.capabilities,
             input_receiver: self.input_receiver,
             builtin_command_dispatcher: self.command_dispatcher,
+            builtin_operation_step_executor: self.builtin_operation_step_executor,
             sync_signal_dispatcher: self.sync_signal_dispatcher,
             mqtt_publisher: self.mqtt_publisher,
             command_sender: self.command_sender,
             script_runner: self.script_runner,
+            downloader: self.downloader,
+            tmp_dir: self.config.tmp_dir,
         }
     }
 }

@@ -1,4 +1,3 @@
-use crate::error::ConfigManagementError;
 use crate::plugin::ExternalPlugin;
 use crate::plugin::LIST;
 use camino::Utf8Path;
@@ -22,15 +21,17 @@ pub struct ExternalPlugins {
 
 impl ExternalPlugins {
     pub fn new(plugin_dirs: Vec<Utf8PathBuf>, sudo_enabled: bool, tmp_dir: Arc<Utf8Path>) -> Self {
-        ExternalPlugins {
+        let mut plugins = ExternalPlugins {
             plugin_dirs,
             plugin_map: BTreeMap::new(),
             sudo: SudoCommandBuilder::enabled(sudo_enabled),
             tmp_dir,
-        }
+        };
+        plugins.load();
+        plugins
     }
 
-    pub async fn load(&mut self) -> Result<(), ConfigManagementError> {
+    pub fn load(&mut self) {
         self.plugin_map.clear();
 
         for plugin_dir in &self.plugin_dirs {
@@ -108,8 +109,6 @@ impl ExternalPlugins {
                 }
             }
         }
-
-        Ok(())
     }
 
     pub fn is_empty(&self) -> bool {
@@ -125,4 +124,10 @@ impl ExternalPlugins {
         plugin_types.sort();
         plugin_types
     }
+}
+
+pub(crate) fn parse_config_type(config_type: &str) -> (&str, &str) {
+    config_type
+        .split_once("::")
+        .unwrap_or((config_type, "file"))
 }

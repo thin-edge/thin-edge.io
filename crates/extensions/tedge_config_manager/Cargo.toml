@@ -33,6 +33,7 @@ toml = { workspace = true }
 uzers = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }

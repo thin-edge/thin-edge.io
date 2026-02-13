@@ -23,8 +23,17 @@ pub enum ConfigManagementError {
     #[error("Received unexpected message on topic")]
     InvalidTopicError,
 
+    #[error("Command received on topic '{0}' does not contain a valid command id")]
+    InvalidCommandTopic(String),
+
     #[error("Directory {path} is not found.")]
     DirectoryNotFound { path: std::path::PathBuf },
+
+    #[error("File '{0}' not found.")]
+    FileNotFound(String),
+
+    #[error("Plugin '{0}' not found.")]
+    PluginNotFound(String),
 
     #[error(transparent)]
     FromEntityTopicError(#[from] tedge_api::mqtt_topics::EntityTopicError),
@@ -34,6 +43,12 @@ pub enum ConfigManagementError {
 
     #[error("Config plugin '{plugin_name}' error: {reason}")]
     PluginError { plugin_name: String, reason: String },
+
+    #[error("Invalid operation step: {0}")]
+    InvalidOperationStep(String),
+
+    #[error("Missing key: {0} in payload")]
+    MissingKey(String),
 
     #[error("{0:#}")]
     Other(#[from] anyhow::Error),

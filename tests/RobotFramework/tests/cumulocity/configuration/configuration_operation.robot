@@ -13,6 +13,7 @@ Test Tags           theme:configuration    theme:childdevices
 
 *** Variables ***
 ${PARENT_SN}    ${EMPTY}
+${PARENT_IP}    ${EMPTY}
 ${CHILD_SN}     ${EMPTY}
 
 
@@ -206,7 +207,7 @@ Manual config_update operation request
     # Don't worry about the command failing, that is expected since the tedgeUrl path does not exist
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/local-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/config_update/local-2222","remoteUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","remoteUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/config_update/local-2222","tedgeUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
     ...    expected_status=failed
     ...    c8y_fragment=c8y_DownloadConfigFile
 
@@ -217,7 +218,7 @@ Trigger config_update operation from another workflow
     ...    curl -X PUT --data-binary 'new content for CONFIG1' "http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/sub_config_update/sub-2222"
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/sub_config_update/sub-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/sub_config_update/sub-2222","remoteUrl":"","serverUrl":"","type":"CONFIG1"}
+    ...    payload={"status":"init","remoteUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/sub_config_update/sub-2222","tedgeUrl":"","serverUrl":"","type":"CONFIG1"}
     ...    expected_status=successful
     ...    c8y_fragment=c8y_DownloadConfigFile
 
@@ -244,7 +245,7 @@ Config update request not processed when operation is disabled for tedge-agent
     Disable config update capability of tedge-agent
     Publish and Verify Local Command
     ...    topic=te/device/main///cmd/config_update/local-2222
-    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/config_update/local-2222","remoteUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
+    ...    payload={"status":"init","remoteUrl":"http://${PARENT_IP}:8000/te/v1/files/${PARENT_SN}/config_update/local-2222","tedgeUrl":"","serverUrl":"","type":"tedge-configuration-plugin"}
     ...    expected_status=init
     ...    c8y_fragment=c8y_DownloadConfigFile
     [Teardown]    Enable config update capability of tedge-agent
@@ -627,14 +628,20 @@ Update configuration plugin config via local filesystem move (same directory)
     Operation Should Be SUCCESSFUL    ${operation}
 
 Customize config operations
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom_config_snapshot.toml    /etc/tedge/operations/
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom_config_update.toml    /etc/tedge/operations/
+    Execute Command    mv /etc/tedge/operations/config_update.toml /etc/tedge/operations/config_update.toml.bak
+
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/custom_config_snapshot.toml
+    ...    /etc/tedge/operations/config_snapshot.toml
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom_config_update.toml    /etc/tedge/operations/config_update.toml
+
     Restart Service    tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
 Restore config operations
-    Execute Command    rm -f /etc/tedge/operations/custom_config_snapshot.toml
-    Execute Command    rm -f /etc/tedge/operations/custom_config_update.toml
+    Execute Command    rm -f /etc/tedge/operations/config_snapshot.toml
+    Execute Command    rm -f /etc/tedge/operations/config_update.toml
+    Execute Command    mv /etc/tedge/operations/config_update.toml.bak /etc/tedge/operations/config_update.toml
     Restart Service    tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
@@ -645,10 +652,10 @@ Restore config operations
 Suite Setup
     # Parent
     ${parent_sn}=    Setup    skip_bootstrap=${False}
-    Set Suite Variable    $PARENT_SN    ${parent_sn}
+    VAR    ${PARENT_SN}=    ${parent_sn}    scope=suite
 
     ${parent_ip}=    Get IP Address
-    Set Suite Variable    $PARENT_IP    ${parent_ip}
+    VAR    ${PARENT_IP}=    ${parent_ip}    scope=suite
     Execute Command    sudo tedge config set mqtt.external.bind.address ${parent_ip}
     Execute Command    sudo tedge config set mqtt.external.bind.port 1883
     Execute Command    sudo tedge config set c8y.proxy.bind.address ${parent_ip}
