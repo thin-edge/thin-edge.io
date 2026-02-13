@@ -331,7 +331,7 @@ jobs:
           invoke test \
             --processes "${{ inputs.processes || '' }}" \
             --include "${{ inputs.include || '' }}" \
-            --retries "${{ inputs.retries || '0' }}" \
+            --retries "${{ inputs.retries || vars.SYSTEM_TEST_RETRIES || '0' }}" \
             --outputdir output
 
       - name: Upload test results
