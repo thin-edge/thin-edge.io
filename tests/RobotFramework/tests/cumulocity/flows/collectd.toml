@@ -1,0 +1,5 @@
+input.mqtt.topics = ["collectd/+/+/+"]
+
+steps = [
+    { script = "collectd.js" },
+]

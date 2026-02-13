@@ -126,7 +126,14 @@ impl EntityMetadata {
     }
 
     pub fn display_name(&self) -> Option<&str> {
-        self.twin_data.get("name").and_then(|v| v.as_str())
+        self.twin_data
+            .get("name")
+            .and_then(|v| v.as_str())
+            .or_else(|| match self.r#type {
+                EntityType::MainDevice => self.external_id.as_ref().map(|xid| xid.as_ref()),
+                EntityType::ChildDevice => self.topic_id.default_device_name(),
+                EntityType::Service => self.topic_id.default_service_name(),
+            })
     }
 
     pub fn display_type(&self) -> Option<&str> {
@@ -134,7 +141,7 @@ impl EntityMetadata {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EntityType {
     #[serde(rename = "device")]
     MainDevice,

@@ -11,6 +11,7 @@ use std::fmt::Formatter;
 use std::time::Duration;
 use std::time::SystemTime;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchError;
@@ -109,6 +110,19 @@ pub struct Message {
     pub topic: String,
     pub payload: Vec<u8>,
     pub timestamp: Option<SystemTime>,
+    pub transport: Option<Transport>,
+}
+
+#[derive(Clone, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
+pub enum Transport {
+    Mqtt {
+        #[serde(
+            serialize_with = "tedge_mqtt_ext::serialize_qos",
+            deserialize_with = "tedge_mqtt_ext::deserialize_qos"
+        )]
+        qos: QoS,
+        retain: bool,
+    },
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -182,7 +196,7 @@ impl Flow {
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         let mut messages = vec![message.clone()];
-        for step in self.steps.iter() {
+        for step in self.steps.iter_mut() {
             let js = step.source().to_string();
             let mut transformed_messages = vec![];
             for message in messages.iter() {
@@ -342,6 +356,7 @@ impl Message {
             topic: topic.to_string(),
             payload: payload.into(),
             timestamp: None,
+            transport: None,
         }
     }
 
@@ -354,6 +369,7 @@ impl Message {
             topic: topic.to_string(),
             payload: payload.into(),
             timestamp: Some(timestamp),
+            transport: None,
         }
     }
 
@@ -393,8 +409,17 @@ impl std::fmt::Debug for Message {
 
 impl From<MqttMessage> for Message {
     fn from(message: MqttMessage) -> Self {
+        let transport = Transport::Mqtt {
+            qos: message.qos,
+            retain: message.retain,
+        };
         let (topic, payload) = message.split();
-        Message::new(topic, payload)
+        Message {
+            topic,
+            payload,
+            timestamp: None,
+            transport: Some(transport),
+        }
     }
 }
 
@@ -405,7 +430,14 @@ impl TryFrom<Message> for MqttMessage {
         let topic = message.topic.as_str().try_into().map_err(|_| {
             FlowError::UnsupportedMessage(format!("invalid topic {}", message.topic))
         })?;
-        Ok(MqttMessage::new(&topic, message.payload))
+
+        let mqtt_message = MqttMessage::new(&topic, message.payload);
+        match message.transport {
+            Some(Transport::Mqtt { qos, retain }) => {
+                Ok(mqtt_message.with_qos(qos).with_retain_flag(retain))
+            }
+            _ => Ok(mqtt_message),
+        }
     }
 }
 

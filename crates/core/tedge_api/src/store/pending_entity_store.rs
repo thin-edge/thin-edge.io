@@ -122,9 +122,7 @@ impl PendingEntityStore {
 
     fn take_cached_telemetry_data(&mut self, entity_tid: &EntityTopicId) -> Vec<MqttMessage> {
         let mut messages = vec![];
-        let capacity = self.telemetry_cache.capacity();
-        let telemetry_cache =
-            std::mem::replace(&mut self.telemetry_cache, RingBuffer::new(capacity));
+        let telemetry_cache = self.telemetry_cache.take();
         for message in telemetry_cache.into_iter() {
             match self.mqtt_schema.entity_channel_of(&message.topic) {
                 Ok((tid, _)) => {

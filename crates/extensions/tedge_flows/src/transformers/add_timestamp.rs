@@ -1,6 +1,7 @@
 use crate::config::ConfigError;
 use crate::js_value::JsonValue;
 use crate::transformers::Transformer;
+use crate::FlowContextHandle;
 use crate::FlowError;
 use crate::Message;
 use std::time::SystemTime;
@@ -48,7 +49,12 @@ impl Transformer for AddTimestamp {
         Ok(())
     }
 
-    fn on_message(&self, time: SystemTime, message: &Message) -> Result<Vec<Message>, FlowError> {
+    fn on_message(
+        &mut self,
+        time: SystemTime,
+        message: &Message,
+        _context: &FlowContextHandle,
+    ) -> Result<Vec<Message>, FlowError> {
         let Ok(serde_json::Value::Object(json_message)) =
             serde_json::from_slice(message.payload.as_slice())
         else {

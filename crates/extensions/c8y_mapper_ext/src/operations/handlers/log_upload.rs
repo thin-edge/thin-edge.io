@@ -207,7 +207,7 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
+        mqtt.skip(2).await; // Skip the mapped registration message
 
         // Simulate log_upload cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -307,7 +307,7 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
+        mqtt.skip(2).await; // Skip the mapped registration message
 
         // Simulate log_upload cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -429,7 +429,7 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
+        mqtt.skip(2).await; // Skip the mapped registration message
 
         // Simulate log_upload command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -639,7 +639,7 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
+        mqtt.skip(2).await; // Skip the mapped registration message
 
         // Simulate log_upload command with "successful" state
         mqtt.send(MqttMessage::new(

@@ -1,7 +1,5 @@
-use super::alarm_converter::AlarmConverter;
 use super::config::C8yMapperConfig;
 use super::error::CumulocityMapperError;
-use super::service_monitor;
 use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
@@ -11,8 +9,7 @@ use crate::entity_cache::InvalidExternalIdError;
 use crate::entity_cache::UpdateOutcome;
 use crate::error::ConversionError;
 use crate::error::MessageConversionError;
-use crate::json;
-use crate::json::Units;
+use crate::mea::events::EventConverter;
 use crate::operations;
 use crate::operations::OperationHandler;
 use crate::supported_operations::operation::get_child_ops;
@@ -53,7 +50,6 @@ use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
 use serde_json::json;
 use serde_json::Value;
-use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
@@ -70,8 +66,6 @@ use tedge_api::commands::SoftwareListCommand;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityType;
 use tedge_api::entity_store::EntityRegistrationMessage;
-use tedge_api::event::error::ThinEdgeJsonDeserializerError;
-use tedge_api::event::ThinEdgeEvent;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
@@ -85,12 +79,13 @@ use tedge_api::Jsonify;
 use tedge_api::LoggedCommand;
 use tedge_config::models::TopicPrefix;
 use tedge_config::TEdgeConfigError;
+use tedge_flows::FlowContextHandle;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
+use tedge_mqtt_ext::TopicFilter;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::FileError;
-use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
 use tokio::time::Duration;
 use tokio::time::Instant;
@@ -100,17 +95,13 @@ use tracing::info;
 use tracing::trace;
 use tracing::warn;
 
-const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
-const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "agent";
-const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
-const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
 const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
 
 #[derive(Debug)]
 pub struct MapperConfig {
-    pub out_topic: Topic,
+    pub http_event_topic: TopicFilter,
     pub errors_topic: Topic,
 }
 
@@ -171,11 +162,9 @@ impl CumulocityConverter {
 }
 
 pub struct CumulocityConverter {
-    pub(crate) size_threshold: SizeThreshold,
     pub config: Arc<C8yMapperConfig>,
     pub(crate) mapper_config: MapperConfig,
     pub device_name: String,
-    alarm_converter: AlarmConverter,
     operation_logs: OperationLogs,
     mqtt_publisher: LoggingSender<MqttMessage>,
     pub http_proxy: C8YHttpProxy,
@@ -191,8 +180,6 @@ pub struct CumulocityConverter {
 
     pub supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
-
-    units: Units,
 }
 
 impl CumulocityConverter {
@@ -202,6 +189,7 @@ impl CumulocityConverter {
         http_proxy: C8YHttpProxy,
         uploader: ClientMessageBox<(String, UploadRequest), (String, UploadResult)>,
         downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+        flow_context: FlowContextHandle,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
 
@@ -210,10 +198,6 @@ impl CumulocityConverter {
         } else {
             config.service.ty.clone()
         };
-
-        let size_threshold = SizeThreshold(config.max_mqtt_payload_size as usize);
-
-        let prefix = &config.bridge_config.c8y_prefix;
 
         let operations_by_xid = {
             let mut operations = get_child_ops(&*config.ops_dir, &config.bridge_config)?;
@@ -231,19 +215,19 @@ impl CumulocityConverter {
             operations_by_xid,
         };
 
-        let alarm_converter = AlarmConverter::new();
-
         let log_dir = config.logs_path.join(TEDGE_AGENT_LOG_DIR);
         let operation_logs = OperationLogs::try_new(log_dir)?;
 
         let mqtt_schema = config.mqtt_schema.clone();
-
+        let http_event_topic =
+            EventConverter::http_event_topic_filter(&config.bridge_config.c8y_prefix);
         let mapper_config = MapperConfig {
-            out_topic: Topic::new_unchecked(&format!("{prefix}/measurement/measurements/create")),
+            http_event_topic,
             errors_topic: mqtt_schema.error_topic(),
         };
 
         let entity_cache = EntityCache::new(
+            flow_context,
             mqtt_schema.clone(),
             EntityTopicId::default_main_device(),
             device_id.clone().into(),
@@ -263,11 +247,9 @@ impl CumulocityConverter {
         );
 
         Ok(CumulocityConverter {
-            size_threshold,
             config: Arc::new(config),
             mapper_config,
             device_name: device_id,
-            alarm_converter,
             supported_operations: operation_manager,
             operation_logs,
             http_proxy,
@@ -280,7 +262,6 @@ impl CumulocityConverter {
             recently_completed_commands: HashMap::new(),
             active_commands_last_cleared: Instant::now(),
             operation_handler,
-            units: Units::default(),
         })
     }
 
@@ -399,7 +380,7 @@ impl CumulocityConverter {
         let entity = self.entity_cache.try_get(entity_topic_id)?;
         let topic = C8yTopic::smartrest_response_topic(
             &entity.external_id,
-            &entity.metadata.r#type,
+            &entity.r#type(),
             &self.config.bridge_config.c8y_prefix,
         )
         .expect("Topic must have been valid as the external id is pre-validated");
@@ -464,147 +445,28 @@ impl CumulocityConverter {
         Ok(id.into())
     }
 
-    fn try_convert_measurement(
-        &mut self,
-        source: &EntityTopicId,
-        input: &MqttMessage,
-        measurement_type: &str,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut mqtt_messages: Vec<MqttMessage> = Vec::new();
-
-        if let Some(entity) = self.entity_cache.get(source) {
-            // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
-            let units = self.get_measurement_type_units(source, measurement_type);
-            let c8y_json_payload =
-                json::from_thin_edge_json(input.payload_str()?, entity, measurement_type, units)?;
-
-            if c8y_json_payload.len() < self.size_threshold.0 {
-                mqtt_messages.push(MqttMessage::new(
-                    &self.mapper_config.out_topic,
-                    c8y_json_payload,
-                ));
-            } else {
-                return Err(ConversionError::TranslatedSizeExceededThreshold {
-                    payload: input.payload_str()?.chars().take(50).collect(),
-                    topic: input.topic.name.clone(),
-                    actual_size: c8y_json_payload.len(),
-                    threshold: self.size_threshold.0,
-                });
-            }
-        }
-        Ok(mqtt_messages)
-    }
-
-    async fn try_convert_event(
-        &mut self,
-        source: &EntityTopicId,
-        input: &MqttMessage,
-        event_type: &str,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut messages = Vec::new();
-
-        let event_type = match event_type.is_empty() {
-            true => DEFAULT_EVENT_TYPE,
-            false => event_type,
+    async fn post_event_over_http(&mut self, message: &MqttMessage) -> Result<(), ConversionError> {
+        let c8y_event = C8yCreateEvent::from_slice(message.payload_bytes())?;
+        let device_id = message
+            .topic
+            .as_ref()
+            .rsplit_once('/')
+            .map(|(_, id)| id.to_string())
+            .unwrap_or_else(|| {
+                self.entity_cache
+                    .main_device_external_id()
+                    .as_ref()
+                    .to_string()
+            });
+        let create_event = CreateEvent {
+            event_type: c8y_event.event_type,
+            time: c8y_event.time,
+            text: c8y_event.text,
+            extras: c8y_event.extras,
+            device_id,
         };
-
-        if let Some(entity) = self.entity_cache.get(source) {
-            let mqtt_topic = input.topic.name.clone();
-            let mqtt_payload = input.payload_str().map_err(|e| {
-                ThinEdgeJsonDeserializerError::FailedToParsePayloadToString {
-                    topic: mqtt_topic.clone(),
-                    error: e.to_string(),
-                }
-            })?;
-
-            let tedge_event = ThinEdgeEvent::try_from(
-                event_type,
-                &entity.metadata.r#type,
-                &entity.external_id,
-                mqtt_payload,
-            )
-            .map_err(
-                |e| ThinEdgeJsonDeserializerError::FailedToParseJsonPayload {
-                    topic: mqtt_topic.clone(),
-                    error: e.to_string(),
-                    payload: mqtt_payload.chars().take(50).collect(),
-                },
-            )?;
-
-            let c8y_event = C8yCreateEvent::from(tedge_event);
-
-            // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
-            let message = if c8y_event.extras.is_empty() {
-                let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
-                let smartrest_topic =
-                    C8yTopic::upstream_topic(&self.config.bridge_config.c8y_prefix);
-                MqttMessage::new(&smartrest_topic, smartrest_event)
-            } else {
-                // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
-                let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
-                let json_mqtt_topic = Topic::new_unchecked(&format!(
-                    "{}/{C8Y_JSON_MQTT_EVENTS_TOPIC}",
-                    self.config.bridge_config.c8y_prefix
-                ));
-                MqttMessage::new(&json_mqtt_topic, cumulocity_event_json)
-            };
-
-            if self.can_send_over_mqtt(&message) {
-                // The message can be sent via MQTT
-                messages.push(message);
-            } else {
-                // The message must be sent over HTTP
-                let create_event = CreateEvent {
-                    event_type: c8y_event.event_type,
-                    time: c8y_event.time,
-                    text: c8y_event.text,
-                    extras: c8y_event.extras,
-                    device_id: entity.external_id.clone().into(),
-                };
-                self.http_proxy.send_event(create_event).await?;
-                return Ok(vec![]);
-            }
-        }
-        Ok(messages)
-    }
-
-    pub fn process_alarm_messages(
-        &mut self,
-        source: &EntityTopicId,
-        input: &MqttMessage,
-        alarm_type: &str,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        self.size_threshold.validate(input)?;
-        let entity = self.entity_cache.try_get(source)?;
-
-        let mqtt_messages = self.alarm_converter.try_convert_alarm(
-            source,
-            &entity.external_id,
-            &entity.metadata.r#type,
-            input,
-            alarm_type,
-            &self.config.bridge_config.c8y_prefix,
-        )?;
-
-        Ok(mqtt_messages)
-    }
-
-    pub async fn process_health_status_message(
-        &mut self,
-        entity_tid: &EntityTopicId,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let entity = self.entity_cache.try_get(entity_tid)?;
-        let parent_xid = self.entity_cache.parent_external_id(entity_tid)?;
-
-        Ok(convert_health_status_message(
-            &self.config.mqtt_schema,
-            entity,
-            parent_xid,
-            self.entity_cache.main_device_external_id(),
-            message,
-            &self.config.bridge_config.c8y_prefix,
-        ))
+        self.http_proxy.send_event(create_event).await?;
+        Ok(())
     }
 
     async fn parse_c8y_devicecontrol_topic(
@@ -943,8 +805,8 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let entity_xid: EntityExternalId = device_xid.into();
         let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
-        let mut command = software_update_request
-            .into_software_update_command(&target.metadata.topic_id, cmd_id)?;
+        let mut command =
+            software_update_request.into_software_update_command(target.topic_id(), cmd_id)?;
 
         command.payload.update_list.iter_mut().for_each(|modules| {
             modules.modules.iter_mut().for_each(|module| {
@@ -967,7 +829,7 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let entity_xid: EntityExternalId = device_xid.into();
         let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
-        let command = RestartCommand::new(&target.metadata.topic_id, cmd_id);
+        let command = RestartCommand::new(target.topic_id(), cmd_id);
         let message = command.command_message(&self.mqtt_schema);
         Ok(vec![message])
     }
@@ -1158,50 +1020,9 @@ impl CumulocityConverter {
         }
     }
 
-    fn serialize_to_smartrest(c8y_event: &C8yCreateEvent) -> Result<String, ConversionError> {
-        Ok(format!(
-            "{},{},\"{}\",{}",
-            CREATE_EVENT_SMARTREST_CODE,
-            c8y_event.event_type,
-            c8y_event.text,
-            c8y_event
-                .time
-                .format(&time::format_description::well_known::Rfc3339)?
-        ))
-    }
-
-    fn can_send_over_mqtt(&self, message: &MqttMessage) -> bool {
-        message.payload_bytes().len() < self.size_threshold.0
-    }
-
     fn command_already_exists(&self, cmd_id: &str) -> bool {
         self.active_commands.contains_key(cmd_id)
             || self.recently_completed_commands.contains_key(cmd_id)
-    }
-
-    fn get_measurement_type_units(
-        &self,
-        source: &EntityTopicId,
-        measurement_type: &str,
-    ) -> Option<&Units> {
-        let group = format!("{source}/{measurement_type}");
-        self.units.get_group_units(&group)
-    }
-
-    fn set_measurement_type_units(
-        &mut self,
-        source: &EntityTopicId,
-        measurement_type: &str,
-        message: &MqttMessage,
-    ) {
-        if let Ok(payload) = message.payload_str() {
-            let group = format!("{source}/{measurement_type}");
-            if let Ok(meta) = serde_json::from_str(payload) {
-                self.units.set_group_units(group, meta)
-            } else if payload.is_empty() {
-                self.units.unset_group_units(group)
-            }
-        }
     }
 }
 
@@ -1245,10 +1066,6 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         match &channel {
             Channel::EntityMetadata => self.try_convert_entity_registration(source, message),
-            Channel::MeasurementMetadata { measurement_type } => {
-                self.set_measurement_type_units(&source, measurement_type, message);
-                Ok(vec![])
-            }
             _ => {
                 self.try_convert_data_message(source, channel, message)
                     .await
@@ -1283,23 +1100,15 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        let entity_type = self.entity_cache.try_get(&source)?.metadata.r#type.clone();
+        let entity_type = self.entity_cache.try_get(&source)?.r#type();
         match &channel {
             Channel::EntityTwinData { fragment_key } => {
                 self.try_convert_entity_twin_data(&source, &entity_type, message, fragment_key)
             }
 
-            Channel::Measurement { measurement_type } => {
-                self.try_convert_measurement(&source, message, measurement_type)
-            }
-
-            Channel::Event { event_type } => {
-                self.try_convert_event(&source, message, event_type).await
-            }
-
-            Channel::Alarm { alarm_type } => {
-                self.process_alarm_messages(&source, message, alarm_type)
-            }
+            Channel::Measurement { .. } => Ok(vec![]),
+            Channel::Event { .. } => Ok(vec![]),
+            Channel::Alarm { .. } => Ok(vec![]),
 
             Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
@@ -1353,10 +1162,10 @@ impl CumulocityConverter {
 
                 let entity = self.entity_cache.try_get(&source)?;
                 let entity = operations::EntityTarget {
-                    topic_id: entity.metadata.topic_id.clone(),
+                    topic_id: entity.topic_id().clone(),
                     external_id: entity.external_id.clone(),
                     smartrest_publish_topic: self
-                        .smartrest_publish_topic_for_entity(&entity.metadata.topic_id)?,
+                        .smartrest_publish_topic_for_entity(entity.topic_id())?,
                 };
 
                 self.operation_handler.handle(entity, message.clone()).await;
@@ -1365,7 +1174,7 @@ impl CumulocityConverter {
 
             Channel::Signal { signal_type } => self.process_signal_message(&source, signal_type),
 
-            Channel::Health => self.process_health_status_message(&source, message).await,
+            Channel::Health => Ok(vec![]),
 
             _ => Ok(vec![]),
         }
@@ -1402,10 +1211,6 @@ impl CumulocityConverter {
         }
 
         let messages = match &message.topic {
-            topic if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) => {
-                self.alarm_converter.process_internal_alarm(message);
-                Ok(vec![])
-            }
             topic
                 if C8yDeviceControlTopic::accept(topic, &self.config.bridge_config.c8y_prefix) =>
             {
@@ -1426,6 +1231,10 @@ impl CumulocityConverter {
                     .accept_topic(topic) =>
             {
                 self.parse_c8y_smartrest_topics(message).await
+            }
+            topic if self.mapper_config.http_event_topic.accept_topic(topic) => {
+                self.post_event_over_http(message).await?;
+                Ok(vec![])
             }
             _ => {
                 error!("Unsupported topic: {}", message.topic.name);
@@ -1466,9 +1275,8 @@ impl CumulocityConverter {
     }
 
     pub fn sync_messages(&mut self) -> Vec<MqttMessage> {
-        let sync_messages: Vec<MqttMessage> = self.alarm_converter.sync();
-        self.alarm_converter = AlarmConverter::Synced;
-        sync_messages
+        // FIXME clean-up alarm sync on c8y actor
+        vec![]
     }
 
     fn try_process_operation_update_message(
@@ -1517,7 +1325,7 @@ impl CumulocityConverter {
             .add_operation(device.external_id.as_ref(), c8y_operation_name)
             .await?;
 
-        let need_cloud_update = match device.metadata.r#type {
+        let need_cloud_update = match device.r#type() {
             // for devices other than the main device and services, dynamic update of supported operations via file events is
             // disabled, so we have to additionally load new operations from the c8y operations for that device
             EntityType::ChildDevice | EntityType::Service => self
@@ -1654,6 +1462,9 @@ pub(crate) mod tests {
     use crate::config::BridgeConfig;
     use crate::config::C8yMapperConfig;
     use crate::entity_cache::InvalidExternalIdError;
+    use crate::mea::alarms::AlarmConverter;
+    use crate::mea::health::HealthStatusConverter;
+    use crate::mea::measurements::MeasurementConverter;
     use crate::supported_operations::operation::ResultFormat;
     use crate::supported_operations::SupportedOperations;
     use crate::tests::spawn_dummy_c8y_http_proxy;
@@ -1668,6 +1479,7 @@ pub(crate) mod tests {
     use serde_json::Value;
     use std::str::FromStr;
     use std::time::Duration;
+    use std::time::SystemTime;
     use tedge_actors::test_helpers::FakeServerBox;
     use tedge_actors::test_helpers::FakeServerBoxBuilder;
     use tedge_actors::Builder;
@@ -1689,6 +1501,9 @@ pub(crate) mod tests {
     use tedge_config::models::SoftwareManagementApiFlag;
     use tedge_config::models::TopicPrefix;
     use tedge_config::TEdgeConfig;
+    use tedge_flows::ConfigError;
+    use tedge_flows::Message;
+    use tedge_flows::Transformer;
     use tedge_http_ext::HttpRequest;
     use tedge_http_ext::HttpResult;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
@@ -1701,7 +1516,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_sync_alarms() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<AlarmConverter>::new(&tmp_dir);
 
         let alarm_topic = "te/device/main///a/temperature_alarm";
         let alarm_payload = r#"{ "severity": "critical", "text": "Temperature very high" }"#;
@@ -1709,14 +1524,6 @@ pub(crate) mod tests {
 
         // During the sync phase, alarms are not converted immediately, but only cached to be synced later
         assert!(converter.convert(&alarm_message).await.is_empty());
-
-        let non_alarm_topic = "te/device/main///m/";
-        let non_alarm_payload = r#"{"temp": 1}"#;
-        let non_alarm_message =
-            MqttMessage::new(&Topic::new_unchecked(non_alarm_topic), non_alarm_payload);
-
-        // But non-alarms are converted immediately, even during the sync phase
-        assert!(!converter.convert(&non_alarm_message).await.is_empty());
 
         let internal_alarm_topic = "c8y-internal/alarms/te/device/main///a/pressure_alarm";
         let internal_alarm_payload = r#"{ "severity": "major", "text": "Temperature very high" }"#;
@@ -1730,24 +1537,27 @@ pub(crate) mod tests {
 
         // When sync phase is complete, all pending alarms are returned
         let sync_messages = converter.sync_messages();
-        assert_eq!(sync_messages.len(), 2);
+        // "c8y/s/us" "306,pressure_alarm"
+        // "c8y-internal/alarms/te/device/main///a/pressure_alarm" ""
+        // "c8y/s/us" "301,temperature_alarm,Temperature very high,2026-01-28T08:49:52.508528106Z"
+        // "c8y-internal/alarms/te/device/main///a/temperature_alarm" { "severity": "critical", "text": "Temperature very high" }
+        assert_eq!(sync_messages.len(), 4);
 
         // The first message will be clear alarm message for pressure_alarm
         let alarm_message = sync_messages.get(0).unwrap();
-        assert_eq!(
-            alarm_message.topic.name,
-            "te/device/main///a/pressure_alarm"
-        );
-        assert_eq!(alarm_message.payload_bytes().len(), 0); //Clear messages are empty messages
+        assert_eq!(alarm_message.topic.name, "c8y/s/us");
+        assert_eq!(alarm_message.payload_str().unwrap(), "306,pressure_alarm");
 
         // The second message will be the temperature_alarm
-        let alarm_message = sync_messages.get(1).unwrap();
-        assert_eq!(alarm_message.topic.name, alarm_topic);
-        assert_eq!(alarm_message.payload_str().unwrap(), alarm_payload);
+        let alarm_message = sync_messages.get(2).unwrap();
+        assert_eq!(alarm_message.topic.name, "c8y/s/us");
+        assert!(alarm_message
+            .payload_str()
+            .unwrap()
+            .starts_with("301,temperature_alarm,Temperature very high"));
 
-        // After the sync phase, the conversion of both non-alarms as well as alarms are done immediately
-        assert!(!converter.convert(alarm_message).await.is_empty());
-        assert!(!converter.convert(&non_alarm_message).await.is_empty());
+        // After the sync phase, already known alarms are not forwarded to c8y
+        assert!(converter.convert(alarm_message).await.is_empty());
 
         // But, even after the sync phase, internal alarms are not converted and just ignored, as they are purely internal
         assert!(converter.convert(&internal_alarm_message).await.is_empty());
@@ -1756,24 +1566,16 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_sync_child_alarms() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<AlarmConverter>::new(&tmp_dir);
 
         let alarm_topic = "te/device/external_sensor///a/temperature_alarm";
         let alarm_payload = r#"{ "severity": "critical", "text": "Temperature very high" }"#;
         let alarm_message = MqttMessage::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
 
-        register_source_entities(alarm_topic, &mut converter).await;
+        converter.register_source_entities(alarm_topic).await;
 
         // During the sync phase, alarms are not converted immediately, but only cached to be synced later
         assert!(converter.convert(&alarm_message).await.is_empty());
-
-        let non_alarm_topic = "te/device/external_sensor///m/";
-        let non_alarm_payload = r#"{"temp": 1}"#;
-        let non_alarm_message =
-            MqttMessage::new(&Topic::new_unchecked(non_alarm_topic), non_alarm_payload);
-
-        // But non-alarms are converted immediately, even during the sync phase
-        assert!(!converter.convert(&non_alarm_message).await.is_empty());
 
         let internal_alarm_topic =
             "c8y-internal/alarms/te/device/external_sensor///a/pressure_alarm";
@@ -1788,24 +1590,33 @@ pub(crate) mod tests {
 
         // When sync phase is complete, all pending alarms are returned
         let sync_messages = converter.sync_messages();
-        assert_eq!(sync_messages.len(), 2);
+        // "c8y/s/us/test-device:device:external_sensor" "306,pressure_alarm"
+        // "c8y-internal/alarms/te/device/external_sensor///a/pressure_alarm"  ""
+        // "c8y/s/us/test-device:device:external_sensor" "301,temperature_alarm,Temperature very high,2026-01-28T08:58:04.34493434Z"
+        // "c8y-internal/alarms/te/device/external_sensor///a/temperature_alarm" { "severity": "critical", "text": "Temperature very high" }
+        assert_eq!(sync_messages.len(), 4);
 
         // The first message will be clear alarm message for pressure_alarm
         let alarm_message = sync_messages.get(0).unwrap();
         assert_eq!(
             alarm_message.topic.name,
-            "te/device/external_sensor///a/pressure_alarm"
+            "c8y/s/us/test-device:device:external_sensor"
         );
-        assert_eq!(alarm_message.payload_bytes().len(), 0); //Clear messages are empty messages
+        assert_eq!(alarm_message.payload_str().unwrap(), "306,pressure_alarm");
 
         // The second message will be the temperature_alarm
-        let alarm_message = sync_messages.get(1).unwrap();
-        assert_eq!(alarm_message.topic.name, alarm_topic);
-        assert_eq!(alarm_message.payload_str().unwrap(), alarm_payload);
+        let alarm_message = sync_messages.get(2).unwrap();
+        assert_eq!(
+            alarm_message.topic.name,
+            "c8y/s/us/test-device:device:external_sensor"
+        );
+        assert!(alarm_message
+            .payload_str()
+            .unwrap()
+            .starts_with("301,temperature_alarm,Temperature very high"));
 
-        // After the sync phase, the conversion of both non-alarms as well as alarms are done immediately
-        assert!(!converter.convert(alarm_message).await.is_empty());
-        assert!(!converter.convert(&non_alarm_message).await.is_empty());
+        // After the sync phase, already known alarms are not forwarded to c8y
+        assert!(converter.convert(alarm_message).await.is_empty());
 
         // But, even after the sync phase, internal alarms are not converted and just ignored, as they are purely internal
         assert!(converter.convert(&internal_alarm_message).await.is_empty());
@@ -1884,7 +1695,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_child_id() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///m/"),
@@ -1895,7 +1706,9 @@ pub(crate) mod tests {
             .to_string(),
         );
 
-        register_source_entities(&in_message.topic.name, &mut converter).await;
+        converter
+            .register_source_entities(&in_message.topic.name)
+            .await;
 
         let messages = converter.convert(&in_message).await;
 
@@ -1924,7 +1737,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_nested_child_device() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let reg_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/immediate_child//"),
             json!({
@@ -1976,7 +1789,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_nested_child_service() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let reg_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/immediate_child//"),
             json!({
@@ -2042,13 +1855,13 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_for_child_device_service() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/child1/service/app1/m/m_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        register_source_entities(in_topic, &mut converter).await;
+        converter.register_source_entities(in_topic).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2070,13 +1883,13 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_for_main_device_service() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/main/service/appm/m/m_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        register_source_entities(in_topic, &mut converter).await;
+        converter.register_source_entities(in_topic).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2099,7 +1912,7 @@ pub(crate) mod tests {
     #[ignore = "FIXME: the registration is currently done even if the message is ill-formed"]
     async fn convert_first_measurement_invalid_then_valid_with_child_id() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/child1///m/";
         let in_invalid_payload = r#"{"temp": invalid}"#;
@@ -2140,13 +1953,15 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_two_measurement_messages_given_different_child_id() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
 
         // First message from "child1"
         let in_first_message =
             MqttMessage::new(&Topic::new_unchecked("te/device/child1///m/"), in_payload);
-        register_source_entities(&in_first_message.topic.name, &mut converter).await;
+        converter
+            .register_source_entities(&in_first_message.topic.name)
+            .await;
 
         let out_first_messages: Vec<_> = converter
             .convert(&in_first_message)
@@ -2163,7 +1978,9 @@ pub(crate) mod tests {
         // Second message from "child2"
         let in_second_message =
             MqttMessage::new(&Topic::new_unchecked("te/device/child2///m/"), in_payload);
-        register_source_entities(&in_second_message.topic.name, &mut converter).await;
+        converter
+            .register_source_entities(&in_second_message.topic.name)
+            .await;
 
         let out_second_messages: Vec<_> = converter
             .convert(&in_second_message)
@@ -2181,13 +1998,13 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_main_id_with_measurement_type() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/main///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        register_source_entities(in_topic, &mut converter).await;
+        converter.register_source_entities(in_topic).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2207,13 +2024,13 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_main_id_with_measurement_type_in_payload() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/main///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        register_source_entities(in_topic, &mut converter).await;
+        converter.register_source_entities(in_topic).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2233,13 +2050,13 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_child_id_with_measurement_type() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/child///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        register_source_entities(in_topic, &mut converter).await;
+        converter.register_source_entities(in_topic).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2259,13 +2076,13 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_measurement_with_child_id_with_measurement_type_in_payload() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
         let in_topic = "te/device/child2///m/test_type";
         let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#;
         let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
-        register_source_entities(in_topic, &mut converter).await;
+        converter.register_source_entities(in_topic).await;
 
         let expected_c8y_json_message = MqttMessage::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -2283,28 +2100,9 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
-    async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
-        let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
-
-        let alarm_topic = "te/device/main///a/temperature_alarm";
-        let big_alarm_text = create_packet(1024 * 20);
-        let alarm_payload = json!({ "text": big_alarm_text }).to_string();
-        let alarm_message = MqttMessage::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
-
-        let error = converter.try_convert(&alarm_message).await.unwrap_err();
-        assert!(matches!(
-            error,
-            crate::error::ConversionError::SizeThresholdExceeded(_)
-        ));
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn convert_event_without_given_event_type() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
         let event_topic = "te/device/main///e/";
         let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2323,7 +2121,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_use_event_type_from_payload_to_c8y_smartrest() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
         let event_topic = "te/device/main///e/topic_event";
         let event_payload = r#"{ "type": "payload event", "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2342,7 +2140,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_use_event_type_from_payload_to_c8y_json() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "type": "payload event", "text": "tick", "foo": "bar" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2366,7 +2164,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_with_known_fields_to_c8y_smartrest() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2385,12 +2183,11 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_with_custom_c8y_topic_prefix() {
         let tmp_dir = TempTedgeDir::new();
-        let mut config = c8y_converter_config(&tmp_dir);
-        let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
-        config.service = tedge_config.service.clone();
-        config.bridge_config.c8y_prefix = "custom-topic".try_into().unwrap();
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
+        converter
+            .set_config(json!({ "c8y_prefix": "custom-topic"}))
+            .unwrap();
 
-        let (mut converter, _) = create_c8y_converter_from_config(config);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2409,7 +2206,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn convert_event_with_extra_fields_to_c8y_json() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<EventConverter>::new(&tmp_dir);
         let event_topic = "te/device/main///e/click_event";
         let event_payload = r#"{ "text": "tick", "foo": "bar" }"#;
         let event_message = MqttMessage::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -2468,7 +2265,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_big_measurement() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let measurement_topic = "te/device/main///m/";
         let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
 
@@ -2479,16 +2276,13 @@ pub(crate) mod tests {
         let result = converter.convert(&big_measurement_message).await;
 
         let payload = result[0].payload_str().unwrap();
-        assert!(payload.contains(
-            r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on te/device/main///m/ after translation is"#
-        ));
-        assert!(payload.ends_with("greater than the threshold size of 16184."));
+        assert!(payload.contains(r#""temperature0":{"temperature0":{"value":0.0}}"#));
     }
 
     #[tokio::test]
     async fn test_convert_small_measurement() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let measurement_topic = "te/device/main///m/";
         let big_measurement_payload = create_thin_edge_measurement(20); // Measurement payload size is 20 bytes
 
@@ -2512,7 +2306,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn test_convert_big_measurement_for_child_device() {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
         let measurement_topic = "te/device/child1///m/";
         let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
 
@@ -2521,16 +2315,13 @@ pub(crate) mod tests {
             big_measurement_payload,
         );
 
-        register_source_entities(measurement_topic, &mut converter).await;
+        converter.register_source_entities(measurement_topic).await;
 
         let result = converter.convert(&big_measurement_message).await;
 
         // Skipping the first two auto-registration messages and validating the third mapped message
         let payload = result[0].payload_str().unwrap();
-        assert!(payload.contains(
-            r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on te/device/child1///m/ after translation is"#
-        ));
-        assert!(payload.ends_with("greater than the threshold size of 16184."));
+        assert!(payload.contains(r#""temperature0":{"temperature0":{"value":0.0}}"#));
     }
 
     #[tokio::test]
@@ -2966,14 +2757,16 @@ pub(crate) mod tests {
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
         config.service = tedge_config.service.clone();
 
-        let (mut converter, _) = create_c8y_converter_from_config(config);
+        let mut converter = MeaConverter::<HealthStatusConverter>::from_c8y_config(config);
 
         let service_health_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/service1/status/health"),
             serde_json::to_string(&json!({"status": "up"})).unwrap(),
         );
 
-        register_source_entities(&service_health_message.topic.name, &mut converter).await;
+        converter
+            .register_source_entities(&service_health_message.topic.name)
+            .await;
 
         let output = converter.convert(&service_health_message).await;
         let service_creation_message = output
@@ -2986,7 +2779,10 @@ pub(crate) mod tests {
         assert_eq!(smartrest_fields.next().unwrap(), "102");
         assert_eq!(
             smartrest_fields.next().unwrap(),
-            format!("{}:device:main:service:service1", converter.device_name)
+            format!(
+                "{}:device:main:service:service1",
+                converter.c8y_converter.device_name
+            )
         );
         assert_eq!(smartrest_fields.next().unwrap(), "service");
         assert_eq!(smartrest_fields.next().unwrap(), "service1");
@@ -3294,6 +3090,7 @@ pub(crate) mod tests {
 
         let device_id = "test-device".into();
         let device_topic_id = EntityTopicId::default_main_device();
+        let service_topic_id = EntityTopicId::default_main_service("tedge-mapper-c8y").unwrap();
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
         let c8y_host = "test.c8y.io".to_owned();
         let tedge_http_host = "127.0.0.1".into();
@@ -3319,6 +3116,7 @@ pub(crate) mod tests {
             tmp_dir.utf8_path().into(),
             device_id,
             device_topic_id,
+            service_topic_id,
             tedge_config.service.clone(),
             c8y_host.clone(),
             c8y_host,
@@ -3361,9 +3159,16 @@ pub(crate) mod tests {
             FakeServerBox::builder();
         let downloader = ClientMessageBox::new(&mut downloader_builder);
 
-        let converter =
-            CumulocityConverter::new(config, mqtt_publisher, http_proxy, uploader, downloader)
-                .unwrap();
+        let flow_context = FlowContextHandle::default();
+        let converter = CumulocityConverter::new(
+            config,
+            mqtt_publisher,
+            http_proxy,
+            uploader,
+            downloader,
+            flow_context,
+        )
+        .unwrap();
 
         (converter, http_builder.build())
     }
@@ -3399,6 +3204,78 @@ pub(crate) mod tests {
                 .process_entity_metadata_message(&message)
                 .await
                 .unwrap();
+        }
+    }
+
+    struct MeaConverter<T> {
+        c8y_converter: CumulocityConverter,
+        mea_converter: T,
+        _http: FakeServerBox<HttpRequest, HttpResult>,
+    }
+
+    impl<T: Default + Transformer> MeaConverter<T> {
+        fn new(tmp_dir: &TempTedgeDir) -> Self {
+            let (c8y_converter, _http) = create_c8y_converter(tmp_dir);
+            MeaConverter {
+                c8y_converter,
+                mea_converter: Default::default(),
+                _http,
+            }
+        }
+
+        fn from_c8y_config(config: C8yMapperConfig) -> Self {
+            let (c8y_converter, _http) = create_c8y_converter_from_config(config);
+            MeaConverter {
+                c8y_converter,
+                mea_converter: Default::default(),
+                _http,
+            }
+        }
+
+        fn set_config(&mut self, config: Value) -> Result<(), ConfigError> {
+            self.mea_converter.set_config(config.into())
+        }
+
+        async fn register_source_entities(&mut self, topic: &str) {
+            register_source_entities(topic, &mut self.c8y_converter).await
+        }
+
+        async fn process_entity_metadata_message(
+            &mut self,
+            message: &MqttMessage,
+        ) -> Result<UpdateOutcome, ConversionError> {
+            self.c8y_converter
+                .process_entity_metadata_message(message)
+                .await
+        }
+
+        async fn convert(&mut self, message: &MqttMessage) -> Vec<MqttMessage> {
+            let context = self.c8y_converter.entity_cache.flow_context();
+            let timestamp = SystemTime::now();
+            let message: Message = message.clone().into();
+            match self.mea_converter.on_message(timestamp, &message, context) {
+                Ok(messages) => messages
+                    .into_iter()
+                    .filter_map(|msg| MqttMessage::try_from(msg).ok())
+                    .collect(),
+                Err(_) => {
+                    vec![]
+                }
+            }
+        }
+
+        fn sync_messages(&mut self) -> Vec<MqttMessage> {
+            let context = self.c8y_converter.entity_cache.flow_context();
+            let timestamp = SystemTime::now();
+            match self.mea_converter.on_interval(timestamp, context) {
+                Ok(messages) => messages
+                    .into_iter()
+                    .filter_map(|msg| MqttMessage::try_from(msg).ok())
+                    .collect(),
+                Err(_) => {
+                    vec![]
+                }
+            }
         }
     }
 }

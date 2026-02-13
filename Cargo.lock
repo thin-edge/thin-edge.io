@@ -972,6 +972,7 @@ dependencies = [
  "tedge_config",
  "tedge_downloader_ext",
  "tedge_file_system_ext",
+ "tedge_flows",
  "tedge_http_ext",
  "tedge_mqtt_ext",
  "tedge_test_utils",

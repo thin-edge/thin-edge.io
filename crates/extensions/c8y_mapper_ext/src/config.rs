@@ -1,3 +1,4 @@
+use crate::mea::events::EventConverter;
 use crate::supported_operations::C8yPrefix;
 use crate::supported_operations::Operations;
 use crate::supported_operations::OperationsError;
@@ -9,6 +10,7 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::C8YHttpConfig;
 use camino::Utf8Path;
 use serde_json::Value;
+use std::ops::Add;
 use std::path::Path;
 use std::sync::Arc;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
@@ -44,6 +46,7 @@ const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 pub struct C8yMapperConfig {
     pub device_id: String,
     pub device_topic_id: EntityTopicId,
+    pub service_topic_id: EntityTopicId,
     pub service: TEdgeConfigReaderService,
     pub c8y_host: String,
     pub c8y_mqtt: String,
@@ -86,6 +89,7 @@ impl C8yMapperConfig {
 
         device_id: String,
         device_topic_id: EntityTopicId,
+        service_topic_id: EntityTopicId,
         service: TEdgeConfigReaderService,
         c8y_host: String,
         c8y_mqtt: String,
@@ -125,6 +129,7 @@ impl C8yMapperConfig {
             data_dir,
             device_id,
             device_topic_id,
+            service_topic_id,
             service,
             c8y_host,
             c8y_mqtt,
@@ -161,6 +166,7 @@ impl C8yMapperConfig {
         config_dir: impl AsRef<Utf8Path>,
         tedge_config: &TEdgeConfig,
         c8y_config: &mapper_config::C8yMapperConfig,
+        service_topic_id: EntityTopicId,
     ) -> Result<C8yMapperConfig, C8yMapperConfigBuildError> {
         let config_dir: Arc<Utf8Path> = config_dir.as_ref().into();
 
@@ -258,6 +264,7 @@ impl C8yMapperConfig {
             tmp_dir,
             device_id,
             device_topic_id,
+            service_topic_id,
             service,
             c8y_host,
             c8y_mqtt,
@@ -285,13 +292,13 @@ impl C8yMapperConfig {
         prefix: &TopicPrefix,
     ) -> Result<TopicFilter, C8yMapperConfigError> {
         let topic_filter: TopicFilter = vec![
-            "c8y-internal/alarms/+/+/+/+/+/a/+",
             C8yTopic::SmartRestRequest.with_prefix(prefix).as_str(),
             &C8yDeviceControlTopic::name(prefix),
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");
 
+        let topic_filter = topic_filter.add(EventConverter::http_event_topic_filter(prefix));
         Ok(topic_filter)
     }
 

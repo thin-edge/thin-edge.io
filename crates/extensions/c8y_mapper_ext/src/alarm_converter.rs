@@ -3,6 +3,7 @@ use c8y_api::smartrest::alarm;
 use c8y_api::smartrest::topic::C8yTopic;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use tedge_api::alarm::ThinEdgeAlarm;
 use tedge_api::alarm::ThinEdgeAlarmDeserializerError;
 use tedge_api::entity::EntityExternalId;
@@ -14,8 +15,8 @@ use tedge_mqtt_ext::Topic;
 
 use crate::error::ConversionError;
 
-const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
-const C8Y_JSON_MQTT_ALARMS_TOPIC: &str = "alarm/alarms/create";
+pub(crate) const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
+pub(crate) const C8Y_JSON_MQTT_ALARMS_TOPIC: &str = "alarm/alarms/create";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AlarmConverter {

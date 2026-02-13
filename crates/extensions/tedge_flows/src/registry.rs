@@ -280,6 +280,9 @@ pub enum UpdateFlowRegistryError {
     FileError(#[from] file::FileError),
 
     #[error(transparent)]
+    FileMoveError(#[from] file::FileMoveError),
+
+    #[error(transparent)]
     AtomicFileError(#[from] fs::AtomFileError),
 }
 

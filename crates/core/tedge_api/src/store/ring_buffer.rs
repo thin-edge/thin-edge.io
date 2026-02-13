@@ -2,10 +2,19 @@ use std::collections::vec_deque;
 use std::collections::VecDeque;
 
 /// A bounded buffer that replaces older values with newer ones when full
-#[derive(Debug)]
-pub(crate) struct RingBuffer<T> {
+#[derive(Debug, Clone)]
+pub struct RingBuffer<T> {
     buffer: VecDeque<T>,
     size: usize,
+}
+
+impl<T> Default for RingBuffer<T> {
+    fn default() -> Self {
+        RingBuffer {
+            buffer: VecDeque::new(),
+            size: 128,
+        }
+    }
 }
 
 impl<T> RingBuffer<T> {
@@ -21,8 +30,15 @@ impl<T> RingBuffer<T> {
         self.buffer.push_back(item);
     }
 
-    pub fn capacity(&self) -> usize {
-        self.buffer.capacity()
+    pub fn take(&mut self) -> Self {
+        let capacity = self.buffer.capacity();
+        std::mem::replace(self, RingBuffer::new(capacity))
+    }
+}
+
+impl<T> From<RingBuffer<T>> for Vec<T> {
+    fn from(value: RingBuffer<T>) -> Self {
+        value.buffer.into()
     }
 }
 
