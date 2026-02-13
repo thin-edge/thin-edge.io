@@ -2,11 +2,11 @@ use nix::errno::Errno::EACCES;
 use nix::errno::Errno::EAGAIN;
 use nix::fcntl::Flock;
 use nix::fcntl::FlockArg;
-use nix::unistd::write;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::fs::{self};
 use std::io;
+use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -57,7 +57,7 @@ pub struct Flockfile {
 }
 
 impl Flockfile {
-    /// Create an exclusive lock file with the given path (usually in in `/run/lock`)
+    /// Create an exclusive lock file with the given path (usually in `/run/lock`)
     pub fn new_lock(path: impl AsRef<Path>) -> Result<Flockfile, FlockfileError> {
         // Ensure the lock file exists, ignoring errors at this stage.
         // This lock file is made world writable so different users can acquire in turn the lock;
@@ -80,23 +80,20 @@ impl Flockfile {
                     source: err,
                 })?;
 
-        // Convert the PID to a string
-        let pid_string = format!("{}", std::process::id());
-
-        let file_clone = file.try_clone().map_err(|err| FlockfileError::FromIo {
-            path: path.clone(),
-            source: err,
+        let mut lock = Flock::lock(file, FlockArg::LockExclusiveNonblock).map_err(|(_, err)| {
+            FlockfileError::FromNix {
+                path: path.clone(),
+                source: err,
+            }
         })?;
-        let lock =
-            Flock::lock(file_clone, FlockArg::LockExclusiveNonblock).map_err(|(_, err)| {
-                FlockfileError::FromNix {
-                    path: path.clone(),
-                    source: err,
-                }
-            })?;
 
         // Write the PID to the lock file
-        write(&file, pid_string.as_bytes()).map_err(|err| FlockfileError::FromNix {
+        lock.write(std::process::id().to_string().as_bytes())
+            .map_err(|err| FlockfileError::FromIo {
+                path: path.clone(),
+                source: err,
+            })?;
+        lock.sync_data().map_err(|err| FlockfileError::FromIo {
             path: path.clone(),
             source: err,
         })?;
