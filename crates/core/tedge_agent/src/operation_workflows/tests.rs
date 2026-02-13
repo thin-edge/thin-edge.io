@@ -7,6 +7,7 @@ use crate::Capabilities;
 use camino::Utf8Path;
 use serde_json::json;
 use std::process::Output;
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -21,6 +22,7 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::NoMessage;
 use tedge_actors::RequestEnvelope;
+use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -51,6 +53,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_script_ext::Execute;
 use tedge_test_utils::fs::TempTedgeDir;
+use tokio::task::JoinHandle;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
@@ -371,9 +374,9 @@ action = "cleanup"
 "#;
 
     let TestHandler {
-        tmp_dir: _tmp_dir,
         mut mqtt_box,
         mut downloader_box,
+        mut actor_handle,
         ..
     } = spawn_mqtt_operation_converter(
         "device/main//",
@@ -391,8 +394,7 @@ action = "cleanup"
     let RequestEnvelope {
         request: (topic, download_request),
         reply_to: _,
-    } = downloader_box
-        .recv()
+    } = recv_or_fail_on_actor_exit(&mut downloader_box, &mut actor_handle, "download request")
         .await
         .expect("download request expected");
     assert_eq!(topic, "te/device/main///cmd/config_update/123");
@@ -423,9 +425,9 @@ action = "cleanup"
 "#;
 
     let TestHandler {
-        tmp_dir: _tmp_dir,
         mut mqtt_box,
         mut downloader_box,
+        mut actor_handle,
         ..
     } = spawn_mqtt_operation_converter(
         "device/main//",
@@ -441,12 +443,17 @@ action = "cleanup"
     mqtt_box.send(mqtt_message).await?;
 
     // Missing input.url should not trigger a downloader request.
-    let request = downloader_box.recv().await;
-    assert!(request.is_none(), "download request must not be sent");
+    assert_no_message_or_actor_exit(
+        &mut downloader_box,
+        &mut actor_handle,
+        "waiting for unexpected download request",
+    )
+    .await;
 
     // The workflow should fail with an explicit reason instead.
     let payload = recv_command_state_with_status(
         &mut mqtt_box,
+        &mut actor_handle,
         "te/device/main///cmd/config_update/123",
         "failed",
     )
@@ -488,9 +495,9 @@ action = "cleanup"
 "#;
 
     let TestHandler {
-        tmp_dir: _tmp_dir,
         mut mqtt_box,
         mut config_box,
+        mut actor_handle,
         ..
     } = spawn_mqtt_operation_converter(
         "device/main//",
@@ -508,10 +515,13 @@ action = "cleanup"
     let RequestEnvelope {
         request,
         reply_to: _,
-    } = config_box
-        .recv()
-        .await
-        .expect("expected operation step request envelope");
+    } = recv_or_fail_on_actor_exit(
+        &mut config_box,
+        &mut actor_handle,
+        "builtin operation step request",
+    )
+    .await
+    .expect("expected builtin operation step request");
 
     assert_eq!(request.command_step, "set");
     assert_eq!(request.command_state.status, "set");
@@ -546,9 +556,9 @@ action = "cleanup"
 "#;
 
     let TestHandler {
-        tmp_dir: _tmp_dir,
         mut mqtt_box,
         mut config_box,
+        mut actor_handle,
         ..
     } = spawn_mqtt_operation_converter(
         "device/main//",
@@ -565,10 +575,13 @@ action = "cleanup"
     let RequestEnvelope {
         request,
         reply_to: _,
-    } = config_box
-        .recv()
-        .await
-        .expect("expected operation step request envelope");
+    } = recv_or_fail_on_actor_exit(
+        &mut config_box,
+        &mut actor_handle,
+        "builtin operation step request",
+    )
+    .await
+    .expect("expected builtin operation step request");
 
     assert_eq!(request.command_step, "set");
     assert_eq!(request.command_state.status, "set");
@@ -579,7 +592,8 @@ action = "cleanup"
 }
 
 struct TestHandler {
-    tmp_dir: TempTedgeDir,
+    tmp_dir: Arc<TempTedgeDir>,
+    actor_handle: JoinHandle<Result<(), RuntimeError>>,
     mqtt_box: TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
     software_box: TimedMessageBox<SimpleMessageBox<SoftwareCommand, SoftwareCommand>>,
     restart_box: TimedMessageBox<SimpleMessageBox<RestartCommand, RestartCommand>>,
@@ -613,7 +627,7 @@ async fn spawn_mqtt_operation_converter(
         NoMessage,
     > = SimpleMessageBoxBuilder::new("Downloader", 5);
 
-    let tmp_dir = TempTedgeDir::new();
+    let tmp_dir = Arc::new(TempTedgeDir::new());
     let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
     let operations_dir = tmp_dir.dir("operations");
     for (file_name, content) in workflows {
@@ -655,10 +669,16 @@ async fn spawn_mqtt_operation_converter(
     let _inotify_box = inotify_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
     let converter_actor = converter_actor_builder.build();
-    tokio::spawn(async move { converter_actor.run().await });
+    let tmp_dir_guard = Arc::clone(&tmp_dir);
+    let actor_handle = tokio::spawn(async move {
+        // Keep tmp_dir alive for the full actor lifetime.
+        let _tmp_dir_guard = tmp_dir_guard;
+        converter_actor.run().await
+    });
 
     Ok(TestHandler {
         tmp_dir,
+        actor_handle,
         mqtt_box,
         software_box,
         restart_box,
@@ -689,10 +709,13 @@ async fn skip_capability_messages(mqtt: &mut impl MessageReceiver<MqttMessage>, 
 
 async fn recv_command_state_with_status(
     mqtt: &mut impl MessageReceiver<MqttMessage>,
+    actor_handle: &mut tokio::task::JoinHandle<Result<(), RuntimeError>>,
     topic: &str,
     status: &str,
 ) -> serde_json::Value {
-    while let Some(msg) = mqtt.recv().await {
+    while let Some(msg) =
+        recv_or_fail_on_actor_exit(mqtt, actor_handle, "waiting for command state message").await
+    {
         if msg.topic.name != topic {
             continue;
         }
@@ -704,6 +727,50 @@ async fn recv_command_state_with_status(
     }
 
     panic!("expected command state with status '{status}' on topic '{topic}'");
+}
+
+async fn recv_or_fail_on_actor_exit<T>(
+    message_box: &mut impl MessageReceiver<T>,
+    actor_handle: &mut JoinHandle<Result<(), RuntimeError>>,
+    context: &str,
+) -> Option<T> {
+    tokio::select! {
+        msg = message_box.recv() => {
+            if msg.is_some() {
+                return msg;
+            }
+
+            panic!(
+                "message receive timed out while waiting for {context}"
+            );
+        }
+        actor = actor_handle => {
+            match actor {
+                Ok(Ok(())) => panic!("workflow actor exited unexpectedly while waiting for {context}"),
+                Ok(Err(err)) => panic!("workflow actor failed while waiting for {context}: {err}"),
+                Err(err) => panic!("workflow actor panicked while waiting for {context}: {err}"),
+            }
+        }
+    }
+}
+
+async fn assert_no_message_or_actor_exit<T>(
+    message_box: &mut impl MessageReceiver<T>,
+    actor_handle: &mut JoinHandle<Result<(), RuntimeError>>,
+    context: &str,
+) {
+    tokio::select! {
+        msg = message_box.recv() => {
+            assert!(msg.is_none(), "unexpected message received while {context}");
+        }
+        actor = actor_handle => {
+            match actor {
+                Ok(Ok(())) => panic!("workflow actor exited unexpectedly while {context}"),
+                Ok(Err(err)) => panic!("workflow actor failed while {context}: {err}"),
+                Err(err) => panic!("workflow actor panicked while {context}: {err}"),
+            }
+        }
+    }
 }
 
 // FIXME: find a way to avoid repeating ourselves with fake and actual restart actors
