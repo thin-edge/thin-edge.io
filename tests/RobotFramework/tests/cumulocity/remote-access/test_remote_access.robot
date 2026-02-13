@@ -27,8 +27,11 @@ Install/uninstall c8y-remote-access-plugin
 Init c8y-remote-access-plugin with the custom user and group
     Device Should Have Installed Software    c8y-remote-access-plugin
 
+    Execute Command    sudo tedge init
     Execute Command    sudo c8y-remote-access-plugin --init --user petertest --group petertest
-    Path Should Have Permissions    /etc/tedge/operations/c8y    mode=775    owner_group=petertest:petertest
+
+    # remote-access-plugin shouldn't take ownership of directory
+    Path Should Have Permissions    /etc/tedge/operations/c8y    mode=775    owner_group=tedge:tedge
     Path Should Have Permissions
     ...    /etc/tedge/operations/c8y/c8y_RemoteAccessConnect
     ...    mode=644

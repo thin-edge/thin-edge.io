@@ -80,6 +80,15 @@ pub async fn create_directory(
     permissions.create_directory(dir.as_ref()).await
 }
 
+pub async fn create_directory_and_update_ownership(
+    dir: impl AsRef<Path>,
+    permissions: &PermissionEntry,
+) -> Result<(), FileError> {
+    permissions
+        .create_directory_and_update_ownership(dir.as_ref())
+        .await
+}
+
 /// Create the directory owned by the user running this API with default directory permissions
 pub async fn create_directory_with_defaults(dir: impl AsRef<Path>) -> Result<(), FileError> {
     create_directory(dir, &PermissionEntry::default()).await
@@ -93,6 +102,18 @@ pub async fn create_directory_with_user_group(
 ) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
     perm_entry.create_directory(dir.as_ref()).await
+}
+
+pub async fn create_directory_with_user_group_and_update_ownership(
+    dir: impl AsRef<Path>,
+    user: &str,
+    group: &str,
+    mode: u32,
+) -> Result<(), FileError> {
+    let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
+    perm_entry
+        .create_directory_and_update_ownership(dir.as_ref())
+        .await
 }
 
 pub async fn create_file(
@@ -306,9 +327,40 @@ impl PermissionEntry {
                 self.clone().apply(&dir).await?;
                 Ok(())
             }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+            Err(e) => Err(FileError::DirectoryCreateFailed {
+                dir: dir.display().to_string(),
+                from: e,
+            }),
+        }
+    }
+
+    async fn create_directory_and_update_ownership(
+        &self,
+        dir: &Path,
+    ) -> Result<(), FileError> {
+        match dir.parent() {
+            None => return Ok(()),
+            Some(parent) => {
+                if !path_exists(parent).await {
+                    Box::pin(self.create_directory_and_update_ownership(parent)).await?;
+                }
+            }
+        }
+        debug!("Creating the directory {:?}", dir);
+        let dir = dir.to_owned();
+        match fs::create_dir(&dir).await {
+            Ok(_) => {
+                debug!(
+                    "Applying desired user and group for newly created dir: {:?}",
+                    dir
+                );
+                self.clone().apply(&dir).await?;
+                Ok(())
+            }
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
                 debug!(
-                    "Applying desired user and group for already existing dir: {:?}",
+                    "Updating user and group for already existing dir: {:?}",
                     dir
                 );
                 self.clone().apply(&dir).await?;
@@ -674,7 +726,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir").display().to_string();
 
-        create_directory_with_user_group(&dir_path, &USER, &GROUP, 0o775)
+        create_directory_with_user_group_and_update_ownership(&dir_path, &USER, &GROUP, 0o775)
             .await
             .unwrap();
 
@@ -690,9 +742,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir");
 
-        let err = create_directory_with_user_group(&dir_path, "nonexistent_user", &GROUP, 0o775)
-            .await
-            .unwrap_err();
+        let err = create_directory_with_user_group_and_update_ownership(
+            &dir_path,
+            "nonexistent_user",
+            &GROUP,
+            0o775,
+        )
+        .await
+        .unwrap_err();
 
         assert!(err.to_string().contains("User not found"));
     }
@@ -702,9 +759,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir");
 
-        let err = create_directory_with_user_group(&dir_path, &USER, "nonexistent_group", 0o775)
-            .await
-            .unwrap_err();
+        let err = create_directory_with_user_group_and_update_ownership(
+            &dir_path,
+            &USER,
+            "nonexistent_group",
+            0o775,
+        )
+        .await
+        .unwrap_err();
 
         assert!(err.to_string().contains("Group not found"));
     }
