@@ -75,9 +75,10 @@ case $target in
     ;;
   aarch64-unknown-linux-musl)
     use_clang=1
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/aarch64-unknown-linux-musl/aarch64-unknown-linux-musl/sysroot"
+    rustflags_self_contained="$rustflags_self_contained -Clink-arg=--sysroot=$MUSL_SYSROOT_DIR -Clink-arg=-L${MUSL_SYSROOT_DIR}/usr/lib"
     export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER="$qemu_aarch64"
-    MUSL_SYSROOT_DIR="$HOME/.musl-cross/aarch64-unknown-linux-musl/aarch64-unknown-linux-musl/sysroot"
     export CFLAGS_aarch64_unknown_linux_musl="--sysroot=$MUSL_SYSROOT_DIR"
     export BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_musl="-I${MUSL_SYSROOT_DIR}/usr/include"
     ;;
@@ -89,11 +90,12 @@ case $target in
     ;;
   arm-unknown-linux-musleabi)
     use_clang=1
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabi/arm-unknown-linux-musleabi/sysroot"
+    rustflags_self_contained="$rustflags_self_contained -Clink-arg=--sysroot=$MUSL_SYSROOT_DIR -Clink-arg=-L${MUSL_SYSROOT_DIR}/usr/lib"
     export CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABI_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABI_RUNNER="$qemu_arm_gnueabi"
     # TODO: target does not support atomics so it is disabled however the code needs to be checked if this will causes problems
     # as it will no longer be thread safe
-    MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabi/arm-unknown-linux-musleabi/sysroot"
     export BINDGEN_EXTRA_CLANG_ARGS_arm_unknown_linux_musleabi="-I${MUSL_SYSROOT_DIR}/usr/include -D__STDC_NO_ATOMICS__=1"
     export CFLAGS_arm_unknown_linux_musleabi="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
     ;;
@@ -105,9 +107,10 @@ case $target in
     ;;
   armv5te-unknown-linux-musleabi)
     use_clang=1
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabi/arm-unknown-linux-musleabi/sysroot"
+    rustflags_self_contained="$rustflags_self_contained -Clink-arg=--sysroot=$MUSL_SYSROOT_DIR -Clink-arg=-L${MUSL_SYSROOT_DIR}/usr/lib"
     export CARGO_TARGET_ARMV5TE_UNKNOWN_LINUX_MUSLEABI_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_ARMV5TE_UNKNOWN_LINUX_MUSLEABI_RUNNER="$qemu_arm_gnueabi"
-    MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabi/arm-unknown-linux-musleabi/sysroot"
     # TODO: target does not support atomics so it is disabled however the code needs to be checked if this will causes problems
     # as it will no longer be thread safe
     export BINDGEN_EXTRA_CLANG_ARGS_armv5te_unknown_linux_musleabi="-I${MUSL_SYSROOT_DIR}/usr/include -D__STDC_NO_ATOMICS__=1"
@@ -115,11 +118,12 @@ case $target in
     ;;
   arm-unknown-linux-musleabihf)
     use_clang=1
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabihf/arm-unknown-linux-musleabihf/sysroot"
+    rustflags_self_contained="$rustflags_self_contained -Clink-arg=--sysroot=$MUSL_SYSROOT_DIR -Clink-arg=-L${MUSL_SYSROOT_DIR}/usr/lib"
     export CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABIHF_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_ARM_UNKNOWN_LINUX_MUSLEABIHF_RUNNER="$qemu_arm_gnueabihf"
     # TODO: target does not support atomics so it is disabled however the code needs to be checked if this will causes problems
     # as it will no longer be thread safe
-    MUSL_SYSROOT_DIR="$HOME/.musl-cross/arm-unknown-linux-musleabihf/arm-unknown-linux-musleabihf/sysroot"
     export BINDGEN_EXTRA_CLANG_ARGS_arm_unknown_linux_musleabihf="-I${MUSL_SYSROOT_DIR}/usr/include -D__STDC_NO_ATOMICS__=1"
     export CFLAGS_arm_unknown_linux_musleabihf="--sysroot=$MUSL_SYSROOT_DIR -D__STDC_NO_ATOMICS__=1"
     ;;
@@ -143,9 +147,10 @@ case $target in
     ;;
   armv7-unknown-linux-musleabihf)
     use_clang=1
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/armv7-unknown-linux-musleabihf/armv7-unknown-linux-musleabihf/sysroot"
+    rustflags_self_contained="$rustflags_self_contained -Clink-arg=--sysroot=$MUSL_SYSROOT_DIR -Clink-arg=-L${MUSL_SYSROOT_DIR}/usr/lib"
     export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_RUNNER="$qemu_arm_gnueabihf"
-    MUSL_SYSROOT_DIR="$HOME/.musl-cross/armv7-unknown-linux-musleabihf/armv7-unknown-linux-musleabihf/sysroot"
     export CFLAGS_armv7_unknown_linux_musleabihf="--sysroot=$MUSL_SYSROOT_DIR"
     export BINDGEN_EXTRA_CLANG_ARGS_armv7_unknown_linux_musleabihf="-I${MUSL_SYSROOT_DIR}/usr/include"
     ;;
@@ -155,8 +160,9 @@ case $target in
     ;;
   i686-unknown-linux-musl)
     use_clang=1
-    export CARGO_TARGET_I686_UNKNOWN_LINUX_MUSL_RUSTFLAGS="$rustflags_self_contained"
     MUSL_SYSROOT_DIR="$HOME/.musl-cross/i686-unknown-linux-musl/i686-unknown-linux-musl/sysroot"
+    rustflags_self_contained="$rustflags_self_contained -Clink-arg=--sysroot=$MUSL_SYSROOT_DIR -Clink-arg=-L${MUSL_SYSROOT_DIR}/usr/lib"
+    export CARGO_TARGET_I686_UNKNOWN_LINUX_MUSL_RUSTFLAGS="$rustflags_self_contained"
     export CFLAGS_i686_unknown_linux_musl="--sysroot=$MUSL_SYSROOT_DIR"
     export BINDGEN_EXTRA_CLANG_ARGS_i686_unknown_linux_musl="-I${MUSL_SYSROOT_DIR}/usr/include"
     ;;
@@ -215,9 +221,10 @@ case $target in
     ;;
   riscv64gc-unknown-linux-musl)
     use_clang=1
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/riscv64-unknown-linux-musl/riscv64-unknown-linux-musl/sysroot"
+    rustflags_self_contained="$rustflags_self_contained -Clink-arg=--sysroot=$MUSL_SYSROOT_DIR -Clink-arg=-L${MUSL_SYSROOT_DIR}/usr/lib"
     export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_RUSTFLAGS="$rustflags_self_contained"
     export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_RUNNER="$qemu_riscv64"
-    MUSL_SYSROOT_DIR="$HOME/.musl-cross/riscv64-unknown-linux-musl/riscv64-unknown-linux-musl/sysroot"
     export CFLAGS_riscv64gc_unknown_linux_musl="--sysroot=$MUSL_SYSROOT_DIR"
     export BINDGEN_EXTRA_CLANG_ARGS="--target=riscv64-unknown-linux-musl --sysroot=$MUSL_SYSROOT_DIR"
     ;;
@@ -232,13 +239,14 @@ case $target in
     ;;
   x86_64-unknown-linux-musl)
     use_clang=1
+    MUSL_SYSROOT_DIR="$HOME/.musl-cross/x86_64-unknown-linux-musl/x86_64-unknown-linux-musl/sysroot"
+    rustflags_self_contained="$rustflags_self_contained -Clink-arg=--sysroot=$MUSL_SYSROOT_DIR -Clink-arg=-L${MUSL_SYSROOT_DIR}/usr/lib"
     # XXX: Work around https://github.com/rust-lang/rust/issues/79555.
     if [ -n "${RING_COVERAGE-}" ]; then
       export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=clang-$llvm_version
     else
       export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="$rustflags_self_contained"
     fi
-    MUSL_SYSROOT_DIR="$HOME/.musl-cross/x86_64-unknown-linux-musl/x86_64-unknown-linux-musl/sysroot"
     export CFLAGS_x86_64_unknown_linux_musl="--sysroot=$MUSL_SYSROOT_DIR"
     export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$MUSL_SYSROOT_DIR"
     ;;
