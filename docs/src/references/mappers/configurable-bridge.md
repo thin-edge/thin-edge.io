@@ -140,7 +140,109 @@ topic = "${item}/ul/#"
 direction = "outbound"
 ```
 
+## Bridge CLI
+
+The `tedge bridge` command provides tools for inspecting and testing bridge rules. This is useful for verifying your configuration, understanding how topics are mapped, and debugging issues with message forwarding.
+
+### `tedge bridge inspect`
+
+To view the active bridge rules for a cloud, use:
+
+```sh
+tedge bridge inspect c8y
+```
+
+This displays all bridge rules grouped by direction, showing how topics are mapped between the local and remote brokers:
+
+```
+Bridge configuration for Cumulocity
+Reading from: /etc/tedge/mappers/c8y/bridge
+
+Local -> Remote
+  c8y/s/uat                                  ->  s/uat
+  c8y/s/ut/#                                 ->  s/ut/#
+  c8y/inventory/managedObjects/update/#      ->  inventory/managedObjects/update/#
+  c8y/measurement/measurements/create/#      ->  measurement/measurements/create/#
+  c8y/s/us/#                                 ->  s/us/#
+  ...
+
+Remote -> Local
+  s/dat                        ->  c8y/s/dat
+  s/ds                         ->  c8y/s/ds
+  devicecontrol/notifications  ->  c8y/devicecontrol/notifications
+  ...
+```
+
+Use `--debug` to also show rules that were skipped due to unmet conditions or empty template loops:
+
+```sh
+tedge bridge inspect c8y --debug
+```
+
+If you are using named profiles, specify the profile with `--profile`:
+
+```sh
+tedge bridge inspect c8y --profile production
+```
+
+:::note
+`tedge bridge inspect` currently only supports clouds with configurable bridge rules (Cumulocity). For AWS and Azure, the built-in bridge rules are not yet configurable.
+:::
+
+### `tedge bridge test`
+
+To check where a specific MQTT topic would be forwarded by the bridge, use:
+
+```sh
+tedge bridge test c8y c8y/s/uat
+```
+
+```
+[local] c8y/s/uat  ->  [remote] s/uat (outbound)
+```
+
+The topic can be either a local or a remote topic:
+
+```sh
+tedge bridge test c8y s/ds
+```
+
+```
+[remote] s/ds  ->  [local] c8y/s/ds (inbound)
+```
+
+When a topic matches a wildcard rule, the matching rule pattern is also shown:
+
+```sh
+tedge bridge test c8y c8y/s/uc/custom-template
+```
+
+```
+[local] c8y/s/uc/custom-template  ->  [remote] s/uc/custom-template (outbound)
+  matched by rule: c8y/s/uc/# -> s/uc/#
+```
+
+If no rules match, you'll see a message and the command exits with code 2:
+
+```
+No matching bridge rule found for "nonexistent/topic"
+```
+
+Wildcard topics are not supported as input, as matching a wildcard against wildcard rules can be ambiguous — for example, `a/+/c` and `a/b/+` both match `a/b/c`, but neither fully contains the other. If you provide a topic containing `#` or `+`, the command exits with an error:
+
+```sh
+tedge bridge test c8y 'c8y/#'
+```
+
+```
+Error: Wildcard characters (#, +) are not supported. Provide a concrete topic to test against.
+```
+
+All matching rules are displayed, which can help identify unexpected overlaps if multiple rules match the same topic.
+
 ## Template file structure
+
+### Cumulocity
 
 The Cumulocity built-in behavior is configured in the file `/etc/tedge/mappers/c8y/bridge/mqtt-core.toml`.
 

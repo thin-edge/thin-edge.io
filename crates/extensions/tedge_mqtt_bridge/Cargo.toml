@@ -13,10 +13,6 @@ repository = { workspace = true }
 # No features on by default
 default = []
 
-[[bin]]
-name = "test-bridge-rules"
-path = "src/main.rs"
-
 [dependencies]
 anyhow = { workspace = true }
 ariadne = { workspace = true }
@@ -43,6 +39,7 @@ tokio = { workspace = true, default-features = false, features = [
 ] }
 toml = { workspace = true }
 tracing = { workspace = true }
+yansi = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }

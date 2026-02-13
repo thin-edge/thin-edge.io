@@ -52,6 +52,7 @@ collect() {
     for cloud in $CLOUDS; do
         if tedge config get "${cloud}.url" >/dev/null 2>&1; then
             collect_logs "tedge-mapper-${cloud}"
+            tedge bridge inspect "${cloud}" > "$OUTPUT_DIR/tedge-bridge-inspect-${cloud}.log"
         fi
     done
 

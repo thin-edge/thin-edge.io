@@ -17,6 +17,7 @@ use tedge_watchdog::WatchdogOpt;
 use tedge_write::bin::Args as TedgeWriteOpt;
 
 use self::init::TEdgeInitCmd;
+mod bridge;
 mod certificate;
 mod common;
 mod completions;
@@ -157,6 +158,9 @@ pub enum TEdgeOpt {
     Completions {
         shell: Shell,
     },
+
+    #[clap(subcommand)]
+    Bridge(bridge::BridgeCmd),
 }
 
 #[derive(Debug, clap::Parser)]
@@ -227,6 +231,7 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Reconnect(opt) => opt.build_command(config).await,
             #[cfg(feature = "tedge-flows")]
             TEdgeOpt::Flows(opt) => opt.build_command(config).await,
+            TEdgeOpt::Bridge(opt) => opt.build_command(config).await,
             TEdgeOpt::Run(_) => {
                 // This method has to be kept in sync with tedge::redirect_if_multicall()
                 panic!("tedge mapper|agent|write commands are launched as multicall")

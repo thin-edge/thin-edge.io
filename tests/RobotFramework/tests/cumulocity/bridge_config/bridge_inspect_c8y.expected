@@ -1,0 +1,31 @@
+Bridge configuration for Cumulocity
+
+Local -> Remote
+  c8y/s/uat                                  ->  s/uat
+  c8y/s/ut/#                                 ->  s/ut/#
+  c8y/inventory/managedObjects/update/#      ->  inventory/managedObjects/update/#
+  c8y/measurement/measurements/create/#      ->  measurement/measurements/create/#
+  c8y/measurement/measurements/createBulk/#  ->  measurement/measurements/createBulk/#
+  c8y/event/events/create/#                  ->  event/events/create/#
+  c8y/event/events/createBulk/#              ->  event/events/createBulk/#
+  c8y/alarm/alarms/create/#                  ->  alarm/alarms/create/#
+  c8y/alarm/alarms/createBulk/#              ->  alarm/alarms/createBulk/#
+  c8y/s/us/#                                 ->  s/us/#
+  c8y/t/us/#                                 ->  t/us/#
+  c8y/q/us/#                                 ->  q/us/#
+  c8y/c/us/#                                 ->  c/us/#
+  c8y/s/uc/#                                 ->  s/uc/#
+  c8y/t/uc/#                                 ->  t/uc/#
+  c8y/q/uc/#                                 ->  q/uc/#
+  c8y/c/uc/#                                 ->  c/uc/#
+
+Remote -> Local
+  s/dat                        ->  c8y/s/dat
+  s/dt                         ->  c8y/s/dt
+  s/ds                         ->  c8y/s/ds
+  s/e                          ->  c8y/s/e
+  devicecontrol/notifications  ->  c8y/devicecontrol/notifications
+  error                        ->  c8y/error
+
+Bidirectional
+  -- No matching rules --

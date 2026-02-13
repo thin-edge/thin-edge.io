@@ -120,5 +120,5 @@ pub fn get_bridge_config_file_path_cloud(
     tedge_config
         .root_dir()
         .join(TEDGE_BRIDGE_CONF_DIR_PATH)
-        .join(&*cloud.bridge_config_filename())
+        .join(&*cloud.mosquitto_config_filename())
 }
