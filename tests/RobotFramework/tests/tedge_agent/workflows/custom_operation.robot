@@ -68,27 +68,27 @@ Timeout An Action
     ...    maximum=1
 
 Trigger Agent Restart
-    ${pid_before}    Execute Command    sudo systemctl show --property MainPID tedge-agent
+    ${pid_before}    Get Service PID    tedge-agent
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/restart-tedge-agent/robot-1 '{"status":"init"}'
     Should Have MQTT Messages
     ...    te/device/main///cmd/restart-tedge-agent/robot-1
     ...    message_pattern=.*tedge-agent-restarted.*
     ...    minimum=1
     ...    timeout=300
-    ${pid_after}    Execute Command    sudo systemctl show --property MainPID tedge-agent
+    ${pid_after}    Get Service PID    tedge-agent
     Should Not Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should have been restarted
 
 Trigger native-reboot within workflow (on_success)
     Execute Command
     ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/sbin/reboot, /usr/bin/on_shutdown.sh' > /etc/sudoers.d/tedge
-    ${pid_before}    Execute Command    sudo systemctl show --property MainPID tedge-agent
+    ${pid_before}    Get Service PID    tedge-agent
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/native-reboot/robot-1 '{"status":"init"}'
     Should Have MQTT Messages
     ...    te/device/main///cmd/native-reboot/robot-1
     ...    message_pattern=.*successful.*
     ...    maximum=1
     ...    timeout=300
-    ${pid_after}    Execute Command    sudo systemctl show --property MainPID tedge-agent
+    ${pid_after}    Get Service PID    tedge-agent
     Should Not Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should have been restarted
     ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-native-reboot-robot-1.log
     Should Contain
@@ -99,14 +99,14 @@ Trigger native-reboot within workflow (on_success)
 Trigger native-reboot within workflow (on_error) - missing sudoers entry for reboot
     Execute Command
     ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync' > /etc/sudoers.d/tedge
-    ${pid_before}    Execute Command    sudo systemctl show --property MainPID tedge-agent
+    ${pid_before}    Get Service PID    tedge-agent
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/native-reboot/robot-2 '{"status":"init"}'
     Should Have MQTT Messages
     ...    te/device/main///cmd/native-reboot/robot-2
     ...    message_pattern=.*failed.*
     ...    maximum=1
     ...    timeout=180
-    ${pid_after}    Execute Command    sudo systemctl show --property MainPID tedge-agent
+    ${pid_after}    Get Service PID    tedge-agent
     Should Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should not have been restarted
     ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-native-reboot-robot-2.log
     Should Not Contain

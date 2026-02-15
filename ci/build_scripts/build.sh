@@ -186,7 +186,7 @@ install_rust() {
 install_zig_tools() {
     # zig provides better cross compiling support
     # shellcheck disable=SC2086
-    cargo $TOOLCHAIN install cargo-zigbuild --version ">=0.17.3"
+    cargo +stable install cargo-zigbuild --version ">=0.17.3"
 
     # Allow users to install zig by other package managers
     ZIGLANG_BIN=(

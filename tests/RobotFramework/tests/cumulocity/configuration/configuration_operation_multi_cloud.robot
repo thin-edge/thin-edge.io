@@ -28,9 +28,9 @@ Get Configuration from Second Device
 
 Mapper Services Are Restarted After Updates
     Cumulocity.Set Device    ${DEVICE_SN}
-    ${pid_before}=    Execute Command    sudo systemctl show --property MainPID tedge-mapper-c8y@second
+    ${pid_before}=    Get Service PID    tedge-mapper-c8y@second
     Execute Command    dpkg -i packages/tedge-mapper*.deb
-    ${pid_after}=    Execute Command    sudo systemctl show --property MainPID tedge-mapper-c8y@second
+    ${pid_after}=    Get Service PID    tedge-mapper-c8y@second
     Should Not Be Equal    ${pid_before}    ${pid_after}
 
 

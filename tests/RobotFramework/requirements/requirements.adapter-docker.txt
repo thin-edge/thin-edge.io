@@ -1,1 +1,1 @@
-robotframework-devicelibrary[docker] @ git+https://github.com/thin-edge/robotframework-devicelibrary.git@1.23.1
+robotframework-devicelibrary[docker] @ git+https://github.com/thin-edge/robotframework-devicelibrary.git@1.24.1
