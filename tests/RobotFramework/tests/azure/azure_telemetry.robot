@@ -170,11 +170,12 @@ Updated builtin flows should not be overridden by the az mapper
 
 Disable builtin az mapper flows
     Disable Builtin Flow
-    Execute Command    (sleep 1; tedge mqtt pub te/device/main///e/ '{"text": "az builtin flow as been turned off"}')&
-    ${message}=    Execute Command
-    ...    tedge mqtt sub 'az/#' --duration 2s
-    ...    ignore_exit_code=${True}
-    Should Be Empty    ${message}
+    ${start}=    Get Unix Timestamp
+    Execute Command    tedge mqtt pub te/device/main///e/ '{"text": "az builtin flow as been turned off"}'
+    Should Not Have MQTT Messages
+    ...    topic=az/#
+    ...    date_from=${start}
+    ...    message_contains=az builtin flow as been turned off
     [Teardown]    Restore Builtin Flow
 
 Monitor flow definition updates
@@ -224,7 +225,12 @@ Update Builtin Flow
     ThinEdgeIO.Transfer To Device    ${CURDIR}/${flow_definition}    /etc/tedge/mappers/az/flows/mea.toml
 
 Disable Builtin Flow
+    ${start}=    Get Unix Timestamp
     Execute Command    mv /etc/tedge/mappers/az/flows/mea.toml /etc/tedge/mappers/az/flows/mea.toml.disabled
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-mapper-az/status/flows
+    ...    date_from=${start}
+    ...    message_contains=mea
 
 Restore Builtin Flow
     Execute Command    cp /etc/tedge/mappers/az/flows/mea.toml.template /etc/tedge/mappers/az/flows/mea.toml

@@ -1062,7 +1062,7 @@ impl From<&EntityMetadata> for EntityRegistrationMessage {
     fn from(value: &EntityMetadata) -> Self {
         EntityRegistrationMessage {
             topic_id: value.topic_id.clone(),
-            r#type: value.r#type.clone(),
+            r#type: value.r#type,
             external_id: value.external_id.clone(),
             parent: value.parent.clone(),
             health_endpoint: value.health_endpoint.clone(),

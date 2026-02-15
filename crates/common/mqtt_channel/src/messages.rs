@@ -36,14 +36,14 @@ impl Display for MqttMessage {
     }
 }
 
-fn serialize_qos<S>(qos: &QoS, serializer: S) -> Result<S::Ok, S::Error>
+pub fn serialize_qos<S>(qos: &QoS, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
     (*qos as u8).serialize(serializer)
 }
 
-fn deserialize_qos<'de, D>(deserializer: D) -> Result<QoS, D::Error>
+pub fn deserialize_qos<'de, D>(deserializer: D) -> Result<QoS, D::Error>
 where
     D: serde::Deserializer<'de>,
 {

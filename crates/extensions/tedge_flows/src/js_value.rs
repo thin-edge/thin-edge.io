@@ -5,6 +5,8 @@ use rquickjs::Ctx;
 use rquickjs::FromJs;
 use rquickjs::IntoJs;
 use rquickjs::Value;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_json::json;
 use serde_json::Number;
 use std::collections::BTreeMap;
@@ -35,6 +37,16 @@ impl Default for JsonValue {
 }
 
 impl JsonValue {
+    pub fn from_value<T: Serialize>(value: T) -> Result<Self, serde_json::Error> {
+        let value: serde_json::Value = serde_json::to_value(value)?;
+        Ok(value.into())
+    }
+
+    pub fn into_value<T: DeserializeOwned>(self) -> Result<T, serde_json::Error> {
+        let value: serde_json::Value = self.into();
+        serde_json::from_value(value)
+    }
+
     fn string(value: impl ToString) -> Self {
         JsonValue::String(value.to_string())
     }
@@ -188,6 +200,7 @@ impl TryFrom<BTreeMap<String, JsonValue>> for Message {
             topic: topic.to_owned(),
             payload,
             timestamp: None,
+            transport: None,
         })
     }
 }
@@ -279,8 +292,8 @@ impl<'js> IntoJs<'js> for JsonValueRef<'_> {
                 Ok(object.into_value())
             }
             JsonValue::Context { flow, step, config } => {
-                use crate::js_lib::kv_store::KVStore;
-                KVStore::js_context(ctx, flow, step, config)
+                use crate::js_lib::kv_store::FlowContextHandle;
+                FlowContextHandle::js_context(ctx, flow, step, config)
             }
         }
     }

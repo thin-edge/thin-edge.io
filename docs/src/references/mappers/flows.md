@@ -86,6 +86,8 @@ type Message = {
 }
 ```
 
+### Context
+
 The `context` object passed to `onMessage()` and `onInterval()` gives scripts and flows a way to share data.
 
 ```ts
@@ -119,6 +121,8 @@ type KVStore = {
 ```
 
 The `context.config` is an object freely defined by the step module, to provide default values such as thresholds, durations or units.
+
+### Callbacks
 
 The `onMessage` function is called for each message to be transformed
   - The arguments passed to the function are:
@@ -346,3 +350,15 @@ Filter out messages which payload is too large
 Assign a target topic to messages
 - Must be given the `topic` the messages have to be sent to.
 - `{ builtin = "set-topic", config.topic = "c8y/measurement/measurements/create" }`
+
+### `update-context`
+
+Store a message in the [mapper context](#context) shared by all the flows and transformation steps.
+- The message topic is used as the key and the message payload as the shared value.
+  - The message payload is stored as is. It has to be a valid JSON payload, though
+  - If the message payload is the empty string, then any previously stored value is removed from the context.
+  - A transformation step can then get the value associated to a key from the mapper context
+    - `const value = context.mapper.get(key)`
+- An `update-context` step can be given a topic filter used to store only a subset of the messages.
+  - `{ builtin = "update-context", config.topics = "te/+/+/+/+/m/+/meta" }`
+  - If a message doesn't match the configured topic, this message is passed unchanged to the subsequent transformation steps.
