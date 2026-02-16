@@ -64,6 +64,7 @@ impl JsonValue {
     {
         let object = values
             .into_iter()
+            .filter(|(_, v)| v != &JsonValue::Null)
             .map(|(k, v)| (k.to_string(), v))
             .collect();
         JsonValue::Object(object)
@@ -117,11 +118,17 @@ impl JsonValue {
 impl From<Message> for JsonValue {
     fn from(value: Message) -> Self {
         let raw_payload = JsonValue::Bytes(value.payload.clone());
-
+        let mqtt = value.transport.map(|transport| match transport {
+            Transport::Mqtt { qos, retain } => JsonValue::object([
+                ("qos", JsonValue::Number((qos as u8).into())),
+                ("retain", JsonValue::Bool(retain)),
+            ]),
+        });
         JsonValue::object([
             ("topic", JsonValue::string(value.topic)),
             ("payload", raw_payload),
             ("time", JsonValue::option(value.timestamp)),
+            ("mqtt", JsonValue::option(mqtt)),
         ])
     }
 }
@@ -336,7 +343,10 @@ impl JsonValue {
             return Ok(JsonValue::Number(n.into()));
         }
         if let Some(n) = value.as_float() {
-            let js_n = serde_json::Number::from_f64(n)
+            if n == n.trunc() {
+                return Ok(JsonValue::Number((n.trunc() as i64).into()));
+            }
+            let js_n = Number::from_f64(n)
                 .map(JsonValue::Number)
                 .unwrap_or(JsonValue::Null);
             return Ok(js_n);
