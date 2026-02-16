@@ -401,21 +401,29 @@ impl WorkflowActor {
                 info!("Processing {operation} operation {step} step with download builtin action");
 
                 let input = input_excerpt.extract_value_from(&state);
-                let Some(url) = input
-                    .get("url")
-                    .and_then(|v| v.as_str())
-                    .filter(|v| !v.is_empty())
-                else {
-                    let err_state = state
-                        .update_with_builtin_action_result(
-                            "download",
-                            Err("Missing or empty `input.url` for download action".to_string()),
-                            handlers,
-                            &mut log_file,
-                        )
-                        .await;
-                    return self.publish_command_state(err_state, &mut log_file).await;
-                };
+                let (url, url_source) =
+                    if let Some(url) = GenericCommandState::extract_text_property(&input, "url") {
+                        (url, "input.url")
+                    } else if let Some(url) = state.get_text_property("tedgeUrl") {
+                        (url, "tedgeUrl")
+                    } else if let Some(url) = state.get_text_property("remoteUrl") {
+                        (url, "remoteUrl")
+                    } else {
+                        let err_state = state
+                            .update_with_builtin_action_result(
+                                "download",
+                                Err("No valid URL found in input.url, tedgeUrl, or remoteUrl"
+                                    .to_string()),
+                                handlers,
+                                &mut log_file,
+                            )
+                            .await;
+                        return self.publish_command_state(err_state, &mut log_file).await;
+                    };
+
+                log_file
+                    .log_info(&format!("Using URL from {}: {}", url_source, url))
+                    .await;
 
                 let temp_filename = format!("{operation}_{cmd_id}");
                 let temp_path = self.tmp_dir.join(&temp_filename);

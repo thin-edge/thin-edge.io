@@ -121,8 +121,8 @@ Send device profile operation locally
     ...          "@skip": false,
     ...          "payload": {
     ...            "type": "tedge-configuration-plugin",
-    ...            "tedgeUrl": "",
-    ...            "remoteUrl": "${config_url}",
+    ...            "tedgeUrl": "${config_url}",
+    ...            "remoteUrl": "",
     ...            "serverUrl": ""
     ...          }
     ...        },

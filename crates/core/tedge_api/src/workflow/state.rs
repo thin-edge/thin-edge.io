@@ -311,8 +311,15 @@ impl GenericCommandState {
         GenericCommandState::extract_text_property(&self.payload, REASON)
     }
 
+    pub fn get_text_property(&self, key: &str) -> Option<&str> {
+        self.payload
+            .get(key)
+            .and_then(|v| v.as_str())
+            .filter(|v| !v.is_empty())
+    }
+
     /// Extract a text property from a Json object
-    fn extract_text_property<'a>(json: &'a Value, property: &str) -> Option<&'a str> {
+    pub fn extract_text_property<'a>(json: &'a Value, property: &str) -> Option<&'a str> {
         json.as_object()
             .and_then(|o| o.get(property))
             .and_then(|v| v.as_str())

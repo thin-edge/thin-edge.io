@@ -47,6 +47,7 @@ use tedge_api::workflow::OperationStepRequest;
 use tedge_api::workflow::OperationStepResponse;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
+use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
@@ -404,7 +405,83 @@ action = "cleanup"
 }
 
 #[tokio::test]
-async fn download_action_missing_input_mapping() -> Result<(), DynError> {
+async fn download_action_without_input_url() -> Result<(), DynError> {
+    let workflow = r#"
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "download"
+
+[download]
+action = "download"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+    let TestHandler {
+        mut mqtt_box,
+        mut downloader_box,
+        mut actor_handle,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        vec![("config_update.toml".to_string(), workflow.to_string())],
+    )
+    .await?;
+
+    // Trigger the operation
+    let mqtt_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_update/123"),
+        r#"{"status":"init","tedgeUrl":"http://example.com/file"}"#,
+    );
+    mqtt_box.send(mqtt_message).await?;
+
+    // Even without input.url mapping, the download action should fall back to tedgeUrl
+    let RequestEnvelope {
+        request: (topic, download_request),
+        mut reply_to,
+    } = recv_or_fail_on_actor_exit(&mut downloader_box, &mut actor_handle, "download request")
+        .await
+        .expect("download request expected");
+    assert_eq!(topic, "te/device/main///cmd/config_update/123");
+    assert_eq!(download_request.url, "http://example.com/file");
+
+    // Complete the download successfully
+    reply_to
+        .send((
+            topic.clone(),
+            Ok(DownloadResponse {
+                url: download_request.url.clone(),
+                file_path: download_request.file_path.clone(),
+            }),
+        ))
+        .await?;
+
+    // The workflow should complete successfully
+    let payload = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/config_update/123",
+        "successful",
+    )
+    .await;
+    assert_eq!(
+        payload.get("status").and_then(|v| v.as_str()),
+        Some("successful")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn download_action_without_input_url_or_tedge_url() -> Result<(), DynError> {
     let workflow = r#"
 operation = "config_update"
 
@@ -442,7 +519,83 @@ action = "cleanup"
     );
     mqtt_box.send(mqtt_message).await?;
 
-    // Missing input.url should not trigger a downloader request.
+    // Even without input.url mapping, the download action should fall back to remoteUrl
+    let RequestEnvelope {
+        request: (topic, download_request),
+        mut reply_to,
+    } = recv_or_fail_on_actor_exit(&mut downloader_box, &mut actor_handle, "download request")
+        .await
+        .expect("download request expected");
+    assert_eq!(topic, "te/device/main///cmd/config_update/123");
+    assert_eq!(download_request.url, "http://example.com/file");
+
+    // Complete the download successfully
+    reply_to
+        .send((
+            topic.clone(),
+            Ok(DownloadResponse {
+                url: download_request.url.clone(),
+                file_path: download_request.file_path.clone(),
+            }),
+        ))
+        .await?;
+
+    // The workflow should complete successfully
+    let payload = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/config_update/123",
+        "successful",
+    )
+    .await;
+    assert_eq!(
+        payload.get("status").and_then(|v| v.as_str()),
+        Some("successful")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn download_action_no_url_available() -> Result<(), DynError> {
+    let workflow = r#"
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "download"
+
+[download]
+action = "download"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+    let TestHandler {
+        mut mqtt_box,
+        mut downloader_box,
+        mut actor_handle,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        vec![("config_update.toml".to_string(), workflow.to_string())],
+    )
+    .await?;
+
+    // Trigger the operation without any URL field
+    let mqtt_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_update/123"),
+        r#"{"status":"init"}"#,
+    );
+    mqtt_box.send(mqtt_message).await?;
+
+    // No URL available should not trigger a downloader request
     assert_no_message_or_actor_exit(
         &mut downloader_box,
         &mut actor_handle,
@@ -450,7 +603,7 @@ action = "cleanup"
     )
     .await;
 
-    // The workflow should fail with an explicit reason instead.
+    // The workflow should fail with an explicit reason
     let payload = recv_command_state_with_status(
         &mut mqtt_box,
         &mut actor_handle,
@@ -465,7 +618,7 @@ action = "cleanup"
     assert_eq!(
         payload.get("reason").and_then(|v| v.as_str()),
         Some(
-            "builtin 'download' action failed with: Missing or empty `input.url` for download action",
+            "builtin 'download' action failed with: No valid URL found in input.url, tedgeUrl, or remoteUrl",
         )
     );
 
