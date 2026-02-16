@@ -161,7 +161,7 @@ class ThinEdgeIO(DeviceLibrary):
         # to run multiple times
         for device in self.devices.values():
             try:
-                device_sn = device.get_id()
+                device_sn = device.adapter.get_id()
                 # Note: this is a no-op if the device or user does not exist
                 c8y_lib.device_mgmt.inventory.delete_device_and_user(
                     device_sn, "c8y_Serial"
@@ -384,7 +384,7 @@ class ThinEdgeIO(DeviceLibrary):
         device = self.current
         if name:
             if name in self.devices:
-                device = self.devices.get(name)
+                device = self.get_device(name)
 
         if not device:
             log.info("Device has not been setup, so no logs to collect")
@@ -832,6 +832,7 @@ class ThinEdgeIO(DeviceLibrary):
         skip_bootstrap: Optional[bool] = None,
         bootstrap_args: Optional[str] = None,
         cleanup: Optional[bool] = None,
+        cleanup_after_suite: Optional[bool] = None,
         adapter: Optional[str] = None,
         env_file: str = ".env",
         register: bool = True,
@@ -846,6 +847,9 @@ class ThinEdgeIO(DeviceLibrary):
             bootstrap_args (str, optional): Additional arguments to be passed to the bootstrap
                 command. Defaults to None.
             cleanup (bool, optional): Should the cleanup be run or not. Defaults to None
+            cleanup_after_suite (bool, optional): Should the cleanup be run after the suite or after a test. Defaults to None.
+                If not set, then it will be auto detected when the cleanup should occur based on when the setup was launch
+                in the suite setup or not.
             adapter (str, optional): Type of adapter to use, e.g. ssh, docker etc. Defaults to None
             **adaptor_config: Additional configuration that is passed to the adapter. It will override
                 any existing settings.
@@ -865,6 +869,7 @@ class ThinEdgeIO(DeviceLibrary):
             skip_bootstrap=skip_bootstrap,
             bootstrap_args=bootstrap_args,
             cleanup=cleanup,
+            cleanup_after_suite=cleanup_after_suite,
             adapter=adapter,
             env_file=env_file,
             **adaptor_config,
@@ -1468,7 +1473,7 @@ class ThinEdgeIO(DeviceLibrary):
         device = self.current
         if device_name:
             if device_name in self.devices:
-                device = self.devices.get(device_name)
+                device = self.get_device(device_name)
 
         if not device:
             raise ValueError(
@@ -1504,7 +1509,7 @@ class ThinEdgeIO(DeviceLibrary):
         device = self.current
         if device_name:
             if device_name in self.devices:
-                device = self.devices.get(device_name)
+                device = self.get_device(device_name)
 
         if not device:
             raise ValueError(
@@ -1572,7 +1577,7 @@ class ThinEdgeIO(DeviceLibrary):
         device = self.current
         if device_name:
             if device_name in self.devices:
-                device = self.devices.get(device_name)
+                device = self.get_device(device_name)
 
         if not device:
             raise ValueError(
