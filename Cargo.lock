@@ -4746,6 +4746,7 @@ version = "1.7.1"
 dependencies = [
  "anstyle",
  "anyhow",
+ "ariadne",
  "asn1-rs 0.7.1",
  "assert_cmd",
  "assert_matches",
@@ -4768,6 +4769,7 @@ dependencies = [
  "mockito",
  "mqtt_channel",
  "mqtt_tests",
+ "mutants",
  "nix",
  "pad",
  "pem",
@@ -4781,6 +4783,7 @@ dependencies = [
  "rumqttc",
  "serde",
  "serde_json",
+ "strum",
  "strum_macros",
  "tar",
  "tedge-agent",
@@ -4794,6 +4797,7 @@ dependencies = [
  "tedge_api",
  "tedge_config",
  "tedge_flows",
+ "tedge_mqtt_bridge",
  "tedge_test_utils",
  "tedge_utils",
  "tempfile",
@@ -5335,6 +5339,7 @@ dependencies = [
  "toml 0.9.6",
  "tracing",
  "tracing-subscriber",
+ "yansi",
 ]
 
 [[package]]

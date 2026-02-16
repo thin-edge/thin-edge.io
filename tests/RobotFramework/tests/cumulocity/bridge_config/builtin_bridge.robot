@@ -1,13 +1,53 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
+Library             OperatingSystem
+Library             String
 Library             Cumulocity
 Library             ThinEdgeIO
 
-Test Setup          Custom Setup
-Test Teardown       Get Logs
+Suite Setup         Custom Setup
+Suite Teardown      Get Logs
 
 
 *** Test Cases ***
+Bridge inspect shows expected topic mappings
+    [Documentation]    Verify that tedge bridge inspect c8y outputs the expected topic mappings
+    ${output}=    Execute Command    tedge bridge inspect c8y    strip=${True}
+    # Remove the "Reading from:" line as the path varies per environment
+    ${output}=    Remove String Using Regexp    ${output}    Reading from:.*\n
+    ${expected}=    OperatingSystem.Get File    ${CURDIR}/bridge_inspect_c8y.expected
+    Should Be Equal    ${output.strip()}    ${expected.strip()}
+
+Bridge test shows matching outbound rule
+    [Documentation]    Verify that tedge bridge test c8y shows the correct routing for a local topic
+    ${output}=    Execute Command    tedge bridge test c8y c8y/s/us/123    strip=${True}
+    Should Contain    ${output}    [local] c8y/s/us/123    ->    [remote] s/us/123 (outbound)
+
+Bridge test shows matching inbound rule
+    [Documentation]    Verify that tedge bridge test c8y shows the correct routing for a remote topic
+    ${output}=    Execute Command    tedge bridge test c8y s/dat    strip=${True}
+    Should Contain    ${output}    [remote] s/dat    ->    [local] c8y/s/dat (inbound)
+
+Bridge test rejects wildcard topics
+    [Documentation]    Verify that tedge bridge test c8y rejects wildcard topics with exit code 1
+    ${output}=    Execute Command
+    ...    tedge bridge test c8y 'c8y/s/us/#'
+    ...    exp_exit_code=1
+    ...    stderr=${True}
+    ...    timeout=0
+    ...    retries=0
+    Should Contain    ${output}[1]    Wildcard characters (#, +) are not supported
+
+Bridge test exits with code 2 for non-matching topics
+    [Documentation]    Verify that tedge bridge test c8y exits with code 2 when no rules match
+    ${output}=    Execute Command
+    ...    tedge bridge test c8y nonexistent/topic
+    ...    exp_exit_code=2
+    ...    strip=${True}
+    ...    timeout=0
+    ...    retries=0
+    Should Contain    ${output}    No matching bridge rule found for "nonexistent/topic"
+
 Connection test
     [Documentation]    Repeatedly test the cloud connection
     FOR    ${attempt}    IN RANGE    0    10    1

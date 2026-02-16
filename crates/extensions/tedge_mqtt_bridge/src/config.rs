@@ -1,5 +1,7 @@
 use crate::config_toml::Direction;
 use crate::config_toml::ExpandError;
+use crate::config_toml::ExpandedBridgeRule;
+use crate::config_toml::NonExpansionReason;
 use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 use crate::AuthMethod;
@@ -154,6 +156,18 @@ impl BridgeRule {
             self.prefix_to_add.clone() + topic.strip_prefix(&*self.prefix_to_remove).unwrap()
         })
     }
+
+    pub fn topic_filter(&self) -> &str {
+        &self.topic_filter
+    }
+
+    pub fn prefix_to_add(&self) -> &str {
+        &self.prefix_to_add
+    }
+
+    pub fn prefix_to_remove(&self) -> &str {
+        &self.prefix_to_remove
+    }
 }
 
 impl BridgeConfig {
@@ -238,27 +252,10 @@ impl BridgeConfig {
         ]
     }
 
-    pub fn add_rules_from_template(
+    pub fn add_expanded_rules(
         &mut self,
-        file_path: &Utf8Path,
-        toml_template: &str,
-        tedge_config: &TEdgeConfig,
-        auth_method: AuthMethod,
-        cloud_profile: Option<&ProfileName>,
+        rules: Vec<ExpandedBridgeRule>,
     ) -> Result<(), InvalidBridgeRule> {
-        let config: crate::config_toml::PersistedBridgeConfig = toml::from_str(toml_template)
-            .map_err(|e| {
-                print_toml_error(file_path.as_str(), toml_template, &e);
-                InvalidBridgeRule::Template
-            })?;
-        let rules = config
-            .expand(tedge_config, auth_method, cloud_profile)
-            .map_err(|errors| {
-                for error in errors {
-                    print_expansion_error(file_path.as_str(), toml_template, &error);
-                }
-                InvalidBridgeRule::Template
-            })?;
         for rule in rules {
             match rule.direction {
                 Direction::Outbound => {
@@ -278,6 +275,41 @@ impl BridgeConfig {
         }
         Ok(())
     }
+
+    pub fn local_to_remote(&self) -> &[BridgeRule] {
+        &self.local_to_remote
+    }
+
+    pub fn remote_to_local(&self) -> &[BridgeRule] {
+        &self.remote_to_local
+    }
+
+    pub fn bidirectional_topics(&self) -> &[(Cow<'static, str>, Cow<'static, str>)] {
+        &self.bidirectional_topics
+    }
+}
+
+pub fn expand_bridge_rules(
+    file_path: &Utf8Path,
+    toml_template: &str,
+    tedge_config: &TEdgeConfig,
+    auth_method: AuthMethod,
+    cloud_profile: Option<&ProfileName>,
+) -> Result<(Vec<ExpandedBridgeRule>, Vec<NonExpansionReason>), InvalidBridgeRule> {
+    let config: crate::config_toml::PersistedBridgeConfig =
+        toml::from_str(toml_template).map_err(|e| {
+            print_toml_error(file_path.as_str(), toml_template, &e);
+            InvalidBridgeRule::Template
+        })?;
+
+    config
+        .expand(tedge_config, auth_method, cloud_profile)
+        .map_err(|errors| {
+            for error in errors {
+                print_expansion_error(file_path.as_str(), toml_template, &error);
+            }
+            InvalidBridgeRule::Template
+        })
 }
 
 fn print_toml_error(path: &str, source: &str, error: &toml::de::Error) {

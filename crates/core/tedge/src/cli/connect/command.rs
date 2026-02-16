@@ -701,7 +701,7 @@ pub async fn bridge_config(
                     az_config.url().or_config_not_set()?.as_str(),
                 )
                 .map_err(TEdgeConfigError::from)?,
-                config_file: cloud.bridge_config_filename(),
+                config_file: cloud.mosquitto_config_filename(),
                 bridge_root_cert_path: az_config.root_cert_path.clone().into(),
                 remote_clientid: az_config.device.id()?.clone(),
                 bridge_certfile: az_config.device.cert_path.clone().into(),
@@ -725,7 +725,7 @@ pub async fn bridge_config(
                     aws_config.url().or_config_not_set()?.as_str(),
                 )
                 .map_err(TEdgeConfigError::from)?,
-                config_file: cloud.bridge_config_filename(),
+                config_file: cloud.mosquitto_config_filename(),
                 bridge_root_cert_path: aws_config.root_cert_path.clone().into(),
                 remote_clientid: aws_config.device.id()?.clone(),
                 bridge_certfile: aws_config.device.cert_path.clone().into(),
@@ -771,7 +771,7 @@ pub async fn bridge_config(
 
             let params = BridgeConfigC8yParams {
                 mqtt_host,
-                config_file: cloud.bridge_config_filename(),
+                config_file: cloud.mosquitto_config_filename(),
                 bridge_root_cert_path: c8y_config.root_cert_path.clone().into(),
                 remote_clientid: c8y_config.device.id()?.clone(),
                 remote_username,
@@ -847,12 +847,14 @@ impl ConnectCommand {
         match &self.cloud {
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile_name) => {
+                let c8y_config = tedge_config.c8y_mapper_config(profile_name)?;
                 // Create bridge rules so the user gets feedback on whether it worked not just within the service
                 if tedge_config.mqtt.bridge.built_in {
                     let spinner = Spinner::start("Updating bridge rule templates");
                     let res = tedge_mapper::c8y::mapper::bridge_rules(
                         tedge_config,
                         profile_name.as_deref(),
+                        tedge_mapper::c8y::mapper::auth_method(&c8y_config),
                     )
                     .await;
                     spinner.finish(res)?;
@@ -860,8 +862,6 @@ impl ConnectCommand {
                 if self.offline_mode {
                     eprintln!("Offline mode. Skipping device creation in Cumulocity cloud.")
                 } else {
-                    let c8y_config =
-                        tedge_config.mapper_config::<C8yMapperSpecificConfig>(profile_name)?;
                     let mqtt_auth_config =
                         tedge_config.mqtt_auth_config_cloud_broker(&c8y_config)?;
                     let spinner = Spinner::start("Creating device in Cumulocity cloud");

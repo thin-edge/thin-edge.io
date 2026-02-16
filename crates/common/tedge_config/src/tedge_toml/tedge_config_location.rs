@@ -310,6 +310,7 @@ impl TEdgeConfigLocation {
     }
 
     #[cfg(feature = "test")]
+    #[track_caller]
     pub(crate) fn load_toml_str(toml: &str, location: TEdgeConfigLocation) -> TEdgeConfig {
         let (tedge_config, warnings) = Self::load_toml_str_with_warnings(toml, location);
         warnings.emit();
@@ -317,6 +318,7 @@ impl TEdgeConfigLocation {
     }
 
     #[cfg(feature = "test")]
+    #[track_caller]
     pub(crate) fn load_toml_str_with_warnings(
         toml: &str,
         location: TEdgeConfigLocation,

@@ -12,6 +12,7 @@ use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadError;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::TEdgeConfig;
+use yansi::Paint as _;
 
 use parsing::parse_condition_with_error;
 use parsing::template::expand_config_template;
@@ -42,6 +43,23 @@ pub struct ExpandedBridgeRule {
     pub remote_prefix: String,
     pub direction: Direction,
     pub topic: String,
+}
+
+#[derive(Debug)]
+pub enum NonExpansionReason {
+    ConditionIsFalse {
+        /// The span to highlight (points to the most relevant part, e.g., config reference)
+        span: std::ops::Range<usize>,
+        message: String,
+        /// The span of the entire rule that was skipped
+        rule_span: Option<std::ops::Range<usize>>,
+    },
+    LoopSourceEmpty {
+        src: Spanned<Iterable>,
+        message: String,
+        /// The span of the entire rule that was skipped
+        rule_span: std::ops::Range<usize>,
+    },
 }
 
 fn resolve_prefix(
@@ -96,7 +114,7 @@ impl PersistedBridgeConfig {
         config: &TEdgeConfig,
         auth_method: AuthMethod,
         cloud_profile: Option<&ProfileName>,
-    ) -> Result<Vec<ExpandedBridgeRule>, Vec<ExpandError>> {
+    ) -> Result<(Vec<ExpandedBridgeRule>, Vec<NonExpansionReason>), Vec<ExpandError>> {
         let expand_prefix = |prefix: &Option<_>, name| match prefix.as_ref() {
             Some(prefix) => expand_spanned(
                 prefix,
@@ -108,27 +126,42 @@ impl PersistedBridgeConfig {
             None => Ok(PrefixExpansionState::NotDefined),
         };
         let mut errors = Vec::new();
-        let expand_condition = |condition: Option<&Spanned<String>>, context: &str| {
-            condition
-                .map(|s| {
-                    let rule: Spanned<Condition> = parse_condition_with_error(s)?;
-                    expand_spanned(
-                        &rule,
-                        (config, auth_method),
-                        cloud_profile,
-                        &format!("Failed to expand {context} condition"),
-                    )
-                    .map_err(|err| vec![err])
-                })
-                .transpose()
-        };
+        let mut non_expansion_reasons = Vec::new();
+        // Returns (result, parsed_condition) so we can use the parsed condition for explanations
+        let expand_condition =
+            |condition: Option<&Spanned<String>>,
+             context: &str|
+             -> Result<Option<(bool, Spanned<Condition>)>, Vec<ExpandError>> {
+                condition
+                    .map(|s| {
+                        let parsed: Spanned<Condition> = parse_condition_with_error(s)?;
+                        let result = expand_spanned(
+                            &parsed,
+                            (config, auth_method),
+                            cloud_profile,
+                            &format!("Failed to expand {context} condition"),
+                        )
+                        .map_err(|err| vec![err])?;
+                        Ok((result, parsed))
+                    })
+                    .transpose()
+            };
 
         let file_condition =
             expand_condition(self.r#if.as_ref(), "global").unwrap_or_else(|mut e| {
                 errors.append(&mut e);
                 None
             });
-        let template_disabled = file_condition == Some(false);
+        let template_disabled = matches!(&file_condition, Some((false, _)));
+        if let Some((false, ref parsed)) = file_condition {
+            let (message, span) =
+                explain_false_condition(parsed, config, auth_method, cloud_profile);
+            non_expansion_reasons.push(NonExpansionReason::ConditionIsFalse {
+                span,
+                message,
+                rule_span: None, // File-level condition has no containing rule
+            });
+        }
 
         let local_prefix = expand_prefix(&self.local_prefix, "local_prefix").unwrap_or_else(|e| {
             errors.push(e);
@@ -149,7 +182,16 @@ impl PersistedBridgeConfig {
                     errors.append(&mut e);
                     None
                 });
-            let rule_disabled = template_disabled || rule_condition == Some(false);
+            let rule_disabled = template_disabled || matches!(&rule_condition, Some((false, _)));
+            if let Some((false, ref parsed)) = rule_condition {
+                let (message, span) =
+                    explain_false_condition(parsed, config, auth_method, cloud_profile);
+                non_expansion_reasons.push(NonExpansionReason::ConditionIsFalse {
+                    span,
+                    message,
+                    rule_span: Some(rule_span.clone()),
+                });
+            }
 
             let rule_local_prefix = expand_prefix(&rule.local_prefix, "local_prefix")
                 .unwrap_or_else(|e| {
@@ -213,7 +255,17 @@ impl PersistedBridgeConfig {
                     errors.append(&mut e);
                     None
                 });
-            let template_rule_disabled = template_disabled || template_condition == Some(false);
+            let template_rule_disabled =
+                template_disabled || matches!(&template_condition, Some((false, _)));
+            if let Some((false, ref parsed)) = template_condition {
+                let (message, span) =
+                    explain_false_condition(parsed, config, auth_method, cloud_profile);
+                non_expansion_reasons.push(NonExpansionReason::ConditionIsFalse {
+                    span,
+                    message,
+                    rule_span: Some(template_span.clone()),
+                });
+            }
 
             let iterable = template
                 .r#for
@@ -253,7 +305,7 @@ impl PersistedBridgeConfig {
                 &remote_prefix,
                 "remote_prefix",
                 "template_rule",
-                template_span,
+                template_span.clone(),
             )
             .unwrap_or_else(|e| {
                 if let Some(e) = e {
@@ -267,6 +319,11 @@ impl PersistedBridgeConfig {
                     r#for: "",
                     tedge: config,
                 };
+                non_expansion_reasons.push(NonExpansionReason::LoopSourceEmpty {
+                    src: template.r#for.clone(),
+                    message: "iterator is empty".into(),
+                    rule_span: template_span.clone(),
+                });
                 // Verify the topic is valid even if there are no rules to generate
                 expand_spanned(
                     &template.topic,
@@ -314,7 +371,7 @@ impl PersistedBridgeConfig {
         }
 
         if errors.is_empty() {
-            Ok(expanded_rules)
+            Ok((expanded_rules, non_expansion_reasons))
         } else {
             Err(errors)
         }
@@ -349,7 +406,7 @@ struct TemplateBridgeRule {
     r#if: Option<Spanned<String>>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Direction {
     Inbound,
@@ -395,6 +452,35 @@ impl Expandable for Condition {
     }
 }
 
+/// Generates a human-readable explanation of why a condition evaluated to false,
+/// along with the most relevant span to highlight.
+fn explain_false_condition(
+    condition: &Spanned<Condition>,
+    config: &TEdgeConfig,
+    auth_method: AuthMethod,
+    cloud_profile: Option<&ProfileName>,
+) -> (String, std::ops::Range<usize>) {
+    match condition.get_ref() {
+        Condition::AuthMethod(expected) => (
+            format!(
+                "auth method is {}, not {}",
+                auth_method.yellow(),
+                expected.green()
+            ),
+            // For auth method, highlight the whole condition
+            condition.span(),
+        ),
+        Condition::Is(expected, config_ref) => {
+            let message = match config_ref.expand(config, cloud_profile) {
+                Ok(_) => format!("{} is {}", config_ref.0.cyan(), (!*expected).yellow()),
+                Err(_) => format!("{} could not be read", config_ref.0.cyan()),
+            };
+            // Highlight the config reference specifically
+            (message, config_ref.span())
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(transparent)]
 struct Template(Spanned<String>);
@@ -403,9 +489,9 @@ struct Template(Spanned<String>);
 #[serde(transparent)]
 struct LoopTemplate(Spanned<String>);
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(untagged)]
-enum Iterable {
+pub enum Iterable {
     Config(String),
     Literal(Vec<String>),
 }
@@ -417,6 +503,12 @@ pub(crate) struct ConfigReference<Target>(Spanned<String>, PhantomData<Target>);
 impl<Target> Clone for ConfigReference<Target> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1)
+    }
+}
+
+impl<Target> ConfigReference<Target> {
+    pub fn span(&self) -> std::ops::Range<usize> {
+        self.0.span()
     }
 }
 
@@ -1160,9 +1252,9 @@ c8y.smartrest.templates = ["a", "b"]
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap();
 
-            assert_eq!(expanded.len(), 2);
-            assert_eq!(expanded[0].topic, "s/dc/a");
-            assert_eq!(expanded[1].topic, "s/dc/b");
+            assert_eq!(expanded.0.len(), 2);
+            assert_eq!(expanded.0[0].topic, "s/dc/a");
+            assert_eq!(expanded.0[1].topic, "s/dc/b");
         }
 
         #[test]
@@ -1187,11 +1279,11 @@ c8y.smartrest.templates = ["a", "b"]
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap();
 
-            assert_eq!(expanded.len(), 4);
-            assert_eq!(expanded[0].topic, "s/us/#");
-            assert_eq!(expanded[1].topic, "t/us/#");
-            assert_eq!(expanded[2].topic, "q/us/#");
-            assert_eq!(expanded[3].topic, "c/us/#");
+            assert_eq!(expanded.0.len(), 4);
+            assert_eq!(expanded.0[0].topic, "s/us/#");
+            assert_eq!(expanded.0[1].topic, "t/us/#");
+            assert_eq!(expanded.0[2].topic, "q/us/#");
+            assert_eq!(expanded.0[3].topic, "c/us/#");
         }
 
         #[test]
@@ -1364,25 +1456,25 @@ smartrest.templates = ["template1", "template2", "template3"]
                 .unwrap();
 
             // Should create 6 rules: 3 outbound + 3 inbound
-            assert_eq!(expanded.len(), 6);
+            assert_eq!(expanded.0.len(), 6);
 
             // Check outbound rules (s/uc/${@for})
-            assert_eq!(expanded[0].topic, "s/uc/template1");
-            assert_eq!(expanded[0].local_prefix, "c8y/");
-            assert_eq!(expanded[0].remote_prefix, "");
-            assert!(matches!(expanded[0].direction, Direction::Outbound));
+            assert_eq!(expanded.0[0].topic, "s/uc/template1");
+            assert_eq!(expanded.0[0].local_prefix, "c8y/");
+            assert_eq!(expanded.0[0].remote_prefix, "");
+            assert!(matches!(expanded.0[0].direction, Direction::Outbound));
 
-            assert_eq!(expanded[1].topic, "s/uc/template2");
-            assert_eq!(expanded[2].topic, "s/uc/template3");
+            assert_eq!(expanded.0[1].topic, "s/uc/template2");
+            assert_eq!(expanded.0[2].topic, "s/uc/template3");
 
             // Check inbound rules (s/dc/${@for})
-            assert_eq!(expanded[3].topic, "s/dc/template1");
-            assert_eq!(expanded[3].local_prefix, "c8y/");
-            assert_eq!(expanded[3].remote_prefix, "");
-            assert!(matches!(expanded[3].direction, Direction::Inbound));
+            assert_eq!(expanded.0[3].topic, "s/dc/template1");
+            assert_eq!(expanded.0[3].local_prefix, "c8y/");
+            assert_eq!(expanded.0[3].remote_prefix, "");
+            assert!(matches!(expanded.0[3].direction, Direction::Inbound));
 
-            assert_eq!(expanded[4].topic, "s/dc/template2");
-            assert_eq!(expanded[5].topic, "s/dc/template3");
+            assert_eq!(expanded.0[4].topic, "s/dc/template2");
+            assert_eq!(expanded.0[5].topic, "s/dc/template3");
         }
 
         #[test]
@@ -1411,12 +1503,12 @@ bridge.topic_prefix = "test"
                 )
                 .unwrap();
 
-            assert_eq!(expanded.len(), 1);
+            assert_eq!(expanded.0.len(), 1);
 
-            assert_eq!(expanded[0].topic, "s/us");
-            assert_eq!(expanded[0].local_prefix, "test/");
-            assert_eq!(expanded[0].remote_prefix, "");
-            assert!(matches!(expanded[0].direction, Direction::Outbound));
+            assert_eq!(expanded.0[0].topic, "s/us");
+            assert_eq!(expanded.0[0].local_prefix, "test/");
+            assert_eq!(expanded.0[0].remote_prefix, "");
+            assert!(matches!(expanded.0[0].direction, Direction::Outbound));
         }
 
         #[test]
@@ -1441,7 +1533,7 @@ c8y.mqtt_service.enabled = false
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap();
 
-            assert_eq!(expanded.len(), 0);
+            assert_eq!(expanded.0.len(), 0);
         }
 
         #[test]
@@ -1466,7 +1558,7 @@ c8y.mqtt_service.enabled = true
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap();
 
-            assert_eq!(expanded.len(), 1);
+            assert_eq!(expanded.0.len(), 1);
         }
 
         #[test]
@@ -1487,13 +1579,13 @@ direction = "outbound"
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap();
 
-            assert_eq!(with_certificate.len(), 0);
+            assert_eq!(with_certificate.0.len(), 0);
 
             let with_password = config
                 .expand(&tedge_config, AuthMethod::Password, None)
                 .unwrap();
 
-            assert_eq!(with_password.len(), 1);
+            assert_eq!(with_password.0.len(), 1);
         }
 
         #[test]
@@ -1515,13 +1607,13 @@ direction = "outbound"
                 .expand(&tedge_config, AuthMethod::Certificate, None)
                 .unwrap();
 
-            assert_eq!(with_certificate.len(), 4);
+            assert_eq!(with_certificate.0.len(), 4);
 
             let with_password = config
                 .expand(&tedge_config, AuthMethod::Password, None)
                 .unwrap();
 
-            assert_eq!(with_password.len(), 0);
+            assert_eq!(with_password.0.len(), 0);
         }
 
         #[test]

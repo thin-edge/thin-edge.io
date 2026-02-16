@@ -176,7 +176,7 @@ impl MaybeBorrowedCloud<'_> {
         }
     }
 
-    pub fn bridge_config_filename(&self) -> Cow<'static, str> {
+    pub fn mosquitto_config_filename(&self) -> Cow<'static, str> {
         match self {
             #[cfg(feature = "c8y")]
             Self::C8y(None) => "c8y-bridge.conf".into(),
