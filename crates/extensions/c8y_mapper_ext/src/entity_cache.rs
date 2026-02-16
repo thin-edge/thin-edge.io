@@ -1,4 +1,5 @@
-use std::collections::hash_map::Entry;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
@@ -9,6 +10,8 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::pending_entity_store::PendingEntityStore;
 use tedge_api::pending_entity_store::RegisteredEntityData;
+use tedge_flows::FlowContextHandle;
+use tedge_flows::JsonValue;
 use tedge_mqtt_ext::MqttMessage;
 use thiserror::Error;
 use tracing::debug;
@@ -50,10 +53,12 @@ pub enum Error {
     NonDefaultTopicScheme(EntityTopicId),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "FlowContextEntity")]
+#[serde(into = "FlowContextEntity")]
 pub struct CloudEntityMetadata {
     pub external_id: EntityExternalId,
-    pub metadata: EntityMetadata,
+    metadata: EntityMetadata,
 }
 
 impl CloudEntityMetadata {
@@ -62,6 +67,34 @@ impl CloudEntityMetadata {
             external_id,
             metadata,
         }
+    }
+
+    pub fn topic_id(&self) -> &EntityTopicId {
+        &self.metadata.topic_id
+    }
+
+    pub fn r#type(&self) -> EntityType {
+        self.metadata.r#type
+    }
+
+    pub fn parent(&self) -> Option<&EntityTopicId> {
+        self.metadata.parent.as_ref()
+    }
+
+    pub fn display_name(&self) -> &str {
+        self.metadata
+            .display_name()
+            .unwrap_or_else(|| self.external_id.as_ref())
+    }
+
+    pub fn display_type(&self) -> &str {
+        self.metadata
+            .display_type()
+            .unwrap_or(match self.metadata.r#type {
+                EntityType::MainDevice => "thin-edge.io",
+                EntityType::ChildDevice => "thin-edge.io-child",
+                EntityType::Service => "service",
+            })
     }
 }
 
@@ -88,18 +121,15 @@ pub enum UpdateOutcome {
 /// until those parents are registered as well.
 /// Once the parent is registered, the pending child entities are also registered along with it.
 pub(crate) struct EntityCache {
-    main_device_tid: EntityTopicId,
-    main_device_xid: EntityExternalId,
     external_id_mapper_fn: ExternalIdMapperFn,
     external_id_validator_fn: ExternalIdValidatorFn,
-
-    entities: HashMap<EntityTopicId, CloudEntityMetadata>,
-    external_id_map: HashMap<EntityExternalId, EntityTopicId>,
+    entities: EntityIndexes,
     pub pending_entities: PendingEntityStore,
 }
 
 impl EntityCache {
     pub(crate) fn new<MF, SF>(
+        flow_context: FlowContextHandle,
         mqtt_schema: MqttSchema,
         main_device_tid: EntityTopicId,
         main_device_xid: EntityExternalId,
@@ -113,16 +143,8 @@ impl EntityCache {
         SF: Fn(&str) -> Result<EntityExternalId, InvalidExternalIdError>,
         SF: 'static + Send + Sync,
     {
-        let main_device_metadata = CloudEntityMetadata::new(
-            main_device_xid.clone(),
-            EntityMetadata::main_device(Some(main_device_xid.clone())),
-        );
-
         Self {
-            main_device_xid: main_device_xid.clone(),
-            main_device_tid: main_device_tid.clone(),
-            entities: HashMap::from([(main_device_tid.clone(), main_device_metadata)]),
-            external_id_map: HashMap::from([(main_device_xid, main_device_tid)]),
+            entities: EntityIndexes::new(flow_context, main_device_tid, main_device_xid),
             pending_entities: PendingEntityStore::new(mqtt_schema, telemetry_cache_size),
             external_id_mapper_fn: Box::new(external_id_mapper_fn),
             external_id_validator_fn: Box::new(external_id_validator_fn),
@@ -136,13 +158,12 @@ impl EntityCache {
     /// Return Unchanged if the entity not affected by this call
     pub fn upsert(&mut self, entity: EntityRegistrationMessage) -> Result<UpdateOutcome, Error> {
         let topic_id = entity.topic_id.clone();
-        let previous = self.entities.entry(entity.topic_id.clone());
-        let outcome = match previous {
-            Entry::Occupied(current) => {
-                let existing_entity = current.get().metadata.clone();
+        let outcome = match self.entities.get(&topic_id) {
+            Some(current) => {
+                let existing_entity = current.metadata.clone();
                 self.update(entity, existing_entity)?
             }
-            Entry::Vacant(_) => {
+            None => {
                 if !self.insert(entity.clone())? {
                     return Ok(UpdateOutcome::Unchanged);
                 }
@@ -173,16 +194,16 @@ impl EntityCache {
             EntityType::ChildDevice => entity
                 .parent
                 .clone()
-                .or_else(|| Some(self.main_device_tid.clone())),
+                .or_else(|| Some(self.entities.main_device_tid.clone())),
             EntityType::Service => entity
                 .parent
                 .clone()
                 .or_else(|| entity.topic_id.default_service_parent_identifier())
-                .or_else(|| Some(self.main_device_tid.clone())),
+                .or_else(|| Some(self.entities.main_device_tid.clone())),
         };
 
         if entity.r#type != EntityType::MainDevice
-            && !self.entities.contains_key(
+            && !self.entities.contains(
                 parent
                     .as_ref()
                     .expect("At least a default parent exists for child entities"),
@@ -197,7 +218,7 @@ impl EntityCache {
         let external_id = if let Some(id) = entity.external_id {
             (self.external_id_validator_fn)(id.as_ref())?
         } else if entity.r#type == EntityType::MainDevice {
-            self.main_device_xid.clone()
+            self.entities.main_device_xid.clone()
         } else {
             (self.external_id_mapper_fn)(&entity.topic_id, self.main_device_external_id())
         };
@@ -215,7 +236,6 @@ impl EntityCache {
             topic_id.clone(),
             CloudEntityMetadata::new(external_id.clone(), entity_metadata),
         );
-        self.external_id_map.insert(external_id, topic_id);
 
         Ok(true)
     }
@@ -248,7 +268,7 @@ impl EntityCache {
         let updated_entity = EntityMetadata {
             topic_id: topic_id.clone(),
             external_id: existing_entity.external_id.clone(),
-            r#type: existing_entity.r#type.clone(),
+            r#type: existing_entity.r#type,
             parent: entity
                 .parent
                 .clone()
@@ -280,32 +300,31 @@ impl EntityCache {
     }
 
     pub(crate) fn delete(&mut self, topic_id: &EntityTopicId) -> Option<CloudEntityMetadata> {
-        let entity = self.entities.remove(topic_id);
-        if let Some(entity) = &entity {
-            self.external_id_map.remove(&entity.external_id);
-        }
-        entity
+        self.entities.remove(topic_id)
     }
 
     pub fn update_twin_data(&mut self, twin_message: EntityTwinMessage) -> Result<bool, Error> {
         let fragment_key = twin_message.fragment_key.clone();
         let fragment_value = twin_message.fragment_value.clone();
-        let entity = self.try_get_mut(&twin_message.topic_id)?;
-        if fragment_value.is_null() {
-            let existing = entity.metadata.twin_data.remove(&fragment_key);
-            if existing.is_none() {
-                return Ok(false);
-            }
-        } else {
-            let existing = entity
-                .metadata
-                .twin_data
-                .insert(fragment_key, fragment_value.clone());
-            if existing.is_some_and(|v| v.eq(&fragment_value)) {
-                return Ok(false);
+        {
+            let entity = self.try_get_mut(&twin_message.topic_id)?;
+            if fragment_value.is_null() {
+                let existing = entity.metadata.twin_data.remove(&fragment_key);
+                if existing.is_none() {
+                    return Ok(false);
+                }
+            } else {
+                let existing = entity
+                    .metadata
+                    .twin_data
+                    .insert(fragment_key, fragment_value.clone());
+                if existing.is_some_and(|v| v.eq(&fragment_value)) {
+                    return Ok(false);
+                }
             }
         }
 
+        self.update_flow_context(&twin_message.topic_id);
         Ok(true)
     }
 
@@ -313,9 +332,7 @@ impl EntityCache {
         &self,
         topic_id: &EntityExternalId,
     ) -> Option<&CloudEntityMetadata> {
-        self.external_id_map
-            .get(topic_id)
-            .and_then(|topic_id| self.entities.get(topic_id))
+        self.entities.get_by_external_id(topic_id)
     }
 
     /// Returns information about an entity under a given MQTT entity topic identifier.
@@ -364,7 +381,7 @@ impl EntityCache {
 
     /// Returns the external id of the main device.
     pub fn main_device_external_id(&self) -> &EntityExternalId {
-        &self.main_device_xid
+        &self.entities.main_device_xid
     }
 
     /// Returns the external id of the parent of the given entity.
@@ -388,10 +405,168 @@ impl EntityCache {
     }
 
     pub fn get_all_external_ids(&self) -> Vec<EntityExternalId> {
+        self.entities.external_ids()
+    }
+
+    fn update_flow_context(&self, topic_id: &EntityTopicId) {
+        let Some(entity) = self.get(topic_id) else {
+            return;
+        };
+        self.entities.update_context(topic_id, entity.clone())
+    }
+
+    #[cfg(test)]
+    pub fn flow_context(&self) -> &FlowContextHandle {
+        &self.entities.flow_context
+    }
+}
+
+#[derive(Debug)]
+struct EntityIndexes {
+    main_device_tid: EntityTopicId,
+    main_device_xid: EntityExternalId,
+    entities: HashMap<EntityTopicId, CloudEntityMetadata>,
+    external_id_map: HashMap<EntityExternalId, EntityTopicId>,
+    flow_context: FlowContextHandle,
+}
+
+impl EntityIndexes {
+    pub fn new(
+        flow_context: FlowContextHandle,
+        main_device_tid: EntityTopicId,
+        main_device_xid: EntityExternalId,
+    ) -> Self {
+        let mut indexes = EntityIndexes {
+            main_device_tid: main_device_tid.clone(),
+            main_device_xid: main_device_xid.clone(),
+            entities: HashMap::new(),
+            external_id_map: HashMap::new(),
+            flow_context,
+        };
+        let main_device_metadata = CloudEntityMetadata::new(
+            main_device_xid.clone(),
+            EntityMetadata::main_device(Some(main_device_xid)),
+        );
+        indexes.insert(main_device_tid, main_device_metadata);
+        indexes
+    }
+
+    pub fn insert(&mut self, topic_id: EntityTopicId, metadata: CloudEntityMetadata) {
+        let external_id = metadata.external_id.clone();
+        self.entities.insert(topic_id.clone(), metadata.clone());
+        self.external_id_map.insert(external_id, topic_id.clone());
+        self.update_context(&topic_id, metadata);
+    }
+
+    pub fn remove(&mut self, topic_id: &EntityTopicId) -> Option<CloudEntityMetadata> {
+        let entity = self.entities.remove(topic_id);
+        if let Some(entity) = self.entities.remove(topic_id) {
+            self.external_id_map.remove(&entity.external_id);
+            self.clear_context(topic_id, &entity.external_id);
+        }
+        entity
+    }
+
+    pub fn contains(&self, topic_id: &EntityTopicId) -> bool {
+        self.entities.contains_key(topic_id)
+    }
+
+    fn get(&self, entity_topic_id: &EntityTopicId) -> Option<&CloudEntityMetadata> {
+        self.entities.get(entity_topic_id)
+    }
+
+    fn get_mut(&mut self, entity_topic_id: &EntityTopicId) -> Option<&mut CloudEntityMetadata> {
+        self.entities.get_mut(entity_topic_id)
+    }
+
+    fn get_by_external_id(&self, external_id: &EntityExternalId) -> Option<&CloudEntityMetadata> {
+        self.external_id_map
+            .get(external_id)
+            .and_then(|topic_id| self.entities.get(topic_id))
+    }
+
+    pub fn external_ids(&self) -> Vec<EntityExternalId> {
         let mut ids: Vec<EntityExternalId> =
             self.external_id_map.keys().map(Clone::clone).collect();
         ids.sort();
         ids
+    }
+
+    fn update_context(&self, topic_id: &EntityTopicId, entity: CloudEntityMetadata) {
+        let external_id = entity.external_id.clone();
+        if let Ok(json_data) = JsonValue::from_value(entity) {
+            self.flow_context
+                .set_value(topic_id.as_str(), json_data.clone());
+            self.flow_context.set_value(external_id.as_ref(), json_data);
+        }
+    }
+
+    fn clear_context(&self, topic_id: &EntityTopicId, external_id: &EntityExternalId) {
+        self.flow_context
+            .set_value(topic_id.as_str(), JsonValue::Null);
+        self.flow_context
+            .set_value(external_id.as_ref(), JsonValue::Null)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct FlowContextEntity {
+    #[serde(rename = "@id")]
+    pub external_id: EntityExternalId,
+
+    #[serde(rename = "@topic-id")]
+    pub topic_id: EntityTopicId,
+
+    #[serde(rename = "@type")]
+    pub r#type: EntityType,
+
+    #[serde(rename = "@parent", skip_serializing_if = "Option::is_none")]
+    pub parent: Option<EntityTopicId>,
+
+    #[serde(rename = "@name")]
+    pub display_name: String,
+
+    #[serde(rename = "@type-name")]
+    pub display_type: String,
+
+    #[serde(rename = "@health", skip_serializing_if = "Option::is_none")]
+    pub health_endpoint: Option<EntityTopicId>,
+}
+
+impl From<FlowContextEntity> for CloudEntityMetadata {
+    fn from(context: FlowContextEntity) -> Self {
+        let external_id = context.external_id;
+        let mut twin_data = serde_json::Map::new();
+
+        twin_data.insert("name".to_string(), context.display_name.into());
+        twin_data.insert("type".to_string(), context.display_type.into());
+
+        let metadata = EntityMetadata {
+            topic_id: context.topic_id,
+            parent: context.parent,
+            r#type: context.r#type,
+            external_id: Some(external_id.clone()),
+            health_endpoint: context.health_endpoint,
+            twin_data,
+        };
+
+        CloudEntityMetadata::new(external_id, metadata)
+    }
+}
+
+impl From<CloudEntityMetadata> for FlowContextEntity {
+    fn from(entity: CloudEntityMetadata) -> Self {
+        let display_name = entity.display_name().to_owned();
+        let display_type = entity.display_type().to_owned();
+        FlowContextEntity {
+            external_id: entity.external_id,
+            topic_id: entity.metadata.topic_id,
+            r#type: entity.metadata.r#type,
+            parent: entity.metadata.parent,
+            display_name,
+            display_type,
+            health_endpoint: entity.metadata.health_endpoint,
+        }
     }
 }
 
@@ -410,6 +585,7 @@ mod tests {
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
+    use tedge_flows::FlowContextHandle;
 
     #[test]
     fn external_id_generation() {
@@ -533,7 +709,9 @@ mod tests {
     }
 
     fn new_entity_cache() -> EntityCache {
+        let flow_context = FlowContextHandle::default();
         EntityCache::new(
+            flow_context,
             MqttSchema::default(),
             EntityTopicId::default_main_device(),
             "test-device".into(),

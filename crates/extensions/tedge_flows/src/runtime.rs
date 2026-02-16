@@ -1,7 +1,8 @@
 use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::flow::SourceTag;
-use crate::js_lib::kv_store::MAPPER_NAMESPACE;
+use crate::js_lib::kv_store::FlowContext;
+use crate::js_lib::kv_store::FlowContextHandle;
 use crate::js_runtime::JsRuntime;
 use crate::registry::BaseFlowRegistry;
 use crate::registry::FlowRegistryExt;
@@ -30,7 +31,15 @@ impl MessageProcessor<BaseFlowRegistry> {
 
 impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
     pub async fn try_new(registry: Registry) -> Result<Self, LoadError> {
-        let js_runtime = JsRuntime::try_new().await?;
+        let context = FlowContextHandle::default();
+        MessageProcessor::with_context(registry, context).await
+    }
+
+    pub async fn with_context(
+        registry: Registry,
+        context: FlowContextHandle,
+    ) -> Result<Self, LoadError> {
+        let js_runtime = JsRuntime::try_new(context).await?;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
@@ -38,6 +47,10 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
             js_runtime,
             stats,
         })
+    }
+
+    pub fn context_handle(&self) -> FlowContextHandle {
+        self.js_runtime.context_handle()
     }
 
     pub async fn load_all_flows(&mut self) {
@@ -158,8 +171,8 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
     pub fn store_context_value(&mut self, message: &Message) -> Result<(), FlowError> {
         if message.payload.is_empty() {
             self.js_runtime
-                .store
-                .remove(MAPPER_NAMESPACE, &message.topic)
+                .context_handle()
+                .remove(&FlowContext::Mapper, &message.topic)
         } else {
             let payload = message.payload_str().ok_or(FlowError::UnsupportedMessage(
                 "Non UFT8 payload".to_string(),
@@ -167,8 +180,8 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
             let value: serde_json::Value = serde_json::from_str(payload)
                 .map_err(|err| FlowError::UnsupportedMessage(format!("Non JSON payload: {err}")))?;
             self.js_runtime
-                .store
-                .insert(MAPPER_NAMESPACE, &message.topic, value);
+                .context_handle()
+                .insert(&FlowContext::Mapper, &message.topic, value);
         }
 
         Ok(())

@@ -56,15 +56,15 @@ tedge_disconnect_test_sm_services
     Should Contain    ${output}    Disabling tedge-mapper-c8y... ✓
 
 tedge reconnect does not restart agent
-    ${pid_before}=    Execute Command    sudo systemctl show --property MainPID tedge-agent
+    ${pid_before}=    Get Service PID    tedge-agent
     ${output}=    Execute Command    sudo tedge reconnect c8y
-    ${pid_after}=    Execute Command    sudo systemctl show --property MainPID tedge-agent
+    ${pid_after}=    Get Service PID    tedge-agent
     Should Be Equal    ${pid_before}    ${pid_after}
 
 tedge reconnect restarts mapper
-    ${pid_before}=    Execute Command    sudo systemctl show --property MainPID tedge-mapper-c8y
+    ${pid_before}=    Get Service PID    tedge-mapper-c8y
     ${output}=    Execute Command    sudo tedge reconnect c8y
-    ${pid_after}=    Execute Command    sudo systemctl show --property MainPID tedge-mapper-c8y
+    ${pid_after}=    Get Service PID    tedge-mapper-c8y
     Should Not Be Equal    ${pid_before}    ${pid_after}
 
 Check absence of OpenSSL Error messages #3024
