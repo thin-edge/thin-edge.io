@@ -170,10 +170,15 @@ on_error = "failed"
   
 [executing]
   action = "proceed"
+  on_success = "download"
+
+[download]
+  action = "download"
+  input.url = "${.payload.remoteUrl}"
   on_success = "install"
 
 [install]
-  script = "/usr/bin/firmware_handler.sh install ${.payload.url}"
+  script = "/usr/bin/firmware_handler.sh install ${.payload.downloadedPath}"
   on_success = "reboot"
 
 [reboot]
@@ -539,6 +544,33 @@ on_success = "successful_config_update"
 on_error = { status = "failed", reason = "fail to update the config"}
 ```
 
+#### Download
+
+The `download` action is a builtin action to download files from a URL.
+It can be used by any workflow that needs to download a file.
+
+The target URL for the download can be specified via the `input` excerpt:
+- `input.url = "${.payload.serverUrl}"` extracts the `serverUrl` from the command payload.
+
+If `input.url` is not provided or empty, the action defaults to `tedgeUrl` in the payload.
+If that is also unavailable, it then falls back to `remoteUrl`.
+
+The downloaded file path is captured into `downloadedPath` in the payload,
+to be used from the subsequent states.
+
+```toml
+[download]
+action = "download"
+input.url = "${.payload.remoteUrl}"
+on_success = "install"
+on_error = { status = "failed", reason = "Download failed" }
+
+[install]
+script = "/usr/bin/install-config.sh ${.payload.downloadedPath}"
+on_success = "successful"
+on_error = "failed"
+```
+
 #### Cleanup
 
 Used to automatically cleanup the retained command from the MQTT broker after the workflow execution completes.
@@ -607,7 +639,10 @@ For each, there are *two* workflows: an internal workflow and a customized versi
     (e.g. `builtin:software_update` can only be invoked from `software_update`).
 
 In order to customize a builtin operation, the first step is to materialize its definition in `/etc/tedge/operations`.
-For instance, here is the builtin workflow for the `software_update` operation:
+
+#### Software Update
+
+Here is the builtin workflow for the `software_update` operation:
 
 ```toml title="/etc/tedge/operations/software_update.toml"
 operation = "software_update"            # any builtin operation can be customized
@@ -671,3 +706,40 @@ action = "cleanup"                                        # terminal steps canno
 action = "cleanup"
 ```
 
+#### Configuration Update
+
+Here is the builtin workflow for the `config_update` operation:
+
+```toml title="/etc/tedge/operations/config_update.toml"
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "download"
+
+[download]
+action = "download"
+on_success = "set"
+on_error = "failed"
+
+[set]
+action = "builtin:config_update:set"
+input.setFrom = "${.payload.downloadedPath}"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+```
+
+The updated configuration file downloaded in the `download` state
+is set in the `set` state using the `builtin:config_update:set` action.
+This builtin action is performed by the __tedge-agent__,
+invoking the `set` command of the corresponding config plugin for that type.
