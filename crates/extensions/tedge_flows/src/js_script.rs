@@ -103,6 +103,7 @@ mod tests {
     use crate::steps::FlowStep;
     use serde_json::json;
     use std::time::Duration;
+    use tedge_mqtt_ext::MqttMessage;
 
     #[tokio::test]
     async fn identity_script() {
@@ -650,6 +651,32 @@ export function onMessage(message, context) {
             runtime.context_handle().get(&FlowContext::Mapper, "bar"),
             JsonValue::Null
         );
+    }
+
+    #[tokio::test]
+    async fn setting_protocol_specific_properties() {
+        let js = r#"
+export function onMessage(message) {
+    message.mqtt = {
+        "qos": 2,
+        "retain": true,
+    };
+    return message
+}
+        "#;
+        let (runtime, mut script) = runtime_with(js).await;
+
+        let input = Message::new("foo/bar", "some message");
+        let output = script
+            .on_message(&runtime, SystemTime::now(), &input)
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+
+        let mqtt_message = MqttMessage::try_from(output).unwrap();
+        assert_eq!(mqtt_message.qos, tedge_mqtt_ext::QoS::ExactlyOnce,);
+        assert!(mqtt_message.retain,);
     }
 
     async fn runtime_with(js: &str) -> (JsRuntime, FlowStep) {

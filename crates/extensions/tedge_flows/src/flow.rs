@@ -127,6 +127,7 @@ pub struct Message {
 
 #[derive(Clone, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
 pub enum Transport {
+    #[serde(rename = "mqtt")]
     Mqtt {
         #[serde(
             serialize_with = "tedge_mqtt_ext::serialize_qos",

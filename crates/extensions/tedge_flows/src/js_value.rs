@@ -1,11 +1,13 @@
 use crate::flow::epoch_ms;
 use crate::flow::FlowError;
 use crate::flow::Message;
+use crate::Transport;
 use rquickjs::Ctx;
 use rquickjs::FromJs;
 use rquickjs::IntoJs;
 use rquickjs::Value;
 use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
 use serde_json::Number;
@@ -176,13 +178,13 @@ impl From<JsonValue> for serde_json::Value {
 impl TryFrom<BTreeMap<String, JsonValue>> for Message {
     type Error = FlowError;
 
-    fn try_from(value: BTreeMap<String, JsonValue>) -> Result<Self, Self::Error> {
-        let Some(JsonValue::String(topic)) = value.get("topic") else {
+    fn try_from(mut value: BTreeMap<String, JsonValue>) -> Result<Self, Self::Error> {
+        let Some(JsonValue::String(topic)) = value.remove("topic") else {
             return Err(anyhow::anyhow!("Message is missing the 'topic' property").into());
         };
-        let payload = match value.get("payload") {
-            Some(JsonValue::String(payload)) => payload.to_owned().into_bytes(),
-            Some(JsonValue::Bytes(payload)) => payload.to_owned(),
+        let payload = match value.remove("payload") {
+            Some(JsonValue::String(payload)) => payload.into_bytes(),
+            Some(JsonValue::Bytes(payload)) => payload,
             None => return Err(anyhow::anyhow!("Message is missing the 'payload' property").into()),
             _ => {
                 return Err(anyhow::anyhow!(
@@ -192,11 +194,15 @@ impl TryFrom<BTreeMap<String, JsonValue>> for Message {
             }
         };
 
+        value.remove("time");
+        value.remove("raw_payload");
+        let transport = OptionalTransport::from_value(value)?;
+
         Ok(Message {
-            topic: topic.to_owned(),
+            topic,
             payload,
             timestamp: None,
-            transport: None,
+            transport,
         })
     }
 }
@@ -226,6 +232,21 @@ impl TryFrom<JsonValue> for Vec<Message> {
                 anyhow::anyhow!("Flow scripts are expected to return an array of messages").into(),
             ),
         }
+    }
+}
+
+#[derive(Deserialize)]
+struct OptionalTransport(Transport);
+
+impl OptionalTransport {
+    fn from_value(value: BTreeMap<String, JsonValue>) -> Result<Option<Transport>, FlowError> {
+        if value.is_empty() {
+            return Ok(None);
+        }
+        let transport = JsonValue::Object(value)
+            .into_value::<OptionalTransport>()
+            .map_err(|err| anyhow::anyhow!("Unexpected transport data: {err}"))?;
+        Ok(Some(transport.0))
     }
 }
 
