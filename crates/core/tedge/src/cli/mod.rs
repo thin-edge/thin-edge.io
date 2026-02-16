@@ -25,7 +25,6 @@ pub mod config;
 mod connect;
 mod diag;
 mod disconnect;
-#[cfg(feature = "tedge-flows")]
 mod flows;
 mod http;
 mod init;
@@ -148,7 +147,6 @@ pub enum TEdgeOpt {
     Http(http::TEdgeHttpCli),
 
     /// Monitor and test flows
-    #[cfg(feature = "tedge-flows")]
     #[clap(subcommand)]
     Flows(flows::TEdgeFlowsCli),
 
@@ -229,7 +227,6 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Mqtt(opt) => opt.build_command(config).await,
             TEdgeOpt::Http(opt) => opt.build_command(config).await,
             TEdgeOpt::Reconnect(opt) => opt.build_command(config).await,
-            #[cfg(feature = "tedge-flows")]
             TEdgeOpt::Flows(opt) => opt.build_command(config).await,
             TEdgeOpt::Bridge(opt) => opt.build_command(config).await,
             TEdgeOpt::Run(_) => {
