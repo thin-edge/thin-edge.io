@@ -13,6 +13,7 @@ Test Tags           theme:configuration    theme:childdevices
 
 *** Variables ***
 ${PARENT_SN}    ${EMPTY}
+${PARENT_IP}    ${EMPTY}
 ${CHILD_SN}     ${EMPTY}
 
 
@@ -627,14 +628,20 @@ Update configuration plugin config via local filesystem move (same directory)
     Operation Should Be SUCCESSFUL    ${operation}
 
 Customize config operations
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom_config_snapshot.toml    /etc/tedge/operations/
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom_config_update.toml    /etc/tedge/operations/
+    Execute Command    mv /etc/tedge/operations/config_update.toml /etc/tedge/operations/config_update.toml.bak
+
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/custom_config_snapshot.toml
+    ...    /etc/tedge/operations/config_snapshot.toml
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom_config_update.toml    /etc/tedge/operations/config_update.toml
+
     Restart Service    tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
 Restore config operations
-    Execute Command    rm -f /etc/tedge/operations/custom_config_snapshot.toml
-    Execute Command    rm -f /etc/tedge/operations/custom_config_update.toml
+    Execute Command    rm -f /etc/tedge/operations/config_snapshot.toml
+    Execute Command    rm -f /etc/tedge/operations/config_update.toml
+    Execute Command    mv /etc/tedge/operations/config_update.toml.bak /etc/tedge/operations/config_update.toml
     Restart Service    tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
@@ -645,10 +652,10 @@ Restore config operations
 Suite Setup
     # Parent
     ${parent_sn}=    Setup    skip_bootstrap=${False}
-    Set Suite Variable    $PARENT_SN    ${parent_sn}
+    VAR    ${PARENT_SN}=    ${parent_sn}    scope=suite
 
     ${parent_ip}=    Get IP Address
-    Set Suite Variable    $PARENT_IP    ${parent_ip}
+    VAR    ${PARENT_IP}=    ${parent_ip}    scope=suite
     Execute Command    sudo tedge config set mqtt.external.bind.address ${parent_ip}
     Execute Command    sudo tedge config set mqtt.external.bind.port 1883
     Execute Command    sudo tedge config set c8y.proxy.bind.address ${parent_ip}

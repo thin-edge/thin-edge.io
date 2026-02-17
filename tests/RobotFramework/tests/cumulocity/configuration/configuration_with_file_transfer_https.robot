@@ -65,7 +65,7 @@ Configuration operation fails when configuration-plugin does not supply client c
     ...    failure_reason=config-manager failed uploading configuration snapshot:.+https://${FTS_IP}:8000/te/v1/files/
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
     Update Configuration Should Fail
-    ...    failure_reason=config-manager failed downloading a file:.+https://${parent_ip}:8001/c8y/inventory/binaries/
+    ...    failure_reason=.+Download failed:.+https://${parent_ip}:8001/c8y/inventory/binaries/
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
 
 Configuration snapshot fails when mapper does not supply client certificate

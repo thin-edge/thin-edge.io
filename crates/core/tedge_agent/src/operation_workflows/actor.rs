@@ -2,11 +2,15 @@ use crate::operation_workflows::message_box::CommandDispatcher;
 use crate::operation_workflows::message_box::SyncSignalDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
 use crate::state_repository::state::AgentStateRepository;
+use crate::Capabilities;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use log::error;
 use log::info;
 use log::warn;
+use serde_json::json;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::process::Output;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -33,13 +37,21 @@ use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::GenericStateUpdate;
 use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::OperationName;
+use tedge_api::workflow::OperationStep;
+use tedge_api::workflow::OperationStepRequest;
+use tedge_api::workflow::OperationStepResponse;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::CommandLog;
+use tedge_downloader_ext::DownloadRequest;
+use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_script_ext::Execute;
 use tokio::time::sleep;
+
+type DownloaderRequest = (String, DownloadRequest);
+type DownloaderResult = (String, DownloadResult);
 
 /// A generic command state that is published by the [TedgeOperationConverterActor]
 /// to itself for further processing .i.e. after a state update
@@ -54,12 +66,19 @@ pub struct WorkflowActor {
     pub(crate) workflow_repository: WorkflowRepository,
     pub(crate) state_repository: AgentStateRepository<CommandBoard>,
     pub(crate) log_dir: Utf8PathBuf,
+    pub(crate) capabilities: Capabilities,
     pub(crate) input_receiver: UnboundedLoggingReceiver<AgentInput>,
     pub(crate) builtin_command_dispatcher: CommandDispatcher,
+    pub(crate) builtin_operation_step_executor: HashMap<
+        (OperationType, OperationStep),
+        ClientMessageBox<OperationStepRequest, OperationStepResponse>,
+    >,
     pub(crate) sync_signal_dispatcher: SyncSignalDispatcher,
     pub(crate) command_sender: DynSender<InternalCommandState>,
     pub(crate) mqtt_publisher: LoggingSender<MqttMessage>,
     pub(crate) script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
+    pub(crate) downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
+    pub(crate) tmp_dir: Utf8PathBuf,
 }
 
 #[async_trait]
@@ -207,6 +226,10 @@ impl WorkflowActor {
         operation: OperationType,
         cmd_id: String,
     ) -> Result<(), RuntimeError> {
+        if !self.is_operation_enabled(&operation) {
+            info!("Ignoring {operation} operation because it is disabled in agent capabilities");
+            return Ok(());
+        }
         let Ok(state) = GenericCommandState::from_command_message(&message) else {
             log::error!("Invalid command payload: {}", &message.topic.name);
             return Ok(());
@@ -254,6 +277,10 @@ impl WorkflowActor {
             log::error!("Unknown command channel: {}", state.topic.name);
             return Ok(());
         };
+        if !self.is_operation_enabled(&operation) {
+            info!("Ignoring {operation} operation because it is disabled in agent capabilities");
+            return Ok(());
+        }
         let mut log_file = self.open_command_log(&state, &operation, &cmd_id);
 
         let action = match self.workflow_repository.get_action(&state) {
@@ -368,6 +395,96 @@ impl WorkflowActor {
                 let output = self.script_runner.await_response(command).await?;
                 log_file.log_script_output(&output).await;
                 Ok(())
+            }
+            OperationAction::Download(input_excerpt, handlers) => {
+                let step = &state.status;
+                info!("Processing {operation} operation {step} step with download builtin action");
+
+                let input = input_excerpt.extract_value_from(&state);
+                let (url, url_source) =
+                    if let Some(url) = GenericCommandState::extract_text_property(&input, "url") {
+                        (url, "input.url")
+                    } else if let Some(url) = state.get_text_property("tedgeUrl") {
+                        (url, "tedgeUrl")
+                    } else if let Some(url) = state.get_text_property("remoteUrl") {
+                        (url, "remoteUrl")
+                    } else {
+                        let err_state = state
+                            .update_with_builtin_action_result(
+                                "download",
+                                Err("No valid URL found in input.url, tedgeUrl, or remoteUrl"
+                                    .to_string()),
+                                handlers,
+                                &mut log_file,
+                            )
+                            .await;
+                        return self.publish_command_state(err_state, &mut log_file).await;
+                    };
+
+                log_file
+                    .log_info(&format!("Using URL from {}: {}", url_source, url))
+                    .await;
+
+                let temp_filename = format!("{operation}_{cmd_id}");
+                let temp_path = self.tmp_dir.join(&temp_filename);
+
+                let download_request = DownloadRequest::new(url, temp_path.as_std_path());
+                let (_topic, download_result) = self
+                    .downloader
+                    .await_response((state.topic.name.clone(), download_request))
+                    .await?;
+
+                let result = match download_result {
+                    Ok(download_response) => {
+                        let downloaded_path = download_response.file_path;
+                        log_file
+                            .log_info(&format!("Downloaded to: {}", downloaded_path.display()))
+                            .await;
+
+                        Ok(json!({"downloadedPath": downloaded_path}))
+                    }
+                    Err(err) => Err(format!("Download failed: {}", err)),
+                };
+                let new_state = state
+                    .update_with_builtin_action_result("download", result, handlers, &mut log_file)
+                    .await;
+                self.publish_command_state(new_state, &mut log_file).await
+            }
+            OperationAction::BuiltInOperationStep(
+                operation_name,
+                operation_step,
+                input_excerpt,
+                handlers,
+            ) => {
+                let action = format!("builtin:{operation_name}:{operation_step}");
+                let input = input_excerpt.extract_value_from(&state);
+                let state = state.update_with_json(input);
+                let step_request = OperationStepRequest {
+                    command_step: operation_step.clone(),
+                    command_state: state.clone(),
+                };
+
+                info!("Processing builtin operation step: {action}");
+
+                let operation_type: OperationType = operation_name.as_str().into();
+                let result = if let Some(handle) = self
+                    .builtin_operation_step_executor
+                    .get_mut(&(operation_type, operation_step.clone()))
+                {
+                    handle
+                        .await_response(step_request)
+                        .await?
+                        .map(|_| Value::Null)
+                } else {
+                    Err(format!(
+                        "No builtin operation step handler registered for {operation} operation {operation_step} step"
+                    ))
+                };
+
+                let new_state = state
+                    .update_with_builtin_action_result(&action, result, handlers, &mut log_file)
+                    .await;
+                self.publish_command_state(new_state, &mut log_file).await
             }
             OperationAction::Operation(sub_operation, input_script, input_excerpt, handlers) => {
                 let next_state = &handlers.on_exec.status;
@@ -634,6 +751,15 @@ impl WorkflowActor {
         match channel {
             Channel::Command { operation, cmd_id } => Ok((operation, cmd_id)),
             _ => Err(CommandTopicError::InvalidCommandTopic),
+        }
+    }
+
+    fn is_operation_enabled(&self, operation: &OperationType) -> bool {
+        match operation {
+            OperationType::ConfigUpdate => self.capabilities.config_update,
+            OperationType::ConfigSnapshot => self.capabilities.config_snapshot,
+            OperationType::LogUpload => self.capabilities.log_upload,
+            _ => true,
         }
     }
 }

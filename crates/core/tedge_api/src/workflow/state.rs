@@ -8,6 +8,7 @@ use crate::workflow::ExitHandlers;
 use crate::workflow::OperationName;
 use crate::workflow::StateExcerptError;
 use crate::workflow::WorkflowExecutionError;
+use crate::CommandLog;
 use crate::CommandStatus;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -242,6 +243,23 @@ impl GenericCommandState {
         self.update_with_json(json_update)
     }
 
+    /// Update the command state with the result of a builtin action
+    pub async fn update_with_builtin_action_result(
+        self,
+        action: &str,
+        result: Result<Value, String>,
+        handlers: ExitHandlers,
+        log_file: &mut CommandLog,
+    ) -> Self {
+        if let Err(error) = result.as_ref() {
+            log_file
+                .log_error(&format!("builtin action '{}' failed: {}", action, error))
+                .await;
+        }
+        let json_update = handlers.state_update_on_result(action, result);
+        self.update_with_json(json_update)
+    }
+
     /// Merge this state into a more complete state overriding all values defined both side
     pub fn merge_into(self, mut state: Self) -> Self {
         state.status = self.status;
@@ -293,8 +311,15 @@ impl GenericCommandState {
         GenericCommandState::extract_text_property(&self.payload, REASON)
     }
 
+    pub fn get_text_property(&self, key: &str) -> Option<&str> {
+        self.payload
+            .get(key)
+            .and_then(|v| v.as_str())
+            .filter(|v| !v.is_empty())
+    }
+
     /// Extract a text property from a Json object
-    fn extract_text_property<'a>(json: &'a Value, property: &str) -> Option<&'a str> {
+    pub fn extract_text_property<'a>(json: &'a Value, property: &str) -> Option<&'a str> {
         json.as_object()
             .and_then(|o| o.get(property))
             .and_then(|v| v.as_str())

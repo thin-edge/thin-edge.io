@@ -193,7 +193,26 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                     ))?;
                     Ok(OperationAction::BuiltIn(exec_handlers, await_handlers))
                 }
-                _ => Err(WorkflowDefinitionError::UnknownAction { action: command }),
+                "download" => {
+                    let handlers = ExitHandlers::try_from(input.handlers)?;
+                    let input_excerpt = input.input.try_into()?;
+                    Ok(OperationAction::Download(input_excerpt, handlers))
+                }
+                _ => {
+                    if let Some(builtin) = command.strip_prefix("builtin:") {
+                        if let Some((operation, step)) = builtin.split_once(':') {
+                            let handlers = ExitHandlers::try_from((input.handlers, defaults))?;
+                            let input_excerpt = input.input.try_into()?;
+                            return Ok(OperationAction::BuiltInOperationStep(
+                                operation.to_string(),
+                                step.to_string(),
+                                input_excerpt,
+                                handlers,
+                            ));
+                        }
+                    }
+                    Err(WorkflowDefinitionError::UnknownAction { action: command })
+                }
             },
         }
     }
@@ -501,7 +520,9 @@ impl FromStr for ExitCodes {
 mod tests {
     use super::*;
     use crate::workflow::GenericStateUpdate;
+    use crate::workflow::StateExcerpt;
     use assert_matches::assert_matches;
+    use serde_json::json;
     use ExitCodes::*;
 
     #[test]
@@ -822,5 +843,84 @@ on_error = "failed"
         let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
         let res = OperationWorkflow::try_from(input);
         assert_matches!(res, Err(WorkflowDefinitionError::InvalidPathExpression(_)));
+    }
+
+    #[test]
+    fn parse_download_action() {
+        let file = r#"
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "download"
+
+[download]
+action = "download"
+input.url = "${.payload.remoteUrl}"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let workflow = OperationWorkflow::try_from(input).unwrap();
+
+        match workflow.states.get("download").unwrap() {
+            OperationAction::Download(input_excerpt, handlers) => {
+                let expected_input = StateExcerpt::from(json!({
+                    "url": "${.payload.remoteUrl}"
+                }));
+                assert_eq!(input_excerpt, &expected_input);
+                // Verify handlers are present
+                assert_eq!(
+                    handlers.state_update_on_exit("download", 0).status,
+                    "successful"
+                );
+            }
+            other => panic!("Expected Download action, but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_config_set_action() {
+        let file = r#"
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "set"
+
+[set]
+action = "builtin:config_update:set"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let workflow = OperationWorkflow::try_from(input).unwrap();
+
+        match workflow.states.get("set").unwrap() {
+            OperationAction::BuiltInOperationStep(operation, step, input_excerpt, handlers) => {
+                // Verify operation and step are correct
+                assert_eq!(operation, "config_update");
+                assert_eq!(step, "set");
+                assert_eq!(input_excerpt, &StateExcerpt::try_from(None).unwrap());
+                // Verify handlers are present
+                assert_eq!(
+                    handlers.state_update_on_exit("config_set", 0).status,
+                    "successful"
+                );
+            }
+            other => panic!("Expected BuiltInOperationStep action, but got {:?}", other),
+        }
     }
 }

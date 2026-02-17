@@ -306,18 +306,27 @@ impl Agent {
         // Mqtt actor
         let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config.clone());
 
+        let mut downloader_actor_builder = DownloaderActor::new(
+            self.config.identity.clone(),
+            self.config.cloud_root_certs.clone(),
+        )
+        .builder();
+        let mut uploader_actor_builder =
+            UploaderActor::new(self.config.identity, self.config.cloud_root_certs).builder();
+
         // Software update actor
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
 
-        // Converter actor
-        let mut converter_actor_builder = WorkflowActorBuilder::new(
+        // Workflow actor
+        let mut workflow_actor_builder = WorkflowActorBuilder::new(
             self.config.operation_config,
             &mut mqtt_actor_builder,
             &mut script_runner,
             &mut fs_watch_actor_builder,
+            &mut downloader_actor_builder,
         );
-        converter_actor_builder.register_builtin_operation(&mut restart_actor_builder);
-        converter_actor_builder.register_builtin_operation(&mut software_update_builder);
+        workflow_actor_builder.register_builtin_operation(&mut restart_actor_builder);
+        workflow_actor_builder.register_builtin_operation(&mut software_update_builder);
 
         // Shutdown on SIGINT
         let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
@@ -348,14 +357,6 @@ impl Agent {
             &self.config.service,
         );
 
-        let mut downloader_actor_builder = DownloaderActor::new(
-            self.config.identity.clone(),
-            self.config.cloud_root_certs.clone(),
-        )
-        .builder();
-        let mut uploader_actor_builder =
-            UploaderActor::new(self.config.identity, self.config.cloud_root_certs).builder();
-
         // Instantiate config manager actor if config_snapshot or both operations are enabled
         let config_actor_builder: Option<ConfigManagerBuilder> =
             if self.config.capabilities.config_snapshot {
@@ -365,22 +366,26 @@ impl Agent {
                     mqtt_device_topic_id: device_topic_id.clone(),
                     tedge_http_host: self.config.tedge_http_host,
                     tmp_path: self.config.tmp_dir.clone(),
+                    ops_dir: self.config.operations_dir.clone(),
                     is_sudo_enabled: self.config.is_sudo_enabled,
                     config_update_enabled: self.config.capabilities.config_update,
                     plugin_dirs: self.config.config_plugin_dirs,
                 })?;
+
                 let mut config_manager = ConfigManagerBuilder::try_new(
-                    manager_config,
+                    manager_config.clone(),
                     &mut fs_watch_actor_builder,
                     &mut downloader_actor_builder,
                     &mut uploader_actor_builder,
                 )
                 .await?;
-                converter_actor_builder.register_builtin_operation(&mut config_manager);
-                converter_actor_builder
+                workflow_actor_builder.register_builtin_operation(&mut config_manager);
+                workflow_actor_builder.register_builtin_operation_step_handler(&mut config_manager);
+                workflow_actor_builder
                     .register_sync_signal_sink(OperationType::ConfigSnapshot, &config_manager);
-                converter_actor_builder
+                workflow_actor_builder
                     .register_sync_signal_sink(OperationType::ConfigUpdate, &config_manager);
+
                 Some(config_manager)
             } else if self.config.capabilities.config_update {
                 warn!("Config_snapshot operation must be enabled to run config_update!");
@@ -409,8 +414,8 @@ impl Agent {
                 &mut uploader_actor_builder,
             )
             .await?;
-            converter_actor_builder.register_builtin_operation(&mut log_actor);
-            converter_actor_builder.register_sync_signal_sink(OperationType::LogUpload, &log_actor);
+            workflow_actor_builder.register_builtin_operation(&mut log_actor);
+            workflow_actor_builder.register_sync_signal_sink(OperationType::LogUpload, &log_actor);
             Some(log_actor)
         } else {
             None
@@ -494,7 +499,7 @@ impl Agent {
         runtime.spawn(restart_actor_builder).await?;
         runtime.spawn(software_update_builder).await?;
         runtime.spawn(script_runner).await?;
-        runtime.spawn(converter_actor_builder).await?;
+        runtime.spawn(workflow_actor_builder).await?;
         runtime.spawn(health_actor).await?;
 
         runtime.run_to_completion().await?;

@@ -1,0 +1,32 @@
+# Uses the builtin download action but overrides config_set with a custom script
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "download"
+
+[download]
+action = "download"
+input.url = "${.payload.remoteUrl}"
+on_success = "set"
+on_error = "failed"
+
+# Overridden set
+[set]
+script = "mv ${.payload.downloadedPath} /etc/tedge/test.conf"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
