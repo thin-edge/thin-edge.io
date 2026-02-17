@@ -1,1 +1,1 @@
-robotframework-devicelibrary[local] @ git+https://github.com/thin-edge/robotframework-devicelibrary.git@1.25.0
+robotframework-devicelibrary[local] @ git+https://github.com/thin-edge/robotframework-devicelibrary.git@d30fbd693077bea2a1a8cc988093948711bfed8f
