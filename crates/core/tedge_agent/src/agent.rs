@@ -317,16 +317,16 @@ impl Agent {
         // Software update actor
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
 
-        // Converter actor
-        let mut converter_actor_builder = WorkflowActorBuilder::new(
+        // Workflow actor
+        let mut workflow_actor_builder = WorkflowActorBuilder::new(
             self.config.operation_config,
             &mut mqtt_actor_builder,
             &mut script_runner,
             &mut fs_watch_actor_builder,
             &mut downloader_actor_builder,
         );
-        converter_actor_builder.register_builtin_operation(&mut restart_actor_builder);
-        converter_actor_builder.register_builtin_operation(&mut software_update_builder);
+        workflow_actor_builder.register_builtin_operation(&mut restart_actor_builder);
+        workflow_actor_builder.register_builtin_operation(&mut software_update_builder);
 
         // Shutdown on SIGINT
         let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
@@ -379,12 +379,11 @@ impl Agent {
                     &mut uploader_actor_builder,
                 )
                 .await?;
-                converter_actor_builder.register_builtin_operation(&mut config_manager);
-                converter_actor_builder
-                    .register_builtin_operation_step_handler(&mut config_manager);
-                converter_actor_builder
+                workflow_actor_builder.register_builtin_operation(&mut config_manager);
+                workflow_actor_builder.register_builtin_operation_step_handler(&mut config_manager);
+                workflow_actor_builder
                     .register_sync_signal_sink(OperationType::ConfigSnapshot, &config_manager);
-                converter_actor_builder
+                workflow_actor_builder
                     .register_sync_signal_sink(OperationType::ConfigUpdate, &config_manager);
 
                 Some(config_manager)
@@ -415,8 +414,8 @@ impl Agent {
                 &mut uploader_actor_builder,
             )
             .await?;
-            converter_actor_builder.register_builtin_operation(&mut log_actor);
-            converter_actor_builder.register_sync_signal_sink(OperationType::LogUpload, &log_actor);
+            workflow_actor_builder.register_builtin_operation(&mut log_actor);
+            workflow_actor_builder.register_sync_signal_sink(OperationType::LogUpload, &log_actor);
             Some(log_actor)
         } else {
             None
@@ -500,7 +499,7 @@ impl Agent {
         runtime.spawn(restart_actor_builder).await?;
         runtime.spawn(software_update_builder).await?;
         runtime.spawn(script_runner).await?;
-        runtime.spawn(converter_actor_builder).await?;
+        runtime.spawn(workflow_actor_builder).await?;
         runtime.spawn(health_actor).await?;
 
         runtime.run_to_completion().await?;

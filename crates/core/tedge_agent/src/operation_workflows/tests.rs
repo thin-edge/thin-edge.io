@@ -803,16 +803,16 @@ async fn spawn_mqtt_operation_converter(
         tmp_dir: tmp_path.into(),
         capabilities: Capabilities::default(),
     };
-    let mut converter_actor_builder = WorkflowActorBuilder::new(
+    let mut workflow_actor_builder = WorkflowActorBuilder::new(
         config,
         &mut mqtt_builder,
         &mut script_builder,
         &mut inotify_builder,
         &mut downloade_builder,
     );
-    converter_actor_builder.register_builtin_operation(&mut restart_builder);
-    converter_actor_builder.register_builtin_operation(&mut software_builder);
-    converter_actor_builder.register_builtin_operation_step_handler(&mut config_builder);
+    workflow_actor_builder.register_builtin_operation(&mut restart_builder);
+    workflow_actor_builder.register_builtin_operation(&mut software_builder);
+    workflow_actor_builder.register_builtin_operation_step_handler(&mut config_builder);
 
     let config_box = config_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
     let software_box = software_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
@@ -821,12 +821,12 @@ async fn spawn_mqtt_operation_converter(
     let downloader_box = downloade_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let _inotify_box = inotify_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
-    let converter_actor = converter_actor_builder.build();
+    let workflow_actor = workflow_actor_builder.build();
     let tmp_dir_guard = Arc::clone(&tmp_dir);
     let actor_handle = tokio::spawn(async move {
         // Keep tmp_dir alive for the full actor lifetime.
         let _tmp_dir_guard = tmp_dir_guard;
-        converter_actor.run().await
+        workflow_actor.run().await
     });
 
     Ok(TestHandler {
