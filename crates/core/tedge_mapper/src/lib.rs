@@ -8,7 +8,6 @@ use crate::az::mapper::AzureMapper;
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
-#[cfg(feature = "tedge-flows")]
 use crate::flows::GenMapper;
 use anyhow::Context;
 use clap::Parser;
@@ -27,7 +26,6 @@ mod az;
 pub mod c8y;
 mod collectd;
 mod core;
-#[cfg(feature = "tedge-flows")]
 mod flows;
 
 /// Set the cloud profile either from the CLI argument or env variable,
@@ -64,7 +62,6 @@ fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
         MapperName::C8y { profile } => Box::new(CumulocityMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
-        #[cfg(feature = "tedge-flows")]
         MapperName::Flows => Box::new(GenMapper),
     }
 }
@@ -115,7 +112,6 @@ pub enum MapperName {
         profile: Option<ProfileName>,
     },
     Collectd,
-    #[cfg(feature = "tedge-flows")]
     Flows,
 }
 
@@ -141,7 +137,6 @@ impl fmt::Display for MapperName {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-c8y@{profile}"),
             MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
-            #[cfg(feature = "tedge-flows")]
             MapperName::Flows => write!(f, "tedge-flows"),
         }
     }
