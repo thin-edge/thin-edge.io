@@ -236,13 +236,6 @@ yansi = { version = "1.0.1", default-features = false, features = [
 ] }
 zeroize = "1.5"
 
-
-# cryptoki uses libloading which tries to link libdl when declaring extern dlopen, but on musl
-# dlopen is directly under libc, so we need to modify the extern block to not link libdl
-# TODO: remove once fix is upstreamed to libloading
-[patch.crates-io]
-libloading = { git = "https://github.com/Bravo555/rust_libloading.git", branch = "0.8.9" }
-
 [profile.release]
 codegen-units = 1
 lto = true
