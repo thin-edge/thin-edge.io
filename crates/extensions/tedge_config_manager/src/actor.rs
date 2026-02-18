@@ -6,6 +6,7 @@ use log::error;
 use log::info;
 use serde_json::json;
 use serde_json::Value;
+use std::str::FromStr;
 use std::sync::Arc;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -58,6 +59,69 @@ pub type ConfigUploadResult = (MqttTopic, UploadResult);
 
 pub type OperationStepRequestEnvelope =
     RequestEnvelope<OperationStepRequest, OperationStepResponse>;
+
+/// Represents the different steps for config management operations
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ConfigOperationStep {
+    Prepare,
+    Set,
+    Apply,
+    Verify,
+    Finalize,
+    Rollback,
+}
+
+impl ConfigOperationStep {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Prepare => "prepare",
+            Self::Set => "set",
+            Self::Apply => "apply",
+            Self::Verify => "verify",
+            Self::Finalize => "finalize",
+            Self::Rollback => "rollback",
+        }
+    }
+
+    pub fn all() -> &'static [ConfigOperationStep] {
+        &[
+            Self::Prepare,
+            Self::Set,
+            Self::Apply,
+            Self::Verify,
+            Self::Finalize,
+            Self::Rollback,
+        ]
+    }
+}
+
+impl FromStr for ConfigOperationStep {
+    type Err = ConfigManagementError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "prepare" => Ok(Self::Prepare),
+            "verify" => Ok(Self::Verify),
+            "set" => Ok(Self::Set),
+            "apply" => Ok(Self::Apply),
+            "finalize" => Ok(Self::Finalize),
+            "rollback" => Ok(Self::Rollback),
+            _ => Err(ConfigManagementError::InvalidOperationStep(s.to_string())),
+        }
+    }
+}
+
+impl AsRef<str> for ConfigOperationStep {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl std::fmt::Display for ConfigOperationStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
 
 fan_in_message_type!(ConfigInput[ConfigOperation, CmdMetaSyncSignal, FsWatchEvent, OperationStepRequestEnvelope] : Debug);
 
@@ -410,17 +474,37 @@ impl ConfigManagerWorker {
         mut req: RequestEnvelope<OperationStepRequest, OperationStepResponse>,
     ) {
         let topic = req.request.command_state.topic.clone();
-        let command_step = req.request.command_step;
+        let command_step = req.request.command_step.clone();
         let command = req.request.command_state;
-        let result = match command_step.as_str() {
-            "set" => self.process_config_set_request(command).await,
-            _ => Err(ConfigManagementError::InvalidOperationStep(
-                command_step.clone(),
-            )),
+
+        let step = match ConfigOperationStep::from_str(command_step.as_str()) {
+            Ok(step) => step,
+            Err(err) => {
+                let response = Err(format!(
+                    "Invalid operation step '{}': {}",
+                    command_step, err
+                ));
+                if let Err(error) = req.reply_to.send(response).await {
+                    error!(
+                        "Failed to send OperationStepResponse for command on topic: {} due to: {}",
+                        topic, error
+                    );
+                }
+                return;
+            }
         };
 
-        let response = result
-            .map_err(|err| format!("config_operation step: '{}' failed: {}", command_step, err));
+        let result = match step {
+            ConfigOperationStep::Prepare => self.process_config_prepare_request(command).await,
+            ConfigOperationStep::Verify => self.process_config_verify_request(command).await,
+            ConfigOperationStep::Set => self.process_config_set_request(command).await,
+            ConfigOperationStep::Apply => self.process_config_apply_request(command).await,
+            ConfigOperationStep::Finalize => self.process_config_finalize_request(command).await,
+            ConfigOperationStep::Rollback => self.process_config_rollback_request(command).await,
+        };
+
+        let response =
+            result.map_err(|err| format!("config_operation step '{}' failed: {}", step, err));
 
         if let Err(error) = req.reply_to.send(response).await {
             error!(
@@ -430,10 +514,48 @@ impl ConfigManagerWorker {
         }
     }
 
+    async fn process_config_prepare_request(
+        &mut self,
+        command: GenericCommandState,
+    ) -> Result<Option<Value>, ConfigManagementError> {
+        let topic = command.topic.clone();
+        let cmd_id = self.extract_command_id(&topic)?;
+        let log_path = command.get_log_path();
+
+        let config_type = command
+            .payload
+            .get("type")
+            .and_then(|v: &Value| v.as_str())
+            .map(|s: &str| s.to_string())
+            .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
+        let from_path = command
+            .payload
+            .get("setFrom")
+            .and_then(|v: &Value| v.as_str())
+            .map(|s: &str| Utf8PathBuf::from(s))
+            .ok_or_else(|| ConfigManagementError::MissingKey("setFrom".to_string()))?;
+
+        // Generate workdir for this operation
+        let work_dir = self.generate_work_dir(&config_type, &cmd_id)?;
+
+        self.execute_config_prepare_step(
+            &topic,
+            &config_type,
+            &from_path,
+            &work_dir,
+            log_path,
+            &cmd_id,
+        )
+        .await?;
+
+        // Return the workdir in the response so it gets merged into the payload
+        Ok(Some(json!({"workDir": work_dir.as_str()})))
+    }
+
     async fn process_config_set_request(
         &mut self,
         command: GenericCommandState,
-    ) -> Result<(), ConfigManagementError> {
+    ) -> Result<Option<Value>, ConfigManagementError> {
         let topic = command.topic.clone();
         let cmd_id = self.extract_command_id(&topic)?;
 
@@ -453,7 +575,126 @@ impl ConfigManagerWorker {
             .ok_or_else(|| ConfigManagementError::MissingKey("setFrom".to_string()))?;
 
         self.execute_config_set_step(&topic, &config_type, &from_path, log_path, &cmd_id)
-            .await
+            .await?;
+        Ok(None)
+    }
+
+    async fn process_config_apply_request(
+        &mut self,
+        command: GenericCommandState,
+    ) -> Result<Option<Value>, ConfigManagementError> {
+        let topic = command.topic.clone();
+        let cmd_id = self.extract_command_id(&topic)?;
+        let log_path = command.get_log_path();
+
+        let config_type = command
+            .payload
+            .get("type")
+            .and_then(|v: &Value| v.as_str())
+            .map(|s: &str| s.to_string())
+            .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
+
+        let work_dir = self.extract_work_dir(&command)?;
+
+        self.execute_config_apply_step(&topic, &config_type, &work_dir, log_path, &cmd_id)
+            .await?;
+        Ok(None)
+    }
+
+    async fn process_config_verify_request(
+        &mut self,
+        command: GenericCommandState,
+    ) -> Result<Option<Value>, ConfigManagementError> {
+        let topic = command.topic.clone();
+        let cmd_id = self.extract_command_id(&topic)?;
+        let log_path = command.get_log_path();
+
+        let config_type = command
+            .payload
+            .get("type")
+            .and_then(|v: &Value| v.as_str())
+            .map(|s: &str| s.to_string())
+            .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
+
+        let work_dir = self.extract_work_dir(&command)?;
+
+        self.execute_config_verify_step(&topic, &config_type, &work_dir, log_path, &cmd_id)
+            .await?;
+        Ok(None)
+    }
+
+    async fn process_config_finalize_request(
+        &mut self,
+        command: GenericCommandState,
+    ) -> Result<Option<Value>, ConfigManagementError> {
+        let topic = command.topic.clone();
+        let cmd_id = self.extract_command_id(&topic)?;
+        let log_path = command.get_log_path();
+
+        let config_type = command
+            .payload
+            .get("type")
+            .and_then(|v: &Value| v.as_str())
+            .map(|s: &str| s.to_string())
+            .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
+
+        let work_dir = self.extract_work_dir(&command)?;
+
+        self.execute_config_finalize_step(&topic, &config_type, &work_dir, log_path, &cmd_id)
+            .await?;
+        Ok(None)
+    }
+
+    async fn process_config_rollback_request(
+        &mut self,
+        command: GenericCommandState,
+    ) -> Result<Option<Value>, ConfigManagementError> {
+        let topic = command.topic.clone();
+        let cmd_id = self.extract_command_id(&topic)?;
+        let log_path = command.get_log_path();
+
+        let config_type = command
+            .payload
+            .get("type")
+            .and_then(|v: &Value| v.as_str())
+            .map(|s: &str| s.to_string())
+            .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
+
+        let work_dir = self.extract_work_dir(&command)?;
+
+        self.execute_config_rollback_step(&topic, &config_type, &work_dir, log_path, &cmd_id)
+            .await?;
+        Ok(None)
+    }
+
+    async fn execute_config_prepare_step(
+        &mut self,
+        _topic: &Topic,
+        config_type: &str,
+        from_path: &Utf8Path,
+        work_dir: &Utf8Path,
+        log_path: Option<Utf8PathBuf>,
+        cmd_id: &str,
+    ) -> Result<(), ConfigManagementError> {
+        let (config_type, plugin_type) = parse_config_type(config_type);
+        let plugin = self
+            .external_plugins
+            .by_plugin_type(plugin_type)
+            .ok_or_else(|| ConfigManagementError::PluginNotFound(plugin_type.to_string()))?;
+
+        let mut command_log = log_path.clone().map(|path| {
+            CommandLog::from_log_path(
+                path,
+                OperationType::ConfigUpdate.to_string(),
+                cmd_id.to_string(),
+            )
+        });
+
+        plugin
+            .prepare(config_type, from_path, work_dir, command_log.as_mut())
+            .await?;
+
+        Ok(())
     }
 
     async fn execute_config_set_step(
@@ -489,6 +730,160 @@ impl ConfigManagerWorker {
         Ok(())
     }
 
+    async fn execute_config_apply_step(
+        &mut self,
+        _topic: &Topic,
+        config_type: &str,
+        work_dir: &Utf8Path,
+        log_path: Option<Utf8PathBuf>,
+        cmd_id: &str,
+    ) -> Result<(), ConfigManagementError> {
+        let (config_type, plugin_type) = parse_config_type(config_type);
+        let plugin = self
+            .external_plugins
+            .by_plugin_type(plugin_type)
+            .ok_or_else(|| ConfigManagementError::PluginNotFound(plugin_type.to_string()))?;
+
+        let mut command_log = log_path.clone().map(|path| {
+            CommandLog::from_log_path(
+                path,
+                OperationType::ConfigUpdate.to_string(),
+                cmd_id.to_string(),
+            )
+        });
+
+        info!(
+            target: "config plugins",
+            "Applying config type: {} with work_dir: {}", config_type, work_dir
+        );
+        plugin
+            .apply(config_type, work_dir, command_log.as_mut())
+            .await?;
+
+        Ok(())
+    }
+
+    async fn execute_config_verify_step(
+        &mut self,
+        _topic: &Topic,
+        config_type: &str,
+        work_dir: &Utf8Path,
+        log_path: Option<Utf8PathBuf>,
+        cmd_id: &str,
+    ) -> Result<(), ConfigManagementError> {
+        let (config_type, plugin_type) = parse_config_type(config_type);
+        let plugin = self
+            .external_plugins
+            .by_plugin_type(plugin_type)
+            .ok_or_else(|| ConfigManagementError::PluginNotFound(plugin_type.to_string()))?;
+
+        let mut command_log = log_path.clone().map(|path| {
+            CommandLog::from_log_path(
+                path,
+                OperationType::ConfigUpdate.to_string(),
+                cmd_id.to_string(),
+            )
+        });
+
+        info!(
+            target: "config plugins",
+            "Verifying config type: {} with work_dir: {}", config_type, work_dir
+        );
+        plugin
+            .verify(config_type, work_dir, command_log.as_mut())
+            .await?;
+
+        Ok(())
+    }
+
+    async fn execute_config_finalize_step(
+        &mut self,
+        _topic: &Topic,
+        config_type: &str,
+        work_dir: &Utf8Path,
+        log_path: Option<Utf8PathBuf>,
+        cmd_id: &str,
+    ) -> Result<(), ConfigManagementError> {
+        let (config_type, plugin_type) = parse_config_type(config_type);
+        let plugin = self
+            .external_plugins
+            .by_plugin_type(plugin_type)
+            .ok_or_else(|| ConfigManagementError::PluginNotFound(plugin_type.to_string()))?;
+
+        let mut command_log = log_path.clone().map(|path| {
+            CommandLog::from_log_path(
+                path,
+                OperationType::ConfigUpdate.to_string(),
+                cmd_id.to_string(),
+            )
+        });
+
+        info!(
+            target: "config plugins",
+            "Finalizing config type: {} with work_dir: {}", config_type, work_dir
+        );
+        plugin
+            .finalize(config_type, work_dir, command_log.as_mut())
+            .await?;
+
+        // Cleanup the work directory
+        if work_dir.exists() {
+            info!(
+                target: "config plugins",
+                "Cleaning up work directory: {}", work_dir
+            );
+            if let Err(err) = std::fs::remove_dir_all(work_dir) {
+                log::warn!("Failed to cleanup work directory {}: {}", work_dir, err);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn execute_config_rollback_step(
+        &mut self,
+        _topic: &Topic,
+        config_type: &str,
+        work_dir: &Utf8Path,
+        log_path: Option<Utf8PathBuf>,
+        cmd_id: &str,
+    ) -> Result<(), ConfigManagementError> {
+        let (config_type, plugin_type) = parse_config_type(config_type);
+        let plugin = self
+            .external_plugins
+            .by_plugin_type(plugin_type)
+            .ok_or_else(|| ConfigManagementError::PluginNotFound(plugin_type.to_string()))?;
+
+        let mut command_log = log_path.clone().map(|path| {
+            CommandLog::from_log_path(
+                path,
+                OperationType::ConfigUpdate.to_string(),
+                cmd_id.to_string(),
+            )
+        });
+
+        info!(
+            target: "config plugins",
+            "Rolling back config type: {} with work_dir: {}", config_type, work_dir
+        );
+        plugin
+            .rollback(config_type, work_dir, command_log.as_mut())
+            .await?;
+
+        // Cleanup the work directory
+        if work_dir.exists() {
+            info!(
+                target: "config plugins",
+                "Cleaning up work directory: {}", work_dir
+            );
+            if let Err(err) = std::fs::remove_dir_all(work_dir) {
+                log::warn!("Failed to cleanup work directory {}: {}", work_dir, err);
+            }
+        }
+
+        Ok(())
+    }
+
     fn extract_command_id(&self, topic: &Topic) -> Result<String, ConfigManagementError> {
         match self.config.mqtt_schema.entity_channel_of(topic) {
             Ok((_, Channel::Command { cmd_id, .. })) => Ok(cmd_id),
@@ -496,6 +891,36 @@ impl ConfigManagerWorker {
                 topic.name.clone(),
             )),
         }
+    }
+
+    /// Generate a unique working directory for a config operation
+    fn generate_work_dir(
+        &self,
+        config_type: &str,
+        cmd_id: &str,
+    ) -> Result<Utf8PathBuf, ConfigManagementError> {
+        let timestamp = OffsetDateTime::now_utc().unix_timestamp();
+        let work_dir = self.config.tmp_path.join(format!(
+            "config_update-{}-{}-{}",
+            config_type.replace(['/', ':', '\\'], "_"),
+            cmd_id,
+            timestamp
+        ));
+        std::fs::create_dir_all(&work_dir)?;
+        Ok(work_dir)
+    }
+
+    /// Extract work_dir from command payload
+    fn extract_work_dir(
+        &self,
+        command: &GenericCommandState,
+    ) -> Result<Utf8PathBuf, ConfigManagementError> {
+        command
+            .payload
+            .get("workDir")
+            .and_then(|v: &Value| v.as_str())
+            .map(Utf8PathBuf::from)
+            .ok_or_else(|| ConfigManagementError::MissingKey("workDir".to_string()))
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), RuntimeError> {
