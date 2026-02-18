@@ -75,31 +75,7 @@ impl Actor for FlowsMapper {
                 InputMessage::WatchEvent(event) => {
                     self.on_input_event(event).await?;
                 }
-                InputMessage::FsWatchEvent(FsWatchEvent::Modified(path)) => {
-                    let Ok(path) = Utf8PathBuf::try_from(path) else {
-                        continue;
-                    };
-                    if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
-                        self.processor.reload_script(path).await;
-                    } else if path.extension() == Some("toml") {
-                        self.processor.add_flow(path.clone()).await;
-                        self.send_updated_subscriptions().await?;
-                        self.update_flow_status(&path).await?;
-                    }
-                }
-                InputMessage::FsWatchEvent(FsWatchEvent::FileDeleted(path)) => {
-                    let Ok(path) = Utf8PathBuf::try_from(path) else {
-                        continue;
-                    };
-                    if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
-                        self.processor.remove_script(path).await;
-                    } else if path.extension() == Some("toml") {
-                        self.processor.remove_flow(path.clone()).await;
-                        self.send_updated_subscriptions().await?;
-                        self.update_flow_status(&path).await?;
-                    }
-                }
-                _ => continue,
+                InputMessage::FsWatchEvent(event) => self.handle_fs_event(event).await?,
             }
         }
 
@@ -421,5 +397,36 @@ impl FlowsMapper {
     ) -> Result<(), RuntimeError> {
         let message = Message::new("", format!("Error in {flow}: {error}"));
         self.publish(flow, vec![message], output).await
+    }
+
+    async fn handle_fs_event(&mut self, event: FsWatchEvent) -> Result<(), RuntimeError> {
+        match event {
+            FsWatchEvent::Modified(path) => {
+                let Ok(path) = Utf8PathBuf::try_from(path) else {
+                    return Ok(());
+                };
+                if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
+                    self.processor.reload_script(path).await;
+                } else if path.extension() == Some("toml") {
+                    self.processor.add_flow(path.clone()).await;
+                    self.send_updated_subscriptions().await?;
+                    self.update_flow_status(&path).await?;
+                }
+            }
+            FsWatchEvent::FileDeleted(path) => {
+                let Ok(path) = Utf8PathBuf::try_from(path) else {
+                    return Ok(());
+                };
+                if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
+                    self.processor.remove_script(path).await;
+                } else if path.extension() == Some("toml") {
+                    self.processor.remove_flow(path.clone()).await;
+                    self.send_updated_subscriptions().await?;
+                    self.update_flow_status(&path).await?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
