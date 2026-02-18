@@ -97,12 +97,12 @@ pub enum FlowOutput {
 /// The final outcome of a sequence of transformations applied by a flow to a message
 pub enum FlowResult {
     Ok {
-        flow: String,
+        flow: Utf8PathBuf,
         messages: Vec<Message>,
         output: FlowOutput,
     },
     Err {
-        flow: String,
+        flow: Utf8PathBuf,
         error: FlowError,
         output: FlowOutput,
     },
@@ -298,12 +298,12 @@ impl Flow {
     pub fn publish(&self, result: Result<Vec<Message>, FlowError>) -> FlowResult {
         match result {
             Ok(messages) => FlowResult::Ok {
-                flow: self.name().to_string(),
+                flow: self.source.clone(),
                 messages,
                 output: self.output.clone(),
             },
             Err(error) => FlowResult::Err {
-                flow: self.name().to_string(),
+                flow: self.source.clone(),
                 error,
                 output: self.errors.clone(),
             },

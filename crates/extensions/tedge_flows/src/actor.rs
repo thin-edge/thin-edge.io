@@ -9,6 +9,7 @@ use crate::runtime::MessageProcessor;
 use crate::InputMessage;
 use crate::Tick;
 use async_trait::async_trait;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use futures::FutureExt;
 use serde_json::json;
@@ -45,7 +46,7 @@ pub struct FlowsMapper {
     pub(super) mqtt_sender: DynSender<MqttMessage>,
     pub(super) watch_request_sender: DynSender<WatchRequest>,
     pub(super) subscriptions: TopicFilter,
-    pub(super) watched_commands: HashSet<String>,
+    pub(super) watched_commands: HashSet<Utf8PathBuf>,
     pub(super) processor: MessageProcessor<ConnectedFlowRegistry>,
     pub(super) next_dump: Instant,
     pub(super) status_topic: Topic,
@@ -83,7 +84,7 @@ impl Actor for FlowsMapper {
                     } else if path.extension() == Some("toml") {
                         self.processor.add_flow(path.clone()).await;
                         self.send_updated_subscriptions().await?;
-                        self.update_flow_status(path.as_str()).await?;
+                        self.update_flow_status(&path).await?;
                     }
                 }
                 InputMessage::FsWatchEvent(FsWatchEvent::FileDeleted(path)) => {
@@ -95,7 +96,7 @@ impl Actor for FlowsMapper {
                     } else if path.extension() == Some("toml") {
                         self.processor.remove_flow(path.clone()).await;
                         self.send_updated_subscriptions().await?;
-                        self.update_flow_status(path.as_str()).await?;
+                        self.update_flow_status(&path).await?;
                     }
                 }
                 _ => continue,
@@ -145,20 +146,22 @@ impl FlowsMapper {
         let mut watch_requests = Vec::new();
         let mut new_watched_commands = HashSet::new();
         for flow in self.processor.registry.flows() {
-            let topic = flow.name();
+            let flow_path = flow.source_path();
             let Some(request) = flow.watch_request() else {
                 continue;
             };
-            if !self.watched_commands.contains(topic) {
+            if !self.watched_commands.contains(flow_path) {
                 info!(target: "flows", "Adding input: {}", flow.as_ref().input);
                 watch_requests.push(request);
             }
-            self.watched_commands.remove(topic);
-            new_watched_commands.insert(topic.to_owned());
+            self.watched_commands.remove(flow_path);
+            new_watched_commands.insert(flow_path.to_owned());
         }
         for old_command in self.watched_commands.drain() {
             info!(target: "flows", "Removing input: {}", old_command);
-            watch_requests.push(WatchRequest::UnWatch { topic: old_command });
+            watch_requests.push(WatchRequest::UnWatch {
+                topic: old_command.to_string(),
+            });
         }
         self.watched_commands = new_watched_commands;
         watch_requests
@@ -168,13 +171,13 @@ impl FlowsMapper {
         let status = "enabled";
         let now = OffsetDateTime::now_utc();
         for flow in self.processor.registry.flows() {
-            let status = self.flow_status(flow.name(), status, &now);
+            let status = self.flow_status(flow.source_path(), status, &now);
             self.mqtt_sender.send(status).await?;
         }
         Ok(())
     }
 
-    async fn update_flow_status(&mut self, flow: &str) -> Result<(), RuntimeError> {
+    async fn update_flow_status(&mut self, flow: &Utf8Path) -> Result<(), RuntimeError> {
         let now = OffsetDateTime::now_utc();
         let status = if self.processor.registry.contains_flow(flow) {
             "updated"
@@ -186,9 +189,9 @@ impl FlowsMapper {
         Ok(())
     }
 
-    fn flow_status(&self, flow: &str, status: &str, time: &OffsetDateTime) -> MqttMessage {
+    fn flow_status(&self, flow: &Utf8Path, status: &str, time: &OffsetDateTime) -> MqttMessage {
         let payload = json!({
-            "flow": flow,
+            "flow": flow.as_str(),
             "status": status,
             "time": time.unix_timestamp(),
         });
@@ -261,18 +264,19 @@ impl FlowsMapper {
     async fn on_input_event(&mut self, event: WatchEvent) -> Result<(), RuntimeError> {
         match event {
             WatchEvent::StdoutLine { topic, line } => {
-                self.on_input_message(topic, line).await?;
+                self.on_input_message(Utf8Path::new(&topic), line).await?;
             }
             WatchEvent::StderrLine { topic, line } => {
                 warn!(target: "flows", "Input command {topic}: {line}");
             }
             WatchEvent::Error { topic, error } => {
                 error!(target: "flows", "Cannot monitor command: {error}");
-                self.on_input_error(&topic, error.into()).await?;
+                self.on_input_error(Utf8Path::new(&topic), error.into())
+                    .await?;
             }
             WatchEvent::EndOfStream { topic } => {
                 error!(target: "flows", "End of input stream: {topic}");
-                self.on_input_eos(&topic).await?
+                self.on_input_eos(Utf8Path::new(&topic)).await?
             }
         }
         Ok(())
@@ -280,16 +284,16 @@ impl FlowsMapper {
 
     async fn on_input_message(
         &mut self,
-        flow_name: String,
+        flow_path: &Utf8Path,
         line: String,
     ) -> Result<(), RuntimeError> {
-        if let Some(flow) = self.processor.registry.flow(&flow_name) {
+        if let Some(flow) = self.processor.registry.flow(flow_path) {
             let topic = flow.input_topic().to_string();
             let timestamp = SystemTime::now();
             let message = Message::new(topic, line);
             if let Some(result) = self
                 .processor
-                .on_flow_input(&flow_name, timestamp, &message)
+                .on_flow_input(flow_path, timestamp, &message)
                 .await
             {
                 self.publish_result(result).await?;
@@ -301,12 +305,12 @@ impl FlowsMapper {
 
     async fn on_input_error(
         &mut self,
-        flow_name: &str,
+        flow_path: &Utf8Path,
         error: FlowError,
     ) -> Result<(), RuntimeError> {
-        let Some((info, flow_error)) = self.processor.registry.flow(flow_name).map(|flow| {
+        let Some((info, flow_error)) = self.processor.registry.flow(flow_path).map(|flow| {
             (
-                format!("Reconnecting input: {flow_name}: {}", flow.as_ref().input),
+                format!("Reconnecting input: {flow_path}: {}", flow.as_ref().input),
                 flow.on_error(error),
             )
         }) else {
@@ -317,7 +321,7 @@ impl FlowsMapper {
         let Some(request) = self
             .processor
             .registry
-            .flow(flow_name)
+            .flow(flow_path)
             .and_then(|flow| flow.watch_request())
         else {
             return Ok(());
@@ -332,10 +336,10 @@ impl FlowsMapper {
         Ok(())
     }
 
-    async fn on_input_eos(&mut self, flow_name: &str) -> Result<(), RuntimeError> {
-        if let Some(flow) = self.processor.registry.flow(flow_name) {
+    async fn on_input_eos(&mut self, flow_path: &Utf8Path) -> Result<(), RuntimeError> {
+        if let Some(flow) = self.processor.registry.flow(flow_path) {
             if let Some(request) = flow.watch_request() {
-                info!(target: "flows", "Reconnecting input: {flow_name}: {}", flow.as_ref().input);
+                info!(target: "flows", "Reconnecting input: {flow_path}: {}", flow.as_ref().input);
                 self.watch_request_sender.send(request).await?
             };
         }
@@ -348,18 +352,18 @@ impl FlowsMapper {
                 flow,
                 messages,
                 output,
-            } => self.publish(flow, messages, &output).await,
+            } => self.publish(&flow, messages, &output).await,
             FlowResult::Err {
                 flow,
                 error,
                 output,
-            } => self.publish_error(flow, error, &output).await,
+            } => self.publish_error(&flow, error, &output).await,
         }
     }
 
     async fn publish(
         &mut self,
-        flow: String,
+        flow: &Utf8Path,
         messages: Vec<Message>,
         output: &FlowOutput,
     ) -> Result<(), RuntimeError> {
@@ -411,7 +415,7 @@ impl FlowsMapper {
 
     async fn publish_error(
         &mut self,
-        flow: String,
+        flow: &Utf8Path,
         error: FlowError,
         output: &FlowOutput,
     ) -> Result<(), RuntimeError> {

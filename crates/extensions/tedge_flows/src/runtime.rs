@@ -94,11 +94,11 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
 
     pub async fn on_flow_input(
         &mut self,
-        flow_name: &str,
+        flow_path: &Utf8Path,
         timestamp: SystemTime,
         message: &Message,
     ) -> Option<FlowResult> {
-        let flow = self.registry.flow_mut(flow_name)?;
+        let flow = self.registry.flow_mut(flow_path)?;
         let started_at = self.stats.runtime_on_message_start();
         let flow_output = flow
             .as_mut()

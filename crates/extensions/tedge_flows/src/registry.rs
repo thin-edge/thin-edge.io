@@ -79,9 +79,9 @@ impl FlowRegistry for BaseFlowRegistry {
 pub trait FlowRegistryExt: FlowRegistry {
     fn config_dir(&self) -> Utf8PathBuf;
 
-    fn contains_flow(&self, flow: &str) -> bool;
-    fn flow(&self, name: &str) -> Option<&Self::Flow>;
-    fn flow_mut(&mut self, name: &str) -> Option<&mut Self::Flow>;
+    fn contains_flow(&self, path: &Utf8Path) -> bool;
+    fn flow(&self, path: &Utf8Path) -> Option<&Self::Flow>;
+    fn flow_mut(&mut self, path: &Utf8Path) -> Option<&mut Self::Flow>;
 
     fn flows(&self) -> impl Iterator<Item = &Self::Flow>;
     fn flows_mut(&mut self) -> impl Iterator<Item = &mut Self::Flow>;
@@ -130,16 +130,16 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         self.store().config_dir.clone()
     }
 
-    fn contains_flow(&self, flow: &str) -> bool {
-        self.store().contains_flow(flow)
+    fn contains_flow(&self, path: &Utf8Path) -> bool {
+        self.store().contains_flow(path)
     }
 
-    fn flow(&self, name: &str) -> Option<&Self::Flow> {
-        self.store().flow(name)
+    fn flow(&self, path: &Utf8Path) -> Option<&Self::Flow> {
+        self.store().flow(path)
     }
 
-    fn flow_mut(&mut self, name: &str) -> Option<&mut Self::Flow> {
-        self.store_mut().flow_mut(name)
+    fn flow_mut(&mut self, path: &Utf8Path) -> Option<&mut Self::Flow> {
+        self.store_mut().flow_mut(path)
     }
 
     fn flows(&self) -> impl Iterator<Item = &Self::Flow> {
@@ -180,7 +180,7 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
     }
 
     async fn remove_flow(&mut self, path: &Utf8Path) {
-        self.store_mut().remove(path.as_str());
+        self.store_mut().remove(path);
         info!(target: "flows", "Removing flow {path}");
     }
 
@@ -283,7 +283,7 @@ pub enum UpdateFlowRegistryError {
 
 pub struct FlowStore<F> {
     config_dir: Utf8PathBuf,
-    flows: HashMap<String, F>,
+    flows: HashMap<Utf8PathBuf, F>,
 }
 
 impl<F> FlowStore<F> {
@@ -298,15 +298,15 @@ impl<F> FlowStore<F> {
         &self.config_dir
     }
 
-    pub fn contains_flow(&self, flow: &str) -> bool {
+    pub fn contains_flow(&self, flow: &Utf8Path) -> bool {
         self.flows.contains_key(flow)
     }
 
-    pub fn flow(&self, name: &str) -> Option<&F> {
+    pub fn flow(&self, name: &Utf8Path) -> Option<&F> {
         self.flows.get(name)
     }
 
-    pub fn flow_mut(&mut self, name: &str) -> Option<&mut F> {
+    pub fn flow_mut(&mut self, name: &Utf8Path) -> Option<&mut F> {
         self.flows.get_mut(name)
     }
 
@@ -321,10 +321,10 @@ impl<F> FlowStore<F> {
 
 impl<F: AsRef<Flow>> FlowStore<F> {
     pub fn insert(&mut self, flow: F) {
-        self.flows.insert(flow.as_ref().name().to_owned(), flow);
+        self.flows.insert(flow.as_ref().source.to_owned(), flow);
     }
 
-    pub fn remove(&mut self, name: &str) -> Option<F> {
-        self.flows.remove(name)
+    pub fn remove(&mut self, flow: &Utf8Path) -> Option<F> {
+        self.flows.remove(flow)
     }
 }
