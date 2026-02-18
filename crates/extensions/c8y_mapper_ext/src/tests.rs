@@ -3276,7 +3276,10 @@ pub(crate) async fn c8y_mapper_builder(
 
     let flows_dir = tedge_flows::flows_dir(tmp_dir.utf8_path(), "c8y", None);
     let flows = c8y_mapper_builder.flow_registry(flows_dir).await.unwrap();
-    let service_config = FlowsMapperConfig::new("te/device/main/service/tedge-mapper-c8y");
+    let service_config = FlowsMapperConfig::new(
+        "te/device/main/service/tedge-mapper-c8y",
+        Duration::from_secs(300),
+    );
 
     let mut flows_mapper = FlowsMapperBuilder::try_new(flows, service_config)
         .await

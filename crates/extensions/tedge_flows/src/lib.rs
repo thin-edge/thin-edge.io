@@ -14,7 +14,6 @@ mod steps;
 mod transformers;
 
 use crate::actor::FlowsMapper;
-use crate::actor::STATS_DUMP_INTERVAL;
 pub use crate::config::ConfigError;
 pub use crate::config::FlowConfig;
 pub use crate::connected_flow::ConnectedFlowRegistry;
@@ -28,9 +27,9 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 pub use js_lib::kv_store::FlowContextHandle;
 pub use js_value::JsonValue;
-use std::collections::HashSet;
 use std::convert::Infallible;
 use std::path::PathBuf;
+use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Builder;
 use tedge_actors::CloneSender;
@@ -52,26 +51,33 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchActorBuilder;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
-use tokio::time::Instant;
 pub use transformers::Transformer;
 
 pub struct FlowsMapperConfig {
     pub(crate) status_topic: Topic,
     pub(crate) stats_publisher: MqttStatsPublisher,
+    pub(crate) stats_dump_interval: Duration,
 }
 
 impl Default for FlowsMapperConfig {
     fn default() -> Self {
-        FlowsMapperConfig::new("te/device/main/service/tedge-mapper-local")
+        FlowsMapperConfig::new(
+            "te/device/main/service/tedge-mapper-local",
+            Duration::from_secs(300),
+        )
     }
 }
 
 impl FlowsMapperConfig {
     /// Panics if the topic prefix is not a valid MQTT topic name
-    pub fn new(topic_prefix: &str) -> Self {
+    pub fn new(topic_prefix: &str, stats_dump_interval: Duration) -> Self {
         let statistics_topic = format!("{topic_prefix}/status/metrics");
         let status_topic = format!("{topic_prefix}/status/flows");
-
+        let stats_dump_interval = if stats_dump_interval < Duration::from_secs(1) {
+            Duration::from_secs(1)
+        } else {
+            stats_dump_interval
+        };
         let stats_publisher = MqttStatsPublisher {
             topic_prefix: statistics_topic,
         };
@@ -79,6 +85,7 @@ impl FlowsMapperConfig {
         FlowsMapperConfig {
             status_topic: Topic::new(&status_topic).unwrap(),
             stats_publisher,
+            stats_dump_interval,
         }
     }
 }
@@ -196,17 +203,14 @@ impl Builder<FlowsMapper> for FlowsMapperBuilder {
 
     fn build(self) -> FlowsMapper {
         let subscriptions = self.topics();
-        let watched_commands = HashSet::new();
-        FlowsMapper {
-            config: self.config,
-            messages: self.message_box.build(),
-            mqtt_sender: self.mqtt_sender,
-            watch_request_sender: self.watch_request_sender,
+        FlowsMapper::new(
+            self.config,
+            self.message_box.build(),
+            self.mqtt_sender,
+            self.watch_request_sender,
             subscriptions,
-            watched_commands,
-            processor: self.processor,
-            next_dump: Instant::now() + STATS_DUMP_INTERVAL,
-        }
+            self.processor,
+        )
     }
 }
 

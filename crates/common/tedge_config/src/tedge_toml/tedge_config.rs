@@ -1364,8 +1364,16 @@ define_tedge_config! {
         /// The directories where configuration plugins are stored
         #[tedge_config(example = "/usr/share/tedge/config-plugins,/usr/local/share/tedge/config-plugins", default(value = "/usr/share/tedge/config-plugins"))]
         plugin_paths: TemplatesSet,
-    }
+    },
 
+    flows: {
+        stats: {
+            /// The interval in seconds between flow statistics dumps
+            #[tedge_config(example = "1h", default(from_str = "1h"))]
+            #[tedge_config(note = "Any value less than one second is rounded up to one second.")]
+            interval: SecondsOrHumanTime,
+        },
+    },
 }
 
 static CLOUD_ROOT_CERTIFICATES: tokio::sync::OnceCell<Arc<[Certificate]>> =

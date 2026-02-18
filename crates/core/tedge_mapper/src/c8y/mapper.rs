@@ -166,7 +166,9 @@ impl TEdgeComponent for CumulocityMapper {
         let flows_dir =
             tedge_flows::flows_dir(cfg_dir, "c8y", self.profile.as_ref().map(|p| p.as_ref()));
         let flows = c8y_mapper_actor.flow_registry(flows_dir).await?;
-        let service_config = FlowsMapperConfig::new(&format!("{te}/{service_topic_id}"));
+        let dump_interval = tedge_config.flows.stats.interval.duration();
+        let service_config =
+            FlowsMapperConfig::new(&format!("{te}/{service_topic_id}"), dump_interval);
 
         let mut flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;
         flows_mapper.connect(&mut mqtt_actor);
