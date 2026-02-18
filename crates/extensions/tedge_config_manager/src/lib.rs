@@ -310,7 +310,10 @@ impl SyncOnCommand for ConfigManagerBuilder {
 
 impl OperationStepHandler for ConfigManagerBuilder {
     fn supported_operation_steps(&self) -> Vec<(OperationType, OperationStep)> {
-        vec![(OperationType::ConfigUpdate, "set".into())]
+        ConfigOperationStep::all()
+            .iter()
+            .map(|step| (OperationType::ConfigUpdate, step.as_str().into()))
+            .collect()
     }
 }
 

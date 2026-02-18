@@ -19,6 +19,7 @@ use mqtt_channel::QoS;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
+use serde_json::Value;
 pub use state::*;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -41,7 +42,7 @@ pub struct OperationStepRequest {
     pub command_state: GenericCommandState,
 }
 
-pub type OperationStepResponse = Result<(), String>;
+pub type OperationStepResponse = Result<Option<Value>, String>;
 
 pub trait OperationStepHandler {
     fn supported_operation_steps(&self) -> Vec<(OperationType, OperationStep)>;

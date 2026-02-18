@@ -1,3 +1,4 @@
+use crate::actor::ConfigOperationStep;
 use crate::error::ConfigManagementError;
 use camino::Utf8Path;
 use std::fs::File;
@@ -11,7 +12,6 @@ use tedge_config::SudoCommandBuilder;
 
 pub const LIST: &str = "list";
 const GET: &str = "get";
-const SET: &str = "set";
 
 #[derive(Debug, Clone)]
 pub struct ExternalPlugin {
@@ -119,15 +119,97 @@ impl ExternalPlugin {
         Ok(())
     }
 
+    pub(crate) async fn prepare(
+        &self,
+        config_type: &str,
+        from_path: &Utf8Path,
+        work_dir: &Utf8Path,
+        command_log: Option<&mut CommandLog>,
+    ) -> Result<(), ConfigManagementError> {
+        let mut command = self.command(ConfigOperationStep::Prepare.as_str())?;
+        command.arg(config_type);
+        command.arg(from_path.as_str());
+        command.arg("--work-dir");
+        command.arg(work_dir.as_str());
+
+        self.execute(command, command_log).await?;
+
+        Ok(())
+    }
+
     pub(crate) async fn set(
         &self,
         config_type: &str,
         config_file_path: &Utf8Path,
         command_log: Option<&mut CommandLog>,
     ) -> Result<(), ConfigManagementError> {
-        let mut command = self.command(SET)?;
+        let mut command = self.command(ConfigOperationStep::Set.as_str())?;
         command.arg(config_type);
         command.arg(config_file_path);
+
+        self.execute(command, command_log).await?;
+
+        Ok(())
+    }
+
+    pub(crate) async fn apply(
+        &self,
+        config_type: &str,
+        work_dir: &Utf8Path,
+        command_log: Option<&mut CommandLog>,
+    ) -> Result<(), ConfigManagementError> {
+        let mut command = self.command(ConfigOperationStep::Apply.as_str())?;
+        command.arg(config_type);
+        command.arg("--work-dir");
+        command.arg(work_dir.as_str());
+
+        self.execute(command, command_log).await?;
+
+        Ok(())
+    }
+
+    pub(crate) async fn verify(
+        &self,
+        config_type: &str,
+        work_dir: &Utf8Path,
+        command_log: Option<&mut CommandLog>,
+    ) -> Result<(), ConfigManagementError> {
+        let mut command = self.command(ConfigOperationStep::Verify.as_str())?;
+        command.arg(config_type);
+        command.arg("--work-dir");
+        command.arg(work_dir.as_str());
+
+        self.execute(command, command_log).await?;
+
+        Ok(())
+    }
+
+    pub(crate) async fn finalize(
+        &self,
+        config_type: &str,
+        work_dir: &Utf8Path,
+        command_log: Option<&mut CommandLog>,
+    ) -> Result<(), ConfigManagementError> {
+        let mut command = self.command(ConfigOperationStep::Finalize.as_str())?;
+        command.arg(config_type);
+        command.arg("--work-dir");
+        command.arg(work_dir.as_str());
+
+        self.execute(command, command_log).await?;
+
+        Ok(())
+    }
+
+    pub(crate) async fn rollback(
+        &self,
+        config_type: &str,
+        work_dir: &Utf8Path,
+        command_log: Option<&mut CommandLog>,
+    ) -> Result<(), ConfigManagementError> {
+        let mut command = self.command(ConfigOperationStep::Rollback.as_str())?;
+        command.arg(config_type);
+        command.arg("--work-dir");
+        command.arg(work_dir.as_str());
 
         self.execute(command, command_log).await?;
 

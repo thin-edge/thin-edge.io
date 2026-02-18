@@ -693,7 +693,7 @@ async fn execute_config_set_operation_step() -> Result<(), anyhow::Error> {
     };
 
     let response = handle.steps.await_response(step_request).await?;
-    assert_eq!(response, Ok(()));
+    assert_eq!(response, Ok(None));
 
     Ok(())
 }

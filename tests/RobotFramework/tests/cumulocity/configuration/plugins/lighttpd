@@ -4,9 +4,14 @@ set -eu
 usage() {
     echo "Usage: $0 <command> [args...]"
     echo "Commands:"
-    echo "  list                                    List all config types supported by this plugin"
-    echo "  get <type>                              Print the config for the specified type to stdout"
-    echo "  set <type> <new-config-path>            Update the config for the specified type from the new config path"
+    echo "  list                                                 List all config types supported by this plugin"
+    echo "  get <type>                                           Print the config for the specified type to stdout"
+    echo "  prepare <type> <new-config-path> --work-dir <dir>    Prepare for configuration update (create backup)"
+    echo "  set <type> <new-config-path>                         Update the config for the specified type from the new config path"
+    echo "  apply <type> --work-dir <dir>                        Apply configuration (restart services)"
+    echo "  verify <type> --work-dir <dir>                       Verify configuration was applied successfully"
+    echo "  finalize <type> --work-dir <dir>                     Finalize configuration update (cleanup)"
+    echo "  rollback <type> --work-dir <dir>                     Rollback configuration to previous state"
     exit 1
 }
 
@@ -17,51 +22,161 @@ list_config_types() {
 get_config() {
     config_type="$1"
 
+    validate_config_type "$config_type"
+
+    # Print the effective configuration, aggregating all config extensions and applying defaults
+    lighttpd -p -f /etc/lighttpd/lighttpd.conf
+}
+
+parse_work_dir() {
+    work_dir=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --work-dir)
+                if [ -z "${2:-}" ]; then
+                    echo "Error: --work-dir requires a value" >&2
+                    exit 1
+                fi
+                work_dir="$2"
+                shift 2
+                ;;
+            *)
+                echo "Error: Unknown argument '$1'" >&2
+                exit 1
+                ;;
+        esac
+    done
+
+    if [ -z "$work_dir" ]; then
+        echo "Error: --work-dir is required" >&2
+        exit 1
+    fi
+
+    echo "$work_dir"
+}
+
+validate_config_type() {
+    config_type="$1"
     if [ "$config_type" != "lighttpd.conf" ]; then
         echo "Error: Unsupported config type '$config_type'" >&2
         exit 1
     fi
+}
 
-    # Print the effective configuration, aggregating all config extensions and applying defaults
-    lighttpd -p -f /etc/lighttpd/lighttpd.conf
+prepare_config() {
+    config_type="$1"
+    new_config_path="$2"
+    shift 2
+
+    validate_config_type "$config_type"
+
+    if [ ! -f "$new_config_path" ]; then
+        echo "Error: New config file not found: $new_config_path" >&2
+        exit 1
+    fi
+
+    # Parse --work-dir argument
+    work_dir=$(parse_work_dir "$@")
+
+    # Verify the new configuration before applying it
+    if ! lighttpd -t -f "$new_config_path" 2>&1; then
+        echo "Error: Configuration validation failed" >&2
+        exit 1
+    fi
+
+    config_path="/etc/lighttpd/lighttpd.conf"
+    backup_path="${work_dir}/lighttpd.conf.backup"
+
+    # Backup existing configuration to work directory
+    if [ -f "$config_path" ]; then
+        cp "$config_path" "$backup_path"
+    fi
 }
 
 set_config() {
     config_type="$1"
     target_config="$2"
     config_path="/etc/lighttpd/lighttpd.conf"
-    backup_path="${config_path}.backup"
 
-    if [ "$config_type" != "lighttpd.conf" ]; then
-        echo "Error: Unsupported config type '$config_type'" >&2
-        exit 1
-    fi
-
-    # Verify the new configuration before applying it
-    if ! lighttpd -t -f "$target_config" 2>&1; then
-        echo "Error: Configuration validation failed" >&2
-        exit 1
-    fi
-
-    # Backup existing configuration
-    if [ -f "$config_path" ]; then
-        cp "$config_path" "$backup_path"
-    fi
+    validate_config_type "$config_type"
 
     # Apply new configuration
     mv "$target_config" "$config_path"
+}
 
-    # Restart the service and check if it succeeded
+apply_config() {
+    config_type="$1"
+    shift
+
+    validate_config_type "$config_type"
+
+    # Parse --work-dir argument
+    work_dir=$(parse_work_dir "$@")
+
+    config_path="/etc/lighttpd/lighttpd.conf"
+    backup_path="${work_dir}/lighttpd.conf.backup"
+
+    # Restart the service
     if ! systemctl restart lighttpd; then
-        echo "Error: Failed to reload lighttpd service, restoring backup" >&2
-        if [ -f "$backup_path" ]; then
-            mv "$backup_path" "$config_path"
-            systemctl reload lighttpd
-        fi
+        echo "Error: Failed to restart lighttpd service" >&2
         exit 1
     fi
+}
 
+verify_config() {
+    config_type="$1"
+    shift
+
+    validate_config_type "$config_type"
+
+    # Parse --work-dir argument
+    work_dir=$(parse_work_dir "$@")
+
+    # Verify the service is running
+    if ! systemctl is-active --quiet lighttpd; then
+        echo "Error: lighttpd service is not running" >&2
+        exit 1
+    fi
+}
+
+finalize_config() {
+    config_type="$1"
+    shift
+
+    validate_config_type "$config_type"
+
+    # Parse --work-dir argument
+    work_dir=$(parse_work_dir "$@")
+
+    backup_path="${work_dir}/lighttpd.conf.backup"
+
+    # Cleanup backup file
     rm -f "$backup_path"
+}
+
+rollback_config() {
+    config_type="$1"
+    shift
+
+    validate_config_type "$config_type"
+
+    # Parse --work-dir argument
+    work_dir=$(parse_work_dir "$@")
+
+    config_path="/etc/lighttpd/lighttpd.conf"
+    backup_path="${work_dir}/lighttpd.conf.backup"
+
+    # Restore backup configuration
+    if [ -f "$backup_path" ]; then
+        mv "$backup_path" "$config_path"
+        if ! systemctl restart lighttpd; then
+            echo "Error: Failed to restart service after rollback" >&2
+            exit 2
+        fi
+    else
+        echo "Error: Backup file not found at $backup_path" >&2
+        exit 1
+    fi
 }
 
 main() {
@@ -83,12 +198,47 @@ main() {
             fi
             get_config "$@"
             ;;
+        prepare)
+            if [ $# -lt 1 ]; then
+                echo "Error: 'prepare' command requires <type> and --work-dir arguments" >&2
+                exit 1
+            fi
+            prepare_config "$@"
+            ;;
         set)
             if [ $# -lt 2 ]; then
                 echo "Error: 'set' command requires <type> and <new-config-path> arguments" >&2
                 exit 1
             fi
             set_config "$@"
+            ;;
+        apply)
+            if [ $# -lt 1 ]; then
+                echo "Error: 'apply' command requires <type> and --work-dir arguments" >&2
+                exit 1
+            fi
+            apply_config "$@"
+            ;;
+        verify)
+            if [ $# -lt 1 ]; then
+                echo "Error: 'verify' command requires <type> and --work-dir arguments" >&2
+                exit 1
+            fi
+            verify_config "$@"
+            ;;
+        finalize)
+            if [ $# -lt 1 ]; then
+                echo "Error: 'finalize' command requires <type> and --work-dir arguments" >&2
+                exit 1
+            fi
+            finalize_config "$@"
+            ;;
+        rollback)
+            if [ $# -lt 1 ]; then
+                echo "Error: 'rollback' command requires <type> and --work-dir arguments" >&2
+                exit 1
+            fi
+            rollback_config "$@"
             ;;
         *)
             echo "Error: Unknown command '$command'" >&2

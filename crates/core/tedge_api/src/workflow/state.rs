@@ -318,6 +318,14 @@ impl GenericCommandState {
             .filter(|v| !v.is_empty())
     }
 
+    pub fn get_path_property(&self, key: &str) -> Option<&Utf8Path> {
+        self.payload
+            .get(key)
+            .and_then(|v| v.as_str())
+            .filter(|v| !v.is_empty())
+            .map(Utf8Path::new)
+    }
+
     /// Extract a text property from a Json object
     pub fn extract_text_property<'a>(json: &'a Value, property: &str) -> Option<&'a str> {
         json.as_object()

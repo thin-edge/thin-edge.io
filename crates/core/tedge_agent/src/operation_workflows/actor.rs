@@ -474,7 +474,7 @@ impl WorkflowActor {
                     handle
                         .await_response(step_request)
                         .await?
-                        .map(|_| Value::Null)
+                        .map(|opt_value| opt_value.unwrap_or(Value::Null))
                 } else {
                     Err(format!(
                         "No builtin operation step handler registered for {operation} operation {operation_step} step"

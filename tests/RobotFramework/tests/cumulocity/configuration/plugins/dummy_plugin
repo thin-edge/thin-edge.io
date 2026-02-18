@@ -1,4 +1,6 @@
 #!/bin/bash
+set -eu
+
 case "$1" in
     "list")
         echo "dummy_config"
@@ -14,11 +16,65 @@ case "$1" in
                 ;;
         esac
         ;;
+    "prepare")
+        case "$2" in
+            "dummy_config")
+                echo "Dummy prepare"
+                ;;
+            *)
+                echo "Unsupported config type \"$2\"" >&2
+                exit 1
+                ;;
+        esac
+        ;;
     "set")
         case "$2" in
             "dummy_config")
-                # Fake config update
                 echo "Config updated successfully"
+                ;;
+            *)
+                echo "Unsupported config type \"$2\"" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    "apply")
+        case "$2" in
+            "dummy_config")
+                echo "Dummy apply"
+                ;;
+            *)
+                echo "Unsupported config type \"$2\"" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    "verify")
+        case "$2" in
+            "dummy_config")
+                echo "Dummy verify"
+                ;;
+            *)
+                echo "Unsupported config type \"$2\"" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    "finalize")
+        case "$2" in
+            "dummy_config")
+                echo "Dummy finalize"
+                ;;
+            *)
+                echo "Unsupported config type \"$2\"" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    "rollback")
+        case "$2" in
+            "dummy_config")
+                echo "Dummy rollback"
                 ;;
             *)
                 echo "Unsupported config type \"$2\"" >&2
