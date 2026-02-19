@@ -223,6 +223,18 @@ Publishing transformation errors
     Should Be Equal As Integers    ${message["b"]["c"]}    6789
     [Teardown]    Uninstall Flow    publish-js-errors.toml
 
+Nested flow directory
+    Install Nested Flow    sensor-flows
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub sensor/temperature 42
+    ${messages}    Should Have MQTT Messages
+    ...    topic=te/sensor
+    ...    minimum=1
+    ...    date_from=${start}
+    ${message}    JSONLibrary.Convert String To Json    ${messages[0]}
+    Should Be Equal As Integers    ${message["temperature"]}    42
+    [Teardown]    Uninstall Nested Flow    sensor-flows
+
 Monitor flow definition updates
     ${start}    Get Unix Timestamp
     Execute Command    touch /etc/tedge/mappers/flows/flows/collectd.toml
@@ -261,6 +273,20 @@ Install Flow
 Uninstall Flow
     [Arguments]    ${definition_file}
     Execute Command    cmd=rm -f /etc/tedge/mappers/flows/flows/${definition_file}
+
+Install Nested Flow
+    [Arguments]    ${directory}
+    ${start}    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/*    /etc/tedge/mappers/flows/flows/${directory}/
+    Execute Command    ls -lh /etc/tedge/mappers/flows/flows/${directory}
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    date_from=${start}
+    ...    message_contains=${directory}
+
+Uninstall Nested Flow
+    [Arguments]    ${directory}
+    Execute Command    cmd=rm -fr /etc/tedge/mappers/flows/flows/${directory}
 
 Configure flows
     # Required by tail-named-pipe.toml
