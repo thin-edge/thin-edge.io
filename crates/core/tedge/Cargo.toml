@@ -28,6 +28,7 @@ clap = { workspace = true }
 clap_complete = { version = "4.5.42", features = ["unstable-dynamic"] }
 doku = { workspace = true }
 flate2 = { workspace = true }
+glob = { workspace = true }
 humantime = { workspace = true }
 hyper = { workspace = true, default-features = false }
 mime_guess = { workspace = true }

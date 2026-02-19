@@ -39,7 +39,7 @@ impl AsMut<Flow> for ConnectedFlow {
 
 impl ConnectedFlow {
     pub fn new(flow: Flow) -> Self {
-        let streaming_source = streaming_source(flow.name().to_owned(), flow.input.clone());
+        let streaming_source = streaming_source(flow.source.to_string(), flow.input.clone());
         let polling_source = polling_source(flow.input.clone());
         ConnectedFlow {
             flow,
@@ -50,6 +50,10 @@ impl ConnectedFlow {
 
     pub fn name(&self) -> &str {
         self.flow.name()
+    }
+
+    pub fn source_path(&self) -> &Utf8Path {
+        &self.flow.source
     }
 
     pub fn input_topic(&self) -> &str {

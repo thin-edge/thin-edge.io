@@ -182,12 +182,45 @@ impl TEdgeFlowsCli {
             .await
             .with_context(|| format!("loading flow {path}"))?;
 
-        if let Some("toml") = path.extension() {
-            processor.load_single_flow(path).await;
+        let resolved_path = if path.is_absolute() {
+            path.clone()
+        } else if tokio::fs::try_exists(path).await.unwrap_or(false) {
+            // Exists relative to current working directory
+            path.canonicalize_utf8().unwrap_or(path.clone())
         } else {
-            processor.load_single_script(path).await;
+            // Try to find the file under flows_dir using glob
+            Self::find_in_flows_dir(flows_dir, path).await?
+        };
+
+        match resolved_path.extension() {
+            Some("toml") => processor.load_single_flow(&resolved_path).await,
+            _ => processor.load_single_script(&resolved_path).await,
         }
         Ok(processor)
+    }
+
+    async fn find_in_flows_dir(
+        flows_dir: &Utf8PathBuf,
+        filename: &Utf8PathBuf,
+    ) -> Result<Utf8PathBuf, Error> {
+        let pattern = format!("{}/**/{}", flows_dir, filename);
+        let files = tokio::task::spawn_blocking(move || {
+            glob::glob(&pattern)
+                .map(|entries| {
+                    entries
+                        .filter_map(Result::ok)
+                        .filter_map(|p| Utf8PathBuf::try_from(p).ok())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        })
+        .await?;
+
+        match files.as_slice() {
+            [] => Ok(filename.to_owned()),
+            [file] => Ok(file.to_owned()),
+            _ => Err(anyhow!("{filename} is ambiguous, matching : {files:?}")),
+        }
     }
 }
 

@@ -1,0 +1,8 @@
+input.mqtt.topics = ["sensor/+"]
+
+steps = [
+    { script = "sensor-to-te.js" },
+]
+
+output.mqtt.topic = "te/sensor"
+errors.mqtt.topic = "te/errors"

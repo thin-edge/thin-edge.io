@@ -8,6 +8,7 @@ use crate::transformers::BuiltinTransformers;
 use crate::LoadError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use glob::glob;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -15,13 +16,18 @@ use std::fmt::Debug;
 use std::time::Duration;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
-use tokio::fs::read_dir;
 use tokio::fs::read_to_string;
 use tracing::error;
 use tracing::info;
 
 #[derive(Deserialize)]
 pub struct FlowConfig {
+    // meta info
+    name: Option<String>,
+    version: Option<String>,
+    description: Option<String>,
+    tags: Option<Vec<String>>,
+
     input: InputConfig,
     #[serde(default)]
     steps: Vec<StepConfig>,
@@ -112,27 +118,35 @@ pub enum ConfigError {
 
 impl FlowConfig {
     pub async fn load_all_flows(config_dir: &Utf8Path) -> HashMap<Utf8PathBuf, FlowConfig> {
-        let mut flows = HashMap::new();
-        let Ok(mut entries) = read_dir(config_dir).await.map_err(
-            |err| error!(target: "flows", "Failed to read flows from {config_dir}: {err}"),
-        ) else {
-            return flows;
-        };
-
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let Some(path) = Utf8Path::from_path(&entry.path()).map(|p| p.to_path_buf()) else {
-                error!(target: "flows", "Skipping non UTF8 path: {}", entry.path().display());
-                continue;
-            };
-            if let Ok(file_type) = entry.file_type().await {
-                if file_type.is_file() {
-                    if let Some("toml") = path.extension() {
-                        info!(target: "flows", "Loading flow: {path}");
-                        if let Some(flow) = FlowConfig::load_single_flow(&path).await {
-                            flows.insert(path.clone(), flow);
+        let pattern = format!("{}/**/*.toml", config_dir);
+        let paths = tokio::task::spawn_blocking(move || {
+            let mut paths = Vec::new();
+            match glob(&pattern) {
+                Ok(entries) => {
+                    for entry in entries.filter_map(Result::ok) {
+                        let Some(path) = Utf8Path::from_path(entry.as_path()).map(|p| p.to_path_buf()) else {
+                            error!(target: "flows", "Skipping non UTF8 path: {}", entry.as_path().display());
+                            continue;
+                        };
+                        if path.is_file() {
+                            paths.push(path);
                         }
                     }
                 }
+                Err(err) => {
+                    error!(target: "flows", "Failed to glob pattern {}: {}", pattern, err);
+                }
+            }
+            paths
+        })
+        .await
+        .unwrap_or_default();
+
+        let mut flows = HashMap::new();
+        for path in paths {
+            info!(target: "flows", "Loading flow: {path}");
+            if let Some(flow) = FlowConfig::load_single_flow(&path).await {
+                flows.insert(path, flow);
             }
         }
         flows
@@ -168,6 +182,10 @@ impl FlowConfig {
             interval: None,
         };
         Self {
+            name: None,
+            version: None,
+            description: None,
+            tags: None,
             input: InputConfig::Mqtt {
                 topics: vec![input_topic],
             },
@@ -181,7 +199,6 @@ impl FlowConfig {
         self,
         rs_transformers: &BuiltinTransformers,
         js_runtime: &mut JsRuntime,
-        config_dir: &Utf8Path,
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
         let input = self.input.try_into()?;
@@ -190,11 +207,18 @@ impl FlowConfig {
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
             let step = step
-                .compile(rs_transformers, js_runtime, config_dir, i, &source)
+                .compile(rs_transformers, js_runtime, i, &source)
                 .await?;
             steps.push(step);
         }
+        let name = self
+            .name
+            .unwrap_or_else(|| source.file_name().unwrap_or_default().to_string());
         Ok(Flow {
+            name,
+            version: self.version,
+            description: self.description,
+            tags: self.tags,
             input,
             steps,
             output,
@@ -209,13 +233,12 @@ impl StepConfig {
         &self,
         rs_transformers: &BuiltinTransformers,
         js_runtime: &mut JsRuntime,
-        config_dir: &Utf8Path,
         index: usize,
         flow: &Utf8Path,
     ) -> Result<FlowStep, ConfigError> {
         let step = match &self.step {
             StepSpec::JavaScript(path) => {
-                Self::compile_script(js_runtime, config_dir, flow, path, index).await?
+                Self::compile_script(js_runtime, flow, path, index).await?
             }
             StepSpec::Transformer(name) => {
                 Self::instantiate_builtin(rs_transformers, flow, name, index)?
@@ -229,16 +252,21 @@ impl StepConfig {
 
     async fn compile_script(
         js_runtime: &mut JsRuntime,
-        config_dir: &Utf8Path,
         flow: &Utf8Path,
         path: &Utf8Path,
         index: usize,
     ) -> Result<FlowStep, ConfigError> {
-        let path = if path.is_absolute() || path.starts_with(config_dir) {
+        let path = if path.is_absolute() {
             path.to_owned()
         } else {
-            config_dir.join(path)
+            // path relative to the flow definition, fallback to existing path
+            flow.parent()
+                .map(|parent| parent.join(path))
+                .unwrap_or_else(|| path.to_owned())
         };
+        let path = path
+            .canonicalize_utf8()
+            .unwrap_or_else(|_| path.to_path_buf());
         let module_name = FlowStep::instance_name(flow, &path, index);
         let mut script = JsScript::new(module_name, flow.to_owned(), path);
         js_runtime.load_script(&mut script).await?;
