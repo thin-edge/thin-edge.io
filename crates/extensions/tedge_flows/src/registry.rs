@@ -92,8 +92,8 @@ pub trait FlowRegistryExt: FlowRegistry {
 
     async fn add_flow(&mut self, js_runtime: &mut JsRuntime, path: &Utf8Path);
     async fn remove_flow(&mut self, path: &Utf8Path);
-    async fn reload_script(&mut self, js_runtime: &mut JsRuntime, path: Utf8PathBuf);
-    async fn remove_script(&mut self, path: Utf8PathBuf);
+    async fn reload_script(&mut self, js_runtime: &mut JsRuntime, path: &Utf8Path);
+    async fn remove_script(&mut self, path: &Utf8Path);
 
     async fn load_config(
         &mut self,
@@ -184,10 +184,10 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         info!(target: "flows", "Removing flow {path}");
     }
 
-    async fn reload_script(&mut self, js_runtime: &mut JsRuntime, path: Utf8PathBuf) {
+    async fn reload_script(&mut self, js_runtime: &mut JsRuntime, path: &Utf8Path) {
         for flow in self.store_mut().flows_mut() {
             for step in &mut flow.as_mut().steps {
-                if step.path() == Some(&path) {
+                if step.path() == Some(path) {
                     match step.load_script(js_runtime).await {
                         Ok(()) => {
                             info!(target: "flows", "Reloading flow script {path}");
@@ -202,11 +202,11 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         }
     }
 
-    async fn remove_script(&mut self, path: Utf8PathBuf) {
+    async fn remove_script(&mut self, path: &Utf8Path) {
         for flow in self.store().flows() {
             let flow_id = flow.as_ref().name();
             for step in flow.as_ref().steps.iter() {
-                if step.path() == Some(&path) {
+                if step.path() == Some(path) {
                     warn!(target: "flows", "Removing a script used by a flow {flow_id}: {path}");
                     return;
                 }

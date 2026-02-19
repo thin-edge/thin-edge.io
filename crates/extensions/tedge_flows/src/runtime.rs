@@ -11,7 +11,6 @@ use crate::FlowError;
 use crate::FlowOutput;
 use crate::LoadError;
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use std::time::SystemTime;
 use tedge_mqtt_ext::TopicFilter;
 use tokio::time::Instant;
@@ -195,21 +194,21 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
         self.js_runtime.dump_memory_stats().await;
     }
 
-    pub async fn reload_script(&mut self, path: Utf8PathBuf) {
+    pub async fn reload_script(&mut self, path: &Utf8Path) {
         self.registry
             .reload_script(&mut self.js_runtime, path)
             .await;
     }
 
-    pub async fn remove_script(&mut self, path: Utf8PathBuf) {
+    pub async fn remove_script(&mut self, path: &Utf8Path) {
         self.registry.remove_script(path).await;
     }
 
-    pub async fn add_flow(&mut self, path: Utf8PathBuf) {
-        self.registry.add_flow(&mut self.js_runtime, &path).await;
+    pub async fn add_flow(&mut self, path: &Utf8Path) {
+        self.registry.add_flow(&mut self.js_runtime, path).await;
     }
 
-    pub async fn remove_flow(&mut self, path: Utf8PathBuf) {
-        self.registry.remove_flow(&path).await;
+    pub async fn remove_flow(&mut self, path: &Utf8Path) {
+        self.registry.remove_flow(path).await;
     }
 }
