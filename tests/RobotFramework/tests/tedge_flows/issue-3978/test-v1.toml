@@ -1,0 +1,8 @@
+name = "test 3978"
+version = "1"
+description = "see https://github.com/thin-edge/thin-edge.io/issues/3978"
+
+input.mqtt.topics = ["test/in"]
+steps = [
+    { script = "test-old.js" },
+]
