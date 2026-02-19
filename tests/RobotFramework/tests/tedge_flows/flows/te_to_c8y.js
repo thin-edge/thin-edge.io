@@ -1,3 +1,5 @@
+const utf8 = new TextDecoder()
+
 /// Transform:
 ///
 /// ```
@@ -45,7 +47,7 @@
 export function onMessage(message, context) {
   let topic_parts = message.topic.split( '/')
   let type = topic_parts[6] || "ThinEdgeMeasurement"
-  let payload = JSON.parse(message.payload)
+  let payload = JSON.parse(utf8.decode(message.payload))
 
   let c8y_msg = {
     type: type

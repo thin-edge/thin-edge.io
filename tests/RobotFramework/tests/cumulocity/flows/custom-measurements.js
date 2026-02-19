@@ -1,7 +1,9 @@
+const utf8 = new TextDecoder()
+
 export function onMessage(message, context) {
     const topic = message.topic.split('/');
     const name = topic[6];
-    const value = JSON.parse(message.payload);
+    const value = JSON.parse(utf8.decode(message.payload));
     if (!Number.isFinite(value)) {
         throw new Error("Invalid payload. Only numbers are accepted");
     }

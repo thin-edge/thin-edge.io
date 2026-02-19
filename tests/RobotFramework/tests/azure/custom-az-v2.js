@@ -1,8 +1,10 @@
+const utf8 = new TextDecoder()
+
 export function onMessage(message, context) {
     let topic = message.topic.split('/')
     let mea_type = topic[6];
 
-    let mea = JSON.parse(message.payload)
+    let mea = JSON.parse(utf8.decode(message.payload))
     if (mea_type) {
         mea.type = mea_type
     }

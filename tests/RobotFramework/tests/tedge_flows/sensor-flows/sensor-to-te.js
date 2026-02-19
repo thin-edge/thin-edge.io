@@ -1,6 +1,8 @@
+const utf8 = new TextDecoder()
+
 export function onMessage(message) {
     let topic = message.topic.split('/')
-    let data = message.payload
+    let data = utf8.decode(message.payload)
 
     if (topic.length < 2) {
         throw new Error("Not a sensor topic");

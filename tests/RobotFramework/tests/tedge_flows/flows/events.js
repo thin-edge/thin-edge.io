@@ -2,12 +2,14 @@ class State {
     static cache = []
 }
 
+const utf8 = new TextDecoder()
+
 export function onMessage(message, context) {
     let topic_parts = message.topic.split( '/')
     if (topic_parts.length < 7 || topic_parts[5] != "e") {
         throw new Error("Not a thin-edge event")
     }
-    let event = JSON.parse(message.payload)
+    let event = JSON.parse(utf8.decode(message.payload))
     let c8y_event = {
         type: topic_parts[6] || "ThinEdgeEvent"
     }
