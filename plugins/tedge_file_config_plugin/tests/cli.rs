@@ -125,7 +125,7 @@ type = "dest.conf"
 }
 
 #[test]
-fn test_set_command_restarts_service() {
+fn test_apply_command_executes_service_restart_command() {
     let ttd = TempTedgeDir::new();
 
     let witness_file = ttd.file("restart-witness.txt");
@@ -151,10 +151,6 @@ is_active = ["true"]
     // Original config
     let dest_file = ttd.file("test.conf");
 
-    // New config
-    let new_content = "new=configuration\n";
-    let source_file = ttd.file("new.conf").with_raw_content(new_content);
-
     let config_content = format!(
         r###"
 [[files]]
@@ -168,12 +164,17 @@ service = "dummy-service"
         .file("tedge-configuration-plugin.toml")
         .with_raw_content(&config_content);
 
+    // Create a workdir for the apply operation
+    let workdir = ttd.dir("workdir");
+
+    // Now apply the configuration (DOES restart service)
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
     cmd.arg("--config-dir")
         .arg(ttd.path().to_str().unwrap())
-        .arg("set")
+        .arg("apply")
         .arg("dest.conf")
-        .arg(source_file.path().to_str().unwrap());
+        .arg("--work-dir")
+        .arg(workdir.utf8_path().as_str());
 
     cmd.assert().success();
 

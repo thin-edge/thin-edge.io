@@ -33,6 +33,18 @@ pub enum PluginOp {
         config_type: String,
     },
 
+    /// Prepare for configuration update (e.g: create backup)
+    Prepare {
+        /// Configuration type to prepare
+        config_type: String,
+
+        from_path: String,
+
+        /// Working directory for metadata
+        #[clap(long = "work-dir")]
+        work_dir: String,
+    },
+
     /// Set configuration for a specific type
     Set {
         /// Configuration type to update
@@ -40,6 +52,46 @@ pub enum PluginOp {
 
         /// Path to the new configuration file
         config_path: String,
+    },
+
+    /// Apply configuration (e.g:restart services)
+    Apply {
+        /// Configuration type to apply
+        config_type: String,
+
+        /// Working directory for metadata
+        #[clap(long = "work-dir")]
+        work_dir: String,
+    },
+
+    /// Verify configuration was applied successfully
+    Verify {
+        /// Configuration type to verify
+        config_type: String,
+
+        /// Working directory with metadata
+        #[clap(long = "work-dir")]
+        work_dir: String,
+    },
+
+    /// Finalize configuration update (e.g: cleanup)
+    Finalize {
+        /// Configuration type to finalize
+        config_type: String,
+
+        /// Working directory to cleanup
+        #[clap(long = "work-dir")]
+        work_dir: String,
+    },
+
+    /// Rollback configuration to previous state
+    Rollback {
+        /// Configuration type to rollback
+        config_type: String,
+
+        /// Working directory with backup
+        #[clap(long = "work-dir")]
+        work_dir: String,
     },
 }
 
@@ -91,6 +143,27 @@ pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::R
             log::error!("Failed to get configuration for {config_type} : {err}");
             err.into()
         }),
+        PluginOp::Prepare {
+            config_type,
+            from_path,
+            work_dir,
+        } => {
+            let workdir_path = Utf8PathBuf::from(work_dir);
+            let new_config_path = Utf8PathBuf::from(from_path);
+            match plugin
+                .prepare(&config_type, &workdir_path, &new_config_path)
+                .await
+            {
+                Ok(()) => {
+                    log::info!("Successfully prepared configuration for {}", config_type);
+                    Ok(())
+                }
+                Err(err) => {
+                    log::error!("Failed to prepare configuration: {err}");
+                    Err(err.into())
+                }
+            }
+        }
         PluginOp::Set {
             config_type,
             config_path,
@@ -103,6 +176,70 @@ pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::R
                 }
                 Err(err) => {
                     log::error!("Failed to set configuration: {err}");
+                    Err(err.into())
+                }
+            }
+        }
+        PluginOp::Apply {
+            config_type,
+            work_dir,
+        } => {
+            let workdir_path = Utf8PathBuf::from(work_dir);
+            match plugin.apply(&config_type, &workdir_path).await {
+                Ok(()) => {
+                    log::info!("Successfully applied configuration for {}", config_type);
+                    Ok(())
+                }
+                Err(err) => {
+                    log::error!("Failed to apply configuration: {err}");
+                    Err(err.into())
+                }
+            }
+        }
+        PluginOp::Verify {
+            config_type,
+            work_dir,
+        } => {
+            let workdir_path = Utf8PathBuf::from(work_dir);
+            match plugin.verify(&config_type, &workdir_path).await {
+                Ok(()) => {
+                    log::info!("Successfully verified configuration for {}", config_type);
+                    Ok(())
+                }
+                Err(err) => {
+                    log::error!("Failed to verify configuration: {err}");
+                    Err(err.into())
+                }
+            }
+        }
+        PluginOp::Finalize {
+            config_type,
+            work_dir,
+        } => {
+            let workdir_path = Utf8PathBuf::from(work_dir);
+            match plugin.finalize(&config_type, &workdir_path).await {
+                Ok(()) => {
+                    log::info!("Successfully finalized configuration for {}", config_type);
+                    Ok(())
+                }
+                Err(err) => {
+                    log::error!("Failed to finalize configuration: {err}");
+                    Err(err.into())
+                }
+            }
+        }
+        PluginOp::Rollback {
+            config_type,
+            work_dir,
+        } => {
+            let workdir_path = Utf8PathBuf::from(work_dir);
+            match plugin.rollback(&config_type, &workdir_path).await {
+                Ok(()) => {
+                    log::info!("Successfully rolled back configuration for {}", config_type);
+                    Ok(())
+                }
+                Err(err) => {
+                    log::error!("Failed to rollback configuration: {err}");
                     Err(err.into())
                 }
             }

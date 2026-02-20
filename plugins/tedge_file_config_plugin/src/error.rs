@@ -20,6 +20,9 @@ pub enum PluginError {
     #[error("Failed to set file permissions: {path}")]
     PermissionError { path: PathBuf, source: io::Error },
 
+    #[error("Service {0} is not running")]
+    ServiceNotRunning(String),
+
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
 }

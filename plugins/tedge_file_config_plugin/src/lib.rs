@@ -89,18 +89,6 @@ impl FileConfigPlugin {
         // Deploy the config file
         self.deploy_config_file(from, entry)?;
 
-        // Execute service action if defined
-        if let Some(service_name) = &entry.service {
-            // service_action is guaranteed to be Some if service is Some (defaulted to "restart" during config parsing)
-            let action = entry
-                .service_action
-                .as_deref()
-                .expect("service_action must be set when service is set");
-            self.execute_service_action(service_name, action)
-                .await
-                .with_context(|| format!("Failed to {action} service: {service_name}"))?;
-        }
-
         Ok(())
     }
 
@@ -128,6 +116,85 @@ impl FileConfigPlugin {
 
         info!("Successfully executed: {action} on service: {service_name}");
 
+        Ok(())
+    }
+
+    /// Prepare for configuration update
+    pub async fn prepare(
+        &self,
+        _config_type: &str,
+        _from_path: &Utf8Path,
+        _workdir: &Utf8Path,
+    ) -> Result<(), PluginError> {
+        // No-op for backward compatibility
+        Ok(())
+    }
+
+    /// Apply configuration by restarting service if configured
+    pub async fn apply(&self, config_type: &str, _workdir: &Utf8Path) -> Result<(), PluginError> {
+        let entry = self
+            .config
+            .get_file_entry(config_type)
+            .ok_or_else(|| PluginError::InvalidConfigType(config_type.to_string()))?;
+
+        // Execute service action if defined for the config type
+        if let Some(service_name) = &entry.service {
+            let action = entry
+                .service_action
+                .as_deref()
+                .expect("service_action must be set when service is set");
+
+            self.execute_service_action(service_name, action)
+                .await
+                .with_context(|| format!("Failed to {action} service: {service_name}"))?;
+        }
+
+        Ok(())
+    }
+
+    /// Verify configuration was applied successfully
+    pub async fn verify(&self, config_type: &str, _workdir: &Utf8Path) -> Result<(), PluginError> {
+        let entry = self
+            .config
+            .get_file_entry(config_type)
+            .ok_or_else(|| PluginError::InvalidConfigType(config_type.to_string()))?;
+
+        // If service is configured, verify it's running
+        if let Some(service_name) = &entry.service {
+            let service = SystemService::new(service_name);
+
+            let is_running = self
+                .service_manager
+                .is_service_running(service)
+                .await
+                .with_context(|| format!("Failed to check if service {service_name} is running"))?;
+
+            if !is_running {
+                return Err(PluginError::ServiceNotRunning(service_name.to_string()));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Finalize configuration update
+    pub async fn finalize(
+        &self,
+        config_type: &str,
+        _workdir: &Utf8Path,
+    ) -> Result<(), PluginError> {
+        info!("Configuration update finalized successfully for {config_type}");
+        // No-op due for backward compatibility
+        Ok(())
+    }
+
+    /// Rollback configuration to previous state
+    pub async fn rollback(
+        &self,
+        _config_type: &str,
+        _workdir: &Utf8Path,
+    ) -> Result<(), PluginError> {
+        // No-op due for backward compatibility
         Ok(())
     }
 
