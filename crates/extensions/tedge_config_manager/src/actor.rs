@@ -60,6 +60,24 @@ pub type ConfigUploadResult = (MqttTopic, UploadResult);
 pub type OperationStepRequestEnvelope =
     RequestEnvelope<OperationStepRequest, OperationStepResponse>;
 
+fn get_text_property<'a>(
+    command: &'a GenericCommandState,
+    key: &str,
+) -> Result<&'a str, ConfigManagementError> {
+    command
+        .get_text_property(key)
+        .ok_or_else(|| ConfigManagementError::MissingKey(key.to_string()))
+}
+
+fn get_path_property<'a>(
+    command: &'a GenericCommandState,
+    key: &str,
+) -> Result<&'a Utf8Path, ConfigManagementError> {
+    command
+        .get_path_property(key)
+        .ok_or_else(|| ConfigManagementError::MissingKey(key.to_string()))
+}
+
 /// Represents the different steps for config management operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ConfigOperationStep {
@@ -522,26 +540,16 @@ impl ConfigManagerWorker {
         let cmd_id = self.extract_command_id(&topic)?;
         let log_path = command.get_log_path();
 
-        let config_type = command
-            .payload
-            .get("type")
-            .and_then(|v: &Value| v.as_str())
-            .map(|s: &str| s.to_string())
-            .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
-        let from_path = command
-            .payload
-            .get("setFrom")
-            .and_then(|v: &Value| v.as_str())
-            .map(|s: &str| Utf8PathBuf::from(s))
-            .ok_or_else(|| ConfigManagementError::MissingKey("setFrom".to_string()))?;
+        let config_type = get_text_property(&command, "type")?;
+        let from_path = get_path_property(&command, "setFrom")?;
 
         // Generate workdir for this operation
-        let work_dir = self.generate_work_dir(&config_type, &cmd_id)?;
+        let work_dir = self.generate_work_dir(config_type, &cmd_id)?;
 
         self.execute_config_prepare_step(
             &topic,
-            &config_type,
-            &from_path,
+            config_type,
+            from_path,
             &work_dir,
             log_path,
             &cmd_id,
@@ -561,20 +569,10 @@ impl ConfigManagerWorker {
 
         let log_path = command.get_log_path();
 
-        let config_type = command
-            .payload
-            .get("type")
-            .and_then(|v: &Value| v.as_str())
-            .map(|s: &str| s.to_string())
-            .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
-        let from_path = command
-            .payload
-            .get("setFrom")
-            .and_then(|v: &Value| v.as_str())
-            .map(|s: &str| Utf8PathBuf::from(s))
-            .ok_or_else(|| ConfigManagementError::MissingKey("setFrom".to_string()))?;
+        let config_type = get_text_property(&command, "type")?;
+        let from_path = get_path_property(&command, "setFrom")?;
 
-        self.execute_config_set_step(&topic, &config_type, &from_path, log_path, &cmd_id)
+        self.execute_config_set_step(&topic, config_type, from_path, log_path, &cmd_id)
             .await?;
         Ok(None)
     }
@@ -587,16 +585,10 @@ impl ConfigManagerWorker {
         let cmd_id = self.extract_command_id(&topic)?;
         let log_path = command.get_log_path();
 
-        let config_type = command
-            .payload
-            .get("type")
-            .and_then(|v: &Value| v.as_str())
-            .map(|s: &str| s.to_string())
-            .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
+        let config_type = get_text_property(&command, "type")?;
+        let work_dir = get_path_property(&command, "workDir")?;
 
-        let work_dir = self.extract_work_dir(&command)?;
-
-        self.execute_config_apply_step(&topic, &config_type, &work_dir, log_path, &cmd_id)
+        self.execute_config_apply_step(&topic, config_type, work_dir, log_path, &cmd_id)
             .await?;
         Ok(None)
     }
@@ -609,16 +601,10 @@ impl ConfigManagerWorker {
         let cmd_id = self.extract_command_id(&topic)?;
         let log_path = command.get_log_path();
 
-        let config_type = command
-            .payload
-            .get("type")
-            .and_then(|v: &Value| v.as_str())
-            .map(|s: &str| s.to_string())
-            .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
+        let config_type = get_text_property(&command, "type")?;
+        let work_dir = get_path_property(&command, "workDir")?;
 
-        let work_dir = self.extract_work_dir(&command)?;
-
-        self.execute_config_verify_step(&topic, &config_type, &work_dir, log_path, &cmd_id)
+        self.execute_config_verify_step(&topic, config_type, work_dir, log_path, &cmd_id)
             .await?;
         Ok(None)
     }
@@ -631,16 +617,10 @@ impl ConfigManagerWorker {
         let cmd_id = self.extract_command_id(&topic)?;
         let log_path = command.get_log_path();
 
-        let config_type = command
-            .payload
-            .get("type")
-            .and_then(|v: &Value| v.as_str())
-            .map(|s: &str| s.to_string())
-            .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
+        let config_type = get_text_property(&command, "type")?;
+        let work_dir = get_path_property(&command, "workDir")?;
 
-        let work_dir = self.extract_work_dir(&command)?;
-
-        self.execute_config_finalize_step(&topic, &config_type, &work_dir, log_path, &cmd_id)
+        self.execute_config_finalize_step(&topic, config_type, work_dir, log_path, &cmd_id)
             .await?;
         Ok(None)
     }
@@ -653,16 +633,10 @@ impl ConfigManagerWorker {
         let cmd_id = self.extract_command_id(&topic)?;
         let log_path = command.get_log_path();
 
-        let config_type = command
-            .payload
-            .get("type")
-            .and_then(|v: &Value| v.as_str())
-            .map(|s: &str| s.to_string())
-            .ok_or_else(|| ConfigManagementError::MissingKey("type".to_string()))?;
+        let config_type = get_text_property(&command, "type")?;
+        let work_dir = get_path_property(&command, "workDir")?;
 
-        let work_dir = self.extract_work_dir(&command)?;
-
-        self.execute_config_rollback_step(&topic, &config_type, &work_dir, log_path, &cmd_id)
+        self.execute_config_rollback_step(&topic, config_type, work_dir, log_path, &cmd_id)
             .await?;
         Ok(None)
     }
@@ -908,19 +882,6 @@ impl ConfigManagerWorker {
         ));
         std::fs::create_dir_all(&work_dir)?;
         Ok(work_dir)
-    }
-
-    /// Extract work_dir from command payload
-    fn extract_work_dir(
-        &self,
-        command: &GenericCommandState,
-    ) -> Result<Utf8PathBuf, ConfigManagementError> {
-        command
-            .payload
-            .get("workDir")
-            .and_then(|v: &Value| v.as_str())
-            .map(Utf8PathBuf::from)
-            .ok_or_else(|| ConfigManagementError::MissingKey("workDir".to_string()))
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), RuntimeError> {
