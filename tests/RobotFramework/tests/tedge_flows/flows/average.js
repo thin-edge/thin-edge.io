@@ -7,9 +7,11 @@ class State {
     static agg_for_topic = {}
 }
 
+const utf8 = new TextDecoder();
+
 export function onMessage (message) {
     let topic = message.topic
-    let payload = JSON.parse(message.payload)
+    let payload = JSON.parse(utf8.decode(message.payload))
     let agg_payload = State.agg_for_topic[topic]
     if (agg_payload) {
         for (let [k, v] of Object.entries(payload)) {

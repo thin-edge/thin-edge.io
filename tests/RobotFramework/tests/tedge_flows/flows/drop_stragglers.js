@@ -1,7 +1,9 @@
+const utf8 = new TextDecoder()
+
 // Reject any message that is too old, too new or with no timestamp
 export function onMessage (message, context) {
     const { max_advance = 1, max_delay = 10} = context.config
-    let payload = JSON.parse(message.payload)
+    let payload = JSON.parse(utf8.decode(message.payload))
     if (!payload.time) {
         return []
     }

@@ -74,17 +74,29 @@ interface FlowStep {
 }
 ```
 
-A message contains the message topic and payload as well as a processing timestamp.
-The bytes of the raw message payload are also accessible as an array of unsigned bytes: 
+A message has three attributes: a `topic`, a `payload` and a processing timestamp.
 
 ```ts
 type Message = {
   topic: string,
-  payload: string,
-  raw_payload: Uint8Array,
+  payload: Uint8Array,
   time: Date
 }
 ```
+
+:::note
+The message `payload` is an array of unsigned bytes that has to be explicitly converted to a string when appropriate:
+
+```js
+const utf8 = new TextDecoder();
+
+export function onMessage(message) {
+    let string_payload = utf8.decode(message.payload)
+    let json_payload = JSON.parse(string_payload)
+    // ..
+}
+```
+:::
 
 ### Context
 
@@ -126,9 +138,9 @@ The `context.config` is an object freely defined by the step module, to provide 
 
 The `onMessage` function is called for each message to be transformed
   - The arguments passed to the function are:
-    - The message `{ topic: string, payload: string, raw_payload: Uint8Array, time: Date }`
+    - The message `{ topic: string, payload: Uint8Array, time: Date }`
     - A context object with the config and state
-  - The function is expected to return zero, one or many transformed messages `[{ topic: string, payload: string }]`
+  - The function is expected to return zero, one or many transformed messages `[{ topic: string, payload: Uint8Array | string }]`
   - An exception can be thrown if the input message cannot be transformed.
 
 A flow script can also export a `onInterval` function

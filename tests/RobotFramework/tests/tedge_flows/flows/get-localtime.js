@@ -1,5 +1,7 @@
+const utf8 = new TextDecoder()
+
 export function onMessage (message) {
-  let payload = JSON.parse(message.payload)
+  let payload = JSON.parse(utf8.decode(message.payload))
   let time = message.time
   let tzOffset = time.getTimezoneOffset() * 60000;
 

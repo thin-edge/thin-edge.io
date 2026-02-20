@@ -184,9 +184,10 @@ mod tests {
     async fn collectd_script() {
         let js = r#"
 export function onMessage(message, context) {
-    const { topic = "topic/not/set" } = context.config;
+    const { topic = "topic/not/set" } = context.config
+    const td = new globalThis.TextDecoder()
     let groups = message.topic.split( '/')
-    let data = message.payload.split(':')
+    let data = td.decode(message.payload).split(':')
 
     let group = groups[2]
 	let measurement = groups[3]
@@ -335,7 +336,7 @@ export function onMessage(message) {
         let js = r#"
 export async function onMessage(message) {
     const utf8decoder = new TextDecoder();
-    const encodedText = message.raw_payload;
+    const encodedText = message.payload;
     console.log(encodedText);
     const decodedText = utf8decoder.decode(encodedText);
     console.log(decodedText);
@@ -360,8 +361,10 @@ export async function onMessage(message) {
         let js = r#"
 export async function onMessage(message) {
     const utf8encoder = new TextEncoder();
-    console.log(message.payload);
-    const encodedText = utf8encoder.encode(message.payload);
+    const utf8decoder = new TextDecoder();
+    const payload = utf8decoder.decode(message.payload);
+    console.log(payload);
+    const encodedText = utf8encoder.encode(payload);
     console.log(encodedText);
     return [{topic:"encoded", payload: encodedText}];
 }
@@ -382,10 +385,11 @@ export async function onMessage(message) {
     #[tokio::test]
     async fn decode_utf8_with_bom_and_invalid_chars() {
         let js = r#"
+const utf8 = new TextDecoder();
+
 export async function onMessage(message) {
-    const utf8decoder = new TextDecoder();
-    const encodedText = message.raw_payload;
-    const decodedText = utf8decoder.decode(encodedText);
+    const encodedText = message.payload;
+    const decodedText = utf8.decode(encodedText);
     return [{topic:"decoded", payload: decodedText}];
 }
         "#;
@@ -408,10 +412,12 @@ export async function onMessage(message) {
         let js = r#"
 export async function onMessage(message) {
     const utf8encoder = new TextEncoder();
+    const utf8decoder = new TextDecoder();
+    const payload = utf8decoder.decode(message.payload);
     const u8array = new Uint8Array(8);
-    const result = utf8encoder.encodeInto(message.payload, u8array);
+    const result = utf8encoder.encodeInto(payload, u8array);
     console.log(result);
-    utf8encoder.encodeInto(message.payload, u8array.subarray(4));
+    utf8encoder.encodeInto(payload, u8array.subarray(4));
     return [{topic:"encoded", payload: u8array}];
 }
         "#;
@@ -435,7 +441,7 @@ export async function onMessage(message) {
     const te = new globalThis.TextEncoder();
     const td = new globalThis.TextDecoder();
 
-    const encodedText = message.raw_payload;
+    const encodedText = message.payload;
     const decodedText = td.decode(encodedText);
     const finalPayload = te.encode(decodedText + decodedText);
     return [{topic:"decoded", payload: finalPayload}];
@@ -458,7 +464,7 @@ export async function onMessage(message) {
     async fn reading_raw_integers() {
         let js = r#"
 export async function onMessage(message) {
-    const measurements = new Uint32Array(message.raw_payload.buffer);
+    const measurements = new Uint32Array(message.payload.buffer);
 
     const tedge_json = {
         time: measurements[0],

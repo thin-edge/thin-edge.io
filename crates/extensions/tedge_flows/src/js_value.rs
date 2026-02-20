@@ -115,14 +115,10 @@ impl JsonValue {
 impl From<Message> for JsonValue {
     fn from(value: Message) -> Self {
         let raw_payload = JsonValue::Bytes(value.payload.clone());
-        let payload = match String::from_utf8(value.payload) {
-            Ok(utf8) => JsonValue::string(utf8),
-            Err(_) => JsonValue::Null,
-        };
+
         JsonValue::object([
             ("topic", JsonValue::string(value.topic)),
-            ("payload", payload),
-            ("raw_payload", raw_payload),
+            ("payload", raw_payload),
             ("time", JsonValue::option(value.timestamp)),
         ])
     }

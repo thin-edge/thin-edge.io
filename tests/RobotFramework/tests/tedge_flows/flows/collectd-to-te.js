@@ -1,7 +1,9 @@
+const utf8 = new TextDecoder();
+
 export function onMessage(message, context) {
     const { topic = "te/device/main///m/collectd" } = context.config;
     let groups = message.topic.split('/')
-    let data = message.payload.split(':')
+    let data = utf8.decode(message.payload).split(':')
 
     if (groups.length < 4) {
         throw new Error("Not a collectd topic");
