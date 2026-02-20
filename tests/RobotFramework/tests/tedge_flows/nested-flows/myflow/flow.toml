@@ -1,0 +1,4 @@
+input.mqtt.topics = ["dummy"]
+steps = [
+    { script = "main.js", interval = "1s" },
+]

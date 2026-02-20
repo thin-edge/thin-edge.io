@@ -75,31 +75,7 @@ impl Actor for FlowsMapper {
                 InputMessage::WatchEvent(event) => {
                     self.on_input_event(event).await?;
                 }
-                InputMessage::FsWatchEvent(FsWatchEvent::Modified(path)) => {
-                    let Ok(path) = Utf8PathBuf::try_from(path) else {
-                        continue;
-                    };
-                    if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
-                        self.processor.reload_script(path).await;
-                    } else if path.extension() == Some("toml") {
-                        self.processor.add_flow(path.clone()).await;
-                        self.send_updated_subscriptions().await?;
-                        self.update_flow_status(&path).await?;
-                    }
-                }
-                InputMessage::FsWatchEvent(FsWatchEvent::FileDeleted(path)) => {
-                    let Ok(path) = Utf8PathBuf::try_from(path) else {
-                        continue;
-                    };
-                    if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
-                        self.processor.remove_script(path).await;
-                    } else if path.extension() == Some("toml") {
-                        self.processor.remove_flow(path.clone()).await;
-                        self.send_updated_subscriptions().await?;
-                        self.update_flow_status(&path).await?;
-                    }
-                }
-                _ => continue,
+                InputMessage::FsWatchEvent(event) => self.handle_fs_event(event).await?,
             }
         }
 
@@ -421,5 +397,75 @@ impl FlowsMapper {
     ) -> Result<(), RuntimeError> {
         let message = Message::new("", format!("Error in {flow}: {error}"));
         self.publish(flow, vec![message], output).await
+    }
+
+    async fn handle_fs_event(&mut self, event: FsWatchEvent) -> Result<(), RuntimeError> {
+        match event {
+            FsWatchEvent::DirectoryCreated(path) | FsWatchEvent::Modified(path) => {
+                // note: when a directory is moved into the watched directory, it triggers Modified in the project's dev
+                // container, but (only) DirectoryCreated in debian-systemd test image
+                let Ok(path) = Utf8PathBuf::try_from(path) else {
+                    return Ok(());
+                };
+
+                if path.is_dir() {
+                    // we can get Modified with path to a directory, which means another directory
+                    // was moved into flows dir.
+                    let Ok(entries) = std::fs::read_dir(&path).inspect_err(
+                        |error| error!(%path, ?error, "Failed to read inside flows directory"),
+                    ) else {
+                        return Ok(());
+                    };
+                    for entry in entries {
+                        let Ok(entry) = entry.inspect_err(
+                            |error| error!(%path, ?error, "Failed to read inside flows directory"),
+                        ) else {
+                            continue;
+                        };
+                        let Ok(path) = Utf8PathBuf::try_from(entry.path()) else {
+                            error!(?path, "Invalid path");
+                            continue;
+                        };
+
+                        self.on_file_updated(path.as_path()).await?;
+                    }
+                } else if path.is_file() {
+                    self.on_file_updated(&path).await?;
+                } else if !path.exists() {
+                    // if a file is renamed we can also get Modified events for old and new name
+                    self.on_file_removed(&path).await?;
+                }
+            }
+            FsWatchEvent::FileDeleted(path) => {
+                let Ok(path) = Utf8PathBuf::try_from(path) else {
+                    return Ok(());
+                };
+                self.on_file_removed(path.as_path()).await?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    async fn on_file_updated(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
+        if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
+            self.processor.reload_script(path).await;
+        } else if path.extension() == Some("toml") {
+            self.processor.add_flow(path).await;
+            self.send_updated_subscriptions().await?;
+            self.update_flow_status(path).await?;
+        }
+        Ok(())
+    }
+
+    async fn on_file_removed(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
+        if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
+            self.processor.remove_script(path).await;
+        } else if path.extension() == Some("toml") {
+            self.processor.remove_flow(path).await;
+            self.send_updated_subscriptions().await?;
+            self.update_flow_status(path).await?;
+        }
+        Ok(())
     }
 }

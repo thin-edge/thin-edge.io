@@ -247,6 +247,18 @@ Display flows definitions directory
     ${directory}    Execute Command    tedge flows config-dir    strip=${True}
     Should Be Equal    ${directory}    /etc/tedge/mappers/flows/flows
 
+Flow is discovered when a directory is moved
+    # can't copy to /tmp directly
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/nested-flows/myflow/flow.toml    /
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/nested-flows/myflow/main.js    /
+    Execute Command    mkdir -p /tmp/myflow
+    Execute Command    mv /flow.toml /tmp/myflow/
+    Execute Command    mv /main.js /tmp/myflow/
+
+    ${start}    Get Unix Timestamp
+    Execute Command    mv /tmp/myflow /etc/tedge/mappers/flows/flows
+    Should Have MQTT Messages    topic=myflow    message_contains=myflow    date_from=${start}
+
 
 *** Keywords ***
 Custom Setup
