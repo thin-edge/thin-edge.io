@@ -23,6 +23,7 @@ pub use crate::registry::FlowRegistryExt;
 pub use crate::registry::UpdateFlowRegistryError;
 pub use crate::runtime::MessageProcessor;
 use crate::stats::MqttStatsPublisher;
+use crate::stats::StatsFilter;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 pub use js_lib::kv_store::FlowContextHandle;
@@ -57,6 +58,7 @@ pub struct FlowsMapperConfig {
     pub(crate) status_topic: Topic,
     pub(crate) stats_publisher: MqttStatsPublisher,
     pub(crate) stats_dump_interval: Duration,
+    pub(crate) stats_filter: StatsFilter,
 }
 
 impl Default for FlowsMapperConfig {
@@ -64,13 +66,20 @@ impl Default for FlowsMapperConfig {
         FlowsMapperConfig::new(
             "te/device/main/service/tedge-mapper-local",
             Duration::from_secs(300),
+            false,
+            false,
         )
     }
 }
 
 impl FlowsMapperConfig {
     /// Panics if the topic prefix is not a valid MQTT topic name
-    pub fn new(topic_prefix: &str, stats_dump_interval: Duration) -> Self {
+    pub fn new(
+        topic_prefix: &str,
+        stats_dump_interval: Duration,
+        publish_on_message_stats: bool,
+        publish_on_interval_stats: bool,
+    ) -> Self {
         let statistics_topic = format!("{topic_prefix}/status/metrics");
         let status_topic = format!("{topic_prefix}/status/flows");
         let stats_dump_interval = if stats_dump_interval < Duration::from_secs(1) {
@@ -86,6 +95,10 @@ impl FlowsMapperConfig {
             status_topic: Topic::new(&status_topic).unwrap(),
             stats_publisher,
             stats_dump_interval,
+            stats_filter: StatsFilter {
+                publish_on_message_stats,
+                publish_on_interval_stats,
+            },
         }
     }
 }

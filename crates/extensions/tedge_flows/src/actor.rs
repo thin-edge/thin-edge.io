@@ -269,7 +269,7 @@ impl FlowsMapper {
             }
             for record in self
                 .processor
-                .dump_processing_stats(&self.config.stats_publisher)
+                .dump_processing_stats(&self.config.stats_publisher, &self.config.stats_filter)
                 .await
             {
                 self.mqtt_sender.send(record).await?;

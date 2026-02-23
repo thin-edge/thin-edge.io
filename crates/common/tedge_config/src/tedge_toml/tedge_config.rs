@@ -1372,6 +1372,14 @@ define_tedge_config! {
             #[tedge_config(example = "1h", default(from_str = "1h"))]
             #[tedge_config(note = "Any value less than one second is rounded up to one second.")]
             interval: SecondsOrHumanTime,
+
+            /// Enable or disable statistics for step onMessage
+            #[tedge_config(default(value = false))]
+            on_message: bool,
+
+            /// Enable or disable statistics for step onInterval
+            #[tedge_config(default(value = false))]
+            on_interval: bool,
         },
     },
 }

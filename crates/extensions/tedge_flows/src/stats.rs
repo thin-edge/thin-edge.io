@@ -27,6 +27,12 @@ pub enum Sample {
 }
 
 #[derive(Default)]
+pub struct StatsFilter {
+    pub(crate) publish_on_message_stats: bool,
+    pub(crate) publish_on_interval_stats: bool,
+}
+
+#[derive(Default)]
 pub struct Stats {
     messages_in: usize,
     messages_out: usize,
@@ -115,9 +121,14 @@ impl Counter {
         self.from_start.entry(dim).or_default().add(sample);
     }
 
-    pub fn dump_processing_stats<P: StatsPublisher>(&self, publisher: &P) -> Vec<P::Record> {
+    pub fn dump_processing_stats<P: StatsPublisher>(
+        &self,
+        publisher: &P,
+        filter: &StatsFilter,
+    ) -> Vec<P::Record> {
         self.from_start
             .iter()
+            .filter(|(dim, _)| filter.is_enabled(dim))
             .filter_map(|(dim, stats)| stats.dump_statistics(dim, publisher))
             .collect()
     }
@@ -149,11 +160,13 @@ impl Stats {
     ) -> Option<P::Record> {
         let stats = match self.processing_time.as_ref() {
             None => serde_json::json!({
+                "type": dim.kind().to_string(),
                 "input": self.messages_in,
                 "output": self.messages_out,
                 "error": self.error_raised,
             }),
             Some(duration_stats) => serde_json::json!({
+                "type": dim.kind().to_string(),
                 "input": self.messages_in,
                 "output": self.messages_out,
                 "error": self.error_raised,
@@ -163,6 +176,17 @@ impl Stats {
         };
 
         publisher.publish_record(dim, stats)
+    }
+}
+
+impl StatsFilter {
+    fn is_enabled(&self, dim: &Dimension) -> bool {
+        match dim {
+            Dimension::Runtime => true,
+            Dimension::Flow(_) => true,
+            Dimension::OnMessage(_) => self.publish_on_message_stats,
+            Dimension::OnInterval(_) => self.publish_on_interval_stats,
+        }
     }
 }
 
@@ -206,6 +230,15 @@ impl Dimension {
 
     fn filename(path: &str) -> &str {
         path.split('/').next_back().unwrap_or(path)
+    }
+
+    fn kind(&self) -> &'static str {
+        match self {
+            Dimension::Runtime => "runtime",
+            Dimension::Flow(_) => "flow",
+            Dimension::OnMessage(_) => "onMessage",
+            Dimension::OnInterval(_) => "onInterval",
+        }
     }
 }
 

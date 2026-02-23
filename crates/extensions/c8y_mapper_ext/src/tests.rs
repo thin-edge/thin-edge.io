@@ -3279,6 +3279,8 @@ pub(crate) async fn c8y_mapper_builder(
     let service_config = FlowsMapperConfig::new(
         "te/device/main/service/tedge-mapper-c8y",
         Duration::from_secs(300),
+        false,
+        false,
     );
 
     let mut flows_mapper = FlowsMapperBuilder::try_new(flows, service_config)

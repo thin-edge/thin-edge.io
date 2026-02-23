@@ -89,9 +89,13 @@ impl TEdgeComponent for AwsMapper {
             tedge_flows::flows_dir(config_dir, "aws", self.profile.as_ref().map(|p| p.as_ref()));
         let flows = aws_converter.flow_registry(flows_dir).await?;
         let te = &tedge_config.mqtt.topic_root;
-        let dump_interval = tedge_config.flows.stats.interval.duration();
-        let service_config =
-            FlowsMapperConfig::new(&format!("{te}/{service_topic_id}"), dump_interval);
+        let stats_config = &tedge_config.flows.stats;
+        let service_config = FlowsMapperConfig::new(
+            &format!("{te}/{service_topic_id}"),
+            stats_config.interval.duration(),
+            stats_config.on_message,
+            stats_config.on_interval,
+        );
 
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();
