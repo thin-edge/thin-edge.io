@@ -367,6 +367,9 @@ impl<F> FlowStore<F> {
     }
 
     pub fn add_unloaded(&mut self, path: Utf8PathBuf) {
+        // When the on-disk version of a flow is broken,
+        // its in-memory version is removed even if still valid.
+        self.flows.remove(&path);
         self.unloaded_flows.insert(path);
     }
 

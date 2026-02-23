@@ -304,16 +304,15 @@ Order of flow definition updates does not matter
     ...    message_contains=issue-3978/test.toml
     Should Contain    ${messages[0]}    "broken"
 
-    # The new version of the flow has not been updated because broken
-    # However, the old version is still running
+    # The new version of the flow has not been loaded because broken
+    # and is no more running
     ${start}    Get Unix Timestamp
     Execute Command    sleep 0.1
     Execute Command    tedge mqtt pub test/in '' --qos 1
-    ${messages}    Should Have MQTT Messages
+    Should Not Have MQTT Messages
     ...    topic=test/out
-    ...    minimum=1
     ...    date_from=${start}
-    Should Be Equal    ${messages[0]}    {"old":"I am from test-old.js"}
+    ...    message_contains={"old":"I am from test-old.js"}
 
     # Push the new script
     ${start}    Get Unix Timestamp
