@@ -1,0 +1,9 @@
+input.mqtt.topics = ["alarms/+"]
+
+steps = [
+    { script = "set-retain-flag.js" },
+    { builtin = "set-topic", config = { topic = "te/alarms" } }
+]
+
+output.mqtt.topic = "te/alarms"
+errors.mqtt.topic = "te/errors"

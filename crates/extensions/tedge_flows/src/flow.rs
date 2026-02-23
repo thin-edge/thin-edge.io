@@ -127,14 +127,21 @@ pub struct Message {
 
 #[derive(Clone, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
 pub enum Transport {
+    #[serde(rename = "mqtt")]
     Mqtt {
         #[serde(
             serialize_with = "tedge_mqtt_ext::serialize_qos",
             deserialize_with = "tedge_mqtt_ext::deserialize_qos"
         )]
+        #[serde(default = "qos_default")]
         qos: QoS,
+        #[serde(default)]
         retain: bool,
     },
+}
+
+fn qos_default() -> QoS {
+    QoS::AtLeastOnce
 }
 
 #[derive(thiserror::Error, Debug)]

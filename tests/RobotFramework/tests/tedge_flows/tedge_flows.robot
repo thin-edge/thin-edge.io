@@ -259,6 +259,14 @@ Flow is discovered when a directory is moved
     Execute Command    mv /tmp/myflow /etc/tedge/mappers/flows/flows
     Should Have MQTT Messages    topic=myflow    message_contains=myflow    date_from=${start}
 
+Setting MQTT attributes
+    Install Nested Flow    mqtt-flows
+    Execute Command    tedge mqtt pub alarms/temperature "The temperature is high"
+    Execute Command    sleep 0.1
+    ${message}    Execute Command    tedge mqtt sub te/alarms -C 1 -W 1
+    Should Contain    ${message}    The temperature is high
+    [Teardown]    Uninstall Nested Flow    mqtt-flows
+
 
 *** Keywords ***
 Custom Setup

@@ -98,6 +98,24 @@ export function onMessage(message) {
 ```
 :::
 
+A message can also contain protocol specific metadata (currently, only MQTT related metadata).
+These metadata are set when the message is received from MQTT (flow input).
+and used by the flow when the message is to be published over MQTT (flow output).
+
+```ts
+type Message = {
+  topic: string,
+  payload: Uint8Array,
+  time: Date,
+  mqtt?: MqttInfo
+}
+
+type MqttInfo = {
+  qos?: 0 | 1 | 2,  // default is 1
+  retain?: boolean  // default is false
+}
+```
+
 ### Context
 
 The `context` object passed to `onMessage()` and `onInterval()` gives scripts and flows a way to share data.
