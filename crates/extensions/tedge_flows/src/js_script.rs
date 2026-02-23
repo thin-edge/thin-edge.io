@@ -672,7 +672,7 @@ export function onMessage(message) {
             (r#"{ "qos": 0 }"#, AtMostOnce, false),
             ("{ }", AtLeastOnce, false),
         ] {
-            let input = Message::new("", payload);
+            let input = Message::new("test/topic", payload);
             let output = script
                 .on_message(&runtime, SystemTime::now(), &input)
                 .await

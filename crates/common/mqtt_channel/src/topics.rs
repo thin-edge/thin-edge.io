@@ -27,7 +27,7 @@ impl Topic {
     /// Check if the topic name is valid and build a new topic.
     pub fn new(name: &str) -> Result<Topic, MqttError> {
         let name = String::from(name);
-        if rumqttc::valid_topic(&name) {
+        if !name.is_empty() && !name.contains('\0') && rumqttc::valid_topic(&name) {
             Ok(Topic { name })
         } else {
             Err(MqttError::InvalidTopic { name })
@@ -67,7 +67,7 @@ impl TopicFilter {
     pub fn new(pattern: &str) -> Result<TopicFilter, MqttError> {
         let pattern = String::from(pattern);
         let qos = QoS::AtLeastOnce;
-        if rumqttc::valid_filter(&pattern) {
+        if !pattern.is_empty() && !pattern.contains('\0') && rumqttc::valid_filter(&pattern) {
             Ok(TopicFilter {
                 patterns: vec![pattern],
                 qos,
@@ -309,6 +309,8 @@ mod tests {
     fn check_invalid_topic() {
         assert!(Topic::new("/temp/+").is_err());
         assert!(Topic::new("/temp/#").is_err());
+        assert!(Topic::new("").is_err());
+        assert!(Topic::new("bad\0topic").is_err());
     }
 
     #[test]
@@ -324,6 +326,7 @@ mod tests {
         assert!(TopicFilter::new("").is_err());
         assert!(TopicFilter::new("/a/#/b").is_err());
         assert!(TopicFilter::new("/a/#/+").is_err());
+        assert!(TopicFilter::new("bad\0filter").is_err());
     }
 
     #[test]
