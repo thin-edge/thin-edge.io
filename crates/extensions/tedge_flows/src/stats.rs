@@ -97,6 +97,23 @@ impl Counter {
         self.add(Dimension::Flow(flow_id.to_owned()), Sample::ErrorRaised);
     }
 
+    pub fn flow_on_startup_start(&mut self, _flow_id: &str) -> Instant {
+        Instant::now()
+    }
+
+    pub fn flow_on_startup_done(&mut self, flow_id: &str, _started_at: Instant, count: usize) {
+        self.add(Dimension::Runtime, Sample::MessageOut(count));
+        self.add(
+            Dimension::Flow(flow_id.to_owned()),
+            Sample::MessageOut(count),
+        );
+    }
+
+    pub fn flow_on_startup_failed(&mut self, flow_id: &str) {
+        self.add(Dimension::Runtime, Sample::ErrorRaised);
+        self.add(Dimension::Flow(flow_id.to_owned()), Sample::ErrorRaised);
+    }
+
     pub fn flow_step_start(&mut self, js: &str, f: &str) -> Instant {
         if let Some(dim) = Dimension::function_call(js, f) {
             self.add(dim, Sample::MessageIn);

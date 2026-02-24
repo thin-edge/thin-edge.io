@@ -493,6 +493,61 @@ Flow with loop detection disabled
     ...    message_contains=too many messages
     [Teardown]    Uninstall Flow    loop.toml
 
+Script runs onStartup function
+    Install Nested Flow    onstartup
+
+    # assert on_startups are run in order
+    ${messages}    Logs Should Contain    JavaScript.Console: "onstartup    min_matches=3    max_matches=3
+    Should Contain    ${messages}[0]    JavaScript.Console: "onstartup on_startup 1"
+    Should Contain    ${messages}[1]    JavaScript.Console: "onstartup on_startup 2"
+    Should Contain    ${messages}[2]    JavaScript.Console: "onstartup on_message 2"
+
+    ${messages}    Should Have MQTT Messages    topic=test/onstartup    message_contains=onstartup    maximum=2
+    Should Be Equal    ${messages}[0]    onstartup on_startup 2
+    Should Be Equal    ${messages}[1]    onstartup on_message 2
+
+    Execute Command    sleep 1
+    ${start}    Get Unix Timestamp
+
+    # emit Modified event to trigger reload of 1st step, 2nd step should reload as well
+    Execute Command    echo "// script modifications..." >> /etc/tedge/mappers/local/flows/onstartup/on-startup1.js
+
+    ${messages}    Logs Should Contain
+    ...    JavaScript.Console: "onstartup
+    ...    min_matches=2
+    ...    max_matches=2
+    ...    date_from=${start}
+    Should Contain    ${messages}[0]    JavaScript.Console: "onstartup on_startup 1"
+    Should Contain    ${messages}[1]    JavaScript.Console: "onstartup on_message 2"
+
+    ${messages}    Should Have MQTT Messages
+    ...    topic=test/onstartup
+    ...    message_contains=onstartup
+    ...    minimum=1
+    ...    maximum=1
+    ...    date_from=${start}
+    Should Be Equal    ${messages}[0]    onstartup on_message 2
+
+    Execute Command    sleep 1
+    ${start}    Get Unix Timestamp
+
+    # emit Modified event to trigger reload of 2nd step, 1st step should not rerun onstartup
+    Execute Command    echo "// script modifications..." >> /etc/tedge/mappers/local/flows/onstartup/on-startup2.js
+
+    ${messages}    Logs Should Contain
+    ...    JavaScript.Console: "onstartup
+    ...    min_matches=1
+    ...    max_matches=1
+    ...    date_from=${start}
+    Should Contain    ${messages}[0]    JavaScript.Console: "onstartup on_startup 2"
+    ${messages}    Should Have MQTT Messages
+    ...    topic=test/onstartup
+    ...    message_contains=on_startup
+    ...    minimum=1
+    ...    maximum=1
+    ...    date_from=${start}
+    Should Be Equal    ${messages}[0]    onstartup on_startup 2
+
 
 *** Keywords ***
 Custom Setup
@@ -523,7 +578,9 @@ Uninstall Flow
 Install Nested Flow
     [Arguments]    ${directory}
     ${start}    Get Unix Timestamp
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/*    /etc/tedge/mappers/local/flows/${directory}/
+    # transfer to parent dir + move to minimize reloads of flows and scripts
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/*    /etc/tedge/mappers/local/${directory}/
+    Execute Command    mv /etc/tedge/mappers/local/${directory} /etc/tedge/mappers/local/flows/${directory}
     Execute Command    ls -lh /etc/tedge/mappers/local/flows/${directory}
     Should Have MQTT Messages
     ...    topic=te/device/main/service/tedge-mapper-local/status/flows

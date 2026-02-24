@@ -17,6 +17,11 @@ pub struct FlowStep {
     handler: StepHandler,
     interval: Duration,
     pub(crate) next_execution: Option<Instant>,
+    /// The point in time at which the step was loaded and startup executed.
+    ///
+    /// Used to invoke the step's `onStartup` function, if applicable. If so, `onStartup` function
+    /// is scheduled to execute immediately and `started_up` is set to an instant it completed.
+    started_at: Option<Instant>,
 }
 
 pub enum StepHandler {
@@ -40,6 +45,7 @@ impl FlowStep {
             handler: StepHandler::JsScript(script, config),
             interval: Duration::ZERO,
             next_execution: None,
+            started_at: None,
         }
     }
 
@@ -48,6 +54,7 @@ impl FlowStep {
             handler: StepHandler::Transformer(instance_name, transformer),
             interval: Duration::ZERO,
             next_execution: None,
+            started_at: None,
         }
     }
 
@@ -75,6 +82,16 @@ impl FlowStep {
         });
 
         self.interval = interval;
+
+        let has_startup = match &self.handler {
+            StepHandler::JsScript(script, _) => script.has_startup,
+            StepHandler::Transformer(_, transformer) => transformer.has_startup(),
+        };
+
+        if !has_startup {
+            self.started_at = Some(Instant::now());
+        }
+
         self.init_next_execution();
         self
     }
@@ -108,6 +125,13 @@ impl FlowStep {
             // FIXME: there is bug here when the updated version adds an on_interval method
             // This method will be ignored, because the interval is zero (because there no on_interval method before)
             // => The configured interval must not be erased
+
+            // after reload trigger onStartup again
+            if script.has_startup {
+                self.started_at = None;
+            } else {
+                self.started_at = Some(Instant::now());
+            }
             self.init_next_execution();
         }
         Ok(())
@@ -143,6 +167,10 @@ impl FlowStep {
         }
     }
 
+    pub fn should_execute_startup(&self) -> bool {
+        self.started_at.is_none()
+    }
+
     /// Transform an input message into zero, one or more output messages
     pub async fn on_message(
         &mut self,
@@ -160,7 +188,7 @@ impl FlowStep {
         }
     }
 
-    /// Trigger the onInterval function of the JS module
+    /// Trigger the onInterval function of the JS module, or onStartup function if step hasn't started yet.
     ///
     /// Return zero, one or more messages
     ///
@@ -178,6 +206,36 @@ impl FlowStep {
                 builtin.on_interval(timestamp, &js.context_handle())
             }
         }
+    }
+
+    /// Trigger the onStartup function of the JS module.
+    ///
+    /// If the script has an onStartup, it should be executed only once, after it's loaded (or reloaded) but before any
+    /// other functions (onMessage and onInterval) (and before reporting the status of the flow?).
+    ///
+    /// Return zero, one or more messages
+    //
+    // if this should be executed only once, we could use the type system to ensure that it's impossible to call
+    // again
+    pub async fn on_startup(
+        &mut self,
+        js: &JsRuntime,
+        timestamp: SystemTime,
+    ) -> Result<Vec<Message>, FlowError> {
+        if self.started_at.is_some() {
+            return Ok(vec![]);
+        }
+        let output = match &mut self.handler {
+            StepHandler::JsScript(script, config) => script.on_startup(js, timestamp, config).await,
+            StepHandler::Transformer(_, builtin) => {
+                builtin.on_startup(timestamp, &js.context_handle())
+            }
+        };
+
+        // after onStartup is finished, make sure it's not run again and schedule onInterval
+        self.started_at = Some(Instant::now());
+
+        output
     }
 }
 

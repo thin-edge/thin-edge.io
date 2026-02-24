@@ -108,6 +108,7 @@ impl JsRuntime {
             match *export {
                 "onMessage" => script.is_defined = true,
                 "onInterval" => script.is_periodic = true,
+                "onStartup" => script.has_startup = true,
                 _ => (),
             }
         }
@@ -157,7 +158,7 @@ impl JsRuntime {
     ) -> Result<Vec<&'static str>, LoadError> {
         let (sender, receiver) = oneshot::channel();
         let source = source.into();
-        let imports = vec!["onMessage", "onInterval"];
+        let imports = vec!["onMessage", "onInterval", "onStartup"];
         TIME_CREDITS.store(100000, std::sync::atomic::Ordering::Relaxed);
         self.send(
             receiver,
