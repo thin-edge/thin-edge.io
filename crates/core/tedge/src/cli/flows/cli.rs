@@ -19,7 +19,7 @@ pub enum TEdgeFlowsCli {
     /// List flows and steps
     List {
         /// Mapper name
-        #[clap(long, default_value = "flows", global = true)]
+        #[clap(long, default_value = "local", global = true)]
         mapper: String,
 
         /// Mapper profile
@@ -42,7 +42,7 @@ pub enum TEdgeFlowsCli {
     /// Process message samples
     Test {
         /// Mapper name
-        #[clap(long, default_value = "flows", global = true)]
+        #[clap(long, default_value = "local", global = true)]
         mapper: String,
 
         /// Mapper profile
@@ -93,7 +93,7 @@ pub enum TEdgeFlowsCli {
     /// Display the path to the directory of flows and steps
     ConfigDir {
         /// Mapper name
-        #[clap(long, default_value = "flows", global = true)]
+        #[clap(long, default_value = "local", global = true)]
         mapper: String,
 
         /// Mapper profile

@@ -36,7 +36,7 @@ contents:
       mode: 0644
     packager: rpm
 
-  - dst: /etc/tedge/mappers/flows/flows
+  - dst: /etc/tedge/mappers/local/flows
     type: dir
 
   - dst: /usr/share/tedge/flows

@@ -57,7 +57,7 @@ pub use transformers::Transformer;
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 
 pub fn default_flows_dir(tedge_config_dir: &Utf8Path) -> Utf8PathBuf {
-    flows_dir(tedge_config_dir, "flows", None)
+    flows_dir(tedge_config_dir, "local", None)
 }
 
 pub fn flows_dir(tedge_config_dir: &Utf8Path, mapper: &str, profile: Option<&str>) -> Utf8PathBuf {

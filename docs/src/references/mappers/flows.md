@@ -171,7 +171,7 @@ A flow script can also export a `onInterval` function
 
 ## Flow configuration
 
-- The generic mapper loads flows and steps stored in `/etc/tedge/mappers/flows/flows`.
+- The generic mapper loads flows and steps stored in `/etc/tedge/mappers/local/flows`.
 - A flow is defined by a TOML file with `.toml` extension.
 - A step is defined by a JavaScript file with an `.mjs` or `.js` extension.
   - This can also be a TypeScript module with a `.ts` extension.
@@ -290,7 +290,7 @@ tedge-mapper flows
 
 This mapper:
 
-- loads all the flows defined in `/etc/tedge/mappers/flows/flows`
+- loads all the flows defined in `/etc/tedge/mappers/local/flows`
 - reloads any flow or script that is created, updated or deleted while the mapper is running
 - subscribes to each flow `input.mqtt.topics`, dispatching the messages to the `onMessage` functions
 - triggers at the configured pace the `onInterval` functions
