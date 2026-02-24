@@ -1,0 +1,26 @@
+name: Download SVGs
+
+on:
+  workflow_dispatch: # You can trigger the workflow manually, or set it on a schedule.
+
+jobs:
+  download-svgs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up environment variables
+        run: |
+          echo "MUNIN_USERNAME=${{ secrets.MUNIN_USERNAME }}" >> $GITHUB_ENV
+          echo "MUNIN_PASSWORD=${{ secrets.MUNIN_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: Make download_svgs.sh executable
+        run: chmod +x /scripts/download_svgs.sh
+
+      - name: Run download_svgs.sh
+        env:
+          MUNIN_USERNAME: ${{ secrets.MUNIN_USERNAME }}
+          MUNIN_PASSWORD: ${{ secrets.MUNIN_PASSWORD }}
+        run: |
+          /scripts/download_svgs.sh
