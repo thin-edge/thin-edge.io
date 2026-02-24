@@ -193,6 +193,21 @@ Placeholder workflow created for ill-defined operations
     ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-issue-3079-test-1.log
     Should Contain    ${workflow_log}    item=TOML parse error
 
+Trigger wrapped workflow without an intermediate state
+    # [Documentation]
+    Execute Command
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge, /usr/bin/systemctl, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init, /sbin/shutdown, /usr/sbin/reboot, /usr/bin/on_shutdown.sh' > /etc/sudoers.d/tedge
+    ${pid_before}    Execute Command    sudo systemctl show --property MainPID tedge-agent
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/restart-tedge-agent-wrapper/robot-1 '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/restart-tedge-agent-wrapper/robot-1
+    ...    message_pattern=.*successful.*
+    ...    maximum=1
+    ...    timeout=120
+    ${pid_after}    Execute Command    sudo systemctl show --property MainPID tedge-agent
+    Should Not Be Equal    ${pid_before}    ${pid_after}    msg=tedge-agent should have been restarted
+
 
 *** Keywords ***
 Custom Test Setup
@@ -217,6 +232,8 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/restart-tedge-agent.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-agent-pid.sh    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/native-reboot.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/restart-tedge-agent-wrapper.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/restart-tedge-agent-internal.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/gp_command.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/super_command.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/sub_command.toml    /etc/tedge/operations/
