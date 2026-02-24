@@ -119,7 +119,7 @@ Each instance of a script must have its own static state
     ...    ${expected_msg}
     [Teardown]    Uninstall Flow    count-*.toml
 
-Running tedge-flows
+Running tedge-mapper-local
     Install Flow    counting-flows    count-events.toml
     Execute Command    tedge mqtt sub test/count/e --duration 2s | grep '{}'
     [Teardown]    Uninstall Flow    count-events.toml
@@ -169,9 +169,9 @@ Appending messages to a file
     [Teardown]    Uninstall Flow    append-to-file.toml
 
 Reloading a broken script when its permission is fixed
-    # Break the a script and make sure tedge-flows can no more handle measurements
+    # Break the script and make sure tedge-mapper-local can no more handle measurements
     Execute Command    chmod a-r /etc/tedge/mappers/local/flows/te_to_c8y.js
-    Restart Service    tedge-flows
+    Restart Service    tedge-mapper-local
     ${transformed_msg}    Execute Command
     ...    sudo -u tedge tedge flows test te/device/main///m/ '{"temperature": 258}'
     ...    stdout=${False}
@@ -239,7 +239,7 @@ Monitor flow definition updates
     ${start}    Get Unix Timestamp
     Execute Command    touch /etc/tedge/mappers/local/flows/collectd.toml
     Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=collectd.toml
 
@@ -278,7 +278,7 @@ Order of flow definition updates does not matter
     ...    ${CURDIR}/issue-3978/test-v1.toml
     ...    /etc/tedge/mappers/local/flows/issue-3978/test.toml
     ${messages}    Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=issue-3978/test.toml
     Should Contain    ${messages[0]}    "updated"
@@ -299,7 +299,7 @@ Order of flow definition updates does not matter
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-3978/test-v2.toml    /etc/tedge/data/
     Execute Command    mv /etc/tedge/data/test-v2.toml /etc/tedge/mappers/local/flows/issue-3978/test.toml
     ${messages}    Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=issue-3978/test.toml
     Should Contain    ${messages[0]}    "broken"
@@ -323,7 +323,7 @@ Order of flow definition updates does not matter
 
     # The new version of flow must be reloaded
     ${messages}    Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=issue-3978/test.toml
     Should Contain    ${messages[0]}    "updated"
@@ -347,7 +347,7 @@ Custom Setup
     Set Suite Variable    $DEVICE_SN
     Copy Configuration Files
     Configure flows
-    Start Service    tedge-flows
+    Start Service    tedge-mapper-local
 
 Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*.js    /etc/tedge/mappers/local/flows/
@@ -359,7 +359,7 @@ Install Flow
     ${start}    Get Unix Timestamp
     ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/${definition_file}    /etc/tedge/mappers/local/flows/
     Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=${definition_file}
 
@@ -373,7 +373,7 @@ Install Nested Flow
     ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/*    /etc/tedge/mappers/local/flows/${directory}/
     Execute Command    ls -lh /etc/tedge/mappers/local/flows/${directory}
     Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=${directory}
 

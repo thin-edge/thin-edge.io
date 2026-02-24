@@ -143,6 +143,17 @@ contents:
       mode: 0644
     packager: rpm
 
+  - src: ./configuration/init/systemd/tedge-mapper-local.service
+    dst: /lib/systemd/system/tedge-mapper-local.service
+    file_info:
+      mode: 0644
+    packager: deb
+  - src: ./configuration/init/systemd/tedge-mapper-local.service
+    dst: /lib/systemd/system/tedge-mapper-local.service
+    file_info:
+      mode: 0644
+    packager: rpm
+
   # cert renewal
   - src: ./configuration/init/systemd/tedge-cert-renewer.target
     dst: /lib/systemd/system/tedge-cert-renewer.target

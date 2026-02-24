@@ -6,6 +6,7 @@ purge_mapper_lock() {
         /run/lock/tedge-mapper-c8y.lock \
         /run/lock/tedge-mapper-az.lock \
         /run/lock/tedge-mapper-aws.lock \
+        /run/lock/tedge-mapper-local.lock \
         /run/lock/tedge-mapper-collectd.lock
 }
 
@@ -23,18 +24,18 @@ fi
 # Automatically added by thin-edge.io
 if [ "$1" = "remove" ]; then
 	if command -v deb-systemd-helper >/dev/null 2>&1; then
-		deb-systemd-helper mask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
+		deb-systemd-helper mask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-local.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
 	elif command -v systemctl >/dev/null 2>&1; then
-		systemctl mask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
+		systemctl mask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-local.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
 	fi
 fi
 
 if [ "$1" = "purge" ]; then
 	if command -v deb-systemd-helper >/dev/null 2>&1; then
-		deb-systemd-helper purge tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
-		deb-systemd-helper unmask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
+		deb-systemd-helper purge tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-local.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
+		deb-systemd-helper unmask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-local.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
 	elif command -v systemctl >/dev/null 2>&1; then
-		systemctl unmask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
+		systemctl unmask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-local.service tedge-mapper-collectd.service tedge-mapper-aws.target tedge-mapper-az.target tedge-mapper-c8y.target >/dev/null || true
 	fi
 fi
 # End automatically added section

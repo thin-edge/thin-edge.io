@@ -285,7 +285,7 @@ the canonical example being a context flow populating the context with measureme
 The extensible mapper is launched as a regular mapper:
 
 ```shell
-tedge-mapper flows
+tedge-mapper local
 ```
 
 This mapper:
@@ -300,9 +300,9 @@ This mapper:
 ## %%te%% flow cli
 
 Flows and steps can be tested using the `tedge flows test` command.
-- These tests are done without any interaction with MQTT and `tedge-mapper flows`,
+- These tests are done without any interaction with MQTT and `tedge-mapper local`,
   meaning that tests can safely be run on a device in production
-- By default, tests run against the flows and scripts used by `tedge-mapper flows`.
+- By default, tests run against the flows and scripts used by `tedge-mapper local`.
   - However, a directory of flows under development can be provided using the `--flows-dir <FLOWS_DIR>` option.
   - One can also test flows of a builtin mapper using the `--mapper` and `--profile` options.
     The tests will then run against the flows of that mapper (and profile if any).

@@ -18,11 +18,11 @@ impl TEdgeComponent for GenMapper {
         tedge_config: TEdgeConfig,
         config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
-        let (mut runtime, mut mqtt_actor) =
-            start_basic_actors("tedge-flows", &tedge_config).await?;
+        let mapper_name = "tedge-mapper-local";
+        let (mut runtime, mut mqtt_actor) = start_basic_actors(mapper_name, &tedge_config).await?;
 
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
-        let service_topic_id = EntityTopicId::default_main_service("tedge-flows")?;
+        let service_topic_id = EntityTopicId::default_main_service(mapper_name)?;
 
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();

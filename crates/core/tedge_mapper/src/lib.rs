@@ -62,7 +62,7 @@ fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
         MapperName::C8y { profile } => Box::new(CumulocityMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
-        MapperName::Flows => Box::new(GenMapper),
+        MapperName::Local => Box::new(GenMapper),
     }
 }
 
@@ -112,7 +112,7 @@ pub enum MapperName {
         profile: Option<ProfileName>,
     },
     Collectd,
-    Flows,
+    Local,
 }
 
 impl fmt::Display for MapperName {
@@ -137,7 +137,7 @@ impl fmt::Display for MapperName {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-c8y@{profile}"),
             MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
-            MapperName::Flows => write!(f, "tedge-flows"),
+            MapperName::Local => write!(f, "tedge-mapper-local"),
         }
     }
 }
