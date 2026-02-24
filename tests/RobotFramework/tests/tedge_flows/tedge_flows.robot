@@ -267,6 +267,79 @@ Setting MQTT attributes
     Should Contain    ${message}    The temperature is high
     [Teardown]    Uninstall Nested Flow    mqtt-flows
 
+Order of flow definition updates does not matter
+    # Start with a working flow
+    ${start}    Get Unix Timestamp
+    Execute Command    sleep 0.1
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/issue-3978/test-old.js
+    ...    /etc/tedge/mappers/flows/flows/issue-3978/test-old.js
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/issue-3978/test-v1.toml
+    ...    /etc/tedge/mappers/flows/flows/issue-3978/test.toml
+    ${messages}    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    date_from=${start}
+    ...    message_contains=issue-3978/test.toml
+    Should Contain    ${messages[0]}    "updated"
+
+    # Check the flow is actually working
+    ${start}    Get Unix Timestamp
+    Execute Command    sleep 0.1
+    Execute Command    tedge mqtt pub test/in '' --qos 1
+    ${messages}    Should Have MQTT Messages
+    ...    topic=test/out
+    ...    minimum=1
+    ...    date_from=${start}
+    Should Be Equal    ${messages[0]}    {"old":"I am from test-old.js"}
+
+    # Update the flow definition, forgetting to provide the new script
+    ${start}    Get Unix Timestamp
+    Execute Command    sleep 0.1
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-3978/test-v2.toml    /etc/tedge/data/
+    Execute Command    mv /etc/tedge/data/test-v2.toml /etc/tedge/mappers/flows/flows/issue-3978/test.toml
+    ${messages}    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    date_from=${start}
+    ...    message_contains=issue-3978/test.toml
+    Should Contain    ${messages[0]}    "broken"
+
+    # The new version of the flow has not been loaded because broken
+    # and is no more running
+    ${start}    Get Unix Timestamp
+    Execute Command    sleep 0.1
+    Execute Command    tedge mqtt pub test/in '' --qos 1
+    Should Not Have MQTT Messages
+    ...    topic=test/out
+    ...    date_from=${start}
+    ...    message_contains={"old":"I am from test-old.js"}
+
+    # Push the new script
+    ${start}    Get Unix Timestamp
+    Execute Command    sleep 0.1
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/issue-3978/test-new.js
+    ...    /etc/tedge/mappers/flows/flows/issue-3978/test-new.js
+
+    # The new version of flow must be reloaded
+    ${messages}    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    date_from=${start}
+    ...    message_contains=issue-3978/test.toml
+    Should Contain    ${messages[0]}    "updated"
+
+    # And effective
+    ${start}    Get Unix Timestamp
+    Execute Command    sleep 0.1
+    Execute Command    tedge mqtt pub test/in '' --qos 1
+    ${messages}    Should Have MQTT Messages
+    ...    topic=test/out
+    ...    minimum=1
+    ...    date_from=${start}
+    Should Be Equal    ${messages[0]}    {"new":"I am from test-new.js"}
+
+    [Teardown]    Uninstall Nested Flow    issue-3978
+
 
 *** Keywords ***
 Custom Setup

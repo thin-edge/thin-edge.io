@@ -117,7 +117,13 @@ pub enum ConfigError {
 }
 
 impl FlowConfig {
-    pub async fn load_all_flows(config_dir: &Utf8Path) -> HashMap<Utf8PathBuf, FlowConfig> {
+    /// Loads all the flow definitions
+    ///
+    /// Return the collection of loaded flow configs
+    /// as well as the list of files that cannot be read as flow specs
+    pub async fn load_all_flows(
+        config_dir: &Utf8Path,
+    ) -> (HashMap<Utf8PathBuf, FlowConfig>, Vec<Utf8PathBuf>) {
         let pattern = format!("{}/**/*.toml", config_dir);
         let paths = tokio::task::spawn_blocking(move || {
             let mut paths = Vec::new();
@@ -143,13 +149,16 @@ impl FlowConfig {
         .unwrap_or_default();
 
         let mut flows = HashMap::new();
+        let mut unloaded_flows = Vec::new();
         for path in paths {
             info!(target: "flows", "Loading flow: {path}");
             if let Some(flow) = FlowConfig::load_single_flow(&path).await {
                 flows.insert(path, flow);
+            } else {
+                unloaded_flows.push(path.clone());
             }
         }
-        flows
+        (flows, unloaded_flows)
     }
 
     pub async fn load_single_flow(flow: &Utf8Path) -> Option<FlowConfig> {

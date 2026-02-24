@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use tedge_utils::file;
 use tedge_utils::fs;
 use tracing::error;
@@ -75,11 +76,17 @@ impl FlowRegistry for BaseFlowRegistry {
     }
 }
 
+pub enum RegistrationStatus {
+    Unregistered,
+    Registered,
+    Broken,
+}
+
 #[async_trait]
 pub trait FlowRegistryExt: FlowRegistry {
     fn config_dir(&self) -> Utf8PathBuf;
 
-    fn contains_flow(&self, path: &Utf8Path) -> bool;
+    fn registration_status(&self, path: &Utf8Path) -> RegistrationStatus;
     fn flow(&self, path: &Utf8Path) -> Option<&Self::Flow>;
     fn flow_mut(&mut self, path: &Utf8Path) -> Option<&mut Self::Flow>;
 
@@ -92,7 +99,11 @@ pub trait FlowRegistryExt: FlowRegistry {
 
     async fn add_flow(&mut self, js_runtime: &mut JsRuntime, path: &Utf8Path);
     async fn remove_flow(&mut self, path: &Utf8Path);
-    async fn reload_script(&mut self, js_runtime: &mut JsRuntime, path: &Utf8Path);
+    async fn reload_script(
+        &mut self,
+        js_runtime: &mut JsRuntime,
+        path: &Utf8Path,
+    ) -> Vec<Utf8PathBuf>;
     async fn remove_script(&mut self, path: &Utf8Path);
 
     async fn load_config(
@@ -130,7 +141,7 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         self.store().config_dir.clone()
     }
 
-    fn contains_flow(&self, path: &Utf8Path) -> bool {
+    fn registration_status(&self, path: &Utf8Path) -> RegistrationStatus {
         self.store().contains_flow(path)
     }
 
@@ -152,14 +163,20 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
 
     async fn load_all_flows(&mut self, js_runtime: &mut JsRuntime) {
         let config_dir = self.config_dir().to_owned();
-        for (path, config) in FlowConfig::load_all_flows(&config_dir).await.into_iter() {
+        let (loaded_flows, unloaded_flows) = FlowConfig::load_all_flows(&config_dir).await;
+        for (path, config) in loaded_flows.into_iter() {
             self.load_config(js_runtime, &path, config).await;
+        }
+        for unloaded_flow in unloaded_flows.into_iter() {
+            self.store_mut().add_unloaded(unloaded_flow);
         }
     }
 
     async fn load_single_flow(&mut self, js_runtime: &mut JsRuntime, flow: &Utf8Path) {
         if let Some(config) = FlowConfig::load_single_flow(flow).await {
             self.load_config(js_runtime, flow, config).await;
+        } else {
+            self.store_mut().add_unloaded(flow.to_owned());
         }
     }
 
@@ -176,30 +193,52 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         info!(target: "flows", "Loading flow {path}");
         if let Some(config) = FlowConfig::load_single_flow(path).await {
             self.load_config(js_runtime, path, config).await;
+        } else {
+            self.store_mut().add_unloaded(path.to_owned());
         }
     }
 
     async fn remove_flow(&mut self, path: &Utf8Path) {
-        self.store_mut().remove(path);
         info!(target: "flows", "Removing flow {path}");
+        self.store_mut().remove(path);
     }
 
-    async fn reload_script(&mut self, js_runtime: &mut JsRuntime, path: &Utf8Path) {
+    async fn reload_script(
+        &mut self,
+        js_runtime: &mut JsRuntime,
+        path: &Utf8Path,
+    ) -> Vec<Utf8PathBuf> {
+        let mut reloaded_flows = HashSet::new();
         for flow in self.store_mut().flows_mut() {
+            let mut reloaded = false;
             for step in &mut flow.as_mut().steps {
                 if step.path() == Some(path) {
                     match step.load_script(js_runtime).await {
                         Ok(()) => {
+                            reloaded = true;
                             info!(target: "flows", "Reloading flow script {path}");
                         }
                         Err(e) => {
                             error!(target: "flows", "Failed to reload flow script {path}: {e}");
-                            return;
                         }
                     }
                 }
             }
+            if reloaded {
+                reloaded_flows.insert(flow.as_ref().source.clone());
+            }
         }
+
+        // reload unloaded flows: they might be fixed by the new script
+        let unloaded_flows = self.store_mut().drain_unloaded();
+        for path in unloaded_flows {
+            self.add_flow(js_runtime, &path).await;
+            if self.store().flow(&path).is_some() {
+                reloaded_flows.insert(path);
+            }
+        }
+
+        reloaded_flows.into_iter().collect()
     }
 
     async fn remove_script(&mut self, path: &Utf8Path) {
@@ -229,7 +268,8 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
                 self.store_mut().insert(flow);
             }
             Err(err) => {
-                error!(target: "flows", "Failed to compile flow {path}: {err}")
+                error!(target: "flows", "Failed to compile flow {path}: {err}");
+                self.store_mut().add_unloaded(path.to_owned());
             }
         }
     }
@@ -284,6 +324,7 @@ pub enum UpdateFlowRegistryError {
 pub struct FlowStore<F> {
     config_dir: Utf8PathBuf,
     flows: HashMap<Utf8PathBuf, F>,
+    unloaded_flows: HashSet<Utf8PathBuf>,
 }
 
 impl<F> FlowStore<F> {
@@ -291,6 +332,7 @@ impl<F> FlowStore<F> {
         FlowStore {
             config_dir: config_dir.as_ref().to_owned(),
             flows: HashMap::new(),
+            unloaded_flows: HashSet::new(),
         }
     }
 
@@ -298,8 +340,14 @@ impl<F> FlowStore<F> {
         &self.config_dir
     }
 
-    pub fn contains_flow(&self, flow: &Utf8Path) -> bool {
-        self.flows.contains_key(flow)
+    pub fn contains_flow(&self, flow: &Utf8Path) -> RegistrationStatus {
+        if self.unloaded_flows.contains(flow) {
+            RegistrationStatus::Broken
+        } else if self.flows.contains_key(flow) {
+            RegistrationStatus::Registered
+        } else {
+            RegistrationStatus::Unregistered
+        }
     }
 
     pub fn flow(&self, name: &Utf8Path) -> Option<&F> {
@@ -317,14 +365,27 @@ impl<F> FlowStore<F> {
     pub fn flows_mut(&mut self) -> impl Iterator<Item = &mut F> {
         self.flows.values_mut()
     }
+
+    pub fn add_unloaded(&mut self, path: Utf8PathBuf) {
+        // When the on-disk version of a flow is broken,
+        // its in-memory version is removed even if still valid.
+        self.flows.remove(&path);
+        self.unloaded_flows.insert(path);
+    }
+
+    pub fn drain_unloaded(&mut self) -> Vec<Utf8PathBuf> {
+        self.unloaded_flows.drain().collect()
+    }
 }
 
 impl<F: AsRef<Flow>> FlowStore<F> {
     pub fn insert(&mut self, flow: F) {
+        self.unloaded_flows.remove(&flow.as_ref().source);
         self.flows.insert(flow.as_ref().source.to_owned(), flow);
     }
 
     pub fn remove(&mut self, flow: &Utf8Path) -> Option<F> {
+        self.unloaded_flows.remove(flow);
         self.flows.remove(flow)
     }
 }
