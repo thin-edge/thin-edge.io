@@ -1,0 +1,4 @@
+input.mqtt.topics = ["test/on-startup"]
+steps = [
+    { script = "on-startup.js" }
+]

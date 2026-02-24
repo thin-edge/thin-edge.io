@@ -194,13 +194,13 @@ impl Flow {
         timestamp: SystemTime,
         message: &Message,
     ) -> FlowResult {
-        let stated_at = stats.flow_on_message_start(self.name());
+        let started_at = stats.flow_on_message_start(self.name());
         let result = self
             .on_message_steps(js_runtime, stats, timestamp, message)
             .await;
         match &result {
             Ok(messages) => {
-                stats.flow_on_message_done(self.name(), stated_at, messages.len());
+                stats.flow_on_message_done(self.name(), started_at, messages.len());
             }
             Err(_) => stats.flow_on_message_failed(self.name()),
         }
