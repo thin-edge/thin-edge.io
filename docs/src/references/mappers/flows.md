@@ -171,7 +171,7 @@ A flow script can also export a `onInterval` function
 
 ## Flow configuration
 
-- The generic mapper loads flows and steps stored in `/etc/tedge/mappers/flows/flows`.
+- The generic mapper loads flows and steps stored in `/etc/tedge/mappers/local/flows`.
 - A flow is defined by a TOML file with `.toml` extension.
 - A step is defined by a JavaScript file with an `.mjs` or `.js` extension.
   - This can also be a TypeScript module with a `.ts` extension.
@@ -285,12 +285,12 @@ the canonical example being a context flow populating the context with measureme
 The extensible mapper is launched as a regular mapper:
 
 ```shell
-tedge-mapper flows
+tedge-mapper local
 ```
 
 This mapper:
 
-- loads all the flows defined in `/etc/tedge/mappers/flows/flows`
+- loads all the flows defined in `/etc/tedge/mappers/local/flows`
 - reloads any flow or script that is created, updated or deleted while the mapper is running
 - subscribes to each flow `input.mqtt.topics`, dispatching the messages to the `onMessage` functions
 - triggers at the configured pace the `onInterval` functions
@@ -300,9 +300,9 @@ This mapper:
 ## %%te%% flow cli
 
 Flows and steps can be tested using the `tedge flows test` command.
-- These tests are done without any interaction with MQTT and `tedge-mapper flows`,
+- These tests are done without any interaction with MQTT and `tedge-mapper local`,
   meaning that tests can safely be run on a device in production
-- By default, tests run against the flows and scripts used by `tedge-mapper flows`.
+- By default, tests run against the flows and scripts used by `tedge-mapper local`.
   - However, a directory of flows under development can be provided using the `--flows-dir <FLOWS_DIR>` option.
   - One can also test flows of a builtin mapper using the `--mapper` and `--profile` options.
     The tests will then run against the flows of that mapper (and profile if any).

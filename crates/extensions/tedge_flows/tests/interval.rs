@@ -477,7 +477,8 @@ type ActorHandle = tokio::task::JoinHandle<Result<(), tedge_actors::RuntimeError
 
 async fn spawn_flows_actor(config_dir: &TempDir, mqtt: &mut MockMqtt) -> ActorHandle {
     let flows = ConnectedFlowRegistry::new(config_dir.path().to_str().unwrap());
-    let status_topic = Topic::new_unchecked("te/device/main/service/tedge-flows/status/flows");
+    let status_topic =
+        Topic::new_unchecked("te/device/main/service/tedge-mapper-local/status/flows");
     let mut flows_builder = FlowsMapperBuilder::try_new(flows, status_topic)
         .await
         .expect("Failed to create FlowsMapper");

@@ -96,7 +96,7 @@ Entity registration data are passed around using the context
 
 Computing average over a time window
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/data/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval --flow /etc/tedge/mappers/flows/flows/average.js
+    ...    cat /etc/tedge/data/average.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --final-on-interval --flow /etc/tedge/mappers/local/flows/average.js
     ...    strip=True
     ${expected_msg}    Execute Command
     ...    cat /etc/tedge/data/average.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
@@ -119,7 +119,7 @@ Each instance of a script must have its own static state
     ...    ${expected_msg}
     [Teardown]    Uninstall Flow    count-*.toml
 
-Running tedge-flows
+Running tedge-mapper-local
     Install Flow    counting-flows    count-events.toml
     Execute Command    tedge mqtt sub test/count/e --duration 2s | grep '{}'
     [Teardown]    Uninstall Flow    count-events.toml
@@ -169,21 +169,21 @@ Appending messages to a file
     [Teardown]    Uninstall Flow    append-to-file.toml
 
 Reloading a broken script when its permission is fixed
-    # Break the a script and make sure tedge-flows can no more handle measurements
-    Execute Command    chmod a-r /etc/tedge/mappers/flows/flows/te_to_c8y.js
-    Restart Service    tedge-flows
+    # Break the script and make sure tedge-mapper-local can no more handle measurements
+    Execute Command    chmod a-r /etc/tedge/mappers/local/flows/te_to_c8y.js
+    Restart Service    tedge-mapper-local
     ${transformed_msg}    Execute Command
     ...    sudo -u tedge tedge flows test te/device/main///m/ '{"temperature": 258}'
     ...    stdout=${False}
     ...    stderr=${True}
     Should Contain
     ...    ${transformed_msg}
-    ...    item=Failed to compile flow /etc/tedge/mappers/flows/flows/measurements.toml
+    ...    item=Failed to compile flow /etc/tedge/mappers/local/flows/measurements.toml
     Should Contain
     ...    ${transformed_msg}
-    ...    item=Cannot read file /etc/tedge/mappers/flows/flows/te_to_c8y.js
+    ...    item=Cannot read file /etc/tedge/mappers/local/flows/te_to_c8y.js
     # Then fix the script
-    Execute Command    chmod a+r /etc/tedge/mappers/flows/flows/te_to_c8y.js
+    Execute Command    chmod a+r /etc/tedge/mappers/local/flows/te_to_c8y.js
     ${start}    Get Unix Timestamp
     Execute Command    tedge mqtt pub te/device/main///m/ '{"temperature": 259.12}'
     Should Have MQTT Messages
@@ -191,7 +191,7 @@ Reloading a broken script when its permission is fixed
     ...    minimum=1
     ...    message_contains="temperature":{"temperature":{"value":259.12}}
     ...    date_from=${start}
-    [Teardown]    Execute Command    cmd=chmod a-r /etc/tedge/mappers/flows/flows/te_to_c8y.js
+    [Teardown]    Execute Command    cmd=chmod a-r /etc/tedge/mappers/local/flows/te_to_c8y.js
 
 Publishing transformation errors
     Install Flow    input-flows    publish-js-errors.toml
@@ -237,15 +237,15 @@ Nested flow directory
 
 Monitor flow definition updates
     ${start}    Get Unix Timestamp
-    Execute Command    touch /etc/tedge/mappers/flows/flows/collectd.toml
+    Execute Command    touch /etc/tedge/mappers/local/flows/collectd.toml
     Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=collectd.toml
 
 Display flows definitions directory
     ${directory}    Execute Command    tedge flows config-dir    strip=${True}
-    Should Be Equal    ${directory}    /etc/tedge/mappers/flows/flows
+    Should Be Equal    ${directory}    /etc/tedge/mappers/local/flows
 
 Flow is discovered when a directory is moved
     # can't copy to /tmp directly
@@ -256,7 +256,7 @@ Flow is discovered when a directory is moved
     Execute Command    mv /main.js /tmp/myflow/
 
     ${start}    Get Unix Timestamp
-    Execute Command    mv /tmp/myflow /etc/tedge/mappers/flows/flows
+    Execute Command    mv /tmp/myflow /etc/tedge/mappers/local/flows
     Should Have MQTT Messages    topic=myflow    message_contains=myflow    date_from=${start}
 
 Setting MQTT attributes
@@ -273,12 +273,12 @@ Order of flow definition updates does not matter
     Execute Command    sleep 0.1
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/issue-3978/test-old.js
-    ...    /etc/tedge/mappers/flows/flows/issue-3978/test-old.js
+    ...    /etc/tedge/mappers/local/flows/issue-3978/test-old.js
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/issue-3978/test-v1.toml
-    ...    /etc/tedge/mappers/flows/flows/issue-3978/test.toml
+    ...    /etc/tedge/mappers/local/flows/issue-3978/test.toml
     ${messages}    Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=issue-3978/test.toml
     Should Contain    ${messages[0]}    "updated"
@@ -297,9 +297,9 @@ Order of flow definition updates does not matter
     ${start}    Get Unix Timestamp
     Execute Command    sleep 0.1
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-3978/test-v2.toml    /etc/tedge/data/
-    Execute Command    mv /etc/tedge/data/test-v2.toml /etc/tedge/mappers/flows/flows/issue-3978/test.toml
+    Execute Command    mv /etc/tedge/data/test-v2.toml /etc/tedge/mappers/local/flows/issue-3978/test.toml
     ${messages}    Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=issue-3978/test.toml
     Should Contain    ${messages[0]}    "broken"
@@ -319,11 +319,11 @@ Order of flow definition updates does not matter
     Execute Command    sleep 0.1
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/issue-3978/test-new.js
-    ...    /etc/tedge/mappers/flows/flows/issue-3978/test-new.js
+    ...    /etc/tedge/mappers/local/flows/issue-3978/test-new.js
 
     # The new version of flow must be reloaded
     ${messages}    Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=issue-3978/test.toml
     Should Contain    ${messages[0]}    "updated"
@@ -347,39 +347,39 @@ Custom Setup
     Set Suite Variable    $DEVICE_SN
     Copy Configuration Files
     Configure flows
-    Start Service    tedge-flows
+    Start Service    tedge-mapper-local
 
 Copy Configuration Files
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*.js    /etc/tedge/mappers/flows/flows/
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*.toml    /etc/tedge/mappers/flows/flows/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*.js    /etc/tedge/mappers/local/flows/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*.toml    /etc/tedge/mappers/local/flows/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/*.samples    /etc/tedge/data/
 
 Install Flow
     [Arguments]    ${directory}    ${definition_file}
     ${start}    Get Unix Timestamp
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/${definition_file}    /etc/tedge/mappers/flows/flows/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/${definition_file}    /etc/tedge/mappers/local/flows/
     Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=${definition_file}
 
 Uninstall Flow
     [Arguments]    ${definition_file}
-    Execute Command    cmd=rm -f /etc/tedge/mappers/flows/flows/${definition_file}
+    Execute Command    cmd=rm -f /etc/tedge/mappers/local/flows/${definition_file}
 
 Install Nested Flow
     [Arguments]    ${directory}
     ${start}    Get Unix Timestamp
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/*    /etc/tedge/mappers/flows/flows/${directory}/
-    Execute Command    ls -lh /etc/tedge/mappers/flows/flows/${directory}
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/*    /etc/tedge/mappers/local/flows/${directory}/
+    Execute Command    ls -lh /etc/tedge/mappers/local/flows/${directory}
     Should Have MQTT Messages
-    ...    topic=te/device/main/service/tedge-flows/status/flows
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
     ...    message_contains=${directory}
 
 Uninstall Nested Flow
     [Arguments]    ${directory}
-    Execute Command    cmd=rm -fr /etc/tedge/mappers/flows/flows/${directory}
+    Execute Command    cmd=rm -fr /etc/tedge/mappers/local/flows/${directory}
 
 Configure flows
     # Required by tail-named-pipe.toml

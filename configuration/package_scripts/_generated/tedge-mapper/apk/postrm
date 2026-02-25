@@ -6,6 +6,7 @@ purge_mapper_lock() {
         /run/lock/tedge-mapper-c8y.lock \
         /run/lock/tedge-mapper-az.lock \
         /run/lock/tedge-mapper-aws.lock \
+        /run/lock/tedge-mapper-local.lock \
         /run/lock/tedge-mapper-collectd.lock
 }
 

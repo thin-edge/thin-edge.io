@@ -4,7 +4,6 @@
 RELEASE_PACKAGES=(
     tedge
     tedge-mapper
-    tedge-flows
     tedge-agent
     tedge-watchdog
     tedge-apt-plugin
