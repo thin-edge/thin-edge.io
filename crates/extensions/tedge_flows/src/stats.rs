@@ -1,7 +1,10 @@
+use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::time::Duration;
 use std::time::Instant;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 
 #[derive(Default)]
 pub struct Counter {
@@ -21,6 +24,12 @@ pub enum Sample {
     MessageOut(usize),
     ErrorRaised,
     ProcessingTime(Duration),
+}
+
+#[derive(Default)]
+pub struct StatsFilter {
+    pub(crate) publish_on_message_stats: bool,
+    pub(crate) publish_on_interval_stats: bool,
 }
 
 #[derive(Default)]
@@ -112,11 +121,16 @@ impl Counter {
         self.from_start.entry(dim).or_default().add(sample);
     }
 
-    pub fn dump_processing_stats(&self) {
-        tracing::info!(target: "flows", "Processing statistics:");
-        for (dim, stats) in &self.from_start {
-            stats.dump_statistics(dim)
-        }
+    pub fn dump_processing_stats<P: StatsPublisher>(
+        &self,
+        publisher: &P,
+        filter: &StatsFilter,
+    ) -> Vec<P::Record> {
+        self.from_start
+            .iter()
+            .filter(|(dim, _)| filter.is_enabled(dim))
+            .filter_map(|(dim, stats)| stats.dump_statistics(dim, publisher))
+            .collect()
     }
 }
 
@@ -139,14 +153,39 @@ impl Stats {
         }
     }
 
-    pub fn dump_statistics(&self, dim: &Dimension) {
-        tracing::info!(target: "flows", "    - {dim}");
-        tracing::info!(target: "flows", "         - input count: {}", self.messages_in);
-        tracing::info!(target: "flows", "         - output count: {}", self.messages_out);
-        tracing::info!(target: "flows", "         - error count: {}", self.error_raised);
-        if let Some(duration_stats) = &self.processing_time {
-            tracing::info!(target: "flows", "         - min processing time: {:?}", duration_stats.min);
-            tracing::info!(target: "flows", "         - max processing time: {:?}", duration_stats.max);
+    pub fn dump_statistics<P: StatsPublisher>(
+        &self,
+        dim: &Dimension,
+        publisher: &P,
+    ) -> Option<P::Record> {
+        let stats = match self.processing_time.as_ref() {
+            None => serde_json::json!({
+                "type": dim.kind().to_string(),
+                "input": self.messages_in,
+                "output": self.messages_out,
+                "error": self.error_raised,
+            }),
+            Some(duration_stats) => serde_json::json!({
+                "type": dim.kind().to_string(),
+                "input": self.messages_in,
+                "output": self.messages_out,
+                "error": self.error_raised,
+                "cpu-min": format!("{:?}", duration_stats.min),
+                "cpu-max": format!("{:?}", duration_stats.max),
+            }),
+        };
+
+        publisher.publish_record(dim, stats)
+    }
+}
+
+impl StatsFilter {
+    fn is_enabled(&self, dim: &Dimension) -> bool {
+        match dim {
+            Dimension::Runtime => true,
+            Dimension::Flow(_) => true,
+            Dimension::OnMessage(_) => self.publish_on_message_stats,
+            Dimension::OnInterval(_) => self.publish_on_interval_stats,
         }
     }
 }
@@ -173,9 +212,9 @@ impl Display for Dimension {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Dimension::Runtime => write!(f, "runtime"),
-            Dimension::Flow(toml) => write!(f, "flow {toml}"),
-            Dimension::OnMessage(js) => write!(f, "onMessage step {js}"),
-            Dimension::OnInterval(js) => write!(f, "onInterval step {js}"),
+            Dimension::Flow(toml) => write!(f, "{}", Self::filename(toml)),
+            Dimension::OnMessage(js) => write!(f, "{}", Self::filename(js)),
+            Dimension::OnInterval(js) => write!(f, "{}.onInterval", Self::filename(js)),
         }
     }
 }
@@ -187,5 +226,38 @@ impl Dimension {
             "onInterval" => Some(Dimension::OnInterval(js.to_owned())),
             _ => None,
         }
+    }
+
+    fn filename(path: &str) -> &str {
+        path.split('/').next_back().unwrap_or(path)
+    }
+
+    fn kind(&self) -> &'static str {
+        match self {
+            Dimension::Runtime => "runtime",
+            Dimension::Flow(_) => "flow",
+            Dimension::OnMessage(_) => "onMessage",
+            Dimension::OnInterval(_) => "onInterval",
+        }
+    }
+}
+
+pub trait StatsPublisher {
+    type Record;
+
+    fn publish_record(&self, dim: &impl Display, stats: Value) -> Option<Self::Record>;
+}
+
+pub struct MqttStatsPublisher {
+    pub topic_prefix: String,
+}
+
+impl StatsPublisher for MqttStatsPublisher {
+    type Record = MqttMessage;
+
+    fn publish_record(&self, dim: &impl Display, stats: Value) -> Option<Self::Record> {
+        let topic = Topic::new(&format!("{}/{}", self.topic_prefix, dim)).ok()?;
+        let payload = stats.to_string();
+        Some(MqttMessage::new(&topic, payload))
     }
 }

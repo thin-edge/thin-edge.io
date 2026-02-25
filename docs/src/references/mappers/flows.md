@@ -297,6 +297,45 @@ This mapper:
 - publishes memory usage statistics
 - publishes flows and steps usage statistics
 
+### Statistics
+
+The memory and cpu statistics published by a mapper for its mapping rules, flows and steps are published over MQTT,
+on a sub-topic of the mapper service topic.
+
+
+```mermaid
+graph LR
+  root --/--> mapper["mapper topic id"] --/--> channel
+
+  subgraph root
+    te
+  end
+
+  subgraph mapper
+    direction LR
+    device --/--- device_id["&lt;device_id&gt;"] --/--- service --/--- mapper_id["&lt;mapper_id&gt;"]
+
+    style device_id stroke-width:1px
+    style mapper_id stroke-width:1px
+  end
+
+  subgraph channel
+    direction LR
+    status --/--- metrics --/--- flow["&lt;flow or script&gt;"]
+  end
+```
+
+For example, for the Cumulocity mapper:
+```
+te/device/main/service/tedge-mapper-c8y/status/metrics/measurements.toml
+```
+
+Statistics publishing is controlled by the following `tedge config` settings:
+
+- `flows.stats.interval` The interval between statistics dumps (1 hour is the default)
+- `flows.stats.on_message` Enable or disable statistics for step onMessage (false is the default)
+- `flows.stats.on_interval`  Enable or disable statistics for step onInterval (false is the default).
+
 ## %%te%% flow cli
 
 Flows and steps can be tested using the `tedge flows test` command.

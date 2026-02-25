@@ -51,6 +51,7 @@ use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_flows::FlowsMapperBuilder;
+use tedge_flows::FlowsMapperConfig;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
@@ -3275,9 +3276,14 @@ pub(crate) async fn c8y_mapper_builder(
 
     let flows_dir = tedge_flows::flows_dir(tmp_dir.utf8_path(), "c8y", None);
     let flows = c8y_mapper_builder.flow_registry(flows_dir).await.unwrap();
-    let flows_status = Topic::new_unchecked("te/device/main/service/tedge-mapper-c8y/status/flows");
+    let service_config = FlowsMapperConfig::new(
+        "te/device/main/service/tedge-mapper-c8y",
+        Duration::from_secs(300),
+        false,
+        false,
+    );
 
-    let mut flows_mapper = FlowsMapperBuilder::try_new(flows, flows_status)
+    let mut flows_mapper = FlowsMapperBuilder::try_new(flows, service_config)
         .await
         .unwrap();
     flows_mapper.connect(&mut mqtt_builder);

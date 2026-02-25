@@ -1,7 +1,6 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use crate::core::mqtt::configure_proxy;
-use crate::core::mqtt::flows_status_topic;
 use anyhow::Context;
 use async_trait::async_trait;
 use c8y_api::http_proxy::read_c8y_credentials;
@@ -15,7 +14,6 @@ use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::models::MQTT_CORE_TLS_PORT;
 use tedge_config::models::MQTT_SERVICE_TLS_PORT;
 use tedge_config::tedge_toml::mapper_config;
@@ -26,6 +24,7 @@ use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_flows::FlowsMapperBuilder;
+use tedge_flows::FlowsMapperConfig;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_bridge::load_bridge_rules_from_directory;
 use tedge_mqtt_bridge::persist_bridge_config_file;
@@ -77,7 +76,7 @@ impl TEdgeComponent for CumulocityMapper {
         let c8y_mapper_name = format!("tedge-mapper-{prefix}");
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&c8y_mapper_name, &tedge_config).await?;
-        let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+        let te = &tedge_config.mqtt.topic_root;
         let service_topic_id = EntityTopicId::default_main_service(&c8y_mapper_name)?;
 
         let c8y_mapper_config = C8yMapperConfig::from_tedge_config(
@@ -167,9 +166,15 @@ impl TEdgeComponent for CumulocityMapper {
         let flows_dir =
             tedge_flows::flows_dir(cfg_dir, "c8y", self.profile.as_ref().map(|p| p.as_ref()));
         let flows = c8y_mapper_actor.flow_registry(flows_dir).await?;
-        let flows_status = flows_status_topic(&mqtt_schema, &service_topic_id);
+        let stats_config = &tedge_config.flows.stats;
+        let service_config = FlowsMapperConfig::new(
+            &format!("{te}/{service_topic_id}"),
+            stats_config.interval.duration(),
+            stats_config.on_message,
+            stats_config.on_interval,
+        );
 
-        let mut flows_mapper = FlowsMapperBuilder::try_new(flows, flows_status).await?;
+        let mut flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;
         flows_mapper.connect(&mut mqtt_actor);
         flows_mapper.connect_fs(&mut fs_watch_actor);
         flows_mapper.connect_cmd(&mut cmd_watcher_actor);

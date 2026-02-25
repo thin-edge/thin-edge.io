@@ -1,12 +1,11 @@
 use crate::core::mapper::start_basic_actors;
-use crate::core::mqtt::flows_status_topic;
 use crate::TEdgeComponent;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowsMapperBuilder;
+use tedge_flows::FlowsMapperConfig;
 use tedge_watch_ext::WatchActorBuilder;
 
 pub struct GenMapper;
@@ -18,18 +17,24 @@ impl TEdgeComponent for GenMapper {
         tedge_config: TEdgeConfig,
         config_dir: &tedge_config::Path,
     ) -> Result<(), anyhow::Error> {
-        let mapper_name = "tedge-mapper-local";
-        let (mut runtime, mut mqtt_actor) = start_basic_actors(mapper_name, &tedge_config).await?;
+        let service_name = "tedge-mapper-local";
+        let (mut runtime, mut mqtt_actor) = start_basic_actors(service_name, &tedge_config).await?;
 
-        let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
-        let service_topic_id = EntityTopicId::default_main_service(mapper_name)?;
+        let te = tedge_config.mqtt.topic_root.as_str();
+        let service_topic_id = EntityTopicId::default_main_service(service_name)?;
+        let stats_config = &tedge_config.flows.stats;
+        let service_config = FlowsMapperConfig::new(
+            &format!("{te}/{service_topic_id}"),
+            stats_config.interval.duration(),
+            stats_config.on_message,
+            stats_config.on_interval,
+        );
 
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();
         let flows_dir = tedge_flows::default_flows_dir(config_dir);
         let flows = ConnectedFlowRegistry::new(flows_dir);
-        let flows_status = flows_status_topic(&mqtt_schema, &service_topic_id);
-        let mut flows_mapper = FlowsMapperBuilder::try_new(flows, flows_status).await?;
+        let mut flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;
         flows_mapper.connect(&mut mqtt_actor);
         flows_mapper.connect_fs(&mut fs_actor);
         flows_mapper.connect_cmd(&mut cmd_watcher_actor);

@@ -1,7 +1,6 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use crate::core::mqtt::configure_proxy;
-use crate::core::mqtt::flows_status_topic;
 use anyhow::Context;
 use async_trait::async_trait;
 use az_mapper_ext::AzureConverter;
@@ -17,6 +16,7 @@ use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperBuilder;
+use tedge_flows::FlowsMapperConfig;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
@@ -102,12 +102,18 @@ impl TEdgeComponent for AzureMapper {
         flows
             .persist_builtin_flow("mea", az_converter.builtin_flow().as_str())
             .await?;
-        let flows_status = flows_status_topic(&mqtt_schema, &service_topic_id);
-
+        let te = &tedge_config.mqtt.topic_root;
+        let stats_config = &tedge_config.flows.stats;
+        let service_config = FlowsMapperConfig::new(
+            &format!("{te}/{service_topic_id}"),
+            stats_config.interval.duration(),
+            stats_config.on_message,
+            stats_config.on_interval,
+        );
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();
 
-        let mut flows_mapper = FlowsMapperBuilder::try_new(flows, flows_status).await?;
+        let mut flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;
         flows_mapper.connect(&mut mqtt_actor);
         flows_mapper.connect_fs(&mut fs_actor);
         flows_mapper.connect_cmd(&mut cmd_watcher_actor);

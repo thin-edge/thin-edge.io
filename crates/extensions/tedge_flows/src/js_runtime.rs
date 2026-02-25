@@ -135,16 +135,14 @@ impl JsRuntime {
         .await?
     }
 
-    pub async fn dump_memory_stats(&self) {
+    pub async fn dump_memory_stats(&self) -> serde_json::Value {
         let usage = self.runtime.memory_usage().await;
-        tracing::info!(target: "flows", "Memory usage:");
-        tracing::info!(target: "flows", "  - malloc size: {}", usage.malloc_size);
-        tracing::info!(target: "flows", "  - used memory size: {}", usage.memory_used_size);
-        tracing::info!(target: "flows", "  - function count: {}", usage.js_func_count);
-        tracing::info!(target: "flows", "  - object count: {}", usage.obj_count);
-        tracing::info!(target: "flows", "  - array count: {}", usage.array_count);
-        tracing::info!(target: "flows", "  - string count: {}", usage.str_count);
-        tracing::info!(target: "flows", "  - atom count: {}", usage.atom_count);
+        serde_json::json!({
+            "malloc_bytes": usage.malloc_size,
+            "memory_used_bytes": usage.memory_used_size,
+            "function_count": usage.js_func_count,
+            "object_count": usage.obj_count,
+        })
     }
 
     async fn send<Response>(
