@@ -28,6 +28,10 @@ pub struct FlowConfig {
     description: Option<String>,
     tags: Option<Vec<String>>,
 
+    /// configuration shared by the steps of this flow
+    #[serde(default)]
+    config: Option<Value>,
+
     input: InputConfig,
     #[serde(default)]
     steps: Vec<StepConfig>,
@@ -195,6 +199,7 @@ impl FlowConfig {
             version: None,
             description: None,
             tags: None,
+            config: None,
             input: InputConfig::Mqtt {
                 topics: vec![input_topic],
             },
@@ -216,6 +221,7 @@ impl FlowConfig {
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
             let step = step
+                .with_shared_config(self.config.as_ref())
                 .compile(rs_transformers, js_runtime, i, &source)
                 .await?;
             steps.push(step);
@@ -238,6 +244,21 @@ impl FlowConfig {
 }
 
 impl StepConfig {
+    pub fn with_shared_config(mut self, shared_config: Option<&Value>) -> Self {
+        match (self.config.as_mut(), shared_config) {
+            (None, Some(config)) => self.config = Some(config.clone()),
+            (Some(Value::Object(config)), Some(Value::Object(shared_config))) => {
+                for (k, v) in shared_config.iter() {
+                    if !config.contains_key(k) {
+                        config.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+            (_, _) => {}
+        }
+        self
+    }
+
     pub async fn compile(
         &self,
         rs_transformers: &BuiltinTransformers,
@@ -386,5 +407,48 @@ fn default_output() -> OutputConfig {
 fn default_errors() -> OutputConfig {
     OutputConfig::Mqtt {
         topic: Some("te/error".to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn inherit_shared_config() {
+        for (shared_config, step_config, merged_config) in [
+            (
+                None,
+                Some(json!({"x": 1, "y": 2})),
+                Some(json!({"x": 1, "y": 2})),
+            ),
+            (
+                Some(json!({"z": 3})),
+                Some(json!({"x": 1, "y": 2})),
+                Some(json!({"x": 1, "y": 2, "z": 3})),
+            ),
+            (
+                Some(json!({"z": 3, "x": 4})),
+                Some(json!({"x": 1, "y": 2})),
+                Some(json!({"x": 1, "y": 2, "z": 3})),
+            ),
+            (
+                Some(json!({"x": 4})),
+                Some(json!({"x": 1, "y": 2})),
+                Some(json!({"x": 1, "y": 2})),
+            ),
+            (Some(json!({"x": 4})), None, Some(json!({"x": 4}))),
+        ] {
+            let step = StepConfig {
+                step: StepSpec::Transformer("some-step".to_string()),
+                config: step_config,
+                interval: None,
+            };
+            assert_eq!(
+                step.with_shared_config(shared_config.as_ref()).config,
+                merged_config
+            );
+        }
     }
 }
