@@ -145,6 +145,8 @@ fn lexer<'src>() -> impl Parser<
 pub enum TemplateComponent<'src> {
     /// A config reference like `${config.c8y.url}` - stores just `c8y.url`
     Config(String, OffsetSpan),
+    /// A mapper config reference like `${mapper.bridge.topic_prefix}` - stores just `bridge.topic_prefix`
+    Mapper(String, OffsetSpan),
     /// The loop item variable `${item}`
     Item,
     /// Literal text
@@ -166,7 +168,7 @@ where
         .labelled("dotted path (e.g. 'c8y.url')")
 }
 
-/// Parser for variable contents - either `config.some.key` or `item`
+/// Parser for variable contents - either `config.some.key`, `mapper.some.key`, or `item`
 fn var_content_parser<'tokens, 'src: 'tokens, I>() -> impl Parser<
     'tokens,
     I,
@@ -183,11 +185,19 @@ where
         )
         .labelled("config reference (e.g. 'config.c8y.url')");
 
+    let mapper_ref = just(Token::Ident("mapper"))
+        .ignore_then(just(Token::Dot))
+        .ignore_then(
+            dotted_path()
+                .map_with(|parts, e| TemplateComponent::Mapper(parts.join("."), e.span())),
+        )
+        .labelled("mapper config reference (e.g. 'mapper.bridge.topic_prefix')");
+
     let item_var = just(Token::Ident("item"))
         .to(TemplateComponent::Item)
         .labelled("'item'");
 
-    choice((config_ref, item_var))
+    choice((config_ref, mapper_ref, item_var))
 }
 
 /// Parser for a complete variable: VarStart content VarEnd
@@ -341,11 +351,70 @@ pub fn parse_config_reference<T>(
     ))
 }
 
+/// Resolves a dotted path (e.g. `bridge.topic_prefix`) against a TOML table.
+///
+/// Returns the string representation of the value, or an error if the key is not found
+/// or the value is not a scalar.
+fn expand_mapper_key(
+    path: &str,
+    table: &toml::Table,
+    span: std::ops::Range<usize>,
+) -> Result<String, ExpandError> {
+    let parts: Vec<&str> = path.split('.').collect();
+    let mut current_table = table;
+
+    // Navigate through all intermediate parts
+    for &part in &parts[..parts.len() - 1] {
+        match current_table.get(part) {
+            Some(toml::Value::Table(t)) => current_table = t,
+            Some(_) => {
+                return Err(ExpandError {
+                    message: format!("Cannot navigate path '{path}': '{part}' is not a table"),
+                    help: None,
+                    span,
+                });
+            }
+            None => {
+                return Err(ExpandError {
+                    message: format!("Key '{path}' not found in mapper config"),
+                    help: Some(format!(
+                        "Check that '{part}' exists in your mapper's tedge.toml"
+                    )),
+                    span,
+                });
+            }
+        }
+    }
+
+    let last_part = parts.last().expect("path must have at least one part");
+    match current_table.get(*last_part) {
+        Some(toml::Value::String(s)) => Ok(s.clone()),
+        Some(toml::Value::Integer(i)) => Ok(i.to_string()),
+        Some(toml::Value::Float(f)) => Ok(f.to_string()),
+        Some(toml::Value::Boolean(b)) => Ok(b.to_string()),
+        Some(_) => Err(ExpandError {
+            message: format!("Mapper config key '{path}' is not a scalar value"),
+            help: Some(
+                "Only string, integer, float, and boolean values can be used in templates".into(),
+            ),
+            span,
+        }),
+        None => Err(ExpandError {
+            message: format!("Key '{path}' not found in mapper config"),
+            help: Some(format!(
+                "Check that '{last_part}' exists in your mapper's tedge.toml"
+            )),
+            span,
+        }),
+    }
+}
+
 /// Expand a template that only contains config references (no template variables)
 pub fn expand_config_template(
     src: &toml::Spanned<String>,
     config: &TEdgeConfig,
     cloud_profile: Option<&ProfileName>,
+    mapper_config: Option<&toml::Table>,
 ) -> Result<String, ExpandError> {
     let components = parse_template(src)?;
     let mut result = String::new();
@@ -358,6 +427,24 @@ pub fn expand_config_template(
                     super::super::expand_config_key(&key, config, cloud_profile, span.into())?;
                 result.push_str(&value);
             }
+            TemplateComponent::Mapper(path, key_span) => match mapper_config {
+                Some(table) => {
+                    let value = expand_mapper_key(&path, table, key_span.into())?;
+                    result.push_str(&value);
+                }
+                None => {
+                    return Err(ExpandError {
+                        message: format!(
+                            "Variable '${{mapper.{path}}}' is only valid in custom mapper bridge rules"
+                        ),
+                        help: Some(
+                            "Create a tedge.toml in your mapper directory to use ${mapper.*}"
+                                .into(),
+                        ),
+                        span: span.into(),
+                    });
+                }
+            },
             TemplateComponent::Item => {
                 return Err(ExpandError {
                     message: "Variable 'item' is only valid inside template rules".into(),
@@ -375,6 +462,7 @@ pub fn expand_config_template(
 pub struct TemplateContext<'a> {
     pub tedge: &'a TEdgeConfig,
     pub loop_var_value: &'a str,
+    pub mapper_config: Option<&'a toml::Table>,
 }
 
 /// Expand a template that can contain both config references and the loop item variable
@@ -386,14 +474,32 @@ pub fn expand_loop_template(
     let components = parse_template(src)?;
     let mut result = String::new();
 
-    for (component, _span) in components {
+    for (component, span) in components {
         match component {
             TemplateComponent::Text(text) => result.push_str(text),
-            TemplateComponent::Config(key, span) => {
+            TemplateComponent::Config(key, key_span) => {
                 let value =
-                    super::super::expand_config_key(&key, ctx.tedge, cloud_profile, span.into())?;
+                    super::super::expand_config_key(&key, ctx.tedge, cloud_profile, key_span.into())?;
                 result.push_str(&value);
             }
+            TemplateComponent::Mapper(path, key_span) => match ctx.mapper_config {
+                Some(table) => {
+                    let value = expand_mapper_key(&path, table, key_span.into())?;
+                    result.push_str(&value);
+                }
+                None => {
+                    return Err(ExpandError {
+                        message: format!(
+                            "Variable '${{mapper.{path}}}' is only valid in custom mapper bridge rules"
+                        ),
+                        help: Some(
+                            "Create a tedge.toml in your mapper directory to use ${mapper.*}"
+                                .into(),
+                        ),
+                        span: span.into(),
+                    });
+                }
+            },
             TemplateComponent::Item => {
                 result.push_str(ctx.loop_var_value);
             }
@@ -470,7 +576,7 @@ mod tests {
     fn config_template_rejects_item_variable() {
         let config = TEdgeConfig::load_toml_str("");
         let input = toml_spanned("${item}");
-        let result = expand_config_template(&input, &config, None);
+        let result = expand_config_template(&input, &config, None, None);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(
@@ -499,7 +605,7 @@ mod tests {
     fn config_template_rejects_non_alphanumeric_characters() {
         let config = TEdgeConfig::load_toml_str("");
         let input = toml_spanned("${test@me}");
-        let result = expand_config_template(&input, &config, None);
+        let result = expand_config_template(&input, &config, None, None);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.message.contains("Invalid character"), "{}", err.message);
@@ -512,6 +618,7 @@ mod tests {
         let ctx = TemplateContext {
             tedge: &config,
             loop_var_value: "my-topic",
+            mapper_config: None,
         };
         let result = expand_loop_template(&toml_spanned("s/uc/${item}"), &ctx, None).unwrap();
         assert_eq!(result, "s/uc/my-topic");
@@ -523,6 +630,7 @@ mod tests {
         let ctx = TemplateContext {
             tedge: &config,
             loop_var_value: "my-topic",
+            mapper_config: None,
         };
         let result = expand_loop_template(&toml_spanned("${unknown}"), &ctx, None);
         assert!(result.is_err());
@@ -533,6 +641,92 @@ mod tests {
             "Error should mention valid options: {}",
             err.message
         );
+    }
+
+    // ========================================================================
+    // ${mapper.*} tests (tasks 1.5-1.6)
+    // ========================================================================
+
+    #[test]
+    fn parses_mapper_reference() {
+        let input = toml_spanned("${mapper.bridge.topic_prefix}");
+        let components = parse_template(&input).unwrap();
+        assert_eq!(components.len(), 1);
+        let TemplateComponent::Mapper(ref path, span) = components[0].0 else {
+            panic!("Expected mapper reference, got: {:?}", components[0].0);
+        };
+        assert_eq!(path, "bridge.topic_prefix");
+        assert_eq!(extract_toml_span(&input, span.into_range()), *path);
+    }
+
+    #[test]
+    fn config_template_expands_simple_mapper_key() {
+        let config = TEdgeConfig::load_toml_str("");
+        let mapper: toml::Table = toml::toml! { topic_prefix = "tb" };
+        let input = toml_spanned("${mapper.topic_prefix}");
+        let result = expand_config_template(&input, &config, None, Some(&mapper)).unwrap();
+        assert_eq!(result, "tb");
+    }
+
+    #[test]
+    fn config_template_expands_nested_mapper_key() {
+        let config = TEdgeConfig::load_toml_str("");
+        let mapper: toml::Table = toml::toml! {
+            [bridge]
+            topic_prefix = "tb"
+        };
+        let input = toml_spanned("${mapper.bridge.topic_prefix}");
+        let result = expand_config_template(&input, &config, None, Some(&mapper)).unwrap();
+        assert_eq!(result, "tb");
+    }
+
+    #[test]
+    fn config_template_errors_on_missing_mapper_key() {
+        let config = TEdgeConfig::load_toml_str("");
+        let mapper: toml::Table = toml::Table::new();
+        let input = toml_spanned("${mapper.nonexistent.key}");
+        let err = expand_config_template(&input, &config, None, Some(&mapper)).unwrap_err();
+        assert!(
+            err.message.contains("nonexistent.key") || err.message.contains("nonexistent"),
+            "{}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn config_template_errors_when_no_mapper_config() {
+        let config = TEdgeConfig::load_toml_str("");
+        let input = toml_spanned("${mapper.bridge.topic_prefix}");
+        let err = expand_config_template(&input, &config, None, None).unwrap_err();
+        assert!(
+            err.message.contains("mapper"),
+            "Error should mention mapper: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn loop_template_expands_mapper_key() {
+        let config = TEdgeConfig::load_toml_str("");
+        let mapper: toml::Table = toml::toml! { topic_prefix = "tb" };
+        let ctx = TemplateContext {
+            tedge: &config,
+            loop_var_value: "telemetry",
+            mapper_config: Some(&mapper),
+        };
+        let result =
+            expand_loop_template(&toml_spanned("${mapper.topic_prefix}/${item}"), &ctx, None)
+                .unwrap();
+        assert_eq!(result, "tb/telemetry");
+    }
+
+    #[test]
+    fn config_template_combines_mapper_and_config_references() {
+        let config = TEdgeConfig::load_toml_str("mqtt.port = 1883");
+        let mapper: toml::Table = toml::toml! { topic_prefix = "tb" };
+        let input = toml_spanned("${mapper.topic_prefix}/${config.mqtt.port}");
+        let result = expand_config_template(&input, &config, None, Some(&mapper)).unwrap();
+        assert_eq!(result, "tb/1883");
     }
 
     // ========================================================================
@@ -614,7 +808,7 @@ mod tests {
     fn error_offset_for_invalid_config_key() {
         let config = TEdgeConfig::load_toml_str("");
         let input = toml_spanned("prefix/${config.invalid.key}/suffix");
-        let err = expand_config_template(&input, &config, None).unwrap_err();
+        let err = expand_config_template(&input, &config, None, None).unwrap_err();
 
         assert_eq!(extract_toml_span(&input, err.span), "invalid.key");
     }

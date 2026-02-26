@@ -113,6 +113,7 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
         config,
         auth_method,
         profile,
+        None,
         &mut visitor,
     )
     .await

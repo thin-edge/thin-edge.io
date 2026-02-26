@@ -114,11 +114,16 @@ impl PersistedBridgeConfig {
         config: &TEdgeConfig,
         auth_method: AuthMethod,
         cloud_profile: Option<&ProfileName>,
+        mapper_config: Option<&toml::Table>,
     ) -> Result<(Vec<ExpandedBridgeRule>, Vec<NonExpansionReason>), Vec<ExpandError>> {
+        let static_cfg = || StaticTemplateConfig {
+            tedge: config,
+            mapper_config,
+        };
         let expand_prefix = |prefix: &Option<_>, name| match prefix.as_ref() {
             Some(prefix) => expand_spanned(
                 prefix,
-                config,
+                static_cfg(),
                 cloud_profile,
                 &format!("Failed to expand {name}"),
             )
@@ -235,11 +240,16 @@ impl PersistedBridgeConfig {
                 local_prefix: final_local_prefix,
                 remote_prefix: final_remote_prefix,
                 direction: rule.direction,
-                topic: expand_spanned(&rule.topic, config, cloud_profile, "Failed to expand topic")
-                    .unwrap_or_else(|e| {
-                        errors.push(e);
-                        String::new()
-                    }),
+                topic: expand_spanned(
+                    &rule.topic,
+                    static_cfg(),
+                    cloud_profile,
+                    "Failed to expand topic",
+                )
+                .unwrap_or_else(|e| {
+                    errors.push(e);
+                    String::new()
+                }),
             };
             if !rule_disabled {
                 expanded_rules.push(expanded);
@@ -318,6 +328,7 @@ impl PersistedBridgeConfig {
                 let template_config = TemplateConfig {
                     r#for: "",
                     tedge: config,
+                    mapper_config,
                 };
                 non_expansion_reasons.push(NonExpansionReason::LoopSourceEmpty {
                     src: template.r#for.clone(),
@@ -341,6 +352,7 @@ impl PersistedBridgeConfig {
                 let template_config = TemplateConfig {
                     r#for: &topic,
                     tedge: config,
+                    mapper_config,
                 };
 
                 let expanded = ExpandedBridgeRule {
@@ -658,6 +670,12 @@ where
 struct TemplateConfig<'a> {
     tedge: &'a TEdgeConfig,
     r#for: &'a str,
+    mapper_config: Option<&'a toml::Table>,
+}
+
+struct StaticTemplateConfig<'a> {
+    tedge: &'a TEdgeConfig,
+    mapper_config: Option<&'a toml::Table>,
 }
 
 /// Expands a tedge.toml config key and return its value
@@ -711,16 +729,16 @@ pub(crate) fn expand_config_key(
 impl Expandable for Template {
     type Target = String;
     type Config<'a>
-        = &'a TEdgeConfig
+        = StaticTemplateConfig<'a>
     where
         Self: 'a;
 
     fn expand(
         &self,
-        config: Self::Config<'_>,
+        config: StaticTemplateConfig<'_>,
         cloud_profile: Option<&ProfileName>,
     ) -> Result<Self::Target, ExpandError> {
-        expand_config_template(&self.0, config, cloud_profile)
+        expand_config_template(&self.0, config.tedge, cloud_profile, config.mapper_config)
     }
 }
 
@@ -733,12 +751,13 @@ impl Expandable for LoopTemplate {
 
     fn expand(
         &self,
-        config: TemplateConfig,
+        config: TemplateConfig<'_>,
         cloud_profile: Option<&ProfileName>,
     ) -> Result<Self::Target, ExpandError> {
         let ctx = TemplateContext {
             tedge: config.tedge,
             loop_var_value: config.r#for,
+            mapper_config: config.mapper_config,
         };
         expand_loop_template(&self.0, &ctx, cloud_profile)
     }
@@ -1051,7 +1070,7 @@ direction = "inbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1);
@@ -1082,7 +1101,7 @@ direction = "inbound"
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1);
@@ -1113,7 +1132,7 @@ direction = "inbound"
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1);
@@ -1145,7 +1164,7 @@ direction = "inbound"
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(
@@ -1211,7 +1230,7 @@ direction = "inbound"
                 let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
                 let errs = config
-                    .expand(&tedge_config, AuthMethod::Certificate, None)
+                    .expand(&tedge_config, AuthMethod::Certificate, None, None)
                     .unwrap_err();
 
                 assert_eq!(
@@ -1249,7 +1268,7 @@ c8y.smartrest.templates = ["a", "b"]
             );
 
             let expanded = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap();
 
             assert_eq!(expanded.0.len(), 2);
@@ -1276,7 +1295,7 @@ c8y.smartrest.templates = ["a", "b"]
             );
 
             let expanded = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap();
 
             assert_eq!(expanded.0.len(), 4);
@@ -1304,7 +1323,7 @@ direction = "inbound"
 
             // This should fail on the first variable
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1);
@@ -1346,7 +1365,7 @@ direction = "outbound"
 
             // This should fail on the first variable
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1);
@@ -1390,7 +1409,7 @@ direction = "outbound"
 
             // This should fail on the first variable
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(errs.len(), 2);
@@ -1452,7 +1471,7 @@ smartrest.templates = ["template1", "template2", "template3"]
             );
 
             let expanded = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap();
 
             // Should create 6 rules: 3 outbound + 3 inbound
@@ -1500,6 +1519,7 @@ bridge.topic_prefix = "test"
                     &tedge_config,
                     AuthMethod::Certificate,
                     Some(&"test".parse().unwrap()),
+                    None,
                 )
                 .unwrap();
 
@@ -1530,7 +1550,7 @@ c8y.mqtt_service.enabled = false
             );
 
             let expanded = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap();
 
             assert_eq!(expanded.0.len(), 0);
@@ -1555,7 +1575,7 @@ c8y.mqtt_service.enabled = true
             );
 
             let expanded = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap();
 
             assert_eq!(expanded.0.len(), 1);
@@ -1576,13 +1596,13 @@ direction = "outbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let with_certificate = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap();
 
             assert_eq!(with_certificate.0.len(), 0);
 
             let with_password = config
-                .expand(&tedge_config, AuthMethod::Password, None)
+                .expand(&tedge_config, AuthMethod::Password, None, None)
                 .unwrap();
 
             assert_eq!(with_password.0.len(), 1);
@@ -1604,13 +1624,13 @@ direction = "outbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let with_certificate = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap();
 
             assert_eq!(with_certificate.0.len(), 4);
 
             let with_password = config
-                .expand(&tedge_config, AuthMethod::Password, None)
+                .expand(&tedge_config, AuthMethod::Password, None, None)
                 .unwrap();
 
             assert_eq!(with_password.0.len(), 0);
@@ -1631,7 +1651,7 @@ direction = "outbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errors = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(
@@ -1658,7 +1678,7 @@ direction = "outbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errors = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(
@@ -1697,7 +1717,7 @@ direction = "inbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1, "Expected 1 error, got: {errs:?}");
@@ -1733,7 +1753,7 @@ direction = "inbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1, "Expected 1 error, got: {errs:?}");
@@ -1770,7 +1790,7 @@ direction = "inbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None)
+                .expand(&tedge_config, AuthMethod::Certificate, None, None)
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1, "Expected 1 error, got: {errs:?}");
