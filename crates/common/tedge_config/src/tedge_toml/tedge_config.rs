@@ -69,7 +69,9 @@ use tedge_config_macros::*;
 use tracing::error;
 
 mod mqtt_config;
+pub use mqtt_config::MqttAuthClientConfigCloudBroker;
 pub use mqtt_config::MqttAuthConfigCloudBroker;
+pub use mqtt_config::PrivateKeyType;
 pub use mqtt_config::TEdgeMqttClientAuthConfig;
 
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";

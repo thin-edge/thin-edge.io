@@ -5052,6 +5052,7 @@ dependencies = [
  "collectd_ext",
  "flockfile",
  "mqtt_channel",
+ "serde",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
@@ -5069,6 +5070,7 @@ dependencies = [
  "tedge_utils",
  "tedge_watch_ext",
  "tokio",
+ "toml 0.9.6",
  "tracing",
  "yansi",
 ]
