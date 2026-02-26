@@ -102,6 +102,7 @@ pub async fn visit_bridge_config_dir(
     tedge_config: &TEdgeConfig,
     auth_method: AuthMethod,
     cloud_profile: Option<&ProfileName>,
+    mapper_config: Option<&toml::Table>,
     visitor: &mut impl BridgeConfigVisitor,
 ) -> anyhow::Result<()> {
     let mut read_dir = tokio::fs::read_dir(dir)
@@ -134,6 +135,7 @@ pub async fn visit_bridge_config_dir(
             tedge_config,
             auth_method,
             cloud_profile,
+            mapper_config,
         )?;
 
         visitor.on_rules_loaded(utf8_path, &content, rules, non_expansions)?;
@@ -152,6 +154,7 @@ pub async fn load_bridge_rules_from_directory(
     tedge_config: &TEdgeConfig,
     auth_method: AuthMethod,
     cloud_profile: Option<&ProfileName>,
+    mapper_config: Option<&toml::Table>,
 ) -> anyhow::Result<BridgeConfig> {
     struct RuntimeVisitor(BridgeConfig);
 
@@ -169,7 +172,15 @@ pub async fn load_bridge_rules_from_directory(
     }
 
     let mut visitor = RuntimeVisitor(BridgeConfig::new());
-    visit_bridge_config_dir(dir, tedge_config, auth_method, cloud_profile, &mut visitor).await?;
+    visit_bridge_config_dir(
+        dir,
+        tedge_config,
+        auth_method,
+        cloud_profile,
+        mapper_config,
+        &mut visitor,
+    )
+    .await?;
     Ok(visitor.0)
 }
 
@@ -353,6 +364,7 @@ mod tests {
                 &tedge_config,
                 AuthMethod::Certificate,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -389,6 +401,7 @@ mod tests {
                 bridge_dir,
                 &tedge_config,
                 AuthMethod::Certificate,
+                None,
                 None,
             )
             .await

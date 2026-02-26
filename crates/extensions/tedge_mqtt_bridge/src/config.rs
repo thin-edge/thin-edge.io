@@ -295,6 +295,7 @@ pub fn expand_bridge_rules(
     tedge_config: &TEdgeConfig,
     auth_method: AuthMethod,
     cloud_profile: Option<&ProfileName>,
+    mapper_config: Option<&toml::Table>,
 ) -> Result<(Vec<ExpandedBridgeRule>, Vec<NonExpansionReason>), InvalidBridgeRule> {
     let config: crate::config_toml::PersistedBridgeConfig =
         toml::from_str(toml_template).map_err(|e| {
@@ -303,7 +304,7 @@ pub fn expand_bridge_rules(
         })?;
 
     config
-        .expand(tedge_config, auth_method, cloud_profile)
+        .expand(tedge_config, auth_method, cloud_profile, mapper_config)
         .map_err(|errors| {
             for error in errors {
                 print_expansion_error(file_path.as_str(), toml_template, &error);
