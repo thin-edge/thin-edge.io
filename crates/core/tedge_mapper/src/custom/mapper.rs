@@ -31,7 +31,6 @@ use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_bridge::MqttOptions;
 use tedge_watch_ext::WatchActorBuilder;
-use tracing::warn;
 
 /// A custom mapper instance, identified by an optional profile name.
 ///
@@ -172,19 +171,24 @@ impl TEdgeComponent for CustomMapper {
         let mapper_dir = self.mapper_dir(config_dir);
         let service_name = self.service_name();
 
-        // 3.3: Validate that the mapper directory exists
         validate_profile_dir(&mapper_dir, config_dir)?;
+
+        let has_flows_dir = mapper_dir.join("flows").is_dir();
+
+        let tedge_toml_exists = mapper_dir.join("tedge.toml").is_file();
+        if !tedge_toml_exists && !has_flows_dir {
+            anyhow::bail!(
+                "Custom mapper directory '{}' contains neither a 'tedge.toml' nor a 'flows/' \
+                 directory — the mapper would do nothing. Add connection settings, flow scripts, \
+                 or both.",
+                mapper_dir
+            );
+        }
 
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&service_name, &tedge_config).await?;
 
-        let has_bridge_dir = mapper_dir.join("bridge").is_dir();
-        let has_flows_dir = mapper_dir.join("flows").is_dir();
-
-        // 4.3/4.4: Check for bridge directory without connection config.
-        // check_startup_config returns an error when bridge/ exists but tedge.toml is absent.
         if let Some(config) = check_startup_config(&mapper_dir).await? {
-            // 4.5: Start the MQTT bridge
             let bridge_dir = mapper_dir.join("bridge");
             let bridge_service_name = self.bridge_service_name();
             let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
@@ -192,14 +196,15 @@ impl TEdgeComponent for CustomMapper {
             let health_topic =
                 service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
 
-            let conn = config.connection.as_ref().with_context(|| {
+            let url = config.url.as_ref().with_context(|| {
                 format!(
-                    "'{}/tedge.toml' is missing a [connection] section required for bridge rules",
+                    "'{}/tedge.toml' is missing a 'url' field required for the MQTT bridge",
                     mapper_dir
                 )
             })?;
 
-            let mut cloud_config = MqttOptions::new(&service_name, &conn.url, conn.port);
+            let mut cloud_config =
+                MqttOptions::new(&service_name, url.host().to_string(), url.port().0);
             cloud_config.set_clean_session(false);
 
             // Set up certificate authentication if cert/key paths are provided
@@ -246,7 +251,6 @@ impl TEdgeComponent for CustomMapper {
             runtime.spawn(bridge_actor).await?;
         }
 
-        // 4.6: Start the flows engine if flows/ is present
         if has_flows_dir {
             let service_topic_id = EntityTopicId::default_main_service(&service_name)?;
             let te = &tedge_config.mqtt.topic_root;
@@ -271,15 +275,6 @@ impl TEdgeComponent for CustomMapper {
             runtime.spawn(flows_mapper).await?;
             runtime.spawn(fs_actor).await?;
             runtime.spawn(cmd_watcher_actor).await?;
-        }
-
-        // 4.7: If neither bridge nor flows — start successfully with no active components
-        if !has_bridge_dir && !has_flows_dir {
-            warn!(
-                "Custom mapper '{}' has no 'bridge/' or 'flows/' directory — \
-                 starting with no active components",
-                mapper_dir
-            );
         }
 
         runtime.spawn(mqtt_actor).await?;
@@ -402,17 +397,17 @@ mod tests {
         }
     }
 
-    // Integration-level unit tests (task 7.4, 7.5)
     mod startup_config {
         use super::*;
         use tedge_test_utils::fs::TempTedgeDir;
 
-        /// Task 7.4: bridge/ without tedge.toml produces a clear error
         #[tokio::test]
         async fn bridge_dir_without_tedge_toml_errors() {
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
-            tokio::fs::create_dir_all(mapper_dir.join("bridge")).await.unwrap();
+            tokio::fs::create_dir_all(mapper_dir.join("bridge"))
+                .await
+                .unwrap();
 
             let err = check_startup_config(&mapper_dir).await.unwrap_err();
             let msg = format!("{err}");
@@ -422,21 +417,25 @@ mod tests {
             );
         }
 
-        /// Task 7.4 (positive): bridge/ with tedge.toml loads config successfully
         #[tokio::test]
         async fn bridge_dir_with_tedge_toml_returns_config() {
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
-            tokio::fs::create_dir_all(mapper_dir.join("bridge")).await.unwrap();
+            tokio::fs::create_dir_all(mapper_dir.join("bridge"))
+                .await
+                .unwrap();
             tokio::fs::write(
                 mapper_dir.join("tedge.toml"),
-                "[connection]\nurl = \"mqtt.example.com\"\n",
+                "url = \"mqtt.example.com\"\n",
             )
             .await
             .unwrap();
 
             let config = check_startup_config(&mapper_dir).await.unwrap();
-            assert!(config.is_some(), "Should return config when tedge.toml exists");
+            assert!(
+                config.is_some(),
+                "Should return config when tedge.toml exists"
+            );
         }
 
         /// No bridge/ directory returns None (flows-only case)
@@ -444,10 +443,15 @@ mod tests {
         async fn no_bridge_dir_returns_none() {
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/custom.flows-only");
-            tokio::fs::create_dir_all(mapper_dir.join("flows")).await.unwrap();
+            tokio::fs::create_dir_all(mapper_dir.join("flows"))
+                .await
+                .unwrap();
 
             let config = check_startup_config(&mapper_dir).await.unwrap();
-            assert!(config.is_none(), "Should return None when no bridge/ dir exists");
+            assert!(
+                config.is_none(),
+                "Should return None when no bridge/ dir exists"
+            );
         }
     }
 }

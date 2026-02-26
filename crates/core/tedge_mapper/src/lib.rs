@@ -93,8 +93,9 @@ pub struct MapperOpt {
     pub common: CommonArgs,
 }
 
-#[derive(Debug, clap::Subcommand, Clone)]
+#[derive(Debug, clap::Subcommand, Clone, strum::EnumString)]
 #[clap(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum MapperName {
     #[cfg(feature = "azure")]
     Az {
@@ -165,7 +166,6 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
         &mapper_opt.common.config_dir,
     )?;
 
-    // 6.3: Scan mappers directory and warn about unrecognised entries
     let mappers_dir = mapper_opt.common.config_dir.join("mappers");
     core::mappers_dir::warn_unrecognised_mapper_dirs(&mappers_dir);
 

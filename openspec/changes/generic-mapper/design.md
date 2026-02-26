@@ -77,9 +77,7 @@ A custom mapper's `tedge.toml` (e.g. `/etc/tedge/mappers/custom.thingsboard/tedg
 When present, the `tedge.toml` is parsed directly by the custom mapper and is invisible to the global `tedge_config`. A minimal example:
 
 ```toml
-[connection]
-url = "mqtt.thingsboard.io"
-port = 8883
+url = "mqtt.thingsboard.io:8883"
 
 [device]
 cert_path = "/etc/tedge/device-certs/tedge-certificate.pem"
@@ -89,7 +87,7 @@ key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
 topic_prefix = "tb"
 ```
 
-The exact schema for this file is defined by the custom mapper code (D4), not by the config macro. If `bridge/` rules exist but `tedge.toml` is absent, the mapper MUST emit an error — bridge rules require connection details to be useful.
+The `url` field is a top-level key using the `HostPort` type (the same `host:port` format used by built-in mapper URLs; port is optional and defaults to 8883). The exact schema for this file is defined by the custom mapper code (D4), not by the config macro. If `bridge/` rules exist but `tedge.toml` is absent, the mapper MUST emit an error — bridge rules require connection details to be useful.
 
 **Bridge template access via `${mapper.*}`**
 
@@ -132,9 +130,10 @@ Its `start()` method, given mapper directory `custom.{name}/` (or `custom/` if u
 
 1. Check for `tedge.toml` and `bridge/` in the mapper directory
    - If `bridge/` exists but `tedge.toml` does not → error: bridge rules require connection settings
+   - If neither `tedge.toml` nor `flows/` is present → error: no active components to start (an empty mapper directory is not useful and likely a misconfiguration)
 2. If `tedge.toml` is present:
-   - Parse it to a simple configuration struct replicating the shared configuration from existing mappers
-   - Extract connection details (URL, TLS config, device identity) from the table
+   - Parse it to a simple configuration struct; `url` is deserialized as `HostPort` (consistent with built-in mapper URL fields)
+   - Extract connection details (host:port from `url`, TLS config, device identity) from the struct
    - Start basic actors (MQTT connection to local broker)
    - Start the built-in MQTT bridge, loading bridge rules from `bridge/` with the mapper's config table available as `${mapper.*}` in templates
 3. If `flows/` is present: start the flows engine, loading flows from `flows/`

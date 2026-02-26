@@ -9,8 +9,8 @@
 
 ## 2. Custom Mapper Config Parsing
 
-- [x] 2.1 Define a `CustomMapperConfig` struct (or use `toml::Table`) for the mapper's `tedge.toml`
-- [x] 2.2 Implement a parser that reads `tedge.toml` from the mapper directory and returns the typed config (or raw table for templates)
+- [x] 2.1 Redefine `CustomMapperConfig`: remove the `[connection]` TOML wrapper section; move `url` to a top-level key deserialized as `HostPort` (combining host and optional port, matching built-in mapper URL convention); remove the separate `port` field
+- [x] 2.2 Update the `tedge.toml` parser and all call sites to use the new top-level `url: HostPort` field; update unit tests to use the new format
 - [x] 2.3 Emit a clear parse error including the file path and TOML error location when the file contains invalid TOML
 - [x] 2.4 Add unit tests for config parsing: valid TOML, invalid TOML, file not found
 
@@ -29,7 +29,7 @@
 - [x] 4.4 Return a clear error when `bridge/` is present but `tedge.toml` is absent
 - [x] 4.5 If `tedge.toml` is present: parse config, extract connection/TLS details, start the MQTT bridge with the mapper config table passed as `${mapper.*}` context
 - [x] 4.6 If `flows/` is present: start the flows engine, loading flows from that directory
-- [x] 4.7 Support the empty-directory case: start successfully with no active components when neither `tedge.toml` nor `flows/` is present
+- [x] 4.7 Error when mapper directory contains neither `tedge.toml` nor `flows/`: remove the empty-directory warn-and-continue logic and replace with a clear error message indicating the mapper would do nothing
 
 ## 5. Service Identity
 
@@ -62,3 +62,9 @@
 - [ ] 8.2 Document the `tedge.toml` schema (required fields for bridge, optional extra fields, available in `${mapper.*}`)
 - [ ] 8.3 Document the `${mapper.*}` template namespace with examples alongside `${config.*}`
 - [ ] 8.4 Write a ThingsBoard walkthrough example (directory layout, `tedge.toml`, bridge rules, flow scripts, systemd unit)
+
+## 9. Code Quality / Cleanup
+
+- [x] 9.1 Remove inline task-reference comments from `mapper.rs` (e.g. `// 3.3:`, `// 4.3/4.4:`, `// 4.5`, `// 4.6`, `// 4.7`) — these are implementation notes that don't belong in the final code
+- [x] 9.2 Eliminate the `BUILTIN_MAPPERS` constant in `mappers_dir.rs` — it duplicates the set of known mapper names already represented by the `MapperName` enum; derive or reference from the single source of truth instead
+- [x] 9.3 Fix the `unrecognised_names_are_flagged` test in `mappers_dir.rs`: the comment "Typo: missing 's' in thingsboard" is wrong (the typo is an extra 'e' in `custom`); reduce to two cases — one with an unrecognised type prefix (`custome.thingsboard`) and one bare unrecognised name (`thingsboard`)
