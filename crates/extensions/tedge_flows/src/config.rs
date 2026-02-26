@@ -10,6 +10,7 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use glob::glob;
 use serde::Deserialize;
+use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -222,6 +223,7 @@ impl FlowConfig {
         for (i, step) in self.steps.into_iter().enumerate() {
             let step = step
                 .with_shared_config(self.config.as_ref())
+                .with_interval_as_config()
                 .compile(rs_transformers, js_runtime, i, &source)
                 .await?;
             steps.push(step);
@@ -255,6 +257,20 @@ impl StepConfig {
                 }
             }
             (_, _) => {}
+        }
+        self
+    }
+
+    pub fn with_interval_as_config(mut self) -> Self {
+        let interval = self.interval.unwrap_or(Duration::from_secs(1));
+        match self.config.as_mut() {
+            None => {
+                self.config = Some(json!({"interval": interval.as_secs() }));
+            }
+            Some(Value::Object(config)) => {
+                config.insert("interval".to_string(), json!(interval.as_secs()));
+            }
+            _ => (),
         }
         self
     }
@@ -449,6 +465,35 @@ mod tests {
                 step.with_shared_config(shared_config.as_ref()).config,
                 merged_config
             );
+        }
+    }
+
+    #[test]
+    fn with_interval_as_config() {
+        for (interval, config, merged_config) in [
+            (None, None, Some(json!({"interval": 1}))),
+            (
+                Some(Duration::from_secs(5)),
+                None,
+                Some(json!({"interval": 5})),
+            ),
+            (
+                None,
+                Some(json!({"x": 42})),
+                Some(json!({"interval": 1, "x": 42})),
+            ),
+            (
+                Some(Duration::from_secs(5)),
+                Some(json!({"x": 42})),
+                Some(json!({"interval": 5, "x": 42})),
+            ),
+        ] {
+            let step = StepConfig {
+                step: StepSpec::Transformer("some-step".to_string()),
+                config,
+                interval,
+            };
+            assert_eq!(step.with_interval_as_config().config, merged_config);
         }
     }
 }
