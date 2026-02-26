@@ -17,7 +17,6 @@ use futures::FutureExt;
 use serde_json::json;
 use std::cmp::min;
 use std::collections::HashSet;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 use tedge_actors::Actor;
@@ -54,7 +53,7 @@ pub struct FlowsMapper {
     ///
     /// When a directory containing flows is moved from the flows directory, we only get an fs event
     /// containing the name of the directory, so we need to remember what files were loaded so we can unload them.
-    loaded_files: HashSet<Arc<Utf8Path>>,
+    loaded_files: HashSet<Utf8PathBuf>,
 }
 
 impl FlowsMapper {
@@ -461,82 +460,94 @@ impl FlowsMapper {
                 let Ok(path) = Utf8PathBuf::try_from(path) else {
                     return Ok(());
                 };
-
-                if path.is_dir() {
-                    // we can get Modified with path to a directory, which means another directory
-                    // was moved into flows dir.
-                    let Ok(entries) = std::fs::read_dir(&path).inspect_err(
-                        |error| error!(%path, ?error, "Failed to read inside flows directory"),
-                    ) else {
-                        return Ok(());
-                    };
-                    for entry in entries {
-                        let Ok(entry) = entry.inspect_err(
-                            |error| error!(%path, ?error, "Failed to read inside flows directory"),
-                        ) else {
-                            continue;
-                        };
-                        let Ok(path) = Utf8PathBuf::try_from(entry.path()) else {
-                            error!(?path, "Invalid path");
-                            continue;
-                        };
-
-                        self.on_file_updated(path.as_path()).await?;
-                    }
-                } else if path.is_file() {
-                    self.on_file_updated(&path).await?;
-                } else if !path.exists() {
-                    // either file or directory was renamed/moved
-                    let (removed_flows, removed_scripts): (Vec<_>, Vec<_>) = self
-                        .loaded_files
-                        .iter()
-                        .filter(|p| p.starts_with(&path))
-                        .cloned()
-                        // remove flows before scripts, otherwise a warning is printed
-                        .partition(|p| p.extension() == Some("toml"));
-                    for file in removed_flows {
-                        self.on_file_removed(&file).await?;
-                    }
-                    for file in removed_scripts {
-                        self.on_file_removed(&file).await?;
-                    }
-                }
+                self.on_path_updated(path.as_path()).await?;
             }
-            FsWatchEvent::FileDeleted(path) => {
+            FsWatchEvent::FileDeleted(path) | FsWatchEvent::DirectoryDeleted(path) => {
                 let Ok(path) = Utf8PathBuf::try_from(path) else {
                     return Ok(());
                 };
-                self.on_file_removed(path.as_path()).await?;
+                self.on_path_removed(path.as_path()).await?;
             }
             _ => {}
         }
         Ok(())
     }
 
+    /// Update/remove files as required after a path was modified.
+    async fn on_path_updated(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
+        if path.is_dir() {
+            // we can get Modified with path to a directory, which means another directory
+            // was moved into flows dir.
+            let Ok(entries) = std::fs::read_dir(path).inspect_err(
+                |error| error!(%path, ?error, "Failed to read inside flows directory"),
+            ) else {
+                return Ok(());
+            };
+            for entry in entries {
+                let Ok(entry) = entry.inspect_err(
+                    |error| error!(%path, ?error, "Failed to read inside flows directory"),
+                ) else {
+                    continue;
+                };
+                let Ok(path) = Utf8PathBuf::try_from(entry.path()) else {
+                    error!(?path, "Invalid path");
+                    continue;
+                };
+
+                self.on_file_updated(path.as_path()).await?;
+            }
+        } else if path.is_file() {
+            self.on_file_updated(path).await?;
+        } else if !path.exists() {
+            self.on_path_removed(path).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Remove all flows and scripts that are currently loaded if they are prefixed by the path.
+    async fn on_path_removed(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
+        let (removed_flows, removed_scripts): (Vec<_>, Vec<_>) = self
+            .loaded_files
+            .iter()
+            .filter(|p| p.starts_with(path))
+            .cloned()
+            // remove flows before scripts, otherwise a warning is printed
+            .partition(|p| p.extension() == Some("toml"));
+        for file in removed_flows {
+            self.on_file_removed(&file).await?;
+        }
+        for file in removed_scripts {
+            self.on_file_removed(&file).await?;
+        }
+
+        Ok(())
+    }
+
     async fn on_file_updated(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
         if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
-            self.loaded_files.insert(path.into());
             let reloaded_flows = self.processor.reload_script(path).await;
             self.send_updated_subscriptions().await?;
             self.update_all_flow_status(reloaded_flows).await?;
-        } else if path.extension() == Some("toml") {
             self.loaded_files.insert(path.into());
+        } else if path.extension() == Some("toml") {
             self.processor.add_flow(path).await;
             self.send_updated_subscriptions().await?;
             self.update_flow_status(path).await?;
+            self.loaded_files.insert(path.into());
         }
         Ok(())
     }
 
     async fn on_file_removed(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
         if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
-            self.loaded_files.remove(path);
             self.processor.remove_script(path).await;
-        } else if path.extension() == Some("toml") {
             self.loaded_files.remove(path);
+        } else if path.extension() == Some("toml") {
             self.processor.remove_flow(path).await;
             self.send_updated_subscriptions().await?;
             self.update_flow_status(path).await?;
+            self.loaded_files.remove(path);
         }
         Ok(())
     }
