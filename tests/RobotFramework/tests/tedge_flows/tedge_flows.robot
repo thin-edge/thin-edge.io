@@ -247,8 +247,12 @@ Display flows definitions directory
     ${directory}    Execute Command    tedge flows config-dir    strip=${True}
     Should Be Equal    ${directory}    /etc/tedge/mappers/local/flows
 
-Flow is discovered when a directory is moved
-    # can't copy to /tmp directly
+Flow is added/removed when a directory is moved in/out
+    # note: in the test image /tmp is on different filesystem, so moving between there and flows dir creates and deletes files in flows dir fs
+    # moving between flows dir and its parent dir is in the same filesystem, so creates Modified events (it's technically only a rename)
+
+    # first test with a different filesystem
+    # for some reason docker prevents us from copying to /tmp directly
     ThinEdgeIO.Transfer To Device    ${CURDIR}/nested-flows/myflow/flow.toml    /
     ThinEdgeIO.Transfer To Device    ${CURDIR}/nested-flows/myflow/main.js    /
     Execute Command    mkdir -p /tmp/myflow
@@ -256,8 +260,43 @@ Flow is discovered when a directory is moved
     Execute Command    mv /main.js /tmp/myflow/
 
     ${start}    Get Unix Timestamp
-    Execute Command    mv /tmp/myflow /etc/tedge/mappers/local/flows
-    Should Have MQTT Messages    topic=myflow    message_contains=myflow    date_from=${start}
+    Execute Command    mv /tmp/myflow /etc/tedge/mappers/local/flows/myflow
+    Execute Command    sleep 1
+    Execute Command    tedge mqtt pub test/nested-flows/myflow 'flow started after moving directory into flows dir'
+    Logs Should Contain
+    ...    JavaScript.Console: "flow started after moving directory into flows dir"
+    ...    date_from=${start}
+    ...    max_matches=1
+
+    # now moving the directory again should stop the flow
+    ${start}    Get Unix Timestamp
+    Execute Command    mv /etc/tedge/mappers/local/flows/myflow /tmp/myflow
+    Execute Command    sleep 1
+    Execute Command    tedge mqtt pub test/nested-flows/myflow 'flow removed after moving directory out of flows dir'
+    Logs Should Not Contain
+    ...    JavaScript.Console: "flow removed after moving directory out of flows dir"
+    ...    date_from=${start}
+
+    # now test on the same filesystem
+    Execute Command    mv /tmp/myflow /etc/tedge/mappers/local/myflow
+
+    ${start}    Get Unix Timestamp
+    Execute Command    mv /etc/tedge/mappers/local/myflow /etc/tedge/mappers/local/flows/myflow
+    Execute Command    sleep 1
+    Execute Command    tedge mqtt pub test/nested-flows/myflow 'flow started after moving directory into flows dir'
+    Logs Should Contain
+    ...    JavaScript.Console: "flow started after moving directory into flows dir"
+    ...    date_from=${start}
+    ...    max_matches=1
+
+    # now moving the directory again should stop the flow
+    ${start}    Get Unix Timestamp
+    Execute Command    mv /etc/tedge/mappers/local/flows/myflow /etc/tedge/mappers/local/myflow
+    Execute Command    sleep 1
+    Execute Command    tedge mqtt pub test/nested-flows/myflow 'flow removed after moving directory out of flows dir'
+    Logs Should Not Contain
+    ...    JavaScript.Console: "flow removed after moving directory out of flows dir"
+    ...    date_from=${start}
 
 Setting MQTT attributes
     Install Nested Flow    mqtt-flows
