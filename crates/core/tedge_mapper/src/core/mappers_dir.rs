@@ -8,8 +8,7 @@
 use camino::Utf8Path;
 use tracing::warn;
 
-/// Known built-in mapper type names.
-const BUILTIN_MAPPERS: &[&str] = &["c8y", "az", "aws", "collectd", "local"];
+use crate::MapperName;
 
 /// Classifies a mapper directory name.
 #[derive(Debug, PartialEq, Eq)]
@@ -28,21 +27,17 @@ pub enum MapperDirKind {
 
 /// Classifies a single mapper directory name.
 pub fn classify_mapper_dir(name: &str) -> MapperDirKind {
-    if BUILTIN_MAPPERS.contains(&name) {
-        return MapperDirKind::BuiltIn;
+    let (name, profile) = match name.split_once('.') {
+        Some((name, profile)) => (name, Some(profile)),
+        None => (name, None),
+    };
+    match name.parse::<MapperName>() {
+        Ok(MapperName::Custom { .. }) if profile.is_none() => MapperDirKind::Custom,
+        Ok(MapperName::Custom { .. }) => MapperDirKind::ProfiledCustom,
+        Ok(_) if profile.is_none() => MapperDirKind::BuiltIn,
+        Ok(_) => MapperDirKind::ProfiledBuiltIn,
+        Err(_) => MapperDirKind::Unrecognised,
     }
-    if name == "custom" {
-        return MapperDirKind::Custom;
-    }
-    if let Some(profile_type) = name.split_once('.').map(|(t, _)| t) {
-        if BUILTIN_MAPPERS.contains(&profile_type) {
-            return MapperDirKind::ProfiledBuiltIn;
-        }
-        if profile_type == "custom" {
-            return MapperDirKind::ProfiledCustom;
-        }
-    }
-    MapperDirKind::Unrecognised
 }
 
 /// Scans the mappers directory and emits a warning for each unrecognised subdirectory.
@@ -85,7 +80,7 @@ mod tests {
 
         #[test]
         fn builtin_names_are_recognised() {
-            for name in BUILTIN_MAPPERS {
+            for name in ["c8y", "az", "aws", "local"] {
                 assert_eq!(
                     classify_mapper_dir(name),
                     MapperDirKind::BuiltIn,
@@ -129,19 +124,14 @@ mod tests {
 
         #[test]
         fn unrecognised_names_are_flagged() {
-            // Typo: missing 's' in thingsboard
+            // Typo: extra 'e' in the custom prefix
             assert_eq!(
                 classify_mapper_dir("custome.thingsboard"),
                 MapperDirKind::Unrecognised
             );
-            // Unknown mapper type
+            // Unknown bare name (no built-in or custom prefix)
             assert_eq!(
-                classify_mapper_dir("mycloud"),
-                MapperDirKind::Unrecognised
-            );
-            // Completely unknown
-            assert_eq!(
-                classify_mapper_dir("oldcloud"),
+                classify_mapper_dir("thingsboard"),
                 MapperDirKind::Unrecognised
             );
         }

@@ -9,30 +9,22 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use tedge_config::models::HostPort;
+use tedge_config::models::MQTT_TLS_PORT;
 
 /// Parsed custom mapper `tedge.toml` configuration.
 ///
 /// The `table` field holds the complete TOML document, available for `${mapper.*}`
-/// template expansion in bridge rule files. The typed `connection` and `device` fields
+/// template expansion in bridge rule files. The typed `url` and `device` fields
 /// provide structured access to the values needed to start the MQTT bridge.
 #[derive(Debug)]
 pub struct CustomMapperConfig {
     /// The complete TOML table — used for `${mapper.*}` template expansion.
     pub table: toml::Table,
-    /// Connection settings for the cloud broker.
-    pub connection: Option<ConnectionConfig>,
+    /// Cloud broker URL in `{host}:{port}` format (port defaults to 8883).
+    pub url: Option<HostPort<MQTT_TLS_PORT>>,
     /// Device identity and TLS certificate settings.
     pub device: Option<DeviceConfig>,
-}
-
-/// Cloud broker connection settings.
-#[derive(Debug, serde::Deserialize)]
-pub struct ConnectionConfig {
-    /// Hostname or IP address of the cloud MQTT broker.
-    pub url: String,
-    /// Port number of the cloud MQTT broker (default: 8883).
-    #[serde(default = "default_port")]
-    pub port: u16,
 }
 
 /// Device identity and TLS settings.
@@ -47,13 +39,9 @@ pub struct DeviceConfig {
     pub root_cert_path: Option<Utf8PathBuf>,
 }
 
-fn default_port() -> u16 {
-    8883
-}
-
 #[derive(Debug, serde::Deserialize)]
 struct RawConfig {
-    connection: Option<ConnectionConfig>,
+    url: Option<HostPort<MQTT_TLS_PORT>>,
     device: Option<DeviceConfig>,
 }
 
@@ -85,7 +73,7 @@ pub async fn load_mapper_config(
 
     Ok(Some(CustomMapperConfig {
         table,
-        connection: raw.connection,
+        url: raw.url,
         device: raw.device,
     }))
 }
@@ -114,9 +102,7 @@ mod tests {
         tokio::fs::write(
             mapper_dir.join("tedge.toml"),
             r#"
-[connection]
-url = "mqtt.thingsboard.io"
-port = 8883
+url = "mqtt.thingsboard.io:8883"
 
 [device]
 cert_path = "/etc/tedge/device-certs/tedge-certificate.pem"
@@ -131,9 +117,9 @@ topic_prefix = "tb"
 
         let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
 
-        let conn = config.connection.unwrap();
-        assert_eq!(conn.url, "mqtt.thingsboard.io");
-        assert_eq!(conn.port, 8883);
+        let url = config.url.unwrap();
+        assert_eq!(url.host().to_string(), "mqtt.thingsboard.io");
+        assert_eq!(url.port().0, 8883);
 
         let device = config.device.unwrap();
         assert_eq!(
@@ -172,7 +158,6 @@ topic_prefix = "tb"
         tokio::fs::write(
             mapper_dir.join("tedge.toml"),
             r#"
-[connection]
 url = "mqtt.example.com"
 "#,
         )
@@ -180,6 +165,6 @@ url = "mqtt.example.com"
         .unwrap();
 
         let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
-        assert_eq!(config.connection.unwrap().port, 8883);
+        assert_eq!(config.url.unwrap().port().0, 8883);
     }
 }

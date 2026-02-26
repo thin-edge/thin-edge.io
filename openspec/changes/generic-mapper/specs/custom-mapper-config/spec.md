@@ -13,7 +13,7 @@ A custom mapper SHALL be defined by a directory under `/etc/tedge/mappers/` name
 
 #### Scenario: Empty custom mapper directory
 - **WHEN** a user creates `/etc/tedge/mappers/custom.thingsboard/` with no contents
-- **THEN** `tedge-mapper` SHALL start the custom mapper successfully, running no active components
+- **THEN** `tedge-mapper` SHALL report an error indicating that neither connection settings (`tedge.toml`) nor flow scripts (`flows/`) are present
 
 #### Scenario: Bridge rules without tedge.toml
 - **WHEN** a user creates `/etc/tedge/mappers/custom.thingsboard/bridge/rules.toml` but no `tedge.toml`
@@ -23,7 +23,7 @@ A custom mapper SHALL be defined by a directory under `/etc/tedge/mappers/` name
 When present, the custom mapper's `tedge.toml` SHALL contain connection and device identity settings needed to establish the MQTT bridge to the cloud. The configuration file is parsed directly by the custom mapper and is not part of the global `tedge_config` schema. The `tedge.toml` is OPTIONAL — it is only required when the mapper establishes a cloud connection via the built-in MQTT bridge.
 
 #### Scenario: Configuration with connection details
-- **WHEN** a custom mapper's `tedge.toml` contains `[connection]` with `url` and `port` fields, and `[device]` with `cert_path` and `key_path` fields
+- **WHEN** a custom mapper's `tedge.toml` contains a top-level `url` field in `{host}:{port}` format (using the `HostPort` type; port is optional), and a `[device]` section with `cert_path` and `key_path` fields
 - **THEN** the custom mapper SHALL use these values to configure the MQTT bridge connection
 
 #### Scenario: Configuration with additional custom fields
@@ -52,9 +52,9 @@ The bridge template system SHALL support a `${mapper.*}` variable namespace that
 - **WHEN** a bridge rule template contains `${mapper.bridge.topic_prefix}` and the mapper's `tedge.toml` contains `[bridge]` with `topic_prefix = "tb"`
 - **THEN** the template SHALL expand to `tb`
 
-#### Scenario: Referencing a nested mapper config value
-- **WHEN** a bridge rule template contains `${mapper.connection.url}` and the mapper's `tedge.toml` contains `[connection]` with `url = "mqtt.thingsboard.io"`
-- **THEN** the template SHALL expand to `mqtt.thingsboard.io`
+#### Scenario: Referencing a top-level mapper config value
+- **WHEN** a bridge rule template contains `${mapper.url}` and the mapper's `tedge.toml` contains a top-level `url = "mqtt.thingsboard.io:8883"`
+- **THEN** the template SHALL expand to `mqtt.thingsboard.io:8883`
 
 #### Scenario: Referencing a non-existent mapper config key
 - **WHEN** a bridge rule template contains `${mapper.nonexistent.key}` and no such key exists in the mapper's `tedge.toml`

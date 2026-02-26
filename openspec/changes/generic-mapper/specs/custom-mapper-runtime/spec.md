@@ -40,7 +40,7 @@ A custom mapper SHALL start the built-in MQTT bridge and/or the flows engine dep
 
 #### Scenario: Empty custom mapper directory
 - **WHEN** a custom mapper starts and its directory has no `tedge.toml`, `bridge/`, or `flows/`
-- **THEN** the mapper SHALL start successfully, running no active components
+- **THEN** the mapper SHALL exit with an error indicating that neither connection settings nor flow scripts are present, and the mapper would do nothing
 
 ### Requirement: Service identity follows naming conventions
 A custom mapper's service identity SHALL follow the same naming pattern as built-in profiled mappers, using `custom` as the mapper type and the profile name (if any) appended with `@`.

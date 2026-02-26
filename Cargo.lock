@@ -5053,6 +5053,7 @@ dependencies = [
  "flockfile",
  "mqtt_channel",
  "serde",
+ "strum",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
