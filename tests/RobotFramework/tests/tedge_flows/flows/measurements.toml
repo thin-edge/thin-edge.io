@@ -1,6 +1,6 @@
 input.mqtt.topics = ["te/+/+/+/+/m/+"]
 
 steps = [
-    { builtin = "add-timestamp" },
+    { builtin = "add-timestamp", config = { format = "${.params.time.format}"} },
     { script = "te_to_c8y.js" }
 ]

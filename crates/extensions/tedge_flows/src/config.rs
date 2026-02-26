@@ -3,6 +3,7 @@ use crate::flow::FlowInput;
 use crate::flow::FlowOutput;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
+use crate::params::Params;
 use crate::steps::FlowStep;
 use crate::transformers::BuiltinTransformers;
 use crate::LoadError;
@@ -139,7 +140,7 @@ impl FlowConfig {
                             error!(target: "flows", "Skipping non UTF8 path: {}", entry.as_path().display());
                             continue;
                         };
-                        if path.is_file() {
+                        if path.is_file() && !Params::is_params_file(&path) {
                             paths.push(path);
                         }
                     }
@@ -184,7 +185,15 @@ impl FlowConfig {
         let specs = read_to_string(path)
             .await
             .map_err(|err| LoadError::from_io(err, path))?;
-        let flow: FlowConfig = toml::from_str(&specs)?;
+        let mut flow: FlowConfig = toml::from_str(&specs)?;
+
+        if let Some(params) = Params::load_flow_params(path).await? {
+            flow.config = params.substitute_all(&flow.config)?;
+            for step in flow.steps.iter_mut() {
+                step.config = params.substitute_all(&step.config)?;
+            }
+        }
+
         Ok(flow)
     }
 

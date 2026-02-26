@@ -1,0 +1,8 @@
+# Parameters used by all the flows of this directory
+
+[time]
+format = "unix"
+reformat = true
+
+[mqtt]
+payload.max_size = 4096
