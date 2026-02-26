@@ -1,37 +1,26 @@
 ## ADDED Requirements
 
 ### Requirement: Custom mapper directory layout
-A custom mapper SHALL be defined by a directory under `/etc/tedge/mappers/` containing a `tedge.toml` configuration file. The directory MAY also contain a `bridge/` subdirectory with bridge rule TOML files and a `flows/` subdirectory with flow scripts. This layout mirrors the structure used by built-in mappers.
+A custom mapper SHALL be defined by a directory under `/etc/tedge/mappers/` named `custom` (for the unprofiled case) or `custom.{name}` (for named instances), following the same profile naming convention as built-in mappers. The directory MAY contain any combination of: a `tedge.toml` configuration file, a `bridge/` subdirectory with bridge rule TOML files, and a `flows/` subdirectory with flow scripts. An empty directory is also valid (the mapper starts with no active components).
 
-#### Scenario: Minimal custom mapper directory
-- **WHEN** a user creates `/etc/tedge/mappers/_thingsboard/tedge.toml` with valid connection settings
-- **THEN** `tedge-mapper` SHALL recognise `_thingsboard` as a valid custom mapper
+#### Scenario: Minimal custom mapper — flows only
+- **WHEN** a user creates `/etc/tedge/mappers/custom.thingsboard/flows/telemetry.js`
+- **THEN** `tedge-mapper` SHALL recognise `thingsboard` as a valid custom mapper profile and start the flows engine
 
-#### Scenario: Full custom mapper directory with bridge and flows
-- **WHEN** a user creates `/etc/tedge/mappers/_thingsboard/` containing `tedge.toml`, `bridge/rules.toml`, and `flows/telemetry.js`
+#### Scenario: Full custom mapper with bridge and flows
+- **WHEN** a user creates `/etc/tedge/mappers/custom.thingsboard/` containing `tedge.toml`, `bridge/rules.toml`, and `flows/telemetry.js`
 - **THEN** the custom mapper SHALL load the configuration, bridge rules, and flow scripts from their respective locations
 
-#### Scenario: Missing tedge.toml
-- **WHEN** a user creates `/etc/tedge/mappers/_mycloud/` with a `bridge/` subdirectory but no `tedge.toml`
-- **THEN** `tedge-mapper` SHALL report an error indicating that the configuration file is missing
+#### Scenario: Empty custom mapper directory
+- **WHEN** a user creates `/etc/tedge/mappers/custom.thingsboard/` with no contents
+- **THEN** `tedge-mapper` SHALL start the custom mapper successfully, running no active components
 
-### Requirement: Custom mapper names use underscore prefix
-Custom mapper directory names MUST start with a `_` character. The `_` prefix distinguishes custom mappers from built-in mappers (which use plain names like `c8y`, `az`, `aws`) on the filesystem and in CLI invocation.
-
-#### Scenario: Valid custom mapper name
-- **WHEN** a directory named `_thingsboard` exists under `/etc/tedge/mappers/`
-- **THEN** `tedge-mapper` SHALL treat it as a custom mapper directory
-
-#### Scenario: Name without underscore prefix is not a custom mapper
-- **WHEN** a directory named `thingsboard` (no `_` prefix) exists under `/etc/tedge/mappers/` and does not match any built-in mapper name or profile directory
-- **THEN** `tedge-mapper` SHALL NOT treat it as a custom mapper and SHALL emit a warning about an unrecognised directory
-
-#### Scenario: Name validation
-- **WHEN** a user attempts to run a custom mapper whose name does not start with `_`
-- **THEN** `tedge-mapper` SHALL report an error indicating that custom mapper names must start with `_`
+#### Scenario: Bridge rules without tedge.toml
+- **WHEN** a user creates `/etc/tedge/mappers/custom.thingsboard/bridge/rules.toml` but no `tedge.toml`
+- **THEN** `tedge-mapper` SHALL report an error indicating that bridge rules require connection settings (`tedge.toml`)
 
 ### Requirement: Custom mapper configuration file
-The custom mapper's `tedge.toml` SHALL contain connection and device identity settings needed to establish the MQTT bridge to the cloud. The configuration file is parsed directly by the custom mapper and is not part of the global `tedge_config` schema.
+When present, the custom mapper's `tedge.toml` SHALL contain connection and device identity settings needed to establish the MQTT bridge to the cloud. The configuration file is parsed directly by the custom mapper and is not part of the global `tedge_config` schema. The `tedge.toml` is OPTIONAL — it is only required when the mapper establishes a cloud connection via the built-in MQTT bridge.
 
 #### Scenario: Configuration with connection details
 - **WHEN** a custom mapper's `tedge.toml` contains `[connection]` with `url` and `port` fields, and `[device]` with `cert_path` and `key_path` fields
@@ -53,11 +42,11 @@ Custom mapper configuration SHALL NOT be part of the `define_tedge_config!` macr
 - **THEN** the output SHALL NOT include any settings from custom mapper `tedge.toml` files
 
 #### Scenario: User edits custom mapper config directly
-- **WHEN** a user edits `/etc/tedge/mappers/_thingsboard/tedge.toml` to change `connection.url`
+- **WHEN** a user edits `/etc/tedge/mappers/custom.thingsboard/tedge.toml` to change `connection.url`
 - **THEN** the change takes effect the next time the custom mapper is started (no `tedge config set` needed)
 
 ### Requirement: Bridge templates support mapper config namespace
-The bridge template system SHALL support a `${mapper.*}` variable namespace that resolves against the custom mapper's own `tedge.toml`. This namespace is available in bridge rule TOML files located in the mapper's `bridge/` directory.
+The bridge template system SHALL support a `${mapper.*}` variable namespace that resolves against the custom mapper's own `tedge.toml`. This namespace is available in bridge rule TOML files located in the mapper's `bridge/` directory, and is only populated when a `tedge.toml` is present.
 
 #### Scenario: Referencing a mapper config value in a bridge template
 - **WHEN** a bridge rule template contains `${mapper.bridge.topic_prefix}` and the mapper's `tedge.toml` contains `[bridge]` with `topic_prefix = "tb"`
