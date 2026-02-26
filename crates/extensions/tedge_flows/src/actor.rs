@@ -4,6 +4,7 @@ use crate::flow::FlowOutput;
 use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::flow::SourceTag;
+use crate::params::Params;
 use crate::registry::FlowRegistryExt;
 use crate::registry::RegistrationStatus;
 use crate::runtime::MessageProcessor;
@@ -455,26 +456,9 @@ impl FlowsMapper {
                 };
 
                 if path.is_dir() {
-                    // we can get Modified with path to a directory, which means another directory
-                    // was moved into flows dir.
-                    let Ok(entries) = std::fs::read_dir(&path).inspect_err(
-                        |error| error!(%path, ?error, "Failed to read inside flows directory"),
-                    ) else {
-                        return Ok(());
-                    };
-                    for entry in entries {
-                        let Ok(entry) = entry.inspect_err(
-                            |error| error!(%path, ?error, "Failed to read inside flows directory"),
-                        ) else {
-                            continue;
-                        };
-                        let Ok(path) = Utf8PathBuf::try_from(entry.path()) else {
-                            error!(?path, "Invalid path");
-                            continue;
-                        };
-
-                        self.on_file_updated(path.as_path()).await?;
-                    }
+                    self.on_directory_updated(&path).await?;
+                } else if Params::is_params_file(&path) {
+                    self.on_params_updated(&path).await?;
                 } else if path.is_file() {
                     self.on_file_updated(&path).await?;
                 } else if !path.exists() {
@@ -486,7 +470,11 @@ impl FlowsMapper {
                 let Ok(path) = Utf8PathBuf::try_from(path) else {
                     return Ok(());
                 };
-                self.on_file_removed(path.as_path()).await?;
+                if Params::is_params_file(&path) {
+                    self.on_params_updated(&path).await?;
+                } else {
+                    self.on_file_removed(path.as_path()).await?;
+                }
             }
             _ => {}
         }
@@ -515,5 +503,36 @@ impl FlowsMapper {
             self.update_flow_status(path).await?;
         }
         Ok(())
+    }
+
+    async fn on_directory_updated(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
+        let Ok(entries) = std::fs::read_dir(path)
+            .inspect_err(|error| error!(%path, ?error, "Failed to read inside flows directory"))
+        else {
+            return Ok(());
+        };
+        for entry in entries {
+            let Ok(entry) = entry.inspect_err(
+                |error| error!(%path, ?error, "Failed to read inside flows directory"),
+            ) else {
+                continue;
+            };
+            let Ok(path) = Utf8PathBuf::try_from(entry.path()) else {
+                error!(?path, "Invalid path");
+                continue;
+            };
+
+            if !Params::is_params_file(&path) {
+                self.on_file_updated(path.as_path()).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn on_params_updated(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
+        let Some(directory) = path.parent() else {
+            return Ok(());
+        };
+        self.on_directory_updated(directory).await
     }
 }

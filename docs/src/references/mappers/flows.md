@@ -195,6 +195,50 @@ steps = [
 ]
 ```
 
+### Parameters
+
+The `params.toml` is an optional file, that can be created to customize specific aspects of the deployed flows
+without modifying the original flow definitions or JavaScript code.
+
+The `params.toml` file provides a list of named values, possibly compound. As an example:
+
+```toml
+debug = false
+
+[time]
+format = "unix"
+reformat = true
+```
+
+These values can then be used as parameters by all the flows which definition `.toml` file sites in the same directory.
+The parameter values are injected in flow and step configuration using template expression such as `${.params.debug}`
+or `${.params.time.format}`.
+
+Below shows a simplistic example of the parameterization of a flow:
+
+```toml
+name = "foo"
+version = "1.0.0"
+
+input.mqtt.topics = ["foo"]
+
+[[steps]]
+script = "main.js"
+config = { debug = "${.params.debug}", format = "${.params.time.format}" }
+```
+
+:::note
+The intent as a `params.toml` file is to ease flow packaging.
+Users can adapt flows to their specific use-cases without changing flow definitions and scripts
+as provided by the flow authors, provided the flow steps are configured after parameters.  
+
+When a flow use parameters, the advice is to provide an example file called `params.toml.template`
+which contains the list of parameterizable values that the user can set.
+To parameterize a flow, the user should copy the `params.toml.template` file to the `params.toml` location,
+and then customize any of the values inside the file.
+Ideally the `params.toml.template` includes some documentation about each parameter to assist the user.
+:::
+
 ### Transformation
 
 The transformation applied by a step is defined either by
