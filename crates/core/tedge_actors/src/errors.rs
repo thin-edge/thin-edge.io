@@ -39,6 +39,9 @@ pub enum RuntimeError {
 
     #[error(transparent)]
     LinkError(#[from] LinkError),
+
+    #[error("A shutdown has been requested")]
+    Shutdown,
 }
 
 impl<T> From<Box<T>> for RuntimeError
