@@ -965,6 +965,7 @@ dependencies = [
  "mockito",
  "plugin_sm",
  "proptest",
+ "rand 0.9.1",
  "serde",
  "serde_json",
  "tedge_actors",
@@ -3527,6 +3528,7 @@ dependencies = [
  "bitflags 2.10.0",
  "lazy_static",
  "num-traits",
+ "proptest-macro",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rand_xorshift",
@@ -3534,6 +3536,18 @@ dependencies = [
  "rusty-fork",
  "tempfile",
  "unarray",
+]
+
+[[package]]
+name = "proptest-macro"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37f29eb7ffe1011ed152b761e866c717244d37c10032f8cbdc08388d733a31b7"
+dependencies = [
+ "convert_case 0.6.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
 ]
 
 [[package]]

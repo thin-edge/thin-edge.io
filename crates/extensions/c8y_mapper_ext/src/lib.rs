@@ -19,6 +19,8 @@ mod signals;
 mod supported_operations;
 
 #[cfg(test)]
+mod shuffled_tests;
+#[cfg(test)]
 mod tests;
 
 #[derive(Debug, Clone, Copy, serde::Deserialize)]

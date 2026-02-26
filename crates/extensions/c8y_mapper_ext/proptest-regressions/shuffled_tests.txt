@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 3b6af12a9742e2df3b20f63fb6f2b402f87626453e4e893c70c1caf8085d3e05 # shrinks to BirthMessagePropArgs = BirthMessagePropArgs { field0: 0 }
+cc 757995923da1a12d6cd29322a0e4f87a273afd162d56f893ab9c43532710143f # shrinks to BirthMessagePropArgs = BirthMessagePropArgs { field0: 3324801105371404973 }

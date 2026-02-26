@@ -3369,6 +3369,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         false,
         false,
         C8Y_MQTT_PAYLOAD_LIMIT,
+        "100ms",
     )
 }
 
@@ -3515,6 +3516,12 @@ impl MessageReceiver<MqttMessage> for MockMqttBox {
             let message = self.receiver.try_recv().await;
             match message {
                 Ok(Some(MqttRequest::Publish(publish))) => {
+                    // Forward to all matching subscribers (simulating MQTT broker loopback)
+                    for (topic, sender) in self.senders.iter_mut() {
+                        if topic.accept(&publish) {
+                            let _ = sender.send(publish.clone()).await;
+                        }
+                    }
                     if !self.ignore_topics.accept(&publish) {
                         return Ok(Some(publish));
                     }

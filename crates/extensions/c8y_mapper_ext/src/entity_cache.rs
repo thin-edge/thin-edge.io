@@ -188,7 +188,7 @@ impl EntityCache {
         Ok(outcome)
     }
 
-    fn insert(&mut self, entity: EntityRegistrationMessage) -> Result<bool, Error> {
+    fn insert(&mut self, mut entity: EntityRegistrationMessage) -> Result<bool, Error> {
         let parent = match entity.r#type {
             EntityType::MainDevice => None,
             EntityType::ChildDevice => entity
@@ -209,6 +209,9 @@ impl EntityCache {
                     .expect("At least a default parent exists for child entities"),
             )
         {
+            if entity.r#type == EntityType::Service {
+                entity.parent = parent.clone();
+            }
             self.pending_entities
                 .cache_early_registration_message(entity);
             return Ok(false);

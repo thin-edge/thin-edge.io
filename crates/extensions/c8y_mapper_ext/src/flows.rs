@@ -163,6 +163,7 @@ topic = "{errors_topic}"
         let errors_topic = mqtt_schema.error_topic();
         let internal_alarms = crate::alarm_converter::INTERNAL_ALARMS_TOPIC;
         let max_size = self.config.max_mqtt_payload_size;
+        let alarm_interval = self.config.alarm_sync_interval;
         let mut input_topics = self.configured_topics(&format!("{topic_prefix}/+/+/+/+/a/+"));
         if !input_topics.is_empty() {
             input_topics.push(format!("{internal_alarms}#"));
@@ -175,7 +176,7 @@ topic = "{errors_topic}"
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
     {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
-    {{ builtin = "into-c8y-alarms", interval = "3s", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }} }},
+    {{ builtin = "into-c8y-alarms", interval = "{alarm_interval}", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }} }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
