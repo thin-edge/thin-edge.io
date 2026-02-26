@@ -95,3 +95,119 @@ impl MessageCache {
             .unwrap_or_default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mea::entities::C8yEntityBirth;
+    use crate::mea::entities::C8yEntityStatus;
+    use tedge_flows::FlowContextHandle;
+    use tedge_flows::Transformer;
+
+    #[test]
+    fn main_device_messages_are_never_cached() {
+        let mut cache = make_cache();
+        let msg = make_message("te/device/main///m/temperature", r#"{"temp":42.0}"#);
+        let result = on_message(&mut cache, &msg);
+        assert_eq!(result, vec![msg]);
+    }
+
+    #[test]
+    fn messages_from_unregistered_entity_are_cached() {
+        let mut cache = make_cache();
+        let msg = make_message("te/device/child1///m/temperature", r#"{"temp":42.0}"#);
+        let result = on_message(&mut cache, &msg);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn cached_messages_are_released_on_entity_birth() {
+        let mut cache = make_cache();
+        let measurement = make_message("te/device/child1///m/temperature", r#"{"temp":42.0}"#);
+        assert!(on_message(&mut cache, &measurement).is_empty());
+
+        let birth = make_birth_message("device/child1//");
+        let result = on_message(&mut cache, &birth);
+        assert_eq!(result, vec![measurement]);
+    }
+
+    #[test]
+    fn messages_from_birthed_entity_pass_through() {
+        let mut cache = make_cache();
+
+        let birth = make_birth_message("device/child1//");
+        let _ = on_message(&mut cache, &birth);
+
+        let measurement = make_message("te/device/child1///m/temperature", r#"{"temp":99.0}"#);
+        let result = on_message(&mut cache, &measurement);
+        assert_eq!(result, vec![measurement]);
+    }
+
+    #[test]
+    fn messages_on_unrecognized_topics_pass_through() {
+        let mut cache = make_cache();
+        let msg = make_message("some/unrelated/topic", r#"{"data":"value"}"#);
+        let result = on_message(&mut cache, &msg);
+        assert_eq!(result, vec![msg]);
+    }
+
+    #[test]
+    fn messages_for_different_entities_are_cached_independently() {
+        let mut cache = make_cache();
+        let msg1 = make_message("te/device/child1///m/temperature", r#"{"temp":1.0}"#);
+        let msg2 = make_message("te/device/child2///m/temperature", r#"{"temp":2.0}"#);
+        assert!(on_message(&mut cache, &msg1).is_empty());
+        assert!(on_message(&mut cache, &msg2).is_empty());
+
+        let birth1 = make_birth_message("device/child1//");
+        assert_eq!(on_message(&mut cache, &birth1), vec![msg1]);
+
+        let birth2 = make_birth_message("device/child2//");
+        assert_eq!(on_message(&mut cache, &birth2), vec![msg2]);
+    }
+
+    #[test]
+    fn all_cached_messages_for_an_entity_are_released_on_birth() {
+        let mut cache = make_cache();
+        let msg1 = make_message("te/device/child1///m/temperature", r#"{"temp":1.0}"#);
+        let msg2 = make_message("te/device/child1///m/temperature", r#"{"temp":2.0}"#);
+        let msg3 = make_message("te/device/child1///e/click", r#"{"text":"clicked"}"#);
+        assert!(on_message(&mut cache, &msg1).is_empty());
+        assert!(on_message(&mut cache, &msg2).is_empty());
+        assert!(on_message(&mut cache, &msg3).is_empty());
+
+        let birth = make_birth_message("device/child1//");
+        let result = on_message(&mut cache, &birth);
+        assert_eq!(result, vec![msg1, msg2, msg3]);
+    }
+
+    fn make_cache() -> MessageCache {
+        let mapper_id: EntityTopicId = "device/main/service/tedge-mapper-c8y".parse().unwrap();
+        MessageCache::new(mapper_id)
+    }
+
+    fn make_message(topic: &str, payload: &str) -> Message {
+        Message::new(topic, payload)
+    }
+
+    const BIRTH_TOPIC: &str = "te/device/main/service/tedge-mapper-c8y/status/entities";
+
+    fn make_birth_message(entity_id: &str) -> Message {
+        let birth = C8yEntityBirth {
+            entity: entity_id.parse().unwrap(),
+            status: C8yEntityStatus::Registered,
+            time: 0.0,
+        };
+        make_message(BIRTH_TOPIC, &birth.to_json())
+    }
+
+    fn on_message(cache: &mut MessageCache, message: &Message) -> Vec<Message> {
+        cache
+            .on_message(
+                SystemTime::UNIX_EPOCH,
+                message,
+                &FlowContextHandle::default(),
+            )
+            .unwrap()
+    }
+}
