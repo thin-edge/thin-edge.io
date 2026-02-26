@@ -277,11 +277,10 @@ Order of flow definition updates does not matter
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/issue-3978/test-v1.toml
     ...    /etc/tedge/mappers/local/flows/issue-3978/test.toml
-    ${messages}    Should Have MQTT Messages
+    Should Have MQTT Messages
     ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
-    ...    message_contains=issue-3978/test.toml
-    Should Contain    ${messages[0]}    "updated"
+    ...    message_pattern=.*issue-3978/test.toml.*"status":"updated".*
 
     # Check the flow is actually working
     ${start}    Get Unix Timestamp
@@ -298,11 +297,10 @@ Order of flow definition updates does not matter
     Execute Command    sleep 0.1
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-3978/test-v2.toml    /etc/tedge/data/
     Execute Command    mv /etc/tedge/data/test-v2.toml /etc/tedge/mappers/local/flows/issue-3978/test.toml
-    ${messages}    Should Have MQTT Messages
+    Should Have MQTT Messages
     ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
-    ...    message_contains=issue-3978/test.toml
-    Should Contain    ${messages[0]}    "broken"
+    ...    message_pattern=.*issue-3978/test.toml.*"status":"broken".*
 
     # The new version of the flow has not been loaded because broken
     # and is no more running
@@ -322,11 +320,10 @@ Order of flow definition updates does not matter
     ...    /etc/tedge/mappers/local/flows/issue-3978/test-new.js
 
     # The new version of flow must be reloaded
-    ${messages}    Should Have MQTT Messages
+    Should Have MQTT Messages
     ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
-    ...    message_contains=issue-3978/test.toml
-    Should Contain    ${messages[0]}    "updated"
+    ...    message_pattern=.*issue-3978/test.toml.*"status":"updated".*
 
     # And effective
     ${start}    Get Unix Timestamp
