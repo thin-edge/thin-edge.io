@@ -1678,6 +1678,33 @@ class ThinEdgeIO(DeviceLibrary):
 
         return entities
 
+    @keyword("Stop Service")
+    def stop(
+        self,
+        name: str,
+        init_system: str = "systemd",
+        device_name: Optional[str] = None,
+        **kwargs,
+    ):
+        # use a higher default than normal for tedge services as
+        # stopping the service can take up to 60 seconds
+        if name.startswith("tedge"):
+            kwargs["timeout"] = kwargs.get("timeout", 70)
+        super().stop_service(name, init_system=init_system, device_name=device_name, **kwargs)
+
+    @keyword("Restart Service")
+    def restart_service(
+        self,
+        name: str,
+        init_system: str = "systemd",
+        device_name: Optional[str] = None,
+        **kwargs,
+    ):
+        # use a higher default than normal for tedge services as
+        # stopping the service can take up to 60 seconds
+        if name.startswith("tedge"):
+            kwargs["timeout"] = kwargs.get("timeout", 70)
+        super().restart_service(name, init_system=init_system, device_name=device_name, **kwargs)
 
 def mqtt_topic_match(m: matcher.MQTTMatcher, topic: str) -> bool:
     """check if an MQTT topic matches
