@@ -188,8 +188,7 @@ where
     let mapper_ref = just(Token::Ident("mapper"))
         .ignore_then(just(Token::Dot))
         .ignore_then(
-            dotted_path()
-                .map_with(|parts, e| TemplateComponent::Mapper(parts.join("."), e.span())),
+            dotted_path().map_with(|parts, e| TemplateComponent::Mapper(parts.join("."), e.span())),
         )
         .labelled("mapper config reference (e.g. 'mapper.bridge.topic_prefix')");
 
@@ -478,8 +477,12 @@ pub fn expand_loop_template(
         match component {
             TemplateComponent::Text(text) => result.push_str(text),
             TemplateComponent::Config(key, key_span) => {
-                let value =
-                    super::super::expand_config_key(&key, ctx.tedge, cloud_profile, key_span.into())?;
+                let value = super::super::expand_config_key(
+                    &key,
+                    ctx.tedge,
+                    cloud_profile,
+                    key_span.into(),
+                )?;
                 result.push_str(&value);
             }
             TemplateComponent::Mapper(path, key_span) => match ctx.mapper_config {

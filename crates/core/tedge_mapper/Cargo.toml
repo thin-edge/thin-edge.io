@@ -20,6 +20,8 @@ c8y_auth_proxy = { workspace = true, optional = true }
 c8y_mapper_ext = { workspace = true, optional = true }
 camino = { workspace = true }
 clap = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
 clock = { workspace = true }
 collectd_ext = { workspace = true }
 flockfile = { workspace = true }
