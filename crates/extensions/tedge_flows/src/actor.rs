@@ -17,6 +17,7 @@ use futures::FutureExt;
 use serde_json::json;
 use std::cmp::min;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 use tedge_actors::Actor;
@@ -49,6 +50,11 @@ pub struct FlowsMapper {
     watched_commands: HashSet<Utf8PathBuf>,
     processor: MessageProcessor<ConnectedFlowRegistry>,
     next_dump: Instant,
+    /// Paths to flow declaration and script files that are currently in use.
+    ///
+    /// When a directory containing flows is moved from the flows directory, we only get an fs event
+    /// containing the name of the directory, so we need to remember what files were loaded so we can unload them.
+    loaded_files: HashSet<Arc<Utf8Path>>,
 }
 
 impl FlowsMapper {
@@ -62,6 +68,7 @@ impl FlowsMapper {
     ) -> Self {
         let watched_commands = HashSet::new();
         let next_dump = Instant::now() + config.stats_dump_interval;
+        let loaded_files = HashSet::new();
         FlowsMapper {
             config,
             messages,
@@ -71,6 +78,7 @@ impl FlowsMapper {
             watched_commands,
             processor,
             next_dump,
+            loaded_files,
         }
     }
 }
@@ -478,8 +486,20 @@ impl FlowsMapper {
                 } else if path.is_file() {
                     self.on_file_updated(&path).await?;
                 } else if !path.exists() {
-                    // if a file is renamed we can also get Modified events for old and new name
-                    self.on_file_removed(&path).await?;
+                    // either file or directory was renamed/moved
+                    let (removed_flows, removed_scripts): (Vec<_>, Vec<_>) = self
+                        .loaded_files
+                        .iter()
+                        .filter(|p| p.starts_with(&path))
+                        .cloned()
+                        // remove flows before scripts, otherwise a warning is printed
+                        .partition(|p| p.extension() == Some("toml"));
+                    for file in removed_flows {
+                        self.on_file_removed(&file).await?;
+                    }
+                    for file in removed_scripts {
+                        self.on_file_removed(&file).await?;
+                    }
                 }
             }
             FsWatchEvent::FileDeleted(path) => {
@@ -495,10 +515,12 @@ impl FlowsMapper {
 
     async fn on_file_updated(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
         if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
+            self.loaded_files.insert(path.into());
             let reloaded_flows = self.processor.reload_script(path).await;
             self.send_updated_subscriptions().await?;
             self.update_all_flow_status(reloaded_flows).await?;
         } else if path.extension() == Some("toml") {
+            self.loaded_files.insert(path.into());
             self.processor.add_flow(path).await;
             self.send_updated_subscriptions().await?;
             self.update_flow_status(path).await?;
@@ -508,8 +530,10 @@ impl FlowsMapper {
 
     async fn on_file_removed(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
         if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
+            self.loaded_files.remove(path);
             self.processor.remove_script(path).await;
         } else if path.extension() == Some("toml") {
+            self.loaded_files.remove(path);
             self.processor.remove_flow(path).await;
             self.send_updated_subscriptions().await?;
             self.update_flow_status(path).await?;

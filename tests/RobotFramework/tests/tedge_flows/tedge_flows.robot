@@ -255,9 +255,14 @@ Flow is discovered when a directory is moved
     Execute Command    mv /flow.toml /tmp/myflow/
     Execute Command    mv /main.js /tmp/myflow/
 
-    ${start}    Get Unix Timestamp
     Execute Command    mv /tmp/myflow /etc/tedge/mappers/local/flows
-    Should Have MQTT Messages    topic=myflow    message_contains=myflow    date_from=${start}
+    ${output}    Execute Command    tedge flows test test/nested-flows/myflow 'flow started after moving directory into flows dir'
+    Should Contain    ${output}    flow started after moving directory into flows dir
+
+    # now moving the directory again should stop the flow
+    Execute Command    mv /etc/tedge/mappers/local/flows/myflow /tmp/myflow
+    ${output}    Execute Command    tedge flows test test/nested-flows/myflow 'flow removed after moving directory out of flows dir'
+    Should Not Contain    ${output}    flow removed after moving directory out of flows dir
 
 Setting MQTT attributes
     Install Nested Flow    mqtt-flows
