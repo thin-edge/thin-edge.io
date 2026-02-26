@@ -165,6 +165,10 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
         &mapper_opt.common.config_dir,
     )?;
 
+    // 6.3: Scan mappers directory and warn about unrecognised entries
+    let mappers_dir = mapper_opt.common.config_dir.join("mappers");
+    core::mappers_dir::warn_unrecognised_mapper_dirs(&mappers_dir);
+
     // Run only one instance of a mapper (if enabled)
     let mut _flock = None;
     if config.run.lock_files {

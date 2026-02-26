@@ -136,6 +136,32 @@ fn list_custom_profiles(mappers_dir: &Utf8Path) -> Vec<String> {
     profiles
 }
 
+/// Validates the mapper directory's startup config, returning the parsed config if `tedge.toml`
+/// is present, `None` if only flows are present, or an error if `bridge/` exists without a
+/// `tedge.toml`.
+///
+/// This is a separate function to make the startup validation testable without requiring a
+/// live MQTT broker.
+pub async fn check_startup_config(
+    mapper_dir: &Utf8Path,
+) -> anyhow::Result<Option<crate::custom::config::CustomMapperConfig>> {
+    let has_bridge_dir = mapper_dir.join("bridge").is_dir();
+    if !has_bridge_dir {
+        return Ok(None);
+    }
+    let mapper_config = load_mapper_config(mapper_dir).await?;
+    match mapper_config {
+        None => {
+            anyhow::bail!(
+                "Mapper directory '{mapper_dir}' contains a 'bridge/' subdirectory but no \
+                 'tedge.toml' connection config. \
+                 Create a tedge.toml with [connection] settings to use the MQTT bridge.",
+            );
+        }
+        Some(config) => Ok(Some(config)),
+    }
+}
+
 #[async_trait]
 impl TEdgeComponent for CustomMapper {
     async fn start(
@@ -155,86 +181,69 @@ impl TEdgeComponent for CustomMapper {
         let has_bridge_dir = mapper_dir.join("bridge").is_dir();
         let has_flows_dir = mapper_dir.join("flows").is_dir();
 
-        // 4.3/4.4: Check for bridge directory without connection config
-        if has_bridge_dir {
-            let mapper_config = load_mapper_config(&mapper_dir).await?;
+        // 4.3/4.4: Check for bridge directory without connection config.
+        // check_startup_config returns an error when bridge/ exists but tedge.toml is absent.
+        if let Some(config) = check_startup_config(&mapper_dir).await? {
+            // 4.5: Start the MQTT bridge
+            let bridge_dir = mapper_dir.join("bridge");
+            let bridge_service_name = self.bridge_service_name();
+            let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+            let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
+            let health_topic =
+                service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
 
-            match mapper_config {
-                None => {
-                    anyhow::bail!(
-                        "Mapper directory '{}' contains a 'bridge/' subdirectory but no \
-                         'tedge.toml' connection config. \
-                         Create a tedge.toml with [connection] settings to use the MQTT bridge.",
-                        mapper_dir
-                    );
-                }
-                Some(config) => {
-                    // 4.5: Start the MQTT bridge
-                    let bridge_dir = mapper_dir.join("bridge");
-                    let bridge_service_name = self.bridge_service_name();
-                    let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
-                    let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
-                    let health_topic =
-                        service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
+            let conn = config.connection.as_ref().with_context(|| {
+                format!(
+                    "'{}/tedge.toml' is missing a [connection] section required for bridge rules",
+                    mapper_dir
+                )
+            })?;
 
-                    let conn = config.connection.as_ref().with_context(|| {
-                        format!(
-                            "'{}/tedge.toml' is missing a [connection] section required \
-                             for bridge rules",
-                            mapper_dir
-                        )
-                    })?;
+            let mut cloud_config = MqttOptions::new(&service_name, &conn.url, conn.port);
+            cloud_config.set_clean_session(false);
 
-                    let mut cloud_config = MqttOptions::new(&service_name, &conn.url, conn.port);
-                    cloud_config.set_clean_session(false);
+            // Set up certificate authentication if cert/key paths are provided
+            if let Some(device) = &config.device {
+                if let (Some(cert_path), Some(key_path)) = (&device.cert_path, &device.key_path) {
+                    let ca_path = device
+                        .root_cert_path
+                        .clone()
+                        .unwrap_or_else(|| Utf8PathBuf::from("/etc/ssl/certs"));
 
-                    // Set up certificate authentication if cert/key paths are provided
-                    if let Some(device) = &config.device {
-                        if let (Some(cert_path), Some(key_path)) =
-                            (&device.cert_path, &device.key_path)
-                        {
-                            let ca_path = device
-                                .root_cert_path
-                                .clone()
-                                .unwrap_or_else(|| Utf8PathBuf::from("/etc/ssl/certs"));
-
-                            let tls_config = MqttAuthConfigCloudBroker {
-                                ca_path,
-                                client: Some(MqttAuthClientConfigCloudBroker {
-                                    cert_file: cert_path.clone(),
-                                    private_key: PrivateKeyType::File(key_path.clone()),
-                                }),
-                            }
-                            .to_rustls_client_config()
-                            .context("Failed to create MQTT TLS config")?;
-                            cloud_config
-                                .set_transport(Transport::tls_with_config(tls_config.into()));
-                        }
+                    let tls_config = MqttAuthConfigCloudBroker {
+                        ca_path,
+                        client: Some(MqttAuthClientConfigCloudBroker {
+                            cert_file: cert_path.clone(),
+                            private_key: PrivateKeyType::File(key_path.clone()),
+                        }),
                     }
-
-                    configure_proxy(&tedge_config, &mut cloud_config)?;
-
-                    let bridge_rules = load_bridge_rules_from_directory(
-                        &bridge_dir,
-                        &tedge_config,
-                        AuthMethod::Certificate,
-                        None,
-                        Some(&config.table),
-                    )
-                    .await?;
-
-                    let bridge_actor = MqttBridgeActorBuilder::new(
-                        &tedge_config,
-                        &bridge_service_name,
-                        &health_topic,
-                        bridge_rules,
-                        cloud_config,
-                        None,
-                    )
-                    .await;
-                    runtime.spawn(bridge_actor).await?;
+                    .to_rustls_client_config()
+                    .context("Failed to create MQTT TLS config")?;
+                    cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
                 }
             }
+
+            configure_proxy(&tedge_config, &mut cloud_config)?;
+
+            let bridge_rules = load_bridge_rules_from_directory(
+                &bridge_dir,
+                &tedge_config,
+                AuthMethod::Certificate,
+                None,
+                Some(&config.table),
+            )
+            .await?;
+
+            let bridge_actor = MqttBridgeActorBuilder::new(
+                &tedge_config,
+                &bridge_service_name,
+                &health_topic,
+                bridge_rules,
+                cloud_config,
+                None,
+            )
+            .await;
+            runtime.spawn(bridge_actor).await?;
         }
 
         // 4.6: Start the flows engine if flows/ is present
@@ -390,6 +399,55 @@ mod tests {
                 msg.contains("does not exist"),
                 "Error should mention missing directory: {msg}"
             );
+        }
+    }
+
+    // Integration-level unit tests (task 7.4, 7.5)
+    mod startup_config {
+        use super::*;
+        use tedge_test_utils::fs::TempTedgeDir;
+
+        /// Task 7.4: bridge/ without tedge.toml produces a clear error
+        #[tokio::test]
+        async fn bridge_dir_without_tedge_toml_errors() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            tokio::fs::create_dir_all(mapper_dir.join("bridge")).await.unwrap();
+
+            let err = check_startup_config(&mapper_dir).await.unwrap_err();
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("bridge") && msg.contains("tedge.toml"),
+                "Error should mention bridge/ and tedge.toml: {msg}"
+            );
+        }
+
+        /// Task 7.4 (positive): bridge/ with tedge.toml loads config successfully
+        #[tokio::test]
+        async fn bridge_dir_with_tedge_toml_returns_config() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            tokio::fs::create_dir_all(mapper_dir.join("bridge")).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("tedge.toml"),
+                "[connection]\nurl = \"mqtt.example.com\"\n",
+            )
+            .await
+            .unwrap();
+
+            let config = check_startup_config(&mapper_dir).await.unwrap();
+            assert!(config.is_some(), "Should return config when tedge.toml exists");
+        }
+
+        /// No bridge/ directory returns None (flows-only case)
+        #[tokio::test]
+        async fn no_bridge_dir_returns_none() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.flows-only");
+            tokio::fs::create_dir_all(mapper_dir.join("flows")).await.unwrap();
+
+            let config = check_startup_config(&mapper_dir).await.unwrap();
+            assert!(config.is_none(), "Should return None when no bridge/ dir exists");
         }
     }
 }
