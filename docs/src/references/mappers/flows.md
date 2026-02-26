@@ -132,7 +132,7 @@ type Context = {
   script: KVStore,
   
   // A value provided by the flow configuration of that step
-  config: any,
+  config: unknown,
 }
 
 type KVStore = {
@@ -140,10 +140,10 @@ type KVStore = {
   keys(): string[]
   
   // Get the value attached to a key (returning null, if none)
-  get(key: string): any,
+  get(key: string): unknown,
   
   // Set the value attached to a key (removing the key if the provided value is null)
-  set(key: string, value: any),
+  set(key: string, value: unknown),
   
   // Remove any value attache to a key
   remove(key: string),
@@ -177,7 +177,7 @@ A flow script can also export a `onInterval` function
   - This can also be a TypeScript module with a `.ts` extension.
 - The definition of flow defines its input, output and error sink as well as a list of transformation steps.
 - Each step is built either from a `script` or a `builtin` transformation
-- A step can possibly be given a config (arbitrary json that will be passed to the transformation script)
+- A step can possibly be given a config (an arbitrary json object that will be passed to the transformation script)
 - Configuration values can also be defined at the flow level,
   these values will be used as default configuration values by all the steps.
 - The pace at which a step `onInterval` function is called defaults to one second,
