@@ -140,7 +140,7 @@ impl Actor for SoftwareManagerActor {
                         warn!("Tedge-agent is no more running the latest-version => a restart is required");
                         // Make sure the operation status is properly reported before the restart
                         tokio::time::sleep(Duration::from_secs(5)).await;
-                        return Err(RuntimeError::ActorError(Box::new(SoftwareManagerError::NotRunningLatestVersion)));
+                        return Err(RuntimeError::RestartRequired);
                     }
                 }
 
