@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """thin-edge.io benchmark"""
+
 import argparse
 import datetime
 import json
