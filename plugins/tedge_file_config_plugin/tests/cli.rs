@@ -184,6 +184,58 @@ service = "dummy-service"
 }
 
 #[test]
+fn test_apply_command_does_not_restart_tedge_agent() {
+    let ttd = TempTedgeDir::new();
+
+    // Original config
+    let dest_file = ttd.file("system.toml");
+
+    let config_content = format!(
+        r###"
+[[files]]
+path = "{}"
+type = "system.toml"
+service = "tedge-agent"
+"###,
+        dest_file.utf8_path()
+    );
+    ttd.dir("plugins")
+        .file("tedge-configuration-plugin.toml")
+        .with_raw_content(&config_content);
+
+    let workdir = ttd.dir("workdir");
+
+    let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
+    cmd.arg("--config-dir")
+        .arg(ttd.path().to_str().unwrap())
+        .arg("apply")
+        .arg("system.toml")
+        .arg("--work-dir")
+        .arg(workdir.utf8_path().as_str());
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    // Verify that the restart signal JSON is printed
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains(":::begin-tedge:::"),
+        "Output should contain ':::begin-tedge:::', got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains(r#"{"restartAgent": true}"#),
+        "Output should contain the restart JSON, got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains(":::end-tedge:::"),
+        "Output should contain ':::end-tedge:::', got: {}",
+        stdout
+    );
+}
+
+#[test]
 fn test_empty_config_file() {
     let ttd = TempTedgeDir::new();
 

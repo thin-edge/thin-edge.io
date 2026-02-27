@@ -100,12 +100,21 @@ impl FileConfigPlugin {
 
         match action {
             "restart" => {
-                self.service_manager
-                    .restart_service(service)
-                    .await
-                    .with_context(|| {
-                        format!("Failed to run restart command for the service: {service_name}")
-                    })?;
+                // If restarting tedge-agent, signal to the agent that it needs to restart itself
+                // instead of actually restarting it (since the agent can't restart itself while running)
+                if service_name == "tedge-agent" {
+                    println!(":::begin-tedge:::");
+                    println!(r#"{{"restartAgent": true}}"#);
+                    println!(":::end-tedge:::");
+                } else {
+                    // For any other service, perform the actual restart
+                    self.service_manager
+                        .restart_service(service)
+                        .await
+                        .with_context(|| {
+                            format!("Failed to run restart command for the service: {service_name}")
+                        })?;
+                }
             }
             _ => {
                 anyhow::bail!(
