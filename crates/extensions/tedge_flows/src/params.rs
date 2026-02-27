@@ -77,7 +77,7 @@ impl Params {
     /// Substitute all the path expressions of the input value
     pub fn substitute(&self, value: &Value) -> Result<Value, LoadError> {
         match value {
-            Value::String(expr) => self.substitute_path(expr),
+            Value::String(expr) => self.substitute_path(expr).or(Ok(Value::Null)),
 
             Value::Array(values) => values.iter().map(|value| self.substitute(value)).collect(),
 
@@ -204,13 +204,15 @@ mod tests {
         let config = json!({
             "x": "${.params.x}",
             "y": "${.params.y}",
-            "z": "unchanged"
+            "z": "unchanged",
+            "unknown": "${.params.unknown}"
         });
 
         let expected = json!({
             "x": 42,
             "y": { "a": "foo", "b": "bar" },
-            "z": "unchanged"
+            "z": "unchanged",
+            "unknown": null
         });
 
         assert_eq!(params.substitute(&config).unwrap(), expected);
