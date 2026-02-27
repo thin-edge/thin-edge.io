@@ -546,18 +546,32 @@ impl ConfigManagerWorker {
         // Generate workdir for this operation
         let work_dir = self.generate_work_dir(config_type, &cmd_id)?;
 
-        self.execute_config_prepare_step(
-            &topic,
-            config_type,
-            from_path,
-            &work_dir,
-            log_path,
-            &cmd_id,
-        )
-        .await?;
+        let result = self
+            .execute_config_prepare_step(
+                &topic,
+                config_type,
+                from_path,
+                &work_dir,
+                log_path,
+                &cmd_id,
+            )
+            .await?;
 
         // Return the workdir in the response so it gets merged into the payload
-        Ok(Some(json!({"workDir": work_dir.as_str()})))
+        let mut response = json!({"workDir": work_dir.as_str()});
+
+        // Merge any JSON returned by the plugin
+        if let Some(plugin_result) = result {
+            if let Some(obj) = response.as_object_mut() {
+                if let Some(plugin_obj) = plugin_result.as_object() {
+                    for (key, value) in plugin_obj {
+                        obj.insert(key.clone(), value.clone());
+                    }
+                }
+            }
+        }
+
+        Ok(Some(response))
     }
 
     async fn process_config_set_request(
@@ -572,9 +586,10 @@ impl ConfigManagerWorker {
         let config_type = get_text_property(&command, "type")?;
         let from_path = get_path_property(&command, "setFrom")?;
 
-        self.execute_config_set_step(&topic, config_type, from_path, log_path, &cmd_id)
+        let result = self
+            .execute_config_set_step(&topic, config_type, from_path, log_path, &cmd_id)
             .await?;
-        Ok(None)
+        Ok(result)
     }
 
     async fn process_config_apply_request(
@@ -588,9 +603,10 @@ impl ConfigManagerWorker {
         let config_type = get_text_property(&command, "type")?;
         let work_dir = get_path_property(&command, "workDir")?;
 
-        self.execute_config_apply_step(&topic, config_type, work_dir, log_path, &cmd_id)
+        let result = self
+            .execute_config_apply_step(&topic, config_type, work_dir, log_path, &cmd_id)
             .await?;
-        Ok(None)
+        Ok(result)
     }
 
     async fn process_config_verify_request(
@@ -604,9 +620,10 @@ impl ConfigManagerWorker {
         let config_type = get_text_property(&command, "type")?;
         let work_dir = get_path_property(&command, "workDir")?;
 
-        self.execute_config_verify_step(&topic, config_type, work_dir, log_path, &cmd_id)
+        let result = self
+            .execute_config_verify_step(&topic, config_type, work_dir, log_path, &cmd_id)
             .await?;
-        Ok(None)
+        Ok(result)
     }
 
     async fn process_config_finalize_request(
@@ -620,9 +637,10 @@ impl ConfigManagerWorker {
         let config_type = get_text_property(&command, "type")?;
         let work_dir = get_path_property(&command, "workDir")?;
 
-        self.execute_config_finalize_step(&topic, config_type, work_dir, log_path, &cmd_id)
+        let result = self
+            .execute_config_finalize_step(&topic, config_type, work_dir, log_path, &cmd_id)
             .await?;
-        Ok(None)
+        Ok(result)
     }
 
     async fn process_config_rollback_request(
@@ -636,9 +654,10 @@ impl ConfigManagerWorker {
         let config_type = get_text_property(&command, "type")?;
         let work_dir = get_path_property(&command, "workDir")?;
 
-        self.execute_config_rollback_step(&topic, config_type, work_dir, log_path, &cmd_id)
+        let result = self
+            .execute_config_rollback_step(&topic, config_type, work_dir, log_path, &cmd_id)
             .await?;
-        Ok(None)
+        Ok(result)
     }
 
     async fn execute_config_prepare_step(
@@ -649,7 +668,7 @@ impl ConfigManagerWorker {
         work_dir: &Utf8Path,
         log_path: Option<Utf8PathBuf>,
         cmd_id: &str,
-    ) -> Result<(), ConfigManagementError> {
+    ) -> Result<Option<Value>, ConfigManagementError> {
         let (config_type, plugin_type) = parse_config_type(config_type);
         let plugin = self
             .external_plugins
@@ -664,11 +683,11 @@ impl ConfigManagerWorker {
             )
         });
 
-        plugin
+        let result = plugin
             .prepare(config_type, from_path, work_dir, command_log.as_mut())
             .await?;
 
-        Ok(())
+        Ok(result)
     }
 
     async fn execute_config_set_step(
@@ -678,7 +697,7 @@ impl ConfigManagerWorker {
         from_path: &Utf8Path,
         log_path: Option<Utf8PathBuf>,
         cmd_id: &str,
-    ) -> Result<(), ConfigManagementError> {
+    ) -> Result<Option<Value>, ConfigManagementError> {
         if !from_path.exists() {
             return Err(ConfigManagementError::FileNotFound(from_path.to_string()));
         }
@@ -697,11 +716,11 @@ impl ConfigManagerWorker {
             )
         });
 
-        plugin
+        let result = plugin
             .set(config_type, from_path, command_log.as_mut())
             .await?;
 
-        Ok(())
+        Ok(result)
     }
 
     async fn execute_config_apply_step(
@@ -711,7 +730,7 @@ impl ConfigManagerWorker {
         work_dir: &Utf8Path,
         log_path: Option<Utf8PathBuf>,
         cmd_id: &str,
-    ) -> Result<(), ConfigManagementError> {
+    ) -> Result<Option<Value>, ConfigManagementError> {
         let (config_type, plugin_type) = parse_config_type(config_type);
         let plugin = self
             .external_plugins
@@ -730,11 +749,11 @@ impl ConfigManagerWorker {
             target: "config plugins",
             "Applying config type: {} with work_dir: {}", config_type, work_dir
         );
-        plugin
+        let result = plugin
             .apply(config_type, work_dir, command_log.as_mut())
             .await?;
 
-        Ok(())
+        Ok(result)
     }
 
     async fn execute_config_verify_step(
@@ -744,7 +763,7 @@ impl ConfigManagerWorker {
         work_dir: &Utf8Path,
         log_path: Option<Utf8PathBuf>,
         cmd_id: &str,
-    ) -> Result<(), ConfigManagementError> {
+    ) -> Result<Option<Value>, ConfigManagementError> {
         let (config_type, plugin_type) = parse_config_type(config_type);
         let plugin = self
             .external_plugins
@@ -763,11 +782,11 @@ impl ConfigManagerWorker {
             target: "config plugins",
             "Verifying config type: {} with work_dir: {}", config_type, work_dir
         );
-        plugin
+        let result = plugin
             .verify(config_type, work_dir, command_log.as_mut())
             .await?;
 
-        Ok(())
+        Ok(result)
     }
 
     async fn execute_config_finalize_step(
@@ -777,7 +796,7 @@ impl ConfigManagerWorker {
         work_dir: &Utf8Path,
         log_path: Option<Utf8PathBuf>,
         cmd_id: &str,
-    ) -> Result<(), ConfigManagementError> {
+    ) -> Result<Option<Value>, ConfigManagementError> {
         let (config_type, plugin_type) = parse_config_type(config_type);
         let plugin = self
             .external_plugins
@@ -796,7 +815,7 @@ impl ConfigManagerWorker {
             target: "config plugins",
             "Finalizing config type: {} with work_dir: {}", config_type, work_dir
         );
-        plugin
+        let result = plugin
             .finalize(config_type, work_dir, command_log.as_mut())
             .await?;
 
@@ -811,7 +830,7 @@ impl ConfigManagerWorker {
             }
         }
 
-        Ok(())
+        Ok(result)
     }
 
     async fn execute_config_rollback_step(
@@ -821,7 +840,7 @@ impl ConfigManagerWorker {
         work_dir: &Utf8Path,
         log_path: Option<Utf8PathBuf>,
         cmd_id: &str,
-    ) -> Result<(), ConfigManagementError> {
+    ) -> Result<Option<Value>, ConfigManagementError> {
         let (config_type, plugin_type) = parse_config_type(config_type);
         let plugin = self
             .external_plugins
@@ -840,7 +859,7 @@ impl ConfigManagerWorker {
             target: "config plugins",
             "Rolling back config type: {} with work_dir: {}", config_type, work_dir
         );
-        plugin
+        let result = plugin
             .rollback(config_type, work_dir, command_log.as_mut())
             .await?;
 
@@ -855,7 +874,7 @@ impl ConfigManagerWorker {
             }
         }
 
-        Ok(())
+        Ok(result)
     }
 
     fn extract_command_id(&self, topic: &Topic) -> Result<String, ConfigManagementError> {

@@ -255,7 +255,8 @@ impl<T> WithContext for Result<T, String> {
     }
 }
 
-fn extract_script_output(stdout: String) -> Option<String> {
+/// Extract script output from stdout between :::begin-tedge::: and :::end-tedge::: markers
+pub fn extract_script_output(stdout: String) -> Option<String> {
     if let Some((_, script_output_and_more)) = stdout.split_once(":::begin-tedge:::\n") {
         if let Some((script_output, _)) = script_output_and_more.split_once("\n:::end-tedge:::") {
             return Some(script_output.to_string());
