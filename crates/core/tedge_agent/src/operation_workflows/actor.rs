@@ -9,7 +9,6 @@ use log::error;
 use log::info;
 use log::warn;
 use serde_json::json;
-use serde_json::Value;
 use std::collections::HashMap;
 use std::process::Output;
 use std::time::Duration;
@@ -348,6 +347,20 @@ impl WorkflowActor {
                 // Forward the command to the builtin operation actor
                 Ok(self.builtin_command_dispatcher.send(builtin_state).await?)
             }
+            OperationAction::RestartAgent(handlers) => {
+                let next_state = &handlers.on_exec.status;
+                info!("Moving {operation} operation to {next_state} state before restarting agent");
+
+                // First, move to the on_exec state and persist it
+                let new_state = state.clone().update(handlers.on_exec);
+                self.publish_command_state(new_state, &mut log_file).await?;
+
+                // Now request a shutdown to the runtime for a graceful shutdown
+                // The agent will be restarted by systemd and resume from the persisted state
+                log_file.log_info("Shutting down agent for restart").await;
+
+                Err(RuntimeError::Shutdown)
+            }
             OperationAction::AwaitingAgentRestart(handlers) => {
                 let step = &state.status;
                 info!("{operation} operation {step} waiting for agent restart");
@@ -471,10 +484,7 @@ impl WorkflowActor {
                     .builtin_operation_step_executor
                     .get_mut(&(operation_type, operation_step.clone()))
                 {
-                    handle
-                        .await_response(step_request)
-                        .await?
-                        .map(|_| Value::Null)
+                    handle.await_response(step_request).await?
                 } else {
                     Err(format!(
                         "No builtin operation step handler registered for {operation} operation {operation_step} step"

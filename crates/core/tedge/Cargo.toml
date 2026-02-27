@@ -63,6 +63,7 @@ tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 tedge_flows = { workspace = true }
 tedge_mqtt_bridge = { workspace = true }
+tedge_system_services = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }

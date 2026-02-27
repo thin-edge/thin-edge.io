@@ -10,9 +10,9 @@ use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
 use crate::command::Command;
-use crate::system_services::service_manager;
-use crate::system_services::SystemService;
-use crate::system_services::SystemServiceManager;
+use tedge_system_services::service_manager;
+use tedge_system_services::SystemService;
+use tedge_system_services::SystemServiceManager;
 
 pub struct RefreshBridgesCmd {
     service_manager: Arc<dyn SystemServiceManager>,
@@ -77,7 +77,7 @@ impl RefreshBridgesCmd {
 
         eprintln!("Restarting mosquitto service.\n");
         self.service_manager
-            .restart_service(SystemService::Mosquitto)
+            .restart_service(SystemService::new("mosquitto"))
             .await?;
 
         Ok(())

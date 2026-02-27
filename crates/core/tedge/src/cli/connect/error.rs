@@ -27,7 +27,7 @@ pub enum ConnectError {
     UrlParse(#[from] url::ParseError),
 
     #[error(transparent)]
-    SystemServiceError(#[from] crate::system_services::SystemServiceError),
+    SystemServiceError(#[from] tedge_system_services::SystemServiceError),
 
     #[error("Operation timed out. Is mosquitto running?")]
     TimeoutElapsedError,

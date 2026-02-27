@@ -1,6 +1,7 @@
 use assert_matches::assert_matches;
 use camino::Utf8Path;
 use serde_json::json;
+use serde_json::Value;
 use std::fs::read_to_string;
 use std::sync::Arc;
 use std::time::Duration;
@@ -678,12 +679,15 @@ async fn execute_config_set_operation_step() -> Result<(), anyhow::Error> {
         .file("downloaded_file")
         .with_raw_content("Some content");
 
+    let work_dir = tempdir.dir("workdir");
+
     let command_state = GenericCommandState::new(
         Topic::new_unchecked("te/device/main///cmd/config_update/1234"),
         "set".to_string(),
         json!({
             "type": "type_two",
             "setFrom": downloaded_path.path(),
+            "workDir": work_dir.utf8_path(),
         }),
     );
 
@@ -693,7 +697,7 @@ async fn execute_config_set_operation_step() -> Result<(), anyhow::Error> {
     };
 
     let response = handle.steps.await_response(step_request).await?;
-    assert_eq!(response, Ok(()));
+    assert_eq!(response, Ok(Value::Null));
 
     Ok(())
 }
@@ -797,6 +801,7 @@ async fn execute_config_set_operation_step_file_not_found() -> Result<(), anyhow
     handle.mqtt.skip(2).await;
 
     let missing_path = tempdir.path().join("missing_file");
+    let work_dir = tempdir.dir("workdir");
 
     let command_state = GenericCommandState::new(
         Topic::new_unchecked("te/device/main///cmd/config_update/1234"),
@@ -804,6 +809,7 @@ async fn execute_config_set_operation_step_file_not_found() -> Result<(), anyhow
         json!({
             "type": "type_two",
             "setFrom": missing_path,
+            "workDir": work_dir.utf8_path(),
         }),
     );
 

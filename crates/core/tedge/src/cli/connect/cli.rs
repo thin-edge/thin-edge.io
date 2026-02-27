@@ -2,8 +2,8 @@ use crate::cli::common::CloudArg;
 use crate::cli::connect::*;
 use crate::command::BuildCommand;
 use crate::command::Command;
-use crate::system_services::service_manager;
 use tedge_config::TEdgeConfig;
+use tedge_system_services::service_manager;
 
 #[derive(clap::Args, Debug, Eq, PartialEq)]
 pub struct TEdgeConnectOpt {

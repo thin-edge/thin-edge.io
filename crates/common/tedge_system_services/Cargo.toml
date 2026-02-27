@@ -1,0 +1,25 @@
+[package]
+name = "tedge_system_services"
+description = "System service management for thin-edge.io"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+camino = { workspace = true }
+strum_macros = { workspace = true }
+tedge_config = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["process"] }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
+test-case = { workspace = true }
+
+[lints]
+workspace = true

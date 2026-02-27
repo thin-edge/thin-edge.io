@@ -1,4 +1,5 @@
 operation = "config_update"
+on_error = "failed"
 
 [init]
 action = "proceed"
@@ -10,14 +11,41 @@ on_success = "download"
 
 [download]
 action = "download"
+on_success = "prepare"
+
+[prepare]
+action = "builtin:config_update:prepare"
+input.setFrom = "${.payload.downloadedPath}"
 on_success = "set"
-on_error = "failed"
 
 [set]
 action = "builtin:config_update:set"
-input.setFrom = "${.payload.downloadedPath}"
+on_success = "evaluate-agent-restart"
+on_error = "rollback"
+
+[evaluate-agent-restart]
+script = "test ${.payload.restartAgent} = true"
+on_exit.0 = "restart-agent"
+on_exit.1 = "verify"
+
+[restart-agent]
+action = "restart-agent"
+on_exec = "await-agent-restart"
+
+[await-agent-restart]
+action = "await-agent-restart"
+timeout_second = 90
+on_timeout = "rollback"
+on_success = "verify"
+
+[verify]
+action = "builtin:config_update:verify"
 on_success = "successful"
-on_error = "failed"
+on_error = "rollback"
+
+[rollback]
+action = "builtin:config_update:rollback"
+on_success = "failed"
 
 [successful]
 action = "cleanup"

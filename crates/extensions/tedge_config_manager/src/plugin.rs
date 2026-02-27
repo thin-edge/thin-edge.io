@@ -1,17 +1,19 @@
+use crate::actor::ConfigOperationStep;
 use crate::error::ConfigManagementError;
 use camino::Utf8Path;
+use serde_json::Value;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Output;
 use std::sync::Arc;
+use tedge_api::workflow::extract_script_output;
 use tedge_api::CommandLog;
 use tedge_api::LoggedCommand;
 use tedge_config::SudoCommandBuilder;
 
 pub const LIST: &str = "list";
 const GET: &str = "get";
-const SET: &str = "set";
 
 #[derive(Debug, Clone)]
 pub struct ExternalPlugin {
@@ -119,18 +121,91 @@ impl ExternalPlugin {
         Ok(())
     }
 
+    pub(crate) async fn prepare(
+        &self,
+        config_type: &str,
+        from_path: &Utf8Path,
+        work_dir: &Utf8Path,
+        command_log: Option<&mut CommandLog>,
+    ) -> Result<Value, ConfigManagementError> {
+        let mut command = self.command(ConfigOperationStep::Prepare.as_str())?;
+        command.arg(config_type);
+        command.arg(from_path.as_str());
+        command.arg("--work-dir");
+        command.arg(work_dir.as_str());
+
+        let output = self.execute(command, command_log).await?;
+        let result = self.parse_json_output(&output);
+
+        Ok(result)
+    }
+
     pub(crate) async fn set(
         &self,
         config_type: &str,
         config_file_path: &Utf8Path,
+        work_dir: &Utf8Path,
         command_log: Option<&mut CommandLog>,
-    ) -> Result<(), ConfigManagementError> {
-        let mut command = self.command(SET)?;
+    ) -> Result<Value, ConfigManagementError> {
+        let mut command = self.command(ConfigOperationStep::Set.as_str())?;
         command.arg(config_type);
         command.arg(config_file_path);
+        command.arg("--work-dir");
+        command.arg(work_dir.as_str());
 
-        self.execute(command, command_log).await?;
+        let output = self.execute(command, command_log).await?;
+        let result = self.parse_json_output(&output);
 
-        Ok(())
+        Ok(result)
+    }
+
+    pub(crate) async fn verify(
+        &self,
+        config_type: &str,
+        work_dir: &Utf8Path,
+        command_log: Option<&mut CommandLog>,
+    ) -> Result<Value, ConfigManagementError> {
+        let mut command = self.command(ConfigOperationStep::Verify.as_str())?;
+        command.arg(config_type);
+        command.arg("--work-dir");
+        command.arg(work_dir.as_str());
+
+        let output = self.execute(command, command_log).await?;
+        let result = self.parse_json_output(&output);
+
+        Ok(result)
+    }
+
+    pub(crate) async fn rollback(
+        &self,
+        config_type: &str,
+        work_dir: &Utf8Path,
+        command_log: Option<&mut CommandLog>,
+    ) -> Result<Value, ConfigManagementError> {
+        let mut command = self.command(ConfigOperationStep::Rollback.as_str())?;
+        command.arg(config_type);
+        command.arg("--work-dir");
+        command.arg(work_dir.as_str());
+
+        let output = self.execute(command, command_log).await?;
+        let result = self.parse_json_output(&output);
+
+        Ok(result)
+    }
+
+    /// Parse JSON output from plugin stdout if it exists between :::begin-tedge::: markers
+    fn parse_json_output(&self, output: &Output) -> Value {
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        if let Some(json_str) = extract_script_output(stdout) {
+            match serde_json::from_str(&json_str) {
+                Ok(value) => value,
+                Err(err) => {
+                    log::warn!("Plugin {} produced invalid JSON output: {}", self.name, err);
+                    Value::Null
+                }
+            }
+        } else {
+            Value::Null
+        }
     }
 }
