@@ -507,13 +507,23 @@ impl FlowsMapper {
 
     /// Remove all flows and scripts that are currently loaded if they are prefixed by the path.
     async fn on_path_removed(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
-        let (removed_flows, removed_scripts): (Vec<_>, Vec<_>) = self
+        let removed_flows: Vec<_> = self
+            .processor
+            .registry
+            .flows()
+            .map(|f| f.source_path().to_path_buf())
+            .filter(|p| p.starts_with(path))
+            .collect();
+
+        let removed_scripts: Vec<_> = self
             .loaded_files
             .iter()
             .filter(|p| p.starts_with(path))
+            .filter(|p| matches!(p.extension(), Some("js" | "ts" | "mjs")))
             .cloned()
             // remove flows before scripts, otherwise a warning is printed
-            .partition(|p| p.extension() == Some("toml"));
+            .collect();
+
         for file in removed_flows {
             self.on_file_removed(&file).await?;
         }
