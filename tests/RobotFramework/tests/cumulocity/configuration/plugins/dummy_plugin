@@ -38,32 +38,10 @@ case "$1" in
                 ;;
         esac
         ;;
-    "apply")
-        case "$2" in
-            "dummy_config")
-                echo "Dummy apply"
-                ;;
-            *)
-                echo "Unsupported config type \"$2\"" >&2
-                exit 1
-                ;;
-        esac
-        ;;
     "verify")
         case "$2" in
             "dummy_config")
                 echo "Dummy verify"
-                ;;
-            *)
-                echo "Unsupported config type \"$2\"" >&2
-                exit 1
-                ;;
-        esac
-        ;;
-    "finalize")
-        case "$2" in
-            "dummy_config")
-                echo "Dummy finalize"
                 ;;
             *)
                 echo "Unsupported config type \"$2\"" >&2

@@ -115,7 +115,9 @@ type = "dest.conf"
         .arg(ttd.path().to_str().unwrap())
         .arg("set")
         .arg("dest.conf")
-        .arg(source_file.path().to_str().unwrap());
+        .arg(source_file.path().to_str().unwrap())
+        .arg("--work-dir")
+        .arg(ttd.path().join("workdir").to_str().unwrap());
 
     cmd.assert().success();
 
@@ -125,7 +127,7 @@ type = "dest.conf"
 }
 
 #[test]
-fn test_apply_command_executes_service_restart_command() {
+fn test_set_command_executes_service_restart_command() {
     let ttd = TempTedgeDir::new();
 
     let witness_file = ttd.file("restart-witness.txt");
@@ -149,13 +151,13 @@ is_active = ["true"]
         .with_raw_content(&system_toml_content);
 
     // Original config
-    let dest_file = ttd.file("test.conf");
+    let dest_file = ttd.file("test.conf").with_raw_content("config=original\n");
 
     let config_content = format!(
         r###"
 [[files]]
 path = "{}"
-type = "dest.conf"
+type = "test.conf"
 service = "dummy-service"
 "###,
         dest_file.utf8_path()
@@ -164,19 +166,25 @@ service = "dummy-service"
         .file("tedge-configuration-plugin.toml")
         .with_raw_content(&config_content);
 
-    // Create a workdir for the apply operation
-    let workdir = ttd.dir("workdir");
+    // New config to set
+    let new_content = "config=new\n";
+    let target_file = ttd.file("new.conf").with_raw_content(new_content);
 
-    // Now apply the configuration (DOES restart service)
+    // Set the configuration (which also triggers service restart)
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
     cmd.arg("--config-dir")
         .arg(ttd.path().to_str().unwrap())
-        .arg("apply")
-        .arg("dest.conf")
+        .arg("set")
+        .arg("test.conf")
+        .arg(target_file.path().to_str().unwrap())
         .arg("--work-dir")
-        .arg(workdir.utf8_path().as_str());
+        .arg(ttd.path().join("workdir").to_str().unwrap());
 
     cmd.assert().success();
+
+    // Verify the file was updated
+    let dest_content = fs::read_to_string(dest_file.path()).unwrap();
+    assert_eq!(dest_content, new_content);
 
     // Verify that the restart command was called with the correct service name
     let witness_content = fs::read_to_string(witness_file.path()).unwrap();
@@ -184,17 +192,17 @@ service = "dummy-service"
 }
 
 #[test]
-fn test_apply_command_does_not_restart_tedge_agent() {
+fn test_set_command_does_not_restart_tedge_agent() {
     let ttd = TempTedgeDir::new();
 
     // Original config
-    let dest_file = ttd.file("system.toml");
+    let dest_file = ttd.file("tedge.conf").with_raw_content("conf=original");
 
     let config_content = format!(
         r###"
 [[files]]
 path = "{}"
-type = "system.toml"
+type = "tedge.conf"
 service = "tedge-agent"
 "###,
         dest_file.utf8_path()
@@ -203,20 +211,27 @@ service = "tedge-agent"
         .file("tedge-configuration-plugin.toml")
         .with_raw_content(&config_content);
 
-    let workdir = ttd.dir("workdir");
+    // New config to set
+    let new_content = "conf=new";
+    let target_file = ttd.file("new.conf").with_raw_content(new_content);
 
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
     cmd.arg("--config-dir")
         .arg(ttd.path().to_str().unwrap())
-        .arg("apply")
-        .arg("system.toml")
+        .arg("set")
+        .arg("tedge.conf")
+        .arg(target_file.path().to_str().unwrap())
         .arg("--work-dir")
-        .arg(workdir.utf8_path().as_str());
+        .arg(ttd.path().join("workdir").to_str().unwrap());
 
     let output = cmd.output().unwrap();
     assert!(output.status.success());
 
-    // Verify that the restart signal JSON is printed
+    // Verify the file was updated
+    let dest_content = fs::read_to_string(dest_file.path()).unwrap();
+    assert_eq!(dest_content, new_content);
+
+    // Verify that the restart signal JSON is printed (instead of actually restarting)
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains(":::begin-tedge:::"),

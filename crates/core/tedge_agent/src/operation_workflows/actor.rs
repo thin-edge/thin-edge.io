@@ -9,7 +9,6 @@ use log::error;
 use log::info;
 use log::warn;
 use serde_json::json;
-use serde_json::Value;
 use std::collections::HashMap;
 use std::process::Output;
 use std::time::Duration;
@@ -485,10 +484,7 @@ impl WorkflowActor {
                     .builtin_operation_step_executor
                     .get_mut(&(operation_type, operation_step.clone()))
                 {
-                    handle
-                        .await_response(step_request)
-                        .await?
-                        .map(|opt_value| opt_value.unwrap_or(Value::Null))
+                    handle.await_response(step_request).await?
                 } else {
                     Err(format!(
                         "No builtin operation step handler registered for {operation} operation {operation_step} step"

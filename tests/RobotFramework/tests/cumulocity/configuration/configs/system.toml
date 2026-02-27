@@ -1,0 +1,15 @@
+[init]
+name = "systemd"
+is_available = ["/bin/systemctl", "--version"]
+restart = ["/bin/systemctl", "restart", "{}"]
+stop =  ["/bin/systemctl", "stop", "{}"]
+start = ["/bin/systemctl", "start", "{}"]
+enable =  ["/bin/systemctl", "enable", "{}"]
+disable =  ["/bin/systemctl", "disable", "{}"]
+is_active = ["/bin/systemctl", "is-active", "{}"]
+
+[system]
+reboot = ["shutdown", "-r", "now"]
+
+[log]
+tedge-agent = "debug"

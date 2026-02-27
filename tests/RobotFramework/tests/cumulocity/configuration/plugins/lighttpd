@@ -7,10 +7,8 @@ usage() {
     echo "  list                                                 List all config types supported by this plugin"
     echo "  get <type>                                           Print the config for the specified type to stdout"
     echo "  prepare <type> <new-config-path> --work-dir <dir>    Prepare for configuration update (create backup)"
-    echo "  set <type> <new-config-path>                         Update the config for the specified type from the new config path"
-    echo "  apply <type> --work-dir <dir>                        Apply configuration (restart services)"
+    echo "  set <type> <new-config-path> --work-dir <dir>      Update the config for the specified type and restart service"
     echo "  verify <type> --work-dir <dir>                       Verify configuration was applied successfully"
-    echo "  finalize <type> --work-dir <dir>                     Finalize configuration update (cleanup)"
     echo "  rollback <type> --work-dir <dir>                     Rollback configuration to previous state"
     exit 1
 }
@@ -96,25 +94,16 @@ prepare_config() {
 set_config() {
     config_type="$1"
     target_config="$2"
+    shift 2
     config_path="/etc/lighttpd/lighttpd.conf"
-
-    validate_config_type "$config_type"
-
-    # Apply new configuration
-    mv "$target_config" "$config_path"
-}
-
-apply_config() {
-    config_type="$1"
-    shift
 
     validate_config_type "$config_type"
 
     # Parse --work-dir argument
     work_dir=$(parse_work_dir "$@")
 
-    config_path="/etc/lighttpd/lighttpd.conf"
-    backup_path="${work_dir}/lighttpd.conf.backup"
+    # Apply new configuration
+    mv "$target_config" "$config_path"
 
     # Restart the service
     if ! systemctl restart lighttpd; then
@@ -137,21 +126,6 @@ verify_config() {
         echo "Error: lighttpd service is not running" >&2
         exit 1
     fi
-}
-
-finalize_config() {
-    config_type="$1"
-    shift
-
-    validate_config_type "$config_type"
-
-    # Parse --work-dir argument
-    work_dir=$(parse_work_dir "$@")
-
-    backup_path="${work_dir}/lighttpd.conf.backup"
-
-    # Cleanup backup file
-    rm -f "$backup_path"
 }
 
 rollback_config() {
@@ -212,26 +186,12 @@ main() {
             fi
             set_config "$@"
             ;;
-        apply)
-            if [ $# -lt 1 ]; then
-                echo "Error: 'apply' command requires <type> and --work-dir arguments" >&2
-                exit 1
-            fi
-            apply_config "$@"
-            ;;
         verify)
             if [ $# -lt 1 ]; then
                 echo "Error: 'verify' command requires <type> and --work-dir arguments" >&2
                 exit 1
             fi
             verify_config "$@"
-            ;;
-        finalize)
-            if [ $# -lt 1 ]; then
-                echo "Error: 'finalize' command requires <type> and --work-dir arguments" >&2
-                exit 1
-            fi
-            finalize_config "$@"
             ;;
         rollback)
             if [ $# -lt 1 ]; then

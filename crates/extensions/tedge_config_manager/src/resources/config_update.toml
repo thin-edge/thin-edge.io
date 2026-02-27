@@ -20,20 +20,28 @@ on_success = "set"
 
 [set]
 action = "builtin:config_update:set"
-on_success = "apply"
+on_success = "evaluate-agent-restart"
+on_error = "rollback"
 
-[apply]
-action = "builtin:config_update:apply"
+[evaluate-agent-restart]
+script = "test ${.payload.restartAgent} = true"
+on_exit.0 = "restart-agent"
+on_exit.1 = "verify"
+
+[restart-agent]
+action = "restart-agent"
+on_exec = "await-agent-restart"
+
+[await-agent-restart]
+action = "await-agent-restart"
+timeout_second = 90
+on_timeout = "rollback"
 on_success = "verify"
 
 [verify]
 action = "builtin:config_update:verify"
-on_success = "finalize"
-on_error = "rollback"
-
-[finalize]
-action = "builtin:config_update:finalize"
 on_success = "successful"
+on_error = "rollback"
 
 [rollback]
 action = "builtin:config_update:rollback"

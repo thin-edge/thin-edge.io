@@ -42,7 +42,7 @@ pub struct OperationStepRequest {
     pub command_state: GenericCommandState,
 }
 
-pub type OperationStepResponse = Result<Option<Value>, String>;
+pub type OperationStepResponse = Result<Value, String>;
 
 pub trait OperationStepHandler {
     fn supported_operation_steps(&self) -> Vec<(OperationType, OperationStep)>;
