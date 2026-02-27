@@ -10,6 +10,7 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use glob::glob;
 use serde::Deserialize;
+use serde_json::Map;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -28,6 +29,10 @@ pub struct FlowConfig {
     description: Option<String>,
     tags: Option<Vec<String>>,
 
+    /// configuration shared by the steps of this flow
+    #[serde(default)]
+    config: Map<String, Value>,
+
     input: InputConfig,
     #[serde(default)]
     steps: Vec<StepConfig>,
@@ -43,7 +48,7 @@ pub struct StepConfig {
     step: StepSpec,
 
     #[serde(default)]
-    config: Option<Value>,
+    config: Map<String, Value>,
 
     #[serde(default)]
     #[serde(deserialize_with = "parse_optional_human_duration")]
@@ -187,7 +192,7 @@ impl FlowConfig {
         let input_topic = "#".to_string();
         let step = StepConfig {
             step: StepSpec::JavaScript(script),
-            config: None,
+            config: Map::new(),
             interval: None,
         };
         Self {
@@ -195,6 +200,7 @@ impl FlowConfig {
             version: None,
             description: None,
             tags: None,
+            config: Map::new(),
             input: InputConfig::Mqtt {
                 topics: vec![input_topic],
             },
@@ -216,6 +222,8 @@ impl FlowConfig {
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
             let step = step
+                .with_shared_config(&self.config)
+                .with_interval_as_config()
                 .compile(rs_transformers, js_runtime, i, &source)
                 .await?;
             steps.push(step);
@@ -238,6 +246,25 @@ impl FlowConfig {
 }
 
 impl StepConfig {
+    pub fn with_shared_config(mut self, shared_config: &Map<String, Value>) -> Self {
+        for (k, v) in shared_config.iter() {
+            if !self.config.contains_key(k) {
+                self.config.insert(k.clone(), v.clone());
+            }
+        }
+        self
+    }
+
+    pub fn with_interval_as_config(mut self) -> Self {
+        let key = "interval";
+        let interval = self.interval.unwrap_or(Duration::from_secs(1));
+        if !self.config.contains_key(key) {
+            self.config
+                .insert(key.to_string(), interval.as_secs().into());
+        }
+        self
+    }
+
     pub async fn compile(
         &self,
         rs_transformers: &BuiltinTransformers,
@@ -253,8 +280,13 @@ impl StepConfig {
                 Self::instantiate_builtin(rs_transformers, flow, name, index)?
             }
         };
+        let config = if self.config.is_empty() {
+            None
+        } else {
+            Some(Value::Object(self.config.clone()))
+        };
         let step = step
-            .with_config(self.config.clone())?
+            .with_config(config)?
             .with_interval(self.interval, flow.as_str());
         Ok(step)
     }
@@ -386,5 +418,79 @@ fn default_output() -> OutputConfig {
 fn default_errors() -> OutputConfig {
     OutputConfig::Mqtt {
         topic: Some("te/error".to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn inherit_shared_config() {
+        for (shared_config, step_config, merged_config) in [
+            (json!({}), json!({"x": 1, "y": 2}), json!({"x": 1, "y": 2})),
+            (
+                json!({"z": 3}),
+                json!({"x": 1, "y": 2}),
+                json!({"x": 1, "y": 2, "z": 3}),
+            ),
+            (
+                json!({"z": 3, "x": 4}),
+                json!({"x": 1, "y": 2}),
+                json!({"x": 1, "y": 2, "z": 3}),
+            ),
+            (
+                json!({"x": 4}),
+                json!({"x": 1, "y": 2}),
+                json!({"x": 1, "y": 2}),
+            ),
+            (json!({"x": 4}), json!({}), json!({"x": 4})),
+        ] {
+            let shared_config = shared_config.as_object().unwrap();
+            let step_config = step_config.as_object().unwrap();
+            let merged_config = merged_config.as_object().unwrap();
+            let step = StepConfig {
+                step: StepSpec::Transformer("some-step".to_string()),
+                config: step_config.clone(),
+                interval: None,
+            };
+            assert_eq!(
+                &step.with_shared_config(shared_config).config,
+                merged_config
+            );
+        }
+    }
+
+    #[test]
+    fn with_interval_as_config() {
+        for (interval, config, merged_config) in [
+            (None, json!({}), json!({"interval": 1})),
+            (
+                Some(Duration::from_secs(5)),
+                json!({}),
+                json!({"interval": 5}),
+            ),
+            (None, json!({"x": 42}), json!({"interval": 1, "x": 42})),
+            (
+                Some(Duration::from_secs(5)),
+                json!({"x": 42}),
+                json!({"interval": 5, "x": 42}),
+            ),
+            (
+                Some(Duration::from_secs(5)),
+                json!({"interval": 33, "x": 42}),
+                json!({"interval": 33, "x": 42}),
+            ),
+        ] {
+            let config = config.as_object().unwrap();
+            let merged_config = merged_config.as_object().unwrap();
+            let step = StepConfig {
+                step: StepSpec::Transformer("some-step".to_string()),
+                config: config.clone(),
+                interval,
+            };
+            assert_eq!(&step.with_interval_as_config().config, merged_config);
+        }
     }
 }

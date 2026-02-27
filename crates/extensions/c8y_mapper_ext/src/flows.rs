@@ -110,10 +110,12 @@ topic = "{errors_topic}"
         format!(
             r#"input.mqtt.topics = {input_topics:?}
 
+config = {{ topic_root = "{topic_prefix}" }}
+
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "unix", reformat = false }} }},
-    {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
-    {{ builtin = "into-c8y-measurements", config = {{ topic_root = "{topic_prefix}" }} }},
+    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "into-c8y-measurements" }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
@@ -141,10 +143,12 @@ topic = "{errors_topic}"
         format!(
             r#"input.mqtt.topics = {input_topics:?}
 
+config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
+
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
-    {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
-    {{ builtin = "into-c8y-events", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}", max_mqtt_payload_size = {max_mqtt_payload_size} }} }},
+    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "into-c8y-events", config = {{ max_mqtt_payload_size = {max_mqtt_payload_size} }} }},
 ]
 
 [output.mqtt]
@@ -173,10 +177,12 @@ topic = "{errors_topic}"
         format!(
             r#"input.mqtt.topics = {input_topics:?}
 
+config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
+
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
-    {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
-    {{ builtin = "into-c8y-alarms", interval = "{alarm_interval}", config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }} }},
+    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "into-c8y-alarms", interval = "{alarm_interval}" }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
 
@@ -204,9 +210,11 @@ topic = "{errors_topic}"
         format!(
             r#"input.mqtt.topics = {input_topics:?}
 
+config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
+
 steps = [
-    {{ builtin = "cache-early-messages", config = {{ topic_root = "{topic_prefix}" }} }},
-    {{ builtin = "into-c8y-health-status", config = {{ topic_root = "{topic_prefix}", main_device = "{main_device}", c8y_prefix = "{c8y_prefix}" }} }},
+    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "into-c8y-health-status", config = {{ main_device = "{main_device}" }} }},
 ]
 
 [output.mqtt]

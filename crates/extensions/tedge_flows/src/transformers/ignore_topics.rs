@@ -18,8 +18,9 @@ impl Transformer for IgnoreTopics {
     }
 
     fn set_config(&mut self, config: JsonValue) -> Result<(), ConfigError> {
-        let topics = config.strings_property("topics");
-        self.topics = crate::config::topic_filters(topics)?;
+        if let Some(topics) = config.strings_property("topics") {
+            self.topics = crate::config::topic_filters(topics)?;
+        }
         Ok(())
     }
 

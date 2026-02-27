@@ -84,20 +84,18 @@ impl JsonValue {
         })
     }
 
-    pub fn strings_property(&self, property: &str) -> Vec<&str> {
-        self.property(property)
-            .map(|v| match v {
-                JsonValue::String(string) => vec![string.as_str()],
-                JsonValue::Array(props) => props
-                    .iter()
-                    .filter_map(|v| match v {
-                        JsonValue::String(s) => Some(s.as_str()),
-                        _ => None,
-                    })
-                    .collect(),
-                _ => vec![],
-            })
-            .unwrap_or_default()
+    pub fn strings_property(&self, property: &str) -> Option<Vec<&str>> {
+        self.property(property).map(|v| match v {
+            JsonValue::String(string) => vec![string.as_str()],
+            JsonValue::Array(props) => props
+                .iter()
+                .filter_map(|v| match v {
+                    JsonValue::String(s) => Some(s.as_str()),
+                    _ => None,
+                })
+                .collect(),
+            _ => vec![],
+        })
     }
 
     pub fn number_property(&self, property: &str) -> Option<&Number> {
