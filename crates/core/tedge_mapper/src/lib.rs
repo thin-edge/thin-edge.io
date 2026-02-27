@@ -8,6 +8,7 @@ use crate::az::mapper::AzureMapper;
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
+use crate::custom::mapper::CustomMapper;
 use crate::flows::GenMapper;
 use anyhow::Context;
 use clap::Parser;
@@ -26,6 +27,7 @@ mod az;
 pub mod c8y;
 mod collectd;
 mod core;
+mod custom;
 mod flows;
 
 /// Set the cloud profile either from the CLI argument or env variable,
@@ -62,6 +64,7 @@ fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
         MapperName::C8y { profile } => Box::new(CumulocityMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
+        MapperName::Custom { profile } => Box::new(CustomMapper { profile }),
         MapperName::Local => Box::new(GenMapper),
     }
 }
@@ -90,8 +93,9 @@ pub struct MapperOpt {
     pub common: CommonArgs,
 }
 
-#[derive(Debug, clap::Subcommand, Clone)]
+#[derive(Debug, clap::Subcommand, Clone, strum::EnumString)]
 #[clap(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum MapperName {
     #[cfg(feature = "azure")]
     Az {
@@ -112,6 +116,12 @@ pub enum MapperName {
         profile: Option<ProfileName>,
     },
     Collectd,
+    /// Run a custom mapper defined by a mapper directory under `/etc/tedge/mappers/custom.{name}/`
+    Custom {
+        /// The custom mapper profile (uses `custom/` directory when omitted)
+        #[clap(long)]
+        profile: Option<ProfileName>,
+    },
     Local,
 }
 
@@ -137,6 +147,10 @@ impl fmt::Display for MapperName {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-c8y@{profile}"),
             MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
+            MapperName::Custom { profile: None } => write!(f, "tedge-mapper-custom"),
+            MapperName::Custom {
+                profile: Some(profile),
+            } => write!(f, "tedge-mapper-custom@{profile}"),
             MapperName::Local => write!(f, "tedge-mapper-local"),
         }
     }
@@ -151,6 +165,9 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
         &mapper_opt.common.log_args,
         &mapper_opt.common.config_dir,
     )?;
+
+    let mappers_dir = mapper_opt.common.config_dir.join("mappers");
+    core::mappers_dir::warn_unrecognised_mapper_dirs(&mappers_dir);
 
     // Run only one instance of a mapper (if enabled)
     let mut _flock = None;
@@ -169,5 +186,28 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
         component
             .start(config, mapper_opt.common.config_dir.as_ref())
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod mapper_name_display {
+        use super::*;
+
+        #[test]
+        fn custom_without_profile() {
+            let name = MapperName::Custom { profile: None };
+            assert_eq!(name.to_string(), "tedge-mapper-custom");
+        }
+
+        #[test]
+        fn custom_with_profile() {
+            let name = MapperName::Custom {
+                profile: Some("thingsboard".parse().unwrap()),
+            };
+            assert_eq!(name.to_string(), "tedge-mapper-custom@thingsboard");
+        }
     }
 }

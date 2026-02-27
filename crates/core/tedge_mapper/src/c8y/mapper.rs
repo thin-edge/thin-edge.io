@@ -385,8 +385,14 @@ pub async fn bridge_rules(
         warn!("failed to set file permissions for '{bridge_config_dir}': {err}");
     }
 
-    load_bridge_rules_from_directory(&bridge_config_dir, tedge_config, auth_method, cloud_profile)
-        .await
+    load_bridge_rules_from_directory(
+        &bridge_config_dir,
+        tedge_config,
+        auth_method,
+        cloud_profile,
+        None,
+    )
+    .await
 }
 
 #[cfg(test)]
