@@ -359,7 +359,7 @@ impl WorkflowActor {
                 // The agent will be restarted by systemd and resume from the persisted state
                 log_file.log_info("Shutting down agent for restart").await;
 
-                return Err(RuntimeError::Shutdown);
+                Err(RuntimeError::Shutdown)
             }
             OperationAction::AwaitingAgentRestart(handlers) => {
                 let step = &state.status;
