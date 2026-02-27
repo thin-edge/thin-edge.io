@@ -1,3 +1,4 @@
 files = [
+    { path = '/etc/tedge/system.toml', type = 'system.toml', service = 'tedge-agent' },
     { path = '/etc/lighttpd/lighttpd.conf', type = 'lighttpd-conf', service = 'lighttpd', service_action = 'restart' }
 ]

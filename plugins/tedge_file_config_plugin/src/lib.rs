@@ -89,6 +89,18 @@ impl FileConfigPlugin {
         // Deploy the config file
         self.deploy_config_file(from, entry)?;
 
+        // Execute service action (e.g. restart) if defined for the config type
+        if let Some(service_name) = &entry.service {
+            let action = entry
+                .service_action
+                .as_deref()
+                .expect("service_action must be set when service is set");
+
+            self.execute_service_action(service_name, action)
+                .await
+                .with_context(|| format!("Failed to {action} service: {service_name}"))?;
+        }
+
         Ok(())
     }
 
@@ -139,28 +151,6 @@ impl FileConfigPlugin {
         Ok(())
     }
 
-    /// Apply configuration by restarting service if configured
-    pub async fn apply(&self, config_type: &str, _workdir: &Utf8Path) -> Result<(), PluginError> {
-        let entry = self
-            .config
-            .get_file_entry(config_type)
-            .ok_or_else(|| PluginError::InvalidConfigType(config_type.to_string()))?;
-
-        // Execute service action if defined for the config type
-        if let Some(service_name) = &entry.service {
-            let action = entry
-                .service_action
-                .as_deref()
-                .expect("service_action must be set when service is set");
-
-            self.execute_service_action(service_name, action)
-                .await
-                .with_context(|| format!("Failed to {action} service: {service_name}"))?;
-        }
-
-        Ok(())
-    }
-
     /// Verify configuration was applied successfully
     pub async fn verify(&self, config_type: &str, _workdir: &Utf8Path) -> Result<(), PluginError> {
         let entry = self
@@ -183,17 +173,6 @@ impl FileConfigPlugin {
             }
         }
 
-        Ok(())
-    }
-
-    /// Finalize configuration update
-    pub async fn finalize(
-        &self,
-        config_type: &str,
-        _workdir: &Utf8Path,
-    ) -> Result<(), PluginError> {
-        info!("Configuration update finalized successfully for {config_type}");
-        // No-op due for backward compatibility
         Ok(())
     }
 

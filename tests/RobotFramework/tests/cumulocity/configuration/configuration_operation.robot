@@ -127,6 +127,35 @@ Set Configuration Should Restart Service
     ${updated_tag}=    Execute Command    curl -I http://localhost 2>/dev/null | grep -i '^Server:'
     Should Contain    ${updated_tag}    tedge-lighttpd
 
+Set Configuration Should Restart Tedge Agent Service
+    Cumulocity.Set Device    ${PARENT_SN}
+    ThinEdgeIO.Set Device Context    ${PARENT_SN}
+
+    # Config plugin TOML with service restart enabled for tedge-agent
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/tedge-configuration-plugin-with-service.toml
+    ...    /etc/tedge/plugins/tedge-configuration-plugin.toml
+    Should Contain Supported Configuration Types    system.toml
+
+    ${pid_before}=    Get Service PID    tedge-agent
+
+    # Apply new configuration that changes log level of tedge-agent to debug
+    Cumulocity.Set Device    ${PARENT_SN}
+    ${config_url}=    Cumulocity.Create Inventory Binary
+    ...    system.toml
+    ...    system.toml
+    ...    file=${CURDIR}/configs/system.toml
+    ${operation}=    Cumulocity.Set Configuration    system.toml    url=${config_url}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=90
+
+    # Verify the configuration was applied
+    ${config_content}=    Execute Command    cat /etc/tedge/system.toml    strip=${True}
+    Should Contain    ${config_content}    tedge-agent = "debug"
+
+    # Verify the tedge-agent service was restarted by checking the PID changed
+    ${pid_after}=    Get Service PID    tedge-agent
+    Should Not Be Equal    ${pid_before}    ${pid_after}
+
 #
 # Get configuration
 #
@@ -315,6 +344,13 @@ Default plugin configuration
     ...    tedge-configuration-plugin
     ...    tedge.toml
     ...    tedge-log-plugin
+
+Config update restarts service if configured in plugin configuration
+    Cumulocity.Set Device    ${PARENT_SN}
+
+    ${config_url}=    Cumulocity.Create Inventory Binary    temp_file    harbor-certificate    contents=DUMMY CONTENTS
+    ${operation}=    Cumulocity.Set Configuration    harbor-certificate    url=${config_url}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
 
 
 *** Keywords ***

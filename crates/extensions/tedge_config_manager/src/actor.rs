@@ -83,9 +83,7 @@ fn get_path_property<'a>(
 pub enum ConfigOperationStep {
     Prepare,
     Set,
-    Apply,
     Verify,
-    Finalize,
     Rollback,
 }
 
@@ -94,22 +92,13 @@ impl ConfigOperationStep {
         match self {
             Self::Prepare => "prepare",
             Self::Set => "set",
-            Self::Apply => "apply",
             Self::Verify => "verify",
-            Self::Finalize => "finalize",
             Self::Rollback => "rollback",
         }
     }
 
     pub fn all() -> &'static [ConfigOperationStep] {
-        &[
-            Self::Prepare,
-            Self::Set,
-            Self::Apply,
-            Self::Verify,
-            Self::Finalize,
-            Self::Rollback,
-        ]
+        &[Self::Prepare, Self::Set, Self::Verify, Self::Rollback]
     }
 }
 
@@ -119,10 +108,8 @@ impl FromStr for ConfigOperationStep {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "prepare" => Ok(Self::Prepare),
-            "verify" => Ok(Self::Verify),
             "set" => Ok(Self::Set),
-            "apply" => Ok(Self::Apply),
-            "finalize" => Ok(Self::Finalize),
+            "verify" => Ok(Self::Verify),
             "rollback" => Ok(Self::Rollback),
             _ => Err(ConfigManagementError::InvalidOperationStep(s.to_string())),
         }
@@ -474,11 +461,13 @@ impl ConfigManagerWorker {
             .with_context(|| format!("path is not utf-8: '{}'", from.to_string_lossy()))?;
 
         let cmd_id = self.extract_command_id(topic)?;
+        let work_dir = self.config.tmp_path.clone();
 
         self.execute_config_set_step(
             topic,
             &request.config_type,
             from_path,
+            &work_dir,
             request.log_path.clone(),
             &cmd_id,
         )
@@ -514,10 +503,8 @@ impl ConfigManagerWorker {
 
         let result = match step {
             ConfigOperationStep::Prepare => self.process_config_prepare_request(command).await,
-            ConfigOperationStep::Verify => self.process_config_verify_request(command).await,
             ConfigOperationStep::Set => self.process_config_set_request(command).await,
-            ConfigOperationStep::Apply => self.process_config_apply_request(command).await,
-            ConfigOperationStep::Finalize => self.process_config_finalize_request(command).await,
+            ConfigOperationStep::Verify => self.process_config_verify_request(command).await,
             ConfigOperationStep::Rollback => self.process_config_rollback_request(command).await,
         };
 
@@ -585,26 +572,10 @@ impl ConfigManagerWorker {
 
         let config_type = get_text_property(&command, "type")?;
         let from_path = get_path_property(&command, "setFrom")?;
-
-        let result = self
-            .execute_config_set_step(&topic, config_type, from_path, log_path, &cmd_id)
-            .await?;
-        Ok(result)
-    }
-
-    async fn process_config_apply_request(
-        &mut self,
-        command: GenericCommandState,
-    ) -> Result<Option<Value>, ConfigManagementError> {
-        let topic = command.topic.clone();
-        let cmd_id = self.extract_command_id(&topic)?;
-        let log_path = command.get_log_path();
-
-        let config_type = get_text_property(&command, "type")?;
         let work_dir = get_path_property(&command, "workDir")?;
 
         let result = self
-            .execute_config_apply_step(&topic, config_type, work_dir, log_path, &cmd_id)
+            .execute_config_set_step(&topic, config_type, from_path, work_dir, log_path, &cmd_id)
             .await?;
         Ok(result)
     }
@@ -622,23 +593,6 @@ impl ConfigManagerWorker {
 
         let result = self
             .execute_config_verify_step(&topic, config_type, work_dir, log_path, &cmd_id)
-            .await?;
-        Ok(result)
-    }
-
-    async fn process_config_finalize_request(
-        &mut self,
-        command: GenericCommandState,
-    ) -> Result<Option<Value>, ConfigManagementError> {
-        let topic = command.topic.clone();
-        let cmd_id = self.extract_command_id(&topic)?;
-        let log_path = command.get_log_path();
-
-        let config_type = get_text_property(&command, "type")?;
-        let work_dir = get_path_property(&command, "workDir")?;
-
-        let result = self
-            .execute_config_finalize_step(&topic, config_type, work_dir, log_path, &cmd_id)
             .await?;
         Ok(result)
     }
@@ -695,6 +649,7 @@ impl ConfigManagerWorker {
         _topic: &Topic,
         config_type: &str,
         from_path: &Utf8Path,
+        work_dir: &Utf8Path,
         log_path: Option<Utf8PathBuf>,
         cmd_id: &str,
     ) -> Result<Option<Value>, ConfigManagementError> {
@@ -717,40 +672,7 @@ impl ConfigManagerWorker {
         });
 
         let result = plugin
-            .set(config_type, from_path, command_log.as_mut())
-            .await?;
-
-        Ok(result)
-    }
-
-    async fn execute_config_apply_step(
-        &mut self,
-        _topic: &Topic,
-        config_type: &str,
-        work_dir: &Utf8Path,
-        log_path: Option<Utf8PathBuf>,
-        cmd_id: &str,
-    ) -> Result<Option<Value>, ConfigManagementError> {
-        let (config_type, plugin_type) = parse_config_type(config_type);
-        let plugin = self
-            .external_plugins
-            .by_plugin_type(plugin_type)
-            .ok_or_else(|| ConfigManagementError::PluginNotFound(plugin_type.to_string()))?;
-
-        let mut command_log = log_path.clone().map(|path| {
-            CommandLog::from_log_path(
-                path,
-                OperationType::ConfigUpdate.to_string(),
-                cmd_id.to_string(),
-            )
-        });
-
-        info!(
-            target: "config plugins",
-            "Applying config type: {} with work_dir: {}", config_type, work_dir
-        );
-        let result = plugin
-            .apply(config_type, work_dir, command_log.as_mut())
+            .set(config_type, from_path, work_dir, command_log.as_mut())
             .await?;
 
         Ok(result)
@@ -786,40 +708,7 @@ impl ConfigManagerWorker {
             .verify(config_type, work_dir, command_log.as_mut())
             .await?;
 
-        Ok(result)
-    }
-
-    async fn execute_config_finalize_step(
-        &mut self,
-        _topic: &Topic,
-        config_type: &str,
-        work_dir: &Utf8Path,
-        log_path: Option<Utf8PathBuf>,
-        cmd_id: &str,
-    ) -> Result<Option<Value>, ConfigManagementError> {
-        let (config_type, plugin_type) = parse_config_type(config_type);
-        let plugin = self
-            .external_plugins
-            .by_plugin_type(plugin_type)
-            .ok_or_else(|| ConfigManagementError::PluginNotFound(plugin_type.to_string()))?;
-
-        let mut command_log = log_path.clone().map(|path| {
-            CommandLog::from_log_path(
-                path,
-                OperationType::ConfigUpdate.to_string(),
-                cmd_id.to_string(),
-            )
-        });
-
-        info!(
-            target: "config plugins",
-            "Finalizing config type: {} with work_dir: {}", config_type, work_dir
-        );
-        let result = plugin
-            .finalize(config_type, work_dir, command_log.as_mut())
-            .await?;
-
-        // Cleanup the work directory
+        // Cleanup the work directory on successful verification
         if work_dir.exists() {
             info!(
                 target: "config plugins",

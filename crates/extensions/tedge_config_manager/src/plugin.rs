@@ -144,26 +144,12 @@ impl ExternalPlugin {
         &self,
         config_type: &str,
         config_file_path: &Utf8Path,
+        work_dir: &Utf8Path,
         command_log: Option<&mut CommandLog>,
     ) -> Result<Option<Value>, ConfigManagementError> {
         let mut command = self.command(ConfigOperationStep::Set.as_str())?;
         command.arg(config_type);
         command.arg(config_file_path);
-
-        let output = self.execute(command, command_log).await?;
-        let result = self.parse_json_output(&output);
-
-        Ok(result)
-    }
-
-    pub(crate) async fn apply(
-        &self,
-        config_type: &str,
-        work_dir: &Utf8Path,
-        command_log: Option<&mut CommandLog>,
-    ) -> Result<Option<Value>, ConfigManagementError> {
-        let mut command = self.command(ConfigOperationStep::Apply.as_str())?;
-        command.arg(config_type);
         command.arg("--work-dir");
         command.arg(work_dir.as_str());
 
@@ -180,23 +166,6 @@ impl ExternalPlugin {
         command_log: Option<&mut CommandLog>,
     ) -> Result<Option<Value>, ConfigManagementError> {
         let mut command = self.command(ConfigOperationStep::Verify.as_str())?;
-        command.arg(config_type);
-        command.arg("--work-dir");
-        command.arg(work_dir.as_str());
-
-        let output = self.execute(command, command_log).await?;
-        let result = self.parse_json_output(&output);
-
-        Ok(result)
-    }
-
-    pub(crate) async fn finalize(
-        &self,
-        config_type: &str,
-        work_dir: &Utf8Path,
-        command_log: Option<&mut CommandLog>,
-    ) -> Result<Option<Value>, ConfigManagementError> {
-        let mut command = self.command(ConfigOperationStep::Finalize.as_str())?;
         command.arg(config_type);
         command.arg("--work-dir");
         command.arg(work_dir.as_str());

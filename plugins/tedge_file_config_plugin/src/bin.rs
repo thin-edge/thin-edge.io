@@ -52,12 +52,6 @@ pub enum PluginOp {
 
         /// Path to the new configuration file
         config_path: String,
-    },
-
-    /// Apply configuration (e.g:restart services)
-    Apply {
-        /// Configuration type to apply
-        config_type: String,
 
         /// Working directory for metadata
         #[clap(long = "work-dir")]
@@ -70,16 +64,6 @@ pub enum PluginOp {
         config_type: String,
 
         /// Working directory with metadata
-        #[clap(long = "work-dir")]
-        work_dir: String,
-    },
-
-    /// Finalize configuration update (e.g: cleanup)
-    Finalize {
-        /// Configuration type to finalize
-        config_type: String,
-
-        /// Working directory to cleanup
         #[clap(long = "work-dir")]
         work_dir: String,
     },
@@ -167,6 +151,7 @@ pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::R
         PluginOp::Set {
             config_type,
             config_path,
+            work_dir: _,
         } => {
             let source_path = Utf8PathBuf::from(config_path);
             match plugin.set(&config_type, &source_path).await {
@@ -176,22 +161,6 @@ pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::R
                 }
                 Err(err) => {
                     log::error!("Failed to set configuration: {err}");
-                    Err(err.into())
-                }
-            }
-        }
-        PluginOp::Apply {
-            config_type,
-            work_dir,
-        } => {
-            let workdir_path = Utf8PathBuf::from(work_dir);
-            match plugin.apply(&config_type, &workdir_path).await {
-                Ok(()) => {
-                    log::info!("Successfully applied configuration for {}", config_type);
-                    Ok(())
-                }
-                Err(err) => {
-                    log::error!("Failed to apply configuration: {err}");
                     Err(err.into())
                 }
             }
@@ -208,22 +177,6 @@ pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::R
                 }
                 Err(err) => {
                     log::error!("Failed to verify configuration: {err}");
-                    Err(err.into())
-                }
-            }
-        }
-        PluginOp::Finalize {
-            config_type,
-            work_dir,
-        } => {
-            let workdir_path = Utf8PathBuf::from(work_dir);
-            match plugin.finalize(&config_type, &workdir_path).await {
-                Ok(()) => {
-                    log::info!("Successfully finalized configuration for {}", config_type);
-                    Ok(())
-                }
-                Err(err) => {
-                    log::error!("Failed to finalize configuration: {err}");
                     Err(err.into())
                 }
             }
