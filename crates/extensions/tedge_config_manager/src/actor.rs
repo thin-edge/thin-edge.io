@@ -522,7 +522,7 @@ impl ConfigManagerWorker {
     async fn process_config_prepare_request(
         &mut self,
         command: GenericCommandState,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         let topic = command.topic.clone();
         let cmd_id = self.extract_command_id(&topic)?;
         let log_path = command.get_log_path();
@@ -548,23 +548,21 @@ impl ConfigManagerWorker {
         let mut response = json!({"workDir": work_dir.as_str()});
 
         // Merge any JSON returned by the plugin
-        if let Some(plugin_result) = result {
-            if let Some(obj) = response.as_object_mut() {
-                if let Some(plugin_obj) = plugin_result.as_object() {
-                    for (key, value) in plugin_obj {
-                        obj.insert(key.clone(), value.clone());
-                    }
+        if let Some(obj) = response.as_object_mut() {
+            if let Some(plugin_obj) = result.as_object() {
+                for (key, value) in plugin_obj {
+                    obj.insert(key.clone(), value.clone());
                 }
             }
         }
 
-        Ok(Some(response))
+        Ok(response)
     }
 
     async fn process_config_set_request(
         &mut self,
         command: GenericCommandState,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         let topic = command.topic.clone();
         let cmd_id = self.extract_command_id(&topic)?;
 
@@ -583,7 +581,7 @@ impl ConfigManagerWorker {
     async fn process_config_verify_request(
         &mut self,
         command: GenericCommandState,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         let topic = command.topic.clone();
         let cmd_id = self.extract_command_id(&topic)?;
         let log_path = command.get_log_path();
@@ -600,7 +598,7 @@ impl ConfigManagerWorker {
     async fn process_config_rollback_request(
         &mut self,
         command: GenericCommandState,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         let topic = command.topic.clone();
         let cmd_id = self.extract_command_id(&topic)?;
         let log_path = command.get_log_path();
@@ -622,7 +620,7 @@ impl ConfigManagerWorker {
         work_dir: &Utf8Path,
         log_path: Option<Utf8PathBuf>,
         cmd_id: &str,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         let (config_type, plugin_type) = parse_config_type(config_type);
         let plugin = self
             .external_plugins
@@ -652,7 +650,7 @@ impl ConfigManagerWorker {
         work_dir: &Utf8Path,
         log_path: Option<Utf8PathBuf>,
         cmd_id: &str,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         if !from_path.exists() {
             return Err(ConfigManagementError::FileNotFound(from_path.to_string()));
         }
@@ -685,7 +683,7 @@ impl ConfigManagerWorker {
         work_dir: &Utf8Path,
         log_path: Option<Utf8PathBuf>,
         cmd_id: &str,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         let (config_type, plugin_type) = parse_config_type(config_type);
         let plugin = self
             .external_plugins
@@ -729,7 +727,7 @@ impl ConfigManagerWorker {
         work_dir: &Utf8Path,
         log_path: Option<Utf8PathBuf>,
         cmd_id: &str,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         let (config_type, plugin_type) = parse_config_type(config_type);
         let plugin = self
             .external_plugins

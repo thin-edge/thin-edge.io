@@ -127,7 +127,7 @@ impl ExternalPlugin {
         from_path: &Utf8Path,
         work_dir: &Utf8Path,
         command_log: Option<&mut CommandLog>,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         let mut command = self.command(ConfigOperationStep::Prepare.as_str())?;
         command.arg(config_type);
         command.arg(from_path.as_str());
@@ -146,7 +146,7 @@ impl ExternalPlugin {
         config_file_path: &Utf8Path,
         work_dir: &Utf8Path,
         command_log: Option<&mut CommandLog>,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         let mut command = self.command(ConfigOperationStep::Set.as_str())?;
         command.arg(config_type);
         command.arg(config_file_path);
@@ -164,7 +164,7 @@ impl ExternalPlugin {
         config_type: &str,
         work_dir: &Utf8Path,
         command_log: Option<&mut CommandLog>,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         let mut command = self.command(ConfigOperationStep::Verify.as_str())?;
         command.arg(config_type);
         command.arg("--work-dir");
@@ -181,7 +181,7 @@ impl ExternalPlugin {
         config_type: &str,
         work_dir: &Utf8Path,
         command_log: Option<&mut CommandLog>,
-    ) -> Result<Option<Value>, ConfigManagementError> {
+    ) -> Result<Value, ConfigManagementError> {
         let mut command = self.command(ConfigOperationStep::Rollback.as_str())?;
         command.arg(config_type);
         command.arg("--work-dir");
@@ -194,18 +194,18 @@ impl ExternalPlugin {
     }
 
     /// Parse JSON output from plugin stdout if it exists between :::begin-tedge::: markers
-    fn parse_json_output(&self, output: &Output) -> Option<Value> {
+    fn parse_json_output(&self, output: &Output) -> Value {
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         if let Some(json_str) = extract_script_output(stdout) {
             match serde_json::from_str(&json_str) {
-                Ok(value) => Some(value),
+                Ok(value) => value,
                 Err(err) => {
                     log::warn!("Plugin {} produced invalid JSON output: {}", self.name, err);
-                    None
+                    Value::Null
                 }
             }
         } else {
-            None
+            Value::Null
         }
     }
 }

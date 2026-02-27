@@ -1,6 +1,7 @@
 use assert_matches::assert_matches;
 use camino::Utf8Path;
 use serde_json::json;
+use serde_json::Value;
 use std::fs::read_to_string;
 use std::sync::Arc;
 use std::time::Duration;
@@ -696,7 +697,7 @@ async fn execute_config_set_operation_step() -> Result<(), anyhow::Error> {
     };
 
     let response = handle.steps.await_response(step_request).await?;
-    assert_eq!(response, Ok(None));
+    assert_eq!(response, Ok(Value::Null));
 
     Ok(())
 }
