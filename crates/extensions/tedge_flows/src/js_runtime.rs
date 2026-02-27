@@ -74,6 +74,7 @@ impl JsRuntime {
             match *export {
                 "onMessage" => script.is_defined = true,
                 "onInterval" => script.is_periodic = true,
+                "onStartup" => script.has_startup = true,
                 _ => (),
             }
         }
@@ -101,7 +102,7 @@ impl JsRuntime {
     ) -> Result<Vec<&'static str>, LoadError> {
         let (sender, receiver) = oneshot::channel();
         let source = source.into();
-        let imports = vec!["onMessage", "onInterval"];
+        let imports = vec!["onMessage", "onInterval", "onStartup"];
         TIME_CREDITS.store(100000, std::sync::atomic::Ordering::Relaxed);
         self.send(
             receiver,
@@ -211,7 +212,7 @@ impl JsWorker {
             while let Some(request) = self.requests.recv().await {
                 match request {
                     JsRequest::LoadModule{name, source, sender, imports} => {
-                        let result = modules.load_module(ctx.clone(), name, source, imports).await;
+                        let result = modules.load_module(ctx.clone(), name.clone(), source, imports).await;
                         let _ = sender.send(result);
                     }
                     JsRequest::CallFunction{module, function, args, sender} => {

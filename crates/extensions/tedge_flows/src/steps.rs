@@ -103,8 +103,12 @@ impl FlowStep {
     }
 
     pub async fn load_script(&mut self, js: &mut JsRuntime) -> Result<(), LoadError> {
-        if let StepHandler::JsScript(script, _) = &mut self.handler {
+        if let StepHandler::JsScript(script, config) = &mut self.handler {
             js.load_script(script).await?;
+            script
+                .on_startup(js, SystemTime::now(), config)
+                .await
+                .unwrap();
             // FIXME: there is bug here when the updated version adds an on_interval method
             // This method will be ignored, because the interval is zero (because there no on_interval method before)
             // => The configured interval must not be erased
@@ -176,6 +180,26 @@ impl FlowStep {
             }
             StepHandler::Transformer(_, builtin) => {
                 builtin.on_interval(timestamp, &js.context_handle())
+            }
+        }
+    }
+
+    /// Trigger the onStartup function of the JS module
+    ///
+    /// The engine should execute this only one time, on startup of the js script (i.e. after loading the script when
+    /// starting, or when the script is reloaded after change). Only defined here to be used for tests in js_script.rs.
+    ///
+    /// Return zero, one or more messages
+    pub async fn on_startup(
+        &mut self,
+        js: &JsRuntime,
+        timestamp: SystemTime,
+    ) -> Result<Vec<Message>, FlowError> {
+        match &mut self.handler {
+            StepHandler::JsScript(script, config) => script.on_startup(js, timestamp, config).await,
+            StepHandler::Transformer(..) => {
+                // startup function is exclusive to js scripts, do nothing
+                Ok(vec![])
             }
         }
     }

@@ -340,6 +340,9 @@ Order of flow definition updates does not matter
 
     [Teardown]    Uninstall Nested Flow    issue-3978
 
+Script runs onStartup function
+    Logs Should Contain    hello from on-startup.js
+
 
 *** Keywords ***
 Custom Setup

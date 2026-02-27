@@ -15,6 +15,7 @@ pub struct JsScript {
     pub path: Utf8PathBuf,
     pub is_defined: bool,
     pub is_periodic: bool,
+    pub has_startup: bool,
 }
 
 impl JsScript {
@@ -25,6 +26,7 @@ impl JsScript {
             path,
             is_defined: false,
             is_periodic: false,
+            has_startup: false,
         }
     }
 
@@ -89,6 +91,30 @@ impl JsScript {
         debug!(target: "flows", "{}: onInterval({timestamp:?})", self.module_name);
         let input = vec![timestamp.into(), self.context(config)];
         js.call_function(&self.module_name, "onInterval", input)
+            .await
+            .map_err(flow::error_from_js)?
+            .try_into()
+    }
+
+    /// Trigger the onStartup function of the JS module
+    ///
+    /// The "onInterval" function is passed 2 arguments
+    /// - the current timestamp
+    /// - the context object
+    ///
+    /// Return zero, one or more messages
+    pub async fn on_startup(
+        &self,
+        js: &JsRuntime,
+        timestamp: SystemTime,
+        config: &JsonValue,
+    ) -> Result<Vec<Message>, FlowError> {
+        if !self.has_startup {
+            return Ok(vec![]);
+        };
+        let input = vec![timestamp.into(), self.context(config)];
+        debug!(target: "flows", "{}: onStartup()", self.module_name);
+        js.call_function(&self.module_name, "onStartup", input)
             .await
             .map_err(flow::error_from_js)?
             .try_into()
@@ -718,6 +744,21 @@ export function onMessage(message) {
         assert_eq!(
             output.payload_str(),
             Some("message received from MQTT, using QoS 2 with retain true")
+        );
+    }
+
+    #[tokio::test]
+    async fn using_onstartup() {
+        let js = r#"export function onStartup() { return {topic: "te/main/device///m/", payload: "hello world" } }"#;
+        let (runtime, mut script) = runtime_with(js).await;
+
+        let output = Message::new("te/main/device///m/", "hello world");
+        assert_eq!(
+            script
+                .on_startup(&runtime, SystemTime::now())
+                .await
+                .unwrap(),
+            vec![output]
         );
     }
 

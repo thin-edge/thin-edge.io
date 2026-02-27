@@ -15,6 +15,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::time::Duration;
+use std::time::SystemTime;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tokio::fs::read_to_string;
@@ -274,7 +275,7 @@ impl StepConfig {
     ) -> Result<FlowStep, ConfigError> {
         let step = match &self.step {
             StepSpec::JavaScript(path) => {
-                Self::compile_script(js_runtime, flow, path, index).await?
+                self.compile_script(js_runtime, flow, path, index).await?
             }
             StepSpec::Transformer(name) => {
                 Self::instantiate_builtin(rs_transformers, flow, name, index)?
@@ -288,10 +289,12 @@ impl StepConfig {
         let step = step
             .with_config(config)?
             .with_interval(self.interval, flow.as_str());
+
         Ok(step)
     }
 
     async fn compile_script(
+        &self,
         js_runtime: &mut JsRuntime,
         flow: &Utf8Path,
         path: &Utf8Path,
@@ -311,6 +314,13 @@ impl StepConfig {
         let module_name = FlowStep::instance_name(flow, &path, index);
         let mut script = JsScript::new(module_name, flow.to_owned(), path);
         js_runtime.load_script(&mut script).await?;
+
+        let config = self.config.clone().unwrap_or(serde_json::Value::Null);
+        script
+            .on_startup(js_runtime, SystemTime::now(), &config.into())
+            .await
+            .unwrap();
+
         Ok(FlowStep::new_script(script))
     }
 
