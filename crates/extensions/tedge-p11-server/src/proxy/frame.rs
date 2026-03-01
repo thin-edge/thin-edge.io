@@ -19,6 +19,26 @@ pub enum Frame {
     Version1(Frame1),
 }
 
+impl Frame {
+    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        postcard::from_bytes::<Frame>(bytes).map_err(|err| {
+            let err = anyhow::Error::from(err);
+            if bytes.len() < 2 {
+                err.context("Frame too short")
+            // should be updated if new frame versions are added
+            // on nightly, we could use std::mem::variant_count
+            } else if let Some(1..) = bytes.get(0) {
+                err.context("Unsupported frame version")
+            // should be updated if new commands are added
+            } else if let Some(14..) = bytes.get(1) {
+                err.context("Received request type is not recognized")
+            } else {
+                err
+            }
+        })
+    }
+}
+
 /// Documents the properties of the serialization/deserialization format for purposes of adding new requests while
 /// maintaining compatibility.
 #[cfg(test)]

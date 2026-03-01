@@ -234,8 +234,47 @@ mod tests {
 
         assert_eq!(
             err_msg.as_str(),
-            "read: Failed to parse the received frame: Serde Deserialization Error"
+            "read: Failed to parse the received frame: Unsupported frame version: Serde Deserialization Error"
         );
+    }
+
+    #[tokio::test]
+    async fn server_reports_invalid_frame() {
+        let (mut client, _) = setup_test().await;
+
+        let command = vec![5, 21, 37];
+
+        client.write_and_close(&command).await;
+        let response = client.read().await;
+
+        let response: Frame = postcard::from_bytes(&response).unwrap();
+        let Frame::Version1(Frame1::Error(ProtocolError(err_msg))) = response else {
+            panic!("should be error");
+        };
+
+        dbg!(&err_msg);
+        assert!(err_msg.contains(
+            "read: Failed to parse the received frame: Unsupported frame version: Serde Deserialization Error"
+        ));
+    }
+
+    #[tokio::test]
+    async fn server_reports_invalid_command() {
+        let (mut client, _) = setup_test().await;
+
+        let command = vec![0, 21, 37];
+
+        client.write_and_close(&command).await;
+        let response = client.read().await;
+
+        let response: Frame = postcard::from_bytes(&response).unwrap();
+        let Frame::Version1(Frame1::Error(ProtocolError(err_msg))) = response else {
+            panic!("should be error");
+        };
+
+        dbg!(&err_msg);
+        assert!(err_msg
+            .contains("read: Failed to parse the received frame: Received request type is not recognized: Serde Deserialization Error"));
     }
 
     async fn setup_test() -> (TestClient, tokio::task::JoinHandle<anyhow::Result<()>>) {
