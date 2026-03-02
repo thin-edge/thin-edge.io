@@ -337,6 +337,85 @@ Order of flow definition updates does not matter
 
     [Teardown]    Uninstall Nested Flow    issue-3978
 
+Params are dynamically reloaded
+    ${start}    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/greeting-flows/hello.js
+    ...    /etc/tedge/mappers/local/flows/greeting-flows/hello.js
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/greeting-flows/hello.toml
+    ...    /etc/tedge/mappers/local/flows/greeting-flows/hello.toml
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
+    ...    date_from=${start}
+    ...    message_contains=greeting-flows/hello.toml
+
+    # Since there is no params.toml file, the default greeting message is used
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub hello/in hi
+    Should Have MQTT Messages
+    ...    topic=hello/out
+    ...    minimum=1
+    ...    date_from=${start}
+    ...    message_contains=Hello World!
+
+    # When params are added the flow is reloaded
+    ${start}    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/greeting-flows/params.toml
+    ...    /etc/tedge/mappers/local/flows/greeting-flows/params.toml
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
+    ...    date_from=${start}
+    ...    message_contains=greeting-flows/hello.toml
+
+    # The greeting message from params is used
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub hello/in hi
+    Should Have MQTT Messages
+    ...    topic=hello/out
+    ...    minimum=1
+    ...    date_from=${start}
+    ...    message_contains=Have a nice day!
+
+    # When params are updated the flow is reloaded
+    ${start}    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/greeting-flows/updated-params.toml
+    ...    /etc/tedge/mappers/local/flows/greeting-flows/params.toml
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
+    ...    date_from=${start}
+    ...    message_contains=greeting-flows/hello.toml
+
+    # The greeting message from params is used
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub hello/in hi
+    Should Have MQTT Messages
+    ...    topic=hello/out
+    ...    minimum=1
+    ...    date_from=${start}
+    ...    message_contains=Enjoy your day!
+
+    # When params are broken the flow is successfully reloaded anyway
+    ${start}    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/greeting-flows/broken-params.toml
+    ...    /etc/tedge/mappers/local/flows/greeting-flows/params.toml
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
+    ...    date_from=${start}
+    ...    message_contains=greeting-flows/hello.toml
+
+    # But the default params are then used
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub hello/in hi
+    Should Have MQTT Messages
+    ...    topic=hello/out
+    ...    minimum=1
+    ...    date_from=${start}
+    ...    message_contains=Hello World!
+
 
 *** Keywords ***
 Custom Setup

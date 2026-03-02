@@ -41,7 +41,11 @@ impl Params {
         let Some(directory) = path.parent() else {
             return Ok(Params::default());
         };
-        Self::load_params(directory).await
+        // To avoid breaking flows, an ill-formed params.toml file is read as empty set of params
+        Self::load_params(directory)
+            .await
+            .map_err(|err| log::warn!("{err:?}"))
+            .or(Ok(Params::default()))
     }
 
     /// Load the `params.toml` used by all the flows of the given directory
@@ -78,6 +82,7 @@ impl Params {
     /// Substitute all the path expressions of the input value
     pub fn substitute(&self, value: &Value) -> Result<Value, LoadError> {
         match value {
+            // To avoid breaking flows, a null value is substituted for an ill-formed params path
             Value::String(expr) => self
                 .substitute_path(expr)
                 .map_err(|err| log::warn!("{err:?}"))
