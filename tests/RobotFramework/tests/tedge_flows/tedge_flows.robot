@@ -298,6 +298,11 @@ Flow is added/removed when a directory is moved in/out
     ...    JavaScript.Console: "flow removed after moving directory out of flows dir"
     ...    date_from=${start}
 
+    # TODO: Also need to test scenario where we move the dir with the flow after flows mapper is started with flow already inside flows dir
+    # and also where we move just the folder with the script, to make sure they're correctly removed regardless of if they've been added
+    # after mapper started or have been in the flows dir since the mapper started
+    # the test could be parametrized by the path of the flow, path of the script and what directory is moved to make it a little shorter
+
 Setting MQTT attributes
     Install Nested Flow    mqtt-flows
     Execute Command    tedge mqtt pub alarms/temperature "The temperature is high"
