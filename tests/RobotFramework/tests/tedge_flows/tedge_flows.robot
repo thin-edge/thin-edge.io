@@ -1,6 +1,7 @@
 *** Settings ***
 Library             JSONLibrary
 Library             ThinEdgeIO
+Resource            fs_dynamic_reload.resource
 
 Suite Setup         Custom Setup
 Suite Teardown      Get Logs
@@ -251,57 +252,36 @@ Flow is added/removed when a directory is moved in/out
     # note: in the test image /tmp is on different filesystem, so moving between there and flows dir creates and deletes files in flows dir fs
     # moving between flows dir and its parent dir is in the same filesystem, so creates Modified events (it's technically only a rename)
 
+    # docker prevents us from copying to /tmp directly if /tmp if tmpfs
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/nested-flows/myflow    /myflow
+    Execute Command    mv /myflow /tmp/myflow
+
     # first test with a different filesystem
-    # for some reason docker prevents us from copying to /tmp directly
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/nested-flows/myflow/flow.toml    /
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/nested-flows/myflow/main.js    /
-    Execute Command    mkdir -p /tmp/myflow
-    Execute Command    mv /flow.toml /tmp/myflow/
-    Execute Command    mv /main.js /tmp/myflow/
-
-    ${start}    Get Unix Timestamp
-    Execute Command    mv /tmp/myflow /etc/tedge/mappers/local/flows/myflow
-    Execute Command    sleep 1
-    Execute Command    tedge mqtt pub test/nested-flows/myflow 'flow started after moving directory into flows dir'
-    Logs Should Contain
-    ...    JavaScript.Console: "flow started after moving directory into flows dir"
-    ...    date_from=${start}
-    ...    max_matches=1
-
-    # now moving the directory again should stop the flow
-    ${start}    Get Unix Timestamp
-    Execute Command    mv /etc/tedge/mappers/local/flows/myflow /tmp/myflow
-    Execute Command    sleep 1
-    Execute Command    tedge mqtt pub test/nested-flows/myflow 'flow removed after moving directory out of flows dir'
-    Logs Should Not Contain
-    ...    JavaScript.Console: "flow removed after moving directory out of flows dir"
-    ...    date_from=${start}
+    Move Directory And Assert it's added and removed    /tmp/myflow    after moving directory into flows dir
 
     # now test on the same filesystem
     Execute Command    mv /tmp/myflow /etc/tedge/mappers/local/myflow
+    Move Directory And Assert it's added and removed    /etc/tedge/mappers/local/myflow    after moving directory into flows dir
 
-    ${start}    Get Unix Timestamp
+    # flow should be reloaded also when it was loaded at startup, not only when it was added via autoreload
+    Stop Service    tedge-mapper-local
     Execute Command    mv /etc/tedge/mappers/local/myflow /etc/tedge/mappers/local/flows/myflow
-    Execute Command    sleep 1
-    Execute Command    tedge mqtt pub test/nested-flows/myflow 'flow started after moving directory into flows dir'
-    Logs Should Contain
-    ...    JavaScript.Console: "flow started after moving directory into flows dir"
-    ...    date_from=${start}
-    ...    max_matches=1
+    Assert flow is not running
+    Start Service    tedge-mapper-local
+    Assert flow is running    after starting service with flow present
 
-    # now moving the directory again should stop the flow
-    ${start}    Get Unix Timestamp
     Execute Command    mv /etc/tedge/mappers/local/flows/myflow /etc/tedge/mappers/local/myflow
-    Execute Command    sleep 1
-    Execute Command    tedge mqtt pub test/nested-flows/myflow 'flow removed after moving directory out of flows dir'
-    Logs Should Not Contain
-    ...    JavaScript.Console: "flow removed after moving directory out of flows dir"
-    ...    date_from=${start}
+    Assert flow is not running    after removing flow running from startup
 
-    # TODO: Also need to test scenario where we move the dir with the flow after flows mapper is started with flow already inside flows dir
-    # and also where we move just the folder with the script, to make sure they're correctly removed regardless of if they've been added
-    # after mapper started or have been in the flows dir since the mapper started
-    # the test could be parametrized by the path of the flow, path of the script and what directory is moved to make it a little shorter
+    # check that flow is disabled if we move the directory that contain scripts the flow uses
+    Stop Service    tedge-mapper-local
+    Execute Command    mv /etc/tedge/mappers/local/myflow /etc/tedge/mappers/local/flows/myflow
+    Assert flow is not running
+    Start Service    tedge-mapper-local
+    Assert flow is running    after starting service with flow with scripts dir present
+
+    Execute Command    mv /etc/tedge/mappers/local/flows/myflow /etc/tedge/mappers/local/myflow
+    Assert flow is not running    after moving scripts dir inside the flow
 
 Setting MQTT attributes
     Install Nested Flow    mqtt-flows

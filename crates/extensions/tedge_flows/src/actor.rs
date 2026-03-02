@@ -488,7 +488,8 @@ impl FlowsMapper {
             return self.on_params_updated(path).await;
         }
 
-        // from all the flows, we need to select scripts used by these flows that are prefixed by the path
+        // first, remove flows that use any scripts that just got removed
+        // need to remove flows before the scripts or else we get a warning
         let (mut removed_flows, mut removed_scripts): (Vec<_>, Vec<_>) = self
             .processor
             .registry
@@ -504,6 +505,7 @@ impl FlowsMapper {
         removed_scripts.sort_unstable();
         removed_scripts.dedup();
 
+        // after that, remove flows whose .toml definition files were removed
         removed_flows.extend(
             self.processor
                 .registry
@@ -511,7 +513,6 @@ impl FlowsMapper {
                 .map(|f| f.source_path().to_path_buf())
                 .filter(|p| p.starts_with(path)),
         );
-
         removed_flows.sort_unstable();
         removed_flows.dedup();
 
@@ -550,28 +551,20 @@ impl FlowsMapper {
     }
 
     async fn on_directory_updated(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
-        // we can get Modified with path to a directory, which means another directory
-        // was moved into flows dir.
-        let Ok(entries) = std::fs::read_dir(path)
-            .inspect_err(|error| error!(%path, ?error, "Failed to read inside flows directory"))
-        else {
-            return Ok(());
-        };
-        for entry in entries {
-            let Ok(entry) = entry.inspect_err(
-                |error| error!(%path, ?error, "Failed to read inside flows directory"),
-            ) else {
-                continue;
-            };
-            let Ok(path) = Utf8PathBuf::try_from(entry.path()) else {
-                error!(?path, "Invalid path");
-                continue;
-            };
+        self.processor.load_all_flows_from_dir(path).await;
 
-            if !Params::is_params_file(&path) {
-                self.on_file_updated(path.as_path()).await?;
-            }
-        }
+        self.send_updated_subscriptions().await?;
+
+        // after new flows from a dir are loaded, need to upload status only for these flows
+        let updated_flows = self
+            .processor
+            .registry
+            .flows()
+            .filter(|f| f.source_path().starts_with(path))
+            .map(|f| f.source_path().to_path_buf())
+            .collect();
+        self.update_all_flow_status(updated_flows).await?;
+
         Ok(())
     }
 

@@ -1,4 +1,4 @@
 input.mqtt.topics = ["test/nested-flows/myflow"]
 steps = [
-    { script = "main.js" },
+    { script = "../scripts/main.js" },
 ]

@@ -59,6 +59,12 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
         self.registry.load_all_flows(&mut self.js_runtime).await;
     }
 
+    pub async fn load_all_flows_from_dir(&mut self, path: &Utf8Path) {
+        self.registry
+            .load_all_flows_from_dir(path, &mut self.js_runtime)
+            .await;
+    }
+
     pub async fn load_single_flow(&mut self, flow: impl AsRef<Utf8Path>) {
         self.registry
             .load_single_flow(&mut self.js_runtime, flow.as_ref())
