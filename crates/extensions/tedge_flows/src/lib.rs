@@ -7,6 +7,7 @@ mod js_lib;
 mod js_runtime;
 mod js_script;
 mod js_value;
+mod params;
 mod registry;
 mod runtime;
 mod stats;
@@ -240,6 +241,9 @@ pub enum LoadError {
         module_name: String,
         function: String,
     },
+
+    #[error("Unknown parameter: ${{{path}}}")]
+    UnknownParam { path: String },
 
     #[error("Cannot read file {path}: {error}")]
     ReadError {
