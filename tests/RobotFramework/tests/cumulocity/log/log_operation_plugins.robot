@@ -232,6 +232,27 @@ Reporting sudo misconfiguration
     ...    current_only=${True}
     ...    text=ERROR log plugins: Skipping /etc/share/tedge/log-plugins/dummy_plugin: not properly configured to run with sudo
 
+Supported log types loaded when sudo disabled
+    [Documentation]    Log plugins should be discovered and listed even when sudo.enable is false.
+    ...    Verifies that the agent does not unconditionally invoked sudo during plugin detection.
+    [Tags]    adapter:docker
+    Sleep    1s    reason=Allow the agent to complete startup actions before stopping
+    Stop Service    tedge-agent
+
+    # remove tedge sudo rules to prevent any command from working
+    Execute Command    cmd=rm -f /etc/sudoers.d/tedge
+
+    Execute Command    tedge config set sudo.enable false
+
+    # install a new plugin
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/dummy_plugin
+    ...    /usr/share/tedge/log-plugins/dummy_plugin2
+    Execute Command    chmod a+x /usr/share/tedge/log-plugins/dummy_plugin2
+
+    Start Service    tedge-agent
+    Should Contain Supported Log Types    dummy_log::dummy_plugin2
+
 Agent resilient to plugin dirs removal
     ${date_from}=    Get Unix Timestamp
     Execute Command    rm -rf /usr/share/tedge/log-plugins

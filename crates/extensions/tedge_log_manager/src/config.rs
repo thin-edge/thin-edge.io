@@ -45,6 +45,7 @@ pub struct LogManagerOptions {
     pub mqtt_schema: MqttSchema,
     pub mqtt_device_topic_id: EntityTopicId,
     pub plugin_dirs: Vec<Utf8PathBuf>,
+    pub is_sudo_enabled: bool,
 }
 
 impl LogManagerConfig {
@@ -89,7 +90,7 @@ impl LogManagerConfig {
             logtype_reload_topic,
             logfile_request_topic,
             log_metadata_sync_topics,
-            sudo_enabled: true,
+            sudo_enabled: cliopts.is_sudo_enabled,
         })
     }
 }
