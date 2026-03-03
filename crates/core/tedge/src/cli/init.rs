@@ -10,7 +10,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::change_user_and_group;
-use tedge_utils::file::create_directory;
+use tedge_utils::file::create_directory_and_update_ownership;
 use tedge_utils::file::PermissionEntry;
 use tracing::debug;
 
@@ -83,18 +83,25 @@ impl TEdgeInitCmd {
                 Some(0o775),
             )
         };
-        create_directory(&config_dir, &permissions).await?;
-        create_directory(config_dir.join("mosquitto-conf"), &permissions).await?;
-        create_directory(config_dir.join("operations"), &permissions).await?;
-        create_directory(config_dir.join("operations").join("c8y"), &permissions).await?;
-        create_directory(config_dir.join("plugins"), &permissions).await?;
-        create_directory(config_dir.join("sm-plugins"), &permissions).await?;
-        create_directory(config_dir.join("device-certs"), &permissions).await?;
-        create_directory(config_dir.join("mappers"), &permissions).await?;
-        create_directory(config_dir.join(".tedge-mapper-c8y"), &permissions).await?;
+        create_directory_and_update_ownership(&config_dir, &permissions).await?;
+        create_directory_and_update_ownership(config_dir.join("mosquitto-conf"), &permissions)
+            .await?;
+        create_directory_and_update_ownership(config_dir.join("operations"), &permissions).await?;
+        create_directory_and_update_ownership(
+            config_dir.join("operations").join("c8y"),
+            &permissions,
+        )
+        .await?;
+        create_directory_and_update_ownership(config_dir.join("plugins"), &permissions).await?;
+        create_directory_and_update_ownership(config_dir.join("sm-plugins"), &permissions).await?;
+        create_directory_and_update_ownership(config_dir.join("device-certs"), &permissions)
+            .await?;
+        create_directory_and_update_ownership(config_dir.join("mappers"), &permissions).await?;
+        create_directory_and_update_ownership(config_dir.join(".tedge-mapper-c8y"), &permissions)
+            .await?;
 
-        create_directory(&config.logs.path, &permissions).await?;
-        create_directory(&config.data.path, &permissions).await?;
+        create_directory_and_update_ownership(&config.logs.path, &permissions).await?;
+        create_directory_and_update_ownership(&config.data.path, &permissions).await?;
 
         let entity_store_file = config_dir.join(".agent").join("entity_store.jsonl");
 

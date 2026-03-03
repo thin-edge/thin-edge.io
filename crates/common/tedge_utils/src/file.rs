@@ -80,6 +80,17 @@ pub async fn create_directory(
     permissions.create_directory(dir.as_ref()).await
 }
 
+pub async fn create_directory_and_update_ownership(
+    dir: impl AsRef<Path>,
+    permissions: &PermissionEntry,
+) -> Result<(), FileError> {
+    permissions
+        .clone()
+        .force_dir_ownership()
+        .create_directory(dir.as_ref())
+        .await
+}
+
 /// Create the directory owned by the user running this API with default directory permissions
 pub async fn create_directory_with_defaults(dir: impl AsRef<Path>) -> Result<(), FileError> {
     create_directory(dir, &PermissionEntry::default()).await
@@ -93,6 +104,19 @@ pub async fn create_directory_with_user_group(
 ) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
     perm_entry.create_directory(dir.as_ref()).await
+}
+
+pub async fn create_directory_with_user_group_and_update_ownership(
+    dir: impl AsRef<Path>,
+    user: &str,
+    group: &str,
+    mode: u32,
+) -> Result<(), FileError> {
+    let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
+    perm_entry
+        .force_dir_ownership()
+        .create_directory(dir.as_ref())
+        .await
 }
 
 pub async fn create_file(
@@ -237,11 +261,22 @@ pub struct PermissionEntry {
     pub user: Option<String>,
     pub group: Option<String>,
     pub mode: Option<u32>,
+    pub reassert_dir_ownership: bool,
 }
 
 impl PermissionEntry {
     pub fn new(user: Option<String>, group: Option<String>, mode: Option<u32>) -> Self {
-        Self { user, group, mode }
+        Self {
+            user,
+            group,
+            mode,
+            reassert_dir_ownership: false,
+        }
+    }
+
+    pub fn force_dir_ownership(mut self) -> Self {
+        self.reassert_dir_ownership = true;
+        self
     }
 
     pub async fn apply(self, path: &Path) -> Result<(), FileError> {
@@ -307,11 +342,13 @@ impl PermissionEntry {
                 Ok(())
             }
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                debug!(
-                    "Applying desired user and group for already existing dir: {:?}",
-                    dir
-                );
-                self.clone().apply(&dir).await?;
+                if self.reassert_dir_ownership {
+                    debug!(
+                        "Updating user and group for already existing dir: {:?}",
+                        dir
+                    );
+                    self.clone().apply(&dir).await?;
+                }
                 Ok(())
             }
             Err(e) => Err(FileError::DirectoryCreateFailed {
@@ -674,7 +711,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir").display().to_string();
 
-        create_directory_with_user_group(&dir_path, &USER, &GROUP, 0o775)
+        create_directory_with_user_group_and_update_ownership(&dir_path, &USER, &GROUP, 0o775)
             .await
             .unwrap();
 
@@ -690,9 +727,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir");
 
-        let err = create_directory_with_user_group(&dir_path, "nonexistent_user", &GROUP, 0o775)
-            .await
-            .unwrap_err();
+        let err = create_directory_with_user_group_and_update_ownership(
+            &dir_path,
+            "nonexistent_user",
+            &GROUP,
+            0o775,
+        )
+        .await
+        .unwrap_err();
 
         assert!(err.to_string().contains("User not found"));
     }
@@ -702,9 +744,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir");
 
-        let err = create_directory_with_user_group(&dir_path, &USER, "nonexistent_group", 0o775)
-            .await
-            .unwrap_err();
+        let err = create_directory_with_user_group_and_update_ownership(
+            &dir_path,
+            &USER,
+            "nonexistent_group",
+            0o775,
+        )
+        .await
+        .unwrap_err();
 
         assert!(err.to_string().contains("Group not found"));
     }
