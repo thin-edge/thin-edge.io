@@ -454,30 +454,75 @@ impl FlowsMapper {
                 let Ok(path) = Utf8PathBuf::try_from(path) else {
                     return Ok(());
                 };
-
-                if path.is_dir() {
-                    self.on_directory_updated(&path).await?;
-                } else if Params::is_params_file(&path) {
-                    self.on_params_updated(&path).await?;
-                } else if path.is_file() {
-                    self.on_file_updated(&path).await?;
-                } else if !path.exists() {
-                    // if a file is renamed we can also get Modified events for old and new name
-                    self.on_file_removed(&path).await?;
-                }
+                self.on_path_updated(path.as_path()).await?;
             }
-            FsWatchEvent::FileDeleted(path) => {
+            FsWatchEvent::FileDeleted(path) | FsWatchEvent::DirectoryDeleted(path) => {
                 let Ok(path) = Utf8PathBuf::try_from(path) else {
                     return Ok(());
                 };
-                if Params::is_params_file(&path) {
-                    self.on_params_updated(&path).await?;
-                } else {
-                    self.on_file_removed(path.as_path()).await?;
-                }
+                self.on_path_removed(path.as_path()).await?;
             }
             _ => {}
         }
+        Ok(())
+    }
+
+    /// Update/remove files as required after a path was modified.
+    async fn on_path_updated(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
+        if path.is_dir() {
+            self.on_directory_updated(path).await?;
+        } else if Params::is_params_file(path) {
+            self.on_params_updated(path).await?;
+        } else if path.is_file() {
+            self.on_file_updated(path).await?;
+        } else if !path.exists() {
+            self.on_path_removed(path).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Remove all flows and scripts that are currently loaded if they are prefixed by the path.
+    async fn on_path_removed(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
+        if Params::is_params_file(path) {
+            return self.on_params_updated(path).await;
+        }
+
+        // first, remove flows that use any scripts that just got removed
+        // need to remove flows before the scripts or else we get a warning
+        let (mut removed_flows, mut removed_scripts): (Vec<_>, Vec<_>) = self
+            .processor
+            .registry
+            .flows()
+            .flat_map(|f| {
+                f.flow.steps.iter().filter_map(|s| {
+                    s.path()
+                        .filter(|p| p.starts_with(path))
+                        .map(|p| (f.flow.source.clone(), p.to_path_buf()))
+                })
+            })
+            .collect();
+        removed_scripts.sort_unstable();
+        removed_scripts.dedup();
+
+        // after that, remove flows whose .toml definition files were removed
+        removed_flows.extend(
+            self.processor
+                .registry
+                .flows()
+                .map(|f| f.source_path().to_path_buf())
+                .filter(|p| p.starts_with(path)),
+        );
+        removed_flows.sort_unstable();
+        removed_flows.dedup();
+
+        for file in removed_flows {
+            self.on_file_removed(&file).await?;
+        }
+        for file in removed_scripts {
+            self.on_file_removed(&file).await?;
+        }
+
         Ok(())
     }
 
@@ -506,26 +551,20 @@ impl FlowsMapper {
     }
 
     async fn on_directory_updated(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
-        let Ok(entries) = std::fs::read_dir(path)
-            .inspect_err(|error| error!(%path, ?error, "Failed to read inside flows directory"))
-        else {
-            return Ok(());
-        };
-        for entry in entries {
-            let Ok(entry) = entry.inspect_err(
-                |error| error!(%path, ?error, "Failed to read inside flows directory"),
-            ) else {
-                continue;
-            };
-            let Ok(path) = Utf8PathBuf::try_from(entry.path()) else {
-                error!(?path, "Invalid path");
-                continue;
-            };
+        self.processor.load_all_flows_from_dir(path).await;
 
-            if !Params::is_params_file(&path) {
-                self.on_file_updated(path.as_path()).await?;
-            }
-        }
+        self.send_updated_subscriptions().await?;
+
+        // after new flows from a dir are loaded, need to upload status only for these flows
+        let updated_flows = self
+            .processor
+            .registry
+            .flows()
+            .filter(|f| f.source_path().starts_with(path))
+            .map(|f| f.source_path().to_path_buf())
+            .collect();
+        self.update_all_flow_status(updated_flows).await?;
+
         Ok(())
     }
 

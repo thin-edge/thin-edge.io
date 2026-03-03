@@ -20,7 +20,7 @@ use tokio::time::Instant;
 
 /// A flow connected to a source of messages
 pub struct ConnectedFlow {
-    flow: Flow,
+    pub(crate) flow: Flow,
     streaming_source: Option<Box<dyn StreamingSource>>,
     polling_source: Option<Box<dyn PollingSource>>,
 }

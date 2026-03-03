@@ -1,6 +1,7 @@
 *** Settings ***
 Library             JSONLibrary
 Library             ThinEdgeIO
+Resource            fs_dynamic_reload.resource
 
 Suite Setup         Custom Setup
 Suite Teardown      Get Logs
@@ -247,17 +248,40 @@ Display flows definitions directory
     ${directory}    Execute Command    tedge flows config-dir    strip=${True}
     Should Be Equal    ${directory}    /etc/tedge/mappers/local/flows
 
-Flow is discovered when a directory is moved
-    # can't copy to /tmp directly
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/nested-flows/myflow/flow.toml    /
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/nested-flows/myflow/main.js    /
-    Execute Command    mkdir -p /tmp/myflow
-    Execute Command    mv /flow.toml /tmp/myflow/
-    Execute Command    mv /main.js /tmp/myflow/
+Flow is added/removed when a directory is moved in/out
+    # note: in the test image /tmp is on different filesystem, so moving between there and flows dir creates and deletes files in flows dir fs
+    # moving between flows dir and its parent dir is in the same filesystem, so creates Modified events (it's technically only a rename)
 
-    ${start}    Get Unix Timestamp
-    Execute Command    mv /tmp/myflow /etc/tedge/mappers/local/flows
-    Should Have MQTT Messages    topic=myflow    message_contains=myflow    date_from=${start}
+    # docker prevents us from copying to /tmp directly if /tmp if tmpfs
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/nested-flows/myflow    /myflow
+    Execute Command    mv /myflow /tmp/myflow
+
+    # first test with a different filesystem
+    Move Directory And Assert it's added and removed    /tmp/myflow    after moving directory into flows dir
+
+    # now test on the same filesystem
+    Execute Command    mv /tmp/myflow /etc/tedge/mappers/local/myflow
+    Move Directory And Assert it's added and removed    /etc/tedge/mappers/local/myflow    after moving directory into flows dir
+
+    # flow should be reloaded also when it was loaded at startup, not only when it was added via autoreload
+    Stop Service    tedge-mapper-local
+    Execute Command    mv /etc/tedge/mappers/local/myflow /etc/tedge/mappers/local/flows/myflow
+    Assert flow is not running
+    Start Service    tedge-mapper-local
+    Assert flow is running    after starting service with flow present
+
+    Execute Command    mv /etc/tedge/mappers/local/flows/myflow /etc/tedge/mappers/local/myflow
+    Assert flow is not running    after removing flow running from startup
+
+    # check that flow is disabled if we move the directory that contain scripts the flow uses
+    Stop Service    tedge-mapper-local
+    Execute Command    mv /etc/tedge/mappers/local/myflow /etc/tedge/mappers/local/flows/myflow
+    Assert flow is not running
+    Start Service    tedge-mapper-local
+    Assert flow is running    after starting service with flow with scripts dir present
+
+    Execute Command    mv /etc/tedge/mappers/local/flows/myflow /etc/tedge/mappers/local/myflow
+    Assert flow is not running    after moving scripts dir inside the flow
 
 Setting MQTT attributes
     Install Nested Flow    mqtt-flows

@@ -94,6 +94,7 @@ pub trait FlowRegistryExt: FlowRegistry {
     fn flows_mut(&mut self) -> impl Iterator<Item = &mut Self::Flow>;
 
     async fn load_all_flows(&mut self, js_runtime: &mut JsRuntime);
+    async fn load_all_flows_from_dir(&mut self, path: &Utf8Path, js_runtime: &mut JsRuntime);
     async fn load_single_flow(&mut self, js_runtime: &mut JsRuntime, flow: &Utf8Path);
     async fn load_single_script(&mut self, js_runtime: &mut JsRuntime, script: &Utf8Path);
 
@@ -163,7 +164,11 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
 
     async fn load_all_flows(&mut self, js_runtime: &mut JsRuntime) {
         let config_dir = self.config_dir().to_owned();
-        let (loaded_flows, unloaded_flows) = FlowConfig::load_all_flows(&config_dir).await;
+        self.load_all_flows_from_dir(&config_dir, js_runtime).await
+    }
+
+    async fn load_all_flows_from_dir(&mut self, path: &Utf8Path, js_runtime: &mut JsRuntime) {
+        let (loaded_flows, unloaded_flows) = FlowConfig::load_all_flows(path).await;
         for (path, config) in loaded_flows.into_iter() {
             self.load_config(js_runtime, &path, config).await;
         }
