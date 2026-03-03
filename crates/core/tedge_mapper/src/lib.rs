@@ -17,6 +17,7 @@ use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
+use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperConfig;
 use tracing::log::warn;
 
@@ -195,4 +196,13 @@ pub(crate) fn flows_config(
         mem_config.stack_size as usize,
     );
     Ok(flows_config)
+}
+
+pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
+    c8y_mapper_ext::load_builtin_transformers(
+        flows,
+        EntityTopicId::default_main_service("tedge-mapper-c8y").unwrap(),
+    );
+    az_mapper_ext::load_builtin_transformers(flows);
+    aws_mapper_ext::load_builtin_transformers(flows);
 }

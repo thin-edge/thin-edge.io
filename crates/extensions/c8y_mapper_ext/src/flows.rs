@@ -22,13 +22,7 @@ impl C8yMapperBuilder {
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
 
         let mapper_topic_id = self.config.service_topic_id.clone();
-        flows.register_builtin(crate::mea::message_cache::MessageCache::new(
-            mapper_topic_id,
-        ));
-        flows.register_builtin(crate::mea::measurements::MeasurementConverter::default());
-        flows.register_builtin(crate::mea::events::EventConverter::default());
-        flows.register_builtin(crate::mea::alarms::AlarmConverter::default());
-        flows.register_builtin(crate::mea::health::HealthStatusConverter::default());
+        crate::load_builtin_transformers(&mut flows, mapper_topic_id);
 
         self.persist_builtin_flows(&mut flows).await?;
         Ok(flows)

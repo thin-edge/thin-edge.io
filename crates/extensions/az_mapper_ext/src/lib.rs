@@ -1,6 +1,7 @@
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::models::timestamp::TimeFormat;
 use tedge_config::models::TopicPrefix;
+use tedge_flows::FlowRegistryExt;
 use tedge_mqtt_ext::Topic;
 
 pub struct AzureConverter {
@@ -63,4 +64,7 @@ errors.mqtt.topic = "{errors_topic}"
             errors_topic = self.errors_topic,
         )
     }
+}
+pub fn load_builtin_transformers(_flows: &mut impl FlowRegistryExt) {
+    // nothing specific for az
 }

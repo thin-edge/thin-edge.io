@@ -12,6 +12,7 @@ use std::time::SystemTime;
 use tedge_config::TEdgeConfig;
 use tedge_flows::BaseFlowRegistry;
 use tedge_flows::JsRuntimeConfig;
+use tedge_flows::LoadError;
 use tedge_flows::Message;
 use tedge_flows::MessageProcessor;
 
@@ -182,11 +183,21 @@ impl TEdgeFlowsCli {
         }
     }
 
+    async fn init_processor(
+        flows_dir: &Utf8PathBuf,
+        js_config: JsRuntimeConfig,
+    ) -> Result<MessageProcessor<BaseFlowRegistry>, LoadError> {
+        let mut registry = BaseFlowRegistry::new(flows_dir);
+        tedge_mapper::load_builtin_transformers(&mut registry);
+        let context = FlowContextHandle::default();
+        MessageProcessor::with_context(registry, js_config, context).await
+    }
+
     pub async fn load_flows(
         flows_dir: &Utf8PathBuf,
         js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
-        let mut processor = MessageProcessor::with_base_registry(flows_dir, js_config)
+        let mut processor = Self::init_processor(flows_dir, js_config)
             .await
             .with_context(|| format!("loading flows and steps from {flows_dir}"))?;
         processor.load_all_flows().await;
@@ -198,7 +209,7 @@ impl TEdgeFlowsCli {
         path: &Utf8PathBuf,
         js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
-        let mut processor = MessageProcessor::with_base_registry(flows_dir, js_config)
+        let mut processor = Self::init_processor(flows_dir, js_config)
             .await
             .with_context(|| format!("loading flow {path}"))?;
 

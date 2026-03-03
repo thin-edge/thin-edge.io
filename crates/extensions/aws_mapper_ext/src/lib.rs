@@ -50,7 +50,7 @@ impl AwsConverter {
     ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
         create_directory_with_defaults(flows_dir.as_ref()).await?;
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
-        flows.register_builtin(SetAwsTopic::default());
+        load_builtin_transformers(&mut flows);
         self.persist_builtin_flow(&mut flows).await?;
         Ok(flows)
     }
@@ -152,6 +152,10 @@ impl tedge_flows::Transformer for SetAwsTopic {
 
         Ok(vec![Message::new(topic, message.payload.clone())])
     }
+}
+
+pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
+    flows.register_builtin(SetAwsTopic::default());
 }
 
 #[cfg(test)]
