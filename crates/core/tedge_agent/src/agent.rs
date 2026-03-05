@@ -403,6 +403,7 @@ impl Agent {
                 mqtt_schema: mqtt_schema.clone(),
                 mqtt_device_topic_id: device_topic_id.clone(),
                 plugin_dirs: self.config.log_plugin_dirs,
+                is_sudo_enabled: self.config.is_sudo_enabled,
             })?;
 
             let plugin_config =
