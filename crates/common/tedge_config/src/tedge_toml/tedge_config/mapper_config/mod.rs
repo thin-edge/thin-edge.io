@@ -119,10 +119,10 @@ impl MapperConfigPath<'_> {
         let dir = &*self.base_dir;
         let ty = self.cloud_type;
         match profile {
-            None => dir.join(format!("{ty}/tedge.toml")),
+            None => dir.join(format!("{ty}/mapper.toml")),
             Some(profile) => {
                 let profile = profile.as_ref();
-                dir.join(format!("{ty}.{profile}/tedge.toml"))
+                dir.join(format!("{ty}.{profile}/mapper.toml"))
             }
         }
     }

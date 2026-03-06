@@ -137,17 +137,17 @@ impl TEdgeConfigLocation {
     /// Decide which configuration source to use for a given cloud and profile
     ///
     /// This function centralizes the decision logic for mapper configuration precedence:
-    /// 1. New format (`mappers/[cloud]/tedge.toml` or `mappers/[cloud].[profile]/tedge.toml`) takes precedence
+    /// 1. New format (`mappers/[cloud]/mapper.toml` or `mappers/[cloud].[profile]/mapper.toml`) takes precedence
     /// 2. If new format exists for some profiles but not the requested one, returns NotFound
     /// 3. If the config directory is inaccessible due to a permissions error, return Error
     ///
     /// If no new format exists, we then look at the
     /// `mapper_config_default_location` field of [TEdgeConfigLocation]:
-    /// 1. If this is set to [MapperConfigLocation::TedgeToml], we fall back to the root tedge.toml
+    /// 1. If this is set to [MapperConfigLocation::TedgeToml], we fall back to the root mapper.toml
     /// 2. If this is set to [MapperConfigLocation::SeparateFile] and no cloud configurations
-    ///    exist in tedge.toml, we use the new mapper config format
-    /// 3. If cloud configurations (for any cloud) do already exist in tedge.toml, we use
-    ///    tedge.toml until the configuration is explicitly migrated
+    ///    exist in mapper.toml, we use the new mapper config format
+    /// 3. If cloud configurations (for any cloud) do already exist in mapper.toml, we use
+    ///    mapper.toml until the configuration is explicitly migrated
     pub async fn decide_config_source<T>(&self, profile: Option<&ProfileName>) -> ConfigDecision
     where
         T: ExpectedCloudType,
@@ -223,13 +223,13 @@ impl TEdgeConfigLocation {
         let mappers_dir = self.mappers_config_dir();
         let cloud_str = cloud_type.as_ref();
 
-        // Clean up default profile: mappers/{cloud}/tedge.toml
-        let default_config = mappers_dir.join(format!("{cloud_str}/tedge.toml"));
+        // Clean up default profile: mappers/{cloud}/mapper.toml
+        let default_config = mappers_dir.join(format!("{cloud_str}/mapper.toml"));
         self.cleanup_config_file_and_possibly_parent(&default_config)
             .await?;
 
-        // Clean up profiled configs: mappers/{cloud}.*/tedge.toml
-        let glob_pattern = format!("{mappers_dir}/{cloud_str}.*/tedge.toml");
+        // Clean up profiled configs: mappers/{cloud}.*/mapper.toml
+        let glob_pattern = format!("{mappers_dir}/{cloud_str}.*/mapper.toml");
         let paths = tokio::task::spawn_blocking(move || {
             glob::glob(&glob_pattern)
                 .map(|entries| entries.collect::<Vec<_>>())
@@ -826,7 +826,7 @@ type = "a-service-type""#;
         let (ttd, t) = create_temp_tedge_config("").unwrap();
         ttd.dir("mappers")
             .dir("c8y")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_raw_content("url = \"example.com\"");
         let mut env = EnvSandbox::new().await;
         env.set_var("TEDGE_C8Y_ROOT_CERT_PATH", "/root/cert/path");
@@ -837,7 +837,7 @@ type = "a-service-type""#;
         assert_eq!(
             c8y_config.http().or_none().unwrap().host().to_string(),
             "example.com",
-            "Verify that c8y/tedge.toml file has actually been read"
+            "Verify that c8y/mapper.toml file has actually been read"
         );
         assert_eq!(c8y_config.root_cert_path.to_string(), "/root/cert/path");
     }
@@ -1019,7 +1019,7 @@ type = "a-service-type""#;
             .unwrap();
 
         let c8y_tedge_toml =
-            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/mapper.toml"))
                 .await
                 .unwrap();
         assert_eq!(
@@ -1048,7 +1048,7 @@ type = "a-service-type""#;
             .unwrap();
 
         let test_tedge_toml =
-            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y.test/tedge.toml"))
+            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y.test/mapper.toml"))
                 .await
                 .unwrap();
         assert_eq!(
@@ -1057,7 +1057,7 @@ type = "a-service-type""#;
         );
 
         let c8y_tedge_toml =
-            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/mapper.toml"))
                 .await
                 .unwrap_or_default();
         assert_eq!(
@@ -1082,7 +1082,7 @@ type = "a-service-type""#;
         location.migrate_mapper_config(CloudType::Az).await.unwrap();
 
         let az_tedge_toml =
-            tokio::fs::read_to_string(location.mappers_config_dir().join("az/tedge.toml"))
+            tokio::fs::read_to_string(location.mappers_config_dir().join("az/mapper.toml"))
                 .await
                 .unwrap();
         assert_eq!(
@@ -1110,7 +1110,7 @@ type = "a-service-type""#;
             .unwrap();
 
         let aws_tedge_toml =
-            tokio::fs::read_to_string(location.mappers_config_dir().join("aws/tedge.toml"))
+            tokio::fs::read_to_string(location.mappers_config_dir().join("aws/mapper.toml"))
                 .await
                 .unwrap();
         assert_eq!(
@@ -1183,10 +1183,10 @@ type = "a-service-type""#;
 
             dir.dir("mappers")
                 .dir("c8y")
-                .file("tedge.toml")
+                .file("mapper.toml")
                 .with_raw_content("url = \"example.com\"");
 
-            let config_path = location.mappers_config_dir().join("c8y/tedge.toml");
+            let config_path = location.mappers_config_dir().join("c8y/mapper.toml");
             assert!(tokio::fs::try_exists(&config_path).await.unwrap());
 
             location
@@ -1203,10 +1203,10 @@ type = "a-service-type""#;
 
             dir.dir("mappers")
                 .dir("c8y")
-                .file("tedge.toml")
+                .file("mapper.toml")
                 .with_raw_content("url = \"example.com\"");
 
-            let config_path = location.mappers_config_dir().join("c8y/tedge.toml");
+            let config_path = location.mappers_config_dir().join("c8y/mapper.toml");
             let parent_dir = location.mappers_config_dir().join("c8y");
 
             assert!(tokio::fs::try_exists(&config_path).await.unwrap());
@@ -1227,13 +1227,13 @@ type = "a-service-type""#;
 
             let mapper_dir = dir.dir("mappers").dir("c8y.test");
             mapper_dir
-                .file("tedge.toml")
+                .file("mapper.toml")
                 .with_raw_content("url = \"example.com\"");
             mapper_dir
                 .file("some-flow.toml")
                 .with_raw_content("# flow content");
 
-            let config_path = location.mappers_config_dir().join("c8y.test/tedge.toml");
+            let config_path = location.mappers_config_dir().join("c8y.test/mapper.toml");
             let flow_path = location
                 .mappers_config_dir()
                 .join("c8y.test/some-flow.toml");
@@ -1256,7 +1256,7 @@ type = "a-service-type""#;
         async fn handles_nonexistent_file_gracefully() {
             let (_dir, location) = create_temp_tedge_config("").unwrap();
 
-            let config_path = location.mappers_config_dir().join("c8y/tedge.toml");
+            let config_path = location.mappers_config_dir().join("c8y/mapper.toml");
 
             let result = location
                 .cleanup_config_file_and_possibly_parent(&config_path)
@@ -1269,7 +1269,7 @@ type = "a-service-type""#;
         async fn handles_nonexistent_directory_gracefully() {
             let (_dir, location) = create_temp_tedge_config("").unwrap();
 
-            let config_path = location.mappers_config_dir().join("nonexistent/tedge.toml");
+            let config_path = location.mappers_config_dir().join("nonexistent/mapper.toml");
 
             let result = location
                 .cleanup_config_file_and_possibly_parent(&config_path)
@@ -1308,7 +1308,7 @@ type = "a-service-type""#;
                 .await
                 .unwrap();
 
-            let config_path = location.mappers_config_dir().join("c8y/tedge.toml");
+            let config_path = location.mappers_config_dir().join("c8y/mapper.toml");
             let parent_dir = location.mappers_config_dir().join("c8y");
             assert!(tokio::fs::try_exists(&config_path).await.unwrap());
 
@@ -1346,7 +1346,7 @@ type = "a-service-type""#;
                 .await
                 .unwrap();
 
-            let config_path = location.mappers_config_dir().join("c8y.test/tedge.toml");
+            let config_path = location.mappers_config_dir().join("c8y.test/mapper.toml");
             let parent_dir = location.mappers_config_dir().join("c8y.test");
             assert!(tokio::fs::try_exists(&config_path).await.unwrap());
 
@@ -1385,7 +1385,7 @@ type = "a-service-type""#;
                 .file("some-flow.toml")
                 .with_raw_content("# flow content");
 
-            let config_path = location.mappers_config_dir().join("c8y.test/tedge.toml");
+            let config_path = location.mappers_config_dir().join("c8y.test/mapper.toml");
             let flow_path = location
                 .mappers_config_dir()
                 .join("c8y.test/flows/some-flow.toml");
@@ -1427,8 +1427,8 @@ type = "a-service-type""#;
                 .await
                 .unwrap();
 
-            let default_config_path = location.mappers_config_dir().join("c8y/tedge.toml");
-            let test_config_path = location.mappers_config_dir().join("c8y.test/tedge.toml");
+            let default_config_path = location.mappers_config_dir().join("c8y/mapper.toml");
+            let test_config_path = location.mappers_config_dir().join("c8y.test/mapper.toml");
             let default_dir = default_config_path.parent().unwrap();
             let test_dir = test_config_path.parent().unwrap();
 
@@ -1467,8 +1467,8 @@ type = "a-service-type""#;
                 .await
                 .unwrap();
 
-            let c8y_config_path = location.mappers_config_dir().join("c8y/tedge.toml");
-            let aws_config_path = location.mappers_config_dir().join("aws/tedge.toml");
+            let c8y_config_path = location.mappers_config_dir().join("c8y/mapper.toml");
+            let aws_config_path = location.mappers_config_dir().join("aws/mapper.toml");
             let c8y_dir = location.mappers_config_dir().join("c8y");
             let aws_dir = location.mappers_config_dir().join("aws");
 
@@ -1501,7 +1501,7 @@ type = "a-service-type""#;
             // Create existing mapper files (from previous successful migration)
             dir.dir("mappers")
                 .dir("c8y")
-                .file("tedge.toml")
+                .file("mapper.toml")
                 .with_raw_content("url = \"test.c8y.io\"");
 
             // Run migration - should do nothing since tedge.toml has no c8y config
@@ -1512,7 +1512,7 @@ type = "a-service-type""#;
 
             // Verify existing files unchanged
             let content =
-                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/mapper.toml"))
                     .await
                     .unwrap();
             assert!(content.contains("test.c8y.io"));
@@ -1529,7 +1529,7 @@ type = "a-service-type""#;
             // Simulate partial migration: create only default profile with wrong data
             dir.dir("mappers")
                 .dir("c8y")
-                .file("tedge.toml")
+                .file("mapper.toml")
                 .with_raw_content("url = \"wrong.c8y.io\"");
 
             // Verify tedge.toml still has config (incomplete migration marker)
@@ -1547,13 +1547,13 @@ type = "a-service-type""#;
 
             // Verify both files now exist with correct data
             let default_toml =
-                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/mapper.toml"))
                     .await
                     .unwrap();
             assert!(default_toml.contains("default.c8y.io"));
 
             let prod_toml = tokio::fs::read_to_string(
-                location.mappers_config_dir().join("c8y.prod/tedge.toml"),
+                location.mappers_config_dir().join("c8y.prod/mapper.toml"),
             )
             .await
             .unwrap();
@@ -1575,15 +1575,15 @@ type = "a-service-type""#;
             // Create multiple profile configs
             dir.dir("mappers")
                 .dir("c8y")
-                .file("tedge.toml")
+                .file("mapper.toml")
                 .with_raw_content("url = \"default\"");
             dir.dir("mappers")
                 .dir("c8y.prod")
-                .file("tedge.toml")
+                .file("mapper.toml")
                 .with_raw_content("url = \"prod\"");
             dir.dir("mappers")
                 .dir("c8y.test")
-                .file("tedge.toml")
+                .file("mapper.toml")
                 .with_raw_content("url = \"test\"");
 
             // Also create a flow file that should be preserved
@@ -1596,16 +1596,16 @@ type = "a-service-type""#;
             let mappers_dir = location.mappers_config_dir();
 
             // Verify all exist
-            assert!(tokio::fs::try_exists(mappers_dir.join("c8y/tedge.toml"))
+            assert!(tokio::fs::try_exists(mappers_dir.join("c8y/mapper.toml"))
                 .await
                 .unwrap());
             assert!(
-                tokio::fs::try_exists(mappers_dir.join("c8y.prod/tedge.toml"))
+                tokio::fs::try_exists(mappers_dir.join("c8y.prod/mapper.toml"))
                     .await
                     .unwrap()
             );
             assert!(
-                tokio::fs::try_exists(mappers_dir.join("c8y.test/tedge.toml"))
+                tokio::fs::try_exists(mappers_dir.join("c8y.test/mapper.toml"))
                     .await
                     .unwrap()
             );
@@ -1616,17 +1616,17 @@ type = "a-service-type""#;
                 .await
                 .unwrap();
 
-            // Verify tedge.toml files removed
-            assert!(!tokio::fs::try_exists(mappers_dir.join("c8y/tedge.toml"))
+            // Verify mapper.toml files removed
+            assert!(!tokio::fs::try_exists(mappers_dir.join("c8y/mapper.toml"))
                 .await
                 .unwrap());
             assert!(
-                !tokio::fs::try_exists(mappers_dir.join("c8y.prod/tedge.toml"))
+                !tokio::fs::try_exists(mappers_dir.join("c8y.prod/mapper.toml"))
                     .await
                     .unwrap()
             );
             assert!(
-                !tokio::fs::try_exists(mappers_dir.join("c8y.test/tedge.toml"))
+                !tokio::fs::try_exists(mappers_dir.join("c8y.test/mapper.toml"))
                     .await
                     .unwrap()
             );
@@ -1662,7 +1662,7 @@ type = "a-service-type""#;
                 .unwrap();
 
             let first_content =
-                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/mapper.toml"))
                     .await
                     .unwrap();
 
@@ -1674,7 +1674,7 @@ type = "a-service-type""#;
 
             // Verify file unchanged
             let second_content =
-                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/tedge.toml"))
+                tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/mapper.toml"))
                     .await
                     .unwrap();
             assert_eq!(first_content, second_content);

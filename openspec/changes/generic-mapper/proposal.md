@@ -1,3 +1,5 @@
+> **Superseded in part**: decisions D1 and D2 below have been revised. See [`mapper-first-class`](../mapper-first-class/proposal.md) before implementing or reviewing this change.
+
 ## Why
 
 A mapper in thin-edge boils down to two things: an MQTT bridge connecting the local broker to a cloud IoT platform, and logic to convert between thin-edge messages (measurements, events, alarms) and cloud-specific messages (and vice versa for operations/RPC). Today, the built-in mappers for Cumulocity, Azure IoT, and AWS handle both of these, but users wanting to connect to other platforms (e.g. ThingsBoard) would need to write and maintain their own separate mapper application.

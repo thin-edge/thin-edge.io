@@ -1,3 +1,5 @@
+> **Superseded in part**: D1 and D2 below have been revised by [`mapper-first-class`](../mapper-first-class/design.md). D3, D4, D5, and D6 remain the reference for those decisions, but D5 and D6 have minor updates in `mapper-first-class`.
+
 ## Context
 
 A thin-edge mapper combines an MQTT bridge (connecting local broker to cloud) with conversion logic (translating between thin-edge and cloud message formats). Built-in mappers for Cumulocity, Azure IoT, and AWS are compiled into `tedge-mapper` with hardcoded CLI subcommands, config schema, and cloud-specific converters. The Cumulocity mapper is the most complex example — it wires up the built-in bridge (with bridge rules loaded from TOML templates in its `bridge/` directory), hardcoded Rust logic for handling operations, and flows. The flows engine and built-in MQTT bridge now provide all the building blocks needed for user-defined mappers, but the wiring between CLI, config, bridge, and flows is still tied to the built-in mapper set.

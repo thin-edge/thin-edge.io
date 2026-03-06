@@ -263,11 +263,11 @@ mod tests {
         let mappers = ttd.dir("mappers");
         mappers
             .dir("c8y.profile1")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_raw_content("");
         mappers
             .dir("c8y.profile2")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_raw_content("");
         let completions = completion_names(&ttd).await;
         assert_eq!(completions, ["profile1", "profile2"]);

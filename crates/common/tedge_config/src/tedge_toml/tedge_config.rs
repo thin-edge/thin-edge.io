@@ -1884,7 +1884,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
             .dir("c8y")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -1907,7 +1907,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
             .dir("c8y.myprofile")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -1930,7 +1930,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
             .dir("c8y.myprofile")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -1951,7 +1951,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
             .dir("c8y")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -2005,7 +2005,7 @@ mod tests {
     async fn mapper_config_falls_back_to_tedge_toml_config_if_only_another_cloud_is_using_new_format(
     ) {
         let ttd = TempTedgeDir::new();
-        ttd.dir("mappers").dir("c8y").file("tedge.toml");
+        ttd.dir("mappers").dir("c8y").file("mapper.toml");
         ttd.file("tedge.toml").with_toml_content(toml::toml! {
             az.url = "az.url"
         });
@@ -2057,7 +2057,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
             .dir("c8y")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
             });
@@ -2079,19 +2079,19 @@ mod tests {
         let mappers_dir = ttd.dir("mappers");
         mappers_dir
             .dir("c8y")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "default.example.com"
             });
         mappers_dir
             .dir("c8y.profile1")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "profile1.example.com"
             });
         mappers_dir
             .dir("c8y.profile2")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "profile2.example.com"
             });
@@ -2123,14 +2123,14 @@ mod tests {
         // C8y mapper with no profile directory
         ttd.dir("mappers")
             .dir("c8y")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "c8y.example.com"
             });
         // Az mapper with no profile directory
         ttd.dir("mappers")
             .dir("az")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "az.example.com"
             });

@@ -1,7 +1,7 @@
-//! Custom mapper configuration.
+//! Mapper configuration.
 //!
-//! A custom mapper's configuration is stored in `tedge.toml` within the mapper directory
-//! (e.g. `/etc/tedge/mappers/custom.thingsboard/tedge.toml`). This file is optional —
+//! A mapper's configuration is stored in `mapper.toml` within the mapper directory
+//! (e.g. `/etc/tedge/mappers/thingsboard/mapper.toml`). This file is optional —
 //! it is only needed when the mapper establishes a cloud connection via the MQTT bridge.
 //!
 //! The full TOML table is available for `${mapper.*}` template expansion in bridge rules.
@@ -27,7 +27,7 @@ pub enum AuthMethodConfig {
     Password,
 }
 
-/// Parsed custom mapper `tedge.toml` configuration.
+/// Parsed mapper `mapper.toml` configuration.
 ///
 /// The `table` field holds the complete TOML document, available for `${mapper.*}`
 /// template expansion in bridge rule files. The typed fields provide structured access
@@ -85,14 +85,14 @@ struct RawConfig {
     credentials_path: Option<Utf8PathBuf>,
 }
 
-/// Reads and parses `tedge.toml` from the given mapper directory.
+/// Reads and parses `mapper.toml` from the given mapper directory.
 ///
 /// Returns `Ok(None)` if the file does not exist (the mapper may be flows-only).
 /// Returns an error with the file path if the file cannot be read or is not valid TOML.
 pub async fn load_mapper_config(
     mapper_dir: &Utf8Path,
 ) -> anyhow::Result<Option<CustomMapperConfig>> {
-    let config_path = mapper_dir.join("tedge.toml");
+    let config_path = mapper_dir.join("mapper.toml");
 
     let content = match tokio::fs::read_to_string(&config_path).await {
         Ok(content) => content,
@@ -194,7 +194,7 @@ mod tests {
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
-            mapper_dir.join("tedge.toml"),
+            mapper_dir.join("mapper.toml"),
             r#"
 url = "mqtt.thingsboard.io:8883"
 
@@ -231,14 +231,14 @@ topic_prefix = "tb"
         let mapper_dir = ttd.utf8_path().join("mappers/custom.broken");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
-        tokio::fs::write(mapper_dir.join("tedge.toml"), "this is not = valid [ toml")
+        tokio::fs::write(mapper_dir.join("mapper.toml"), "this is not = valid [ toml")
             .await
             .unwrap();
 
         let err = load_mapper_config(&mapper_dir).await.unwrap_err();
         let msg = format!("{err}");
         assert!(
-            msg.contains("tedge.toml"),
+            msg.contains("mapper.toml"),
             "Error should mention the file path: {msg}"
         );
     }
@@ -250,7 +250,7 @@ topic_prefix = "tb"
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
-            mapper_dir.join("tedge.toml"),
+            mapper_dir.join("mapper.toml"),
             r#"
 url = "mqtt.example.com"
 "#,
@@ -269,7 +269,7 @@ url = "mqtt.example.com"
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
-            mapper_dir.join("tedge.toml"),
+            mapper_dir.join("mapper.toml"),
             r#"
 url = "mqtt.example.com:8883"
 auth_method = "certificate"
@@ -308,7 +308,7 @@ keepalive_interval = "60s"
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
-            mapper_dir.join("tedge.toml"),
+            mapper_dir.join("mapper.toml"),
             r#"url = "mqtt.example.com"
 auth_method = "password"
 credentials_path = "/etc/tedge/mappers/custom.pw/creds.toml"
@@ -353,7 +353,7 @@ credentials_path = "/etc/tedge/mappers/custom.pw/creds.toml"
         let mapper_dir = ttd.utf8_path().join("mappers/custom.halfcert");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         tokio::fs::write(
-            mapper_dir.join("tedge.toml"),
+            mapper_dir.join("mapper.toml"),
             r#"url = "mqtt.example.com"
 [device]
 cert_path = "/etc/tedge/device-certs/tedge-certificate.pem"
@@ -376,7 +376,7 @@ cert_path = "/etc/tedge/device-certs/tedge-certificate.pem"
         let mapper_dir = ttd.utf8_path().join("mappers/custom.halfkey");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         tokio::fs::write(
-            mapper_dir.join("tedge.toml"),
+            mapper_dir.join("mapper.toml"),
             r#"url = "mqtt.example.com"
 [device]
 key_path = "/etc/tedge/device-certs/tedge-private-key.pem"

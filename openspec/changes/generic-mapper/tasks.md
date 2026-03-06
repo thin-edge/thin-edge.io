@@ -1,3 +1,5 @@
+> **Superseded in part**: sections 3 (CLI Subcommand), 4 (CustomMapper Component), 5 (Service Identity), and 6 (Unrecognised Directory Warnings) are replaced by [`mapper-first-class`](../mapper-first-class/tasks.md). Sections 1, 2, and 1a remain valid. Sections 7 (Integration Tests), 8 (Documentation), 9–11 (Code Quality) are unaffected.
+
 ## 1. Bridge Template System Extension
 
 - [x] 1.1 Add `mapper_config: Option<&toml::Table>` field to `TemplateContext` struct

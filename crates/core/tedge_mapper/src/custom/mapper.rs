@@ -161,7 +161,9 @@ pub fn build_cloud_mqtt_options(
     tedge_config: &TEdgeConfig,
 ) -> anyhow::Result<(MqttOptions, AuthMethod)> {
     let url = config.url.as_ref().with_context(|| {
-        format!("'{mapper_dir}/tedge.toml' is missing a 'url' field required for the MQTT bridge",)
+        format!(
+            "'{mapper_dir}/mapper.toml' is missing a 'url' field required for the MQTT bridge",
+        )
     })?;
 
     let mut cloud_config = MqttOptions::new(service_name, url.host().to_string(), url.port().0);
@@ -221,7 +223,7 @@ pub fn build_cloud_mqtt_options(
         AuthMethod::Password => {
             let creds_path = config.credentials_path.as_deref().with_context(|| {
                 format!(
-                    "'{mapper_dir}/tedge.toml' sets auth_method = \"password\" but \
+                    "'{mapper_dir}/mapper.toml' sets auth_method = \"password\" but \
                      no credentials_path is configured"
                 )
             })?;
@@ -274,7 +276,7 @@ async fn build_flows_actors(
 /// Validates that the mapper directory has at least one active component
 /// (bridge or flows).
 ///
-/// A directory containing only `tedge.toml` (and no `bridge/` or `flows/`
+/// A directory containing only `mapper.toml` (and no `bridge/` or `flows/`
 /// directories) would start with nothing to do.
 pub fn check_has_active_components(mapper_dir: &Utf8Path) -> anyhow::Result<()> {
     let has_bridge_dir = mapper_dir.join("bridge").is_dir();
@@ -290,9 +292,9 @@ pub fn check_has_active_components(mapper_dir: &Utf8Path) -> anyhow::Result<()> 
     Ok(())
 }
 
-/// Validates the mapper directory's startup config, returning the parsed config if `tedge.toml`
+/// Validates the mapper directory's startup config, returning the parsed config if `mapper.toml`
 /// is present, `None` if only flows are present, or an error if `bridge/` exists without a
-/// `tedge.toml`.
+/// `mapper.toml`.
 ///
 /// This is a separate function to make the startup validation testable without requiring a
 /// live MQTT broker.
@@ -308,8 +310,8 @@ pub async fn check_startup_config(
         None => {
             anyhow::bail!(
                 "Mapper directory '{mapper_dir}' contains a 'bridge/' subdirectory but no \
-                 'tedge.toml' connection config. \
-                 Create a tedge.toml with a top-level 'url' field (e.g. url = \"host:8883\") to use the MQTT bridge.",
+                 'mapper.toml' connection config. \
+                 Create a mapper.toml with a top-level 'url' field (e.g. url = \"host:8883\") to use the MQTT bridge.",
             );
         }
         Some(config) => Ok(Some(config)),
@@ -513,20 +515,20 @@ mod tests {
             let err = check_startup_config(&mapper_dir).await.unwrap_err();
             let msg = format!("{err}");
             assert!(
-                msg.contains("bridge") && msg.contains("tedge.toml"),
-                "Error should mention bridge/ and tedge.toml: {msg}"
+                msg.contains("bridge") && msg.contains("mapper.toml"),
+                "Error should mention bridge/ and mapper.toml: {msg}"
             );
         }
 
         #[tokio::test]
-        async fn bridge_dir_with_tedge_toml_returns_config() {
+        async fn bridge_dir_with_mapper_toml_returns_config() {
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
             tokio::fs::create_dir_all(mapper_dir.join("bridge"))
                 .await
                 .unwrap();
             tokio::fs::write(
-                mapper_dir.join("tedge.toml"),
+                mapper_dir.join("mapper.toml"),
                 "url = \"mqtt.example.com\"\n",
             )
             .await
@@ -535,7 +537,7 @@ mod tests {
             let config = check_startup_config(&mapper_dir).await.unwrap();
             assert!(
                 config.is_some(),
-                "Should return config when tedge.toml exists"
+                "Should return config when mapper.toml exists"
             );
         }
 
@@ -555,13 +557,13 @@ mod tests {
             );
         }
 
-        /// A directory with only tedge.toml (no bridge/ or flows/) has no active components
+        /// A directory with only mapper.toml (no bridge/ or flows/) has no active components
         #[test]
-        fn tedge_toml_only_errors_no_active_components() {
+        fn mapper_toml_only_errors_no_active_components() {
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
             std::fs::create_dir_all(&mapper_dir).unwrap();
-            std::fs::write(mapper_dir.join("tedge.toml"), "url = \"host:8883\"\n").unwrap();
+            std::fs::write(mapper_dir.join("mapper.toml"), "url = \"host:8883\"\n").unwrap();
 
             let err = check_has_active_components(&mapper_dir).unwrap_err();
             let msg = format!("{err}");
@@ -610,10 +612,7 @@ mod tests {
             let err =
                 build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config).unwrap_err();
             let msg = format!("{err}");
-            assert!(
-                msg.contains("tedge.toml"),
-                "Error should mention tedge.toml: {msg}"
-            );
+            assert!(msg.contains("mapper.toml"), "Error should mention mapper.toml: {msg}");
             assert!(msg.contains("url"), "Error should mention url: {msg}");
         }
 
