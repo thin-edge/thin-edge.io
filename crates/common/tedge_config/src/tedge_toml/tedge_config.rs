@@ -585,6 +585,11 @@ define_tedge_config! {
         #[serde(skip)]
         mapper_config_file: Utf8PathBuf,
 
+        /// Identifies this mapper directory as belonging to the Cumulocity cloud integration.
+        /// Written into `mapper.toml` automatically; not user-configurable via the CLI.
+        #[tedge_config(reader(skip))]
+        cloud_type: CloudType,
+
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
         // Config consumers should use `c8y.http`/`c8y.mqtt` as appropriate, hence this field is private
@@ -841,6 +846,11 @@ define_tedge_config! {
         #[serde(skip)]
         mapper_config_file: Utf8PathBuf,
 
+        /// Identifies this mapper directory as belonging to the Azure IoT cloud integration.
+        /// Written into `mapper.toml` automatically; not user-configurable via the CLI.
+        #[tedge_config(reader(skip))]
+        cloud_type: CloudType,
+
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
         url: ConnectUrl,
@@ -935,6 +945,11 @@ define_tedge_config! {
         #[tedge_config(reader(skip))]
         #[serde(skip)]
         mapper_config_file: Utf8PathBuf,
+
+        /// Identifies this mapper directory as belonging to the AWS IoT cloud integration.
+        /// Written into `mapper.toml` automatically; not user-configurable via the CLI.
+        #[tedge_config(reader(skip))]
+        cloud_type: CloudType,
 
         /// Endpoint URL of AWS IoT tenant
         #[tedge_config(example = "your-endpoint.amazonaws.com")]

@@ -1,9 +1,8 @@
 //! Custom mapper component.
 //!
-//! A custom mapper is started with `tedge-mapper custom [--profile <name>]`. It reads
-//! its configuration from the mapper directory (`{config_dir}/mappers/custom.{name}/`)
-//! and conditionally starts the built-in MQTT bridge and/or flows engine based on what
-//! files are present in that directory.
+//! A user-defined mapper is started with `tedge-mapper <name>`. It reads its configuration
+//! from the mapper directory (`{config_dir}/mappers/{name}/`) and conditionally starts the
+//! built-in MQTT bridge and/or flows engine based on what files are present.
 
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
@@ -22,7 +21,6 @@ use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::MqttAuthClientConfigCloudBroker;
 use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
 use tedge_config::tedge_toml::PrivateKeyType;
-use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_flows::ConnectedFlowRegistry;
@@ -36,114 +34,99 @@ use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_bridge::MqttOptions;
 use tedge_watch_ext::WatchActorBuilder;
 
-/// A custom mapper instance, identified by an optional profile name.
+/// A user-defined mapper instance, identified by its name.
 ///
-/// The mapper directory is `{config_dir}/mappers/custom.{profile}/` (or `custom/` when
-/// no profile is given).
+/// The mapper directory is `{config_dir}/mappers/{name}/`.
 pub struct CustomMapper {
-    pub profile: Option<ProfileName>,
+    pub name: String,
 }
 
 impl CustomMapper {
-    /// Returns the mapper directory path for this profile.
-    ///
-    /// - `custom.{name}/` when a profile is provided
-    /// - `custom/` when no profile is given
+    /// Returns the mapper directory path for this instance.
     pub fn mapper_dir(&self, config_dir: &Utf8Path) -> Utf8PathBuf {
-        let dir_name = match &self.profile {
-            None => "custom".to_string(),
-            Some(profile) => format!("custom.{profile}"),
-        };
-        config_dir.join("mappers").join(dir_name)
+        config_dir.join("mappers").join(&self.name)
     }
 
-    /// Returns the service name for this mapper instance.
-    ///
-    /// - `tedge-mapper-custom@{profile}` when a profile is provided
-    /// - `tedge-mapper-custom` when no profile is given
+    /// Returns the systemd service name: `tedge-mapper@{name}`.
     pub fn service_name(&self) -> String {
-        match &self.profile {
-            None => "tedge-mapper-custom".to_string(),
-            Some(profile) => format!("tedge-mapper-custom@{profile}"),
-        }
+        format!("tedge-mapper@{}", self.name)
     }
 
-    /// Returns the bridge service name for this mapper instance.
-    ///
-    /// - `tedge-mapper-bridge-custom@{profile}` when a profile is provided
-    /// - `tedge-mapper-bridge-custom` when no profile is given
+    /// Returns the bridge service name: `tedge-mapper-bridge-{name}`.
     pub fn bridge_service_name(&self) -> String {
-        match &self.profile {
-            None => "tedge-mapper-bridge-custom".to_string(),
-            Some(profile) => format!("tedge-mapper-bridge-custom@{profile}"),
+        format!("tedge-mapper-bridge-{}", self.name)
+    }
+}
+
+/// Validates that the mapper directory exists and contains a `mapper.toml` file.
+///
+/// If the directory is missing or has no `mapper.toml`, returns an error listing
+/// available mappers found in the mappers directory.
+pub async fn validate_mapper_dir(
+    mapper_dir: &Utf8Path,
+    config_dir: &Utf8Path,
+) -> anyhow::Result<()> {
+    let mappers_root = config_dir.join("mappers");
+
+    if !tokio::fs::try_exists(mapper_dir).await.unwrap_or(false)
+        || !tokio::fs::metadata(mapper_dir)
+            .await
+            .map(|m| m.is_dir())
+            .unwrap_or(false)
+    {
+        let available = list_available_mappers(&mappers_root).await;
+        if available.is_empty() {
+            anyhow::bail!(
+                "Mapper directory '{mapper_dir}' does not exist. \
+                 No mappers found under '{mappers_root}'.",
+            );
+        } else {
+            anyhow::bail!(
+                "Mapper directory '{mapper_dir}' does not exist. \
+                 Available mappers: {}",
+                available.join(", ")
+            );
         }
     }
+
+    anyhow::ensure!(
+        tokio::fs::try_exists(mapper_dir.join("mapper.toml"))
+            .await
+            .unwrap_or(false),
+        "Mapper directory '{mapper_dir}' does not contain a 'mapper.toml' file. \
+         Create a mapper.toml to configure this mapper."
+    );
+
+    Ok(())
 }
 
-/// Validates that the mapper directory for the given profile exists.
-///
-/// If the profile directory is missing, returns an error listing available
-/// `custom.*` profiles found in the mappers directory.
-pub fn validate_profile_dir(mapper_dir: &Utf8Path, config_dir: &Utf8Path) -> anyhow::Result<()> {
-    if mapper_dir.exists() {
-        return Ok(());
-    }
-
-    // Collect available custom profiles to help the user
-    let mappers_dir = config_dir.join("mappers");
-    let available = list_custom_profiles(&mappers_dir);
-
-    if available.is_empty() {
-        anyhow::bail!(
-            "Custom mapper directory '{}' does not exist. \
-             No custom mapper profiles found under '{}'.",
-            mapper_dir,
-            mappers_dir
-        );
-    } else {
-        let formatted: Vec<String> = available
-            .into_iter()
-            .map(|p| match p {
-                None => "(default, no --profile)".to_string(),
-                Some(name) => format!("--profile {name}"),
-            })
-            .collect();
-        anyhow::bail!(
-            "Custom mapper directory '{}' does not exist. \
-             Available custom mapper profiles: {}",
-            mapper_dir,
-            formatted.join(", ")
-        );
-    }
-}
-
-/// Lists available custom mapper profiles by scanning the mappers directory.
-///
-/// Returns `None` for the default (`custom/`) directory and `Some(name)` for each
-/// `custom.{name}/` directory found.
-fn list_custom_profiles(mappers_dir: &Utf8Path) -> Vec<Option<String>> {
-    let Ok(entries) = std::fs::read_dir(mappers_dir) else {
+/// Lists available mappers by scanning the mappers root directory for subdirectories
+/// that contain a `mapper.toml` file.
+async fn list_available_mappers(mappers_root: &Utf8Path) -> Vec<String> {
+    let Ok(mut entries) = tokio::fs::read_dir(mappers_root).await else {
         return Vec::new();
     };
 
-    let mut profiles = Vec::new();
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        let Ok(file_type) = entry.file_type() else {
+    let mut names = Vec::new();
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let Ok(file_type) = entry.file_type().await else {
             continue;
         };
         if !file_type.is_dir() {
             continue;
         }
-        if name == "custom" {
-            profiles.push(None);
-        } else if let Some(profile) = name.strip_prefix("custom.") {
-            profiles.push(Some(profile.to_string()));
+        let path = Utf8PathBuf::from(entry.path().to_string_lossy().into_owned());
+        if tokio::fs::try_exists(path.join("mapper.toml"))
+            .await
+            .unwrap_or(false)
+        {
+            if let Some(name) = path.file_name() {
+                names.push(name.to_string());
+            }
         }
     }
-    profiles.sort();
-    profiles
+    names.sort();
+    names
 }
 
 /// Builds the [`MqttOptions`] for the cloud broker connection described by `config`.
@@ -161,9 +144,7 @@ pub fn build_cloud_mqtt_options(
     tedge_config: &TEdgeConfig,
 ) -> anyhow::Result<(MqttOptions, AuthMethod)> {
     let url = config.url.as_ref().with_context(|| {
-        format!(
-            "'{mapper_dir}/mapper.toml' is missing a 'url' field required for the MQTT bridge",
-        )
+        format!("'{mapper_dir}/mapper.toml' is missing a 'url' field required for the MQTT bridge",)
     })?;
 
     let mut cloud_config = MqttOptions::new(service_name, url.host().to_string(), url.port().0);
@@ -328,7 +309,7 @@ impl TEdgeComponent for CustomMapper {
         let mapper_dir = self.mapper_dir(config_dir);
         let service_name = self.service_name();
 
-        validate_profile_dir(&mapper_dir, config_dir)?;
+        validate_mapper_dir(&mapper_dir, config_dir).await?;
         check_has_active_components(&mapper_dir)?;
 
         let has_flows_dir = mapper_dir.join("flows").is_dir();
@@ -394,21 +375,14 @@ mod tests {
         use super::*;
 
         #[test]
-        fn without_profile() {
-            let mapper = CustomMapper { profile: None };
-            assert_eq!(mapper.service_name(), "tedge-mapper-custom");
-            assert_eq!(mapper.bridge_service_name(), "tedge-mapper-bridge-custom");
-        }
-
-        #[test]
-        fn with_profile() {
+        fn uses_mapper_name_in_service_names() {
             let mapper = CustomMapper {
-                profile: Some("thingsboard".parse().unwrap()),
+                name: "thingsboard".to_string(),
             };
-            assert_eq!(mapper.service_name(), "tedge-mapper-custom@thingsboard");
+            assert_eq!(mapper.service_name(), "tedge-mapper@thingsboard");
             assert_eq!(
                 mapper.bridge_service_name(),
-                "tedge-mapper-bridge-custom@thingsboard"
+                "tedge-mapper-bridge-thingsboard"
             );
         }
     }
@@ -417,46 +391,41 @@ mod tests {
         use super::*;
 
         #[test]
-        fn without_profile_uses_custom_dir() {
-            let mapper = CustomMapper { profile: None };
-            let dir = mapper.mapper_dir(Utf8Path::new("/etc/tedge"));
-            assert_eq!(dir, Utf8PathBuf::from("/etc/tedge/mappers/custom"));
-        }
-
-        #[test]
-        fn with_profile_uses_prefixed_dir() {
+        fn uses_name_in_no_prefix_dir() {
             let mapper = CustomMapper {
-                profile: Some("thingsboard".parse().unwrap()),
+                name: "thingsboard".to_string(),
             };
             let dir = mapper.mapper_dir(Utf8Path::new("/etc/tedge"));
-            assert_eq!(
-                dir,
-                Utf8PathBuf::from("/etc/tedge/mappers/custom.thingsboard")
-            );
+            assert_eq!(dir, Utf8PathBuf::from("/etc/tedge/mappers/thingsboard"));
         }
     }
 
-    mod profile_validation {
+    mod mapper_validation {
         use super::*;
         use tedge_test_utils::fs::TempTedgeDir;
 
-        #[test]
-        fn succeeds_when_directory_exists() {
+        #[tokio::test]
+        async fn succeeds_when_mapper_toml_exists() {
             let ttd = TempTedgeDir::new();
             let config_dir = ttd.utf8_path();
-            let mapper_dir = config_dir.join("mappers/custom.test");
-            std::fs::create_dir_all(&mapper_dir).unwrap();
+            let mapper_dir = config_dir.join("mappers/thingsboard");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(mapper_dir.join("mapper.toml"), "")
+                .await
+                .unwrap();
 
-            assert!(validate_profile_dir(&mapper_dir, config_dir).is_ok());
+            assert!(validate_mapper_dir(&mapper_dir, config_dir).await.is_ok());
         }
 
-        #[test]
-        fn errors_when_directory_missing() {
+        #[tokio::test]
+        async fn errors_when_directory_missing() {
             let ttd = TempTedgeDir::new();
             let config_dir = ttd.utf8_path();
-            let mapper_dir = config_dir.join("mappers/custom.nonexistent");
+            let mapper_dir = config_dir.join("mappers/nonexistent");
 
-            let err = validate_profile_dir(&mapper_dir, config_dir).unwrap_err();
+            let err = validate_mapper_dir(&mapper_dir, config_dir)
+                .await
+                .unwrap_err();
             let msg = format!("{err}");
             assert!(
                 msg.contains("does not exist"),
@@ -464,34 +433,64 @@ mod tests {
             );
         }
 
-        #[test]
-        fn error_lists_available_profiles() {
+        #[tokio::test]
+        async fn errors_when_no_mapper_toml() {
+            let ttd = TempTedgeDir::new();
+            let config_dir = ttd.utf8_path();
+            let mapper_dir = config_dir.join("mappers/thingsboard");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            // No mapper.toml
+
+            let err = validate_mapper_dir(&mapper_dir, config_dir)
+                .await
+                .unwrap_err();
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("mapper.toml"),
+                "Error should mention missing mapper.toml: {msg}"
+            );
+        }
+
+        #[tokio::test]
+        async fn error_lists_available_mappers() {
             let ttd = TempTedgeDir::new();
             let config_dir = ttd.utf8_path();
 
-            // Create some existing custom profiles
-            std::fs::create_dir_all(config_dir.join("mappers/custom.thingsboard")).unwrap();
-            std::fs::create_dir_all(config_dir.join("mappers/custom.mycloud")).unwrap();
+            let thingsboard_dir = config_dir.join("mappers/thingsboard");
+            tokio::fs::create_dir_all(&thingsboard_dir).await.unwrap();
+            tokio::fs::write(thingsboard_dir.join("mapper.toml"), "")
+                .await
+                .unwrap();
+            let mycloud_dir = config_dir.join("mappers/mycloud");
+            tokio::fs::create_dir_all(&mycloud_dir).await.unwrap();
+            tokio::fs::write(mycloud_dir.join("mapper.toml"), "")
+                .await
+                .unwrap();
 
-            let mapper_dir = config_dir.join("mappers/custom.nonexistent");
-            let err = validate_profile_dir(&mapper_dir, config_dir).unwrap_err();
+            let mapper_dir = config_dir.join("mappers/nonexistent");
+            let err = validate_mapper_dir(&mapper_dir, config_dir)
+                .await
+                .unwrap_err();
             let msg = format!("{err}");
 
             assert!(
                 msg.contains("thingsboard") || msg.contains("mycloud"),
-                "Error should list available profiles: {msg}"
+                "Error should list available mappers: {msg}"
             );
         }
 
-        #[test]
-        fn error_when_no_profiles_exist() {
+        #[tokio::test]
+        async fn error_when_no_mappers_exist() {
             let ttd = TempTedgeDir::new();
             let config_dir = ttd.utf8_path();
-            // Create mappers dir but no custom profiles
-            std::fs::create_dir_all(config_dir.join("mappers")).unwrap();
+            tokio::fs::create_dir_all(config_dir.join("mappers"))
+                .await
+                .unwrap();
 
-            let mapper_dir = config_dir.join("mappers/custom.nonexistent");
-            let err = validate_profile_dir(&mapper_dir, config_dir).unwrap_err();
+            let mapper_dir = config_dir.join("mappers/nonexistent");
+            let err = validate_mapper_dir(&mapper_dir, config_dir)
+                .await
+                .unwrap_err();
             let msg = format!("{err}");
             assert!(
                 msg.contains("does not exist"),
@@ -612,7 +611,10 @@ mod tests {
             let err =
                 build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config).unwrap_err();
             let msg = format!("{err}");
-            assert!(msg.contains("mapper.toml"), "Error should mention mapper.toml: {msg}");
+            assert!(
+                msg.contains("mapper.toml"),
+                "Error should mention mapper.toml: {msg}"
+            );
             assert!(msg.contains("url"), "Error should mention url: {msg}");
         }
 
@@ -722,6 +724,7 @@ mod tests {
                 bridge: BridgeConfig::default(),
                 auth_method: AuthMethodConfig::Auto,
                 credentials_path: None,
+                cloud_type: None,
             }
         }
     }

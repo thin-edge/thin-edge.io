@@ -1,80 +1,47 @@
 //! Utilities for scanning the mappers directory and warning about unrecognised entries.
 //!
-//! The `/etc/tedge/mappers/` directory may contain mapper directories for built-in mappers
-//! (e.g. `c8y/`, `az.staging/`) and custom mapper directories (`custom/`, `custom.{name}/`).
-//! Any directory that doesn't match these conventions may be a typo or a stale entry and
-//! is worth warning about.
+//! Under the no-prefix convention, a directory under `/etc/tedge/mappers/` is a mapper
+//! if and only if it contains a `mapper.toml` file. Directories without `mapper.toml`
+//! are unrecognised and generate a warning.
 
 use camino::Utf8Path;
 use tracing::warn;
 
-use crate::MapperName;
-
-/// Classifies a mapper directory name.
-#[derive(Debug, PartialEq, Eq)]
-pub enum MapperDirKind {
-    /// A built-in mapper directory (e.g. `c8y/`).
-    BuiltIn,
-    /// A profiled built-in mapper directory (e.g. `c8y.staging/`).
-    ProfiledBuiltIn,
-    /// The default custom mapper directory (`custom/`).
-    Custom,
-    /// A profiled custom mapper directory (e.g. `custom.thingsboard/`).
-    ProfiledCustom,
-    /// An unrecognised directory that doesn't match any known convention.
-    Unrecognised,
-}
-
-/// Classifies a single mapper directory name.
-fn classify_mapper_dir(name: &str) -> MapperDirKind {
-    let (name, profile) = match name.split_once('.') {
-        Some((name, profile)) => (name, Some(profile)),
-        None => (name, None),
-    };
-    match name.parse::<MapperName>() {
-        Ok(MapperName::Custom { .. }) if profile.is_none() => MapperDirKind::Custom,
-        Ok(MapperName::Custom { .. }) => MapperDirKind::ProfiledCustom,
-        Ok(_) if profile.is_none() => MapperDirKind::BuiltIn,
-        Ok(_) => MapperDirKind::ProfiledBuiltIn,
-        Err(_) => MapperDirKind::Unrecognised,
-    }
-}
-
-/// Scans the mappers directory and emits a warning for each unrecognised subdirectory.
+/// Scans the mappers directory and emits a warning for each subdirectory
+/// that does not contain a `mapper.toml` file.
 ///
-/// This is called on mapper startup to help users spot typos (e.g. `custome.thingsboard`)
-pub fn warn_unrecognised_mapper_dirs(mappers_dir: &Utf8Path) {
-    for name in collect_unrecognised_mapper_dirs(mappers_dir) {
+/// This is called on mapper startup to help users spot typos or stale entries.
+pub async fn warn_unrecognised_mapper_dirs(mappers_dir: &Utf8Path) {
+    for name in collect_unrecognised_mapper_dirs(mappers_dir).await {
         warn!(
-            "Unrecognised mapper directory '{mappers_dir}/{name}'. \
-             Use 'custom.{{name}}/' for custom mappers; \
-             run 'tedge-mapper --help' for built-in mapper types. \
+            "Unrecognised mapper directory '{mappers_dir}/{name}': no 'mapper.toml' found. \
              This directory will be ignored.",
         );
     }
 }
 
-/// Returns the names of unrecognised subdirectories found in `mappers_dir`.
+/// Returns the names of subdirectories in `mappers_dir` that do not contain a `mapper.toml`.
 ///
-/// A directory is unrecognised if its name is not a known mapper type or a profile of one.
 /// This is exposed for testing; callers should normally use `warn_unrecognised_mapper_dirs`.
-pub(crate) fn collect_unrecognised_mapper_dirs(mappers_dir: &Utf8Path) -> Vec<String> {
-    let Ok(entries) = std::fs::read_dir(mappers_dir) else {
+pub(crate) async fn collect_unrecognised_mapper_dirs(mappers_dir: &Utf8Path) -> Vec<String> {
+    let Ok(mut entries) = tokio::fs::read_dir(mappers_dir).await else {
         return Vec::new(); // Directory doesn't exist yet — nothing to warn about
     };
 
     let mut unrecognised = Vec::new();
-    for entry in entries.flatten() {
-        let Ok(file_type) = entry.file_type() else {
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let Ok(file_type) = entry.file_type().await else {
             continue;
         };
         if !file_type.is_dir() {
             continue;
         }
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if matches!(classify_mapper_dir(&name), MapperDirKind::Unrecognised) {
-            unrecognised.push(name.into_owned());
+        let path = camino::Utf8PathBuf::from(entry.path().to_string_lossy().into_owned());
+        if !tokio::fs::try_exists(path.join("mapper.toml"))
+            .await
+            .unwrap_or(false)
+        {
+            unrecognised.push(entry.file_name().to_string_lossy().into_owned());
         }
     }
     unrecognised
@@ -84,164 +51,106 @@ pub(crate) fn collect_unrecognised_mapper_dirs(mappers_dir: &Utf8Path) -> Vec<St
 mod tests {
     use super::*;
 
-    mod classify {
-        use super::*;
-
-        #[test]
-        fn builtin_names_are_recognised() {
-            for name in ["c8y", "az", "aws", "local"] {
-                assert_eq!(
-                    classify_mapper_dir(name),
-                    MapperDirKind::BuiltIn,
-                    "{name} should be BuiltIn"
-                );
-            }
-        }
-
-        #[test]
-        fn profiled_builtin_names_are_recognised() {
-            assert_eq!(
-                classify_mapper_dir("c8y.staging"),
-                MapperDirKind::ProfiledBuiltIn
-            );
-            assert_eq!(
-                classify_mapper_dir("az.prod"),
-                MapperDirKind::ProfiledBuiltIn
-            );
-            assert_eq!(
-                classify_mapper_dir("aws.us-east"),
-                MapperDirKind::ProfiledBuiltIn
-            );
-        }
-
-        #[test]
-        fn custom_is_recognised() {
-            assert_eq!(classify_mapper_dir("custom"), MapperDirKind::Custom);
-        }
-
-        #[test]
-        fn profiled_custom_is_recognised() {
-            assert_eq!(
-                classify_mapper_dir("custom.thingsboard"),
-                MapperDirKind::ProfiledCustom
-            );
-            assert_eq!(
-                classify_mapper_dir("custom.my-cloud"),
-                MapperDirKind::ProfiledCustom
-            );
-        }
-
-        #[test]
-        fn unrecognised_names_are_flagged() {
-            // Typo: extra 'e' in the custom prefix
-            assert_eq!(
-                classify_mapper_dir("custome.thingsboard"),
-                MapperDirKind::Unrecognised
-            );
-            // Unknown bare name (no built-in or custom prefix)
-            assert_eq!(
-                classify_mapper_dir("thingsboard"),
-                MapperDirKind::Unrecognised
-            );
-        }
-    }
-
     mod warn_unrecognised {
         use super::*;
         use tedge_test_utils::fs::TempTedgeDir;
 
-        #[test]
-        fn does_not_warn_for_known_directories() {
+        #[tokio::test]
+        async fn does_not_warn_for_dirs_with_mapper_toml() {
             let ttd = TempTedgeDir::new();
             let mappers_dir = ttd.utf8_path().join("mappers");
-            std::fs::create_dir_all(mappers_dir.join("c8y")).unwrap();
-            std::fs::create_dir_all(mappers_dir.join("c8y.staging")).unwrap();
-            std::fs::create_dir_all(mappers_dir.join("custom.thingsboard")).unwrap();
-            std::fs::create_dir_all(mappers_dir.join("aws")).unwrap();
+            for name in ["c8y", "az", "thingsboard", "production"] {
+                let dir = mappers_dir.join(name);
+                tokio::fs::create_dir_all(&dir).await.unwrap();
+                tokio::fs::write(dir.join("mapper.toml"), "").await.unwrap();
+            }
 
-            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir);
+            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
             assert!(
                 unrecognised.is_empty(),
-                "Known directories should not be unrecognised, got: {unrecognised:?}"
+                "Dirs with mapper.toml should not be unrecognised, got: {unrecognised:?}"
             );
         }
 
-        #[test]
-        fn handles_nonexistent_mappers_dir_gracefully() {
+        #[tokio::test]
+        async fn handles_nonexistent_mappers_dir_gracefully() {
             let ttd = TempTedgeDir::new();
             let mappers_dir = ttd.utf8_path().join("nonexistent/mappers");
-            assert!(collect_unrecognised_mapper_dirs(&mappers_dir).is_empty());
+            assert!(collect_unrecognised_mapper_dirs(&mappers_dir)
+                .await
+                .is_empty());
         }
 
-        #[test]
-        fn typo_in_custom_prefix_triggers_warning() {
+        #[tokio::test]
+        async fn dir_without_mapper_toml_is_flagged() {
             let ttd = TempTedgeDir::new();
             let mappers_dir = ttd.utf8_path().join("mappers");
-            // Typo: extra 'e' in custom
-            std::fs::create_dir_all(mappers_dir.join("custome.thingsboard")).unwrap();
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard"))
+                .await
+                .unwrap();
 
-            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir);
-            assert!(
-                unrecognised.contains(&"custome.thingsboard".to_string()),
-                "Typo 'custome.thingsboard' should be flagged as unrecognised: {unrecognised:?}"
-            );
-        }
-
-        #[test]
-        fn bare_unknown_name_triggers_warning() {
-            let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
-            std::fs::create_dir_all(mappers_dir.join("thingsboard")).unwrap();
-
-            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir);
+            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
             assert!(
                 unrecognised.contains(&"thingsboard".to_string()),
-                "Unknown bare name 'thingsboard' should be flagged as unrecognised: {unrecognised:?}"
+                "'thingsboard' (no mapper.toml) should be flagged: {unrecognised:?}"
             );
         }
 
-        #[test]
-        fn mixed_directories_only_flags_unrecognised_ones() {
+        #[tokio::test]
+        async fn mixed_directories_only_flags_those_without_mapper_toml() {
             let ttd = TempTedgeDir::new();
             let mappers_dir = ttd.utf8_path().join("mappers");
-            std::fs::create_dir_all(mappers_dir.join("c8y")).unwrap();
-            std::fs::create_dir_all(mappers_dir.join("custom.thingsboard")).unwrap();
-            std::fs::create_dir_all(mappers_dir.join("custome.thingsboard")).unwrap();
-            std::fs::create_dir_all(mappers_dir.join("thingsboard")).unwrap();
 
-            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir);
+            let c8y_dir = mappers_dir.join("c8y");
+            tokio::fs::create_dir_all(&c8y_dir).await.unwrap();
+            tokio::fs::write(c8y_dir.join("mapper.toml"), "")
+                .await
+                .unwrap();
+
+            // No mapper.toml
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard"))
+                .await
+                .unwrap();
+            tokio::fs::create_dir_all(mappers_dir.join("stale-dir"))
+                .await
+                .unwrap();
+
+            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
             assert_eq!(
                 unrecognised.len(),
                 2,
                 "Should flag exactly 2 unrecognised: {unrecognised:?}"
             );
-            assert!(unrecognised.contains(&"custome.thingsboard".to_string()));
             assert!(unrecognised.contains(&"thingsboard".to_string()));
+            assert!(unrecognised.contains(&"stale-dir".to_string()));
         }
 
         /// Verifies that `warn_unrecognised_mapper_dirs` actually emits `WARN` log events.
-        #[test]
-        fn unrecognised_dirs_emit_warn_log_events() {
+        #[tokio::test]
+        async fn unrecognised_dirs_emit_warn_log_events() {
             let warnings = CapturedWarnings::install();
 
             let ttd = TempTedgeDir::new();
             let mappers_dir = ttd.utf8_path().join("mappers");
-            std::fs::create_dir_all(mappers_dir.join("custome.thingsboard")).unwrap();
-            std::fs::create_dir_all(mappers_dir.join("thingsboard")).unwrap();
-            std::fs::create_dir_all(mappers_dir.join("c8y")).unwrap();
+            tokio::fs::create_dir_all(mappers_dir.join("stale-dir"))
+                .await
+                .unwrap();
+            let c8y_dir = mappers_dir.join("c8y");
+            tokio::fs::create_dir_all(&c8y_dir).await.unwrap();
+            tokio::fs::write(c8y_dir.join("mapper.toml"), "")
+                .await
+                .unwrap();
 
-            warn_unrecognised_mapper_dirs(&mappers_dir);
+            warn_unrecognised_mapper_dirs(&mappers_dir).await;
 
             let captured = warnings.get();
             assert!(
-                captured.iter().any(|m| m.contains("custome.thingsboard")),
-                "Expected a warning for 'custome.thingsboard', got: {captured:?}"
+                captured.iter().any(|m| m.contains("stale-dir")),
+                "Expected a warning for 'stale-dir', got: {captured:?}"
             );
             assert!(
-                captured
-                    .iter()
-                    .any(|m| m.contains("thingsboard") && !m.contains("custome")),
-                "Expected a warning for 'thingsboard', got: {captured:?}"
+                captured.iter().all(|m| !m.contains("c8y")),
+                "Should not warn about 'c8y' (has mapper.toml), got: {captured:?}"
             );
         }
     }

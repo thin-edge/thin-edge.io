@@ -27,6 +27,28 @@ use tedge_utils::file::create_directory_with_defaults;
 use tracing::error;
 use tracing::log::warn;
 
+/// Validates that a mapper name matches `[a-z][a-z0-9-]*`.
+///
+/// Underscores are forbidden because they would create ambiguity in the
+/// `MAPPER_{NAME}_{KEY}` environment variable scheme.
+fn validate_mapper_name(name: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(!name.is_empty(), "Mapper name cannot be empty");
+    let mut chars = name.chars();
+    let first = chars.next().unwrap();
+    anyhow::ensure!(
+        first.is_ascii_lowercase(),
+        "Invalid mapper name '{name}': must start with a lowercase ASCII letter"
+    );
+    for ch in chars {
+        anyhow::ensure!(
+            matches!(ch, 'a'..='z' | '0'..='9' | '-'),
+            "Invalid mapper name '{name}': names must match [a-z][a-z0-9-]* \
+             (underscores are not allowed)"
+        );
+    }
+    Ok(())
+}
+
 #[cfg(feature = "aws")]
 mod aws;
 #[cfg(feature = "azure")]
@@ -57,8 +79,8 @@ macro_rules! read_and_set_var {
     };
 }
 
-fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
-    match component_name {
+fn lookup_component(component_name: MapperName) -> anyhow::Result<Box<dyn TEdgeComponent>> {
+    Ok(match component_name {
         #[cfg(feature = "azure")]
         MapperName::Az { profile } => Box::new(AzureMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
@@ -72,9 +94,18 @@ fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
         MapperName::C8y { profile } => Box::new(CumulocityMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
-        MapperName::Custom { profile } => Box::new(CustomMapper { profile }),
+        MapperName::UserDefined(mut args) => {
+            let name = args.remove(0);
+            validate_mapper_name(&name)?;
+            anyhow::ensure!(
+                args.is_empty(),
+                "User-defined mapper '{name}' does not accept additional arguments, \
+                 got: {args:?}. Global flags (e.g. --config-dir) must appear before the mapper name."
+            );
+            Box::new(CustomMapper { name })
+        }
         MapperName::Local => Box::new(GenMapper),
-    }
+    })
 }
 
 #[derive(Debug, Parser)]
@@ -101,9 +132,8 @@ pub struct MapperOpt {
     pub common: CommonArgs,
 }
 
-#[derive(Debug, clap::Subcommand, Clone, strum::EnumString)]
+#[derive(Debug, clap::Subcommand, Clone)]
 #[clap(rename_all = "kebab-case")]
-#[strum(serialize_all = "kebab-case")]
 pub enum MapperName {
     #[cfg(feature = "azure")]
     Az {
@@ -124,13 +154,12 @@ pub enum MapperName {
         profile: Option<ProfileName>,
     },
     Collectd,
-    /// Run a custom mapper defined by a mapper directory under `/etc/tedge/mappers/custom.{name}/`
-    Custom {
-        /// The custom mapper profile (uses `custom/` directory when omitted)
-        #[clap(long)]
-        profile: Option<ProfileName>,
-    },
     Local,
+    /// Run a user-defined mapper from `/etc/tedge/mappers/{name}/`.
+    ///
+    /// The mapper name must match `[a-z][a-z0-9-]*`.
+    #[clap(external_subcommand)]
+    UserDefined(Vec<String>),
 }
 
 impl fmt::Display for MapperName {
@@ -155,10 +184,7 @@ impl fmt::Display for MapperName {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-c8y@{profile}"),
             MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
-            MapperName::Custom { profile: None } => write!(f, "tedge-mapper-custom"),
-            MapperName::Custom {
-                profile: Some(profile),
-            } => write!(f, "tedge-mapper-custom@{profile}"),
+            MapperName::UserDefined(args) => write!(f, "tedge-mapper@{}", args[0]),
             MapperName::Local => write!(f, "tedge-mapper-local"),
         }
     }
@@ -166,7 +192,7 @@ impl fmt::Display for MapperName {
 
 pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<()> {
     let mapper_name = mapper_opt.name.to_string();
-    let component = lookup_component(mapper_opt.name);
+    let component = lookup_component(mapper_opt.name)?;
 
     log_init(
         "tedge-mapper",
@@ -175,7 +201,7 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
     )?;
 
     let mappers_dir = mapper_opt.common.config_dir.join("mappers");
-    core::mappers_dir::warn_unrecognised_mapper_dirs(&mappers_dir);
+    core::mappers_dir::warn_unrecognised_mapper_dirs(&mappers_dir).await;
 
     // Run only one instance of a mapper (if enabled)
     let mut _flock = None;
@@ -249,17 +275,42 @@ mod tests {
         use super::*;
 
         #[test]
-        fn custom_without_profile() {
-            let name = MapperName::Custom { profile: None };
-            assert_eq!(name.to_string(), "tedge-mapper-custom");
+        fn user_defined_display() {
+            let name = MapperName::UserDefined(vec!["thingsboard".to_string()]);
+            assert_eq!(name.to_string(), "tedge-mapper@thingsboard");
+        }
+    }
+
+    mod validate_mapper_name_tests {
+        use super::*;
+
+        #[test]
+        fn valid_name() {
+            assert!(validate_mapper_name("thingsboard").is_ok());
+            assert!(validate_mapper_name("my-cloud").is_ok());
+            assert!(validate_mapper_name("abc123").is_ok());
         }
 
         #[test]
-        fn custom_with_profile() {
-            let name = MapperName::Custom {
-                profile: Some("thingsboard".parse().unwrap()),
-            };
-            assert_eq!(name.to_string(), "tedge-mapper-custom@thingsboard");
+        fn empty_name_errors() {
+            assert!(validate_mapper_name("").is_err());
+        }
+
+        #[test]
+        fn underscore_errors() {
+            let err = validate_mapper_name("my_cloud").unwrap_err();
+            assert!(format!("{err}").contains("underscores are not allowed"));
+        }
+
+        #[test]
+        fn uppercase_errors() {
+            let err = validate_mapper_name("MyCloud").unwrap_err();
+            assert!(format!("{err}").contains("lowercase"));
+        }
+
+        #[test]
+        fn starts_with_digit_errors() {
+            assert!(validate_mapper_name("1cloud").is_err());
         }
     }
 }

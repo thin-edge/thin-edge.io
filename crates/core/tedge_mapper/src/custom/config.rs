@@ -9,6 +9,7 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use tedge_config::models::CloudType;
 use tedge_config::models::HostPort;
 use tedge_config::models::SecondsOrHumanTime;
 use tedge_config::models::MQTT_TLS_PORT;
@@ -47,6 +48,10 @@ pub struct CustomMapperConfig {
     /// Path to a TOML credentials file for username/password authentication.
     /// The file must contain a `[credentials]` section with `username` and `password` fields.
     pub credentials_path: Option<Utf8PathBuf>,
+    /// Identifies the built-in cloud integration this mapper belongs to.
+    /// `None` for user-defined mappers that don't opt into a built-in cloud integration.
+    /// Cloud-type dispatch is not yet implemented — this field is currently informational.
+    pub cloud_type: Option<CloudType>,
 }
 
 /// Device identity and TLS settings.
@@ -83,6 +88,7 @@ struct RawConfig {
     #[serde(default)]
     auth_method: AuthMethodConfig,
     credentials_path: Option<Utf8PathBuf>,
+    cloud_type: Option<CloudType>,
 }
 
 /// Reads and parses `mapper.toml` from the given mapper directory.
@@ -109,7 +115,7 @@ pub async fn load_mapper_config(
     let raw: RawConfig = table
         .clone()
         .try_into()
-        .with_context(|| format!("Invalid configuration in {config_path}"))?;
+        .map_err(|e| anyhow::anyhow!("Invalid configuration in {config_path}: {e}"))?;
 
     let config = CustomMapperConfig {
         table,
@@ -118,6 +124,7 @@ pub async fn load_mapper_config(
         bridge: raw.bridge,
         auth_method: raw.auth_method,
         credentials_path: raw.credentials_path,
+        cloud_type: raw.cloud_type,
     };
 
     // Validate that cert_path and key_path are either both set or both absent.
@@ -390,6 +397,58 @@ key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
         assert!(
             msg.contains("key_path") && msg.contains("cert_path"),
             "Error should mention both key_path and cert_path: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn parses_cloud_type_when_present() {
+        let ttd = TempTedgeDir::new();
+        let mapper_dir = ttd.utf8_path().join("mappers/custom.ct");
+        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+        tokio::fs::write(
+            mapper_dir.join("mapper.toml"),
+            "url = \"mqtt.example.com\"\ncloud_type = \"c8y\"\n",
+        )
+        .await
+        .unwrap();
+
+        let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+        assert_eq!(config.cloud_type, Some(CloudType::C8y));
+    }
+
+    #[tokio::test]
+    async fn cloud_type_is_none_when_absent() {
+        let ttd = TempTedgeDir::new();
+        let mapper_dir = ttd.utf8_path().join("mappers/custom.noct");
+        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+        tokio::fs::write(
+            mapper_dir.join("mapper.toml"),
+            "url = \"mqtt.example.com\"\n",
+        )
+        .await
+        .unwrap();
+
+        let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+        assert_eq!(config.cloud_type, None);
+    }
+
+    #[tokio::test]
+    async fn errors_on_unknown_cloud_type() {
+        let ttd = TempTedgeDir::new();
+        let mapper_dir = ttd.utf8_path().join("mappers/custom.badct");
+        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+        tokio::fs::write(
+            mapper_dir.join("mapper.toml"),
+            "url = \"mqtt.example.com\"\ncloud_type = \"notacloud\"\n",
+        )
+        .await
+        .unwrap();
+
+        let err = load_mapper_config(&mapper_dir).await.unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("cloud_type") || msg.contains("notacloud"),
+            "Error should mention the invalid cloud_type value: {msg}"
         );
     }
 }

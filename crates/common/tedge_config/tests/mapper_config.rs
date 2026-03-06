@@ -101,7 +101,10 @@ mod default_location_mode {
                 tokio::fs::read_to_string(ttd.path().join("mappers/c8y/mapper.toml"))
                     .await
                     .unwrap();
-            assert_eq!(c8y_mapper_toml.trim(), "url = \"example.com\"");
+            assert_eq!(
+                c8y_mapper_toml.trim(),
+                "cloud_type = \"c8y\"\nurl = \"example.com\""
+            );
         }
     }
 

@@ -96,16 +96,18 @@ Generic-mapper D3 (config separate from `define_tedge_config!`, `${mapper.*}` na
 ```toml
 # Identifies the built-in cloud integration for this mapper instance.
 # Absent for pure flows/bridge mappers (no cloud-specific logic).
-# Valid values: "c8y", "az", "aws"
+# Valid values: "c8y", "az", "aws" — unknown values are rejected with an error.
 # Note: dispatch based on this field is not yet implemented. This field
-# is defined now so that tooling (tedge mapper config set, shell completions)
-# can use it to select the correct config schema.
+# is defined now so that tooling (tedge mapper list, tedge mapper config get)
+# can report cloud type and future tooling can use it for schema selection.
 cloud_type = "c8y"
 ```
 
-When `cloud_type` is absent, the mapper runs as a pure flows/bridge mapper (existing generic-mapper behaviour). When present, the value determines the schema that `tedge mapper config set` (future) applies for validation and completion. Actual dispatch — running c8y/az/aws logic for a user-defined mapper instance — is deferred to a follow-on change.
+`cloud_type` is modelled as a `CloudType` enum in both `tedge_config` (for built-in mappers) and `custom/config.rs` (for user-defined mappers). Unknown values produce a hard error at parse time — this makes the config easier to reason about and catches typos early.
 
-For built-in mapper directories, packaging pre-populates `mapper.toml` with the appropriate `cloud_type`.
+When `cloud_type` is absent, the mapper runs as a pure flows/bridge mapper (existing generic-mapper behaviour). Actual dispatch — running c8y/az/aws logic for a user-defined mapper instance — is deferred to a follow-on change.
+
+For built-in mapper directories, `cloud_type` is written automatically by `migrate_mapper_config` (alongside `mapper_config_dir`). It is stored as a `#[tedge_config(reader(skip))]` field in the c8y/az/aws DTO sections, so it is serialised to `mapper.toml` but is not user-configurable via `tedge config set`.
 
 ---
 

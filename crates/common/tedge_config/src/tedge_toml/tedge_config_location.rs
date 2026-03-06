@@ -270,13 +270,16 @@ impl TEdgeConfigLocation {
         self.update_toml(&|dto, _rdr| {
             match cloud_type {
                 CloudType::C8y => {
-                    dto.c8y.non_profile.mapper_config_dir = Some(self.mappers_config_dir())
+                    dto.c8y.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
+                    dto.c8y.non_profile.cloud_type = Some(CloudType::C8y);
                 }
                 CloudType::Aws => {
-                    dto.aws.non_profile.mapper_config_dir = Some(self.mappers_config_dir())
+                    dto.aws.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
+                    dto.aws.non_profile.cloud_type = Some(CloudType::Aws);
                 }
                 CloudType::Az => {
-                    dto.az.non_profile.mapper_config_dir = Some(self.mappers_config_dir())
+                    dto.az.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
+                    dto.az.non_profile.cloud_type = Some(CloudType::Az);
                 }
             }
             Ok(())
@@ -1024,7 +1027,10 @@ type = "a-service-type""#;
                 .unwrap();
         assert_eq!(
             toml::from_str::<toml::Table>(&c8y_tedge_toml).unwrap(),
-            toml::toml!(url = "test.c8y.io")
+            toml::toml! {
+                url = "test.c8y.io"
+                cloud_type = "c8y"
+            }
         );
 
         // tedge.toml may or may not exist, but the key thing is the url isn't defined there
@@ -1062,7 +1068,9 @@ type = "a-service-type""#;
                 .unwrap_or_default();
         assert_eq!(
             toml::from_str::<toml::Table>(&c8y_tedge_toml).unwrap(),
-            toml::Table::new()
+            toml::toml! {
+                cloud_type = "c8y"
+            }
         );
 
         // tedge.toml may or may not exist, but the key thing is the url isn't defined there
@@ -1087,7 +1095,10 @@ type = "a-service-type""#;
                 .unwrap();
         assert_eq!(
             toml::from_str::<toml::Table>(&az_tedge_toml).unwrap(),
-            toml::toml!(url = "example.com")
+            toml::toml! {
+                url = "example.com"
+                cloud_type = "az"
+            }
         );
 
         // tedge.toml may or may not exist, but the key thing is the url isn't defined there
@@ -1115,7 +1126,10 @@ type = "a-service-type""#;
                 .unwrap();
         assert_eq!(
             toml::from_str::<toml::Table>(&aws_tedge_toml).unwrap(),
-            toml::toml!(url = "example.com")
+            toml::toml! {
+                url = "example.com"
+                cloud_type = "aws"
+            }
         );
 
         // tedge.toml may or may not exist, but the key thing is the url isn't defined there
@@ -1269,7 +1283,9 @@ type = "a-service-type""#;
         async fn handles_nonexistent_directory_gracefully() {
             let (_dir, location) = create_temp_tedge_config("").unwrap();
 
-            let config_path = location.mappers_config_dir().join("nonexistent/mapper.toml");
+            let config_path = location
+                .mappers_config_dir()
+                .join("nonexistent/mapper.toml");
 
             let result = location
                 .cleanup_config_file_and_possibly_parent(&config_path)
