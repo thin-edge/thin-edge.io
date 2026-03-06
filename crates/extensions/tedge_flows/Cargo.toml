@@ -45,6 +45,7 @@ rquickjs = { version = "0.11", default-features = false, features = [
 [dev-dependencies]
 tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
 tempfile = { workspace = true }
+test-case = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 

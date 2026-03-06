@@ -1,0 +1,8 @@
+# This flow defines an infinite MQTT loop:
+# the output topic 'te/loop/test' matches input filter 'te/loop/+'.
+
+[input]
+mqtt.topics = ["te/loop/+"]
+
+[output]
+mqtt.topic = "te/loop/test"

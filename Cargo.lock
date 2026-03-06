@@ -5254,6 +5254,7 @@ dependencies = [
  "tedge_utils",
  "tedge_watch_ext",
  "tempfile",
+ "test-case",
  "thiserror 2.0.12",
  "time",
  "tokio",

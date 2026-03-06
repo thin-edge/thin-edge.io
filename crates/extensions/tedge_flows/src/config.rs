@@ -41,6 +41,10 @@ pub struct FlowConfig {
     output: OutputConfig,
     #[serde(default = "default_errors")]
     errors: OutputConfig,
+
+    /// If true, output messages that match the input filter are not dropped
+    #[serde(default)]
+    expect_loop: bool,
 }
 
 #[derive(Deserialize)]
@@ -120,6 +124,16 @@ pub enum ConfigError {
 
     #[error("Not a valid step configuration: {0}")]
     IncorrectSetting(String),
+
+    #[error("Flow '{name}' defines an infinite loop: the output topic '{output_topic}' matches input filter '{input_filter}'")]
+    MqttInfiniteLoop {
+        name: String,
+        input_filter: String,
+        output_topic: String,
+    },
+
+    #[error("Flow '{name}' defines an infinite loop: the output file '{path}' is the same as the input file")]
+    FileInfiniteLoop { name: String, path: String },
 }
 
 impl FlowConfig {
@@ -209,6 +223,8 @@ impl FlowConfig {
             description: None,
             tags: None,
             config: Map::new(),
+            // Expect a loop when wrapping a single script as a flow, as there is no way to statically identify input and output topics
+            expect_loop: true,
             input: InputConfig::Mqtt {
                 topics: vec![input_topic],
             },
@@ -239,6 +255,9 @@ impl FlowConfig {
         let name = self
             .name
             .unwrap_or_else(|| source.file_name().unwrap_or_default().to_string());
+
+        detect_loop(&name, &input, &output, self.expect_loop)?;
+
         Ok(Flow {
             name,
             version: self.version,
@@ -249,6 +268,7 @@ impl FlowConfig {
             output,
             errors,
             source,
+            expect_loop: self.expect_loop,
         })
     }
 }
@@ -429,10 +449,48 @@ fn default_errors() -> OutputConfig {
     }
 }
 
+/// Checks whether `input` and `output` form an infinite loop,
+/// where the output of published to the same input source.
+/// When `expect_loop` is true, the check is skipped.
+fn detect_loop(
+    name: &str,
+    input: &FlowInput,
+    output: &FlowOutput,
+    expect_loop: bool,
+) -> Result<(), ConfigError> {
+    if expect_loop {
+        return Ok(());
+    }
+    match (input, output) {
+        (FlowInput::Mqtt { topics }, FlowOutput::Mqtt { topic: Some(out) })
+            if topics.accept_topic_name(&out.name) =>
+        {
+            Err(ConfigError::MqttInfiniteLoop {
+                name: name.to_string(),
+                input_filter: format!("{topics:?}"),
+                output_topic: out.name.clone(),
+            })
+        }
+        (
+            FlowInput::PollFile { path: in_path, .. } | FlowInput::StreamFile { path: in_path, .. },
+            FlowOutput::File { path: out_path },
+        ) if in_path == out_path => Err(ConfigError::FileInfiniteLoop {
+            name: name.to_string(),
+            path: in_path.to_string(),
+        }),
+        _ => Ok(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::Utf8PathBuf;
     use serde_json::json;
+    use std::time::Duration;
+    use tedge_mqtt_ext::Topic;
+    use tedge_mqtt_ext::TopicFilter;
+    use test_case::test_case;
 
     #[test]
     fn inherit_shared_config() {
@@ -500,5 +558,72 @@ mod tests {
             };
             assert_eq!(&step.with_interval_as_config().config, merged_config);
         }
+    }
+
+    #[test]
+    fn detect_loop_when_output_topic_matches_input_filter() {
+        let input = FlowInput::Mqtt {
+            topics: TopicFilter::new_unchecked("te/loop/+"),
+        };
+        let output = FlowOutput::Mqtt {
+            topic: Some(Topic::new("te/loop/test").unwrap()),
+        };
+        assert!(matches!(
+            detect_loop("my-flow", &input, &output, false),
+            Err(ConfigError::MqttInfiniteLoop { .. })
+        ));
+    }
+
+    #[test]
+    fn detect_loop_when_poll_file_output_matches_input_path() {
+        let input = FlowInput::PollFile {
+            topic: "te/loop".to_string(),
+            path: Utf8PathBuf::from("/tmp/data.txt"),
+            interval: Duration::from_secs(1),
+        };
+        let output = FlowOutput::File {
+            path: Utf8PathBuf::from("/tmp/data.txt"),
+        };
+        assert!(matches!(
+            detect_loop("my-flow", &input, &output, false),
+            Err(ConfigError::FileInfiniteLoop { .. })
+        ));
+    }
+
+    #[test]
+    fn detect_loop_when_stream_file_output_matches_input_path() {
+        let input = FlowInput::StreamFile {
+            topic: "te/loop".to_string(),
+            path: Utf8PathBuf::from("/tmp/data.txt"),
+        };
+        let output = FlowOutput::File {
+            path: Utf8PathBuf::from("/tmp/data.txt"),
+        };
+        assert!(matches!(
+            detect_loop("my-flow", &input, &output, false),
+            Err(ConfigError::FileInfiniteLoop { .. })
+        ));
+    }
+
+    #[test]
+    fn expect_loop_suppresses_loop_detection() {
+        let input = FlowInput::Mqtt {
+            topics: TopicFilter::new_unchecked("te/loop/+"),
+        };
+        let output = FlowOutput::Mqtt {
+            topic: Some(Topic::new("te/loop/test").unwrap()),
+        };
+        // Would normally be an error, but expect_loop = true bypasses the check
+        assert!(detect_loop("my-flow", &input, &output, true).is_ok());
+    }
+
+    #[test_case(FlowOutput::Mqtt { topic: Some(Topic::new("te/another/test").unwrap()) }; "mqtt output different topic")]
+    #[test_case(FlowOutput::Context; "context output")]
+    #[test_case(FlowOutput::Mqtt { topic: None }; "mqtt output without fixed topic")]
+    fn no_loop_detected_for_different_output_types(output: FlowOutput) {
+        let input = FlowInput::Mqtt {
+            topics: TopicFilter::new_unchecked("te/loop/+"),
+        };
+        assert!(detect_loop("my-flow", &input, &output, false).is_ok());
     }
 }

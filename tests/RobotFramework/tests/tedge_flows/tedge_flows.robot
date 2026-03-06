@@ -261,7 +261,9 @@ Flow is added/removed when a directory is moved in/out
 
     # now test on the same filesystem
     Execute Command    mv /tmp/myflow /etc/tedge/mappers/local/myflow
-    Move Directory And Assert it's added and removed    /etc/tedge/mappers/local/myflow    after moving directory into flows dir
+    Move Directory And Assert it's added and removed
+    ...    /etc/tedge/mappers/local/myflow
+    ...    after moving directory into flows dir
 
     # flow should be reloaded also when it was loaded at startup, not only when it was added via autoreload
     Stop Service    tedge-mapper-local
@@ -439,6 +441,57 @@ Params are dynamically reloaded
     ...    minimum=1
     ...    date_from=${start}
     ...    message_contains=Hello World!
+
+Flow with static mqtt topic loop is rejected at load time
+    Install Flow    infinite-loop-flows    mqtt-static-loop.toml
+    Service Logs Should Contain    tedge-mapper-local    Flow 'mqtt-static-loop.toml' defines an infinite loop
+
+    ${errors}    Execute Command
+    ...    tedge flows test te/loop/test '{}'
+    ...    stdout=${False}
+    ...    stderr=${True}
+    Should Contain    ${errors}    Flow 'mqtt-static-loop.toml' defines an infinite loop
+    [Teardown]    Uninstall Flow    mqtt-static-loop.toml
+
+Flow with mqtt runtime loop drops messages
+    Install Flow    infinite-loop-flows    mqtt-runtime-loop.toml
+    Execute Command    tedge mqtt pub te/loop/test '{}'
+    Service Logs Should Contain
+    ...    tedge-mapper-local
+    ...    Flow 'mqtt-runtime-loop.toml' is dropping output message to 'te/loop/test' to prevent an infinite loop
+
+    ${errors}    Execute Command
+    ...    tedge flows test te/loop/test '{}'
+    ...    stdout=${False}
+    ...    stderr=${True}
+    Should Contain
+    ...    ${errors}
+    ...    Flow 'mqtt-runtime-loop.toml' is dropping output message to 'te/loop/test' to prevent an infinite loop
+    [Teardown]    Uninstall Flow    mqtt-runtime-loop.toml
+
+Flow with static file path loop is rejected at load time
+    Install Flow    infinite-loop-flows    file-loop.toml
+    Service Logs Should Contain    tedge-mapper-local    Flow 'file-loop.toml' defines an infinite loop
+
+    ${errors}    Execute Command
+    ...    tedge flows test te/anything '{}'
+    ...    stdout=${False}
+    ...    stderr=${True}
+    Should Contain    ${errors}    Flow 'file-loop.toml' defines an infinite loop
+    [Teardown]    Uninstall Flow    file-loop.toml
+
+Loop detection skipped for single script test
+    ${output}    Execute Command    tedge flows test --flow circuit-breaker.js loopback/test '{}'
+    Should Contain    ${output}    [loopback/test] {}
+
+Flow with loop detection disabled
+    [Documentation]    Testing the loop.toml flow with controlled loop that eventually breaks, using expect_loop=true in the flow definition
+    Install Flow    finite-loop-flows    loop.toml
+    Execute Command    tedge mqtt pub loopback '{}'
+    Should Have MQTT Messages
+    ...    topic=te/device/main///a/too-many-messages
+    ...    message_contains=too many messages
+    [Teardown]    Uninstall Flow    loop.toml
 
 
 *** Keywords ***
