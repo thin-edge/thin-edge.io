@@ -467,7 +467,9 @@ mod tests {
                 .unwrap();
 
             assert!(has_remote_subscription(&rules, "s/dl/tmpl1"));
+            assert!(has_remote_subscription(&rules, "s/ol/tmpl1"));
             assert!(has_remote_subscription(&rules, "s/dl/tmpl2"));
+            assert!(has_remote_subscription(&rules, "s/ol/tmpl2"));
         }
 
         #[tokio::test]

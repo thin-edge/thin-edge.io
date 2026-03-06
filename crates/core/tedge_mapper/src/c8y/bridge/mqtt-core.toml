@@ -12,6 +12,11 @@ topic = "s/dl/${item}"
 direction = "inbound"
 
 [[template_rule]]
+for = "${config.c8y.smartrest1.templates}"
+topic = "s/ol/${item}"
+direction = "inbound"
+
+[[template_rule]]
 for = "${config.c8y.smartrest.templates}"
 topic = "s/dc/${item}"
 direction = "inbound"
