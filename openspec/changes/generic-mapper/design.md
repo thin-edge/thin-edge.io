@@ -74,7 +74,7 @@ Validation: if `--profile` is provided and no matching `custom.{name}/` director
 
 A custom mapper's `tedge.toml` (e.g. `/etc/tedge/mappers/custom.thingsboard/tedge.toml`) is **optional** — it is only needed when the mapper establishes a cloud connection via the built-in MQTT bridge. A mapper that only runs flows (local processing, no cloud) needs no `tedge.toml` at all.
 
-When present, the `tedge.toml` is parsed directly by the custom mapper and is invisible to the global `tedge_config`. A minimal example:
+When present, the `tedge.toml` is parsed directly by the custom mapper and is invisible to the global `tedge_config`. A minimal mutual-TLS example:
 
 ```toml
 url = "mqtt.thingsboard.io:8883"
@@ -87,7 +87,72 @@ key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
 topic_prefix = "tb"
 ```
 
+The full set of recognised fields is:
+
+```toml
+# Required when bridge/ rules are present
+url = "mqtt.thingsboard.io:8883"
+
+# Authentication method: "auto" (default) | "certificate" | "password"
+# "auto": use certificate auth by default; switch to username/password auth only if
+#         credentials_path is set (and device.cert_path + device.key_path are absent).
+# "certificate": mutual TLS — requires device.cert_path and device.key_path.
+# "password": username/password sent in the MQTT CONNECT packet — requires credentials_path.
+# Note: "password" here is MQTT-level username/password, not HTTP Basic Auth.
+auth_method = "auto"
+
+# Path to a TOML credentials file for username/password authentication.
+# The file must contain a [credentials] section with username and password fields:
+#   [credentials]
+#   username = "my-device"
+#   password = "secret"
+# Only used when auth_method is "password", or when auth_method is "auto" and
+# device.cert_path / device.key_path are not set.
+credentials_path = "/etc/tedge/mappers/custom.thingsboard/credentials.toml"
+
+[device]
+# Optional explicit MQTT client ID sent to the cloud broker.
+# Consistent with device.id / c8y.device.id in the global config.
+# When absent and a certificate is configured, the certificate's CN is used.
+# When absent and no certificate is configured, the service name is used.
+# device.id always takes precedence over the certificate CN when both are set.
+id = "my-device-id"
+
+# Client certificate and private key for mutual TLS authentication.
+# Required when auth_method is "certificate" or "auto" with certificate auth selected.
+cert_path = "/etc/tedge/device-certs/tedge-certificate.pem"
+key_path  = "/etc/tedge/device-certs/tedge-private-key.pem"
+
+# CA certificate(s) used to verify the cloud broker's TLS certificate.
+# Accepts a file path or a directory (like bridge_cafile / bridge_capath in mosquitto).
+# Defaults to the system trust store when absent.
+root_cert_path = "/etc/ssl/certs"
+
+[bridge]
+# MQTT keepalive interval — consistent with az.bridge.keepalive_interval and
+# aws.bridge.keepalive_interval in the global config.
+keepalive_interval = "60s"
+
+# Whether to use a clean session when connecting to the remote broker.
+# Corresponds to mosquitto's `cleansession` bridge option.
+# Default: false (persistent session, matching AWS/Azure built-in mappers).
+clean_session = false
+
+# Any additional user-defined fields are available as ${mapper.bridge.*} in bridge rules.
+topic_prefix = "tb"
+```
+
 The `url` field is a top-level key using the `HostPort` type (the same `host:port` format used by built-in mapper URLs; port is optional and defaults to 8883). The exact schema for this file is defined by the custom mapper code (D4), not by the config macro. If `bridge/` rules exist but `tedge.toml` is absent, the mapper MUST emit an error — bridge rules require connection details to be useful.
+
+**When to use certificate vs username/password authentication**
+
+Most cloud IoT brokers (AWS IoT, Azure IoT Hub, ThingsBoard Cloud) use mutual TLS, where the device proves its identity with a client certificate (`device.cert_path` + `device.key_path`). This is the default (`auth_method = "auto"` with no `credentials_path` set).
+
+Username/password authentication sends credentials in the MQTT CONNECT packet (the `Username` and `Password` fields defined in the MQTT specification — this is distinct from HTTP Basic Auth). The canonical example is Cumulocity: if the device authenticates to the Cumulocity HTTP API using username/password (basic auth), then the same credentials are also used for the MQTT connection. More generally, use `auth_method = "password"` when the cloud platform authenticates devices via credentials rather than certificates — for example, a self-hosted MQTT broker with username/password ACLs, or a platform that issues per-device tokens rather than certificates.
+
+With `auth_method = "auto"`, setting `credentials_path` switches the mapper to username/password auth. Set `auth_method` explicitly to force one method and get a clear error if the required fields are missing.
+
+Note: the internal codebase historically calls this "basic" auth (enum variant `AuthType::Basic`, `c8y.auth_method = "basic"`). For the custom mapper we use `"password"` to avoid confusion with HTTP Basic Auth.
 
 **Bridge template access via `${mapper.*}`**
 
@@ -128,9 +193,9 @@ CustomMapper {
 
 Its `start()` method, given mapper directory `custom.{name}/` (or `custom/` if unprofiled):
 
-1. Check for `tedge.toml` and `bridge/` in the mapper directory
+1. Check for `bridge/` and `flows/` in the mapper directory
+   - If neither `bridge/` nor `flows/` is present → error: no active components to start (a directory with only `tedge.toml` and no `bridge/` or `flows/` is a misconfiguration; `tedge.toml` alone provides no active component)
    - If `bridge/` exists but `tedge.toml` does not → error: bridge rules require connection settings
-   - If neither `tedge.toml` nor `flows/` is present → error: no active components to start (an empty mapper directory is not useful and likely a misconfiguration)
 2. If `tedge.toml` is present:
    - Parse it to a simple configuration struct; `url` is deserialized as `HostPort` (consistent with built-in mapper URL fields)
    - Extract connection details (host:port from `url`, TLS config, device identity) from the struct

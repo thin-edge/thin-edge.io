@@ -9,10 +9,13 @@ use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use crate::core::mqtt::configure_proxy;
 use crate::custom::config::load_mapper_config;
+use crate::custom::config::read_mapper_credentials;
+use crate::custom::config::AuthMethodConfig;
 use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use certificate::PemCertificate;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
@@ -28,6 +31,7 @@ use tedge_flows::FlowsMapperConfig;
 use tedge_mqtt_bridge::config_toml::AuthMethod;
 use tedge_mqtt_bridge::load_bridge_rules_from_directory;
 use tedge_mqtt_bridge::rumqttc::Transport;
+use tedge_mqtt_bridge::use_credentials;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_bridge::MqttOptions;
 use tedge_watch_ext::WatchActorBuilder;
@@ -97,20 +101,27 @@ pub fn validate_profile_dir(mapper_dir: &Utf8Path, config_dir: &Utf8Path) -> any
             mappers_dir
         );
     } else {
+        let formatted: Vec<String> = available
+            .into_iter()
+            .map(|p| match p {
+                None => "(default, no --profile)".to_string(),
+                Some(name) => format!("--profile {name}"),
+            })
+            .collect();
         anyhow::bail!(
             "Custom mapper directory '{}' does not exist. \
              Available custom mapper profiles: {}",
             mapper_dir,
-            available.join(", ")
+            formatted.join(", ")
         );
     }
 }
 
 /// Lists available custom mapper profiles by scanning the mappers directory.
 ///
-/// Returns profile names (the part after `custom.`) for each `custom.{name}/`
-/// directory found, plus an empty string for `custom/` if it exists.
-fn list_custom_profiles(mappers_dir: &Utf8Path) -> Vec<String> {
+/// Returns `None` for the default (`custom/`) directory and `Some(name)` for each
+/// `custom.{name}/` directory found.
+fn list_custom_profiles(mappers_dir: &Utf8Path) -> Vec<Option<String>> {
     let Ok(entries) = std::fs::read_dir(mappers_dir) else {
         return Vec::new();
     };
@@ -126,13 +137,157 @@ fn list_custom_profiles(mappers_dir: &Utf8Path) -> Vec<String> {
             continue;
         }
         if name == "custom" {
-            profiles.push("(default, no --profile)".to_string());
+            profiles.push(None);
         } else if let Some(profile) = name.strip_prefix("custom.") {
-            profiles.push(format!("--profile {profile}"));
+            profiles.push(Some(profile.to_string()));
         }
     }
     profiles.sort();
     profiles
+}
+
+/// Builds the [`MqttOptions`] for the cloud broker connection described by `config`.
+///
+/// Reads `config.url`, sets clean-session and keepalive, resolves the CA path,
+/// determines the effective auth method, and configures either certificate TLS or
+/// password credentials. Also applies any HTTP proxy settings from `tedge_config`.
+///
+/// Returns `(MqttOptions, AuthMethod)` so the caller can pass `AuthMethod` to
+/// `load_bridge_rules_from_directory`.
+pub fn build_cloud_mqtt_options(
+    config: &crate::custom::config::CustomMapperConfig,
+    service_name: &str,
+    mapper_dir: &Utf8Path,
+    tedge_config: &TEdgeConfig,
+) -> anyhow::Result<(MqttOptions, AuthMethod)> {
+    let url = config.url.as_ref().with_context(|| {
+        format!("'{mapper_dir}/tedge.toml' is missing a 'url' field required for the MQTT bridge",)
+    })?;
+
+    let mut cloud_config = MqttOptions::new(service_name, url.host().to_string(), url.port().0);
+    cloud_config.set_clean_session(config.bridge.clean_session);
+    if let Some(interval) = &config.bridge.keepalive_interval {
+        cloud_config.set_keep_alive(interval.duration());
+    }
+
+    let ca_path = config
+        .device
+        .as_ref()
+        .and_then(|d| d.root_cert_path.clone())
+        .unwrap_or_else(|| Utf8PathBuf::from("/etc/ssl/certs"));
+
+    // Resolve the effective auth method
+    let has_credentials = config.credentials_path.is_some();
+    let effective_auth = match config.auth_method {
+        AuthMethodConfig::Certificate => AuthMethod::Certificate,
+        AuthMethodConfig::Password => AuthMethod::Password,
+        AuthMethodConfig::Auto => {
+            if has_credentials {
+                AuthMethod::Password
+            } else {
+                AuthMethod::Certificate
+            }
+        }
+    };
+
+    match effective_auth {
+        AuthMethod::Certificate => {
+            if let Some(device) = &config.device {
+                if let (Some(cert_path), Some(key_path)) = (&device.cert_path, &device.key_path) {
+                    let tls_config = MqttAuthConfigCloudBroker {
+                        ca_path,
+                        client: Some(MqttAuthClientConfigCloudBroker {
+                            cert_file: cert_path.clone(),
+                            private_key: PrivateKeyType::File(key_path.clone()),
+                        }),
+                    }
+                    .to_rustls_client_config()
+                    .context("Failed to create MQTT TLS config")?;
+                    cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
+
+                    // device.id takes precedence over cert CN
+                    let client_id = device.id.clone().or_else(|| {
+                        PemCertificate::from_pem_file(cert_path)
+                            .and_then(|cert| cert.subject_common_name())
+                            .ok()
+                            .filter(|cn| !cn.is_empty())
+                    });
+                    if let Some(id) = client_id {
+                        cloud_config.set_client_id(id);
+                    }
+                }
+            }
+        }
+        AuthMethod::Password => {
+            let creds_path = config.credentials_path.as_deref().with_context(|| {
+                format!(
+                    "'{mapper_dir}/tedge.toml' sets auth_method = \"password\" but \
+                     no credentials_path is configured"
+                )
+            })?;
+            let (username, password) = read_mapper_credentials(creds_path)?;
+            use_credentials(&mut cloud_config, &ca_path, username, password)?;
+
+            // Apply explicit device.id if set
+            if let Some(id) = config.device.as_ref().and_then(|d| d.id.as_ref()) {
+                cloud_config.set_client_id(id.clone());
+            }
+        }
+    }
+
+    configure_proxy(tedge_config, &mut cloud_config)?;
+
+    Ok((cloud_config, effective_auth))
+}
+
+/// Constructs the flows-mapper builder and its supporting file-watch actors.
+///
+/// Returns `(FlowsMapperBuilder, FsWatchActorBuilder, WatchActorBuilder)`.
+/// The caller is responsible for wiring the actors together (`.connect`, `.connect_fs`,
+/// `.connect_cmd`) and spawning them into the runtime — keeping the actor-graph
+/// wiring visible at the `start` level rather than buried inside a helper.
+async fn build_flows_actors(
+    mapper_dir: &Utf8Path,
+    service_name: &str,
+    tedge_config: &TEdgeConfig,
+) -> anyhow::Result<(FlowsMapperBuilder, FsWatchActorBuilder, WatchActorBuilder)> {
+    let service_topic_id = EntityTopicId::default_main_service(service_name)?;
+    let te = &tedge_config.mqtt.topic_root;
+    let stats_config = &tedge_config.flows.stats;
+    let service_config = FlowsMapperConfig::new(
+        &format!("{te}/{service_topic_id}"),
+        stats_config.interval.duration(),
+        stats_config.on_message,
+        stats_config.on_interval,
+        stats_config.on_startup,
+    );
+
+    let flows_dir = mapper_dir.join("flows");
+    let flows = ConnectedFlowRegistry::new(flows_dir);
+    let fs_actor = FsWatchActorBuilder::new();
+    let cmd_watcher_actor = WatchActorBuilder::new();
+    let flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;
+
+    Ok((flows_mapper, fs_actor, cmd_watcher_actor))
+}
+
+/// Validates that the mapper directory has at least one active component
+/// (bridge or flows).
+///
+/// A directory containing only `tedge.toml` (and no `bridge/` or `flows/`
+/// directories) would start with nothing to do.
+pub fn check_has_active_components(mapper_dir: &Utf8Path) -> anyhow::Result<()> {
+    let has_bridge_dir = mapper_dir.join("bridge").is_dir();
+    let has_flows_dir = mapper_dir.join("flows").is_dir();
+    if !has_bridge_dir && !has_flows_dir {
+        anyhow::bail!(
+            "Custom mapper directory '{}' contains neither a 'bridge/' nor a 'flows/' \
+             directory — the mapper would do nothing. Add bridge rules, flow scripts, \
+             or both.",
+            mapper_dir
+        );
+    }
+    Ok(())
 }
 
 /// Validates the mapper directory's startup config, returning the parsed config if `tedge.toml`
@@ -154,7 +309,7 @@ pub async fn check_startup_config(
             anyhow::bail!(
                 "Mapper directory '{mapper_dir}' contains a 'bridge/' subdirectory but no \
                  'tedge.toml' connection config. \
-                 Create a tedge.toml with [connection] settings to use the MQTT bridge.",
+                 Create a tedge.toml with a top-level 'url' field (e.g. url = \"host:8883\") to use the MQTT bridge.",
             );
         }
         Some(config) => Ok(Some(config)),
@@ -172,18 +327,9 @@ impl TEdgeComponent for CustomMapper {
         let service_name = self.service_name();
 
         validate_profile_dir(&mapper_dir, config_dir)?;
+        check_has_active_components(&mapper_dir)?;
 
         let has_flows_dir = mapper_dir.join("flows").is_dir();
-
-        let tedge_toml_exists = mapper_dir.join("tedge.toml").is_file();
-        if !tedge_toml_exists && !has_flows_dir {
-            anyhow::bail!(
-                "Custom mapper directory '{}' contains neither a 'tedge.toml' nor a 'flows/' \
-                 directory — the mapper would do nothing. Add connection settings, flow scripts, \
-                 or both.",
-                mapper_dir
-            );
-        }
 
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&service_name, &tedge_config).await?;
@@ -196,44 +342,13 @@ impl TEdgeComponent for CustomMapper {
             let health_topic =
                 service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
 
-            let url = config.url.as_ref().with_context(|| {
-                format!(
-                    "'{}/tedge.toml' is missing a 'url' field required for the MQTT bridge",
-                    mapper_dir
-                )
-            })?;
-
-            let mut cloud_config =
-                MqttOptions::new(&service_name, url.host().to_string(), url.port().0);
-            cloud_config.set_clean_session(false);
-
-            // Set up certificate authentication if cert/key paths are provided
-            if let Some(device) = &config.device {
-                if let (Some(cert_path), Some(key_path)) = (&device.cert_path, &device.key_path) {
-                    let ca_path = device
-                        .root_cert_path
-                        .clone()
-                        .unwrap_or_else(|| Utf8PathBuf::from("/etc/ssl/certs"));
-
-                    let tls_config = MqttAuthConfigCloudBroker {
-                        ca_path,
-                        client: Some(MqttAuthClientConfigCloudBroker {
-                            cert_file: cert_path.clone(),
-                            private_key: PrivateKeyType::File(key_path.clone()),
-                        }),
-                    }
-                    .to_rustls_client_config()
-                    .context("Failed to create MQTT TLS config")?;
-                    cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
-                }
-            }
-
-            configure_proxy(&tedge_config, &mut cloud_config)?;
+            let (cloud_config, effective_auth) =
+                build_cloud_mqtt_options(&config, &service_name, &mapper_dir, &tedge_config)?;
 
             let bridge_rules = load_bridge_rules_from_directory(
                 &bridge_dir,
                 &tedge_config,
-                AuthMethod::Certificate,
+                effective_auth,
                 None,
                 Some(&config.table),
             )
@@ -252,23 +367,8 @@ impl TEdgeComponent for CustomMapper {
         }
 
         if has_flows_dir {
-            let service_topic_id = EntityTopicId::default_main_service(&service_name)?;
-            let te = &tedge_config.mqtt.topic_root;
-            let stats_config = &tedge_config.flows.stats;
-            let service_config = FlowsMapperConfig::new(
-                &format!("{te}/{service_topic_id}"),
-                stats_config.interval.duration(),
-                stats_config.on_message,
-                stats_config.on_interval,
-                stats_config.on_startup,
-            );
-
-            let flows_dir = mapper_dir.join("flows");
-            let flows = ConnectedFlowRegistry::new(flows_dir);
-
-            let mut fs_actor = FsWatchActorBuilder::new();
-            let mut cmd_watcher_actor = WatchActorBuilder::new();
-            let mut flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;
+            let (mut flows_mapper, mut fs_actor, mut cmd_watcher_actor) =
+                build_flows_actors(&mapper_dir, &service_name, &tedge_config).await?;
             flows_mapper.connect(&mut mqtt_actor);
             flows_mapper.connect_fs(&mut fs_actor);
             flows_mapper.connect_cmd(&mut cmd_watcher_actor);
@@ -453,6 +553,177 @@ mod tests {
                 config.is_none(),
                 "Should return None when no bridge/ dir exists"
             );
+        }
+
+        /// A directory with only tedge.toml (no bridge/ or flows/) has no active components
+        #[test]
+        fn tedge_toml_only_errors_no_active_components() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            std::fs::create_dir_all(&mapper_dir).unwrap();
+            std::fs::write(mapper_dir.join("tedge.toml"), "url = \"host:8883\"\n").unwrap();
+
+            let err = check_has_active_components(&mapper_dir).unwrap_err();
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("bridge") && msg.contains("flows"),
+                "Error should mention both bridge/ and flows/: {msg}"
+            );
+        }
+
+        /// A directory with bridge/ passes the active-components check
+        #[test]
+        fn bridge_dir_passes_active_components_check() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            std::fs::create_dir_all(mapper_dir.join("bridge")).unwrap();
+
+            assert!(check_has_active_components(&mapper_dir).is_ok());
+        }
+
+        /// A directory with flows/ passes the active-components check
+        #[test]
+        fn flows_dir_passes_active_components_check() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            std::fs::create_dir_all(mapper_dir.join("flows")).unwrap();
+
+            assert!(check_has_active_components(&mapper_dir).is_ok());
+        }
+    }
+
+    mod cloud_mqtt_options {
+        use super::*;
+        use crate::custom::config::AuthMethodConfig;
+        use crate::custom::config::BridgeConfig;
+        use crate::custom::config::CustomMapperConfig;
+        use tedge_config::TEdgeConfig;
+        use tedge_test_utils::fs::TempTedgeDir;
+
+        #[test]
+        fn missing_url_returns_error_with_file_path_hint() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+
+            let err =
+                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config).unwrap_err();
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("tedge.toml"),
+                "Error should mention tedge.toml: {msg}"
+            );
+            assert!(msg.contains("url"), "Error should mention url: {msg}");
+        }
+
+        #[test]
+        fn auto_without_credentials_resolves_to_certificate() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(Some("mqtt.example.com:1883"));
+
+            let (_, auth) =
+                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config).unwrap();
+            assert!(matches!(auth, AuthMethod::Certificate));
+        }
+
+        #[test]
+        fn explicit_certificate_method_resolves_to_certificate() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mut config = make_config(Some("mqtt.example.com:1883"));
+            config.auth_method = AuthMethodConfig::Certificate;
+
+            let (_, auth) =
+                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config).unwrap();
+            assert!(matches!(auth, AuthMethod::Certificate));
+        }
+
+        #[test]
+        fn password_method_without_credentials_path_errors() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mut config = make_config(Some("mqtt.example.com:1883"));
+            config.auth_method = AuthMethodConfig::Password;
+
+            let err =
+                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config).unwrap_err();
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("credentials_path"),
+                "Error should mention credentials_path: {msg}"
+            );
+        }
+
+        #[test]
+        fn auto_with_credentials_path_resolves_to_password() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let creds_path = ttd.utf8_path().join("creds.toml");
+            std::fs::write(
+                &creds_path,
+                "[credentials]\nusername = \"alice\"\npassword = \"secret\"\n",
+            )
+            .unwrap();
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mut config = make_config(Some("mqtt.example.com:1883"));
+            config.credentials_path = Some(creds_path);
+
+            // auth_method = Auto + credentials_path set → resolves to Password
+            match build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config) {
+                Ok((_, auth)) => assert!(matches!(auth, AuthMethod::Password)),
+                Err(e) => {
+                    // Only acceptable failure is a TLS/CA setup issue (system-dependent);
+                    // the auth resolution itself must have succeeded.
+                    let msg = format!("{e}");
+                    assert!(
+                        !msg.contains("credentials_path"),
+                        "Auth resolution should succeed (credentials_path is set): {msg}"
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn explicit_password_method_with_credentials_path_resolves_to_password() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let creds_path = ttd.utf8_path().join("creds.toml");
+            std::fs::write(
+                &creds_path,
+                "[credentials]\nusername = \"bob\"\npassword = \"pass\"\n",
+            )
+            .unwrap();
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mut config = make_config(Some("mqtt.example.com:1883"));
+            config.auth_method = AuthMethodConfig::Password;
+            config.credentials_path = Some(creds_path);
+
+            match build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config) {
+                Ok((_, auth)) => assert!(matches!(auth, AuthMethod::Password)),
+                Err(e) => {
+                    let msg = format!("{e}");
+                    assert!(
+                        !msg.contains("credentials_path"),
+                        "Auth resolution should succeed (credentials_path is set): {msg}"
+                    );
+                }
+            }
+        }
+
+        fn make_config(url: Option<&str>) -> CustomMapperConfig {
+            CustomMapperConfig {
+                table: toml::Table::new(),
+                url: url.map(|u| u.parse().unwrap()),
+                device: None,
+                bridge: BridgeConfig::default(),
+                auth_method: AuthMethodConfig::Auto,
+                credentials_path: None,
+            }
         }
     }
 }

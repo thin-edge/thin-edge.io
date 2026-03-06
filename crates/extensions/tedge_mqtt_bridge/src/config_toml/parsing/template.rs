@@ -350,6 +350,31 @@ pub fn parse_config_reference<T>(
     ))
 }
 
+/// Expands a `${mapper.path}` component, resolving `path` from `mapper_config`.
+///
+/// Returns an error if `mapper_config` is `None` (not in a custom mapper context)
+/// or if the key is missing / not a scalar. `whole_span` is used for the "not in a
+/// custom mapper" error; `key_span` is used for key-resolution errors.
+fn expand_mapper_component(
+    path: &str,
+    key_span: OffsetSpan,
+    whole_span: OffsetSpan,
+    mapper_config: Option<&toml::Table>,
+) -> Result<String, ExpandError> {
+    match mapper_config {
+        Some(table) => expand_mapper_key(path, table, key_span.into()),
+        None => Err(ExpandError {
+            message: format!(
+                "Variable '${{mapper.{path}}}' is only valid in custom mapper bridge rules"
+            ),
+            help: Some(
+                "Use '${config.*}' to reference built-in mapper configuration values".into(),
+            ),
+            span: whole_span.into(),
+        }),
+    }
+}
+
 /// Resolves a dotted path (e.g. `bridge.topic_prefix`) against a TOML table.
 ///
 /// Returns the string representation of the value, or an error if the key is not found
@@ -426,24 +451,10 @@ pub fn expand_config_template(
                     super::super::expand_config_key(&key, config, cloud_profile, span.into())?;
                 result.push_str(&value);
             }
-            TemplateComponent::Mapper(path, key_span) => match mapper_config {
-                Some(table) => {
-                    let value = expand_mapper_key(&path, table, key_span.into())?;
-                    result.push_str(&value);
-                }
-                None => {
-                    return Err(ExpandError {
-                        message: format!(
-                            "Variable '${{mapper.{path}}}' is only valid in custom mapper bridge rules"
-                        ),
-                        help: Some(
-                            "Create a tedge.toml in your mapper directory to use ${mapper.*}"
-                                .into(),
-                        ),
-                        span: span.into(),
-                    });
-                }
-            },
+            TemplateComponent::Mapper(path, key_span) => {
+                let value = expand_mapper_component(&path, key_span, span, mapper_config)?;
+                result.push_str(&value);
+            }
             TemplateComponent::Item => {
                 return Err(ExpandError {
                     message: "Variable 'item' is only valid inside template rules".into(),
@@ -485,24 +496,10 @@ pub fn expand_loop_template(
                 )?;
                 result.push_str(&value);
             }
-            TemplateComponent::Mapper(path, key_span) => match ctx.mapper_config {
-                Some(table) => {
-                    let value = expand_mapper_key(&path, table, key_span.into())?;
-                    result.push_str(&value);
-                }
-                None => {
-                    return Err(ExpandError {
-                        message: format!(
-                            "Variable '${{mapper.{path}}}' is only valid in custom mapper bridge rules"
-                        ),
-                        help: Some(
-                            "Create a tedge.toml in your mapper directory to use ${mapper.*}"
-                                .into(),
-                        ),
-                        span: span.into(),
-                    });
-                }
-            },
+            TemplateComponent::Mapper(path, key_span) => {
+                let value = expand_mapper_component(&path, key_span, span, ctx.mapper_config)?;
+                result.push_str(&value);
+            }
             TemplateComponent::Item => {
                 result.push_str(ctx.loop_var_value);
             }

@@ -46,7 +46,11 @@ Custom mapper configuration SHALL NOT be part of the `define_tedge_config!` macr
 - **THEN** the change takes effect the next time the custom mapper is started (no `tedge config set` needed)
 
 ### Requirement: Bridge templates support mapper config namespace
-The bridge template system SHALL support a `${mapper.*}` variable namespace that resolves against the custom mapper's own `tedge.toml`. This namespace is available in bridge rule TOML files located in the mapper's `bridge/` directory, and is only populated when a `tedge.toml` is present.
+The bridge template system SHALL support a `${mapper.*}` variable namespace that resolves against the custom mapper's own `tedge.toml`. This namespace is available in **string template fields** (`local_prefix`, `remote_prefix`, and `topic`) within bridge rule TOML files located in the mapper's `bridge/` directory. It is only populated when a `tedge.toml` is present.
+
+The `${mapper.*}` namespace is NOT supported in:
+- `if =` condition expressions — these only accept `${config.*}` boolean references or `${connection.auth_method} == '...'`
+- `for =` loop source expressions — these only accept `${config.*}` template set references or literal TOML arrays
 
 #### Scenario: Referencing a mapper config value in a bridge template
 - **WHEN** a bridge rule template contains `${mapper.bridge.topic_prefix}` and the mapper's `tedge.toml` contains `[bridge]` with `topic_prefix = "tb"`
@@ -56,14 +60,29 @@ The bridge template system SHALL support a `${mapper.*}` variable namespace that
 - **WHEN** a bridge rule template contains `${mapper.url}` and the mapper's `tedge.toml` contains a top-level `url = "mqtt.thingsboard.io:8883"`
 - **THEN** the template SHALL expand to `mqtt.thingsboard.io:8883`
 
+#### Scenario: Referencing a nested mapper config value in a topic template
+- **WHEN** a bridge rule `topic` contains `${mapper.prefix}/${item}` and the mapper's `tedge.toml` contains `prefix = "tb"`, and the loop iterates over `"telemetry"`
+- **THEN** the topic SHALL expand to `tb/telemetry`
+
 #### Scenario: Referencing a non-existent mapper config key
 - **WHEN** a bridge rule template contains `${mapper.nonexistent.key}` and no such key exists in the mapper's `tedge.toml`
-- **THEN** the template system SHALL report an error indicating the key was not found
+- **THEN** the template system SHALL report an error indicating the key was not found, and SHALL include the key name in the error message
 
 #### Scenario: Combining mapper and global config references
 - **WHEN** a bridge rule template contains both `${mapper.bridge.topic_prefix}` and `${config.mqtt.port}`
 - **THEN** both variables SHALL resolve correctly — `${mapper.*}` from the mapper's `tedge.toml` and `${config.*}` from the global thin-edge config
 
-#### Scenario: Built-in mappers can use mapper namespace
-- **WHEN** a built-in mapper's bridge rule template uses `${mapper.*}` to reference its own config values
-- **THEN** the template SHALL resolve correctly against the built-in mapper's configuration (the existing `${config.*}` references continue to work as well)
+#### Scenario: `${mapper.*}` without a mapper config present
+- **WHEN** a bridge rule template contains `${mapper.some.key}` but no `tedge.toml` is present for the mapper
+- **THEN** the template system SHALL report an error indicating that `${mapper.*}` is only valid in custom mapper bridge rules
+
+#### Scenario: `${mapper.*}` rejected in `if` conditions
+- **WHEN** a bridge rule file contains `if = "${mapper.some_flag}"`
+- **THEN** the template system SHALL report a clear parse error — `${mapper.*}` is not a valid condition expression; only `${config.*}` boolean references and `${connection.auth_method} == '...'` are accepted
+
+#### Scenario: `${mapper.*}` rejected in `for` loop sources
+- **WHEN** a bridge rule file contains a `[[template_rule]]` with `for = "${mapper.some_list}"`
+- **THEN** the template system SHALL report a clear parse error — `${mapper.*}` is not a valid loop source; only `${config.*}` template set references and literal TOML arrays are accepted
+
+#### Out of scope: Built-in mappers and the mapper namespace
+`${mapper.*}` is only populated for custom mappers, whose config is already a raw TOML table. Built-in mappers (c8y, az, aws) use typed Rust config structs; serialising those to a TOML table to back `${mapper.*}` is non-trivial and unnecessary since `${config.c8y.*}` (etc.) already provides access to all built-in mapper config values. Supporting `${mapper.*}` in built-in bridge rules is deferred to a future change if demand warrants it.

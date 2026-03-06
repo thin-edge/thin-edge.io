@@ -5047,6 +5047,7 @@ dependencies = [
  "c8y_auth_proxy",
  "c8y_mapper_ext",
  "camino",
+ "certificate",
  "clap",
  "clock",
  "collectd_ext",
@@ -5073,6 +5074,7 @@ dependencies = [
  "tokio",
  "toml 0.9.6",
  "tracing",
+ "tracing-subscriber",
  "yansi",
 ]
 

@@ -1812,5 +1812,181 @@ direction = "inbound"
                 "Span should point to the end of the string"
             );
         }
+
+        // ====================================================================
+        // ${mapper.*} scope tests
+        //
+        // ${mapper.*} is only valid in string template fields (local_prefix,
+        // remote_prefix, topic). It is NOT supported in `if =` conditions or
+        // `for =` loop sources, which are separate parsers tied to the typed
+        // TEdgeConfig system.
+        // ====================================================================
+
+        #[test]
+        fn mapper_namespace_expands_in_local_prefix() {
+            let toml = r#"
+local_prefix = "${mapper.topic_prefix}/"
+remote_prefix = ""
+
+[[rule]]
+topic = "test/topic"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let mapper_table: toml::Table = toml::toml! { topic_prefix = "tb" };
+
+            let expanded = config
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    Some(&mapper_table),
+                )
+                .unwrap();
+
+            assert_eq!(expanded.0.len(), 1);
+            assert_eq!(expanded.0[0].local_prefix, "tb/");
+        }
+
+        #[test]
+        fn mapper_namespace_expands_in_rule_topic() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[rule]]
+topic = "${mapper.cloud_topic}"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let mapper_table: toml::Table = toml::toml! { cloud_topic = "v1/devices/me/telemetry" };
+
+            let expanded = config
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    Some(&mapper_table),
+                )
+                .unwrap();
+
+            assert_eq!(expanded.0.len(), 1);
+            assert_eq!(expanded.0[0].topic, "v1/devices/me/telemetry");
+        }
+
+        #[test]
+        fn mapper_namespace_expands_in_template_rule_topic() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[template_rule]]
+for = ['telemetry', 'attributes']
+topic = "${mapper.topic_prefix}/${item}"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let mapper_table: toml::Table = toml::toml! { topic_prefix = "v1/devices/me" };
+
+            let expanded = config
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    Some(&mapper_table),
+                )
+                .unwrap();
+
+            assert_eq!(expanded.0.len(), 2);
+            assert_eq!(expanded.0[0].topic, "v1/devices/me/telemetry");
+            assert_eq!(expanded.0[1].topic, "v1/devices/me/attributes");
+        }
+
+        #[test]
+        fn mapper_namespace_rejected_in_if_condition() {
+            // ${mapper.*} is not a valid condition expression — the condition parser
+            // only accepts ${config.*} boolean references and ${connection.auth_method} == '...'.
+            // Users who write this should get a parse error pointing to 'mapper'.
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+if = "${mapper.some_flag}"
+
+[[rule]]
+topic = "test/topic"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let mapper_table: toml::Table = toml::toml! { some_flag = true };
+
+            let errs = config
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    Some(&mapper_table),
+                )
+                .unwrap_err();
+
+            assert!(
+                !errs.is_empty(),
+                "Expected an error for ${{mapper.*}} in if condition"
+            );
+            // The error span should point to 'mapper' so users can identify the issue
+            assert_eq!(
+                &toml[errs[0].span.clone()],
+                "mapper",
+                "Error span should point to 'mapper'"
+            );
+        }
+
+        #[test]
+        fn mapper_namespace_rejected_in_for_loop() {
+            // ${mapper.*} is not a valid for-loop source — the for field only accepts
+            // ${config.*} template set references or literal TOML arrays.
+            // Users who write this should get a parse error pointing to 'mapper'.
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[template_rule]]
+for = "${mapper.topics}"
+topic = "${item}"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let mapper_table: toml::Table = toml::toml! { topics = ["a", "b"] };
+
+            let errs = config
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    Some(&mapper_table),
+                )
+                .unwrap_err();
+
+            assert!(
+                !errs.is_empty(),
+                "Expected an error for ${{mapper.*}} in for loop"
+            );
+            // The error message should indicate the for field failed to expand
+            assert!(
+                errs[0].message.contains("Failed to expand 'for' reference"),
+                "Error message should mention the for field: {}",
+                errs[0].message
+            );
+            // The error span should point to 'mapper' so users can identify the issue
+            assert_eq!(
+                &toml[errs[0].span.clone()],
+                "mapper",
+                "Error span should point to 'mapper'"
+            );
+        }
     }
 }
