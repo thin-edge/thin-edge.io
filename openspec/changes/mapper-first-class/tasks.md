@@ -44,7 +44,7 @@ Tasks 6.1–6.3 are **D1-dependent**:
 
 **No-prefix approach:**
 - [x] 6.1a Rewrite scanner to classify directories by `mapper.toml` presence: directory contains `mapper.toml` → mapper; otherwise → unrecognised
-- [ ] 6.2a Read `cloud_type` from `mapper.toml` when present and include it in the classification result
+- [x] 6.2a Read `cloud_type` from `mapper.toml` when present and include it in the classification result
 - [x] 6.3a Emit a warning for any directory under `/etc/tedge/mappers/` that does not contain `mapper.toml`
 
 **`+` prefix approach:**
@@ -57,12 +57,12 @@ Tasks 6.1–6.3 are **D1-dependent**:
 
 ## 7. `tedge mapper` subcommand (new)
 
-- [ ] 7.1 Add `Mapper` variant to `TEdgeOpt` in `crates/core/tedge/src/cli/mod.rs`
-- [ ] 7.2 Implement `tedge mapper list`: scan `/etc/tedge/mappers/` for mapper directories (by `mapper.toml` presence), read `cloud_type` from each, print name and `cloud_type` (or `(none)`)
-- [ ] 7.3 Add unit tests for `tedge mapper list`: empty directory, built-in only, mixed built-in and user-defined
-- [ ] 7.4 Implement `tedge mapper config get <name>.<key>`: split on first `.` to extract mapper name and TOML key path; locate mapper directory; read and walk `mapper.toml` using the key path
-- [ ] 7.5 Print the raw value to stdout (matching `tedge config get` behaviour)
-- [ ] 7.6 Add unit tests for `tedge mapper config get`: valid key, top-level key, nested key (`device.cert_path`), mapper not found, `mapper.toml` not found, key not found, non-table intermediate node
+- [x] 7.1 Add `Mapper` variant to `TEdgeOpt` in `crates/core/tedge/src/cli/mod.rs`
+- [x] 7.2 Implement `tedge mapper list`: scan `/etc/tedge/mappers/` for mapper directories (by `mapper.toml` presence), read `cloud_type` from each, print name and `cloud_type` (or `(none)`)
+- [x] 7.3 Add unit tests for `tedge mapper list`: empty directory, built-in only, mixed built-in and user-defined
+- [x] 7.4 Implement `tedge mapper config get <name>.<key>`: split on first `.` to extract mapper name and TOML key path; locate mapper directory; read and walk `mapper.toml` using the key path
+- [x] 7.5 Print the raw value to stdout (matching `tedge config get` behaviour)
+- [x] 7.6 Add unit tests for `tedge mapper config get`: valid key, top-level key, nested key (`device.cert_path`), mapper not found, `mapper.toml` not found, key not found, non-table intermediate node
 
 ## 8. Code cleanup
 
