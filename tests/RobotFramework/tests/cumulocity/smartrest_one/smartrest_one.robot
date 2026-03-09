@@ -9,12 +9,16 @@ Test Tags           theme:c8y    theme:operation
 
 
 *** Variables ***
+# Note: The legacy c++ sdk has some good examples on SmartREST 1.0 templates:
+# https://github.com/Cumulocity-IoT/cumulocity-agents-linux/blob/835d81aa709e65129afde924c1d8a231a61bf840/srtemplate.txt#L147
 ${SMART_REST_ONE_TEMPLATES}=
 ...                             SEPARATOR=\n
 ...                             10,339,GET,/identity/externalIds/c8y_Serial/%%,,application/vnd.com.nsn.cumulocity.externalId+json,%%,STRING,
 ...                             10,311,GET,/alarm/alarms?source\=%%&status\=%%&pageSize\=100,,,%%,UNSIGNED STRING,
 ...                             11,800,$.managedObject,,$.id
 ...                             11,808,$.alarms,,$.id,$.type
+...                             11,502,,$.c8y_Restart,$.id,$.deviceId
+...                             11,807,,$.c8y_Command,$.id,$.c8y_Command.text,$.deviceId
 
 
 *** Test Cases ***
@@ -73,6 +77,12 @@ Register and Use SmartREST 1.0. Templates
     # Operations
     ${OPERATION}=    Get Configuration    tedge-configuration-plugin
     Operation Should Be SUCCESSFUL    ${OPERATION}
+
+    # SmartREST 1.0 operation response templates are received on the device
+    Cumulocity.Create Operation
+    ...    description=echo helloworld
+    ...    fragments={"c8y_Command":{"text":"echo helloworld2"}}
+    Should Have MQTT Messages    topic=c8y/s/ol/${TEMPLATE_XID}    pattern=^807,.+$
 
 Register Device
     [Arguments]    ${SERIAL}

@@ -132,7 +132,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                 format!(r#"t/ul/# out 1 {topic_prefix}/ """#),
                 format!(r#"q/ul/# out 1 {topic_prefix}/ """#),
                 format!(r#"c/ul/# out 1 {topic_prefix}/ """#),
-                format!(r#"s/dl/# in 1 {topic_prefix}/ """#),
+                format!(r#"s/dl in 1 {topic_prefix}/ """#),
             ]);
 
             let templates_set = smartrest_one_templates
@@ -142,9 +142,11 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
                     // SmartRest1 templates should be deserialized as:
                     // c8y/s/ul/template-1 (in from localhost), s/ul/template-1
                     // c8y/s/dl/template-1 (out to localhost), s/dl/template-1
+                    // c8y/s/ol/template-1 (out to localhost), s/ol/template-1
                     [
                         format!(r#"s/ul/{s} out 1 {topic_prefix}/ """#),
                         format!(r#"s/dl/{s} in 1 {topic_prefix}/ """#),
+                        format!(r#"s/ol/{s} in 1 {topic_prefix}/ """#),
                     ]
                     .into_iter()
                 })
@@ -433,12 +435,14 @@ mod tests {
                 r#"t/ul/# out 1 c8y/ """#.into(),
                 r#"q/ul/# out 1 c8y/ """#.into(),
                 r#"c/ul/# out 1 c8y/ """#.into(),
-                r#"s/dl/# in 1 c8y/ """#.into(),
+                r#"s/dl in 1 c8y/ """#.into(),
                 // SmartREST 1.0 custom templates
                 r#"s/ul/legacy1 out 1 c8y/ """#.into(),
                 r#"s/dl/legacy1 in 1 c8y/ """#.into(),
+                r#"s/ol/legacy1 in 1 c8y/ """#.into(),
                 r#"s/ul/legacy2 out 1 c8y/ """#.into(),
                 r#"s/dl/legacy2 in 1 c8y/ """#.into(),
+                r#"s/ol/legacy2 in 1 c8y/ """#.into(),
             ],
             try_private: false,
             start_type: "automatic".into(),

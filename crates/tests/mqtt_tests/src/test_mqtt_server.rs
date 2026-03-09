@@ -114,7 +114,7 @@ fn spawn_broker() -> u16 {
         // start it in a thread and wait a bit.
         let broker_thread = std::thread::spawn(move || {
             eprintln!("MQTT-TEST INFO: start test MQTT broker (port = {})", port);
-            broker.start()
+            broker.start().map_err(Box::new)
         });
         std::thread::sleep(std::time::Duration::from_millis(50));
 
