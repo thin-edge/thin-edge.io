@@ -191,10 +191,15 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
     }
 
     async fn add_flow(&mut self, js_runtime: &mut JsRuntime, path: &Utf8Path) {
-        if tokio::fs::read_to_string(&path).await.is_err() {
-            self.remove_flow(path).await;
+        if !path.is_file() {
+            // The file doesn't exist at this moment (TOCTOU: it was present when
+            // on_file_updated checked path.is_file(), or when drain_unloaded queued
+            // this path, but was removed before we got here).  Do nothing: if the
+            // file was truly deleted a FileDeleted event will arrive and call
+            // remove_flow; if it is being replaced a subsequent Modified event will
+            // reload it.
             return;
-        };
+        }
         info!(target: "flows", "Loading flow {path}");
         if let Some(config) = FlowConfig::load_single_flow(path).await {
             self.load_config(js_runtime, path, config).await;
