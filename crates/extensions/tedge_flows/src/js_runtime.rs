@@ -14,13 +14,23 @@ use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 use tracing::debug;
+use tracing::warn;
 
 pub struct JsRuntime {
     runtime: rquickjs::AsyncRuntime,
     store: FlowContextHandle,
     worker: mpsc::Sender<JsRequest>,
+    /// Handle to the worker task, used to ensure the old context is fully
+    /// dropped before we create a new one on module reload — critical for
+    /// freeing accumulated QuickJS module memory.
+    worker_handle: JoinHandle<()>,
     execution_timeout: Duration,
+    /// Sources for every module ever loaded, keyed by module name.
+    /// Used to reload all modules into a fresh context when a hot-reload
+    /// triggers a context reset.
+    module_sources: HashMap<String, Vec<u8>>,
 }
 
 static TIME_CREDITS: AtomicUsize = AtomicUsize::new(1000);
@@ -37,13 +47,15 @@ impl JsRuntime {
             })))
             .await;
         let context = rquickjs::AsyncContext::full(&runtime).await?;
-        let worker = JsWorker::spawn(context, store.clone()).await;
+        let (worker, worker_handle) = JsWorker::spawn(context, store.clone()).await;
         let execution_timeout = Duration::from_secs(5);
         Ok(JsRuntime {
             runtime,
             store,
             worker,
+            worker_handle,
             execution_timeout,
+            module_sources: HashMap::new(),
         })
     }
 
@@ -99,9 +111,106 @@ impl JsRuntime {
         name: String,
         source: impl Into<Vec<u8>>,
     ) -> Result<Vec<&'static str>, LoadError> {
-        let (sender, receiver) = oneshot::channel();
         let source = source.into();
         let imports = vec!["onMessage", "onInterval"];
+
+        if self.module_sources.contains_key(&name) {
+            // Hot-reload: update the stored source and recreate the JS context
+            // to free all accumulated QuickJS module memory from previous loads.
+            // Without context recreation, each reload leaves a JSModuleDef in
+            // ctx->loaded_modules (rquickjs Module has no Drop impl calling
+            // JS_FreeModule), eventually exhausting the 16 MB runtime limit.
+            self.module_sources.insert(name.clone(), source);
+            let exports = self.reset_context_and_reload_all().await?;
+            Ok(exports
+                .into_iter()
+                .find_map(|(n, ex)| if n == name { Some(ex) } else { None })
+                .unwrap_or_default())
+        } else {
+            // First-time load — just send to the existing worker.
+            self.module_sources.insert(name.clone(), source.clone());
+            self.load_js_raw(name, source, imports).await
+        }
+    }
+
+    /// Recreate the QuickJS context, freeing all accumulated module memory,
+    /// then reload every previously-tracked module into the fresh context.
+    ///
+    /// Returns the exports of every successfully reloaded module.
+    async fn reset_context_and_reload_all(
+        &mut self,
+    ) -> Result<Vec<(String, Vec<&'static str>)>, LoadError> {
+        // 1. Ask the current worker to clean up and exit its request loop.
+        let (reset_tx, reset_rx) = oneshot::channel::<()>();
+        if let Err(e) = self
+            .worker
+            .send(JsRequest::ResetContext { sender: reset_tx })
+            .await
+        {
+            // Worker may already be gone (e.g., panicked).  That is fine —
+            // we still proceed to create a fresh context below.
+            warn!(target: "flows", "Failed to signal old JS worker for context reset: {e}");
+        } else {
+            // Wait for the worker to acknowledge that it has exited the loop.
+            let _ = reset_rx.await;
+        }
+
+        // 2. Close the old channel so the worker task can finish.
+        //    We do this by replacing the sender with a dummy channel whose
+        //    receiver is immediately dropped, effectively closing the old one.
+        let (dummy_tx, _dummy_rx) = mpsc::channel(1);
+        let _old_sender = std::mem::replace(&mut self.worker, dummy_tx);
+        drop(_old_sender); // closes old channel → worker loop exits if not already
+
+        // 3. Wait for the old worker task to fully complete — only then is the
+        //    old AsyncContext dropped and JS_FreeContext called, which frees
+        //    every accumulated JSModuleDef in ctx->loaded_modules.
+        let old_handle = std::mem::replace(&mut self.worker_handle, tokio::task::spawn(async {}));
+        if let Err(e) = old_handle.await {
+            warn!(target: "flows", "Old JS worker task did not complete cleanly: {e}");
+        }
+
+        // 4. Create a fresh context on the same runtime (old memory is now freed).
+        let context = rquickjs::AsyncContext::full(&self.runtime)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+        let (new_worker, new_handle) = JsWorker::spawn(context, self.store.clone()).await;
+        self.worker = new_worker;
+        self.worker_handle = new_handle;
+
+        // 5. Reload all tracked modules into the new context.
+        let imports = vec!["onMessage", "onInterval"];
+        let sources: Vec<(String, Vec<u8>)> = self
+            .module_sources
+            .iter()
+            .map(|(n, s)| (n.clone(), s.clone()))
+            .collect();
+
+        let mut all_exports = Vec::with_capacity(sources.len());
+        for (name, source) in sources {
+            match self
+                .load_js_raw(name.clone(), source, imports.clone())
+                .await
+            {
+                Ok(exports) => all_exports.push((name, exports)),
+                Err(e) => {
+                    warn!(target: "flows", "Failed to reload module `{name}` after context reset: {e}");
+                }
+            }
+        }
+
+        Ok(all_exports)
+    }
+
+    /// Send a LoadModule request to the worker without updating module_sources.
+    /// Used both for first-time loading and for reloading after a context reset.
+    async fn load_js_raw(
+        &mut self,
+        name: String,
+        source: Vec<u8>,
+        imports: Vec<&'static str>,
+    ) -> Result<Vec<&'static str>, LoadError> {
+        let (sender, receiver) = oneshot::channel();
         TIME_CREDITS.store(100000, std::sync::atomic::Ordering::Relaxed);
         self.send(
             receiver,
@@ -181,6 +290,10 @@ enum JsRequest {
         args: Vec<JsonValue>,
         sender: oneshot::Sender<Result<JsonValue, LoadError>>,
     },
+    /// Ask the worker to clear its state and exit its request loop so that the
+    /// caller can drop the old context (freeing accumulated QuickJS module
+    /// memory) and spin up a fresh one.
+    ResetContext { sender: oneshot::Sender<()> },
 }
 
 struct JsWorker {
@@ -192,13 +305,13 @@ impl JsWorker {
     pub async fn spawn(
         context: rquickjs::AsyncContext,
         store: FlowContextHandle,
-    ) -> mpsc::Sender<JsRequest> {
+    ) -> (mpsc::Sender<JsRequest>, JoinHandle<()>) {
         let (sender, requests) = mpsc::channel(100);
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let worker = JsWorker { context, requests };
             worker.run(store).await
         });
-        sender
+        (sender, handle)
     }
 
     async fn run(mut self, store: FlowContextHandle) {
@@ -217,6 +330,14 @@ impl JsWorker {
                     JsRequest::CallFunction{module, function, args, sender} => {
                         let result = modules.call_function(ctx.clone(), module, function, args).await;
                         let _ = sender.send(result);
+                    }
+                    JsRequest::ResetContext { sender } => {
+                        // Drop all Rust-side module references, then exit so
+                        // that the caller can drop this context and create a
+                        // fresh one, freeing accumulated QuickJS module memory.
+                        drop(modules);
+                        let _ = sender.send(());
+                        break;
                     }
                 }
             }

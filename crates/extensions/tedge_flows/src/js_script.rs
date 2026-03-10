@@ -731,4 +731,40 @@ export function onMessage(message) {
         let step = FlowStep::new_script(script);
         (runtime, step)
     }
+
+    /// Regression test for https://github.com/thin-edge/thin-edge.io/issues/4028
+    ///
+    /// Repeatedly reloading a flow script used to exhaust the QuickJS 16 MB
+    /// runtime memory limit because every reload left a JSModuleDef object in
+    /// ctx->loaded_modules (rquickjs Module has no Drop impl that calls
+    /// JS_FreeModule). The fix recreates the AsyncContext on each hot-reload so
+    /// that JS_FreeContext releases all accumulated module memory.
+    #[tokio::test]
+    async fn repeated_hot_reload_does_not_exhaust_js_memory() {
+        // Build a large script (~160 KB) that mirrors a real protobuf decoder.
+        let many_logs = "    console.log(`processing message`);\n".repeat(4000);
+        let large_js = format!(
+            "export function onMessage(message, context) {{\n{many_logs}    return [];\n}}"
+        );
+
+        let context = FlowContextHandle::default();
+        let mut runtime = JsRuntime::try_new(context).await.unwrap();
+        let module_name = "test_module".to_string();
+        let mut script = JsScript::new(module_name, "flow.toml".into(), "main.js".into());
+
+        // First load
+        runtime
+            .load_script_literal(&mut script, large_js.as_bytes().to_vec())
+            .await
+            .expect("initial load should succeed");
+
+        // Reload the same large script many times — without the fix this would
+        // fail around reload 1000 with "JS raised exception" due to OOM.
+        for i in 1..=1000 {
+            runtime
+                .load_script_literal(&mut script, large_js.as_bytes().to_vec())
+                .await
+                .unwrap_or_else(|e| panic!("reload {i} failed: {e}"));
+        }
+    }
 }
