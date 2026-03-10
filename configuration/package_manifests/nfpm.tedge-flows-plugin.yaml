@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/static/schema.json
+---
+name: tedge-flows-plugin
+description: |
+  thin-edge.io plugin for software management for flows
+arch: "${PKG_ARCH}"
+platform: "linux"
+version: "${GIT_SEMVER}"
+release: "${RELEASE}"
+section: misc
+priority: "optional"
+maintainer: "thin-edge.io team <info@thin-edge.io>"
+vendor: "thin-edge.io"
+homepage: "https://thin-edge.io"
+license: "Apache-2.0"
+
+depends:
+  - tedge
+
+deb:
+  fields:
+    Vcs-Browser: ${CI_PROJECT_URL}
+    Vcs-Git: ${CI_PROJECT_URL}
+  compression: xz
+
+contents:
+  # Symlink to sm plugin dir
+  - src: /usr/bin/tedge-flows-plugin
+    dst: /etc/tedge/sm-plugins/flow
+    type: symlink

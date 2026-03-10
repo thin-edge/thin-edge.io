@@ -14,6 +14,7 @@ TEDGE_MAPPER=tedge-mapper
 TEDGE_AGENT=tedge-agent
 TEDGE_WATCHDOG=tedge-watchdog
 TEDGE_APT_PLUGIN=tedge-apt-plugin
+TEDGE_FLOWS_PLUGIN=tedge-flows-plugin
 C8Y_CONFIGURATION_PLUGIN=c8y-configuration-plugin
 C8Y_LOG_PLUGIN=c8y-log-plugin
 C8Y_FIRMWARE_PLUGIN=c8y-firmware-plugin
@@ -234,12 +235,17 @@ install_tedge_plugins() {
         install_artifact "$C8Y_REMOTE_ACCESS_PLUGIN"
     fi
 
+    if [ -n "$TEDGE_FLOWS_PLUGIN" ]; then
+        install_artifact "$TEDGE_FLOWS_PLUGIN"
+    fi
+
     if [ -n "$PURGE_OLD_PACKAGES" ]; then
         remove_package "tedge_apt_plugin"
         remove_package "tedge_apama_plugin"
         remove_package "c8y_configuration_plugin"
         remove_package "c8y_log_plugin"
         remove_package "tedge_watchdog"
+        remove_package "tedge_flows_plugin"
     fi
 }
 
@@ -304,9 +310,14 @@ main() {
 
     # Ignore plugins for older versions
     if dpkg --compare-versions "$VERSION" lt "0.10.0"; then
-        log "ignore c8y-firmware-plugin and c8y-remote-access-plugin as they are not supported in <= 0.10.0"
+        log "ignore c8y-firmware-plugin and c8y-remote-access-plugin as they are not supported in < 0.10.0"
         C8Y_FIRMWARE_PLUGIN=
         C8Y_REMOTE_ACCESS_PLUGIN=
+    fi
+
+    if dpkg --compare-versions "$VERSION" lt "1.8.0"; then
+        log "ignore tedge-flows-plugin as it is not supported in < 1.8.0"
+        TEDGE_FLOWS_PLUGIN=
     fi
 
     echo "Thank you for trying thin-edge.io!"
