@@ -14,7 +14,6 @@ use tedge_utils::file;
 use tedge_utils::fs;
 use tracing::error;
 use tracing::info;
-use tracing::warn;
 
 #[async_trait]
 pub trait FlowRegistry {
@@ -252,14 +251,19 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
     }
 
     async fn remove_script(&mut self, path: &Utf8Path) {
-        for flow in self.store().flows() {
-            let flow_id = flow.as_ref().name();
-            for step in flow.as_ref().steps.iter() {
-                if step.path() == Some(path) {
-                    warn!(target: "flows", "Removing a script used by a flow {flow_id}: {path}");
-                    return;
-                }
-            }
+        // Collect flows that reference this script so we can modify the store afterwards.
+        let flows_to_unload: Vec<Utf8PathBuf> = self
+            .store()
+            .flows()
+            .filter(|f| f.as_ref().steps.iter().any(|s| s.path() == Some(path)))
+            .map(|f| f.as_ref().source.clone())
+            .collect();
+
+        for flow_source in flows_to_unload {
+            info!(target: "flows", "Unloading flow {flow_source}: referenced script was removed: {path}");
+            // Move the flow to unloaded so it stops processing messages but can be
+            // reloaded automatically when the script is restored.
+            self.store_mut().add_unloaded(flow_source);
         }
     }
 

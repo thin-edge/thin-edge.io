@@ -476,32 +476,7 @@ impl FlowsMapper {
         } else if path.is_file() {
             self.on_file_updated(path).await?;
         } else if !path.exists() {
-            // A `Modified` event for a path that no longer exists can mean two things:
-            //
-            // 1. A file is being replaced (deleted then re-created, e.g. a package update).
-            //    The `notify` layer emits a synthetic `Modified` alongside every `FileDeleted`,
-            //    so the file may be transiently absent. When the replacement completes within
-            //    the 50 ms debounce window, the file already exists by actor-processing time
-            //    so the `path.is_file()` branch above handles the reload instead. The guard
-            //    in `on_file_removed` (`if path.exists() { return }`) protects against the
-            //    stale `FileDeleted` that follows the re-creation (#4023).
-            //
-            // 2. A path was renamed/moved out of the watched tree on the same filesystem.
-            //    On same-filesystem moves, `notify` emits only `Modified` (not `FileDeleted`
-            //    or `DirectoryDeleted`), so this is the only opportunity to remove the
-            //    affected flows. This applies both to directories (flows under them) and to
-            //    individual flow files (e.g. `mea.toml → mea.toml.disabled`).
-            //
-            // We call `on_path_removed` whenever any loaded flow has a source path at or
-            // under `path`, covering both directory prefixes and exact file matches.
-            let has_affected_flows = self
-                .processor
-                .registry
-                .flows()
-                .any(|f| f.source_path().starts_with(path));
-            if has_affected_flows {
-                self.on_path_removed(path).await?;
-            }
+            self.on_path_removed(path).await?;
         }
 
         Ok(())
@@ -577,9 +552,9 @@ impl FlowsMapper {
             self.processor.remove_script(path).await;
         } else if path.extension() == Some("toml") {
             self.processor.remove_flow(path).await;
-            self.send_updated_subscriptions().await?;
-            self.update_flow_status(path).await?;
         }
+        self.send_updated_subscriptions().await?;
+        self.update_flow_status(path).await?;
         Ok(())
     }
 
