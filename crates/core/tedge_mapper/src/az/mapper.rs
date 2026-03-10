@@ -20,6 +20,7 @@ use tedge_flows::FlowsMapperConfig;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
+use tedge_utils::file::create_directory_with_defaults;
 use tedge_watch_ext::WatchActorBuilder;
 use tracing::warn;
 use yansi::Paint;
@@ -98,6 +99,7 @@ impl TEdgeComponent for AzureMapper {
         );
         let flows_dir =
             tedge_flows::flows_dir(config_dir, "az", self.profile.as_ref().map(|p| p.as_ref()));
+        create_directory_with_defaults(flows_dir.as_std_path()).await?;
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
         flows
             .persist_builtin_flow("mea", az_converter.builtin_flow().as_str())
