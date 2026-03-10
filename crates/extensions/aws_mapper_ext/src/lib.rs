@@ -11,6 +11,7 @@ use tedge_flows::JsonValue;
 use tedge_flows::Message;
 use tedge_flows::UpdateFlowRegistryError;
 use tedge_mqtt_ext::Topic;
+use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::timestamp::TimeFormat;
 
 pub struct AwsConverter {
@@ -47,6 +48,7 @@ impl AwsConverter {
         &self,
         flows_dir: impl AsRef<Utf8Path>,
     ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
+        create_directory_with_defaults(flows_dir.as_ref()).await?;
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
         flows.register_builtin(SetAwsTopic::default());
         self.persist_builtin_flow(&mut flows).await?;
