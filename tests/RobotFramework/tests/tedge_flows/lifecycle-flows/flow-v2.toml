@@ -1,0 +1,12 @@
+name = "lifecycle-test"
+version = "2"
+description = "Updated flow definition — listens on a different input topic"
+
+input.mqtt.topics = ["test/lifecycle/updated/in"]
+
+steps = [
+    { script = "main.js" }
+]
+
+output.mqtt.topic = "test/lifecycle/out"
+errors.mqtt.topic = "te/errors"

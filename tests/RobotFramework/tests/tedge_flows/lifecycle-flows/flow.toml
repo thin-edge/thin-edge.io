@@ -1,0 +1,12 @@
+name = "lifecycle-test"
+version = "1"
+description = "Flow used by flow lifecycle system tests"
+
+input.mqtt.topics = ["test/lifecycle/in"]
+
+steps = [
+    { script = "main.js" }
+]
+
+output.mqtt.topic = "test/lifecycle/out"
+errors.mqtt.topic = "te/errors"
