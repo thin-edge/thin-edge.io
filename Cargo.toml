@@ -9,6 +9,7 @@ members = [
     "plugins/tedge_apt_plugin",
     "plugins/tedge_file_config_plugin",
     "plugins/tedge_file_log_plugin",
+    "plugins/tedge_flows_plugin",
 ]
 resolver = "2"
 
@@ -47,6 +48,7 @@ tedge-agent = { path = "crates/core/tedge_agent" }
 tedge-apt-plugin = { path = "plugins/tedge_apt_plugin" }
 tedge-file-config-plugin = { path = "plugins/tedge_file_config_plugin" }
 tedge-file-log-plugin = { path = "plugins/tedge_file_log_plugin" }
+tedge-flows-plugin = { path = "plugins/tedge_flows_plugin" }
 tedge-mapper = { path = "crates/core/tedge_mapper", default-features = false }
 tedge-p11-server = { path = "crates/extensions/tedge-p11-server" }
 tedge-watchdog = { path = "crates/core/tedge_watchdog" }

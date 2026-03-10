@@ -12,6 +12,7 @@ use tedge_config::cli::CommonArgs;
 use tedge_config::TEdgeConfig;
 use tedge_file_config_plugin::bin::FileConfigCli;
 use tedge_file_log_plugin::bin::FileLogCli;
+use tedge_flows_plugin::FlowsCli;
 use tedge_mapper::MapperOpt;
 use tedge_watchdog::WatchdogOpt;
 use tedge_write::bin::Args as TedgeWriteOpt;
@@ -71,6 +72,9 @@ pub enum Component {
 
     #[clap(alias = "apt")]
     TedgeAptPlugin(AptCli),
+
+    #[clap(alias = "flow")]
+    TedgeFlowsPlugin(FlowsCli),
 
     TedgeFileConfigPlugin(FileConfigCli),
 
