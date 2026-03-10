@@ -184,8 +184,6 @@ impl EntityStoreServer {
                     error!("Failed to process entity data message: {message} due to : {err}");
                 }
             }
-        } else {
-            error!("Ignoring the message: {message} received on unsupported topic",);
         }
     }
 
