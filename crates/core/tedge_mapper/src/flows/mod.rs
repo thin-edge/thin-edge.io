@@ -6,6 +6,7 @@ use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowsMapperBuilder;
 use tedge_flows::FlowsMapperConfig;
+use tedge_utils::file::create_directory_with_defaults;
 use tedge_watch_ext::WatchActorBuilder;
 
 pub struct GenMapper;
@@ -33,6 +34,7 @@ impl TEdgeComponent for GenMapper {
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();
         let flows_dir = tedge_flows::default_flows_dir(config_dir);
+        create_directory_with_defaults(flows_dir.as_std_path()).await?;
         let flows = ConnectedFlowRegistry::new(flows_dir);
         let mut flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;
         flows_mapper.connect(&mut mqtt_actor);
