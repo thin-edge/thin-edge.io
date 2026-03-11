@@ -488,9 +488,10 @@ impl FlowsMapper {
             return self.on_params_updated(path).await;
         }
 
-        // first, remove flows that use any scripts that just got removed
-        // need to remove flows before the scripts or else we get a warning
-        let (mut removed_flows, mut removed_scripts): (Vec<_>, Vec<_>) = self
+        // first, unload flows that use any scripts that just got removed
+        // need to unload flows before the scripts or else we get a warning
+        // when scripts of unloaded flows are reloaded, the flow may start again
+        let (unloaded_flows, removed_scripts): (Vec<_>, Vec<_>) = self
             .processor
             .registry
             .flows()
@@ -502,24 +503,28 @@ impl FlowsMapper {
                 })
             })
             .collect();
-        removed_scripts.sort_unstable();
-        removed_scripts.dedup();
 
-        // after that, remove flows whose .toml definition files were removed
-        removed_flows.extend(
-            self.processor
-                .registry
-                .flows()
-                .map(|f| f.source_path().to_path_buf())
-                .filter(|p| p.starts_with(path)),
-        );
-        removed_flows.sort_unstable();
-        removed_flows.dedup();
+        for file in unloaded_flows {
+            // will add flow to list of unloaded if scripts are missing
+            self.processor.load_single_flow(&file).await;
+            self.send_updated_subscriptions().await?;
+            self.update_flow_status(path).await?;
+        }
 
-        for file in removed_flows {
+        for file in removed_scripts {
             self.on_file_removed(&file).await?;
         }
-        for file in removed_scripts {
+
+        // after that, remove flows whose .toml definition files were removed
+        let removed_flows: Vec<_> = self
+            .processor
+            .registry
+            .flows()
+            .map(|f| f.source_path().to_path_buf())
+            .filter(|p| p.starts_with(path))
+            .collect();
+
+        for file in removed_flows {
             self.on_file_removed(&file).await?;
         }
 
