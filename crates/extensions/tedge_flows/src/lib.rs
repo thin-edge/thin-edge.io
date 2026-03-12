@@ -254,11 +254,14 @@ pub enum LoadError {
     #[error(transparent)]
     TomlError(#[from] toml::de::Error),
 
-    #[error(transparent)]
+    #[error("JS Error: {0:?}")]
     JsError(#[from] rquickjs::Error),
 
-    #[error(transparent)]
-    Anyhow(#[from] anyhow::Error),
+    #[error("JS Exception: {message}\n{stack}")]
+    JsException { message: String, stack: String },
+
+    #[error("Maximum processing time exceeded")]
+    Timeout,
 }
 
 impl LoadError {

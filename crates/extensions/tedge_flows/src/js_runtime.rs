@@ -3,11 +3,10 @@ use crate::js_lib::kv_store::FlowContextHandle;
 use crate::js_script::JsScript;
 use crate::js_value::JsonValue;
 use crate::LoadError;
-use anyhow::anyhow;
 use camino::Utf8Path;
 use rquickjs::module::Evaluated;
-use rquickjs::CaughtError;
 use rquickjs::Ctx;
+use rquickjs::Error;
 use rquickjs::Module;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
@@ -17,7 +16,7 @@ use tokio::sync::oneshot;
 use tracing::debug;
 
 pub struct JsRuntime {
-    runtime: rquickjs::AsyncRuntime,
+    pub(crate) runtime: rquickjs::AsyncRuntime,
     store: FlowContextHandle,
     worker: mpsc::Sender<JsRequest>,
     execution_timeout: Duration,
@@ -179,11 +178,10 @@ impl JsRuntime {
         &self,
         mut receiver: oneshot::Receiver<Response>,
         request: JsRequest,
-    ) -> Result<Response, anyhow::Error> {
-        self.worker
-            .send(request)
-            .await
-            .map_err(|err| anyhow!(err))?;
+    ) -> Result<Response, LoadError> {
+        if self.worker.send(request).await.is_err() {
+            panic!("No JS runtime");
+        }
 
         // FIXME: The following timeout is not working
         //  - see unit test: js_script::while_loop
@@ -192,8 +190,9 @@ impl JsRuntime {
         //    - A timeout is the properly raised
         //    - but the JS runtime keeps executing `while(true)` and is no more responsive.
         match tokio::time::timeout(self.execution_timeout, &mut receiver).await {
-            Ok(response) => response.map_err(|err| anyhow!(err)),
-            Err(_) => Err(anyhow!("Maximum processing time exceeded")),
+            Ok(Err(_)) => panic!("JS runtime crashed"),
+            Ok(Ok(response)) => Ok(response),
+            Err(_) => Err(LoadError::Timeout),
         }
     }
 }
@@ -329,7 +328,7 @@ impl<'js> JsModules<'js> {
             [v0, v1, v2, v3] => f.call((v0, v1, v2, v3)),
             [v0, v1, v2, v3, v4] => f.call((v0, v1, v2, v3, v4)),
             [v0, v1, v2, v3, v4, v5] => f.call((v0, v1, v2, v3, v4, v5)),
-            _ => return Err(anyhow::anyhow!("Too many args").into()),
+            _ => unreachable!("tedge flows API doesn't have functions with >6 arguments"),
         };
 
         debug!(target: "flows", "execute({module_name}.{function}) => {r:?}");
@@ -338,14 +337,14 @@ impl<'js> JsModules<'js> {
 }
 
 impl LoadError {
-    fn from_js(ctx: &Ctx<'_>, err: rquickjs::Error) -> Self {
+    fn from_js(ctx: &Ctx<'_>, err: Error) -> Self {
         if let Some(ex) = ctx.catch().as_exception() {
-            let err = anyhow::anyhow!("{ex}");
-            err.context("JS raised exception").into()
+            LoadError::JsException {
+                message: ex.message().unwrap_or_default(),
+                stack: ex.stack().unwrap_or_default(),
+            }
         } else {
-            let err = CaughtError::from_error(ctx, err);
-            let err = anyhow::anyhow!("{err}");
-            err.context("JS runtime error").into()
+            err.into()
         }
     }
 }

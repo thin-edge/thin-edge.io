@@ -335,6 +335,30 @@ export function onMessage(message) {
     }
 
     #[tokio::test]
+    async fn too_large_module() {
+        // Given a small JS runtime
+        let context = FlowContextHandle::default();
+        let mut runtime = JsRuntime::try_new(context).await.unwrap();
+        runtime.runtime.set_memory_limit(16 * 1024 * 10).await;
+
+        // Build a large script (~160 KB) that mirrors a real protobuf decoder.
+        let many_logs = "    console.log(`processing message`);\n".repeat(4000);
+        let large_js = format!(
+            "export function onMessage(message, context) {{\n{many_logs}    return [];\n}}"
+        );
+
+        let module_name = "test_module".to_string();
+        let mut script = JsScript::new(module_name, "flow.toml".into(), "main.js".into());
+
+        let error = runtime
+            .load_script_literal(&mut script, large_js.as_bytes().to_vec())
+            .await
+            .unwrap_err();
+        eprintln!("{:?}", error);
+        assert!(error.to_string().contains("out of memory"));
+    }
+
+    #[tokio::test]
     async fn using_text_decoder() {
         let js = r#"
 export async function onMessage(message) {
