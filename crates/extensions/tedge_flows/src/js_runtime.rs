@@ -21,12 +21,28 @@ pub struct JsRuntime {
     store: FlowContextHandle,
     worker: mpsc::Sender<JsRequest>,
     execution_timeout: Duration,
+    module_sources: HashMap<String, Vec<u8>>,
 }
 
 static TIME_CREDITS: AtomicUsize = AtomicUsize::new(1000);
 
 impl JsRuntime {
     pub async fn try_new(store: FlowContextHandle) -> Result<Self, LoadError> {
+        let runtime = Self::new_runtime().await?;
+        let context = rquickjs::AsyncContext::full(&runtime).await?;
+        let worker = JsWorker::spawn(context, store.clone()).await;
+        let execution_timeout = Duration::from_secs(5);
+        let module_sources = HashMap::new();
+        Ok(JsRuntime {
+            runtime,
+            store,
+            worker,
+            execution_timeout,
+            module_sources,
+        })
+    }
+
+    async fn new_runtime() -> Result<rquickjs::AsyncRuntime, LoadError> {
         let runtime = rquickjs::AsyncRuntime::new()?;
         runtime.set_memory_limit(16 * 1024 * 1024).await;
         runtime.set_max_stack_size(256 * 1024).await;
@@ -36,15 +52,7 @@ impl JsRuntime {
                 credits == 0
             })))
             .await;
-        let context = rquickjs::AsyncContext::full(&runtime).await?;
-        let worker = JsWorker::spawn(context, store.clone()).await;
-        let execution_timeout = Duration::from_secs(5);
-        Ok(JsRuntime {
-            runtime,
-            store,
-            worker,
-            execution_timeout,
-        })
+        Ok(runtime)
     }
 
     pub fn context_handle(&self) -> FlowContextHandle {
@@ -96,6 +104,28 @@ impl JsRuntime {
 
     async fn load_js(
         &mut self,
+        name: String,
+        source: impl Into<Vec<u8>>,
+    ) -> Result<Vec<&'static str>, LoadError> {
+        if self.module_sources.remove(&name).is_some() {
+            // As rquickjs fails to drop old module versions,
+            // a new worker has to be created with fresh new Async Runtime & Context
+            self.runtime = Self::new_runtime().await?;
+            let context = rquickjs::AsyncContext::full(&self.runtime).await?;
+            self.worker = JsWorker::spawn(context, self.store.clone()).await;
+            for (n, s) in &self.module_sources {
+                self.load_new_js(n.to_owned(), s.clone()).await?;
+            }
+        }
+
+        let source = source.into();
+        let exports = self.load_new_js(name.clone(), source.clone()).await?;
+        self.module_sources.insert(name, source);
+        Ok(exports)
+    }
+
+    async fn load_new_js(
+        &self,
         name: String,
         source: impl Into<Vec<u8>>,
     ) -> Result<Vec<&'static str>, LoadError> {
@@ -244,6 +274,10 @@ impl<'js> JsModules<'js> {
         imports: Vec<&'static str>,
     ) -> Result<Vec<&'static str>, LoadError> {
         debug!(target: "flows", "compile({name})");
+        assert!(
+            !self.modules.contains_key(&name),
+            "reloading a module leaks memory"
+        );
         let module = Module::declare(ctx.clone(), name.clone(), source)
             .map_err(|err| LoadError::from_js(&ctx, err))?;
         let (module, p) = module.eval().map_err(|err| LoadError::from_js(&ctx, err))?;
