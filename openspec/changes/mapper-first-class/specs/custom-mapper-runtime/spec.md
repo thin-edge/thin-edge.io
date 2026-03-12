@@ -3,23 +3,29 @@
 ### Requirement: CLI invocation via external subcommand
 Users SHALL be able to start a user-defined mapper using `tedge-mapper <name>`, where `<name>` is the mapper directory name under `/etc/tedge/mappers/`. This is implemented via clap's `external_subcommand` mechanism, which captures any subcommand name that does not match a built-in variant (`c8y`, `az`, `aws`, etc.).
 
-At startup, the mapper name is validated:
+At startup, the mapper name is validated by `validate_and_load`, which performs these checks in order:
 1. Matches `[a-z][a-z0-9-]*` — otherwise hard error
-2. The mapper directory exists and contains `mapper.toml` — otherwise error listing available user-defined mappers
+2. The mapper directory exists — otherwise error listing available mappers
+3. At least one of `bridge/` or `flows/` is present — otherwise error (nothing to do)
+4. If `bridge/` is present, `mapper.toml` must also be present and valid — otherwise error
 
 Extra arguments after the name SHALL be rejected with a clear error.
 
 #### Scenario: Starting a user-defined mapper by name
-- **WHEN** a user runs `tedge-mapper thingsboard` and `/etc/tedge/mappers/thingsboard/mapper.toml` exists
+- **WHEN** a user runs `tedge-mapper thingsboard` and `/etc/tedge/mappers/thingsboard/` exists with at least a `flows/` or `bridge/` subdirectory
 - **THEN** `tedge-mapper` SHALL start the mapper, launching whichever of the MQTT bridge and flows engine are applicable given the directory contents
 
 #### Scenario: Mapper directory does not exist
 - **WHEN** a user runs `tedge-mapper mycloud` and no directory `/etc/tedge/mappers/mycloud/` exists
 - **THEN** `tedge-mapper` SHALL report an error indicating that no mapper configuration was found for `mycloud` and SHALL list available user-defined mappers
 
-#### Scenario: Mapper directory exists but has no mapper.toml
-- **WHEN** a user runs `tedge-mapper mycloud` and `/etc/tedge/mappers/mycloud/` exists but contains no `mapper.toml`
-- **THEN** `tedge-mapper` SHALL report an error indicating that `mycloud` is not a recognised mapper (no `mapper.toml` found)
+#### Scenario: Mapper directory has no bridge/ or flows/
+- **WHEN** a user runs `tedge-mapper mycloud` and `/etc/tedge/mappers/mycloud/` exists but contains neither a `bridge/` nor a `flows/` subdirectory
+- **THEN** `tedge-mapper` SHALL report an error indicating the mapper has nothing to do
+
+#### Scenario: Mapper directory has flows/ but no mapper.toml
+- **WHEN** a user runs `tedge-mapper mycloud` and `/etc/tedge/mappers/mycloud/flows/` exists but no `mapper.toml` is present
+- **THEN** `tedge-mapper` SHALL start successfully as a flows-only mapper (no cloud MQTT bridge)
 
 #### Scenario: Extra arguments after mapper name rejected
 - **WHEN** a user runs `tedge-mapper thingsboard --unknown-flag`
@@ -69,7 +75,7 @@ A mapper's service identity SHALL use `tedge-mapper@{name}` as the service name,
 
 #### Scenario: Bridge service name
 - **WHEN** a mapper named `thingsboard` starts its built-in MQTT bridge
-- **THEN** the bridge service name SHALL be `tedge-mapper-bridge@thingsboard`
+- **THEN** the bridge service name SHALL be `tedge-mapper-bridge-thingsboard`
 
 ### Requirement: Multiple mappers can coexist
 Multiple mapper instances SHALL be able to run simultaneously as independent services, each with its own configuration, bridge connection, and flows.

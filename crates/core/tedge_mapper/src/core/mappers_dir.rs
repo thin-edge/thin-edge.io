@@ -36,12 +36,18 @@ pub(crate) async fn collect_unrecognised_mapper_dirs(mappers_dir: &Utf8Path) -> 
         if !file_type.is_dir() {
             continue;
         }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        // Built-in mappers (c8y, az, aws, collectd, local) and their profile
+        // variants can legitimately have no mapper.toml — skip them silently.
+        if crate::is_builtin_mapper_dir_name(&name) {
+            continue;
+        }
         let path = camino::Utf8PathBuf::from(entry.path().to_string_lossy().into_owned());
         if !tokio::fs::try_exists(path.join("mapper.toml"))
             .await
             .unwrap_or(false)
         {
-            unrecognised.push(entry.file_name().to_string_lossy().into_owned());
+            unrecognised.push(name);
         }
     }
     unrecognised
@@ -125,6 +131,56 @@ mod tests {
             assert!(unrecognised.contains(&"stale-dir".to_string()));
         }
 
+        #[tokio::test]
+        async fn builtin_dir_without_mapper_toml_is_not_flagged() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            // c8y dir without mapper.toml — simulates post-install before tedge config upgrade
+            tokio::fs::create_dir_all(mappers_dir.join("c8y"))
+                .await
+                .unwrap();
+            tokio::fs::create_dir_all(mappers_dir.join("az"))
+                .await
+                .unwrap();
+
+            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
+            assert!(
+                unrecognised.is_empty(),
+                "Built-in dirs without mapper.toml should not be flagged: {unrecognised:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn profiled_builtin_dir_without_mapper_toml_is_not_flagged() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_dir.join("c8y.prod"))
+                .await
+                .unwrap();
+
+            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
+            assert!(
+                unrecognised.is_empty(),
+                "Profiled built-in dir 'c8y.prod' without mapper.toml should not be flagged: {unrecognised:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn name_with_builtin_prefix_but_not_a_profile_is_flagged() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            // "c8y-extra" is not a profile (uses '-' not '.') — should be flagged
+            tokio::fs::create_dir_all(mappers_dir.join("c8y-extra"))
+                .await
+                .unwrap();
+
+            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
+            assert!(
+                unrecognised.contains(&"c8y-extra".to_string()),
+                "'c8y-extra' (no dot separator, no mapper.toml) should be flagged: {unrecognised:?}"
+            );
+        }
+
         /// Verifies that `warn_unrecognised_mapper_dirs` actually emits `WARN` log events.
         #[tokio::test]
         async fn unrecognised_dirs_emit_warn_log_events() {
@@ -135,9 +191,8 @@ mod tests {
             tokio::fs::create_dir_all(mappers_dir.join("stale-dir"))
                 .await
                 .unwrap();
-            let c8y_dir = mappers_dir.join("c8y");
-            tokio::fs::create_dir_all(&c8y_dir).await.unwrap();
-            tokio::fs::write(c8y_dir.join("mapper.toml"), "")
+            // c8y without mapper.toml — built-in, should not warn
+            tokio::fs::create_dir_all(mappers_dir.join("c8y"))
                 .await
                 .unwrap();
 
@@ -150,7 +205,7 @@ mod tests {
             );
             assert!(
                 captured.iter().all(|m| !m.contains("c8y")),
-                "Should not warn about 'c8y' (has mapper.toml), got: {captured:?}"
+                "Should not warn about 'c8y' (built-in mapper), got: {captured:?}"
             );
         }
     }

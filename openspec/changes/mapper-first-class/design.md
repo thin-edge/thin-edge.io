@@ -1,6 +1,6 @@
 ## Context
 
-This change revises D1 and D2 from `generic-mapper` and introduces two new decisions. Generic-mapper D4 (runtime wiring of bridge + flows) is unchanged. D3 (config schema) gains a new field and a file rename. D5 (service identity) and D6 (directory scanner) require updates.
+This change revises D1 and D2 from `generic-mapper` and introduces four new decisions (D7–D8, plus `tedge mapper` CLI and env-var scheme in D3/D4). Generic-mapper D4 (runtime wiring of bridge + flows) is unchanged. D3 (config schema) gains a new field and a file rename. D5 (service identity) and D6 (directory scanner) are updated.
 
 ---
 
@@ -125,7 +125,7 @@ tedge mapper config get <name>.<key>
 ```
 c8y           cloud_type=c8y
 az            cloud_type=az
-thingsboard   (no cloud_type)
+thingsboard
 production    cloud_type=c8y
 ```
 
@@ -168,28 +168,56 @@ For `tedge-mapper thingsboard`:
 | Service name | `tedge-mapper@thingsboard` |
 | Health topic | `te/device/main/service/tedge-mapper@thingsboard/status/health` |
 | Lock file | `/run/tedge-mapper@thingsboard.lock` |
-| Bridge service name | `tedge-mapper-bridge@thingsboard` |
+| Bridge service name | `tedge-mapper-bridge-thingsboard` |
 
 This replaces `tedge-mapper-custom@{profile}` from generic-mapper D5.
 
 ---
 
+## D6a: Unified startup validation via `validate_and_load`
+
+Startup validation is performed by a single function `validate_and_load(mapper_dir, config_dir) → Result<MapperStartup>`, which is the sole source of truth for what constitutes a valid mapper directory. The function returns a typed enum:
+
+```rust
+pub enum MapperStartup {
+    FlowsOnly,
+    WithBridge { config: CustomMapperConfig, has_flows: bool },
+}
+```
+
+The validation sequence:
+1. The mapper directory must exist — error listing available mappers if not
+2. At least one of `bridge/` or `flows/` must be present — error if neither
+3. If `bridge/` is present, `mapper.toml` must exist and be valid — error if not
+
+`mapper.toml` is **not** required when `bridge/` is absent — a flows-only mapper is valid with just a `flows/` directory and no `mapper.toml`.
+
+**Why a single function with typed return**: An earlier design split validation across three separate functions (`validate_mapper_dir`, `check_has_active_components`, `check_startup_config`). This made it easy for specs and tests to describe a different sequence than the code actually implements — the flows-only change broke the spec undetected. Collapsing to one function with a typed return makes the validation contract a single thing to spec against, and drives `start()` dispatch directly from the enum variant, making spec-implementation drift a compile error rather than a silent inconsistency.
+
+---
+
 ## Updated D6: Directory scanner
 
-Under the **no-prefix** approach, the scanner classifies by `mapper.toml` presence:
+A directory under `/etc/tedge/mappers/` is classified by `mapper.toml` presence:
 
 | Directory contents | Classification |
 |---|---|
 | Contains `mapper.toml` | mapper (inspect `cloud_type` for type) |
-| No `mapper.toml` | unrecognised → warning |
+| No `mapper.toml`, built-in name | silently ignored |
+| No `mapper.toml`, other name | unrecognised → warning |
 
-Under the **`+` prefix** approach, the scanner classifies by name pattern (no file reading):
+Built-in mapper directories (`c8y`, `az`, `aws`, `collectd`, `local`) and their profile variants (e.g. `c8y.prod`) legitimately have no `mapper.toml` at runtime — their directories are created by the mapper itself for `flows/` and `bridge/` subdirectories, while config lives in the root `tedge.toml`. The scanner suppresses warnings for these via `is_builtin_mapper_dir_name`, which matches the exact built-in names and any `{builtin}.{anything}` dot-separated variant. A name like `c8y-extra` (hyphen, not dot) is not considered a profile and is still flagged.
 
-| Directory pattern | Classification |
-|---|---|
-| `c8y`, `az`, `aws`, `collectd`, `flows`, `local` | built-in |
-| `{builtin}.{profile}` | profile of built-in |
-| `+{name}` | user-defined |
-| Anything else | unrecognised → warning |
+---
 
-The correct implementation depends on the D1 decision.
+## D7: Certificate inheritance from root `tedge.toml`
+
+When `device.cert_path` / `device.key_path` are absent from `mapper.toml`, `build_cloud_mqtt_options` falls back to the corresponding values from the root `tedge.toml`. Precedence: explicit `mapper.toml` value > root `tedge.toml` value. This avoids requiring users to duplicate their device cert configuration for every user-defined mapper.
+
+`device.cert_path` and `device.key_path` are always configured as a pair — both must be set or both must be absent in `mapper.toml`. Setting one without the other is a parse-time error in `load_mapper_config`. The root `tedge.toml` always provides both (they have system defaults), so the effective cert and key after fallback are always either both present or both absent — never asymmetric.
+
+---
+
+## D8: Relative paths in `mapper.toml`
+
+All path fields in `CustomMapperConfig` (`device.cert_path`, `device.key_path`, `device.root_cert_path`, `credentials_path`) support relative paths. Relative paths are resolved relative to the mapper directory at parse time in `load_mapper_config`, immediately after deserialising, so all downstream code always sees absolute paths. Absolute paths are returned unchanged.

@@ -2,6 +2,7 @@ use crate::command::BuildCommand;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::ConfigError;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
 
@@ -80,7 +81,7 @@ impl Command for ListMappersCommand {
         }
         for (name, cloud_type) in mappers {
             if let Some(cloud) = &cloud_type {
-                println!("{name}\t({cloud})");
+                println!("{name}\tcloud_type={cloud}");
             } else {
                 println!("{name}");
             }
@@ -186,7 +187,7 @@ fn toml_value_to_string(value: &toml::Value) -> String {
 
 /// Scans `mappers_root` and returns `(name, cloud_type)` for each subdirectory
 /// that contains a `mapper.toml`.
-async fn scan_mappers(mappers_root: &Utf8PathBuf) -> Vec<(String, Option<String>)> {
+async fn scan_mappers(mappers_root: &Utf8Path) -> Vec<(String, Option<String>)> {
     let Ok(mut entries) = tokio::fs::read_dir(mappers_root).await else {
         return Vec::new();
     };
@@ -213,7 +214,7 @@ async fn scan_mappers(mappers_root: &Utf8PathBuf) -> Vec<(String, Option<String>
 }
 
 /// Reads the `cloud_type` string from a `mapper.toml` if present.
-async fn read_cloud_type(mapper_toml: &Utf8PathBuf) -> Option<String> {
+async fn read_cloud_type(mapper_toml: &Utf8Path) -> Option<String> {
     let content = tokio::fs::read_to_string(mapper_toml).await.ok()?;
     let table: toml::Table = content.parse().ok()?;
     table
@@ -243,7 +244,9 @@ mod tests {
         async fn dir_without_mapper_toml_is_excluded() {
             let ttd = TempTedgeDir::new();
             let mappers_root = ttd.utf8_path().join("mappers");
-            tokio::fs::create_dir_all(mappers_root.join("stale")).await.unwrap();
+            tokio::fs::create_dir_all(mappers_root.join("stale"))
+                .await
+                .unwrap();
 
             assert!(scan_mappers(&mappers_root).await.is_empty());
         }
@@ -268,9 +271,12 @@ mod tests {
             let mappers_root = ttd.utf8_path().join("mappers");
             let tb_dir = mappers_root.join("thingsboard");
             tokio::fs::create_dir_all(&tb_dir).await.unwrap();
-            tokio::fs::write(tb_dir.join("mapper.toml"), "url = \"tb.example.com:8883\"\n")
-                .await
-                .unwrap();
+            tokio::fs::write(
+                tb_dir.join("mapper.toml"),
+                "url = \"tb.example.com:8883\"\n",
+            )
+            .await
+            .unwrap();
 
             let mappers = scan_mappers(&mappers_root).await;
             assert_eq!(mappers, vec![("thingsboard".to_string(), None)]);
@@ -287,15 +293,23 @@ mod tests {
             ] {
                 let dir = mappers_root.join(name);
                 tokio::fs::create_dir_all(&dir).await.unwrap();
-                tokio::fs::write(dir.join("mapper.toml"), content).await.unwrap();
+                tokio::fs::write(dir.join("mapper.toml"), content)
+                    .await
+                    .unwrap();
             }
             // directory without mapper.toml — should be excluded
-            tokio::fs::create_dir_all(mappers_root.join("stale")).await.unwrap();
+            tokio::fs::create_dir_all(mappers_root.join("stale"))
+                .await
+                .unwrap();
 
             let mappers = scan_mappers(&mappers_root).await;
             assert_eq!(mappers.len(), 2);
-            assert!(mappers.iter().any(|(n, ct)| n == "c8y" && ct.as_deref() == Some("c8y")));
-            assert!(mappers.iter().any(|(n, ct)| n == "thingsboard" && ct.is_none()));
+            assert!(mappers
+                .iter()
+                .any(|(n, ct)| n == "c8y" && ct.as_deref() == Some("c8y")));
+            assert!(mappers
+                .iter()
+                .any(|(n, ct)| n == "thingsboard" && ct.is_none()));
         }
     }
 

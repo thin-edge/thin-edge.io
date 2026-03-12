@@ -21,7 +21,7 @@ Tasks are grouped by area. Where tasks depend on the D1 decision (no-prefix vs `
 - [x] 3.3 Implement name extraction: take the first element of the `Vec` as the mapper name; reject extra elements with a clear error
 - [x] 3.4 Validate the mapper name matches `[a-z][a-z0-9-]*`; reject with a hard error otherwise
 - [x] 3.5 Resolve the mapper directory from the name (no-prefix: `{name}/`)
-- [x] 3.6 Error with a list of available mappers when the directory or `mapper.toml` is not found
+- [x] 3.6 Error with a list of available mappers when the mapper directory is not found
 - [x] 3.7 Add unit tests: valid name, invalid name (underscore, uppercase, empty), unknown mapper, extra arguments
 
 ## 4. `CustomMapper` struct update **[replaces gm-4.1, gm-4.2]**
@@ -73,7 +73,41 @@ Tasks 6.1–6.3 are **D1-dependent**:
 
 ## 9. Documentation
 
-- [ ] 9.1 Update the custom mapper directory layout documentation to use the new convention
-- [ ] 9.2 Document `cloud_type` field: purpose, valid values, note that dispatch is not yet implemented
-- [ ] 9.3 Document `tedge mapper list` and `tedge mapper config get` commands
-- [ ] 9.4 Update the ThingsBoard walkthrough example (from `generic-mapper` docs) to use the new directory layout and CLI invocation
+- [x] 9.1 Update the custom mapper directory layout documentation to use the new convention
+- [x] 9.2 Document `cloud_type` field: purpose, valid values, note that dispatch is not yet implemented
+- [x] 9.3 Document `tedge mapper list` and `tedge mapper config get` commands
+- [x] 9.4 Update the ThingsBoard walkthrough example (from `generic-mapper` docs) to use the new directory layout and CLI invocation
+
+## 10. OQ1 — suppress false-positive warnings for built-in mapper directories
+
+Built-in mappers (`c8y`, `az`, `aws`, `collectd`, `local`) legitimately have no `mapper.toml` (their config lives in the root `tedge.toml`). Their subdirectories exist at runtime because the mapper creates `flows/` and `bridge/` under them. The current `warn_unrecognised_mapper_dirs` warns about any directory without `mapper.toml`, producing false positives for these built-in directories and their profile variants (e.g. `c8y.prod`).
+
+- [x] 10.1 Add `pub(crate) fn is_builtin_mapper_dir_name(name: &str) -> bool` in `lib.rs` (alongside `MapperName`), recognising the exact names `c8y`, `az`, `aws`, `collectd`, `local` and any `{builtin}.{anything}` profile variant (matched via `starts_with("{builtin}.")`)
+- [x] 10.2 Update `collect_unrecognised_mapper_dirs` in `mappers_dir.rs` to skip directories where `is_builtin_mapper_dir_name` returns `true`
+- [x] 10.3 Add/update tests:
+  - a built-in dir without `mapper.toml` (e.g. `c8y/`) is not flagged
+  - a profiled built-in dir without `mapper.toml` (e.g. `c8y.prod/`) is not flagged
+  - a user-defined dir without `mapper.toml` (e.g. `thingsboard/`) is still flagged
+  - a name that starts with a builtin prefix but is not a profile (e.g. `c8y-extra/`) is still flagged
+
+## 11. OQ2 — inherit `device.cert_path` / `device.key_path` from root `tedge.toml`
+
+User-defined mappers using certificate TLS currently require `device.cert_path` and `device.key_path` in `mapper.toml`. When these are absent, `build_cloud_mqtt_options` silently skips client-cert setup (the `if let Some(device)` branch does nothing). The mapper should fall back to the values already configured in the root `tedge.toml`.
+
+- [x] 11.1 In `build_cloud_mqtt_options` (`custom/mapper.rs`), when `config.device.cert_path` / `device.key_path` are absent, read the fallback values from `tedge_config.device.cert_path` and `tedge_config.device.key_path`; precedence: `mapper.toml` > root `tedge.toml`
+- [x] 11.2 Add unit tests:
+  - explicit `mapper.toml` values are used when present (no fallback)
+  - absent `mapper.toml` values fall back to `TEdgeConfig` values
+  - both absent and `TEdgeConfig` also absent → existing error behaviour unchanged
+- [x] 11.3 Update the `CustomMapperConfig` doc comment to document the fallback behaviour
+
+## 12. OQ3 — relative paths in `mapper.toml`
+
+All path fields in `CustomMapperConfig` (`device.cert_path`, `device.key_path`, `device.root_cert_path`, `credentials_path`) are currently treated as absolute. Users who want to store a cloud-specific cert next to `mapper.toml` must use an absolute path. Relative paths should be resolved relative to the mapper directory at load time so the rest of the code always sees absolute paths.
+
+- [x] 12.1 After deserialising `CustomMapperConfig` in `load_mapper_config` (`custom/config.rs`), resolve each of `device.cert_path`, `device.key_path`, `device.root_cert_path`, `credentials_path` relative to the mapper directory if it is a relative path; leave absolute paths unchanged
+- [x] 12.2 Add unit tests:
+  - a relative `cert_path = "cert.pem"` is resolved to `{mapper_dir}/cert.pem`
+  - an absolute path is returned unchanged
+  - nested relative path (`device/cert.pem`) resolves correctly
+- [x] 12.3 Document the relative-path behaviour in the `CustomMapperConfig` struct doc comment and in the `mapper.toml` schema documentation

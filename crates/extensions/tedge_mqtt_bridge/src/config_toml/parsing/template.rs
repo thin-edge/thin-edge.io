@@ -402,7 +402,7 @@ fn expand_mapper_key(
                 return Err(ExpandError {
                     message: format!("Key '{path}' not found in mapper config"),
                     help: Some(format!(
-                        "Check that '{part}' exists in your mapper's tedge.toml"
+                        "Check that '{part}' exists in your mapper's mapper.toml"
                     )),
                     span,
                 });
@@ -426,7 +426,7 @@ fn expand_mapper_key(
         None => Err(ExpandError {
             message: format!("Key '{path}' not found in mapper config"),
             help: Some(format!(
-                "Check that '{last_part}' exists in your mapper's tedge.toml"
+                "Check that '{last_part}' exists in your mapper's mapper.toml"
             )),
             span,
         }),

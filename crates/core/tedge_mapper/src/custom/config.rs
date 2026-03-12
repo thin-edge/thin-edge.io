@@ -33,6 +33,21 @@ pub enum AuthMethodConfig {
 /// The `table` field holds the complete TOML document, available for `${mapper.*}`
 /// template expansion in bridge rule files. The typed fields provide structured access
 /// to the values needed to start the MQTT bridge.
+///
+/// ## Certificate fallback
+///
+/// When `device.cert_path` and `device.key_path` are absent from `mapper.toml`,
+/// `build_cloud_mqtt_options` falls back to the values from the root `tedge.toml`
+/// (`device.cert_path` / `device.key_path`). Explicit `mapper.toml` values always
+/// take precedence over root `tedge.toml` values.
+///
+/// ## Relative paths
+///
+/// All path fields (`device.cert_path`, `device.key_path`, `device.root_cert_path`,
+/// `credentials_path`) support relative paths. Relative paths are resolved relative
+/// to the mapper directory (e.g. `/etc/tedge/mappers/thingsboard/`) at parse time,
+/// so `cert.pem` in `mapper.toml` becomes `/etc/tedge/mappers/thingsboard/cert.pem`.
+/// Absolute paths are returned unchanged.
 #[derive(Debug)]
 pub struct CustomMapperConfig {
     /// The complete TOML table — used for `${mapper.*}` template expansion.
@@ -117,13 +132,25 @@ pub async fn load_mapper_config(
         .try_into()
         .map_err(|e| anyhow::anyhow!("Invalid configuration in {config_path}: {e}"))?;
 
+    // Resolve relative paths relative to the mapper directory so all downstream
+    // code always sees absolute paths.
+    let device = raw.device.map(|mut d| {
+        d.cert_path = d.cert_path.map(|p| resolve_relative(mapper_dir, p));
+        d.key_path = d.key_path.map(|p| resolve_relative(mapper_dir, p));
+        d.root_cert_path = d.root_cert_path.map(|p| resolve_relative(mapper_dir, p));
+        d
+    });
+    let credentials_path = raw
+        .credentials_path
+        .map(|p| resolve_relative(mapper_dir, p));
+
     let config = CustomMapperConfig {
         table,
         url: raw.url,
-        device: raw.device,
+        device,
         bridge: raw.bridge,
         auth_method: raw.auth_method,
-        credentials_path: raw.credentials_path,
+        credentials_path,
         cloud_type: raw.cloud_type,
     };
 
@@ -153,6 +180,15 @@ pub async fn load_mapper_config(
     Ok(Some(config))
 }
 
+/// Resolves `path` relative to `base` if it is relative; returns it unchanged if absolute.
+fn resolve_relative(base: &Utf8Path, path: Utf8PathBuf) -> Utf8PathBuf {
+    if path.is_absolute() {
+        path
+    } else {
+        base.join(path)
+    }
+}
+
 /// Reads username and password from a credentials TOML file.
 ///
 /// The file must contain a `[credentials]` section:
@@ -161,7 +197,9 @@ pub async fn load_mapper_config(
 /// username = "my-device"
 /// password = "secret"
 /// ```
-pub fn read_mapper_credentials(credentials_path: &Utf8Path) -> anyhow::Result<(String, String)> {
+pub async fn read_mapper_credentials(
+    credentials_path: &Utf8Path,
+) -> anyhow::Result<(String, String)> {
     #[derive(serde::Deserialize)]
     struct CredentialsFile {
         credentials: BasicCredentials,
@@ -172,7 +210,8 @@ pub fn read_mapper_credentials(credentials_path: &Utf8Path) -> anyhow::Result<(S
         password: String,
     }
 
-    let contents = std::fs::read_to_string(credentials_path)
+    let contents = tokio::fs::read_to_string(credentials_path)
+        .await
         .with_context(|| format!("Failed to read credentials file '{credentials_path}'"))?;
     let file: CredentialsFile = toml::from_str(&contents)
         .with_context(|| format!("Failed to parse credentials file '{credentials_path}'"))?;
@@ -187,7 +226,7 @@ mod tests {
     #[tokio::test]
     async fn returns_none_when_file_not_found() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+        let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         let result = load_mapper_config(&mapper_dir).await.unwrap();
@@ -197,7 +236,7 @@ mod tests {
     #[tokio::test]
     async fn parses_valid_toml() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/custom.tb");
+        let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
@@ -235,7 +274,7 @@ topic_prefix = "tb"
     #[tokio::test]
     async fn returns_error_with_path_for_invalid_toml() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/custom.broken");
+        let mapper_dir = ttd.utf8_path().join("mappers/broken");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(mapper_dir.join("mapper.toml"), "this is not = valid [ toml")
@@ -253,7 +292,7 @@ topic_prefix = "tb"
     #[tokio::test]
     async fn default_port_is_8883_when_not_specified() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/custom.noport");
+        let mapper_dir = ttd.utf8_path().join("mappers/noport");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
@@ -272,7 +311,7 @@ url = "mqtt.example.com"
     #[tokio::test]
     async fn parses_full_schema() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/custom.full");
+        let mapper_dir = ttd.utf8_path().join("mappers/full");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
@@ -280,7 +319,7 @@ url = "mqtt.example.com"
             r#"
 url = "mqtt.example.com:8883"
 auth_method = "certificate"
-credentials_path = "/etc/tedge/mappers/custom.full/credentials.toml"
+credentials_path = "/etc/tedge/mappers/full/credentials.toml"
 
 [device]
 id = "my-device-id"
@@ -300,7 +339,7 @@ keepalive_interval = "60s"
         assert_eq!(config.auth_method, AuthMethodConfig::Certificate);
         assert_eq!(
             config.credentials_path.as_deref().map(|p| p.as_str()),
-            Some("/etc/tedge/mappers/custom.full/credentials.toml")
+            Some("/etc/tedge/mappers/full/credentials.toml")
         );
         let device = config.device.unwrap();
         assert_eq!(device.id.as_deref(), Some("my-device-id"));
@@ -311,14 +350,14 @@ keepalive_interval = "60s"
     #[tokio::test]
     async fn parses_password_auth_method() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/custom.pw");
+        let mapper_dir = ttd.utf8_path().join("mappers/pw");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
             mapper_dir.join("mapper.toml"),
             r#"url = "mqtt.example.com"
 auth_method = "password"
-credentials_path = "/etc/tedge/mappers/custom.pw/creds.toml"
+credentials_path = "/etc/tedge/mappers/pw/creds.toml"
 "#,
         )
         .await
@@ -328,26 +367,27 @@ credentials_path = "/etc/tedge/mappers/custom.pw/creds.toml"
         assert_eq!(config.auth_method, AuthMethodConfig::Password);
     }
 
-    #[test]
-    fn reads_credentials_from_toml_file() {
+    #[tokio::test]
+    async fn reads_credentials_from_toml_file() {
         let ttd = TempTedgeDir::new();
         let creds_path = ttd.utf8_path().join("credentials.toml");
-        std::fs::write(
+        tokio::fs::write(
             &creds_path,
             "[credentials]\nusername = \"alice\"\npassword = \"s3cr3t\"\n",
         )
+        .await
         .unwrap();
 
-        let (username, password) = read_mapper_credentials(&creds_path).unwrap();
+        let (username, password) = read_mapper_credentials(&creds_path).await.unwrap();
         assert_eq!(username, "alice");
         assert_eq!(password, "s3cr3t");
     }
 
-    #[test]
-    fn credentials_error_on_missing_file() {
+    #[tokio::test]
+    async fn credentials_error_on_missing_file() {
         let ttd = TempTedgeDir::new();
         let creds_path = ttd.utf8_path().join("missing.toml");
-        let err = read_mapper_credentials(&creds_path).unwrap_err();
+        let err = read_mapper_credentials(&creds_path).await.unwrap_err();
         assert!(
             format!("{err}").contains("credentials"),
             "Error should mention credentials: {err}"
@@ -357,7 +397,7 @@ credentials_path = "/etc/tedge/mappers/custom.pw/creds.toml"
     #[tokio::test]
     async fn errors_when_cert_path_set_without_key_path() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/custom.halfcert");
+        let mapper_dir = ttd.utf8_path().join("mappers/halfcert");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         tokio::fs::write(
             mapper_dir.join("mapper.toml"),
@@ -380,7 +420,7 @@ cert_path = "/etc/tedge/device-certs/tedge-certificate.pem"
     #[tokio::test]
     async fn errors_when_key_path_set_without_cert_path() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/custom.halfkey");
+        let mapper_dir = ttd.utf8_path().join("mappers/halfkey");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         tokio::fs::write(
             mapper_dir.join("mapper.toml"),
@@ -403,7 +443,7 @@ key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
     #[tokio::test]
     async fn parses_cloud_type_when_present() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/custom.ct");
+        let mapper_dir = ttd.utf8_path().join("mappers/cloudtype");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         tokio::fs::write(
             mapper_dir.join("mapper.toml"),
@@ -419,7 +459,7 @@ key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
     #[tokio::test]
     async fn cloud_type_is_none_when_absent() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/custom.noct");
+        let mapper_dir = ttd.utf8_path().join("mappers/noct");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         tokio::fs::write(
             mapper_dir.join("mapper.toml"),
@@ -435,7 +475,7 @@ key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
     #[tokio::test]
     async fn errors_on_unknown_cloud_type() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/custom.badct");
+        let mapper_dir = ttd.utf8_path().join("mappers/badct");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         tokio::fs::write(
             mapper_dir.join("mapper.toml"),
@@ -450,5 +490,95 @@ key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
             msg.contains("cloud_type") || msg.contains("notacloud"),
             "Error should mention the invalid cloud_type value: {msg}"
         );
+    }
+
+    mod relative_paths {
+        use super::*;
+
+        #[tokio::test]
+        async fn relative_cert_path_is_resolved_to_mapper_dir() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "[device]\ncert_path = \"cert.pem\"\nkey_path = \"key.pem\"\n",
+            )
+            .await
+            .unwrap();
+
+            let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+            let device = config.device.unwrap();
+            assert_eq!(
+                device.cert_path.unwrap(),
+                mapper_dir.join("cert.pem"),
+                "Relative cert_path should resolve to mapper_dir/cert.pem"
+            );
+            assert_eq!(
+                device.key_path.unwrap(),
+                mapper_dir.join("key.pem"),
+                "Relative key_path should resolve to mapper_dir/key.pem"
+            );
+        }
+
+        #[tokio::test]
+        async fn absolute_cert_path_is_unchanged() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "[device]\ncert_path = \"/etc/tedge/device-certs/tedge-certificate.pem\"\nkey_path = \"/etc/tedge/device-certs/tedge-private-key.pem\"\n",
+            )
+            .await
+            .unwrap();
+
+            let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+            let device = config.device.unwrap();
+            assert_eq!(
+                device.cert_path.unwrap(),
+                Utf8PathBuf::from("/etc/tedge/device-certs/tedge-certificate.pem"),
+                "Absolute cert_path should be returned unchanged"
+            );
+        }
+
+        #[tokio::test]
+        async fn nested_relative_path_resolves_correctly() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "[device]\ncert_path = \"certs/device.pem\"\nkey_path = \"certs/device.key\"\n",
+            )
+            .await
+            .unwrap();
+
+            let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+            let device = config.device.unwrap();
+            assert_eq!(
+                device.cert_path.unwrap(),
+                mapper_dir.join("certs/device.pem")
+            );
+        }
+
+        #[tokio::test]
+        async fn relative_credentials_path_is_resolved() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "credentials_path = \"credentials.toml\"\n",
+            )
+            .await
+            .unwrap();
+
+            let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+            assert_eq!(
+                config.credentials_path.unwrap(),
+                mapper_dir.join("credentials.toml")
+            );
+        }
     }
 }

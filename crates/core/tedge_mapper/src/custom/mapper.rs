@@ -10,6 +10,7 @@ use crate::core::mqtt::configure_proxy;
 use crate::custom::config::load_mapper_config;
 use crate::custom::config::read_mapper_credentials;
 use crate::custom::config::AuthMethodConfig;
+use crate::custom::config::CustomMapperConfig;
 use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
@@ -58,22 +59,48 @@ impl CustomMapper {
     }
 }
 
-/// Validates that the mapper directory exists and contains a `mapper.toml` file.
+/// The result of validating and loading a mapper directory at startup.
 ///
-/// If the directory is missing or has no `mapper.toml`, returns an error listing
-/// available mappers found in the mappers directory.
-pub async fn validate_mapper_dir(
+/// This is the single authoritative description of what a mapper directory
+/// contains and what components should be started. Produced by
+/// [`validate_and_load`], then used directly to drive [`start`].
+#[derive(Debug)]
+pub enum MapperStartup {
+    /// The mapper directory has a `flows/` subdirectory but no `bridge/`.
+    /// Only the flows engine will be started; no cloud MQTT connection.
+    FlowsOnly,
+    /// The mapper directory has a `bridge/` subdirectory (with a valid
+    /// `mapper.toml`). The MQTT bridge will be started. `has_flows` indicates
+    /// whether a `flows/` subdirectory is also present.
+    WithBridge {
+        config: Box<CustomMapperConfig>,
+        has_flows: bool,
+    },
+}
+
+/// Validates the mapper directory and loads its configuration in one step.
+///
+/// This is the single point of startup validation for a user-defined mapper.
+/// The validation sequence is:
+/// 1. The mapper directory must exist.
+/// 2. At least one of `bridge/` or `flows/` must be present — an empty
+///    directory would start with nothing to do.
+/// 3. If `bridge/` is present, `mapper.toml` must exist and be valid.
+///
+/// Returns a typed [`MapperStartup`] that describes what should be started,
+/// eliminating the need for callers to re-inspect the directory state.
+pub async fn validate_and_load(
     mapper_dir: &Utf8Path,
     config_dir: &Utf8Path,
-) -> anyhow::Result<()> {
-    let mappers_root = config_dir.join("mappers");
-
+) -> anyhow::Result<MapperStartup> {
+    // 1. Directory must exist.
     if !tokio::fs::try_exists(mapper_dir).await.unwrap_or(false)
         || !tokio::fs::metadata(mapper_dir)
             .await
             .map(|m| m.is_dir())
             .unwrap_or(false)
     {
+        let mappers_root = config_dir.join("mappers");
         let available = list_available_mappers(&mappers_root).await;
         if available.is_empty() {
             anyhow::bail!(
@@ -89,15 +116,36 @@ pub async fn validate_mapper_dir(
         }
     }
 
-    anyhow::ensure!(
-        tokio::fs::try_exists(mapper_dir.join("mapper.toml"))
-            .await
-            .unwrap_or(false),
-        "Mapper directory '{mapper_dir}' does not contain a 'mapper.toml' file. \
-         Create a mapper.toml to configure this mapper."
-    );
+    let has_bridge_dir = mapper_dir.join("bridge").is_dir();
+    let has_flows_dir = mapper_dir.join("flows").is_dir();
 
-    Ok(())
+    // 2. At least one active component required.
+    if !has_bridge_dir && !has_flows_dir {
+        anyhow::bail!(
+            "Custom mapper directory '{}' contains neither a 'bridge/' nor a 'flows/' \
+             directory — the mapper would do nothing. Add bridge rules, flow scripts, \
+             or both.",
+            mapper_dir
+        );
+    }
+
+    if !has_bridge_dir {
+        return Ok(MapperStartup::FlowsOnly);
+    }
+
+    // 3. bridge/ present — mapper.toml is required for connection settings.
+    let config = load_mapper_config(mapper_dir).await?.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Mapper directory '{mapper_dir}' contains a 'bridge/' subdirectory but no \
+             'mapper.toml' connection config. \
+             Create a mapper.toml with a top-level 'url' field (e.g. url = \"host:8883\") to use the MQTT bridge."
+        )
+    })?;
+
+    Ok(MapperStartup::WithBridge {
+        config: Box::new(config),
+        has_flows: has_flows_dir,
+    })
 }
 
 /// Lists available mappers by scanning the mappers root directory for subdirectories
@@ -137,8 +185,8 @@ async fn list_available_mappers(mappers_root: &Utf8Path) -> Vec<String> {
 ///
 /// Returns `(MqttOptions, AuthMethod)` so the caller can pass `AuthMethod` to
 /// `load_bridge_rules_from_directory`.
-pub fn build_cloud_mqtt_options(
-    config: &crate::custom::config::CustomMapperConfig,
+pub async fn build_cloud_mqtt_options(
+    config: &CustomMapperConfig,
     service_name: &str,
     mapper_dir: &Utf8Path,
     tedge_config: &TEdgeConfig,
@@ -173,32 +221,50 @@ pub fn build_cloud_mqtt_options(
         }
     };
 
+    // Resolve cert/key: mapper.toml takes precedence, then fall back to root tedge.toml.
+    // Calling device_cert_path/device_key_path with None never errors (no cloud-specific
+    // lookup is performed), so we propagate any unexpected error rather than silently
+    // swallowing it with .ok().
+    let mapper_cert = config.device.as_ref().and_then(|d| d.cert_path.clone());
+    let mapper_key = config.device.as_ref().and_then(|d| d.key_path.clone());
+    let effective_cert = match mapper_cert {
+        Some(cert) => cert,
+        None => tedge_config
+            .device_cert_path(None::<tedge_config::tedge_toml::tedge_config::Cloud<'_>>)
+            .context("Failed to read device.cert_path from tedge config")?
+            .into(),
+    };
+    let effective_key = match mapper_key {
+        Some(key) => key,
+        None => tedge_config
+            .device_key_path(None::<tedge_config::tedge_toml::tedge_config::Cloud<'_>>)
+            .context("Failed to read device.key_path from tedge config")?
+            .into(),
+    };
+    let device_id = config.device.as_ref().and_then(|d| d.id.clone());
+
     match effective_auth {
         AuthMethod::Certificate => {
-            if let Some(device) = &config.device {
-                if let (Some(cert_path), Some(key_path)) = (&device.cert_path, &device.key_path) {
-                    let tls_config = MqttAuthConfigCloudBroker {
-                        ca_path,
-                        client: Some(MqttAuthClientConfigCloudBroker {
-                            cert_file: cert_path.clone(),
-                            private_key: PrivateKeyType::File(key_path.clone()),
-                        }),
-                    }
-                    .to_rustls_client_config()
-                    .context("Failed to create MQTT TLS config")?;
-                    cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
+            let tls_config = MqttAuthConfigCloudBroker {
+                ca_path,
+                client: Some(MqttAuthClientConfigCloudBroker {
+                    cert_file: effective_cert.clone(),
+                    private_key: PrivateKeyType::File(effective_key.clone()),
+                }),
+            }
+            .to_rustls_client_config()
+            .context("Failed to create MQTT TLS config")?;
+            cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
 
-                    // device.id takes precedence over cert CN
-                    let client_id = device.id.clone().or_else(|| {
-                        PemCertificate::from_pem_file(cert_path)
-                            .and_then(|cert| cert.subject_common_name())
-                            .ok()
-                            .filter(|cn| !cn.is_empty())
-                    });
-                    if let Some(id) = client_id {
-                        cloud_config.set_client_id(id);
-                    }
-                }
+            // device.id takes precedence over cert CN
+            let client_id = device_id.or_else(|| {
+                PemCertificate::from_pem_file(&effective_cert)
+                    .and_then(|cert| cert.subject_common_name())
+                    .ok()
+                    .filter(|cn| !cn.is_empty())
+            });
+            if let Some(id) = client_id {
+                cloud_config.set_client_id(id);
             }
         }
         AuthMethod::Password => {
@@ -208,12 +274,12 @@ pub fn build_cloud_mqtt_options(
                      no credentials_path is configured"
                 )
             })?;
-            let (username, password) = read_mapper_credentials(creds_path)?;
+            let (username, password) = read_mapper_credentials(creds_path).await?;
             use_credentials(&mut cloud_config, &ca_path, username, password)?;
 
             // Apply explicit device.id if set
-            if let Some(id) = config.device.as_ref().and_then(|d| d.id.as_ref()) {
-                cloud_config.set_client_id(id.clone());
+            if let Some(id) = device_id {
+                cloud_config.set_client_id(id);
             }
         }
     }
@@ -254,51 +320,6 @@ async fn build_flows_actors(
     Ok((flows_mapper, fs_actor, cmd_watcher_actor))
 }
 
-/// Validates that the mapper directory has at least one active component
-/// (bridge or flows).
-///
-/// A directory containing only `mapper.toml` (and no `bridge/` or `flows/`
-/// directories) would start with nothing to do.
-pub fn check_has_active_components(mapper_dir: &Utf8Path) -> anyhow::Result<()> {
-    let has_bridge_dir = mapper_dir.join("bridge").is_dir();
-    let has_flows_dir = mapper_dir.join("flows").is_dir();
-    if !has_bridge_dir && !has_flows_dir {
-        anyhow::bail!(
-            "Custom mapper directory '{}' contains neither a 'bridge/' nor a 'flows/' \
-             directory — the mapper would do nothing. Add bridge rules, flow scripts, \
-             or both.",
-            mapper_dir
-        );
-    }
-    Ok(())
-}
-
-/// Validates the mapper directory's startup config, returning the parsed config if `mapper.toml`
-/// is present, `None` if only flows are present, or an error if `bridge/` exists without a
-/// `mapper.toml`.
-///
-/// This is a separate function to make the startup validation testable without requiring a
-/// live MQTT broker.
-pub async fn check_startup_config(
-    mapper_dir: &Utf8Path,
-) -> anyhow::Result<Option<crate::custom::config::CustomMapperConfig>> {
-    let has_bridge_dir = mapper_dir.join("bridge").is_dir();
-    if !has_bridge_dir {
-        return Ok(None);
-    }
-    let mapper_config = load_mapper_config(mapper_dir).await?;
-    match mapper_config {
-        None => {
-            anyhow::bail!(
-                "Mapper directory '{mapper_dir}' contains a 'bridge/' subdirectory but no \
-                 'mapper.toml' connection config. \
-                 Create a mapper.toml with a top-level 'url' field (e.g. url = \"host:8883\") to use the MQTT bridge.",
-            );
-        }
-        Some(config) => Ok(Some(config)),
-    }
-}
-
 #[async_trait]
 impl TEdgeComponent for CustomMapper {
     async fn start(
@@ -309,15 +330,12 @@ impl TEdgeComponent for CustomMapper {
         let mapper_dir = self.mapper_dir(config_dir);
         let service_name = self.service_name();
 
-        validate_mapper_dir(&mapper_dir, config_dir).await?;
-        check_has_active_components(&mapper_dir)?;
-
-        let has_flows_dir = mapper_dir.join("flows").is_dir();
+        let startup = validate_and_load(&mapper_dir, config_dir).await?;
 
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&service_name, &tedge_config).await?;
 
-        if let Some(config) = check_startup_config(&mapper_dir).await? {
+        if let MapperStartup::WithBridge { ref config, .. } = startup {
             let bridge_dir = mapper_dir.join("bridge");
             let bridge_service_name = self.bridge_service_name();
             let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
@@ -326,7 +344,7 @@ impl TEdgeComponent for CustomMapper {
                 service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
 
             let (cloud_config, effective_auth) =
-                build_cloud_mqtt_options(&config, &service_name, &mapper_dir, &tedge_config)?;
+                build_cloud_mqtt_options(config, &service_name, &mapper_dir, &tedge_config).await?;
 
             let bridge_rules = load_bridge_rules_from_directory(
                 &bridge_dir,
@@ -349,7 +367,15 @@ impl TEdgeComponent for CustomMapper {
             runtime.spawn(bridge_actor).await?;
         }
 
-        if has_flows_dir {
+        let has_flows = matches!(
+            startup,
+            MapperStartup::FlowsOnly
+                | MapperStartup::WithBridge {
+                    has_flows: true,
+                    ..
+                }
+        );
+        if has_flows {
             let (mut flows_mapper, mut fs_actor, mut cmd_watcher_actor) =
                 build_flows_actors(&mapper_dir, &service_name, &tedge_config).await?;
             flows_mapper.connect(&mut mqtt_actor);
@@ -400,30 +426,18 @@ mod tests {
         }
     }
 
-    mod mapper_validation {
+    mod validate_and_load {
         use super::*;
         use tedge_test_utils::fs::TempTedgeDir;
 
-        #[tokio::test]
-        async fn succeeds_when_mapper_toml_exists() {
-            let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
-            let mapper_dir = config_dir.join("mappers/thingsboard");
-            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-            tokio::fs::write(mapper_dir.join("mapper.toml"), "")
-                .await
-                .unwrap();
-
-            assert!(validate_mapper_dir(&mapper_dir, config_dir).await.is_ok());
-        }
-
+        /// Directory does not exist → error mentioning the missing directory.
         #[tokio::test]
         async fn errors_when_directory_missing() {
             let ttd = TempTedgeDir::new();
             let config_dir = ttd.utf8_path();
             let mapper_dir = config_dir.join("mappers/nonexistent");
 
-            let err = validate_mapper_dir(&mapper_dir, config_dir)
+            let err = validate_and_load(&mapper_dir, config_dir)
                 .await
                 .unwrap_err();
             let msg = format!("{err}");
@@ -433,52 +447,30 @@ mod tests {
             );
         }
 
-        #[tokio::test]
-        async fn errors_when_no_mapper_toml() {
-            let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
-            let mapper_dir = config_dir.join("mappers/thingsboard");
-            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-            // No mapper.toml
-
-            let err = validate_mapper_dir(&mapper_dir, config_dir)
-                .await
-                .unwrap_err();
-            let msg = format!("{err}");
-            assert!(
-                msg.contains("mapper.toml"),
-                "Error should mention missing mapper.toml: {msg}"
-            );
-        }
-
+        /// Error when directory is missing lists available mappers.
         #[tokio::test]
         async fn error_lists_available_mappers() {
             let ttd = TempTedgeDir::new();
             let config_dir = ttd.utf8_path();
 
-            let thingsboard_dir = config_dir.join("mappers/thingsboard");
-            tokio::fs::create_dir_all(&thingsboard_dir).await.unwrap();
-            tokio::fs::write(thingsboard_dir.join("mapper.toml"), "")
-                .await
-                .unwrap();
-            let mycloud_dir = config_dir.join("mappers/mycloud");
-            tokio::fs::create_dir_all(&mycloud_dir).await.unwrap();
-            tokio::fs::write(mycloud_dir.join("mapper.toml"), "")
-                .await
-                .unwrap();
+            for name in ["thingsboard", "mycloud"] {
+                let dir = config_dir.join(format!("mappers/{name}"));
+                tokio::fs::create_dir_all(&dir).await.unwrap();
+                tokio::fs::write(dir.join("mapper.toml"), "").await.unwrap();
+            }
 
             let mapper_dir = config_dir.join("mappers/nonexistent");
-            let err = validate_mapper_dir(&mapper_dir, config_dir)
+            let err = validate_and_load(&mapper_dir, config_dir)
                 .await
                 .unwrap_err();
             let msg = format!("{err}");
-
             assert!(
                 msg.contains("thingsboard") || msg.contains("mycloud"),
                 "Error should list available mappers: {msg}"
             );
         }
 
+        /// No mappers exist → error still mentions missing directory (not a panic).
         #[tokio::test]
         async fn error_when_no_mappers_exist() {
             let ttd = TempTedgeDir::new();
@@ -488,7 +480,7 @@ mod tests {
                 .unwrap();
 
             let mapper_dir = config_dir.join("mappers/nonexistent");
-            let err = validate_mapper_dir(&mapper_dir, config_dir)
+            let err = validate_and_load(&mapper_dir, config_dir)
                 .await
                 .unwrap_err();
             let msg = format!("{err}");
@@ -497,21 +489,58 @@ mod tests {
                 "Error should mention missing directory: {msg}"
             );
         }
-    }
 
-    mod startup_config {
-        use super::*;
-        use tedge_test_utils::fs::TempTedgeDir;
-
+        /// Directory exists but has neither bridge/ nor flows/ → error about no active components.
         #[tokio::test]
-        async fn bridge_dir_without_tedge_toml_errors() {
+        async fn errors_when_no_active_components() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let config_dir = ttd.utf8_path();
+            let mapper_dir = config_dir.join("mappers/testmapper");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(mapper_dir.join("mapper.toml"), "url = \"host:8883\"\n")
+                .await
+                .unwrap();
+
+            let err = validate_and_load(&mapper_dir, config_dir)
+                .await
+                .unwrap_err();
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("bridge") && msg.contains("flows"),
+                "Error should mention both bridge/ and flows/: {msg}"
+            );
+        }
+
+        /// flows/ present, no bridge/ → FlowsOnly.
+        #[tokio::test]
+        async fn flows_only_when_no_bridge_dir() {
+            let ttd = TempTedgeDir::new();
+            let config_dir = ttd.utf8_path();
+            let mapper_dir = config_dir.join("mappers/myflows");
+            tokio::fs::create_dir_all(mapper_dir.join("flows"))
+                .await
+                .unwrap();
+
+            let startup = validate_and_load(&mapper_dir, config_dir).await.unwrap();
+            assert!(
+                matches!(startup, MapperStartup::FlowsOnly),
+                "Expected FlowsOnly"
+            );
+        }
+
+        /// bridge/ present but no mapper.toml → error mentioning both.
+        #[tokio::test]
+        async fn errors_when_bridge_without_mapper_toml() {
+            let ttd = TempTedgeDir::new();
+            let config_dir = ttd.utf8_path();
+            let mapper_dir = config_dir.join("mappers/testmapper");
             tokio::fs::create_dir_all(mapper_dir.join("bridge"))
                 .await
                 .unwrap();
 
-            let err = check_startup_config(&mapper_dir).await.unwrap_err();
+            let err = validate_and_load(&mapper_dir, config_dir)
+                .await
+                .unwrap_err();
             let msg = format!("{err}");
             assert!(
                 msg.contains("bridge") && msg.contains("mapper.toml"),
@@ -519,10 +548,12 @@ mod tests {
             );
         }
 
+        /// bridge/ + mapper.toml, no flows/ → WithBridge { has_flows: false }.
         #[tokio::test]
-        async fn bridge_dir_with_mapper_toml_returns_config() {
+        async fn with_bridge_only_when_no_flows_dir() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let config_dir = ttd.utf8_path();
+            let mapper_dir = config_dir.join("mappers/testmapper");
             tokio::fs::create_dir_all(mapper_dir.join("bridge"))
                 .await
                 .unwrap();
@@ -533,63 +564,72 @@ mod tests {
             .await
             .unwrap();
 
-            let config = check_startup_config(&mapper_dir).await.unwrap();
+            let startup = validate_and_load(&mapper_dir, config_dir).await.unwrap();
             assert!(
-                config.is_some(),
-                "Should return config when mapper.toml exists"
+                matches!(
+                    startup,
+                    MapperStartup::WithBridge {
+                        has_flows: false,
+                        ..
+                    }
+                ),
+                "Expected WithBridge {{ has_flows: false }}"
             );
         }
 
-        /// No bridge/ directory returns None (flows-only case)
+        /// bridge/ + mapper.toml + flows/ → WithBridge { has_flows: true }.
         #[tokio::test]
-        async fn no_bridge_dir_returns_none() {
+        async fn with_bridge_and_flows_when_both_present() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.flows-only");
+            let config_dir = ttd.utf8_path();
+            let mapper_dir = config_dir.join("mappers/testmapper");
+            tokio::fs::create_dir_all(mapper_dir.join("bridge"))
+                .await
+                .unwrap();
             tokio::fs::create_dir_all(mapper_dir.join("flows"))
                 .await
                 .unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "url = \"mqtt.example.com\"\n",
+            )
+            .await
+            .unwrap();
 
-            let config = check_startup_config(&mapper_dir).await.unwrap();
+            let startup = validate_and_load(&mapper_dir, config_dir).await.unwrap();
             assert!(
-                config.is_none(),
-                "Should return None when no bridge/ dir exists"
+                matches!(
+                    startup,
+                    MapperStartup::WithBridge {
+                        has_flows: true,
+                        ..
+                    }
+                ),
+                "Expected WithBridge {{ has_flows: true }}"
             );
         }
 
-        /// A directory with only mapper.toml (no bridge/ or flows/) has no active components
-        #[test]
-        fn mapper_toml_only_errors_no_active_components() {
+        /// bridge/ + malformed mapper.toml → parse error mentioning mapper.toml.
+        #[tokio::test]
+        async fn errors_when_bridge_mapper_toml_is_malformed() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
-            std::fs::create_dir_all(&mapper_dir).unwrap();
-            std::fs::write(mapper_dir.join("mapper.toml"), "url = \"host:8883\"\n").unwrap();
+            let config_dir = ttd.utf8_path();
+            let mapper_dir = config_dir.join("mappers/testmapper");
+            tokio::fs::create_dir_all(mapper_dir.join("bridge"))
+                .await
+                .unwrap();
+            tokio::fs::write(mapper_dir.join("mapper.toml"), "not valid toml [[[\n")
+                .await
+                .unwrap();
 
-            let err = check_has_active_components(&mapper_dir).unwrap_err();
-            let msg = format!("{err}");
+            let err = validate_and_load(&mapper_dir, config_dir)
+                .await
+                .unwrap_err();
+            let msg = format!("{err:#}");
             assert!(
-                msg.contains("bridge") && msg.contains("flows"),
-                "Error should mention both bridge/ and flows/: {msg}"
+                msg.contains("mapper.toml"),
+                "Error should mention mapper.toml: {msg}"
             );
-        }
-
-        /// A directory with bridge/ passes the active-components check
-        #[test]
-        fn bridge_dir_passes_active_components_check() {
-            let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
-            std::fs::create_dir_all(mapper_dir.join("bridge")).unwrap();
-
-            assert!(check_has_active_components(&mapper_dir).is_ok());
-        }
-
-        /// A directory with flows/ passes the active-components check
-        #[test]
-        fn flows_dir_passes_active_components_check() {
-            let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
-            std::fs::create_dir_all(mapper_dir.join("flows")).unwrap();
-
-            assert!(check_has_active_components(&mapper_dir).is_ok());
         }
     }
 
@@ -597,19 +637,50 @@ mod tests {
         use super::*;
         use crate::custom::config::AuthMethodConfig;
         use crate::custom::config::BridgeConfig;
-        use crate::custom::config::CustomMapperConfig;
         use tedge_config::TEdgeConfig;
         use tedge_test_utils::fs::TempTedgeDir;
 
-        #[test]
-        fn missing_url_returns_error_with_file_path_hint() {
+        // Test-only EC certificate and matching private key (self-signed, CN=localhost).
+        // Generated by crates/common/axum_tls/test_data/_regenerate_certs.sh.
+        const TEST_CERT_PEM: &str = "\
+-----BEGIN CERTIFICATE-----\n\
+MIIBnzCCAUWgAwIBAgIUSTUtJUfUdERMKBwsfdRv9IbvQicwCgYIKoZIzj0EAwIw\n\
+FDESMBAGA1UEAwwJbG9jYWxob3N0MCAXDTIzMTExNDE2MDUwOVoYDzMwMjMwMzE3\n\
+MTYwNTA5WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwWTATBgcqhkjOPQIBBggqhkjO\n\
+PQMBBwNCAAR2SVEPD34AAxFuk0xYm60p7hA7+1SW+sFHazBRg32ifFd0o2Mn+Tf+\n\
+voYflBi3v4lhr361RoWB8QfmaGN05vv+o3MwcTAdBgNVHQ4EFgQUAb4jQ7RQ/xyg\n\
+cZM+We8ik29/oxswHwYDVR0jBBgwFoAUAb4jQ7RQ/xygcZM+We8ik29/oxswIQYD\n\
+VR0RBBowGIIJbG9jYWxob3N0ggsqLmxvY2FsaG9zdDAMBgNVHRMBAf8EAjAAMAoG\n\
+CCqGSM49BAMCA0gAMEUCIA6QrxoDHQJqoly7d8VN0sj0eDvfFpbbZdSnzBd6R8AP\n\
+AiEAm/PAH3IPGuHRBIpdC0rNR8F/l3WcN9I9984qKZdG5rs=\n\
+-----END CERTIFICATE-----\n";
+
+        const TEST_KEY_PEM: &str = "\
+-----BEGIN EC PRIVATE KEY-----\n\
+MHcCAQEEIBX2Z/NKGEX14QbH4kb5GXom0pqSPfX0mxdWbLb86apEoAoGCCqGSM49\n\
+AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
+/r6GH5QYt7+JYa9+tUaFgfEH5mhjdOb7/g==\n\
+-----END EC PRIVATE KEY-----\n";
+
+        /// Writes TEST_CERT_PEM and TEST_KEY_PEM to `dir` and returns (cert_path, key_path).
+        async fn write_test_cert(dir: &camino::Utf8Path) -> (Utf8PathBuf, Utf8PathBuf) {
+            let cert = dir.join("cert.pem");
+            let key = dir.join("key.pem");
+            tokio::fs::write(&cert, TEST_CERT_PEM).await.unwrap();
+            tokio::fs::write(&key, TEST_KEY_PEM).await.unwrap();
+            (cert, key)
+        }
+
+        #[tokio::test]
+        async fn missing_url_returns_error_with_file_path_hint() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
             let tedge_config = TEdgeConfig::load_toml_str("");
             let config = make_config(None);
 
-            let err =
-                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config).unwrap_err();
+            let err = build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                .await
+                .unwrap_err();
             let msg = format!("{err}");
             assert!(
                 msg.contains("mapper.toml"),
@@ -618,41 +689,50 @@ mod tests {
             assert!(msg.contains("url"), "Error should mention url: {msg}");
         }
 
-        #[test]
-        fn auto_without_credentials_resolves_to_certificate() {
+        #[tokio::test]
+        async fn auto_without_credentials_resolves_to_certificate() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
-            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+            let (cert, key) = write_test_cert(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
             let config = make_config(Some("mqtt.example.com:1883"));
 
-            let (_, auth) =
-                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config).unwrap();
+            let (_, auth) = build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                .await
+                .unwrap();
             assert!(matches!(auth, AuthMethod::Certificate));
         }
 
-        #[test]
-        fn explicit_certificate_method_resolves_to_certificate() {
+        #[tokio::test]
+        async fn explicit_certificate_method_resolves_to_certificate() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
-            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+            let (cert, key) = write_test_cert(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
             let mut config = make_config(Some("mqtt.example.com:1883"));
             config.auth_method = AuthMethodConfig::Certificate;
 
-            let (_, auth) =
-                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config).unwrap();
+            let (_, auth) = build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                .await
+                .unwrap();
             assert!(matches!(auth, AuthMethod::Certificate));
         }
 
-        #[test]
-        fn password_method_without_credentials_path_errors() {
+        #[tokio::test]
+        async fn password_method_without_credentials_path_errors() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
             let tedge_config = TEdgeConfig::load_toml_str("");
             let mut config = make_config(Some("mqtt.example.com:1883"));
             config.auth_method = AuthMethodConfig::Password;
 
-            let err =
-                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config).unwrap_err();
+            let err = build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                .await
+                .unwrap_err();
             let msg = format!("{err}");
             assert!(
                 msg.contains("credentials_path"),
@@ -660,60 +740,93 @@ mod tests {
             );
         }
 
-        #[test]
-        fn auto_with_credentials_path_resolves_to_password() {
+        #[tokio::test]
+        async fn auto_with_credentials_path_resolves_to_password() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
             let creds_path = ttd.utf8_path().join("creds.toml");
-            std::fs::write(
+            tokio::fs::write(
                 &creds_path,
                 "[credentials]\nusername = \"alice\"\npassword = \"secret\"\n",
             )
+            .await
             .unwrap();
             let tedge_config = TEdgeConfig::load_toml_str("");
             let mut config = make_config(Some("mqtt.example.com:1883"));
             config.credentials_path = Some(creds_path);
 
-            // auth_method = Auto + credentials_path set → resolves to Password
-            match build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config) {
-                Ok((_, auth)) => assert!(matches!(auth, AuthMethod::Password)),
-                Err(e) => {
-                    // Only acceptable failure is a TLS/CA setup issue (system-dependent);
-                    // the auth resolution itself must have succeeded.
-                    let msg = format!("{e}");
-                    assert!(
-                        !msg.contains("credentials_path"),
-                        "Auth resolution should succeed (credentials_path is set): {msg}"
-                    );
-                }
-            }
+            let (_, auth) = build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                .await
+                .unwrap();
+            assert!(matches!(auth, AuthMethod::Password));
         }
 
-        #[test]
-        fn explicit_password_method_with_credentials_path_resolves_to_password() {
+        #[tokio::test]
+        async fn explicit_password_method_with_credentials_path_resolves_to_password() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/custom.test");
+            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
             let creds_path = ttd.utf8_path().join("creds.toml");
-            std::fs::write(
+            tokio::fs::write(
                 &creds_path,
                 "[credentials]\nusername = \"bob\"\npassword = \"pass\"\n",
             )
+            .await
             .unwrap();
             let tedge_config = TEdgeConfig::load_toml_str("");
             let mut config = make_config(Some("mqtt.example.com:1883"));
             config.auth_method = AuthMethodConfig::Password;
             config.credentials_path = Some(creds_path);
 
-            match build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config) {
-                Ok((_, auth)) => assert!(matches!(auth, AuthMethod::Password)),
-                Err(e) => {
-                    let msg = format!("{e}");
-                    assert!(
-                        !msg.contains("credentials_path"),
-                        "Auth resolution should succeed (credentials_path is set): {msg}"
-                    );
-                }
-            }
+            let (_, auth) = build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                .await
+                .unwrap();
+            assert!(matches!(auth, AuthMethod::Password));
+        }
+
+        #[tokio::test]
+        async fn mapper_toml_cert_takes_precedence_over_tedge_config() {
+            // When mapper.toml explicitly sets cert/key, those take priority over
+            // tedge.toml values. We verify this by setting the tedge.toml paths to
+            // nonexistent files — if the mapper cert is used the function succeeds;
+            // if the tedge fallback is used it fails.
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let tedge_config = TEdgeConfig::load_toml_str(
+                "device.cert_path = \"/nonexistent/tedge-cert.pem\"\n\
+                 device.key_path = \"/nonexistent/tedge-key.pem\"\n",
+            );
+            let (mapper_cert, mapper_key) = write_test_cert(ttd.utf8_path()).await;
+            let mut config = make_config(Some("mqtt.example.com:1883"));
+            config.device = Some(crate::custom::config::DeviceConfig {
+                id: None,
+                cert_path: Some(mapper_cert),
+                key_path: Some(mapper_key),
+                root_cert_path: None,
+            });
+
+            // If mapper cert takes precedence the TLS config is built successfully.
+            build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                .await
+                .unwrap();
+        }
+
+        #[tokio::test]
+        async fn absent_mapper_cert_falls_back_to_tedge_config() {
+            // When mapper.toml has no cert/key, the values from tedge_config are used.
+            // We verify by setting tedge_config to nonexistent paths and checking that
+            // the error mentions those paths (not a missing-cert-path error).
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let (cert, key) = write_test_cert(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+            let config = make_config(Some("mqtt.example.com:1883"));
+            // config.device = None, so cert/key come from tedge_config fallback
+
+            build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                .await
+                .unwrap();
         }
 
         fn make_config(url: Option<&str>) -> CustomMapperConfig {
