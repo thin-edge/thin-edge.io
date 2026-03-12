@@ -184,8 +184,6 @@ impl EntityStoreServer {
                     error!("Failed to process entity data message: {message} due to : {err}");
                 }
             }
-        } else {
-            error!("Ignoring the message: {message} received on unsupported topic",);
         }
     }
 
@@ -428,7 +426,26 @@ impl EntityStoreServer {
     }
 }
 
-pub fn subscriptions(topic_root: &str) -> TopicFilter {
-    let topic = format!("{}/+/+/+/+/#", topic_root);
-    vec![topic].try_into().unwrap()
+pub fn subscriptions(mqtt_schema: &MqttSchema) -> TopicFilter {
+    let mut topics = TopicFilter::empty();
+
+    // Subscribing only to northbound topics published *from* the device,
+    // and not the southbound topics published *to* the device,
+    // as those are the only ones relevant for entity store and auto-registration
+    for channel_filter in [
+        ChannelFilter::EntityMetadata,
+        ChannelFilter::EntityTwinData,
+        ChannelFilter::Measurement,
+        ChannelFilter::MeasurementMetadata,
+        ChannelFilter::Event,
+        ChannelFilter::EventMetadata,
+        ChannelFilter::Alarm,
+        ChannelFilter::AlarmMetadata,
+        ChannelFilter::AnyCommandMetadata,
+        ChannelFilter::AnyStatus,
+    ] {
+        topics.add_all(mqtt_schema.topics(EntityFilter::AnyEntity, channel_filter));
+    }
+
+    topics
 }

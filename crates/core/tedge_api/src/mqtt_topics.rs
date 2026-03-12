@@ -183,6 +183,7 @@ impl MqttSchema {
             ChannelFilter::Signal(signal_type) => format!("/signal/{signal_type}"),
             ChannelFilter::Health => "/status/health".to_string(),
             ChannelFilter::Status(component) => format!("/status/{component}"),
+            ChannelFilter::AnyStatus => "/status/+".to_string(),
         };
 
         TopicFilter::new_unchecked(&format!("{}/{entity}{channel}", self.root))
@@ -903,6 +904,7 @@ pub enum ChannelFilter {
     CommandMetadata(OperationType),
     Health,
     Status(String),
+    AnyStatus,
 }
 
 impl From<&Channel> for ChannelFilter {
