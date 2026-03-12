@@ -100,6 +100,7 @@ pub trait FlowRegistryExt: FlowRegistry {
 
     async fn add_flow(&mut self, js_runtime: &mut JsRuntime, path: &Utf8Path);
     async fn remove_flow(&mut self, path: &Utf8Path);
+    fn unload_flow(&mut self, path: &Utf8Path);
     async fn reload_script(
         &mut self,
         js_runtime: &mut JsRuntime,
@@ -206,6 +207,12 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
     async fn remove_flow(&mut self, path: &Utf8Path) {
         info!(target: "flows", "Removing flow {path}");
         self.store_mut().remove(path);
+    }
+
+    fn unload_flow(&mut self, path: &Utf8Path) {
+        info!(target: "flows", "Unloading flow {path}");
+        self.store_mut().unloaded_flows.insert(path.to_path_buf());
+        self.store_mut().flows.remove(path);
     }
 
     async fn reload_script(

@@ -504,9 +504,9 @@ impl FlowsMapper {
             })
             .collect();
 
-        for file in unloaded_flows {
+        for flow in unloaded_flows {
             // will add flow to list of unloaded if scripts are missing
-            self.processor.load_single_flow(&file).await;
+            self.processor.registry.unload_flow(&flow);
             self.send_updated_subscriptions().await?;
             self.update_flow_status(path).await?;
         }

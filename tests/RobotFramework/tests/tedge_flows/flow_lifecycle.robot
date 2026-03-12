@@ -84,6 +84,45 @@ Flow script update changes processing behavior
     ...    message_contains="version":"v2"
     ...    date_from=${start}
 
+Removing script unloads flow and restoring script loads flow again
+    [Documentation]    After the JS script file is moved of the path referred by flow, the flow must be unloaded and loaded again when script is restored.
+    Install Lifecycle Flow    main-v1.js
+
+    # Verify v1 behavior
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub ${INPUT_TOPIC} '{}'
+    Should Have MQTT Messages
+    ...    topic=${OUTPUT_TOPIC}
+    ...    message_contains="version":"v1"
+    ...    date_from=${start}
+
+    # Move script to main flows dir
+    Execute Command    sleep 1
+    ${start}    Get Unix Timestamp
+    Execute Command    mv ${FLOW_DIR}/main.js ${FLOWS_DIR}/main.js
+
+    # FIXME: when we get Modified event for a js file we currently load it immediately even if it's not referred by any
+    # loaded or unloaded flow. Then we try to load all unloaded flows, hoping loaded script fixed them, but if these
+    # flows are not using the script, we emit this error message. Instead we shouldn't try to reload these flows unless
+    # the script we're modifying is part of the flow, which will avoid this error message.
+    Logs Should Contain    Failed to compile flow    date_from=${start}
+    Should Have MQTT Messages
+    ...    topic=${FLOW_STATUS_TOPIC}
+    ...    date_from=${start}
+    ...    message_contains="flow":"/etc/tedge/mappers/local/flows/lifecycle-test/main.js","status":"removed"
+
+    # Move script back to the flow dir
+    Execute Command    sleep 1
+    Execute Command    mv ${FLOWS_DIR}/main.js ${FLOW_DIR}/main.js
+
+    # Verify v1 behavior
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub ${INPUT_TOPIC} '{}'
+    Should Have MQTT Messages
+    ...    topic=${OUTPUT_TOPIC}
+    ...    message_contains="version":"v1"
+    ...    date_from=${start}
+
 Flow definition update changes processing behavior
     [Documentation]    After updating the flow definition (TOML file), the flow is reloaded
     ...    with the new settings. This test changes the input topic and verifies that the
