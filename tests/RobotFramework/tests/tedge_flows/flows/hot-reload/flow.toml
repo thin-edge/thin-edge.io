@@ -1,0 +1,4 @@
+input.mqtt.topics = ["test/hot-reload"]
+
+[[steps]]
+script = "main.js"

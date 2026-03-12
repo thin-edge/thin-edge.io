@@ -201,7 +201,7 @@ Publishing transformation errors
     Should Have MQTT Messages
     ...    topic=test/errors
     ...    minimum=1
-    ...    message_contains=Error: Not a collectd topic
+    ...    message_contains=JS Exception: Not a collectd topic
     ...    date_from=${start}
 
     ${start}    Get Unix Timestamp
@@ -209,7 +209,7 @@ Publishing transformation errors
     Should Have MQTT Messages
     ...    topic=test/errors
     ...    minimum=1
-    ...    message_contains=Error: Not a collectd payload
+    ...    message_contains=JS Exception: Not a collectd payload
     ...    date_from=${start}
 
     ${start}    Get Unix Timestamp

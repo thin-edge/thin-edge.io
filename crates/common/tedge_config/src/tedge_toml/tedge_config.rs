@@ -1367,6 +1367,16 @@ define_tedge_config! {
     },
 
     flows: {
+        memory: {
+            /// The maximum number of bytes allocated to the JS runtime
+            #[tedge_config(example = "16777216", default(value = 16777216u32))]
+            heap_size: u32,
+
+            /// The maximum number of bytes used by the JS runtime for its stack
+            #[tedge_config(example = "262144", default(value = 262144u32))]
+            stack_size: u32,
+        },
+
         stats: {
             /// The interval in seconds between flow statistics dumps
             #[tedge_config(example = "1h", default(from_str = "1h"))]

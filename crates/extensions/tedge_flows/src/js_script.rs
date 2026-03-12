@@ -99,8 +99,8 @@ impl JsScript {
 mod tests {
     use super::*;
     use crate::js_lib::kv_store::FlowContext;
-    use crate::js_lib::kv_store::FlowContextHandle;
     use crate::steps::FlowStep;
+    use crate::JsRuntimeConfig;
     use serde_json::json;
     use std::time::Duration;
     use tedge_mqtt_ext::MqttMessage;
@@ -332,6 +332,30 @@ export function onMessage(message) {
         assert!(error
             .to_string()
             .contains("Maximum call stack size exceeded"));
+    }
+
+    #[tokio::test]
+    async fn too_large_module() {
+        // Given a small JS runtime
+        let mut js_config = JsRuntimeConfig::default();
+        js_config.heap_size /= 100;
+        let mut runtime = JsRuntime::with_config(js_config).await.unwrap();
+
+        // Build a large script (~160 KB) that mirrors a real protobuf decoder.
+        let many_logs = "    console.log(`processing message`);\n".repeat(4000);
+        let large_js = format!(
+            "export function onMessage(message, context) {{\n{many_logs}    return [];\n}}"
+        );
+
+        let module_name = "test_module".to_string();
+        let mut script = JsScript::new(module_name, "flow.toml".into(), "main.js".into());
+
+        let error = runtime
+            .load_script_literal(&mut script, large_js.as_bytes().to_vec())
+            .await
+            .unwrap_err();
+        eprintln!("{:?}", error);
+        assert!(error.to_string().contains("out of memory"));
     }
 
     #[tokio::test]
@@ -721,9 +745,46 @@ export function onMessage(message) {
         );
     }
 
+    /// Regression test for https://github.com/thin-edge/thin-edge.io/issues/4028
+    ///
+    /// Repeatedly reloading a flow script used to exhaust the QuickJS 16 MB
+    /// runtime memory limit because every reload left a JSModuleDef object in
+    /// ctx->loaded_modules (rquickjs Module has no Drop impl that calls
+    /// JS_FreeModule). The fix recreates the AsyncContext on each hot-reload so
+    /// that JS_FreeContext releases all accumulated module memory.
+    #[tokio::test]
+    async fn repeated_hot_reload_does_not_exhaust_js_memory() {
+        // Build a large script (~160 KB) that mirrors a real protobuf decoder.
+        let many_logs = "    console.log(`processing message`);\n".repeat(4000);
+        let large_js = format!(
+            "export function onMessage(message, context) {{\n{many_logs}    return [];\n}}"
+        );
+
+        // Use a runtime with a medium size memory
+        let mut js_config = JsRuntimeConfig::default();
+        js_config.heap_size /= 10;
+        let mut runtime = JsRuntime::with_config(js_config).await.unwrap();
+        let module_name = "test_module".to_string();
+        let mut script = JsScript::new(module_name, "flow.toml".into(), "main.js".into());
+
+        // First load
+        runtime
+            .load_script_literal(&mut script, large_js.as_bytes().to_vec())
+            .await
+            .expect("initial load should succeed");
+
+        // Reload the same large script many times — without the fix this would
+        // fail around reload 50 with "JS raised exception" due to OOM.
+        for i in 1..=100 {
+            runtime
+                .load_script_literal(&mut script, large_js.as_bytes().to_vec())
+                .await
+                .unwrap_or_else(|e| panic!("reload {i} failed: {e}"));
+        }
+    }
+
     async fn runtime_with(js: &str) -> (JsRuntime, FlowStep) {
-        let context = FlowContextHandle::default();
-        let mut runtime = JsRuntime::try_new(context).await.unwrap();
+        let mut runtime = JsRuntime::with_default().await.unwrap();
         let mut script = JsScript::new("toml|1|js".to_owned(), "toml".into(), "js".into());
         if let Err(err) = runtime.load_script_literal(&mut script, js).await {
             panic!("{:?}", err);

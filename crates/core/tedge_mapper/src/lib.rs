@@ -12,10 +12,12 @@ use crate::flows::GenMapper;
 use anyhow::Context;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
+use tedge_flows::FlowsMapperConfig;
 use tracing::log::warn;
 
 #[cfg(feature = "aws")]
@@ -170,4 +172,26 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
             .start(config, mapper_opt.common.config_dir.as_ref())
             .await
     }
+}
+
+pub(crate) fn flows_config(
+    tedge_config: &TEdgeConfig,
+    mapper_name: &str,
+) -> Result<FlowsMapperConfig, anyhow::Error> {
+    let te = tedge_config.mqtt.topic_root.as_str();
+    let service_topic_id = EntityTopicId::default_main_service(mapper_name)?;
+
+    let stats_config = &tedge_config.flows.stats;
+    let mem_config = &tedge_config.flows.memory;
+    let flows_config = FlowsMapperConfig::new(
+        &format!("{te}/{service_topic_id}"),
+        stats_config.interval.duration(),
+        stats_config.on_message,
+        stats_config.on_interval,
+    )
+    .with_js_config(
+        mem_config.heap_size as usize,
+        mem_config.stack_size as usize,
+    );
+    Ok(flows_config)
 }

@@ -1,11 +1,10 @@
 use crate::core::mapper::start_basic_actors;
+use crate::flows_config;
 use crate::TEdgeComponent;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowsMapperBuilder;
-use tedge_flows::FlowsMapperConfig;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_watch_ext::WatchActorBuilder;
 
@@ -20,16 +19,7 @@ impl TEdgeComponent for GenMapper {
     ) -> Result<(), anyhow::Error> {
         let service_name = "tedge-mapper-local";
         let (mut runtime, mut mqtt_actor) = start_basic_actors(service_name, &tedge_config).await?;
-
-        let te = tedge_config.mqtt.topic_root.as_str();
-        let service_topic_id = EntityTopicId::default_main_service(service_name)?;
-        let stats_config = &tedge_config.flows.stats;
-        let service_config = FlowsMapperConfig::new(
-            &format!("{te}/{service_topic_id}"),
-            stats_config.interval.duration(),
-            stats_config.on_message,
-            stats_config.on_interval,
-        );
+        let service_config = flows_config(&tedge_config, service_name)?;
 
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();

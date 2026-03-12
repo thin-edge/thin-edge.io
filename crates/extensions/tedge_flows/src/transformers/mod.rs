@@ -90,7 +90,6 @@ impl BuiltinTransformers {
 mod tests {
     use super::*;
     use crate::config::StepConfig;
-    use crate::js_lib::kv_store::FlowContextHandle;
     use crate::js_runtime::JsRuntime;
     use crate::steps::FlowStep;
     use serde_json::json;
@@ -195,8 +194,7 @@ config = { topics = ["units/#"] }
         transformers: &BuiltinTransformers,
         config: &str,
     ) -> (JsRuntime, FlowStep) {
-        let context = FlowContextHandle::default();
-        let mut runtime = JsRuntime::try_new(context).await.unwrap();
+        let mut runtime = JsRuntime::with_default().await.unwrap();
         let step = toml::from_str::<StepConfig>(config)
             .unwrap()
             .compile(transformers, &mut runtime, 0, "test-flow".into())
