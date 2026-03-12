@@ -28,6 +28,7 @@ use crate::stats::StatsFilter;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 pub use js_lib::kv_store::FlowContextHandle;
+pub use js_runtime::JsRuntimeConfig;
 pub use js_value::JsonValue;
 use std::convert::Infallible;
 use std::path::PathBuf;
@@ -60,6 +61,7 @@ pub struct FlowsMapperConfig {
     pub(crate) stats_publisher: MqttStatsPublisher,
     pub(crate) stats_dump_interval: Duration,
     pub(crate) stats_filter: StatsFilter,
+    pub(crate) js_config: JsRuntimeConfig,
 }
 
 impl Default for FlowsMapperConfig {
@@ -100,7 +102,17 @@ impl FlowsMapperConfig {
                 publish_on_message_stats,
                 publish_on_interval_stats,
             },
+            js_config: JsRuntimeConfig::default(),
         }
+    }
+
+    pub fn with_js_config(self, heap_size: usize, stack_size: usize) -> Self {
+        let js_config = JsRuntimeConfig {
+            heap_size,
+            stack_size,
+            execution_timeout: Duration::from_secs(5),
+        };
+        FlowsMapperConfig { js_config, ..self }
     }
 }
 
@@ -137,7 +149,9 @@ impl FlowsMapperBuilder {
         registry: ConnectedFlowRegistry,
         config: FlowsMapperConfig,
     ) -> Result<Self, LoadError> {
-        let mut processor = MessageProcessor::try_new(registry).await?;
+        let context = FlowContextHandle::default();
+        let mut processor =
+            MessageProcessor::with_context(registry, config.js_config.clone(), context).await?;
         let message_box = SimpleMessageBoxBuilder::new("TedgeFlows", 16);
         let mqtt_sender = NullSender.into();
         let watch_request_sender = NullSender.into();

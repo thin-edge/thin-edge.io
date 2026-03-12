@@ -99,8 +99,8 @@ impl JsScript {
 mod tests {
     use super::*;
     use crate::js_lib::kv_store::FlowContext;
-    use crate::js_lib::kv_store::FlowContextHandle;
     use crate::steps::FlowStep;
+    use crate::JsRuntimeConfig;
     use serde_json::json;
     use std::time::Duration;
     use tedge_mqtt_ext::MqttMessage;
@@ -337,9 +337,9 @@ export function onMessage(message) {
     #[tokio::test]
     async fn too_large_module() {
         // Given a small JS runtime
-        let context = FlowContextHandle::default();
-        let mut runtime = JsRuntime::try_new(context).await.unwrap();
-        runtime.runtime.set_memory_limit(16 * 1024 * 10).await;
+        let mut js_config = JsRuntimeConfig::default();
+        js_config.heap_size /= 100;
+        let mut runtime = JsRuntime::with_config(js_config).await.unwrap();
 
         // Build a large script (~160 KB) that mirrors a real protobuf decoder.
         let many_logs = "    console.log(`processing message`);\n".repeat(4000);
@@ -760,8 +760,10 @@ export function onMessage(message) {
             "export function onMessage(message, context) {{\n{many_logs}    return [];\n}}"
         );
 
-        let context = FlowContextHandle::default();
-        let mut runtime = JsRuntime::try_new(context).await.unwrap();
+        // Use a runtime with a medium size memory
+        let mut js_config = JsRuntimeConfig::default();
+        js_config.heap_size /= 10;
+        let mut runtime = JsRuntime::with_config(js_config).await.unwrap();
         let module_name = "test_module".to_string();
         let mut script = JsScript::new(module_name, "flow.toml".into(), "main.js".into());
 
@@ -772,8 +774,8 @@ export function onMessage(message) {
             .expect("initial load should succeed");
 
         // Reload the same large script many times — without the fix this would
-        // fail around reload 500 with "JS raised exception" due to OOM.
-        for i in 1..=1000 {
+        // fail around reload 50 with "JS raised exception" due to OOM.
+        for i in 1..=100 {
             runtime
                 .load_script_literal(&mut script, large_js.as_bytes().to_vec())
                 .await
@@ -782,8 +784,7 @@ export function onMessage(message) {
     }
 
     async fn runtime_with(js: &str) -> (JsRuntime, FlowStep) {
-        let context = FlowContextHandle::default();
-        let mut runtime = JsRuntime::try_new(context).await.unwrap();
+        let mut runtime = JsRuntime::with_default().await.unwrap();
         let mut script = JsScript::new("toml|1|js".to_owned(), "toml".into(), "js".into());
         if let Err(err) = runtime.load_script_literal(&mut script, js).await {
             panic!("{:?}", err);

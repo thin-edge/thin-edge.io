@@ -764,7 +764,7 @@ mod tests {
         let flows_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
         let flows_path = Utf8Path::from_path(flows_dir.path()).unwrap();
         let flows = converter.flow_registry(flows_path).await.unwrap();
-        let mut runtime = MessageProcessor::try_new(flows).await.unwrap();
+        let mut runtime = MessageProcessor::with_default(flows).await.unwrap();
         runtime.load_all_flows().await;
 
         AwsFlows {

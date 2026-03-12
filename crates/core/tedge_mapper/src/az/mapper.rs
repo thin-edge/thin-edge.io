@@ -1,11 +1,11 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use crate::core::mqtt::configure_proxy;
+use crate::flows_config;
 use anyhow::Context;
 use async_trait::async_trait;
 use az_mapper_ext::AzureConverter;
 use std::borrow::Cow;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::models::TopicPrefix;
@@ -16,7 +16,6 @@ use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperBuilder;
-use tedge_flows::FlowsMapperConfig;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
@@ -42,7 +41,6 @@ impl TEdgeComponent for AzureMapper {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&az_mapper_name, &tedge_config).await?;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
-        let service_topic_id = EntityTopicId::default_main_service(&az_mapper_name)?;
 
         if tedge_config.mqtt.bridge.built_in {
             let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
@@ -104,14 +102,7 @@ impl TEdgeComponent for AzureMapper {
         flows
             .persist_builtin_flow("mea", az_converter.builtin_flow().as_str())
             .await?;
-        let te = &tedge_config.mqtt.topic_root;
-        let stats_config = &tedge_config.flows.stats;
-        let service_config = FlowsMapperConfig::new(
-            &format!("{te}/{service_topic_id}"),
-            stats_config.interval.duration(),
-            stats_config.on_message,
-            stats_config.on_interval,
-        );
+        let service_config = flows_config(&tedge_config, &az_mapper_name)?;
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();
 

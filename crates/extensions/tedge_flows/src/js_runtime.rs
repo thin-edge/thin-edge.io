@@ -16,35 +16,62 @@ use tokio::sync::oneshot;
 use tracing::debug;
 
 pub struct JsRuntime {
-    pub(crate) runtime: rquickjs::AsyncRuntime,
+    runtime: rquickjs::AsyncRuntime,
     store: FlowContextHandle,
     worker: mpsc::Sender<JsRequest>,
-    execution_timeout: Duration,
     module_sources: HashMap<String, Vec<u8>>,
+    config: JsRuntimeConfig,
+}
+
+#[derive(Clone)]
+pub struct JsRuntimeConfig {
+    pub heap_size: usize,
+    pub stack_size: usize,
+    pub execution_timeout: Duration,
+}
+
+impl Default for JsRuntimeConfig {
+    fn default() -> Self {
+        JsRuntimeConfig {
+            heap_size: 16 * 1024 * 1024,
+            stack_size: 256 * 1024,
+            execution_timeout: Duration::from_secs(5),
+        }
+    }
 }
 
 static TIME_CREDITS: AtomicUsize = AtomicUsize::new(1000);
 
 impl JsRuntime {
-    pub async fn try_new(store: FlowContextHandle) -> Result<Self, LoadError> {
-        let runtime = Self::new_runtime().await?;
+    pub async fn with_default() -> Result<Self, LoadError> {
+        Self::try_new(JsRuntimeConfig::default(), FlowContextHandle::default()).await
+    }
+
+    pub async fn with_config(config: JsRuntimeConfig) -> Result<Self, LoadError> {
+        Self::try_new(config, FlowContextHandle::default()).await
+    }
+
+    pub async fn try_new(
+        config: JsRuntimeConfig,
+        store: FlowContextHandle,
+    ) -> Result<Self, LoadError> {
+        let runtime = Self::new_runtime(&config).await?;
         let context = rquickjs::AsyncContext::full(&runtime).await?;
         let worker = JsWorker::spawn(context, store.clone()).await;
-        let execution_timeout = Duration::from_secs(5);
         let module_sources = HashMap::new();
         Ok(JsRuntime {
             runtime,
             store,
             worker,
-            execution_timeout,
             module_sources,
+            config,
         })
     }
 
-    async fn new_runtime() -> Result<rquickjs::AsyncRuntime, LoadError> {
+    async fn new_runtime(config: &JsRuntimeConfig) -> Result<rquickjs::AsyncRuntime, LoadError> {
         let runtime = rquickjs::AsyncRuntime::new()?;
-        runtime.set_memory_limit(16 * 1024 * 1024).await;
-        runtime.set_max_stack_size(256 * 1024).await;
+        runtime.set_memory_limit(config.heap_size).await;
+        runtime.set_max_stack_size(config.stack_size).await;
         runtime
             .set_interrupt_handler(Some(Box::new(|| {
                 let credits = TIME_CREDITS.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
@@ -109,7 +136,7 @@ impl JsRuntime {
         if self.module_sources.remove(&name).is_some() {
             // As rquickjs fails to drop old module versions,
             // a new worker has to be created with fresh new Async Runtime & Context
-            self.runtime = Self::new_runtime().await?;
+            self.runtime = Self::new_runtime(&self.config).await?;
             let context = rquickjs::AsyncContext::full(&self.runtime).await?;
             self.worker = JsWorker::spawn(context, self.store.clone()).await;
             for (n, s) in &self.module_sources {
@@ -189,7 +216,7 @@ impl JsRuntime {
         //  - Using task::spawn_blocking to launch the quickjs runtime doesn't help
         //    - A timeout is the properly raised
         //    - but the JS runtime keeps executing `while(true)` and is no more responsive.
-        match tokio::time::timeout(self.execution_timeout, &mut receiver).await {
+        match tokio::time::timeout(self.config.execution_timeout, &mut receiver).await {
             Ok(Err(_)) => panic!("JS runtime crashed"),
             Ok(Ok(response)) => Ok(response),
             Err(_) => Err(LoadError::Timeout),

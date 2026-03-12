@@ -4,6 +4,7 @@ use crate::flow::SourceTag;
 use crate::js_lib::kv_store::FlowContext;
 use crate::js_lib::kv_store::FlowContextHandle;
 use crate::js_runtime::JsRuntime;
+use crate::js_runtime::JsRuntimeConfig;
 use crate::registry::BaseFlowRegistry;
 use crate::registry::FlowRegistryExt;
 use crate::stats::Counter;
@@ -27,21 +28,23 @@ pub struct MessageProcessor<Registry> {
 impl MessageProcessor<BaseFlowRegistry> {
     pub async fn with_base_registry(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
         let registry = BaseFlowRegistry::new(config_dir);
-        Self::try_new(registry).await
+        Self::with_default(registry).await
     }
 }
 
 impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
-    pub async fn try_new(registry: Registry) -> Result<Self, LoadError> {
+    pub async fn with_default(registry: Registry) -> Result<Self, LoadError> {
+        let js_config = JsRuntimeConfig::default();
         let context = FlowContextHandle::default();
-        MessageProcessor::with_context(registry, context).await
+        MessageProcessor::with_context(registry, js_config, context).await
     }
 
     pub async fn with_context(
         registry: Registry,
+        js_config: JsRuntimeConfig,
         context: FlowContextHandle,
     ) -> Result<Self, LoadError> {
-        let js_runtime = JsRuntime::try_new(context).await?;
+        let js_runtime = JsRuntime::try_new(js_config, context).await?;
         let stats = Counter::default();
 
         Ok(MessageProcessor {
