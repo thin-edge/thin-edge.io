@@ -165,7 +165,10 @@ impl ConfigManagerBuilder {
 
     /// List of MQTT topic filters the log actor has to subscribe to
     fn subscriptions(config: &ConfigManagerConfig) -> TopicFilter {
-        let mut topic_filter = config.config_snapshot_topic.clone();
+        let mut topic_filter = TopicFilter::empty();
+        if config.config_snapshot_enabled {
+            topic_filter += config.config_snapshot_topic.clone();
+        }
         if config.config_update_enabled {
             topic_filter += config.config_update_topic.clone();
         }
@@ -261,14 +264,17 @@ impl IntoIterator for &ConfigManagerBuilder {
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let mut operation_senders = vec![(
-            OperationType::ConfigSnapshot.to_string(),
-            MappingSender::new(
-                self.box_builder.get_sender(),
-                generic_command_into_snapshot_request,
-            )
-            .into(),
-        )];
+        let mut operation_senders = vec![];
+        if self.config.config_snapshot_enabled {
+            operation_senders.push((
+                OperationType::ConfigSnapshot.to_string(),
+                MappingSender::new(
+                    self.box_builder.get_sender(),
+                    generic_command_into_snapshot_request,
+                )
+                .into(),
+            ));
+        }
         if self.config.config_update_enabled {
             operation_senders.push((
                 OperationType::ConfigUpdate.to_string(),

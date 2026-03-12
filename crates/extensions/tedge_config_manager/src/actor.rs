@@ -865,12 +865,21 @@ impl ConfigManagerWorker {
 
         config_types.sort();
 
-        for topic in self.config.config_reload_topics.iter() {
-            let metadata = ConfigOperationData::Metadata {
-                topic: topic.clone(),
-                types: config_types.clone(),
-            };
-            self.output_sender.send(metadata).await?;
+        if self.config.config_snapshot_enabled {
+            self.output_sender
+                .send(ConfigOperationData::Metadata {
+                    topic: self.config.config_snapshot_meta_topic.clone(),
+                    types: config_types.clone(),
+                })
+                .await?;
+        }
+        if self.config.config_update_enabled {
+            self.output_sender
+                .send(ConfigOperationData::Metadata {
+                    topic: self.config.config_update_meta_topic.clone(),
+                    types: config_types.clone(),
+                })
+                .await?;
         }
         Ok(())
     }

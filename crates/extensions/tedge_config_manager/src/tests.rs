@@ -116,19 +116,15 @@ async fn new_config_manager_builder(
             .unwrap()],
         plugin_config_dir: temp_dir.to_path_buf(),
         plugin_config_path: temp_dir.path().join("tedge-configuration-plugin.toml"),
-        config_reload_topics: [
-            "te/device/main///cmd/config_snapshot",
-            "te/device/main///cmd/config_update",
-        ]
-        .into_iter()
-        .map(Topic::new_unchecked)
-        .collect(),
+        config_snapshot_meta_topic: Topic::new_unchecked("te/device/main///cmd/config_snapshot"),
+        config_update_meta_topic: Topic::new_unchecked("te/device/main///cmd/config_update"),
         tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
         ops_dir: temp_dir.dir("operations").utf8_path_buf(),
         mqtt_schema: MqttSchema::new(),
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
         tedge_http_host: "127.0.0.1:3000".into(),
+        config_snapshot_enabled: true,
         config_update_enabled: true,
         sudo_enabled: false,
     };
