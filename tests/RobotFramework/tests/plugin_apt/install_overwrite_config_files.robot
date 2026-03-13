@@ -11,7 +11,7 @@ Test Tags           theme:software    theme:plugins
 
 *** Test Cases ***
 Install packages without overwriting config files
-    Execute Command    tedge config set apt.dpk.options.config keepold
+    Execute Command    tedge config set apt.dpkg.options.config keepold
     # install package v1
     ${OPERATION}=    Install Software
     ...    {"name": "sampledeb", "version": "1.0.0", "softwareType": "apt", "url": "${FILE_URL_1}"}
@@ -31,7 +31,7 @@ Install packages without overwriting config files
     Should Contain    ${output}    Updated the config
 
 Install packages overwrite config files
-    Execute Command    tedge config set apt.dpk.options.config keepnew
+    Execute Command    tedge config set apt.dpkg.options.config keepnew
     # install package v1
     ${OPERATION}=    Install Software
     ...    {"name": "sampledeb", "version": "1.0.0", "softwareType": "apt", "url": "${FILE_URL_1}"}

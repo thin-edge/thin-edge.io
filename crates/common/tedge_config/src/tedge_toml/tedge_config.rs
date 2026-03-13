@@ -1311,7 +1311,8 @@ define_tedge_config! {
         #[tedge_config(example = "thin-edge.io team.*")]
         maintainer: String,
 
-        dpk: {
+        #[tedge_config(deprecated_name = "dpk")] // for compatibility
+        dpkg: {
             options: {
                 /// dpkg configuration option used to control the dpkg options "--force-confold" and
                 /// "--force-confnew" and are applied when installing apt packages via the tedge-apt-plugin.
