@@ -14,15 +14,16 @@ class State {
     static batch = [0]
 }
 
-export function onMessage (message, context) {
-    const { back_to_normal = 100, too_many = 1000 } = context.config
+export function onMessage(message, context) {
+    const config = context.config
+    const { back_to_normal = 100, too_many = 1000 } = config
     State.total += 1
     State.batch[0] += 1
     if (State.open) {
         if (State.total < back_to_normal) {
             State.open = false
             if (config.message_on_back_to_normal) {
-                return [config?.message_on_back_to_normal, message]
+                return [config.message_on_back_to_normal, message]
             } else {
                 return [message]
             }

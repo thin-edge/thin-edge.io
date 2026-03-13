@@ -1,5 +1,5 @@
 *** Settings ***
-Library    ThinEdgeIO
+Library     ThinEdgeIO
 
 
 *** Variables ***

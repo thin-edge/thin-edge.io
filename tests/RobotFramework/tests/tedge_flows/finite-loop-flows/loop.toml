@@ -1,4 +1,6 @@
 # This flow is on purpose looping: the messages are published to the same topic
+# expect_loop = true allows messages to loop back through the input without being dropped
+expect_loop = true
 input.mqtt.topics = ["loopback/#"]
 
 [[steps]]
@@ -7,6 +9,7 @@ builtin = "add-timestamp"
 [[steps]]
 script = "circuit-breaker.js"
 interval = "1s"
-config.too_many = 10000
+config.back_to_normal = 10
+config.too_many = 20
 config.message_on_too_many = { topic = "te/device/main///a/too-many-messages", payload = "too many messages" }
 config.message_on_back_to_normal = { topic = "te/device/main///a/too-many-messages", payload = "back to normal" }

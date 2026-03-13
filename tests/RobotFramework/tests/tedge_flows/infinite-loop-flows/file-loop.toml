@@ -1,0 +1,9 @@
+# This flow defines an infinite file loop:
+# both the input and the output reference the same file path
+
+[input]
+file.path = "/tmp/tedge-loop-test.txt"
+file.interval = "1s"
+
+[output]
+file.path = "/tmp/tedge-loop-test.txt"

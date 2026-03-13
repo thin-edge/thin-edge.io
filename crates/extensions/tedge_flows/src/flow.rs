@@ -16,6 +16,7 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchError;
 use tokio::time::Instant;
+use tracing::error;
 
 /// A chain of message transformations
 ///
@@ -49,6 +50,9 @@ pub struct Flow {
 
     /// Path to the configuration file for this flow
     pub source: Utf8PathBuf,
+
+    /// Whether to allow output messages to loop back to the input
+    pub expect_loop: bool,
 }
 
 pub enum SourceTag {
@@ -304,16 +308,47 @@ impl Flow {
 
     pub fn publish(&self, result: Result<Vec<Message>, FlowError>) -> FlowResult {
         match result {
-            Ok(messages) => FlowResult::Ok {
-                flow: self.source.clone(),
-                messages,
-                output: self.output.clone(),
-            },
+            Ok(mut messages) => {
+                self.filter_looping_messages(&mut messages);
+                FlowResult::Ok {
+                    flow: self.source.clone(),
+                    messages,
+                    output: self.output.clone(),
+                }
+            }
             Err(error) => FlowResult::Err {
                 flow: self.source.clone(),
                 error,
                 output: self.errors.clone(),
             },
+        }
+    }
+
+    /// Filter any output message that matches the input filter of this flow
+    fn filter_looping_messages(&self, messages: &mut Vec<Message>) {
+        if self.expect_loop {
+            return;
+        }
+        if let (
+            FlowInput::Mqtt {
+                topics: input_topics,
+            },
+            FlowOutput::Mqtt { topic: None },
+        ) = (&self.input, &self.output)
+        {
+            messages.retain(|msg| {
+                if input_topics.accept_topic_name(&msg.topic) {
+                    error!(
+                        target: "flows",
+                        "Flow '{}' is dropping output message to '{}' to prevent an infinite loop",
+                        self.name,
+                        msg.topic
+                    );
+                    false
+                } else {
+                    true
+                }
+            });
         }
     }
 }
@@ -469,4 +504,80 @@ pub(crate) fn epoch_ms(time: &SystemTime) -> u128 {
 
 pub fn error_from_js(err: LoadError) -> FlowError {
     FlowError::IncorrectSetting(format!("{err:#}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use camino::Utf8PathBuf;
+
+    #[test]
+    fn looped_messages_filtered() {
+        let input = FlowInput::Mqtt {
+            topics: TopicFilter::new_unchecked("te/loop/+"),
+        };
+        let output = FlowOutput::Mqtt { topic: None };
+
+        let flow = test_flow(input, output, false);
+        let mut messages = vec![
+            Message::new("te/loop/test", b"{}"),
+            Message::new("te/other", b"{}"),
+        ];
+        flow.filter_looping_messages(&mut messages);
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].topic, "te/other");
+    }
+
+    #[test]
+    fn messages_without_loops_passthrough() {
+        let input = FlowInput::Mqtt {
+            topics: TopicFilter::new_unchecked("te/loop/+"),
+        };
+        let output = FlowOutput::Mqtt { topic: None };
+
+        let flow = test_flow(input, output, false);
+        let mut messages = vec![
+            Message::new("te/foo", b"{}"),
+            Message::new("te/bar", b"{}"),
+            Message::new("te/baz", b"{}"),
+        ];
+        flow.filter_looping_messages(&mut messages);
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].topic, "te/foo");
+        assert_eq!(messages[1].topic, "te/bar");
+        assert_eq!(messages[2].topic, "te/baz");
+    }
+
+    #[test]
+    fn expect_loop_allows_looped_messages() {
+        let input = FlowInput::Mqtt {
+            topics: TopicFilter::new_unchecked("te/loop/+"),
+        };
+        let output = FlowOutput::Mqtt { topic: None };
+
+        let flow = test_flow(input, output, true);
+        let mut messages = vec![
+            Message::new("te/loop/test", b"{}"),
+            Message::new("te/other", b"{}"),
+        ];
+        flow.filter_looping_messages(&mut messages);
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].topic, "te/loop/test");
+        assert_eq!(messages[1].topic, "te/other");
+    }
+
+    fn test_flow(input: FlowInput, output: FlowOutput, expect_loop: bool) -> Flow {
+        Flow {
+            name: "test-flow".to_string(),
+            version: None,
+            description: None,
+            tags: None,
+            input,
+            steps: vec![],
+            output,
+            errors: FlowOutput::Mqtt { topic: None },
+            source: Utf8PathBuf::from("test.toml"),
+            expect_loop,
+        }
+    }
 }
