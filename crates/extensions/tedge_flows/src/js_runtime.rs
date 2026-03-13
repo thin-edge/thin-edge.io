@@ -133,7 +133,8 @@ impl JsRuntime {
         name: String,
         source: impl Into<Vec<u8>>,
     ) -> Result<Vec<&'static str>, LoadError> {
-        if self.module_sources.remove(&name).is_some() {
+        let previous_version = self.module_sources.remove(&name);
+        if previous_version.is_some() {
             // As rquickjs fails to drop old module versions,
             // a new worker has to be created with fresh new Async Runtime & Context
             self.runtime = Self::new_runtime(&self.config).await?;
@@ -145,9 +146,23 @@ impl JsRuntime {
         }
 
         let source = source.into();
-        let exports = self.load_new_js(name.clone(), source.clone()).await?;
-        self.module_sources.insert(name, source);
-        Ok(exports)
+        match self.load_new_js(name.clone(), source.clone()).await {
+            Ok(exports) => {
+                self.module_sources.insert(name, source);
+                Ok(exports)
+            }
+            Err(err) => {
+                // If the new version cannot be loaded, any previous version must be reloaded
+                if let Some(previous_source) = previous_version {
+                    let _ = self
+                        .load_new_js(name.clone(), previous_source.clone())
+                        .await;
+                    self.module_sources.insert(name, previous_source);
+                }
+                // reporting the error related to the new version
+                Err(err)
+            }
+        }
     }
 
     async fn load_new_js(
