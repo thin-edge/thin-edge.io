@@ -158,9 +158,9 @@ jobs:
       - name: Install tools
         run: just install-tools
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: '3.9'
+          python-version-file: 'tests/.python-version'
           cache: 'pip'
           cache-dependency-path: |
             **/requirements/requirements*.txt
