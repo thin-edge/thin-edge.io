@@ -40,7 +40,7 @@ The general test suit flow is very similar to the above [Docker adapter](#docker
 Before you can run the tests you need to install the pre-requisites:
 
 * docker (or podman)
-* python3 (>=3.8)
+* python3 (>=3.14)
 * pip3
 * venv (python package)
 
@@ -77,14 +77,14 @@ provision:
 
 ### Option 1: Installing the dependencies yourself
 
-1. Install python3 (>= 3.8)
+1. Install python3 (>= 3.14)
     
     Follow the [python instructions](https://www.python.org/downloads/), or
 
     **MacOS (using homebrew)**
 
     ```sh
-    brew install python@3.10
+    brew install python@3.14
     ```
 
     **Debian/Ubuntu**
