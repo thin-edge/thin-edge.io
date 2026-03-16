@@ -28,6 +28,7 @@ use anyhow::bail;
 use c8y_api::http_proxy::read_c8y_credentials;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::CryptokiConfig;
+use certificate::PemCertificate;
 use mqtt_channel::Topic;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -146,6 +147,9 @@ impl Command for ConnectCommand {
         );
 
         validate_config(&tedge_config, &self.cloud)?;
+        if matches!(self.cloud, Cloud::C8y(_)) {
+            warn_if_cert_cn_invalid(&bridge_config);
+        }
 
         if self.is_test_connection {
             self.check_bridge(&tedge_config, &bridge_config)
@@ -520,6 +524,33 @@ impl ConnectCommand {
             );
         }
     }
+}
+
+fn warn_if_cert_cn_invalid(bridge_config: &BridgeConfig) {
+    if let Err(e) = check_cert_cn(bridge_config) {
+        warning!("{e}");
+    }
+}
+
+fn check_cert_cn(bridge_config: &BridgeConfig) -> anyhow::Result<()> {
+    if bridge_config.auth_type != AuthType::Certificate {
+        return Ok(());
+    }
+    let cert = PemCertificate::from_pem_file(&bridge_config.bridge_certfile).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to parse device certificate {}: {e}",
+            bridge_config.bridge_certfile
+        )
+    })?;
+    let cn = cert.subject_common_name().map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to read Common Name from device certificate {}: {e}",
+            bridge_config.bridge_certfile
+        )
+    })?;
+    certificate::device_id::is_valid_device_id(&cn, 64).map_err(|e| {
+        anyhow::anyhow!("The device certificate Common Name may not be accepted by the cloud: {e}")
+    })
 }
 
 fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyhow::Result<()> {
@@ -1407,6 +1438,105 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
                 TEdgeConfig::load_toml_str("az.profiles.new.bridge.topic_prefix = \"az-new\"");
 
             validate_config(&config, &cloud).unwrap();
+        }
+    }
+
+    mod cert_cn_validation {
+        use super::super::check_cert_cn;
+        use crate::bridge::BridgeConfig;
+        use crate::bridge::BridgeLocation;
+        use camino::Utf8PathBuf;
+        use std::time::Duration;
+        use tedge_config::models::auth_method::AuthType;
+        use tedge_config::models::HostPort;
+        use tedge_config::models::MQTT_TLS_PORT;
+        use tedge_test_utils::fs::TempTedgeDir;
+
+        fn bridge_config_with_cert(cert_path: Utf8PathBuf) -> BridgeConfig {
+            BridgeConfig {
+                cloud_name: "Cumulocity".into(),
+                config_file: "test-bridge.conf".into(),
+                connection: "edge_to_c8y".into(),
+                address: HostPort::<MQTT_TLS_PORT>::try_from("example.c8y.io:8883").unwrap(),
+                remote_username: None,
+                remote_password: None,
+                bridge_root_cert_path: "/etc/ssl/certs/ca-certificates.crt".into(),
+                remote_clientid: "test-device".into(),
+                local_clientid: "test".into(),
+                bridge_certfile: cert_path,
+                bridge_keyfile: "/dev/null".into(),
+                use_mapper: false,
+                use_agent: false,
+                topics: vec![],
+                try_private: false,
+                start_type: "automatic".into(),
+                clean_session: true,
+                include_local_clean_session: true,
+                local_clean_session: true,
+                notifications: false,
+                notifications_local_only: false,
+                notification_topic: "test_topic".into(),
+                bridge_attempt_unsubscribe: false,
+                bridge_location: BridgeLocation::Mosquitto,
+                connection_check_attempts: 1,
+                auth_type: AuthType::Certificate,
+                mosquitto_version: None,
+                keepalive_interval: Duration::from_secs(60),
+                proxy: None,
+            }
+        }
+
+        fn self_signed_cert_pem(cn: &str) -> String {
+            let mut params = rcgen::CertificateParams::new(vec![]).unwrap();
+            params.distinguished_name = rcgen::DistinguishedName::new();
+            params
+                .distinguished_name
+                .push(rcgen::DnType::CommonName, cn);
+            let key_pair = rcgen::KeyPair::generate().unwrap();
+            params.self_signed(&key_pair).unwrap().pem()
+        }
+
+        fn bridge_config_with_cn(cn: &str) -> (TempTedgeDir, BridgeConfig) {
+            let ttd = TempTedgeDir::new();
+            let cert_path = ttd.utf8_path().join("device.crt");
+            std::fs::write(&cert_path, self_signed_cert_pem(cn)).unwrap();
+            (ttd, bridge_config_with_cert(cert_path))
+        }
+
+        #[test]
+        fn valid_cn_produces_no_warning() {
+            let (_ttd, config) = bridge_config_with_cn("my-valid-device");
+            assert!(check_cert_cn(&config).is_ok());
+        }
+
+        #[test]
+        fn cn_with_colon_produces_warning() {
+            let (_ttd, config) = bridge_config_with_cn("my:invalid:device");
+            assert!(check_cert_cn(&config)
+                .unwrap_err()
+                .to_string()
+                .contains("my:invalid:device"));
+        }
+
+        #[test]
+        fn missing_cert_file_produces_error() {
+            let config = bridge_config_with_cert("/nonexistent/path/device.crt".into());
+            let err = check_cert_cn(&config).unwrap_err().to_string();
+            assert!(
+                err.contains("Failed to parse device certificate"),
+                "unexpected error: {err}"
+            );
+            assert!(
+                err.contains("/nonexistent/path/device.crt"),
+                "unexpected error: {err}"
+            );
+        }
+
+        #[test]
+        fn basic_auth_produces_no_warning() {
+            let (_ttd, mut config) = bridge_config_with_cn("my:invalid:device");
+            config.auth_type = AuthType::Basic;
+            assert!(check_cert_cn(&config).is_ok());
         }
     }
 }

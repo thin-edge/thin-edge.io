@@ -79,3 +79,13 @@ Mapper started early does not miss supported operations
     ...    c8y_UploadConfigFile
     ...    c8y_DownloadConfigFile
     ...    c8y_LogfileRequest
+
+Warn users when the device certificate contains invalid characters
+    [Tags]    \#3855
+    ${DEVICE_SN}=    Setup    connect=${False}
+    Execute Command
+    ...    cmd=openssl req -x509 -newkey rsa:2048 -keyout $(tedge config get device.key_path) -out $(tedge config get device.cert_path) -days 30 -nodes -subj "/CN=${DEVICE_SN}:invalid"
+    ${output}=    Execute Command    tedge connect c8y    ignore_exit_code=${True}    stdout=${False}    stderr=${True}
+    Should Contain
+    ...    ${output}
+    ...    The device certificate Common Name may not be accepted by the cloud: The string '"${DEVICE_SN}:invalid"' contains characters which cannot be used in a name
