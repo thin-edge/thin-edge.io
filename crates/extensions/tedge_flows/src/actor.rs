@@ -540,13 +540,21 @@ impl FlowsMapper {
     }
 
     async fn on_file_removed(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
+        // A FileDeleted event can arrive after the file has already been re-created
+        // (e.g. during a package update that deletes then recreates the file within the
+        // 50 ms debounce window).  In that case the file is already loaded via a
+        // subsequent Modified event, so we must not remove it here.
+        if path.exists() {
+            return Ok(());
+        }
+
         if matches!(path.extension(), Some("js" | "ts" | "mjs")) {
             self.processor.remove_script(path).await;
         } else if path.extension() == Some("toml") {
             self.processor.remove_flow(path).await;
-            self.send_updated_subscriptions().await?;
-            self.update_flow_status(path).await?;
         }
+        self.send_updated_subscriptions().await?;
+        self.update_flow_status(path).await?;
         Ok(())
     }
 
