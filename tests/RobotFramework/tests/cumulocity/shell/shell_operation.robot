@@ -36,6 +36,15 @@ Shell command succeeds if output is too large
     ${result}=    Set Variable    ${operation.to_json()["c8y_Command"]["result"]}
     Should End With    ${result}    ...<trimmed>
 
+Commands fail if the tmp.dir does not exist and include the path in the failure reason
+    [Tags]    \#3796
+    Execute Command    cmd=tedge config set tmp.path /dummy
+    Disconnect Then Connect Mapper    mapper=c8y
+    ${operation}=    Cumulocity.Execute Shell Command    echo helloworld
+    Operation Should Be FAILED
+    ...    ${operation}
+    ...    failure_reason=.*Operation execution failed: the configured tmp.path '/dummy' does not exist*
+
 
 *** Keywords ***
 Custom Setup

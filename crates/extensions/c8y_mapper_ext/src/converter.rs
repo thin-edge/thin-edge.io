@@ -884,14 +884,22 @@ impl CumulocityConverter {
         let command = script.command.as_str();
         let cmd_id = self.command_id.new_id();
 
-        let mut logged =
-            LoggedCommand::new(command, self.config.tmp_dir.as_ref()).map_err(|e| {
-                CumulocityMapperError::ExecuteFailed {
-                    error_message: e.to_string(),
-                    command: command.to_string(),
-                    operation_name: operation_name.to_string(),
-                }
-            })?;
+        let tmp_dir = self.config.tmp_dir.as_ref();
+        if !tmp_dir.exists() {
+            return Err(CumulocityMapperError::ExecuteFailed {
+                error_message: format!("the configured tmp.path '{}' does not exist", tmp_dir),
+                command: command.to_string(),
+                operation_name: operation_name.clone(),
+            });
+        }
+
+        let mut logged = LoggedCommand::new(command, tmp_dir).map_err(|e| {
+            CumulocityMapperError::ExecuteFailed {
+                error_message: e.to_string(),
+                command: command.to_string(),
+                operation_name: operation_name.to_string(),
+            }
+        })?;
 
         logged.args(script.args);
 
