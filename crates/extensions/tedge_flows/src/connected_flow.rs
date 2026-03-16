@@ -87,8 +87,9 @@ impl ConnectedFlow {
             return Ok(vec![]);
         };
 
-        let messages = source.poll(timestamp).await?;
+        let messages = source.poll(timestamp).await;
         source.update_after_poll(now);
+        let messages = messages?;
         Ok(messages)
     }
 

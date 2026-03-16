@@ -5,6 +5,7 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::CloneSender;
 use tedge_actors::MappingSender;
+use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
@@ -458,6 +459,76 @@ async fn interval_executes_when_time_exceeds_interval() {
     let _ = actor_handle.await;
 }
 
+#[tokio::test(start_paused = true)]
+async fn file_polling_interval_is_respected_on_errors() {
+    let config_dir = create_test_flow_dir();
+
+    // the flow should publish errors because the file doesn't exist
+    write_file(
+        &config_dir,
+        "read-file-periodically.toml",
+        r#"
+[input.file]
+path = "file.input"
+interval = "10s"
+
+[output.mqtt]
+topic = "test/file/input"
+
+[errors.mqtt]
+topic = "test/file/input"
+    "#,
+    );
+
+    let captured_messages = CapturedMessages::default();
+    let mut mqtt = MockMqtt::new(captured_messages.clone());
+    let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
+    let count = || {
+        captured_messages
+            .retain(|msg| msg.topic.name == "test/file/input")
+            .count()
+    };
+
+    // we want to wait until startup delay expired and messages start being published
+    tick(Duration::from_secs(5)).await;
+    let messages_after_startup = count();
+    assert!(
+        messages_after_startup > 0,
+        "There should be messages published after startup delay"
+    );
+
+    // if input box is filled, clear it so new messages can come
+    // AFAIK no way to just discard all messages other than try to await
+    // (try_recv doesn't immediately return)
+    captured_messages.retain(|_| false);
+    for _ in 0..MQTT_BOX_CHANNEL_CAPACITY {
+        let _ = tokio::time::timeout(
+            tokio::time::Duration::from_millis(5),
+            mqtt.message_box.as_mut().unwrap().try_recv(),
+        )
+        .await;
+    }
+
+    // after flow started and messages are being published, after waiting time
+    // interval, there should be 1 more message than before
+    for _ in 0..10 {
+        // run multiple ticks instead of 1 big tick so if any actions are
+        // scheduled for wrong tick have a chance to be executed
+        tick(Duration::from_secs(1)).await;
+    }
+
+    let num_messages_after_interval = count();
+    assert_eq!(
+        num_messages_after_interval,
+        1,
+        "Messages published before polling interval expired: after waiting interval there should be only 1 message but {num_messages_after_interval} were published:\n{:?}",
+        captured_messages.messages.lock().unwrap()
+    );
+
+    actor_handle.abort();
+    let _ = actor_handle.await;
+}
+
 fn create_test_flow_dir() -> TempDir {
     tempfile::tempdir().unwrap()
 }
@@ -501,10 +572,15 @@ struct MockMqtt {
     message_box: Option<tedge_actors::SimpleMessageBox<MqttRequest, MqttMessage>>,
 }
 
+const MQTT_BOX_CHANNEL_CAPACITY: usize = 16;
+
 impl MockMqtt {
     fn new(captured: CapturedMessages) -> Self {
         Self {
-            inbox: Some(SimpleMessageBoxBuilder::new("MockMqtt", 16)),
+            inbox: Some(SimpleMessageBoxBuilder::new(
+                "MockMqtt",
+                MQTT_BOX_CHANNEL_CAPACITY,
+            )),
             captured,
             sender: Mutex::new(None),
             message_box: None,
