@@ -261,9 +261,15 @@ impl Uploader {
                 })?
                 .error_for_status()
                 .map_err(|err| match err.status() {
-                    Some(status_error) if status_error.is_client_error() => {
+                    // 4xx and 500/501 server-side errors are permanent and retrying won't help
+                    Some(status)
+                        if status.is_client_error()
+                            || status == reqwest::StatusCode::INTERNAL_SERVER_ERROR
+                            || status == reqwest::StatusCode::NOT_IMPLEMENTED =>
+                    {
                         backoff::Error::Permanent(UploadError::Network(err))
                     }
+                    // 502/503/504 are gateway/overload conditions that may resolve on retry.
                     _ => backoff::Error::transient(UploadError::Network(err)),
                 })
         };
@@ -453,7 +459,7 @@ mod tests {
             put(|body: axum::body::Body| async move {
                 let res = async {
                     if is_first_attempt.fetch_and(false, Ordering::SeqCst) {
-                        Ok(StatusCode::INTERNAL_SERVER_ERROR)
+                        Ok(StatusCode::SERVICE_UNAVAILABLE)
                     } else {
                         let mut file = BufWriter::new(
                             File::create(target_path_clone.as_path())
