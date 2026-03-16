@@ -17,7 +17,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Block Fixup Commit Merge
         # https://github.com/13rac1/block-fixup-merge-action
@@ -36,7 +36,7 @@ jobs:
     continue-on-error: true
     steps:
       # For pull requests it's not necessary to checkout the code
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         if: ${{ github.event_name == 'pull_request' }}
         # https://github.com/dorny/paths-filter
         id: filter
@@ -64,7 +64,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Retrieve MSRV from workspace Cargo.toml
         id: rust_version
@@ -90,7 +90,7 @@ jobs:
     needs: changes
     if: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Without pinning the version, cargo-udeps fails with:
       # error[E0275]: overflow evaluating the requirement `{async fn body of try_exists<&std::path::Path>()}: std::marker::Send`
@@ -119,7 +119,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
@@ -139,7 +139,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # Nightly toolchain is needed for cargo fmt since issue: https://github.com/thin-edge/thin-edge.io/issues/1660
       # dtolnay/rust-toolchain is preferred over actions-rs/toolchain is currently not maintained and currently using
@@ -178,7 +178,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
@@ -202,7 +202,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
@@ -222,7 +222,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
@@ -243,7 +243,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Retrieve MSRV from workspace Cargo.toml
         id: rust_version
@@ -267,7 +267,7 @@ jobs:
     name: Shellcheck
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Run ShellCheck
       uses: ludeeus/action-shellcheck@master
 
@@ -275,7 +275,7 @@ jobs:
     name: Spell Check with Typos
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: crate-ci/typos@master
 
   doc:
@@ -284,7 +284,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
@@ -303,11 +303,11 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.docs == 'true' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           # use tedge-docs nodejs version for guidance, though it is not mandatory
           # https://github.com/thin-edge/tedge-docs
-          node-version: '>=18.0'
+          node-version: '>=22.0'
       - run: npx docusaurus-mdx-checker
         working-directory: docs
