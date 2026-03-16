@@ -1,4 +1,4 @@
-black~=25.1.0
-invoke~=2.2.0
-pylint~=3.3.7
-robotframework-robocop~=6.5.0
+black~=26.1.0
+invoke~=2.2.1
+pylint~=4.0.5
+robotframework-robocop~=8.2.2
