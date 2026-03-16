@@ -5,21 +5,38 @@ use serde::Serialize;
 use serde_json::Value;
 use std::fmt;
 use std::fmt::Formatter;
+use std::str::FromStr;
 use strum::Display;
-use strum::EnumString;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
-#[derive(
-    Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize, Document, EnumString, Display,
-)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize, Document, Display)]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 pub enum TimeFormat {
     #[serde(rename = "rfc-3339", alias = "rfc3339")]
-    #[strum(serialize = "rfc-3339", serialize = "rfc3339")]
     Rfc3339,
     Unix,
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("Failed to parse flag: {input}. Supported values are: 'rfc-3339' or 'unix'")]
+pub struct InvalidTimeFormat {
+    input: String,
+}
+
+impl FromStr for TimeFormat {
+    type Err = InvalidTimeFormat;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input {
+            "rfc-3339" | "rfc3339" => Ok(TimeFormat::Rfc3339),
+            "unix" => Ok(TimeFormat::Unix),
+            _ => Err(InvalidTimeFormat {
+                input: input.to_string(),
+            }),
+        }
+    }
 }
 
 impl TimeFormat {
@@ -200,6 +217,15 @@ mod tests {
     #[test]
     fn time_format_deserialize_unix() {
         assert_eq!(deserialize_json_and_fromstr("unix"), TimeFormat::Unix);
+    }
+
+    #[test]
+    fn time_format_invalid_value_shows_accepted_values() {
+        let err = "iso8601".parse::<TimeFormat>().unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Failed to parse flag: iso8601. Supported values are: 'rfc-3339' or 'unix'"
+        );
     }
 
     fn deserialize_json_and_fromstr(input: &str) -> TimeFormat {
