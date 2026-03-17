@@ -1,7 +1,9 @@
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::models::timestamp::TimeFormat;
 use tedge_config::models::TopicPrefix;
+use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowRegistryExt;
+use tedge_flows::UpdateFlowRegistryError;
 use tedge_mqtt_ext::Topic;
 
 pub struct AzureConverter {
@@ -33,6 +35,15 @@ impl AzureConverter {
             time_format,
             size_threshold,
         }
+    }
+
+    pub async fn persist_builtin_flow(
+        &self,
+        flows: &mut ConnectedFlowRegistry,
+    ) -> Result<(), UpdateFlowRegistryError> {
+        flows
+            .persist_builtin_flow("mea", self.builtin_flow().as_str())
+            .await
     }
 
     pub fn builtin_flow(&self) -> String {

@@ -1,4 +1,3 @@
-use camino::Utf8Path;
 use std::time::SystemTime;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::models::TopicPrefix;
@@ -11,7 +10,6 @@ use tedge_flows::JsonValue;
 use tedge_flows::Message;
 use tedge_flows::UpdateFlowRegistryError;
 use tedge_mqtt_ext::Topic;
-use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::timestamp::TimeFormat;
 
 pub struct AwsConverter {
@@ -44,18 +42,7 @@ impl AwsConverter {
         }
     }
 
-    pub async fn flow_registry(
-        &self,
-        flows_dir: impl AsRef<Utf8Path>,
-    ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
-        create_directory_with_defaults(flows_dir.as_ref()).await?;
-        let mut flows = ConnectedFlowRegistry::new(flows_dir);
-        load_builtin_transformers(&mut flows);
-        self.persist_builtin_flow(&mut flows).await?;
-        Ok(flows)
-    }
-
-    pub(crate) async fn persist_builtin_flow(
+    pub async fn persist_builtin_flow(
         &self,
         flows: &mut ConnectedFlowRegistry,
     ) -> Result<(), UpdateFlowRegistryError> {
@@ -163,6 +150,7 @@ mod tests {
     use super::*;
     use assert_json_diff::*;
     use assert_matches::*;
+    use camino::Utf8Path;
     use serde_json::json;
     use tedge_config::tedge_toml::AWS_MQTT_PAYLOAD_LIMIT;
     use tedge_flows::ConnectedFlowRegistry;
@@ -767,7 +755,10 @@ mod tests {
         );
         let flows_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
         let flows_path = Utf8Path::from_path(flows_dir.path()).unwrap();
-        let flows = converter.flow_registry(flows_path).await.unwrap();
+        let mut flows = ConnectedFlowRegistry::new(flows_path);
+        load_builtin_transformers(&mut flows);
+        converter.persist_builtin_flow(&mut flows).await.unwrap();
+
         let mut runtime = MessageProcessor::with_default(flows).await.unwrap();
         runtime.load_all_flows().await;
 

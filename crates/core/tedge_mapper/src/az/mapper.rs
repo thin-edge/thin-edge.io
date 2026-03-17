@@ -13,13 +13,10 @@ use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
-use tedge_flows::ConnectedFlowRegistry;
-use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperBuilder;
 use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
-use tedge_utils::file::create_directory_with_defaults;
 use tedge_watch_ext::WatchActorBuilder;
 use tracing::warn;
 use yansi::Paint;
@@ -97,11 +94,8 @@ impl TEdgeComponent for AzureMapper {
         );
         let flows_dir =
             tedge_flows::flows_dir(config_dir, "az", self.profile.as_ref().map(|p| p.as_ref()));
-        create_directory_with_defaults(flows_dir.as_std_path()).await?;
-        let mut flows = ConnectedFlowRegistry::new(flows_dir);
-        flows
-            .persist_builtin_flow("mea", az_converter.builtin_flow().as_str())
-            .await?;
+        let mut flows = crate::flow_registry(flows_dir).await?;
+        az_converter.persist_builtin_flow(&mut flows).await?;
         let service_config = flows_config(&tedge_config, &az_mapper_name)?;
         let mut fs_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();

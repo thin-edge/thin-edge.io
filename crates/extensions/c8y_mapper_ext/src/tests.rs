@@ -50,6 +50,7 @@ use tedge_config::tedge_toml::C8Y_MQTT_PAYLOAD_LIMIT;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowsMapperBuilder;
 use tedge_flows::FlowsMapperConfig;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
@@ -64,6 +65,7 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
+use tedge_utils::file::create_directory_with_defaults;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
@@ -3275,7 +3277,15 @@ pub(crate) async fn c8y_mapper_builder(
     c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
 
     let flows_dir = tedge_flows::flows_dir(tmp_dir.utf8_path(), "c8y", None);
-    let flows = c8y_mapper_builder.flow_registry(flows_dir).await.unwrap();
+    create_directory_with_defaults(flows_dir.clone())
+        .await
+        .unwrap();
+    let mut flows = ConnectedFlowRegistry::new(flows_dir);
+    crate::load_builtin_transformers(&mut flows);
+    c8y_mapper_builder
+        .persist_builtin_flows(&mut flows)
+        .await
+        .unwrap();
     let service_config = FlowsMapperConfig::new(
         "te/device/main/service/tedge-mapper-c8y",
         Duration::from_secs(300),

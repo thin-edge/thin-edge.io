@@ -1,31 +1,11 @@
 use crate::actor::C8yMapperBuilder;
-use camino::Utf8Path;
 use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowRegistryExt;
 use tedge_flows::UpdateFlowRegistryError;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_utils::file::create_directory_with_defaults;
-use tracing::error;
 
 impl C8yMapperBuilder {
-    pub async fn flow_registry(
-        &self,
-        flows_dir: impl AsRef<Utf8Path>,
-    ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
-        if let Err(err) = create_directory_with_defaults(flows_dir.as_ref()).await {
-            error!(
-                "failed to create flow directory '{}': {err}",
-                flows_dir.as_ref()
-            );
-            return Err(err)?;
-        };
-        let mut flows = ConnectedFlowRegistry::new(flows_dir);
-        crate::load_builtin_transformers(&mut flows);
-        self.persist_builtin_flows(&mut flows).await?;
-        Ok(flows)
-    }
-
-    async fn persist_builtin_flows(
+    pub async fn persist_builtin_flows(
         &self,
         flows: &mut ConnectedFlowRegistry,
     ) -> Result<(), UpdateFlowRegistryError> {
