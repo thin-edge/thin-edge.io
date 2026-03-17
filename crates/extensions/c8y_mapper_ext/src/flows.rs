@@ -20,10 +20,7 @@ impl C8yMapperBuilder {
             return Err(err)?;
         };
         let mut flows = ConnectedFlowRegistry::new(flows_dir);
-
-        let mapper_topic_id = self.config.service_topic_id.clone();
-        crate::load_builtin_transformers(&mut flows, mapper_topic_id);
-
+        crate::load_builtin_transformers(&mut flows);
         self.persist_builtin_flows(&mut flows).await?;
         Ok(flows)
     }
@@ -108,7 +105,7 @@ config = {{ topic_root = "{topic_prefix}" }}
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "unix", reformat = false }} }},
-    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "cache-early-messages", config = {{ mapper_topic_id = "{mapper_topic_id}" }} }},
     {{ builtin = "into-c8y-measurements" }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
@@ -141,7 +138,7 @@ config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
-    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "cache-early-messages", config = {{ mapper_topic_id = "{mapper_topic_id}" }} }},
     {{ builtin = "into-c8y-events", config = {{ max_mqtt_payload_size = {max_mqtt_payload_size} }} }},
 ]
 
@@ -175,7 +172,7 @@ config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
-    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "cache-early-messages", config = {{ mapper_topic_id = "{mapper_topic_id}" }} }},
     {{ builtin = "into-c8y-alarms", interval = "{alarm_interval}" }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
@@ -207,7 +204,7 @@ topic = "{errors_topic}"
 config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
 
 steps = [
-    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "cache-early-messages", config = {{ mapper_topic_id = "{mapper_topic_id}" }} }},
     {{ builtin = "into-c8y-health-status", config = {{ main_device = "{main_device}" }} }},
 ]
 

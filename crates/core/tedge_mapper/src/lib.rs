@@ -199,10 +199,7 @@ pub(crate) fn flows_config(
 }
 
 pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
-    c8y_mapper_ext::load_builtin_transformers(
-        flows,
-        EntityTopicId::default_main_service("tedge-mapper-c8y").unwrap(),
-    );
+    c8y_mapper_ext::load_builtin_transformers(flows);
     az_mapper_ext::load_builtin_transformers(flows);
     aws_mapper_ext::load_builtin_transformers(flows);
 }

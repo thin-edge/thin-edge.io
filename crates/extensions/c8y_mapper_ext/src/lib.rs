@@ -1,4 +1,3 @@
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_flows::FlowRegistryExt;
 
 pub mod actor;
@@ -52,8 +51,8 @@ impl Default for Capabilities {
     }
 }
 
-pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt, mapper_topic_id: EntityTopicId) {
-    flows.register_builtin(mea::message_cache::MessageCache::new(mapper_topic_id));
+pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
+    flows.register_builtin(mea::message_cache::MessageCache::default());
     flows.register_builtin(mea::measurements::MeasurementConverter::default());
     flows.register_builtin(mea::events::EventConverter::default());
     flows.register_builtin(mea::alarms::AlarmConverter::default());
