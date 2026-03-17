@@ -1,6 +1,7 @@
 *** Settings ***
 Resource            ../../../resources/common.resource
 Library             OperatingSystem
+Library             String
 Library             ThinEdgeIO
 Library             Cumulocity
 
@@ -89,6 +90,119 @@ Set configuration with broken url
     [Template]    Set Configuration from URL
     Main Device    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    invalid://hellö.zip
     Child Device    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    invalid://hellö.zip
+
+Set Configuration Should Restart Service
+    Cumulocity.Set Device    ${PARENT_SN}
+    ThinEdgeIO.Set Device Context    ${PARENT_SN}
+
+    # Install lighttpd as the test service
+    Execute Command    apt install -y lighttpd
+    Service Should Be Running    lighttpd
+
+    # Config plugin TOML with service restart enabled for lighttpd
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/tedge-configuration-plugin-with-service.toml
+    ...    /etc/tedge/plugins/tedge-configuration-plugin.toml
+    Should Contain Supported Configuration Types    lighttpd-conf
+
+    # Verify initial server tag
+    ${initial_tag}=    Execute Command
+    ...    curl -I http://localhost 2>/dev/null | grep -i '^Server:' || echo 'Server: lighttpd'
+    ...    strip=${True}
+    Should Contain    ${initial_tag}    lighttpd
+
+    # Apply new configuration with custom server tag
+    Cumulocity.Set Device    ${PARENT_SN}
+    ${config_url}=    Cumulocity.Create Inventory Binary
+    ...    lighttpd-config
+    ...    lighttpd-config
+    ...    file=${CURDIR}/plugins/lighttpd.conf
+    ${operation}=    Cumulocity.Set Configuration    lighttpd-conf    url=${config_url}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=60
+
+    # Verify the configuration was applied
+    ${config_content}=    Execute Command    cat /etc/lighttpd/lighttpd.conf    strip=${True}
+    Should Contain    ${config_content}    tedge-lighttpd
+
+    # Verify service was restarted by checking the server tag changed
+    ${updated_tag}=    Execute Command    curl -I http://localhost 2>/dev/null | grep -i '^Server:'
+    Should Contain    ${updated_tag}    tedge-lighttpd
+
+Set Configuration For system.toml Should Restart Tedge Agent Service
+    Cumulocity.Set Device    ${PARENT_SN}
+    ThinEdgeIO.Set Device Context    ${PARENT_SN}
+
+    # Config plugin TOML with service restart enabled for tedge-agent
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/tedge-configuration-plugin-with-service.toml
+    ...    /etc/tedge/plugins/tedge-configuration-plugin.toml
+    Should Contain Supported Configuration Types    system.toml
+
+    ${pid_before}=    Get Service PID    tedge-agent
+
+    # Apply new configuration that changes log level of tedge-agent to debug
+    Cumulocity.Set Device    ${PARENT_SN}
+    ${config_url}=    Cumulocity.Create Inventory Binary
+    ...    system.toml
+    ...    system.toml
+    ...    file=${CURDIR}/configs/system.toml
+    ${operation}=    Cumulocity.Set Configuration    system.toml    url=${config_url}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=90
+
+    # Verify the configuration was applied
+    ${config_content}=    Execute Command    cat /etc/tedge/system.toml    strip=${True}
+    Should Contain    ${config_content}    tedge-agent = "debug"
+
+    # Verify the tedge-agent service was restarted by checking the PID changed
+    ${pid_after}=    Get Service PID    tedge-agent
+    Should Not Be Equal    ${pid_before}    ${pid_after}
+
+Set Configuration For tedge.toml Should Restart Tedge Agent Service
+    Cumulocity.Set Device    ${PARENT_SN}
+    ThinEdgeIO.Set Device Context    ${PARENT_SN}
+
+    # Config plugin TOML with service restart enabled for tedge-agent
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/tedge-configuration-plugin-with-service.toml
+    ...    /etc/tedge/plugins/tedge-configuration-plugin.toml
+    Should Contain Supported Configuration Types    tedge.toml
+
+    # Snapshot the current tedge.toml from the device via the cloud
+    ${timestamp}=    Get Unix Timestamp
+    ${snapshot_op}=    Cumulocity.Get Configuration    tedge.toml
+    ${snapshot_op}=    Operation Should Be SUCCESSFUL    ${snapshot_op}    timeout=60
+
+    # Retrieve the attachment that was uploaded by the snapshot operation
+    ${events}=    Cumulocity.Device Should Have Event/s
+    ...    type=tedge.toml
+    ...    with_attachment=${True}
+    ${contents}=    Cumulocity.Event Should Have An Attachment    ${events[0]["id"]}
+    ${config_content}=    Decode Bytes To String    ${contents}    UTF-8
+
+    # Update the existing config by disabling config snapshot capability,
+    # but keep config_update enabled so that the update operation resumes even after the agent restart.
+    # Selectively disabling config_snapshot to test that even that doesn't impact an ongoing config_update.
+    ${updated_content}=    Set Variable    ${config_content}\n\n[agent.enable]\nconfig_snapshot = false\n
+
+    ${pid_before}=    Get Service PID    tedge-agent
+
+    # Upload the updated content to Cumulocity and push it to the device
+    ${config_url}=    Cumulocity.Create Inventory Binary
+    ...    tedge.toml
+    ...    tedge.toml
+    ...    contents=${updated_content}
+    ${update_op}=    Cumulocity.Set Configuration    tedge.toml    url=${config_url}
+    ${update_op}=    Operation Should Be SUCCESSFUL    ${update_op}    timeout=60
+
+    # Verify the modified content was applied on the device
+    ${device_contents}=    ThinEdgeIO.Execute Command    cat /etc/tedge/tedge.toml    strip=${True}
+    Should Contain    ${device_contents}    config_snapshot = false
+
+    # Verify the tedge-agent service was restarted by checking the PID changed
+    ${pid_after}=    Get Service PID    tedge-agent
+    Should Not Be Equal    ${pid_before}    ${pid_after}
+
+    [Teardown]    Restore tedge.toml
 
 #
 # Get configuration
@@ -764,3 +878,7 @@ Enable config snapshot capability of tedge-agent
     Execute Command    tedge config set agent.enable.config_snapshot true
     ThinEdgeIO.Restart Service    tedge-agent
     ThinEdgeIO.Service Should Be Running    tedge-agent
+
+Restore tedge.toml
+    ThinEdgeIO.Set Device Context    ${PARENT_SN}
+    Execute Command    tedge config unset agent.enable.config_snapshot

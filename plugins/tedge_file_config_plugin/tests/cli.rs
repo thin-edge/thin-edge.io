@@ -115,13 +115,139 @@ type = "dest.conf"
         .arg(ttd.path().to_str().unwrap())
         .arg("set")
         .arg("dest.conf")
-        .arg(source_file.path().to_str().unwrap());
+        .arg(source_file.path().to_str().unwrap())
+        .arg("--work-dir")
+        .arg(ttd.path().join("workdir").to_str().unwrap());
 
     cmd.assert().success();
 
     // Verify the file was copied
     let dest_content = fs::read_to_string(dest_file.path()).unwrap();
     assert_eq!(dest_content, new_content);
+}
+
+#[test]
+fn test_set_command_executes_service_restart_command() {
+    let ttd = TempTedgeDir::new();
+
+    let witness_file = ttd.file("restart-witness.txt");
+
+    // system.toml for restart command
+    let system_toml_content = format!(
+        r#"
+[init]
+name = "dummy"
+is_available = ["true"]
+restart = ["sh", "-c", "echo $0 >> {}", "{{}}"]
+start = ["true"]
+stop =  ["true"]
+enable =  ["true"]
+disable =  ["true"]
+is_active = ["true"]
+"#,
+        witness_file.utf8_path()
+    );
+    ttd.file("system.toml")
+        .with_raw_content(&system_toml_content);
+
+    // Original config
+    let dest_file = ttd.file("test.conf").with_raw_content("config=original\n");
+
+    let config_content = format!(
+        r###"
+[[files]]
+path = "{}"
+type = "test.conf"
+service = "dummy-service"
+"###,
+        dest_file.utf8_path()
+    );
+    ttd.dir("plugins")
+        .file("tedge-configuration-plugin.toml")
+        .with_raw_content(&config_content);
+
+    // New config to set
+    let new_content = "config=new\n";
+    let target_file = ttd.file("new.conf").with_raw_content(new_content);
+
+    // Set the configuration (which also triggers service restart)
+    let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
+    cmd.arg("--config-dir")
+        .arg(ttd.path().to_str().unwrap())
+        .arg("set")
+        .arg("test.conf")
+        .arg(target_file.path().to_str().unwrap())
+        .arg("--work-dir")
+        .arg(ttd.path().join("workdir").to_str().unwrap());
+
+    cmd.assert().success();
+
+    // Verify the file was updated
+    let dest_content = fs::read_to_string(dest_file.path()).unwrap();
+    assert_eq!(dest_content, new_content);
+
+    // Verify that the restart command was called with the correct service name
+    let witness_content = fs::read_to_string(witness_file.path()).unwrap();
+    assert_eq!(witness_content.trim(), "dummy-service");
+}
+
+#[test]
+fn test_set_command_does_not_restart_tedge_agent() {
+    let ttd = TempTedgeDir::new();
+
+    // Original config
+    let dest_file = ttd.file("tedge.conf").with_raw_content("conf=original");
+
+    let config_content = format!(
+        r###"
+[[files]]
+path = "{}"
+type = "tedge.conf"
+service = "tedge-agent"
+"###,
+        dest_file.utf8_path()
+    );
+    ttd.dir("plugins")
+        .file("tedge-configuration-plugin.toml")
+        .with_raw_content(&config_content);
+
+    // New config to set
+    let new_content = "conf=new";
+    let target_file = ttd.file("new.conf").with_raw_content(new_content);
+
+    let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
+    cmd.arg("--config-dir")
+        .arg(ttd.path().to_str().unwrap())
+        .arg("set")
+        .arg("tedge.conf")
+        .arg(target_file.path().to_str().unwrap())
+        .arg("--work-dir")
+        .arg(ttd.path().join("workdir").to_str().unwrap());
+
+    let output = cmd.output().unwrap();
+    assert!(output.status.success());
+
+    // Verify the file was updated
+    let dest_content = fs::read_to_string(dest_file.path()).unwrap();
+    assert_eq!(dest_content, new_content);
+
+    // Verify that the restart signal JSON is printed (instead of actually restarting)
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains(":::begin-tedge:::"),
+        "Output should contain ':::begin-tedge:::', got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains(r#"{"restartAgent": true}"#),
+        "Output should contain the restart JSON, got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains(":::end-tedge:::"),
+        "Output should contain ':::end-tedge:::', got: {}",
+        stdout
+    );
 }
 
 #[test]

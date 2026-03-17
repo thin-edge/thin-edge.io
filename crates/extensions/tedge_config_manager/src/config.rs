@@ -25,10 +25,12 @@ pub struct ConfigManagerConfig {
     pub tmp_path: Arc<Utf8Path>,
     pub ops_dir: Utf8PathBuf,
     pub mqtt_schema: MqttSchema,
-    pub config_reload_topics: Vec<Topic>,
+    pub config_snapshot_meta_topic: Topic,
+    pub config_update_meta_topic: Topic,
     pub config_update_topic: TopicFilter,
     pub config_snapshot_topic: TopicFilter,
     pub tedge_http_host: Arc<str>,
+    pub config_snapshot_enabled: bool,
     pub config_update_enabled: bool,
     pub sudo_enabled: bool,
 }
@@ -41,6 +43,7 @@ pub struct ConfigManagerOptions {
     pub tmp_path: Arc<Utf8Path>,
     pub ops_dir: Utf8PathBuf,
     pub is_sudo_enabled: bool,
+    pub config_snapshot_enabled: bool,
     pub config_update_enabled: bool,
     pub plugin_dirs: Vec<Utf8PathBuf>,
 }
@@ -54,10 +57,10 @@ impl ConfigManagerConfig {
         let plugin_config_dir = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
         let plugin_config_path = plugin_config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
 
-        let config_reload_topics = [OperationType::ConfigSnapshot, OperationType::ConfigUpdate]
-            .into_iter()
-            .map(|cmd| mqtt_topic_root.capability_topic_for(&mqtt_device_topic_id, cmd))
-            .collect();
+        let config_snapshot_meta_topic = mqtt_topic_root
+            .capability_topic_for(&mqtt_device_topic_id, OperationType::ConfigSnapshot);
+        let config_update_meta_topic = mqtt_topic_root
+            .capability_topic_for(&mqtt_device_topic_id, OperationType::ConfigUpdate);
 
         let config_update_topic = mqtt_topic_root.topics(
             EntityFilter::Entity(&mqtt_device_topic_id),
@@ -77,10 +80,12 @@ impl ConfigManagerConfig {
             tmp_path: cliopts.tmp_path,
             ops_dir: cliopts.ops_dir,
             mqtt_schema: mqtt_topic_root,
-            config_reload_topics,
+            config_snapshot_meta_topic,
+            config_update_meta_topic,
             config_update_topic,
             config_snapshot_topic,
             tedge_http_host: cliopts.tedge_http_host,
+            config_snapshot_enabled: cliopts.config_snapshot_enabled,
             config_update_enabled: cliopts.config_update_enabled,
             sudo_enabled: cliopts.is_sudo_enabled,
         })

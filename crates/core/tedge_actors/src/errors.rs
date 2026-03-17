@@ -39,6 +39,9 @@ pub enum RuntimeError {
 
     #[error(transparent)]
     LinkError(#[from] LinkError),
+
+    #[error("A restart is required due to a self update or configuration update")]
+    RestartRequired,
 }
 
 impl<T> From<Box<T>> for RuntimeError

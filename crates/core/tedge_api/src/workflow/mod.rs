@@ -19,6 +19,7 @@ use mqtt_channel::QoS;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
+use serde_json::Value;
 pub use state::*;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -41,7 +42,7 @@ pub struct OperationStepRequest {
     pub command_state: GenericCommandState,
 }
 
-pub type OperationStepResponse = Result<(), String>;
+pub type OperationStepResponse = Result<Value, String>;
 
 pub trait OperationStepHandler {
     fn supported_operation_steps(&self) -> Vec<(OperationType, OperationStep)>;
@@ -106,6 +107,17 @@ pub enum OperationAction {
     /// on_error = "<state>"
     /// ```
     AwaitingAgentRestart(AwaitHandlers),
+
+    /// Restart the agent process and move to the next state
+    ///
+    /// This action first transitions to the `on_exec` state, persists it, then sends SIGTERM to the agent process.
+    /// The agent will be restarted by the service manager (systemd), and resume from the `on_exec` state.
+    ///
+    /// ```toml
+    /// action = "restart-agent"
+    /// on_exec = "<state>"
+    /// ```
+    RestartAgent(ExecHandlers),
 
     /// A script has to be executed
     Script(ShellScript, ExitHandlers),
@@ -201,6 +213,7 @@ impl Display for OperationAction {
             OperationAction::MoveTo(step) => format!("move to {step} state"),
             OperationAction::BuiltIn(_, _) => "builtin action".to_string(),
             OperationAction::AwaitingAgentRestart { .. } => "await agent restart".to_string(),
+            OperationAction::RestartAgent(_) => "restart agent".to_string(),
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
             OperationAction::Download(_, _) => "builtin download action".to_string(),

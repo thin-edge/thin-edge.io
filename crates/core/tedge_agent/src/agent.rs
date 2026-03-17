@@ -72,7 +72,6 @@ use tedge_uploader_ext::UploaderActor;
 use tedge_utils::file::create_directory_with_defaults;
 use tracing::info;
 use tracing::instrument;
-use tracing::warn;
 
 pub const TEDGE_AGENT: &str = "tedge-agent";
 
@@ -357,9 +356,9 @@ impl Agent {
             &self.config.service,
         );
 
-        // Instantiate config manager actor if config_snapshot or both operations are enabled
+        // Instantiate config manager actor if either config_snapshot or config_update operation is enabled
         let config_actor_builder: Option<ConfigManagerBuilder> =
-            if self.config.capabilities.config_snapshot {
+            if self.config.capabilities.config_snapshot || self.config.capabilities.config_update {
                 let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {
                     config_dir: self.config.config_dir.clone().into(),
                     mqtt_topic_root: mqtt_schema.clone(),
@@ -368,6 +367,7 @@ impl Agent {
                     tmp_path: self.config.tmp_dir.clone(),
                     ops_dir: self.config.operations_dir.clone(),
                     is_sudo_enabled: self.config.is_sudo_enabled,
+                    config_snapshot_enabled: self.config.capabilities.config_snapshot,
                     config_update_enabled: self.config.capabilities.config_update,
                     plugin_dirs: self.config.config_plugin_dirs,
                 })?;
@@ -381,15 +381,16 @@ impl Agent {
                 .await?;
                 workflow_actor_builder.register_builtin_operation(&mut config_manager);
                 workflow_actor_builder.register_builtin_operation_step_handler(&mut config_manager);
-                workflow_actor_builder
-                    .register_sync_signal_sink(OperationType::ConfigSnapshot, &config_manager);
-                workflow_actor_builder
-                    .register_sync_signal_sink(OperationType::ConfigUpdate, &config_manager);
+                if self.config.capabilities.config_snapshot {
+                    workflow_actor_builder
+                        .register_sync_signal_sink(OperationType::ConfigSnapshot, &config_manager);
+                }
+                if self.config.capabilities.config_update {
+                    workflow_actor_builder
+                        .register_sync_signal_sink(OperationType::ConfigUpdate, &config_manager);
+                }
 
                 Some(config_manager)
-            } else if self.config.capabilities.config_update {
-                warn!("Config_snapshot operation must be enabled to run config_update!");
-                None
             } else {
                 None
             };

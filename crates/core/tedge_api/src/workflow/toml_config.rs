@@ -175,6 +175,10 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                     let handlers = AwaitHandlers::try_from((input.handlers, defaults))?;
                     Ok(OperationAction::AwaitingAgentRestart(handlers))
                 }
+                "restart-agent" => {
+                    let handlers = ExecHandlers::try_new(input.handlers.on_exec.map(|u| u.into()))?;
+                    Ok(OperationAction::RestartAgent(handlers))
+                }
                 "await-operation-completion" => {
                     let handlers = AwaitHandlers::try_from((input.handlers, defaults))?;
                     let cmd_output = input.output.try_into()?;
