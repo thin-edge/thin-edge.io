@@ -35,7 +35,7 @@ impl Transformer for AddTimestamp {
             self.time_property = time_property.to_owned();
         }
         if let Some(format_name) = config.string_property("format") {
-            let Ok(format) = TimeFormat::try_from(format_name) else {
+            let Ok(format) = format_name.parse::<TimeFormat>() else {
                 return Err(ConfigError::IncorrectSetting(format!(
                     "Unknown time format: {format_name}"
                 )));
