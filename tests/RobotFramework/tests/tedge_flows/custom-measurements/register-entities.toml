@@ -1,0 +1,11 @@
+input.mqtt.topics = ["te/+/+/+/+"]
+
+steps = [
+    { script = "register-entities.js" },
+]
+
+[output.mqtt]
+topic = "fake/c8y/entities"
+
+[errors.mqtt]
+topic = "te/errors"
