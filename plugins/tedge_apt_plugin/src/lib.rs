@@ -146,8 +146,8 @@ fn run_op(apt: AptCli, tedge_config: Option<TEdgeConfig>) -> Result<ExitStatus, 
             file_path,
         } => {
             let (installer, _metadata) = get_installer(module, version, file_path)?;
-            let dpk_option = get_dpk_option(&tedge_config);
-            AptGetCmd::Install(dpk_option, vec![installer]).run()?
+            let dpkg_option = get_dpkg_option(&tedge_config);
+            AptGetCmd::Install(dpkg_option, vec![installer]).run()?
         }
 
         PluginOp::Remove { module, version } => {
@@ -172,7 +172,7 @@ fn run_op(apt: AptCli, tedge_config: Option<TEdgeConfig>) -> Result<ExitStatus, 
             // which will get cleaned up once it goes out of scope after this block
             let mut metadata_vec = Vec::new();
             let mut args: Vec<String> = Vec::new();
-            let dpk_option = get_dpk_option(&tedge_config);
+            let dpkg_option = get_dpkg_option(&tedge_config);
 
             for update_module in updates {
                 match update_module.action {
@@ -196,7 +196,7 @@ fn run_op(apt: AptCli, tedge_config: Option<TEdgeConfig>) -> Result<ExitStatus, 
                     }
                 };
             }
-            AptGetCmd::Install(dpk_option, args).run()?
+            AptGetCmd::Install(dpkg_option, args).run()?
         }
 
         PluginOp::Prepare => AptGetCmd::Update.run()?,
@@ -282,8 +282,8 @@ impl AptGetCmd {
         cmd.args(["--quiet", "--yes"]);
 
         match self {
-            AptGetCmd::Install(dpk_option, packages) => {
-                let config_option = match dpk_option {
+            AptGetCmd::Install(dpkg_option, packages) => {
+                let config_option = match dpkg_option {
                     AptConfig::KeepOld => "DPkg::Options::=--force-confold",
                     AptConfig::KeepNew => "DPkg::Options::=--force-confnew",
                 };
@@ -318,10 +318,10 @@ impl AptGetCmd {
     }
 }
 
-fn get_dpk_option(tedge_config: &Option<TEdgeConfig>) -> AptConfig {
+fn get_dpkg_option(tedge_config: &Option<TEdgeConfig>) -> AptConfig {
     match tedge_config {
         None => AptConfig::KeepNew,
-        Some(config) => config.apt.dpk.options.config.clone(),
+        Some(config) => config.apt.dpkg.options.config.clone(),
     }
 }
 

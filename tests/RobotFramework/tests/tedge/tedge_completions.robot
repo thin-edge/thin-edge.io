@@ -13,7 +13,7 @@ ${thing}=
 ...             SEPARATOR=
 ...             apt.name\tThe filtering criterion that is used to filter packages list output by name\n\
 ...             apt.maintainer\tThe filtering criterion that is used to filter packages list output by maintainer\n\
-...             apt.dpk.options.config\tdpkg configuration option used to control the dpkg options "--force-confold" and "--force-confnew" and are applied when installing apt packages via the tedge-apt-plugin. Accepts either 'keepold' or 'keepnew'.
+...             apt.dpkg.options.config\tdpkg configuration option used to control the dpkg options "--force-confold" and "--force-confnew" and are applied when installing apt packages via the tedge-apt-plugin. Accepts either 'keepold' or 'keepnew'.
 
 
 *** Test Cases ***
