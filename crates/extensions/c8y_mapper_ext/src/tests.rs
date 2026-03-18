@@ -3281,6 +3281,7 @@ pub(crate) async fn c8y_mapper_builder(
         Duration::from_secs(300),
         false,
         false,
+        false,
     );
 
     let mut flows_mapper = FlowsMapperBuilder::try_new(flows, service_config)

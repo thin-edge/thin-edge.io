@@ -188,6 +188,7 @@ pub(crate) fn flows_config(
         stats_config.interval.duration(),
         stats_config.on_message,
         stats_config.on_interval,
+        stats_config.on_startup,
     )
     .with_js_config(
         mem_config.heap_size as usize,

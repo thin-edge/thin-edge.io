@@ -37,6 +37,18 @@ pub trait Transformer: Send + Sync + 'static {
     ) -> Result<Vec<Message>, FlowError> {
         Ok(vec![])
     }
+
+    fn has_startup(&self) -> bool {
+        false
+    }
+
+    fn on_startup(
+        &mut self,
+        _timestamp: SystemTime,
+        _context: &FlowContextHandle,
+    ) -> Result<Vec<Message>, FlowError> {
+        Ok(vec![])
+    }
 }
 
 pub trait TransformerBuilder: Send + Sync + 'static {
@@ -187,6 +199,60 @@ config = { topics = ["units/#"] }
         assert_eq!(
             step.on_message(&runtime, datetime, &input).await.unwrap(),
             vec![input]
+        );
+    }
+
+    #[tokio::test]
+    async fn onstartup_works() {
+        let step = r#"
+builtin = "onstartup-builtin"
+"#;
+
+        #[derive(Clone)]
+        struct OnstartupBuiltin;
+
+        impl Transformer for OnstartupBuiltin {
+            fn name(&self) -> &str {
+                "onstartup-builtin"
+            }
+
+            fn set_config(&mut self, _: JsonValue) -> Result<(), ConfigError> {
+                Ok(())
+            }
+
+            fn on_message(
+                &mut self,
+                _: SystemTime,
+                _: &Message,
+                _: &FlowContextHandle,
+            ) -> Result<Vec<Message>, FlowError> {
+                Ok(vec![])
+            }
+
+            fn has_startup(&self) -> bool {
+                true
+            }
+
+            fn on_startup(
+                &mut self,
+                _timestamp: SystemTime,
+                _context: &FlowContextHandle,
+            ) -> Result<Vec<Message>, FlowError> {
+                Ok(vec![Message::new("onstartup", "onstartup")])
+            }
+        }
+
+        let mut transformers = BuiltinTransformers::new();
+        transformers.register(OnstartupBuiltin);
+
+        let (runtime, mut step) = step_instance(&transformers, step).await;
+
+        let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
+        let output = Message::new("onstartup", "onstartup");
+
+        assert_eq!(
+            step.on_startup(&runtime, datetime).await.unwrap(),
+            vec![output]
         );
     }
 

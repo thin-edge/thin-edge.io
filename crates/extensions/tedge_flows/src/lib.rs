@@ -71,6 +71,7 @@ impl Default for FlowsMapperConfig {
             Duration::from_secs(300),
             false,
             false,
+            false,
         )
     }
 }
@@ -82,6 +83,7 @@ impl FlowsMapperConfig {
         stats_dump_interval: Duration,
         publish_on_message_stats: bool,
         publish_on_interval_stats: bool,
+        publish_on_startup_stats: bool,
     ) -> Self {
         let statistics_topic = format!("{topic_prefix}/status/metrics");
         let status_topic = format!("{topic_prefix}/status/flows");
@@ -101,6 +103,7 @@ impl FlowsMapperConfig {
             stats_filter: StatsFilter {
                 publish_on_message_stats,
                 publish_on_interval_stats,
+                publish_on_startup_stats,
             },
             js_config: JsRuntimeConfig::default(),
         }

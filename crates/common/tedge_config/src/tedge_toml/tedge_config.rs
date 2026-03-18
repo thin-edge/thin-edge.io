@@ -1390,6 +1390,10 @@ define_tedge_config! {
             /// Enable or disable statistics for step onInterval
             #[tedge_config(default(value = false))]
             on_interval: bool,
+
+            /// Enable or disable statistics for step onStartup
+            #[tedge_config(default(value = false))]
+            on_startup: bool,
         },
     },
 }

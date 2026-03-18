@@ -17,6 +17,7 @@ pub enum Dimension {
     Flow(String),
     OnMessage(String),
     OnInterval(String),
+    OnStartup(String),
 }
 
 pub enum Sample {
@@ -30,6 +31,7 @@ pub enum Sample {
 pub struct StatsFilter {
     pub(crate) publish_on_message_stats: bool,
     pub(crate) publish_on_interval_stats: bool,
+    pub(crate) publish_on_startup_stats: bool,
 }
 
 #[derive(Default)]
@@ -93,6 +95,23 @@ impl Counter {
     }
 
     pub fn flow_on_interval_failed(&mut self, flow_id: &str) {
+        self.add(Dimension::Runtime, Sample::ErrorRaised);
+        self.add(Dimension::Flow(flow_id.to_owned()), Sample::ErrorRaised);
+    }
+
+    pub fn flow_on_startup_start(&mut self, _flow_id: &str) -> Instant {
+        Instant::now()
+    }
+
+    pub fn flow_on_startup_done(&mut self, flow_id: &str, _started_at: Instant, count: usize) {
+        self.add(Dimension::Runtime, Sample::MessageOut(count));
+        self.add(
+            Dimension::Flow(flow_id.to_owned()),
+            Sample::MessageOut(count),
+        );
+    }
+
+    pub fn flow_on_startup_failed(&mut self, flow_id: &str) {
         self.add(Dimension::Runtime, Sample::ErrorRaised);
         self.add(Dimension::Flow(flow_id.to_owned()), Sample::ErrorRaised);
     }
@@ -186,6 +205,7 @@ impl StatsFilter {
             Dimension::Flow(_) => true,
             Dimension::OnMessage(_) => self.publish_on_message_stats,
             Dimension::OnInterval(_) => self.publish_on_interval_stats,
+            Dimension::OnStartup(_) => self.publish_on_startup_stats,
         }
     }
 }
@@ -215,6 +235,7 @@ impl Display for Dimension {
             Dimension::Flow(toml) => write!(f, "{}", Self::filename(toml)),
             Dimension::OnMessage(js) => write!(f, "{}", Self::filename(js)),
             Dimension::OnInterval(js) => write!(f, "{}.onInterval", Self::filename(js)),
+            Dimension::OnStartup(js) => write!(f, "{}.onStartup", Self::filename(js)),
         }
     }
 }
@@ -224,6 +245,7 @@ impl Dimension {
         match f {
             "onMessage" => Some(Dimension::OnMessage(js.to_owned())),
             "onInterval" => Some(Dimension::OnInterval(js.to_owned())),
+            "onStartup" => Some(Dimension::OnStartup(js.to_owned())),
             _ => None,
         }
     }
@@ -238,6 +260,7 @@ impl Dimension {
             Dimension::Flow(_) => "flow",
             Dimension::OnMessage(_) => "onMessage",
             Dimension::OnInterval(_) => "onInterval",
+            Dimension::OnStartup(_) => "onStartup",
         }
     }
 }

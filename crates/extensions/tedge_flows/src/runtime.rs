@@ -145,6 +145,25 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
             .collect()
     }
 
+    pub async fn on_startup(&mut self, timestamp: SystemTime) -> Vec<FlowResult> {
+        let mut out_messages = vec![];
+
+        let unstarted_flows = self
+            .registry
+            .flows_mut()
+            .filter(|f| f.as_ref().steps.iter().any(|s| s.should_execute_startup()));
+
+        for flow in unstarted_flows {
+            let flow_output = flow
+                .as_mut()
+                .on_startup(&self.js_runtime, &mut self.stats, timestamp)
+                .await;
+            out_messages.push(flow_output);
+        }
+
+        out_messages
+    }
+
     pub async fn on_interval(&mut self, timestamp: SystemTime, now: Instant) -> Vec<FlowResult> {
         let mut out_messages = vec![];
         for flow in self.registry.flows_mut() {

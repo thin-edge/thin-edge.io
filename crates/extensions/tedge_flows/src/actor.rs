@@ -85,6 +85,7 @@ impl Actor for FlowsMapper {
     async fn run(mut self) -> Result<(), RuntimeError> {
         self.send_updated_subscriptions().await?;
         self.notify_flows_status().await?;
+        self.on_startup().await?;
 
         while let Some(message) = self.next_message().await {
             match message {
@@ -99,7 +100,10 @@ impl Actor for FlowsMapper {
                 InputMessage::WatchEvent(event) => {
                     self.on_input_event(event).await?;
                 }
-                InputMessage::FsWatchEvent(event) => self.handle_fs_event(event).await?,
+                InputMessage::FsWatchEvent(event) => {
+                    self.handle_fs_event(event).await?;
+                    self.on_startup().await?;
+                }
             }
         }
 
@@ -277,10 +281,19 @@ impl FlowsMapper {
             }
             self.next_dump = now + self.config.stats_dump_interval;
         }
+
         for messages in self.processor.on_interval(timestamp, now).await {
             self.publish_result(messages).await?;
         }
 
+        Ok(())
+    }
+
+    async fn on_startup(&mut self) -> Result<(), RuntimeError> {
+        let timestamp = SystemTime::now();
+        for messages in self.processor.on_startup(timestamp).await {
+            self.publish_result(messages).await?;
+        }
         Ok(())
     }
 
