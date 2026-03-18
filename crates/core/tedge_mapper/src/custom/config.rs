@@ -63,10 +63,6 @@ pub struct CustomMapperConfig {
     /// Path to a TOML credentials file for username/password authentication.
     /// The file must contain a `[credentials]` section with `username` and `password` fields.
     pub credentials_path: Option<Utf8PathBuf>,
-    /// Identifies the built-in cloud integration this mapper belongs to.
-    /// `None` for user-defined mappers that don't opt into a built-in cloud integration.
-    /// Cloud-type dispatch is not yet implemented — this field is currently informational.
-    pub cloud_type: Option<CloudType>,
 }
 
 /// Device identity and TLS settings.
@@ -144,6 +140,14 @@ pub async fn load_mapper_config(
         .credentials_path
         .map(|p| resolve_relative(mapper_dir, p));
 
+    if raw.cloud_type.is_some() {
+        anyhow::bail!(
+            "Invalid configuration in {config_path}: \
+             'cloud_type' is not yet supported. \
+             Cloud-type dispatch is not implemented — remove the 'cloud_type' field."
+        );
+    }
+
     let config = CustomMapperConfig {
         table,
         url: raw.url,
@@ -151,7 +155,6 @@ pub async fn load_mapper_config(
         bridge: raw.bridge,
         auth_method: raw.auth_method,
         credentials_path,
-        cloud_type: raw.cloud_type,
     };
 
     // Validate that cert_path and key_path are either both set or both absent.
@@ -441,7 +444,7 @@ key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
     }
 
     #[tokio::test]
-    async fn parses_cloud_type_when_present() {
+    async fn errors_when_cloud_type_is_set() {
         let ttd = TempTedgeDir::new();
         let mapper_dir = ttd.utf8_path().join("mappers/cloudtype");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
@@ -452,24 +455,12 @@ key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
         .await
         .unwrap();
 
-        let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
-        assert_eq!(config.cloud_type, Some(CloudType::C8y));
-    }
-
-    #[tokio::test]
-    async fn cloud_type_is_none_when_absent() {
-        let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/noct");
-        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-        tokio::fs::write(
-            mapper_dir.join("mapper.toml"),
-            "url = \"mqtt.example.com\"\n",
-        )
-        .await
-        .unwrap();
-
-        let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
-        assert_eq!(config.cloud_type, None);
+        let err = load_mapper_config(&mapper_dir).await.unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("cloud_type"),
+            "Error should mention cloud_type: {msg}"
+        );
     }
 
     #[tokio::test]

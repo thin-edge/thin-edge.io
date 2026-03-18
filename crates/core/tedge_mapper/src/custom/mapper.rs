@@ -888,7 +888,6 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 bridge: BridgeConfig::default(),
                 auth_method: AuthMethodConfig::Auto,
                 credentials_path: None,
-                cloud_type: None,
             }
         }
     }
