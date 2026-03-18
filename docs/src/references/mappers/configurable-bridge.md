@@ -77,7 +77,17 @@ direction = "bidirectional"
 
 ### Configuration variable interpolation
 
-You can interpolate variables from tedge config (using the same stringification logic as `tedge config get <key>`) inside `local_prefix`, `remote_prefix` and `topic`:
+You can interpolate variables inside `local_prefix`, `remote_prefix` and `topic` from three namespaces:
+
+| Namespace | Source | Example |
+|-----------|--------|---------|
+| `${config.*}` | Global `tedge.toml` (same values as `tedge config get`) | `${config.c8y.bridge.topic_prefix}` |
+| `${connection.*}` | Active connection context (`auth_method`) | `${connection.auth_method}` |
+| `${mapper.*}` | Mapper's own `mapper.toml` (user-defined mappers only) | `${mapper.bridge.topic_prefix}` |
+
+#### `${config.*}` — global config
+
+Resolves against `tedge.toml` using the same stringification as `tedge config get <key>`:
 
 ```toml
 [[rule]]
@@ -94,6 +104,36 @@ remote_prefix = "$aws/things/${config.aws.device.id}"
 topic = "shadow/#"
 direction = "bidirectional"
 ```
+
+#### `${mapper.*}` — mapper-local config
+
+For user-defined mappers, the entire `mapper.toml` is available under the `${mapper.*}` namespace. Any key you define in `mapper.toml` — including custom fields in sections — is accessible in bridge rules.
+
+This is useful for values specific to your cloud integration that don't belong in the global `tedge.toml`:
+
+```toml
+# /etc/tedge/mappers/thingsboard/mapper.toml
+url = "mqtt.thingsboard.io:8883"
+
+[bridge]
+topic_prefix = "v1/devices/me"  # custom field, accessible as ${mapper.bridge.topic_prefix}
+```
+
+```toml
+# /etc/tedge/mappers/thingsboard/bridge/rules.toml
+local_prefix = "tb/"
+remote_prefix = "${mapper.bridge.topic_prefix}/"
+
+[[rule]]
+topic = "telemetry"
+direction = "outbound"
+```
+
+This forwards messages from `tb/telemetry` on the local broker to `v1/devices/me/telemetry` on the ThingsBoard broker.
+
+:::note
+The `${mapper.*}` namespace is only available in bridge rules for user-defined mappers. It cannot be used in `if = "..."` conditions or `for = "..."` template loops.
+:::
 
 ### Template rules
 

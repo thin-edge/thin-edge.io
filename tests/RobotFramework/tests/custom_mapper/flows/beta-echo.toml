@@ -1,0 +1,5 @@
+input.mqtt.topics = ["beta/test/in"]
+steps = []
+
+[output.mqtt]
+topic = "beta/test/out"

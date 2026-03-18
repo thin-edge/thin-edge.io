@@ -60,20 +60,20 @@ These tests live in `mod.rs` (the `expand()` integration level) and verify `${ma
 
 ## 7. Integration Tests
 
-- [ ] 7.1 Test: flows-only custom mapper starts successfully and processes messages (Robot Framework / system test)
-- [ ] 7.2 Test: custom mapper with `tedge.toml` and `bridge/` establishes the MQTT bridge (Robot Framework / system test)
-- [ ] 7.3 Test: custom mapper with all three components (`tedge.toml`, `bridge/`, `flows/`) starts all subsystems (Robot Framework / system test)
+- [x] 7.1 Test: flows-only custom mapper starts successfully and processes messages (Robot Framework / system test)
+- [x] 7.2 Test: custom mapper with `tedge.toml` and `bridge/` establishes the MQTT bridge (Robot Framework / system test)
+- [x] 7.3 Test: custom mapper with all three components (`tedge.toml`, `bridge/`, `flows/`) starts all subsystems (Robot Framework / system test)
 - [x] 7.4 Test: `bridge/` without `tedge.toml` produces a clear error (unit test: `startup_config::bridge_dir_without_tedge_toml_errors`)
 - [x] 7.5 Test: `tedge-mapper custom --profile nonexistent` produces an error listing available profiles (unit test: `profile_validation::errors_when_directory_missing`, `error_lists_available_profiles`)
-- [ ] 7.6 Test: two custom mapper profiles can run concurrently without interfering (Robot Framework / system test)
+- [x] 7.6 Test: two custom mapper profiles can run concurrently without interfering (Robot Framework / system test)
 - [x] 7.7 Test: `tedge config list` does not include any custom mapper settings (structural: custom mapper config is not in `define_tedge_config!`, it reads from mapper-local `tedge.toml` only)
 
 ## 8. Documentation
 
-- [ ] 8.1 Document the custom mapper directory layout (`custom.{name}/`, `tedge.toml`, `bridge/`, `flows/`)
-- [ ] 8.2 Document the `tedge.toml` schema (required fields for bridge, optional extra fields, available in `${mapper.*}`)
-- [ ] 8.3 Document the `${mapper.*}` template namespace with examples alongside `${config.*}`
-- [ ] 8.4 Write a ThingsBoard walkthrough example (directory layout, `tedge.toml`, bridge rules, flow scripts, systemd unit)
+- [x] 8.1 Document the custom mapper directory layout (`custom.{name}/`, `tedge.toml`, `bridge/`, `flows/`)
+- [x] 8.2 Document the `tedge.toml` schema (required fields for bridge, optional extra fields, available in `${mapper.*}`)
+- [x] 8.3 Document the `${mapper.*}` template namespace with examples alongside `${config.*}`
+- [x] 8.4 Write a ThingsBoard walkthrough example (directory layout, `tedge.toml`, bridge rules, flow scripts, systemd unit)
 
 ## 9. Code Quality / Cleanup
 
