@@ -1,26 +1,36 @@
 //! Utilities for scanning the mappers directory and warning about unrecognised entries.
 //!
-//! Under the no-prefix convention, a directory under `/etc/tedge/mappers/` is a mapper
-//! if and only if it contains a `mapper.toml` file. Directories without `mapper.toml`
-//! are unrecognised and generate a warning.
+//! A directory under `/etc/tedge/mappers/` is a recognised mapper if it contains at least
+//! one of: a `mapper.toml` file or a `flows/` subdirectory. Directories with neither are
+//! unrecognised and generate a warning. Flows-only mapper directories (with `flows/` but no
+//! `mapper.toml`) generate a separate warning if their `flows/` directory is empty.
 
 use camino::Utf8Path;
 use tracing::warn;
 
-/// Scans the mappers directory and emits a warning for each subdirectory
-/// that does not contain a `mapper.toml` file.
+/// Scans the mappers directory and emits warnings for:
+/// - directories that have neither `mapper.toml` nor a `flows/` subdirectory (unrecognised)
+/// - directories that have an empty `flows/` subdirectory and no `mapper.toml` (flows-only
+///   mapper with no scripts defined)
 ///
 /// This is called on mapper startup to help users spot typos or stale entries.
 pub async fn warn_unrecognised_mapper_dirs(mappers_dir: &Utf8Path) {
     for name in collect_unrecognised_mapper_dirs(mappers_dir).await {
         warn!(
-            "Unrecognised mapper directory '{mappers_dir}/{name}': no 'mapper.toml' found. \
+            "Unrecognised mapper directory '{mappers_dir}/{name}': no 'mapper.toml' or 'flows/' found. \
              This directory will be ignored.",
         );
     }
+    for name in collect_empty_flows_mapper_dirs(mappers_dir).await {
+        warn!("Mapper '{name}' has a 'flows/' directory but no flow scripts are defined.",);
+    }
 }
 
-/// Returns the names of subdirectories in `mappers_dir` that do not contain a `mapper.toml`.
+/// Returns the names of subdirectories in `mappers_dir` that have neither a `mapper.toml`
+/// nor a `flows/` subdirectory.
+///
+/// A directory with a `flows/` subdirectory is a recognised flows-only mapper even without
+/// `mapper.toml`. Only directories with neither are considered unrecognised.
 ///
 /// This is exposed for testing; callers should normally use `warn_unrecognised_mapper_dirs`.
 pub(crate) async fn collect_unrecognised_mapper_dirs(mappers_dir: &Utf8Path) -> Vec<String> {
@@ -37,20 +47,56 @@ pub(crate) async fn collect_unrecognised_mapper_dirs(mappers_dir: &Utf8Path) -> 
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
-        // Built-in mappers (c8y, az, aws, collectd, local) and their profile
-        // variants can legitimately have no mapper.toml — skip them silently.
-        if crate::is_builtin_mapper_dir_name(&name) {
-            continue;
-        }
         let path = camino::Utf8PathBuf::from(entry.path().to_string_lossy().into_owned());
-        if !tokio::fs::try_exists(path.join("mapper.toml"))
+        let has_mapper_toml = tokio::fs::try_exists(path.join("mapper.toml"))
             .await
-            .unwrap_or(false)
-        {
+            .unwrap_or(false);
+        let has_flows_dir = tokio::fs::try_exists(path.join("flows"))
+            .await
+            .unwrap_or(false);
+        if !has_mapper_toml && !has_flows_dir {
             unrecognised.push(name);
         }
     }
     unrecognised
+}
+
+/// Returns the names of flows-only mapper directories whose `flows/` subdirectory is empty.
+///
+/// A directory qualifies when it has a `flows/` subdirectory but no `mapper.toml` and the
+/// `flows/` directory contains no entries. This suggests the user set up the structure but
+/// has not yet added any flow scripts.
+///
+/// This is exposed for testing; callers should normally use `warn_unrecognised_mapper_dirs`.
+pub(crate) async fn collect_empty_flows_mapper_dirs(mappers_dir: &Utf8Path) -> Vec<String> {
+    let Ok(mut entries) = tokio::fs::read_dir(mappers_dir).await else {
+        return Vec::new();
+    };
+
+    let mut empty_flows = Vec::new();
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let Ok(file_type) = entry.file_type().await else {
+            continue;
+        };
+        if !file_type.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let path = camino::Utf8PathBuf::from(entry.path().to_string_lossy().into_owned());
+        let has_mapper_toml = tokio::fs::try_exists(path.join("mapper.toml"))
+            .await
+            .unwrap_or(false);
+        if has_mapper_toml {
+            continue;
+        }
+        let Ok(mut flows_entries) = tokio::fs::read_dir(path.join("flows")).await else {
+            continue; // no flows/ dir — handled by collect_unrecognised_mapper_dirs
+        };
+        if flows_entries.next_entry().await.ok().flatten().is_none() {
+            empty_flows.push(name);
+        }
+    }
+    empty_flows
 }
 
 #[cfg(test)]
@@ -88,7 +134,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn dir_without_mapper_toml_is_flagged() {
+        async fn dir_without_mapper_toml_or_flows_is_flagged() {
             let ttd = TempTedgeDir::new();
             let mappers_dir = ttd.utf8_path().join("mappers");
             tokio::fs::create_dir_all(mappers_dir.join("thingsboard"))
@@ -98,22 +144,59 @@ mod tests {
             let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
             assert!(
                 unrecognised.contains(&"thingsboard".to_string()),
-                "'thingsboard' (no mapper.toml) should be flagged: {unrecognised:?}"
+                "'thingsboard' (no mapper.toml, no flows/) should be flagged: {unrecognised:?}"
             );
         }
 
         #[tokio::test]
-        async fn mixed_directories_only_flags_those_without_mapper_toml() {
+        async fn dir_with_flows_subdir_is_not_flagged_as_unrecognised() {
             let ttd = TempTedgeDir::new();
             let mappers_dir = ttd.utf8_path().join("mappers");
+            // flows-only mapper: has flows/ but no mapper.toml
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard/flows"))
+                .await
+                .unwrap();
+            tokio::fs::write(
+                mappers_dir.join("thingsboard/flows/telemetry.toml"),
+                "input.mqtt.topics = [\"te/+/+/+/+/m/+\"]",
+            )
+            .await
+            .unwrap();
 
-            let c8y_dir = mappers_dir.join("c8y");
-            tokio::fs::create_dir_all(&c8y_dir).await.unwrap();
-            tokio::fs::write(c8y_dir.join("mapper.toml"), "")
+            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
+            assert!(
+                !unrecognised.contains(&"thingsboard".to_string()),
+                "'thingsboard' (flows-only) should not be flagged as unrecognised: {unrecognised:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn dir_with_empty_flows_subdir_is_not_flagged_as_unrecognised() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            // flows/ dir exists but is empty — still recognised (not unrecognised)
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard/flows"))
                 .await
                 .unwrap();
 
-            // No mapper.toml
+            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
+            assert!(
+                !unrecognised.contains(&"thingsboard".to_string()),
+                "'thingsboard' (empty flows/) should not be flagged as unrecognised: {unrecognised:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn mixed_directories_only_flags_those_without_mapper_toml_or_flows() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+
+            // c8y: simulates a real built-in mapper dir (has flows/, no mapper.toml)
+            tokio::fs::create_dir_all(mappers_dir.join("c8y/flows"))
+                .await
+                .unwrap();
+
+            // Neither mapper.toml nor flows/ — unrecognised
             tokio::fs::create_dir_all(mappers_dir.join("thingsboard"))
                 .await
                 .unwrap();
@@ -132,44 +215,11 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn builtin_dir_without_mapper_toml_is_not_flagged() {
+        async fn dir_without_mapper_toml_or_flows_is_flagged_regardless_of_name() {
             let ttd = TempTedgeDir::new();
             let mappers_dir = ttd.utf8_path().join("mappers");
-            // c8y dir without mapper.toml — simulates post-install before tedge config upgrade
-            tokio::fs::create_dir_all(mappers_dir.join("c8y"))
-                .await
-                .unwrap();
-            tokio::fs::create_dir_all(mappers_dir.join("az"))
-                .await
-                .unwrap();
-
-            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
-            assert!(
-                unrecognised.is_empty(),
-                "Built-in dirs without mapper.toml should not be flagged: {unrecognised:?}"
-            );
-        }
-
-        #[tokio::test]
-        async fn profiled_builtin_dir_without_mapper_toml_is_not_flagged() {
-            let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
-            tokio::fs::create_dir_all(mappers_dir.join("c8y.prod"))
-                .await
-                .unwrap();
-
-            let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
-            assert!(
-                unrecognised.is_empty(),
-                "Profiled built-in dir 'c8y.prod' without mapper.toml should not be flagged: {unrecognised:?}"
-            );
-        }
-
-        #[tokio::test]
-        async fn name_with_builtin_prefix_but_not_a_profile_is_flagged() {
-            let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
-            // "c8y-extra" is not a profile (uses '-' not '.') — should be flagged
+            // Even a name that looks like a built-in is flagged if it has neither
+            // mapper.toml nor flows/ — built-in mapper dirs always have flows/ in practice.
             tokio::fs::create_dir_all(mappers_dir.join("c8y-extra"))
                 .await
                 .unwrap();
@@ -177,7 +227,7 @@ mod tests {
             let unrecognised = collect_unrecognised_mapper_dirs(&mappers_dir).await;
             assert!(
                 unrecognised.contains(&"c8y-extra".to_string()),
-                "'c8y-extra' (no dot separator, no mapper.toml) should be flagged: {unrecognised:?}"
+                "'c8y-extra' (no mapper.toml, no flows/) should be flagged: {unrecognised:?}"
             );
         }
 
@@ -191,10 +241,16 @@ mod tests {
             tokio::fs::create_dir_all(mappers_dir.join("stale-dir"))
                 .await
                 .unwrap();
-            // c8y without mapper.toml — built-in, should not warn
-            tokio::fs::create_dir_all(mappers_dir.join("c8y"))
+            // c8y with flows/ and a flow script — simulates a real built-in mapper dir
+            tokio::fs::create_dir_all(mappers_dir.join("c8y/flows"))
                 .await
                 .unwrap();
+            tokio::fs::write(
+                mappers_dir.join("c8y/flows/default.toml"),
+                "input.mqtt.topics = [\"te/+/+/+/+/m/+\"]",
+            )
+            .await
+            .unwrap();
 
             warn_unrecognised_mapper_dirs(&mappers_dir).await;
 
@@ -207,6 +263,110 @@ mod tests {
                 captured.iter().all(|m| !m.contains("c8y")),
                 "Should not warn about 'c8y' (built-in mapper), got: {captured:?}"
             );
+        }
+
+        /// Verifies that `warn_unrecognised_mapper_dirs` emits the empty-flows warning.
+        #[tokio::test]
+        async fn empty_flows_dir_emits_warn_log_event() {
+            let warnings = CapturedWarnings::install();
+
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            // flows-only mapper with empty flows/ — should warn about missing scripts
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard/flows"))
+                .await
+                .unwrap();
+
+            warn_unrecognised_mapper_dirs(&mappers_dir).await;
+
+            let captured = warnings.get();
+            assert!(
+                captured.iter().any(|m| m.contains("thingsboard")),
+                "Expected a warning for 'thingsboard' (empty flows/), got: {captured:?}"
+            );
+        }
+    }
+
+    mod empty_flows {
+        use super::*;
+        use tedge_test_utils::fs::TempTedgeDir;
+
+        #[tokio::test]
+        async fn empty_flows_dir_without_mapper_toml_is_flagged() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard/flows"))
+                .await
+                .unwrap();
+
+            let empty_flows = collect_empty_flows_mapper_dirs(&mappers_dir).await;
+            assert!(
+                empty_flows.contains(&"thingsboard".to_string()),
+                "'thingsboard' (empty flows/, no mapper.toml) should be flagged: {empty_flows:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn non_empty_flows_dir_is_not_flagged() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard/flows"))
+                .await
+                .unwrap();
+            tokio::fs::write(
+                mappers_dir.join("thingsboard/flows/telemetry.toml"),
+                "input.mqtt.topics = [\"te/+/+/+/+/m/+\"]",
+            )
+            .await
+            .unwrap();
+
+            let empty_flows = collect_empty_flows_mapper_dirs(&mappers_dir).await;
+            assert!(
+                !empty_flows.contains(&"thingsboard".to_string()),
+                "'thingsboard' (non-empty flows/) should not be flagged: {empty_flows:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn mapper_toml_with_empty_flows_is_not_flagged() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard/flows"))
+                .await
+                .unwrap();
+            tokio::fs::write(mappers_dir.join("thingsboard/mapper.toml"), "")
+                .await
+                .unwrap();
+
+            let empty_flows = collect_empty_flows_mapper_dirs(&mappers_dir).await;
+            assert!(
+                !empty_flows.contains(&"thingsboard".to_string()),
+                "'thingsboard' (empty flows/ but has mapper.toml) should not be flagged: {empty_flows:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn dir_without_flows_subdir_is_not_flagged() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard"))
+                .await
+                .unwrap();
+
+            let empty_flows = collect_empty_flows_mapper_dirs(&mappers_dir).await;
+            assert!(
+                empty_flows.is_empty(),
+                "Dir with no flows/ at all should not appear in empty-flows list: {empty_flows:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn handles_nonexistent_mappers_dir_gracefully() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("nonexistent/mappers");
+            assert!(collect_empty_flows_mapper_dirs(&mappers_dir)
+                .await
+                .is_empty());
         }
     }
 

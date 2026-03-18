@@ -170,24 +170,6 @@ pub enum MapperName {
     UserDefined(Vec<String>),
 }
 
-/// Built-in mapper names: directories with these names (or `{name}.{profile}` variants)
-/// are created by the system and legitimately have no `mapper.toml`.
-const BUILTIN_MAPPER_NAMES: &[&str] = &["c8y", "az", "aws", "collectd", "local"];
-
-/// Returns `true` if `name` matches a built-in mapper directory name.
-///
-/// Built-in mappers (`c8y`, `az`, `aws`, `collectd`, `local`) store their config in the
-/// root `tedge.toml`, not in a per-mapper `mapper.toml`. Their directories exist because
-/// the runtime creates `flows/` and `bridge/` subdirectories under them. These directories
-/// should not be flagged as unrecognised by `warn_unrecognised_mapper_dirs`.
-///
-/// Also recognises profile variants: `c8y.prod`, `az.secondary`, etc.
-pub(crate) fn is_builtin_mapper_dir_name(name: &str) -> bool {
-    BUILTIN_MAPPER_NAMES
-        .iter()
-        .any(|b| name == *b || name.starts_with(&format!("{b}.")))
-}
-
 impl fmt::Display for MapperName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -308,40 +290,6 @@ mod tests {
         fn user_defined_display() {
             let name = MapperName::UserDefined(vec!["thingsboard".to_string()]);
             assert_eq!(name.to_string(), "tedge-mapper-thingsboard");
-        }
-    }
-
-    mod builtin_mapper_dir_name_tests {
-        use super::*;
-
-        #[test]
-        fn exact_builtin_names_are_recognised() {
-            for name in BUILTIN_MAPPER_NAMES {
-                assert!(
-                    is_builtin_mapper_dir_name(name),
-                    "'{name}' should be a built-in name"
-                );
-            }
-        }
-
-        #[test]
-        fn profiled_builtin_names_are_recognised() {
-            assert!(is_builtin_mapper_dir_name("c8y.prod"));
-            assert!(is_builtin_mapper_dir_name("az.secondary"));
-            assert!(is_builtin_mapper_dir_name("aws.eu"));
-        }
-
-        #[test]
-        fn user_defined_names_are_not_recognised() {
-            assert!(!is_builtin_mapper_dir_name("thingsboard"));
-            assert!(!is_builtin_mapper_dir_name("mycloud"));
-        }
-
-        #[test]
-        fn builtin_prefix_without_dot_separator_is_not_recognised() {
-            // "c8y-extra" is not a profile variant — only "c8y.{profile}" is
-            assert!(!is_builtin_mapper_dir_name("c8y-extra"));
-            assert!(!is_builtin_mapper_dir_name("c8ything"));
         }
     }
 
