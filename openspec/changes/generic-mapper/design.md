@@ -210,29 +210,25 @@ There is no cloud-specific converter. All message transformation is handled by f
 
 ### D5: Service identity follows existing conventions
 
-Service identity uses the same `{mapper}@{profile}` pattern as built-in profiled mappers. For `tedge-mapper custom --profile thingsboard`:
+> **Updated by `mapper-first-class`**: service names use the mapper name directly (no `custom` type prefix) following the `tedge-mapper-{name}` pattern (dash, not `@`).
 
-- Service name: `tedge-mapper-custom@thingsboard`
-- Health topic: `te/device/main/service/tedge-mapper-custom@thingsboard/status/health`
-- Lock file: `/run/tedge-mapper-custom@thingsboard.lock`
-- Bridge service name: `tedge-mapper-bridge-custom@thingsboard`
+Service identity uses the mapper name directly. For `tedge-mapper thingsboard`:
 
-For the unprofiled case (`tedge-mapper custom`):
-
-- Service name: `tedge-mapper-custom`
-- Health topic: `te/device/main/service/tedge-mapper-custom/status/health`
-- Lock file: `/run/tedge-mapper-custom.lock`
-- Bridge service name: `tedge-mapper-bridge-custom`
+- Service name: `tedge-mapper-thingsboard`
+- Health topic: `te/device/main/service/tedge-mapper-thingsboard/status/health`
+- Lock file: `/run/tedge-mapper-thingsboard.lock`
+- Bridge service name: `tedge-mapper-bridge-thingsboard`
 
 ### D6: Warn about unrecognised mapper directories
 
-On mapper startup (and optionally on `tedge config` operations), scan `/etc/tedge/mappers/` and warn about directories that are not:
+> **Updated by `mapper-first-class`**: detection is now presence-based rather than name-based. Any directory without a `mapper.toml` is flagged (except known built-in names and their profile variants).
 
-- A known built-in mapper name (`c8y`, `az`, `aws`, `collectd`, `flows`)
-- A profile directory of a known mapper (e.g. `c8y.staging`)
-- A custom mapper directory (`custom` or `custom.{name}`)
+On mapper startup, scan `/etc/tedge/mappers/` and warn about any subdirectory that:
 
-This catches typos like `custom.thingboard` (missing 's') and stale directories from removed mappers.
+- Is not a known built-in mapper name (`c8y`, `az`, `aws`, `collectd`, `local`) or its profile variant (e.g. `c8y.staging`), **and**
+- Does not contain a `mapper.toml` file
+
+This catches stale directories from removed mappers. Under the flat naming convention (`thingsboard/` rather than `custom.thingsboard/`), any active user-defined mapper will have a `mapper.toml`, so presence of that file is the reliable signal that a directory is intentional.
 
 ## Risks / Trade-offs
 

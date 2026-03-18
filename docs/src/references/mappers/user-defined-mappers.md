@@ -141,13 +141,13 @@ cloud_type = "c8y"           # opt into Cumulocity built-in integration
 sudo tedge-mapper thingsboard
 ```
 
-Or with systemd:
+Or with systemd (after creating a service file for `tedge-mapper-thingsboard`):
 
 ```sh
-sudo systemctl start tedge-mapper@thingsboard
+sudo systemctl start tedge-mapper-thingsboard
 ```
 
-The corresponding systemd service is `tedge-mapper@<name>`.
+The corresponding service name is `tedge-mapper-<name>`.
 
 ## `tedge mapper` commands
 
@@ -238,8 +238,26 @@ EOF
 
 See [Configurable bridge](./configurable-bridge.md) for the full bridge rule syntax, and [tedge-flows-examples](https://github.com/thin-edge/tedge-flows-examples) for complete, maintained flows examples.
 
-### 4. Start the mapper
+### 4. Create a service file and start the mapper
+
+Create a systemd service file for the mapper (or the equivalent for your init system):
 
 ```sh
-sudo systemctl enable --now tedge-mapper@thingsboard
+sudo tee /etc/systemd/system/tedge-mapper-thingsboard.service <<'EOF'
+[Unit]
+Description=thin-edge.io user-defined mapper thingsboard
+After=syslog.target network.target mosquitto.service
+
+[Service]
+User=tedge
+ExecStart=/usr/bin/tedge-mapper thingsboard
+Restart=on-failure
+RestartPreventExitStatus=255
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now tedge-mapper-thingsboard
 ```

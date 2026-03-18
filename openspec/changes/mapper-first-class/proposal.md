@@ -15,7 +15,7 @@ Additionally, config discoverability was deferred in `generic-mapper`: users edi
 - **`cloud_type` field** (schema definition only; dispatch is a follow-on change): a new optional field in `mapper.toml` identifies which built-in cloud integration a mapper instance uses. Absent for pure flows/bridge mappers. When set (e.g. `cloud_type = "c8y"`), it also determines the schema that `tedge mapper config set` (future) uses to validate and write config values.
 - **Directory convention (open question — see design)**: preferred approach — no prefix; a directory under `/etc/tedge/mappers/` is a mapper iff it contains `mapper.toml`, making built-in and user-defined directories structurally identical. Alternative — user-defined mappers use a `+{name}/` prefix to distinguish them from pre-installed built-in directories at a glance.
 - **CLI invocation**: `tedge-mapper thingsboard` replaces `tedge-mapper custom --profile thingsboard`; the mapper name maps directly to a directory under `/etc/tedge/mappers/`
-- **Service identity**: `tedge-mapper@{name}` (e.g. `tedge-mapper@thingsboard`), using systemd's template instance convention
+- **Service identity**: `tedge-mapper-{name}` (e.g. `tedge-mapper-thingsboard`), matching the convention of built-in mappers and not tied to any specific init system
 - **New `tedge mapper` subcommand** in the `tedge` binary:
   - `tedge mapper list` — lists all mappers with their `cloud_type` if set
   - `tedge mapper config get <name>.<key>` — reads a key from `{name}/mapper.toml` using the same dotted syntax as `tedge config get`

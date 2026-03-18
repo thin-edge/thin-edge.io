@@ -48,9 +48,9 @@ impl CustomMapper {
         config_dir.join("mappers").join(&self.name)
     }
 
-    /// Returns the systemd service name: `tedge-mapper@{name}`.
+    /// Returns the service name: `tedge-mapper-{name}`.
     pub fn service_name(&self) -> String {
-        format!("tedge-mapper@{}", self.name)
+        format!("tedge-mapper-{}", self.name)
     }
 
     /// Returns the bridge service name: `tedge-mapper-bridge-{name}`.
@@ -405,7 +405,7 @@ mod tests {
             let mapper = CustomMapper {
                 name: "thingsboard".to_string(),
             };
-            assert_eq!(mapper.service_name(), "tedge-mapper@thingsboard");
+            assert_eq!(mapper.service_name(), "tedge-mapper-thingsboard");
             assert_eq!(
                 mapper.bridge_service_name(),
                 "tedge-mapper-bridge-thingsboard"
@@ -827,6 +827,57 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
                 .await
                 .unwrap();
+        }
+
+        #[tokio::test]
+        async fn explicit_device_id_is_used_as_mqtt_client_id() {
+            // When device.id is set in mapper.toml it takes precedence over the cert CN.
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let (cert, key) = write_test_cert(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+            let mut config = make_config(Some("mqtt.example.com:1883"));
+            config.device = Some(crate::custom::config::DeviceConfig {
+                id: Some("my-explicit-device-id".to_string()),
+                cert_path: None,
+                key_path: None,
+                root_cert_path: None,
+            });
+
+            let (mqtt_opts, _) =
+                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                mqtt_opts.client_id(),
+                "my-explicit-device-id",
+                "device.id should be used as the MQTT client ID"
+            );
+        }
+
+        #[tokio::test]
+        async fn absent_device_id_uses_cert_cn_as_mqtt_client_id() {
+            // When device.id is absent the cert's CN ("localhost" in TEST_CERT_PEM) is used.
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let (cert, key) = write_test_cert(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+            let config = make_config(Some("mqtt.example.com:1883"));
+            // config.device = None, so client ID should come from the cert CN
+
+            let (mqtt_opts, _) =
+                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                mqtt_opts.client_id(),
+                "localhost",
+                "cert CN should be used as the MQTT client ID when device.id is absent"
+            );
         }
 
         fn make_config(url: Option<&str>) -> CustomMapperConfig {

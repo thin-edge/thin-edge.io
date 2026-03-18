@@ -77,7 +77,8 @@ The `Vec<String>`'s first element is the mapper name. Extra elements after the n
 
 At startup, the mapper name is validated:
 1. Matches `[a-z][a-z0-9-]*` — otherwise hard error (required for unambiguous env var mapping; see D4)
-2. The mapper directory exists and contains `mapper.toml` — otherwise error listing available user-defined mappers
+2. Does not start with `bridge-` — otherwise hard error (names starting with `bridge-` would produce a service name of `tedge-mapper-bridge-{rest}`, colliding with the bridge sub-service naming pattern)
+3. The mapper directory exists and contains `mapper.toml` — otherwise error listing available user-defined mappers
 
 **Limitations**: user-defined mapper names do not appear in `tedge-mapper --help` or tab-completion in the initial implementation. Both can be addressed later by scanning the mapper directory before printing help.
 
@@ -165,12 +166,16 @@ For `tedge-mapper thingsboard`:
 
 | | Value |
 |---|---|
-| Service name | `tedge-mapper@thingsboard` |
-| Health topic | `te/device/main/service/tedge-mapper@thingsboard/status/health` |
-| Lock file | `/run/tedge-mapper@thingsboard.lock` |
+| Service name | `tedge-mapper-thingsboard` |
+| Health topic | `te/device/main/service/tedge-mapper-thingsboard/status/health` |
+| Lock file | `/run/tedge-mapper-thingsboard.lock` |
 | Bridge service name | `tedge-mapper-bridge-thingsboard` |
 
 This replaces `tedge-mapper-custom@{profile}` from generic-mapper D5.
+
+The service name uses a plain dash separator rather than `@`. The `@` convention is specific to systemd template units — thin-edge aims to be init system agnostic, and the `tedge-mapper@.service` template is removed from packaging. This also aligns with built-in mapper service names (`tedge-mapper-c8y`, `tedge-mapper-az`, `tedge-mapper-aws`), making user-defined and built-in mappers structurally identical from the init system's perspective. Users manage their own service files for user-defined mappers.
+
+The `bridge-` prefix restriction on mapper names (D2) ensures that no mapper's service name can collide with the bridge sub-service pattern `tedge-mapper-bridge-{name}`.
 
 ---
 

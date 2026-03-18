@@ -32,28 +32,22 @@ Tasks are grouped by area. Where tasks depend on the D1 decision (no-prefix vs `
 
 ## 5. Service identity **[replaces gm-5.x]**
 
-- [x] 5.1 Derive service name as `tedge-mapper@{name}` (replaces `tedge-mapper-custom@{profile}`)
-- [x] 5.2 Derive health topic as `te/device/main/service/tedge-mapper@{name}/status/health`
-- [x] 5.3 Derive lock file path as `/run/tedge-mapper@{name}.lock`
-- [x] 5.4 Derive bridge service name as `tedge-mapper-bridge-{name}` (note: uses `-` separator, not `@`, consistent with linter output)
+- [x] 5.1 Derive service name as `tedge-mapper-{name}` (was `tedge-mapper@{name}`)
+- [x] 5.2 Derive health topic as `te/device/main/service/tedge-mapper-{name}/status/health`
+- [x] 5.3 Derive lock file path as `/run/tedge-mapper-{name}.lock`
+- [x] 5.4 Derive bridge service name as `tedge-mapper-bridge-{name}`
 - [x] 5.5 Update unit tests for all derived names
+- [x] 5.6 Add validation that mapper names starting with `bridge-` are rejected with a hard error
+- [x] 5.7 Remove `tedge-mapper@.service` systemd template unit from `configuration/init/systemd/`
+- [x] 5.8 Remove `tedge-mapper@.service` entries from `configuration/package_manifests/nfpm.tedge-mapper.yaml`
+- [x] 5.9 Update Robot Framework system tests in `tests/RobotFramework/tests/custom_mapper/` to start mappers directly (e.g. via `tedge-mapper <name>` or a plain service file) rather than via `systemctl start tedge-mapper@{name}`
 
 ## 6. Directory scanner **[replaces gm-6.x]**
 
-Tasks 6.1–6.3 are **D1-dependent**:
-
-**No-prefix approach:**
-- [x] 6.1a Rewrite scanner to classify directories by `mapper.toml` presence: directory contains `mapper.toml` → mapper; otherwise → unrecognised
-- [x] 6.2a Read `cloud_type` from `mapper.toml` when present and include it in the classification result
-- [x] 6.3a Emit a warning for any directory under `/etc/tedge/mappers/` that does not contain `mapper.toml`
-
-**`+` prefix approach:**
-- [ ] 6.1b Update scanner name-pattern rules: `+{name}` → user-defined; built-in names unchanged; `{builtin}.{profile}` → profile of built-in; anything else → unrecognised
-- [ ] 6.2b _(cloud_type reading not needed for classification)_
-- [ ] 6.3b Emit a warning for directories not matching any known pattern
-
-**Common (both approaches):**
-- [x] 6.4 Add unit tests: recognised built-in, recognised user-defined, unrecognised directory produces warning, `cloud_type` is correctly read/reported (no-prefix only)
+- [x] 6.1 Rewrite scanner to classify directories by `mapper.toml` presence: directory contains `mapper.toml` → mapper; otherwise → unrecognised
+- [x] 6.2 Read `cloud_type` from `mapper.toml` when present and include it in the classification result
+- [x] 6.3 Emit a warning for any directory under `/etc/tedge/mappers/` that does not contain `mapper.toml`
+- [x] 6.4 Add unit tests: recognised built-in, recognised user-defined, unrecognised directory produces warning, `cloud_type` is correctly read/reported
 
 ## 7. `tedge mapper` subcommand (new)
 

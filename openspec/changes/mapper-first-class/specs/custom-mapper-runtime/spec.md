@@ -5,7 +5,8 @@ Users SHALL be able to start a user-defined mapper using `tedge-mapper <name>`, 
 
 At startup, the mapper name is validated by `validate_and_load`, which performs these checks in order:
 1. Matches `[a-z][a-z0-9-]*` — otherwise hard error
-2. The mapper directory exists — otherwise error listing available mappers
+2. Does not start with `bridge-` — otherwise hard error (would collide with the `tedge-mapper-bridge-{name}` bridge sub-service naming pattern)
+3. The mapper directory exists — otherwise error listing available mappers
 3. At least one of `bridge/` or `flows/` is present — otherwise error (nothing to do)
 4. If `bridge/` is present, `mapper.toml` must also be present and valid — otherwise error
 
@@ -59,19 +60,19 @@ A mapper SHALL start the built-in MQTT bridge and/or the flows engine depending 
 - **THEN** the mapper SHALL exit with an error indicating that neither connection settings nor flow scripts are present
 
 ### Requirement: Service identity follows naming conventions
-A mapper's service identity SHALL use `tedge-mapper@{name}` as the service name, following systemd's template instance convention.
+A mapper's service identity SHALL use `tedge-mapper-{name}` as the service name. This matches the naming convention of built-in mappers (`tedge-mapper-c8y`, `tedge-mapper-az`, `tedge-mapper-aws`) and is not tied to any specific init system.
 
 #### Scenario: Service name for user-defined mapper
 - **WHEN** a mapper is started with `tedge-mapper thingsboard`
-- **THEN** its service name SHALL be `tedge-mapper@thingsboard`
+- **THEN** its service name SHALL be `tedge-mapper-thingsboard`
 
 #### Scenario: Health topic
 - **WHEN** a mapper named `thingsboard` starts
-- **THEN** it SHALL publish health status on topic `te/device/main/service/tedge-mapper@thingsboard/status/health`
+- **THEN** it SHALL publish health status on topic `te/device/main/service/tedge-mapper-thingsboard/status/health`
 
 #### Scenario: Lock file
 - **WHEN** a mapper named `thingsboard` starts
-- **THEN** it SHALL create a lock file at `/run/tedge-mapper@thingsboard.lock` to prevent duplicate instances
+- **THEN** it SHALL create a lock file at `/run/tedge-mapper-thingsboard.lock` to prevent duplicate instances
 
 #### Scenario: Bridge service name
 - **WHEN** a mapper named `thingsboard` starts its built-in MQTT bridge

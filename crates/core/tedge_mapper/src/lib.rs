@@ -27,10 +27,13 @@ use tedge_utils::file::create_directory_with_defaults;
 use tracing::error;
 use tracing::log::warn;
 
-/// Validates that a mapper name matches `[a-z][a-z0-9-]*`.
+/// Validates that a mapper name matches `[a-z][a-z0-9-]*` and does not start with `bridge-`.
 ///
 /// Underscores are forbidden because they would create ambiguity in the
 /// `MAPPER_{NAME}_{KEY}` environment variable scheme.
+///
+/// Names starting with `bridge-` are forbidden because they would produce a service name of
+/// `tedge-mapper-bridge-{rest}`, which collides with the bridge sub-service naming pattern.
 fn validate_mapper_name(name: &str) -> anyhow::Result<()> {
     anyhow::ensure!(!name.is_empty(), "Mapper name cannot be empty");
     let mut chars = name.chars();
@@ -46,6 +49,11 @@ fn validate_mapper_name(name: &str) -> anyhow::Result<()> {
              (underscores are not allowed)"
         );
     }
+    anyhow::ensure!(
+        !name.starts_with("bridge-"),
+        "Invalid mapper name '{name}': names starting with 'bridge-' are reserved \
+         (would collide with the bridge sub-service name 'tedge-mapper-bridge-{name}')"
+    );
     Ok(())
 }
 
@@ -204,7 +212,7 @@ impl fmt::Display for MapperName {
             MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
             MapperName::UserDefined(args) => write!(
                 f,
-                "tedge-mapper@{}",
+                "tedge-mapper-{}",
                 args.first().map(String::as_str).unwrap_or("<unknown>")
             ),
             MapperName::Local => write!(f, "tedge-mapper-local"),
@@ -299,7 +307,7 @@ mod tests {
         #[test]
         fn user_defined_display() {
             let name = MapperName::UserDefined(vec!["thingsboard".to_string()]);
-            assert_eq!(name.to_string(), "tedge-mapper@thingsboard");
+            assert_eq!(name.to_string(), "tedge-mapper-thingsboard");
         }
     }
 
@@ -367,6 +375,12 @@ mod tests {
         #[test]
         fn starts_with_digit_errors() {
             assert!(validate_mapper_name("1cloud").is_err());
+        }
+
+        #[test]
+        fn bridge_prefix_errors() {
+            let err = validate_mapper_name("bridge-cloud").unwrap_err();
+            assert!(format!("{err}").contains("bridge-"));
         }
     }
 }
