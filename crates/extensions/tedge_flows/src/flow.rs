@@ -415,7 +415,7 @@ impl Flow {
                     error!(
                         target: "flows",
                         "Flow '{}' is dropping output message to '{}' to prevent an infinite loop",
-                        self.name,
+                        self.name(),
                         msg.topic
                     );
                     false

@@ -444,13 +444,13 @@ Params are dynamically reloaded
 
 Flow with static mqtt topic loop is rejected at load time
     Install Flow    infinite-loop-flows    mqtt-static-loop.toml
-    Service Logs Should Contain    tedge-mapper-local    Flow 'mqtt-static-loop.toml' defines an infinite loop
+    Service Logs Should Contain    tedge-mapper-local    Flow 'mqtt-static-loop' defines an infinite loop
 
     ${errors}    Execute Command
     ...    tedge flows test te/loop/test '{}'
     ...    stdout=${False}
     ...    stderr=${True}
-    Should Contain    ${errors}    Flow 'mqtt-static-loop.toml' defines an infinite loop
+    Should Contain    ${errors}    Flow 'mqtt-static-loop' defines an infinite loop
     [Teardown]    Uninstall Flow    mqtt-static-loop.toml
 
 Flow with mqtt runtime loop drops messages
@@ -458,7 +458,7 @@ Flow with mqtt runtime loop drops messages
     Execute Command    tedge mqtt pub te/loop/test '{}'
     Service Logs Should Contain
     ...    tedge-mapper-local
-    ...    Flow 'mqtt-runtime-loop.toml' is dropping output message to 'te/loop/test' to prevent an infinite loop
+    ...    Flow 'mqtt-runtime-loop' is dropping output message to 'te/loop/test' to prevent an infinite loop
 
     ${errors}    Execute Command
     ...    tedge flows test te/loop/test '{}'
@@ -466,18 +466,18 @@ Flow with mqtt runtime loop drops messages
     ...    stderr=${True}
     Should Contain
     ...    ${errors}
-    ...    Flow 'mqtt-runtime-loop.toml' is dropping output message to 'te/loop/test' to prevent an infinite loop
+    ...    Flow 'mqtt-runtime-loop' is dropping output message to 'te/loop/test' to prevent an infinite loop
     [Teardown]    Uninstall Flow    mqtt-runtime-loop.toml
 
 Flow with static file path loop is rejected at load time
     Install Flow    infinite-loop-flows    file-loop.toml
-    Service Logs Should Contain    tedge-mapper-local    Flow 'file-loop.toml' defines an infinite loop
+    Service Logs Should Contain    tedge-mapper-local    Flow 'file-loop' defines an infinite loop
 
     ${errors}    Execute Command
     ...    tedge flows test te/anything '{}'
     ...    stdout=${False}
     ...    stderr=${True}
-    Should Contain    ${errors}    Flow 'file-loop.toml' defines an infinite loop
+    Should Contain    ${errors}    Flow 'file-loop' defines an infinite loop
     [Teardown]    Uninstall Flow    file-loop.toml
 
 Loop detection skipped for single script test
