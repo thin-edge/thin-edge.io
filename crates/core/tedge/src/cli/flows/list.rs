@@ -31,7 +31,13 @@ impl Command for ListCommand {
             None => processor.registry.flows().for_each(Self::display),
         }
 
-        Ok(())
+        if !processor.registry.unloaded().is_empty() {
+            Err(anyhow::anyhow!("Some invalid flows"))?
+        } else if processor.registry.flows().next().is_none() {
+            Err(anyhow::anyhow!("No valid flows"))?
+        } else {
+            Ok(())
+        }
     }
 }
 

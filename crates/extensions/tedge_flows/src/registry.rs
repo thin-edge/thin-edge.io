@@ -133,6 +133,9 @@ pub trait FlowRegistryExt: FlowRegistry {
 
     /// Register a transformer that can be used as a builtin in flow steps
     fn register_builtin(&mut self, transformer: impl TransformerBuilder + Transformer);
+
+    /// List toml files that cannot be loaded as flows
+    fn unloaded(&self) -> &HashSet<Utf8PathBuf>;
 }
 
 #[async_trait]
@@ -321,6 +324,10 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
     fn register_builtin(&mut self, transformer: impl TransformerBuilder + Transformer) {
         self.builtins_mut().register(transformer)
     }
+
+    fn unloaded(&self) -> &HashSet<Utf8PathBuf> {
+        self.store().unloaded()
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -385,6 +392,10 @@ impl<F> FlowStore<F> {
         // its in-memory version is removed even if still valid.
         self.flows.remove(&path);
         self.unloaded_flows.insert(path);
+    }
+
+    pub fn unloaded(&self) -> &HashSet<Utf8PathBuf> {
+        &self.unloaded_flows
     }
 
     pub fn drain_unloaded(&mut self) -> Vec<Utf8PathBuf> {
