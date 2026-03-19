@@ -272,14 +272,23 @@ impl TEdgeConfigLocation {
                 CloudType::C8y => {
                     dto.c8y.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
                     dto.c8y.non_profile.cloud_type = Some(CloudType::C8y);
+                    dto.c8y.profiles.iter_mut().for_each(|(_name, profile)| {
+                        profile.cloud_type = Some(CloudType::C8y);
+                    });
                 }
                 CloudType::Aws => {
                     dto.aws.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
                     dto.aws.non_profile.cloud_type = Some(CloudType::Aws);
+                    dto.aws.profiles.iter_mut().for_each(|(_name, profile)| {
+                        profile.cloud_type = Some(CloudType::Aws);
+                    });
                 }
                 CloudType::Az => {
                     dto.az.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
                     dto.az.non_profile.cloud_type = Some(CloudType::Az);
+                    dto.az.profiles.iter_mut().for_each(|(_name, profile)| {
+                        profile.cloud_type = Some(CloudType::Az);
+                    });
                 }
             }
             Ok(())
@@ -432,10 +441,23 @@ impl TEdgeConfigLocation {
     ) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config)?;
 
-        if persist_if_empty == StoreEmptyConfig::No && toml.trim() == "" {
-            return self
-                .cleanup_config_file_and_possibly_parent(toml_path)
-                .await;
+        if persist_if_empty == StoreEmptyConfig::No {
+            // Strip the `cloud_type` marker before checking for emptiness: it is a
+            // structural field written automatically during migration and should not
+            // prevent cleanup when all user-configured fields have been removed.
+            let effectively_empty = toml::from_str::<toml::Value>(&toml)
+                .map(|mut v| {
+                    if let Some(t) = v.as_table_mut() {
+                        t.remove("cloud_type");
+                    }
+                    toml::to_string_pretty(&v).is_ok_and(|s| s.trim().is_empty())
+                })
+                .unwrap_or_else(|_| toml.trim().is_empty());
+            if effectively_empty {
+                return self
+                    .cleanup_config_file_and_possibly_parent(toml_path)
+                    .await;
+            }
         }
 
         // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
@@ -1059,18 +1081,18 @@ type = "a-service-type""#;
                 .unwrap();
         assert_eq!(
             toml::from_str::<toml::Table>(&test_tedge_toml).unwrap(),
-            toml::toml!(url = "test.c8y.io")
+            toml::toml!(
+                cloud_type = "c8y"
+                url = "test.c8y.io"
+            )
         );
 
-        let c8y_tedge_toml =
-            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y/mapper.toml"))
+        // With no default-profile URL to store, the c8y/mapper.toml stub is not written —
+        // only `cloud_type` would be in it, which is treated as effectively empty.
+        assert!(
+            !tokio::fs::try_exists(location.mappers_config_dir().join("c8y/mapper.toml"))
                 .await
-                .unwrap_or_default();
-        assert_eq!(
-            toml::from_str::<toml::Table>(&c8y_tedge_toml).unwrap(),
-            toml::toml! {
-                cloud_type = "c8y"
-            }
+                .unwrap()
         );
 
         // tedge.toml may or may not exist, but the key thing is the url isn't defined there
@@ -1080,6 +1102,30 @@ type = "a-service-type""#;
         assert!(!toml::from_str::<toml::Table>(&tedge_toml)
             .unwrap()
             .contains_key("c8y"));
+    }
+
+    #[tokio::test]
+    async fn profiled_c8y_config_migration_includes_cloud_type() {
+        let (_dir, location) =
+            create_temp_tedge_config("c8y.profiles.test.url = \"test.c8y.io\"").unwrap();
+        let _env_lock = EnvSandbox::new().await;
+
+        location
+            .migrate_mapper_config(CloudType::C8y)
+            .await
+            .unwrap();
+
+        let test_tedge_toml =
+            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y.test/mapper.toml"))
+                .await
+                .unwrap();
+        assert_eq!(
+            toml::from_str::<toml::Table>(&test_tedge_toml).unwrap(),
+            toml::toml! {
+                url = "test.c8y.io"
+                cloud_type = "c8y"
+            }
+        );
     }
 
     #[tokio::test]
@@ -1503,6 +1549,49 @@ type = "a-service-type""#;
             assert!(!tokio::fs::try_exists(&c8y_dir).await.unwrap());
             assert!(tokio::fs::try_exists(&aws_config_path).await.unwrap());
             assert!(tokio::fs::try_exists(&aws_dir).await.unwrap());
+        }
+
+        #[tokio::test]
+        async fn migrated_default_profile_config_is_removed_when_url_unset() {
+            // Regression: after migration, mapper.toml contains `cloud_type = "c8y"`.
+            // Unsetting the URL should still delete the file — `cloud_type` is a structural
+            // marker written automatically and should not prevent cleanup.
+            let (_dir, location) = create_temp_tedge_config(r#"c8y.url = "test.c8y.io""#).unwrap();
+            let _env_lock = EnvSandbox::new().await;
+
+            // Migration moves URL from tedge.toml to mapper.toml, and adds cloud_type.
+            location
+                .migrate_mapper_config(CloudType::C8y)
+                .await
+                .unwrap();
+
+            let config_path = location.mappers_config_dir().join("c8y/mapper.toml");
+            let parent_dir = location.mappers_config_dir().join("c8y");
+
+            let content = tokio::fs::read_to_string(&config_path).await.unwrap();
+            assert!(
+                content.contains("cloud_type"),
+                "expected cloud_type in mapper.toml after migration"
+            );
+            assert!(content.contains("test.c8y.io"));
+
+            // Unset the URL — only cloud_type would remain, so the file should be deleted.
+            location
+                .update_toml(&|dto, _rdr| {
+                    dto.try_unset_key(&WritableKey::C8yUrl(None))?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+
+            assert!(
+                !tokio::fs::try_exists(&config_path).await.unwrap(),
+                "mapper.toml should be deleted after unsetting the last user-configured key"
+            );
+            assert!(
+                !tokio::fs::try_exists(&parent_dir).await.unwrap(),
+                "mapper directory should be deleted when empty"
+            );
         }
     }
 
