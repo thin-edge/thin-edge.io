@@ -29,6 +29,27 @@ Test c8y specific transformers with tedge flows cli
     ...    ${expected_msg}
     [Teardown]    Uninstall Flow    custom-measurements
 
+Test c8y specific transformers with tedge flows cli and initial context
+    Install Flow    custom-measurements
+    ${transformed_msg}    Execute Command
+    ...    tedge flows test te/device/main///m/environment '{"temperature": 258}' --context '{ "device/main//": {"@id":"raspberry-007","@type":"device","@topic-id":"device/main//","@name":"raspberry-007","@type-name":"thin-edge"} }'
+    Should Contain    ${transformed_msg}    item=[fake/c8y/measurements]
+    Should Contain    ${transformed_msg}    item="temperature":{"temperature":{"value":258.0}}
+    Should Contain    ${transformed_msg}    item="type":"environment"
+    [Teardown]    Uninstall Flow    custom-measurements
+
+Test c8y specific transformers with tedge flows cli and initial context (provided as a file)
+    Install Flow    custom-measurements
+    ${transformed_msg}    Execute Command
+    ...    tedge flows test te/device/child-xyz///m/environment '{"temperature": 42}' --context /etc/tedge/mappers/local/flows/custom-measurements/context.json
+    Should Contain    ${transformed_msg}    item=[fake/c8y/measurements]
+    Should Contain
+    ...    ${transformed_msg}
+    ...    item={"externalSource":{"externalId":"raspberry-007-child-xyz","type":"c8y_Serial"}
+    Should Contain    ${transformed_msg}    item="temperature":{"temperature":{"value":42.0}}
+    Should Contain    ${transformed_msg}    item="type":"environment"
+    [Teardown]    Uninstall Flow    custom-measurements
+
 Apply c8y specific transformers with tedge-mapper local
     Install Flow    custom-measurements
     ${start}    Get Unix Timestamp

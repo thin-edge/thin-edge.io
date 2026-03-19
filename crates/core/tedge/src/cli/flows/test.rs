@@ -21,6 +21,7 @@ use tokio::time::Instant;
 pub struct TestCommand {
     pub flows_dir: Utf8PathBuf,
     pub flow: Option<Utf8PathBuf>,
+    pub context: Option<String>,
     pub message: Option<Message>,
     pub final_on_interval: bool,
     pub processing_time: Option<SystemTime>,
@@ -45,6 +46,10 @@ impl Command for TestCommand {
                 TEdgeFlowsCli::load_file(&self.flows_dir, flow, self.js_config.clone()).await?
             }
         };
+        if let Some(context) = self.context.as_ref() {
+            TEdgeFlowsCli::load_context(processor.context_handle(), context).await?;
+        }
+
         // we need a tick before calling on_message to run onStartup
         processor.on_startup(SystemTime::now()).await;
         if let Some(message) = &self.message {
