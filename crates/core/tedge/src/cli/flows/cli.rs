@@ -11,6 +11,7 @@ use camino::Utf8PathBuf;
 use std::time::SystemTime;
 use tedge_config::TEdgeConfig;
 use tedge_flows::BaseFlowRegistry;
+use tedge_flows::JsRuntimeConfig;
 use tedge_flows::Message;
 use tedge_flows::MessageProcessor;
 
@@ -115,7 +116,13 @@ impl BuildCommand for TEdgeFlowsCli {
                 let flows_dir = flows_dir.unwrap_or_else(|| {
                     Self::default_flows_dir(config, &mapper, profile.as_deref())
                 });
-                Ok(ListCommand { flows_dir, topic }.into_boxed())
+                let js_config = Self::js_config(config);
+                Ok(ListCommand {
+                    flows_dir,
+                    topic,
+                    js_config,
+                }
+                .into_boxed())
             }
 
             TEdgeFlowsCli::Test {
@@ -139,6 +146,7 @@ impl BuildCommand for TEdgeFlowsCli {
                     (None, Some(_)) => Err(anyhow!("Missing sample topic"))?,
                     (None, None) => None,
                 };
+                let js_config = Self::js_config(config);
                 Ok(TestCommand {
                     flows_dir,
                     flow,
@@ -147,6 +155,7 @@ impl BuildCommand for TEdgeFlowsCli {
                     processing_time,
                     base64_input,
                     base64_output,
+                    js_config,
                 }
                 .into_boxed())
             }
@@ -164,10 +173,20 @@ impl TEdgeFlowsCli {
         tedge_flows::flows_dir(config.root_dir(), mapper, profile)
     }
 
+    fn js_config(config: &TEdgeConfig) -> JsRuntimeConfig {
+        let mem = &config.flows.memory;
+        JsRuntimeConfig {
+            heap_size: mem.heap_size as usize,
+            stack_size: mem.stack_size as usize,
+            ..JsRuntimeConfig::default()
+        }
+    }
+
     pub async fn load_flows(
         flows_dir: &Utf8PathBuf,
+        js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
-        let mut processor = MessageProcessor::with_base_registry(flows_dir)
+        let mut processor = MessageProcessor::with_base_registry(flows_dir, js_config)
             .await
             .with_context(|| format!("loading flows and steps from {flows_dir}"))?;
         processor.load_all_flows().await;
@@ -177,8 +196,9 @@ impl TEdgeFlowsCli {
     pub async fn load_file(
         flows_dir: &Utf8PathBuf,
         path: &Utf8PathBuf,
+        js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
-        let mut processor = MessageProcessor::with_base_registry(flows_dir)
+        let mut processor = MessageProcessor::with_base_registry(flows_dir, js_config)
             .await
             .with_context(|| format!("loading flow {path}"))?;
 

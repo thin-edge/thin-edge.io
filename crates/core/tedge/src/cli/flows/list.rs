@@ -6,10 +6,12 @@ use camino::Utf8PathBuf;
 use tedge_config::TEdgeConfig;
 use tedge_flows::Flow;
 use tedge_flows::FlowRegistryExt;
+use tedge_flows::JsRuntimeConfig;
 
 pub struct ListCommand {
     pub flows_dir: Utf8PathBuf,
     pub topic: Option<String>,
+    pub js_config: JsRuntimeConfig,
 }
 
 #[async_trait::async_trait]
@@ -19,7 +21,7 @@ impl Command for ListCommand {
     }
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
-        let processor = TEdgeFlowsCli::load_flows(&self.flows_dir).await?;
+        let processor = TEdgeFlowsCli::load_flows(&self.flows_dir, self.js_config.clone()).await?;
 
         match &self.topic {
             Some(topic) => processor

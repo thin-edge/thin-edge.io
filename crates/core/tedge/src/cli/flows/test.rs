@@ -9,6 +9,7 @@ use std::time::SystemTime;
 use tedge_config::TEdgeConfig;
 use tedge_flows::BaseFlowRegistry;
 use tedge_flows::FlowResult;
+use tedge_flows::JsRuntimeConfig;
 use tedge_flows::Message;
 use tedge_flows::MessageProcessor;
 use tedge_flows::SourceTag;
@@ -25,6 +26,7 @@ pub struct TestCommand {
     pub processing_time: Option<SystemTime>,
     pub base64_input: bool,
     pub base64_output: bool,
+    pub js_config: JsRuntimeConfig,
 }
 
 #[async_trait::async_trait]
@@ -38,8 +40,10 @@ impl Command for TestCommand {
 
     async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
         let mut processor = match &self.flow {
-            None => TEdgeFlowsCli::load_flows(&self.flows_dir).await?,
-            Some(flow) => TEdgeFlowsCli::load_file(&self.flows_dir, flow).await?,
+            None => TEdgeFlowsCli::load_flows(&self.flows_dir, self.js_config.clone()).await?,
+            Some(flow) => {
+                TEdgeFlowsCli::load_file(&self.flows_dir, flow, self.js_config.clone()).await?
+            }
         };
         // we need a tick before calling on_message to run onStartup
         processor.on_startup(SystemTime::now()).await;
