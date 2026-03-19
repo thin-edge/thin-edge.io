@@ -39,6 +39,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         # tedge dependencies
         mosquitto \
         mosquitto-clients \
+    # configure locales
+    && echo "LANG=C.UTF-8" > /etc/default/locale \
     #
     # Remove unnecessary systemd services
     && rm -f /lib/systemd/system/multi-user.target.wants/* \
@@ -103,5 +105,10 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhisto
 
 # Enable cross-rs to compile using docker-in-docker
 ENV CROSS_CONTAINER_IN_CONTAINER=true
+
+# Set locale to UTF-8 for consistent character encoding
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV LANGUAGE=C.UTF-8
 
 CMD ["/lib/systemd/systemd", "--system", "--unit=basic.target"]
