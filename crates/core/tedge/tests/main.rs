@@ -632,4 +632,46 @@ mod tests {
         ];
         vec
     }
+
+    // `tedge completions` is sourced from shell startup files, so any warnings
+    // printed to stderr would appear on every new shell session. Verify that
+    // even when the config file contains an unrecognised key (which would
+    // normally produce a warning), running `tedge completions` stays silent.
+    #[test_case("bash")]
+    #[test_case("zsh")]
+    #[test_case("fish")]
+    fn completions_produces_no_stderr_even_with_unknown_config_key(
+        shell: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+
+        // Write a config file with an unrecognised key so that, if logging were
+        // active, a warning would be emitted.
+        std::fs::write(
+            temp_dir.path().join("tedge.toml"),
+            "[unknown_section]\nunknown_key = \"value\"\n",
+        )?;
+
+        // Another tedge command with the same config *does* emit the warning —
+        // this confirms the config really does trigger one.
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "get",
+            "device.cert_path",
+        ])?
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Unknown configuration field"));
+
+        // `tedge completions` must remain completely silent on stderr.
+        tedge_command(["--config-dir", config_dir, "completions", shell])?
+            .assert()
+            .success()
+            .stderr(predicate::str::is_empty());
+
+        Ok(())
+    }
 }
