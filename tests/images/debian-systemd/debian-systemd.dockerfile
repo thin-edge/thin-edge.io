@@ -34,7 +34,9 @@ RUN apt-get -y update \
     softhsm2 \
     # mosquitto (default version used by Debian, see below for more details)
     mosquitto \
-    mosquitto-clients
+    mosquitto-clients \
+    # configure locales
+    && echo "LANG=C.UTF-8" > /etc/default/locale
 
 # Since vim.tiny is installed, vi command runs it under the hood, but in compatibility mode.
 # Disabling this classic compatibility mode to make it more user friendly (like vim) enabling features like:
@@ -107,6 +109,11 @@ RUN echo '[ -f /etc/bash_completion ] && source /etc/bash_completion' >> ~/.bash
     && echo '# bind shift+tab to reverse menu complete' >> ~/.zshrc \
     && echo "zmodload zsh/complist" >> ~/.zshrc \
     && echo "bindkey -M menuselect '^[[Z' reverse-menu-complete" >> ~/.zshrc
+
+# Set locale to UTF-8 for consistent character encoding
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV LANGUAGE=C.UTF-8
 
 # Reference: https://developers.redhat.com/blog/2019/04/24/how-to-run-systemd-in-a-container#enter_podman
 # STOPSIGNAL SIGRTMIN+3 (=37)
