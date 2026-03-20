@@ -89,12 +89,17 @@ async fn main() -> anyhow::Result<()> {
                 .context("failed to run tedge file log plugin")?
         }
         TEdgeOptMulticall::Tedge(TEdgeCli { cmd, common }) => {
-            log_init_with_default_level(
-                "tedge",
-                &common.log_args,
-                &common.config_dir,
-                tracing::Level::WARN,
-            )?;
+            // Skip log initialisation for `tedge completions` — the command is
+            // sourced from shell startup files and any warnings (e.g. about
+            // unrecognised config keys) would be printed on every new shell session.
+            if !matches!(cmd, TEdgeOpt::Completions { .. }) {
+                log_init_with_default_level(
+                    "tedge",
+                    &common.log_args,
+                    &common.config_dir,
+                    tracing::Level::WARN,
+                )?;
+            }
 
             let tedge_config = tedge_config::TEdgeConfig::load(&common.config_dir).await?;
 
