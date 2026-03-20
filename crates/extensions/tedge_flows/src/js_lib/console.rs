@@ -36,6 +36,10 @@ impl Console {
         self.print(tracing::Level::DEBUG, values)
     }
 
+    fn info(&self, values: Rest<Value<'_>>) -> Result<()> {
+        self.print(tracing::Level::INFO, values)
+    }
+
     fn log(&self, values: Rest<Value<'_>>) -> Result<()> {
         self.print(tracing::Level::INFO, values)
     }

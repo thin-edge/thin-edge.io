@@ -1,0 +1,4 @@
+input.mqtt.topics = ["logger"]
+steps = [
+    { script = "main.js" },
+]
