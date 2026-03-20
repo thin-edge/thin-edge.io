@@ -30,11 +30,13 @@ Each mapper lives in its own directory under `/etc/tedge/mappers/`:
 ```
 
 The mapper name must:
+
 - start with a lowercase ASCII letter (`a`–`z`)
 - contain only lowercase letters, digits, and hyphens (`-`)
 - not contain underscores or uppercase letters
 
 Valid names: `thingsboard`, `my-cloud`, `edge-platform`
+
 Invalid names: `ThingsBoard`, `my_cloud`, `1cloud`
 
 ### `mapper.toml`

@@ -186,7 +186,8 @@ fn toml_value_to_string(value: &toml::Value) -> String {
 }
 
 /// Scans `mappers_root` and returns `(name, cloud_type)` for each subdirectory
-/// that contains a `mapper.toml`.
+/// that is a recognised mapper: one that contains a `mapper.toml` file or a `flows/`
+/// subdirectory (or both). Directories with neither are skipped.
 async fn scan_mappers(mappers_root: &Utf8Path) -> Vec<(String, Option<String>)> {
     let Ok(mut entries) = tokio::fs::read_dir(mappers_root).await else {
         return Vec::new();
@@ -202,11 +203,19 @@ async fn scan_mappers(mappers_root: &Utf8Path) -> Vec<(String, Option<String>)> 
         }
         let path = Utf8PathBuf::from(entry.path().to_string_lossy().into_owned());
         let mapper_toml = path.join("mapper.toml");
-        if !tokio::fs::try_exists(&mapper_toml).await.unwrap_or(false) {
+        let has_mapper_toml = tokio::fs::try_exists(&mapper_toml).await.unwrap_or(false);
+        let has_flows_dir = tokio::fs::try_exists(path.join("flows"))
+            .await
+            .unwrap_or(false);
+        if !has_mapper_toml && !has_flows_dir {
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
-        let cloud_type = read_cloud_type(&mapper_toml).await;
+        let cloud_type = if has_mapper_toml {
+            read_cloud_type(&mapper_toml).await
+        } else {
+            None
+        };
         mappers.push((name, cloud_type));
     }
     mappers.sort_by(|(a, _), (b, _)| a.cmp(b));
@@ -241,7 +250,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn dir_without_mapper_toml_is_excluded() {
+        async fn dir_without_mapper_toml_or_flows_is_excluded() {
             let ttd = TempTedgeDir::new();
             let mappers_root = ttd.utf8_path().join("mappers");
             tokio::fs::create_dir_all(mappers_root.join("stale"))
@@ -249,6 +258,51 @@ mod tests {
                 .unwrap();
 
             assert!(scan_mappers(&mappers_root).await.is_empty());
+        }
+
+        #[tokio::test]
+        async fn flows_only_mapper_is_included() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let flows_dir = mappers_root.join("thingsboard/flows");
+            tokio::fs::create_dir_all(&flows_dir).await.unwrap();
+            tokio::fs::write(
+                flows_dir.join("telemetry.toml"),
+                "input.mqtt.topics = [\"te/+/+/+/+/m/+\"]\n",
+            )
+            .await
+            .unwrap();
+
+            let mappers = scan_mappers(&mappers_root).await;
+            assert_eq!(mappers, vec![("thingsboard".to_string(), None)]);
+        }
+
+        #[tokio::test]
+        async fn flows_only_mapper_with_empty_flows_dir_is_included() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_root.join("thingsboard/flows"))
+                .await
+                .unwrap();
+
+            let mappers = scan_mappers(&mappers_root).await;
+            assert_eq!(mappers, vec![("thingsboard".to_string(), None)]);
+        }
+
+        #[tokio::test]
+        async fn mapper_with_both_mapper_toml_and_flows_is_included_once() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("c8y");
+            tokio::fs::create_dir_all(mapper_dir.join("flows"))
+                .await
+                .unwrap();
+            tokio::fs::write(mapper_dir.join("mapper.toml"), "cloud_type = \"c8y\"\n")
+                .await
+                .unwrap();
+
+            let mappers = scan_mappers(&mappers_root).await;
+            assert_eq!(mappers, vec![("c8y".to_string(), Some("c8y".to_string()))]);
         }
 
         #[tokio::test]
