@@ -50,6 +50,21 @@ Test c8y specific transformers with tedge flows cli and initial context (provide
     Should Contain    ${transformed_msg}    item="type":"environment"
     [Teardown]    Uninstall Flow    custom-measurements
 
+Test c8y flows with tedge flows cli
+    ${installed_flows}    Execute Command    tedge flows list --mapper c8y
+    Should Contain    ${installed_flows}    measurements
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-measurements/c8y.samples    /etc/tedge/data/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-measurements/context.json    /etc/tedge/data/
+    ${transformed_msg}    Execute Command
+    ...    cat /etc/tedge/data/c8y.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --mapper c8y --context /etc/tedge/data/context.json
+    ...    strip=True
+    ${expected_msg}    Execute Command
+    ...    cat /etc/tedge/data/c8y.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
+    ...    strip=True
+    Should Be Equal
+    ...    ${transformed_msg}
+    ...    ${expected_msg}
+
 Apply c8y specific transformers with tedge-mapper local
     Install Flow    custom-measurements
     ${start}    Get Unix Timestamp

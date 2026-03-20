@@ -1,0 +1,5 @@
+# child-xyz birth message
+INPUT: [te/device/main/service/tedge-mapper-c8y/status/entities] { "entity": "device/child-xyz//", "status": "registered", "time": 1774011963.456 }
+
+INPUT: [te/device/child-xyz///m/environment] {"temperature": 258.0, "time":"2025-06-27T13:33:53.493Z"}
+OUTPUT: [c8y/measurement/measurements/create] {"externalSource":{"externalId":"raspberry-007-child-xyz","type":"c8y_Serial"},"temperature":{"temperature":{"value":258.0}},"time":"2025-06-27T13:33:53.493Z","type":"environment"}
