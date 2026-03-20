@@ -203,7 +203,7 @@ shell-words = "1.1"
 strum = "0.27"
 strum_macros = "0.27"
 syn = { version = "2", features = ["full", "extra-traits"] }
-tar = "0.4.44"
+tar = "0.4.45"
 tempfile = "3.12"
 test-case = "3.2"
 thiserror = "2.0"
