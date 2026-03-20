@@ -61,16 +61,21 @@ which rule how to consume, transform and produce MQTT messages.
 
 A transformation *script* is a JavaScript or TypeScript module that exports:
 
+- optionally, a function `onStartup()`, invoked once when the flow or step starts to initialise state and optionally produce messages,
 - at least, a function `onMessage()`, aimed to transform one input message into zero, one or more output messages,
 - possibly, a function `onInterval()`, called at regular intervals to produce aggregated messages,
 
 ```ts
 interface FlowStep {
-    // transform one input message into zero, one or more output messages
-    onMessage(message: Message, context: Context): null | Message | Message[],
+  // called once when the flow (or the step) starts or when a step is reloaded
+  // it can be used to initialise state and optionally produce messages
+  onStartup(time: Date, context: Context): null | Message | Message[],
+
+  // transform one input message into zero, one or more output messages
+  onMessage(message: Message, context: Context): null | Message | Message[],
   
-    // called at regular intervals to produce aggregated messages
-    onInterval(time: Date, context: Context): null | Message | Message[]
+  // called at regular intervals to produce aggregated messages
+  onInterval(time: Date, context: Context): null | Message | Message[]
 }
 ```
 
@@ -168,6 +173,39 @@ A flow script can also export a `onInterval` function
     the flow script can implement aggregations over a time window.
     When messages are received they are pushed by the `onMessage` function into that state
     and the final outcome is extracted by the `onInterval` function at the end of the time window.
+
+A flow script can also export a `onStartup` function
+  - The `onStartup(time, context)` callback is invoked once when a flow is started and
+    also when an individual step module is reloaded while the mapper is running.
+  - Typical uses are: initialise `context` state, load or compute reference data, and
+    optionally produce one-time messages that should be emitted at startup.
+  - When a flow is initially loaded, `onStartup` callbacks for the involved steps are
+    invoked in the flow activation sequence. When a single step file is modified and
+    reloaded, the `onStartup` for that step is invoked (reload behaviour depends on the
+    mapper runtime and flow layout).
+  - Messages returned by `onStartup` are treated as regular output from the step, passed down to the
+    subsequent `onMessage` steps of the flow, and are emitted according to the flow's output
+    configuration (they are subject to the same loop-detection and output filtering safeguards as
+    other messages).
+
+    Example (simplified):
+
+    ```js
+    export function onStartup(_time, context) {
+      // initialize a shared value in the flow-level context
+      context.flow.set("units", JSON.stringify({ temp: "C" }))
+      // optionally return an initial message to be published by the flow
+      return { topic: "my/init", payload: "startup-complete" }
+    }
+
+    export function onMessage(message, context) {
+      // normal per-message processing
+    }
+    ```
+
+    For a more real-world example of how `onStartup` can be used, see
+    [`thingsboard-registration`](https://github.com/thin-edge/tedge-flows-examples/blob/10b4ac9560dde74f079efb3c9a46ea1167a0ded5/flows/thingsboard-registration/src/main.ts#L41-L48)
+    example.
 
 ## Flow configuration
 
