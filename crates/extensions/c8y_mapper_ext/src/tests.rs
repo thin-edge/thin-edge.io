@@ -3385,19 +3385,42 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
 }
 
 pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessage>) {
-    //Skip all the init messages by still doing loose assertions
-    assert_received_contains_str(
-        mqtt,
-        [
-            (
-                "c8y/inventory/managedObjects/update/test-device",
-                "c8y_Agent",
-            ),
-            ("c8y/s/us", "114"),
-            ("c8y/s/us", "500"),
-        ],
-    )
-    .await;
+    // Consume initial messages. Init messages may arrive on `c8y/s/us` or
+    // on per-device subtopics like `c8y/s/us/<device>`. Accept the expected
+    // init payload fragments from any topic.
+    let mut found_agent = false;
+    let mut found_114 = false;
+    let mut found_500 = false;
+
+    let timeout_fut = async {
+        while !(found_agent && found_114 && found_500) {
+            let msg = mqtt.recv().await;
+            if msg.is_none() {
+                break;
+            }
+            let msg = msg.unwrap();
+            let payload = msg.payload.as_str().unwrap_or_default();
+            if payload.contains("c8y_Agent") {
+                found_agent = true;
+            }
+            if payload.contains("114") {
+                found_114 = true;
+            }
+            if payload.contains("500") {
+                found_500 = true;
+            }
+        }
+    };
+
+    let _ = tokio::time::timeout(TEST_TIMEOUT_MS, timeout_fut).await;
+
+    assert!(
+        found_agent && found_114 && found_500,
+        "expected init messages not received: agent={} 114={} 500={}",
+        found_agent,
+        found_114,
+        found_500
+    );
 }
 
 pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<HttpRequest, HttpResult>) {
