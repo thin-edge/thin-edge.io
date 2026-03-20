@@ -28,7 +28,7 @@ Log operation journald plugin
 
 Supported log types updated on software update
     ${start_time}=    Get Unix Timestamp
-    ${OPERATION}=    Install Software    cron
+    ${OPERATION}=    Install Software    {"name": "cron", "softwareType": "apt"}
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
 
     Should Have MQTT Messages

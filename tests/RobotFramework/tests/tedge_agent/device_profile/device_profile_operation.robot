@@ -206,6 +206,7 @@ Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist    ${DEVICE_SN}
+    Execute Command    tedge config set software.plugin.default apt
 
     Copy Configuration Files
     Restart Service    tedge-agent

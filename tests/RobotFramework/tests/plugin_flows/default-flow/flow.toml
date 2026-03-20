@@ -1,0 +1,8 @@
+# meta information about the flow
+name = "default-flow"
+version = "1.0.0"
+
+input.mqtt.topics = ["default/in"]
+
+[[steps]]
+script = "main.js"

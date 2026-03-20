@@ -45,7 +45,7 @@ Config operation plugin
 
 Supported config types updated on software update
     ${start_time}=    Get Unix Timestamp
-    ${OPERATION}=    Install Software    cron
+    ${OPERATION}=    Install Software    {"name": "cron", "softwareType": "apt"}
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
 
     Command Metadata Should Have Refreshed    ${start_time}

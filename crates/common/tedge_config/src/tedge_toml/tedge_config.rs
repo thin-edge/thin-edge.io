@@ -1396,6 +1396,12 @@ define_tedge_config! {
             #[tedge_config(default(value = false))]
             on_startup: bool,
         },
+
+        params: {
+            /// If set and params.toml exists in a flow, keeps the params.toml when removing a flow; otherwise, the entire flow directory is deleted
+            #[tedge_config(default(value = false))]
+            keep_on_delete: bool,
+        }
     },
 }
 

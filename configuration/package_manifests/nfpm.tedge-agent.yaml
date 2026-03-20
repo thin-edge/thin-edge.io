@@ -71,6 +71,7 @@ overrides:
   deb:
     recommends:
       - tedge-apt-plugin
+      - tedge-flows-plugin
     scripts:
       preinstall: configuration/package_scripts/_generated/tedge-agent/deb/preinst
       postinstall: configuration/package_scripts/_generated/tedge-agent/deb/postinst

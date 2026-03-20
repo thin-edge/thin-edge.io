@@ -73,6 +73,12 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .context("failed to run tedge apt plugin")?
         }
+        TEdgeOptMulticall::Component(Component::TedgeFlowsPlugin(opt)) => {
+            let config = tedge_flows_plugin::get_config(opt.common.config_dir.as_std_path()).await;
+            tokio::task::spawn_blocking(move || tedge_flows_plugin::run_and_exit(opt, config))
+                .await
+                .context("failed to run tedge flows plugin")?
+        }
         TEdgeOptMulticall::Component(Component::TedgeFileConfigPlugin(opt)) => {
             let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;
             let tedge_config =

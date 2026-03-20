@@ -1,0 +1,9 @@
+# meta information about the flow
+name = "hello-flow"
+version = "2.0.0"
+
+input.mqtt.topics = ["hello/in"]
+
+[[steps]]
+script = "main.js"
+config.call = "${.params.call}"

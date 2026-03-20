@@ -26,6 +26,10 @@ Package: tedge-apt-plugin
 Pin: version %%VERSION%%
 Pin-Priority: 1001
 
+Package: tedge-flows-plugin
+Pin: version %%VERSION%%
+Pin-Priority: 1001
+
 Package: tedge-watchdog
 Pin: version %%VERSION%%
 Pin-Priority: 1001
