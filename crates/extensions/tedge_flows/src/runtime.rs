@@ -26,9 +26,13 @@ pub struct MessageProcessor<Registry> {
 }
 
 impl MessageProcessor<BaseFlowRegistry> {
-    pub async fn with_base_registry(config_dir: impl AsRef<Utf8Path>) -> Result<Self, LoadError> {
+    pub async fn with_base_registry(
+        config_dir: impl AsRef<Utf8Path>,
+        js_config: JsRuntimeConfig,
+    ) -> Result<Self, LoadError> {
         let registry = BaseFlowRegistry::new(config_dir);
-        Self::with_default(registry).await
+        let context = FlowContextHandle::default();
+        MessageProcessor::with_context(registry, js_config, context).await
     }
 }
 
