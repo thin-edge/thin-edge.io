@@ -1,0 +1,11 @@
+input.mqtt.topics = ["te/+/+/+/+/m/+"]
+
+steps = [
+    { builtin = "into-c8y-measurements" },
+    { builtin = "set-topic", config = { topic = "fake/c8y/measurements" } }
+]
+
+[output.mqtt]
+
+[errors.mqtt]
+topic = "te/errors"

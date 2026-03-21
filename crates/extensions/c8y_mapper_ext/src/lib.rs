@@ -1,3 +1,5 @@
+use tedge_flows::FlowRegistryExt;
+
 pub mod actor;
 pub mod alarm_converter;
 pub mod availability;
@@ -47,4 +49,12 @@ impl Default for Capabilities {
             software_update: true,
         }
     }
+}
+
+pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
+    flows.register_builtin(mea::message_cache::MessageCache::default());
+    flows.register_builtin(mea::measurements::MeasurementConverter::default());
+    flows.register_builtin(mea::events::EventConverter::default());
+    flows.register_builtin(mea::alarms::AlarmConverter::default());
+    flows.register_builtin(mea::health::HealthStatusConverter::default());
 }

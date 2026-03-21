@@ -1,40 +1,11 @@
 use crate::actor::C8yMapperBuilder;
-use camino::Utf8Path;
 use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowRegistryExt;
 use tedge_flows::UpdateFlowRegistryError;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_utils::file::create_directory_with_defaults;
-use tracing::error;
 
 impl C8yMapperBuilder {
-    pub async fn flow_registry(
-        &self,
-        flows_dir: impl AsRef<Utf8Path>,
-    ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
-        if let Err(err) = create_directory_with_defaults(flows_dir.as_ref()).await {
-            error!(
-                "failed to create flow directory '{}': {err}",
-                flows_dir.as_ref()
-            );
-            return Err(err)?;
-        };
-        let mut flows = ConnectedFlowRegistry::new(flows_dir);
-
-        let mapper_topic_id = self.config.service_topic_id.clone();
-        flows.register_builtin(crate::mea::message_cache::MessageCache::new(
-            mapper_topic_id,
-        ));
-        flows.register_builtin(crate::mea::measurements::MeasurementConverter::default());
-        flows.register_builtin(crate::mea::events::EventConverter::default());
-        flows.register_builtin(crate::mea::alarms::AlarmConverter::default());
-        flows.register_builtin(crate::mea::health::HealthStatusConverter::default());
-
-        self.persist_builtin_flows(&mut flows).await?;
-        Ok(flows)
-    }
-
-    async fn persist_builtin_flows(
+    pub async fn persist_builtin_flows(
         &self,
         flows: &mut ConnectedFlowRegistry,
     ) -> Result<(), UpdateFlowRegistryError> {
@@ -114,7 +85,7 @@ config = {{ topic_root = "{topic_prefix}" }}
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "unix", reformat = false }} }},
-    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "cache-early-messages", config = {{ mapper_topic_id = "{mapper_topic_id}" }} }},
     {{ builtin = "into-c8y-measurements" }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
@@ -147,7 +118,7 @@ config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
-    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "cache-early-messages", config = {{ mapper_topic_id = "{mapper_topic_id}" }} }},
     {{ builtin = "into-c8y-events", config = {{ max_mqtt_payload_size = {max_mqtt_payload_size} }} }},
 ]
 
@@ -181,7 +152,7 @@ config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
 
 steps = [
     {{ builtin = "add-timestamp", config = {{ property = "time", format = "rfc3339", reformat = false }} }},
-    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "cache-early-messages", config = {{ mapper_topic_id = "{mapper_topic_id}" }} }},
     {{ builtin = "into-c8y-alarms", interval = "{alarm_interval}" }},
     {{ builtin = "limit-payload-size", config = {{ max_size = {max_size} }} }},
 ]
@@ -213,7 +184,7 @@ topic = "{errors_topic}"
 config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
 
 steps = [
-    {{ builtin = "cache-early-messages" }},
+    {{ builtin = "cache-early-messages", config = {{ mapper_topic_id = "{mapper_topic_id}" }} }},
     {{ builtin = "into-c8y-health-status", config = {{ main_device = "{main_device}" }} }},
 ]
 

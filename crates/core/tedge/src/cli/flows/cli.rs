@@ -8,10 +8,13 @@ use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Error;
 use camino::Utf8PathBuf;
+use std::str::FromStr;
 use std::time::SystemTime;
 use tedge_config::TEdgeConfig;
 use tedge_flows::BaseFlowRegistry;
+use tedge_flows::FlowContextHandle;
 use tedge_flows::JsRuntimeConfig;
+use tedge_flows::LoadError;
 use tedge_flows::Message;
 use tedge_flows::MessageProcessor;
 
@@ -61,6 +64,12 @@ pub enum TEdgeFlowsCli {
         /// If none is provided, applies all the matching flows
         #[clap(long)]
         flow: Option<Utf8PathBuf>,
+
+        /// JSON object used to initialize the flow mapper context
+        ///
+        /// This can be a path to a JSON file or an inlined JSON object
+        #[clap(long)]
+        context: Option<String>,
 
         /// Trigger onInterval after all the message samples
         #[clap(long = "final-on-interval")]
@@ -130,6 +139,7 @@ impl BuildCommand for TEdgeFlowsCli {
                 profile,
                 flows_dir,
                 flow,
+                context,
                 final_on_interval,
                 processing_time,
                 base64_input,
@@ -150,6 +160,7 @@ impl BuildCommand for TEdgeFlowsCli {
                 Ok(TestCommand {
                     flows_dir,
                     flow,
+                    context,
                     message,
                     final_on_interval,
                     processing_time,
@@ -182,11 +193,21 @@ impl TEdgeFlowsCli {
         }
     }
 
+    async fn init_processor(
+        flows_dir: &Utf8PathBuf,
+        js_config: JsRuntimeConfig,
+    ) -> Result<MessageProcessor<BaseFlowRegistry>, LoadError> {
+        let mut registry = BaseFlowRegistry::new(flows_dir);
+        tedge_mapper::load_builtin_transformers(&mut registry);
+        let context = FlowContextHandle::default();
+        MessageProcessor::with_context(registry, js_config, context).await
+    }
+
     pub async fn load_flows(
         flows_dir: &Utf8PathBuf,
         js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
-        let mut processor = MessageProcessor::with_base_registry(flows_dir, js_config)
+        let mut processor = Self::init_processor(flows_dir, js_config)
             .await
             .with_context(|| format!("loading flows and steps from {flows_dir}"))?;
         processor.load_all_flows().await;
@@ -198,7 +219,7 @@ impl TEdgeFlowsCli {
         path: &Utf8PathBuf,
         js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
-        let mut processor = MessageProcessor::with_base_registry(flows_dir, js_config)
+        let mut processor = Self::init_processor(flows_dir, js_config)
             .await
             .with_context(|| format!("loading flow {path}"))?;
 
@@ -217,6 +238,26 @@ impl TEdgeFlowsCli {
             _ => processor.load_single_script(&resolved_path).await,
         }
         Ok(processor)
+    }
+
+    pub async fn load_context(
+        context: FlowContextHandle,
+        initial_content: &str,
+    ) -> Result<(), Error> {
+        let path = Utf8PathBuf::from(initial_content);
+        let json = match tokio::fs::read_to_string(path).await {
+            Ok(file_content) => serde_json::Value::from_str(&file_content),
+            Err(_) => serde_json::Value::from_str(initial_content),
+        };
+        match json {
+            Ok(serde_json::Value::Object(values)) => {
+                for (key, value) in values {
+                    context.set_value(&key, value.into())
+                }
+                Ok(())
+            }
+            _ => Err(anyhow!("Invalid context: expecting a JSON object")),
+        }
     }
 
     async fn find_in_flows_dir(

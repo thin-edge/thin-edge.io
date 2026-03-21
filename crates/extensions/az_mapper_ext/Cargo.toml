@@ -1,6 +1,6 @@
 [package]
 name = "az_mapper_ext"
-description = "thin-edge aws extension adding support for azure data model"
+description = "thin-edge extension adding support for azure data model"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
@@ -12,15 +12,8 @@ repository = { workspace = true }
 [dependencies]
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
+tedge_flows = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
-
-[dev-dependencies]
-assert-json-diff = { workspace = true }
-assert_matches = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-test-case = { workspace = true }
-time = { workspace = true, features = ["macros"] }
 
 [lints]
 workspace = true

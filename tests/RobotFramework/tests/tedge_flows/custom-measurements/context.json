@@ -1,0 +1,16 @@
+{
+  "device/main//": {
+    "@id":"raspberry-007",
+    "@type":"device",
+    "@topic-id":"device/main//",
+    "@name":"raspberry-007",
+    "@type-name":"thin-edge"
+  },
+  "device/child-xyz//": {
+    "@id":"raspberry-007-child-xyz",
+    "@type":"child-device",
+    "@topic-id":"device/child-xyz//",
+    "@name":"child-xyz",
+    "@type-name":"thin-edge"
+  }
+}

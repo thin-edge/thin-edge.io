@@ -1,6 +1,7 @@
 use crate::mea::entities::C8yEntityBirth;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::str::FromStr;
 use std::time::SystemTime;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -16,23 +17,12 @@ use tedge_flows::Message;
 ///
 /// - Cache messages from unregistered entity
 /// - Return the cached messages when an entity birth message is received
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MessageCache {
     mqtt_schema: MqttSchema,
-    mapper_topic_id: EntityTopicId,
+    mapper_topic_id: Option<EntityTopicId>,
     cache: HashMap<EntityTopicId, RingBuffer<Message>>,
     birthed: HashSet<EntityTopicId>,
-}
-
-impl MessageCache {
-    pub fn new(mapper_topic_id: EntityTopicId) -> Self {
-        MessageCache {
-            mqtt_schema: MqttSchema::default(),
-            mapper_topic_id,
-            cache: HashMap::default(),
-            birthed: HashSet::default(),
-        }
-    }
 }
 
 impl tedge_flows::Transformer for MessageCache {
@@ -44,6 +34,13 @@ impl tedge_flows::Transformer for MessageCache {
         if let Some(root) = config.string_property("topic_root") {
             self.mqtt_schema = MqttSchema::with_root(root.to_string())
         }
+
+        if let Some(mapper_topic_id) = config.string_property("mapper_topic_id") {
+            self.mapper_topic_id =
+                Some(EntityTopicId::from_str(mapper_topic_id).map_err(|err| {
+                    ConfigError::IncorrectSetting(format!("Not a valid mapper topic id: {}", err))
+                })?)
+        }
         Ok(())
     }
 
@@ -53,9 +50,14 @@ impl tedge_flows::Transformer for MessageCache {
         message: &Message,
         _context: &FlowContextHandle,
     ) -> Result<Vec<Message>, FlowError> {
+        let mapper_topic_id = self.mapper_topic_id.as_ref().ok_or_else(|| {
+            FlowError::IncorrectSetting(
+                "A mapper_topic_id must be configured for cache-early-messages steps".to_string(),
+            )
+        })?;
         match self.mqtt_schema.entity_channel_of(&message.topic) {
             Ok((source, Channel::Status { component }))
-                if component == "entities" && source == self.mapper_topic_id =>
+                if component == "entities" && source == mapper_topic_id =>
             {
                 let birth_message =
                     C8yEntityBirth::from_json(message.payload.as_slice()).map_err(|err| {
@@ -182,8 +184,10 @@ mod tests {
     }
 
     fn make_cache() -> MessageCache {
-        let mapper_id: EntityTopicId = "device/main/service/tedge-mapper-c8y".parse().unwrap();
-        MessageCache::new(mapper_id)
+        MessageCache {
+            mapper_topic_id: "device/main/service/tedge-mapper-c8y".parse().ok(),
+            ..Default::default()
+        }
     }
 
     fn make_message(topic: &str, payload: &str) -> Message {

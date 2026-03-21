@@ -85,7 +85,8 @@ impl TEdgeComponent for AwsMapper {
         );
         let flows_dir =
             tedge_flows::flows_dir(config_dir, "aws", self.profile.as_ref().map(|p| p.as_ref()));
-        let flows = aws_converter.flow_registry(flows_dir).await?;
+        let mut flows = crate::flow_registry(flows_dir).await?;
+        aws_converter.persist_builtin_flow(&mut flows).await?;
         let service_config = flows_config(&tedge_config, &aws_mapper_name)?;
 
         let mut fs_actor = FsWatchActorBuilder::new();

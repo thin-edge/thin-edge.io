@@ -481,3 +481,101 @@ Store a message in the [mapper context](#context) shared by all the flows and tr
 - An `update-context` step can be given a topic filter used to store only a subset of the messages.
   - `{ builtin = "update-context", config.topics = "te/+/+/+/+/m/+/meta" }`
   - If a message doesn't match the configured topic, this message is passed unchanged to the subsequent transformation steps.
+
+### `into-c8y-measurements`
+
+Transform a [%%te%% measurement](../../../understand/thin-edge-json/#measurements) into a [Cumulocity measurement](../c8y-mapper/#measurement)
+
+- This transformer uses the [mapper context](#context) to retrieve metadata about the message sources.
+  - In the case of the Cumulocity mapper, this context is populated by the mapper.
+  - However, in the case of a user-defined mapper, this context has to populated by a flow consuming MQTT messages
+    or reading a configuration file. This is done by inserting [registration messages](../mqtt-api/#entity-registration)
+    using the [entity topic identifiers](../mqtt-api/#group-identifier) as keys.
+  - ```
+    context.mapper.set("device/child-xyz//", {
+        "@id":"raspberry-007-child-xyz",
+        "@type":"child-device",
+        "@topic-id":"device/child-xyz//",
+        "@name":"child-xyz",
+        "@type-name":"thin-edge"
+     })
+    ```
+- If the source that is sending alarms is not registered yet in the mapper context,
+  then this transformer discards the alarm. If this is not the desired behavior an approach is to add upstream a step
+  using the [`cache-early-messages`](#cache-early-messages) transformer.
+- Even if designed after Cumulocity requirements, this transformer can be used by any mappers.
+
+### `into-c8y-events`
+
+Transform a [%%te%% event](../../../understand/thin-edge-json/#events) into a [Cumulocity event](../c8y-mapper/#events)
+
+- This transformer uses the [mapper context](#context) to retrieve metadata about the message sources.
+  - In the case of the Cumulocity mapper, this context is populated by the mapper.
+  - However, in the case of a user-defined mapper, this context has to populated by a flow consuming MQTT messages
+    or reading a configuration file. This is done by inserting [registration messages](../mqtt-api/#entity-registration)
+    using the [entity topic identifiers](../mqtt-api/#group-identifier) as keys.
+  - ```
+    context.mapper.set("device/child-xyz//", {
+        "@id":"raspberry-007-child-xyz",
+        "@type":"child-device",
+        "@topic-id":"device/child-xyz//",
+        "@name":"child-xyz",
+        "@type-name":"thin-edge"
+     })
+    ```
+- If the source that is sending alarms is not registered yet in the mapper context,
+  then this transformer discards the alarm. If this is not the desired behavior an approach is to add upstream a step
+  using the [`cache-early-messages`](#cache-early-messages) transformer.
+- Even if designed after Cumulocity requirements, this transformer can be used by any mappers.
+
+### `into-c8y-alarms`
+
+Transform a [%%te%% alarm](../../../understand/thin-edge-json/#alarms) into a [Cumulocity alarm](../c8y-mapper/#alarms)
+
+- This transformer uses the [mapper context](#context) to retrieve metadata about the message sources.
+  - In the case of the Cumulocity mapper, this context is populated by the mapper.
+  - However, in the case of a user-defined mapper, this context has to populated by a flow consuming MQTT messages
+    or reading a configuration file. This is done by inserting [registration messages](../mqtt-api/#entity-registration)
+    using the [entity topic identifiers](../mqtt-api/#group-identifier) as keys.
+  - ```
+    context.mapper.set("device/child-xyz//", {
+        "@id":"raspberry-007-child-xyz",
+        "@type":"child-device",
+        "@topic-id":"device/child-xyz//",
+        "@name":"child-xyz",
+        "@type-name":"thin-edge"
+     })
+    ```
+- If the source that is sending alarms is not registered yet in the mapper context,
+  then this transformer discards the alarm. If this is not the desired behavior an approach is to add upstream a step
+  using the [`cache-early-messages`](#cache-early-messages) transformer.
+- Even if designed after Cumulocity requirements, this transformer can be used by any mappers.
+
+### `cache-early-messages`
+
+Cache all messages for an entity (the main device, a child device or a service), till a birth message is received.
+
+The typical usage is to use a two-level flow, where `cache-early-messages` is used to postpone any message transformation till
+the second step is ready to process them, the source entities being fully registered and their metadata properly cached in the flows `context.mapper`.
+
+```toml
+input.mqtt.topics = ["te/+/+/+/+/m/+", "te/device/main/service/tedge-mapper-c8y/status/entities"]
+
+config = { topic_root = "te" }
+
+[[steps]]
+builtin = "cache-early-messages"
+config = { mapper_topic_id = "device/main/service/tedge-mapper-c8y" }
+
+[[steps]]
+builtin = "into-c8y-measurements"
+```
+
+- The default for the Cumulocity mapper is to publish birth messages on `te/device/main/service/tedge-mapper-c8y/status/entities`
+- This is configurable. A custom mapper (which topic id is `a/b/c/d`) is expected to publish finalized entity registration
+  on `te/a/b/c/d/status/entities`.
+- A birth message is composed of
+  - the registered entity topic identifier,
+  - its status `registered` or `unregistered`
+  - a unix timestamp
+  - `{ "entity": "device/child-xyz//", "status": "registered", "time": 1774011963.456 }`

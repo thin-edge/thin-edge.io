@@ -10,6 +10,7 @@ use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
 use crate::flows::GenMapper;
 use anyhow::Context;
+use camino::Utf8Path;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -17,7 +18,12 @@ use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
+use tedge_flows::ConnectedFlowRegistry;
+use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperConfig;
+use tedge_flows::UpdateFlowRegistryError;
+use tedge_utils::file::create_directory_with_defaults;
+use tracing::error;
 use tracing::log::warn;
 
 #[cfg(feature = "aws")]
@@ -195,4 +201,25 @@ pub(crate) fn flows_config(
         mem_config.stack_size as usize,
     );
     Ok(flows_config)
+}
+
+pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
+    c8y_mapper_ext::load_builtin_transformers(flows);
+    az_mapper_ext::load_builtin_transformers(flows);
+    aws_mapper_ext::load_builtin_transformers(flows);
+}
+
+pub(crate) async fn flow_registry(
+    flows_dir: impl AsRef<Utf8Path>,
+) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
+    if let Err(err) = create_directory_with_defaults(flows_dir.as_ref()).await {
+        error!(
+            "failed to create flow directory '{}': {err}",
+            flows_dir.as_ref()
+        );
+        return Err(err)?;
+    };
+    let mut flows = ConnectedFlowRegistry::new(flows_dir);
+    load_builtin_transformers(&mut flows);
+    Ok(flows)
 }

@@ -1,0 +1,5 @@
+INPUT: [te/device/main//] {"@id": "raspberry-007", "@type": "device" }
+OUTPUT: [fake/c8y/entities] {"@id":"raspberry-007","@type":"device","@topic-id":"device/main//","@name":"raspberry-007","@type-name":"thin-edge"}
+
+INPUT: [te/device/main///m/environment] {"temperature": 258.0, "time":"2025-06-27T13:33:53.493Z"}
+OUTPUT: [fake/c8y/measurements] {"temperature":{"temperature":{"value":258.0}},"time":"2025-06-27T13:33:53.493Z","type":"environment"}
