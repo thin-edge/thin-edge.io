@@ -588,7 +588,7 @@ async fn nested_child_service_alarm_with_shuffled_ordering_impl(seed: u64) {
 async fn setup_mapper() -> (MockMqttBox, Box<dyn std::any::Any>) {
     let ttd = TempTedgeDir::new();
     let TestHandle {
-        mut mqtt,
+        mqtt,
         http,
         fs,
         ul,
@@ -597,7 +597,6 @@ async fn setup_mapper() -> (MockMqttBox, Box<dyn std::any::Any>) {
     } = spawn_c8y_mapper_actor(&ttd, true).await;
 
     spawn_dummy_c8y_http_proxy(http);
-    mqtt.ignore("te/device/main/service/tedge-mapper-c8y/status/entities");
 
     (mqtt, Box::new((ttd, fs, ul, dl, avail)))
 }

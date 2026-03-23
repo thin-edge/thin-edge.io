@@ -51,12 +51,8 @@ pub trait Transformer: Send + Sync + 'static {
         Ok(vec![])
     }
 
-    fn has_context_update(&self) -> bool {
-        false
-    }
-
     fn on_context_update(
-        &self,
+        &mut self,
         _timestamp: SystemTime,
         _update: &FlowContextUpdate,
         _context: &FlowContextHandle,
@@ -243,12 +239,8 @@ builtin = "on-context-update"
                 Ok(vec![message.clone()])
             }
 
-            fn has_context_update(&self) -> bool {
-                true
-            }
-
             fn on_context_update(
-                &self,
+                &mut self,
                 _timestamp: SystemTime,
                 update: &FlowContextUpdate,
                 _context: &FlowContextHandle,

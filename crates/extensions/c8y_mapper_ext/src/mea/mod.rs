@@ -4,7 +4,6 @@ use tedge_flows::FlowContextHandle;
 use tedge_flows::JsonValue;
 
 pub mod alarms;
-pub mod entities;
 pub mod events;
 pub mod health;
 pub mod measurements;
