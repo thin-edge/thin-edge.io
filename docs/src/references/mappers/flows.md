@@ -489,8 +489,8 @@ Transform a [%%te%% measurement](../../../understand/thin-edge-json/#measurement
 - This transformer uses the [mapper context](#context) to retrieve metadata about the message sources.
   - In the case of the Cumulocity mapper, this context is populated by the mapper.
   - However, in the case of a user-defined mapper, this context has to populated by a flow consuming MQTT messages
-    or reading a configuration file. This is done by inserting [registration messages](../mqtt-api/#entity-registration)
-    using the [entity topic identifiers](../mqtt-api/#group-identifier) as keys.
+    or reading a configuration file. This is done by inserting [registration messages](../mqtt-api.md#entity-registration)
+    using the [entity topic identifiers](../mqtt-api.md#group-identifier) as keys.
   - ```
     context.mapper.set("device/child-xyz//", {
         "@id":"raspberry-007-child-xyz",
@@ -512,8 +512,8 @@ Transform a [%%te%% event](../../../understand/thin-edge-json/#events) into a [C
 - This transformer uses the [mapper context](#context) to retrieve metadata about the message sources.
   - In the case of the Cumulocity mapper, this context is populated by the mapper.
   - However, in the case of a user-defined mapper, this context has to populated by a flow consuming MQTT messages
-    or reading a configuration file. This is done by inserting [registration messages](../mqtt-api/#entity-registration)
-    using the [entity topic identifiers](../mqtt-api/#group-identifier) as keys.
+    or reading a configuration file. This is done by inserting [registration messages](../mqtt-api.md#entity-registration)
+    using the [entity topic identifiers](../mqtt-api.md#group-identifier) as keys.
   - ```
     context.mapper.set("device/child-xyz//", {
         "@id":"raspberry-007-child-xyz",
@@ -535,8 +535,8 @@ Transform a [%%te%% alarm](../../../understand/thin-edge-json/#alarms) into a [C
 - This transformer uses the [mapper context](#context) to retrieve metadata about the message sources.
   - In the case of the Cumulocity mapper, this context is populated by the mapper.
   - However, in the case of a user-defined mapper, this context has to populated by a flow consuming MQTT messages
-    or reading a configuration file. This is done by inserting [registration messages](../mqtt-api/#entity-registration)
-    using the [entity topic identifiers](../mqtt-api/#group-identifier) as keys.
+    or reading a configuration file. This is done by inserting [registration messages](../mqtt-api.md#entity-registration)
+    using the [entity topic identifiers](../mqtt-api.md#group-identifier) as keys.
   - ```
     context.mapper.set("device/child-xyz//", {
         "@id":"raspberry-007-child-xyz",
