@@ -19,7 +19,10 @@ use parsing::template::expand_config_template;
 use parsing::template::expand_loop_template;
 use parsing::template::TemplateContext;
 
-use crate::config_toml::parsing::template::parse_config_reference;
+use crate::config_toml::parsing::template::expand_mapper_key;
+use crate::config_toml::parsing::template::expand_mapper_key_as_array;
+use crate::config_toml::parsing::template::parse_for_reference;
+use crate::config_toml::parsing::template::ForReference;
 
 #[cfg(test)]
 mod test_helpers;
@@ -114,7 +117,7 @@ impl PersistedBridgeConfig {
         config: &TEdgeConfig,
         auth_method: AuthMethod,
         cloud_profile: Option<&ProfileName>,
-        mapper_config: Option<&toml::Table>,
+        mapper_config: &toml::Table,
     ) -> Result<(Vec<ExpandedBridgeRule>, Vec<NonExpansionReason>), Vec<ExpandError>> {
         let static_cfg = || StaticTemplateConfig {
             tedge: config,
@@ -142,7 +145,7 @@ impl PersistedBridgeConfig {
                         let parsed: Spanned<Condition> = parse_condition_with_error(s)?;
                         let result = expand_spanned(
                             &parsed,
-                            (config, auth_method),
+                            (config, auth_method, mapper_config),
                             cloud_profile,
                             &format!("Failed to expand {context} condition"),
                         )
@@ -279,7 +282,7 @@ impl PersistedBridgeConfig {
 
             let iterable = template
                 .r#for
-                .expand(config, cloud_profile)
+                .expand((config, mapper_config), cloud_profile)
                 .unwrap_or_else(|mut e| {
                     e.message = format!("Failed to expand 'for' reference: {}", e.message);
                     errors.push(e);
@@ -430,6 +433,10 @@ pub enum Direction {
 pub(crate) enum Condition {
     AuthMethod(AuthMethod),
     Is(bool, ConfigReference<bool>),
+    /// `${mapper.key}` (or `!${mapper.key}`) in an `if` field.
+    /// The `bool` is the expected value, `String` is the dotted key path,
+    /// and `Range` is the span of the key in the source file.
+    MapperIs(bool, String, std::ops::Range<usize>),
 }
 
 #[derive(
@@ -449,17 +456,27 @@ pub enum AuthMethod {
 
 impl Expandable for Condition {
     type Target = bool;
-    type Config<'a> = (&'a TEdgeConfig, AuthMethod);
+    type Config<'a> = (&'a TEdgeConfig, AuthMethod, &'a toml::Table);
 
     fn expand(
         &self,
         config: Self::Config<'_>,
         cloud_profile: Option<&ProfileName>,
     ) -> Result<Self::Target, ExpandError> {
+        let (tedge, auth_method, mapper_config) = config;
         match self {
-            Self::AuthMethod(auth_method) => Ok(*auth_method == config.1),
-            Self::Is(true, config_ref) => config_ref.expand(config.0, cloud_profile),
-            Self::Is(false, config_ref) => Ok(!config_ref.expand(config.0, cloud_profile)?),
+            Self::AuthMethod(expected) => Ok(*expected == auth_method),
+            Self::Is(true, config_ref) => config_ref.expand(tedge, cloud_profile),
+            Self::Is(false, config_ref) => Ok(!config_ref.expand(tedge, cloud_profile)?),
+            Self::MapperIs(target, key, span) => {
+                let value_str = expand_mapper_key(key, mapper_config, span.clone())?;
+                let value: bool = value_str.parse().map_err(|_| ExpandError {
+                    message: format!("Mapper config key '{key}' is not a boolean"),
+                    help: Some("Use 'true' or 'false' values for condition checks".into()),
+                    span: span.clone(),
+                })?;
+                Ok(if *target { value } else { !value })
+            }
         }
     }
 }
@@ -489,6 +506,14 @@ fn explain_false_condition(
             };
             // Highlight the config reference specifically
             (message, config_ref.span())
+        }
+        Condition::MapperIs(expected, key, span) => {
+            let message = format!(
+                "mapper config key '{}' is {}",
+                key.cyan(),
+                (!*expected).yellow()
+            );
+            (message, span.clone())
         }
     }
 }
@@ -530,10 +555,20 @@ impl<Target> FromStr for ConfigReference<Target> {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut ser = String::new();
         serde::Serialize::serialize(s, toml::ser::ValueSerializer::new(&mut ser)).unwrap();
-        parse_config_reference(
-            &Spanned::<String>::deserialize(toml::de::ValueDeserializer::parse(&ser).unwrap())
-                .unwrap(),
-        )
+        let spanned =
+            Spanned::<String>::deserialize(toml::de::ValueDeserializer::parse(&ser).unwrap())
+                .unwrap();
+        match parse_for_reference(&spanned)? {
+            ForReference::Config(key, key_span) => Ok(ConfigReference(
+                Spanned::new(key_span.into_range(), key),
+                std::marker::PhantomData,
+            )),
+            ForReference::Mapper(_, span) => Err(ExpandError {
+                message: "expected config reference, got mapper reference".into(),
+                help: Some("Use format: ${config.key}".into()),
+                span: span.into_range(),
+            }),
+        }
     }
 }
 
@@ -583,19 +618,33 @@ fn expand_spanned<T: Expandable>(
 impl Expandable for Spanned<Iterable> {
     type Target = TemplatesSet;
     type Config<'a>
-        = &'a TEdgeConfig
+        = (&'a TEdgeConfig, &'a toml::Table)
     where
         Self: 'a;
 
     fn expand(
         &self,
-        tedge_config: &TEdgeConfig,
+        (tedge_config, mapper_config): (&TEdgeConfig, &toml::Table),
         cloud_profile: Option<&ProfileName>,
     ) -> Result<Self::Target, ExpandError> {
         match self.get_ref() {
-            Iterable::Config(config_ref) => {
-                parse_config_reference(&toml::Spanned::new(self.span(), config_ref.clone()))?
-                    .expand(tedge_config, cloud_profile)
+            Iterable::Config(s) => {
+                let spanned = toml::Spanned::new(self.span(), s.clone());
+                match parse_for_reference(&spanned)? {
+                    ForReference::Config(key, key_span) => ConfigReference::<TemplatesSet>(
+                        toml::Spanned::new(key_span.into_range(), key),
+                        std::marker::PhantomData,
+                    )
+                    .expand(tedge_config, cloud_profile),
+                    ForReference::Mapper(key, key_span) => {
+                        let table = mapper_config;
+                        Ok(TemplatesSet(expand_mapper_key_as_array(
+                            &key,
+                            table,
+                            key_span.into_range(),
+                        )?))
+                    }
+                }
             }
             Iterable::Literal(values) => Ok(TemplatesSet(values.clone())),
         }
@@ -670,12 +719,12 @@ where
 struct TemplateConfig<'a> {
     tedge: &'a TEdgeConfig,
     r#for: &'a str,
-    mapper_config: Option<&'a toml::Table>,
+    mapper_config: &'a toml::Table,
 }
 
 struct StaticTemplateConfig<'a> {
     tedge: &'a TEdgeConfig,
-    mapper_config: Option<&'a toml::Table>,
+    mapper_config: &'a toml::Table,
 }
 
 /// Expands a tedge.toml config key and return its value
@@ -923,9 +972,10 @@ mod tests {
             let reference = "${c8y.topics.e}";
             let result: Result<ConfigReference<TemplatesSet>, _> = reference.parse();
             let err = result.unwrap_err();
+            // The for-reference parser rejects unknown namespaces, naming the valid alternatives
             assert!(
-                err.message.contains("expected config reference"),
-                "{}",
+                err.message.contains("'config'") && err.message.contains("'mapper'"),
+                "Expected error mentioning valid namespaces ('config', 'mapper'), got: {}",
                 err.message
             );
         }
@@ -934,8 +984,13 @@ mod tests {
         fn config_reference_rejects_missing_suffix() {
             let reference = "${config.c8y.mqtt_service.topics";
             let result: Result<ConfigReference<TemplatesSet>, _> = reference.parse();
-            assert!(result.is_err());
-            assert!(result.unwrap_err().message.contains("must end with }"));
+            let err = result.unwrap_err();
+            // The lexer catches the unclosed brace and reports it
+            assert!(
+                err.message.contains("closing '}'"),
+                "Expected error about unclosed brace, got: {}",
+                err.message
+            );
         }
 
         #[test]
@@ -976,7 +1031,10 @@ topic_prefix = "changed"
             let tedge_config =
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = true");
             assert!(condition
-                .expand((&tedge_config, AuthMethod::Certificate), None)
+                .expand(
+                    (&tedge_config, AuthMethod::Certificate, &toml::Table::new()),
+                    None
+                )
                 .unwrap());
         }
 
@@ -988,7 +1046,10 @@ topic_prefix = "changed"
             let tedge_config =
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = true");
             assert!(!condition
-                .expand((&tedge_config, AuthMethod::Certificate), None)
+                .expand(
+                    (&tedge_config, AuthMethod::Certificate, &toml::Table::new()),
+                    None
+                )
                 .unwrap());
         }
 
@@ -1070,7 +1131,12 @@ direction = "inbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1);
@@ -1101,7 +1167,12 @@ direction = "inbound"
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1);
@@ -1132,7 +1203,12 @@ direction = "inbound"
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1);
@@ -1164,7 +1240,12 @@ direction = "inbound"
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = false");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(
@@ -1230,7 +1311,12 @@ direction = "inbound"
                 let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
                 let errs = config
-                    .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                    .expand(
+                        &tedge_config,
+                        AuthMethod::Certificate,
+                        None,
+                        &toml::Table::new(),
+                    )
                     .unwrap_err();
 
                 assert_eq!(
@@ -1268,7 +1354,12 @@ c8y.smartrest.templates = ["a", "b"]
             );
 
             let expanded = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap();
 
             assert_eq!(expanded.0.len(), 2);
@@ -1295,7 +1386,12 @@ c8y.smartrest.templates = ["a", "b"]
             );
 
             let expanded = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap();
 
             assert_eq!(expanded.0.len(), 4);
@@ -1323,7 +1419,12 @@ direction = "inbound"
 
             // This should fail on the first variable
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1);
@@ -1365,7 +1466,12 @@ direction = "outbound"
 
             // This should fail on the first variable
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1);
@@ -1409,7 +1515,12 @@ direction = "outbound"
 
             // This should fail on the first variable
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(errs.len(), 2);
@@ -1471,7 +1582,12 @@ smartrest.templates = ["template1", "template2", "template3"]
             );
 
             let expanded = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap();
 
             // Should create 6 rules: 3 outbound + 3 inbound
@@ -1519,7 +1635,7 @@ bridge.topic_prefix = "test"
                     &tedge_config,
                     AuthMethod::Certificate,
                     Some(&"test".parse().unwrap()),
-                    None,
+                    &toml::Table::new(),
                 )
                 .unwrap();
 
@@ -1550,7 +1666,12 @@ c8y.mqtt_service.enabled = false
             );
 
             let expanded = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap();
 
             assert_eq!(expanded.0.len(), 0);
@@ -1575,7 +1696,12 @@ c8y.mqtt_service.enabled = true
             );
 
             let expanded = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap();
 
             assert_eq!(expanded.0.len(), 1);
@@ -1596,13 +1722,23 @@ direction = "outbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let with_certificate = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap();
 
             assert_eq!(with_certificate.0.len(), 0);
 
             let with_password = config
-                .expand(&tedge_config, AuthMethod::Password, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Password,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap();
 
             assert_eq!(with_password.0.len(), 1);
@@ -1624,13 +1760,23 @@ direction = "outbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let with_certificate = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap();
 
             assert_eq!(with_certificate.0.len(), 4);
 
             let with_password = config
-                .expand(&tedge_config, AuthMethod::Password, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Password,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap();
 
             assert_eq!(with_password.0.len(), 0);
@@ -1651,7 +1797,12 @@ direction = "outbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errors = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(
@@ -1678,7 +1829,12 @@ direction = "outbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errors = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(
@@ -1699,7 +1855,14 @@ direction = "outbound"
                 .unwrap();
             let deserialized: Spanned<String> =
                 <_>::deserialize(toml::de::ValueDeserializer::parse(&value).unwrap()).unwrap();
-            assert_eq!(parse_config_reference(&deserialized).unwrap(), original);
+            let roundtripped = match parse_for_reference(&deserialized).unwrap() {
+                ForReference::Config(key, key_span) => ConfigReference::<String>(
+                    Spanned::new(key_span.into_range(), key),
+                    std::marker::PhantomData,
+                ),
+                ForReference::Mapper(..) => panic!("expected config reference"),
+            };
+            assert_eq!(roundtripped, original);
         }
 
         #[test]
@@ -1717,7 +1880,12 @@ direction = "inbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1, "Expected 1 error, got: {errs:?}");
@@ -1753,15 +1921,20 @@ direction = "inbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1, "Expected 1 error, got: {errs:?}");
             let err = &errs[0];
 
             assert!(
-                err.message.contains("config reference must end with }"),
-                "Message should be an end of input error, got: {:?}",
+                err.message.contains("closing '}'"),
+                "Message should mention the unclosed brace, got: {:?}",
                 err.message
             );
 
@@ -1790,7 +1963,12 @@ direction = "inbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             let errs = config
-                .expand(&tedge_config, AuthMethod::Certificate, None, None)
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
                 .unwrap_err();
 
             assert_eq!(errs.len(), 1, "Expected 1 error, got: {errs:?}");
@@ -1837,12 +2015,7 @@ direction = "outbound"
             let mapper_table: toml::Table = toml::toml! { topic_prefix = "tb" };
 
             let expanded = config
-                .expand(
-                    &tedge_config,
-                    AuthMethod::Certificate,
-                    None,
-                    Some(&mapper_table),
-                )
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
                 .unwrap();
 
             assert_eq!(expanded.0.len(), 1);
@@ -1864,12 +2037,7 @@ direction = "outbound"
             let mapper_table: toml::Table = toml::toml! { cloud_topic = "v1/devices/me/telemetry" };
 
             let expanded = config
-                .expand(
-                    &tedge_config,
-                    AuthMethod::Certificate,
-                    None,
-                    Some(&mapper_table),
-                )
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
                 .unwrap();
 
             assert_eq!(expanded.0.len(), 1);
@@ -1892,12 +2060,7 @@ direction = "outbound"
             let mapper_table: toml::Table = toml::toml! { topic_prefix = "v1/devices/me" };
 
             let expanded = config
-                .expand(
-                    &tedge_config,
-                    AuthMethod::Certificate,
-                    None,
-                    Some(&mapper_table),
-                )
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
                 .unwrap();
 
             assert_eq!(expanded.0.len(), 2);
@@ -1906,10 +2069,7 @@ direction = "outbound"
         }
 
         #[test]
-        fn mapper_namespace_rejected_in_if_condition() {
-            // ${mapper.*} is not a valid condition expression — the condition parser
-            // only accepts ${config.*} boolean references and ${connection.auth_method} == '...'.
-            // Users who write this should get a parse error pointing to 'mapper'.
+        fn mapper_namespace_in_if_condition_errors_when_key_missing() {
             let toml = r#"
 local_prefix = ""
 remote_prefix = ""
@@ -1921,34 +2081,57 @@ direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
-            let mapper_table: toml::Table = toml::toml! { some_flag = true };
 
             let errs = config
                 .expand(
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    Some(&mapper_table),
+                    &toml::Table::new(),
                 )
                 .unwrap_err();
 
+            assert!(!errs.is_empty());
             assert!(
-                !errs.is_empty(),
-                "Expected an error for ${{mapper.*}} in if condition"
-            );
-            // The error span should point to 'mapper' so users can identify the issue
-            assert_eq!(
-                &toml[errs[0].span.clone()],
-                "mapper",
-                "Error span should point to 'mapper'"
+                errs[0].message.contains("not found"),
+                "Error should indicate the key was not found: {}",
+                errs[0].message
             );
         }
 
         #[test]
-        fn mapper_namespace_rejected_in_for_loop() {
-            // ${mapper.*} is not a valid for-loop source — the for field only accepts
-            // ${config.*} template set references or literal TOML arrays.
-            // Users who write this should get a parse error pointing to 'mapper'.
+        fn mapper_namespace_in_for_loop_errors_when_key_missing() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[template_rule]]
+for = "${mapper.topics}"
+topic = "${item}"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            let errs = config
+                .expand(
+                    &tedge_config,
+                    AuthMethod::Certificate,
+                    None,
+                    &toml::Table::new(),
+                )
+                .unwrap_err();
+
+            assert!(!errs.is_empty());
+            assert!(
+                errs[0].message.contains("not found"),
+                "Error should indicate the key was not found: {}",
+                errs[0].message
+            );
+        }
+
+        #[test]
+        fn mapper_array_can_drive_a_for_loop() {
             let toml = r#"
 local_prefix = ""
 remote_prefix = ""
@@ -1962,30 +2145,174 @@ direction = "outbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
             let mapper_table: toml::Table = toml::toml! { topics = ["a", "b"] };
 
+            let expanded = config
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
+                .unwrap();
+
+            assert_eq!(expanded.0.len(), 2);
+            assert_eq!(expanded.0[0].topic, "a");
+            assert_eq!(expanded.0[1].topic, "b");
+        }
+
+        #[test]
+        fn mapper_flag_can_be_used_in_if_condition() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[rule]]
+if = "${mapper.enabled}"
+topic = "test/topic"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            let mapper_true: toml::Table = toml::toml! { enabled = true };
+            let enabled = config
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_true)
+                .unwrap();
+            assert_eq!(enabled.0.len(), 1);
+
+            let mapper_false: toml::Table = toml::toml! { enabled = false };
+            let disabled = config
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_false)
+                .unwrap();
+            assert_eq!(disabled.0.len(), 0);
+        }
+
+        #[test]
+        fn negated_mapper_flag_can_be_used_in_if_condition() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[rule]]
+if = "!${mapper.enabled}"
+topic = "test/topic"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+
+            // When enabled = true, the negated condition should suppress the rule
+            let mapper_true: toml::Table = toml::toml! { enabled = true };
+            let suppressed = config
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_true)
+                .unwrap();
+            assert_eq!(suppressed.0.len(), 0);
+
+            // When enabled = false, the negated condition should include the rule
+            let mapper_false: toml::Table = toml::toml! { enabled = false };
+            let included = config
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_false)
+                .unwrap();
+            assert_eq!(included.0.len(), 1);
+        }
+
+        #[test]
+        fn mapper_nested_key_expands_in_template_string() {
+            // The docs show ${mapper.bridge.topic_prefix} accessing a nested table,
+            // e.g. mapper.toml: [bridge]\ntopic_prefix = "v1/devices/me"
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[rule]]
+topic = "${mapper.bridge.topic_prefix}/events"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let mapper_table: toml::Table =
+                toml::toml! { bridge = { topic_prefix = "v1/devices/me" } };
+
+            let expanded = config
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
+                .unwrap();
+
+            assert_eq!(expanded.0.len(), 1);
+            assert_eq!(expanded.0[0].topic, "v1/devices/me/events");
+        }
+
+        #[test]
+        fn mapper_for_loop_errors_when_key_is_missing() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[template_rule]]
+for = "${mapper.topics}"
+topic = "${item}"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let mapper_table: toml::Table = toml::toml! { unrelated = "value" };
+
             let errs = config
-                .expand(
-                    &tedge_config,
-                    AuthMethod::Certificate,
-                    None,
-                    Some(&mapper_table),
-                )
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
                 .unwrap_err();
 
+            assert!(!errs.is_empty());
             assert!(
-                !errs.is_empty(),
-                "Expected an error for ${{mapper.*}} in for loop"
-            );
-            // The error message should indicate the for field failed to expand
-            assert!(
-                errs[0].message.contains("Failed to expand 'for' reference"),
-                "Error message should mention the for field: {}",
+                errs[0].message.contains("'topics'") && errs[0].message.contains("not found"),
+                "Error should identify the missing key: {}",
                 errs[0].message
             );
-            // The error span should point to 'mapper' so users can identify the issue
-            assert_eq!(
-                &toml[errs[0].span.clone()],
-                "mapper",
-                "Error span should point to 'mapper'"
+        }
+
+        #[test]
+        fn mapper_for_loop_errors_when_value_is_not_an_array() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[template_rule]]
+for = "${mapper.topics}"
+topic = "${item}"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let mapper_table: toml::Table = toml::toml! { topics = "not-an-array" };
+
+            let errs = config
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
+                .unwrap_err();
+
+            assert!(!errs.is_empty());
+            assert!(
+                errs[0].message.contains("not an array"),
+                "Error should indicate the value is not an array: {}",
+                errs[0].message
+            );
+        }
+
+        #[test]
+        fn mapper_for_loop_errors_when_array_contains_non_string_element() {
+            let toml = r#"
+local_prefix = ""
+remote_prefix = ""
+
+[[template_rule]]
+for = "${mapper.topics}"
+topic = "${item}"
+direction = "outbound"
+"#;
+            let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let mapper_table: toml::Table = toml::toml! { topics = [1, 2, 3] };
+
+            let errs = config
+                .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
+                .unwrap_err();
+
+            assert!(!errs.is_empty());
+            assert!(
+                errs[0].message.contains("non-string"),
+                "Error should mention non-string element: {}",
+                errs[0].message
             );
         }
     }

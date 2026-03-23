@@ -1438,6 +1438,10 @@ impl TEdgeConfigReader {
         self.c8y.entries()
     }
 
+    pub fn c8y_reader(&self, profile: Option<&str>) -> anyhow::Result<&TEdgeConfigReaderC8y> {
+        Ok(self.c8y.try_get(profile)?)
+    }
+
     pub fn az_keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
         self.az.keys()
     }

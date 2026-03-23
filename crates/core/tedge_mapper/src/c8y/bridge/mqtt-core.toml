@@ -3,21 +3,21 @@
 # Cumulocity MQTT Quick Reference: https://cumulocity.com/docs/smartrest/quick-reference/
 # thin-edge.io Configurable built-in bridge reference: https://thin-edge.github.io/thin-edge.io/next/references/mappers/configurable-bridge/
 
-local_prefix = "${config.c8y.bridge.topic_prefix}/"
+local_prefix = "${mapper.bridge.topic_prefix}/"
 remote_prefix = ""
 
 [[template_rule]]
-for = "${config.c8y.smartrest1.templates}"
+for = "${mapper.smartrest1.templates}"
 topic = "s/dl/${item}"
 direction = "inbound"
 
 [[template_rule]]
-for = "${config.c8y.smartrest1.templates}"
+for = "${mapper.smartrest1.templates}"
 topic = "s/ol/${item}"
 direction = "inbound"
 
 [[template_rule]]
-for = "${config.c8y.smartrest.templates}"
+for = "${mapper.smartrest.templates}"
 topic = "s/dc/${item}"
 direction = "inbound"
 
@@ -100,14 +100,14 @@ topic = "alarm/alarms/createBulk/#"
 direction = "outbound"
 
 [[rule]]
-if = "${config.c8y.mqtt_service.enabled}"
-local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/out/"
+if = "${mapper.mqtt_service.enabled}"
+local_prefix = "${mapper.bridge.topic_prefix}/mqtt/out/"
 topic = "#"
 direction = "outbound"
 
 [[template_rule]]
-if = "${config.c8y.mqtt_service.enabled}"
-for = "${config.c8y.mqtt_service.topics}"
-local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/in/"
+if = "${mapper.mqtt_service.enabled}"
+for = "${mapper.mqtt_service.topics}"
+local_prefix = "${mapper.bridge.topic_prefix}/mqtt/in/"
 topic = "${item}"
 direction = "inbound"

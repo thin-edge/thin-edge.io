@@ -121,6 +121,78 @@ fn default_from_key_uses_its_own_value_if_both_are_set() {
 }
 
 #[test]
+fn reader_with_lazy_field_serializes_to_toml() {
+    #![allow(unused_variables)]
+    define_tedge_config! {
+        test: {
+            #[tedge_config(default(value = "hello"))]
+            name: String,
+
+            #[tedge_config(reader(function = "compute_derived"))]
+            #[doku(as = "String")]
+            derived: Result<String, ReadError>,
+        }
+    }
+
+    fn compute_derived(
+        _reader: &TEdgeConfigReaderTest,
+        _dto: &OptionalConfig<String>,
+    ) -> Result<String, ReadError> {
+        Ok("derived-value".to_owned())
+    }
+
+    let dto = TEdgeConfigDto::default();
+    let reader = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation);
+
+    // Serialization must succeed and must compute lazy reader fields
+    let toml_str = toml::to_string_pretty(&reader.test).expect("reader should serialize to TOML");
+    let table: toml::Table = toml::from_str(&toml_str).unwrap();
+
+    // Regular config value appears in the output
+    assert_eq!(table["name"].as_str(), Some("hello"));
+    // Lazy reader fields are computed and included in serialized output
+    assert_eq!(table["derived"].as_str(), Some("derived-value"));
+}
+
+#[test]
+fn reader_with_failing_lazy_field_omits_it_from_toml() {
+    #![allow(unused_variables)]
+    define_tedge_config! {
+        test: {
+            #[tedge_config(default(value = "hello"))]
+            name: String,
+
+            #[tedge_config(reader(function = "always_fails"))]
+            #[doku(as = "String")]
+            broken: Result<String, ReadError>,
+        }
+    }
+
+    fn always_fails(
+        _reader: &TEdgeConfigReaderTest,
+        _dto: &OptionalConfig<String>,
+    ) -> Result<String, ReadError> {
+        Err(ReadError::ConfigNotSet(ConfigNotSet {
+            key: std::borrow::Cow::Borrowed("test.broken"),
+        }))
+    }
+
+    let dto = TEdgeConfigDto::default();
+    let reader = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation);
+
+    let toml_str = toml::to_string_pretty(&reader.test)
+        .expect("reader should serialize to TOML even when a lazy field fails");
+    let table: toml::Table = toml::from_str(&toml_str).unwrap();
+
+    assert_eq!(table["name"].as_str(), Some("hello"));
+    // Failed lazy reader fields are omitted from TOML output (not an error)
+    assert!(
+        !table.contains_key("broken"),
+        "failed lazy reader fields must be omitted from TOML"
+    );
+}
+
+#[test]
 fn default_from_key_uses_its_own_value_if_only_it_is_set() {
     #![allow(unused_variables)]
     define_tedge_config! {

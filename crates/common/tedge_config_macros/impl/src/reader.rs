@@ -50,17 +50,20 @@ fn generate_structs(
     let mut attrs: Vec<Vec<syn::Attribute>> = Vec::new();
     let mut lazy_readers = Vec::new();
     let mut vis: Vec<syn::Visibility> = Vec::new();
+    // Entries for the custom Serialize impl: each item calls self.field() or &self.field
+    let mut serialize_entries = Vec::<TokenStream>::new();
 
     for item in items {
         match item {
             FieldOrGroup::Field(field) if !field.reader().skip => {
                 let ty = field.ty();
-                attrs.push(field.attrs().to_vec());
+                let key_str = field.name().to_string();
+                attrs.push(reader_field_attrs(field.attrs()));
                 idents.push(field.ident());
                 if let Some((function, rw_field)) = field.reader_function() {
-                    let name = rw_field.lazy_reader_name(&parents);
+                    let lr_name = rw_field.lazy_reader_name(&parents);
                     let parent_ty = rw_field.parent_name(&parents);
-                    tys.push(parse_quote_spanned!(ty.span()=> #name));
+                    tys.push(parse_quote_spanned!(ty.span()=> #lr_name));
                     let dto_ty: syn::Type = match extract_type_from_result(&rw_field.ty) {
                         Some((ok, _err)) => parse_quote!(OptionalConfig<#ok>),
                         None => {
@@ -69,7 +72,7 @@ fn generate_structs(
                         }
                     };
                     lazy_readers.push((
-                        name,
+                        lr_name.clone(),
                         &rw_field.ty,
                         function,
                         parent_ty,
@@ -77,19 +80,35 @@ fn generate_structs(
                         dto_ty.clone(),
                         visibility(field),
                     ));
+                    let method_ident = &rw_field.ident;
+                    if extract_type_from_result(&rw_field.ty).is_some() {
+                        serialize_entries.push(quote! {
+                            if let Ok(val) = self.#method_ident() {
+                                map.serialize_entry(#key_str, val)?;
+                            }
+                        });
+                    } else {
+                        serialize_entries.push(quote! {
+                            map.serialize_entry(#key_str, self.#method_ident())?;
+                        });
+                    }
                     vis.push(parse_quote!());
                 } else if field.is_optional() {
                     tys.push(parse_quote_spanned!(ty.span()=> OptionalConfig<#ty>));
+                    let field_ident = field.ident();
+                    serialize_entries.push(quote! {
+                        map.serialize_entry(#key_str, &self.#field_ident)?;
+                    });
                     vis.push(match field.reader().private {
                         true => parse_quote!(),
                         false => parse_quote!(pub),
                     });
                 } else if let Some(ro_field) = field.read_only() {
-                    let name = ro_field.lazy_reader_name(&parents);
+                    let lr_name = ro_field.lazy_reader_name(&parents);
                     let parent_ty = ro_field.parent_name(&parents);
-                    tys.push(parse_quote_spanned!(ro_field.ty.span()=> #name));
+                    tys.push(parse_quote_spanned!(ro_field.ty.span()=> #lr_name));
                     lazy_readers.push((
-                        name,
+                        lr_name.clone(),
                         &ro_field.ty,
                         &ro_field.readonly.function,
                         parent_ty,
@@ -97,9 +116,25 @@ fn generate_structs(
                         parse_quote!(()),
                         visibility(field),
                     ));
+                    let method_ident = &ro_field.ident;
+                    if extract_type_from_result(&ro_field.ty).is_some() {
+                        serialize_entries.push(quote! {
+                            if let Ok(val) = self.#method_ident() {
+                                map.serialize_entry(#key_str, val)?;
+                            }
+                        });
+                    } else {
+                        serialize_entries.push(quote! {
+                            map.serialize_entry(#key_str, self.#method_ident())?;
+                        });
+                    }
                     vis.push(parse_quote!());
                 } else {
                     tys.push(ty.to_owned());
+                    let field_ident = field.ident();
+                    serialize_entries.push(quote! {
+                        map.serialize_entry(#key_str, &self.#field_ident)?;
+                    });
                     vis.push(match field.reader().private {
                         true => parse_quote!(),
                         false => parse_quote!(pub),
@@ -109,7 +144,9 @@ fn generate_structs(
             }
             FieldOrGroup::Multi(group) if !group.reader.skip => {
                 let sub_reader_name = prefixed_type_name(name, group);
-                idents.push(&group.ident);
+                let group_ident = &group.ident;
+                let key_str = item.name().to_string();
+                idents.push(group_ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> MultiReader<#sub_reader_name>));
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone(), item.name().into()));
@@ -120,7 +157,10 @@ fn generate_structs(
                     parents,
                     "",
                 )?));
-                attrs.push(group.attrs.to_vec());
+                attrs.push(reader_field_attrs(&group.attrs));
+                serialize_entries.push(quote! {
+                    map.serialize_entry(#key_str, &self.#group_ident)?;
+                });
                 vis.push(match group.reader.private {
                     true => parse_quote!(),
                     false => parse_quote!(pub),
@@ -128,7 +168,9 @@ fn generate_structs(
             }
             FieldOrGroup::Group(group) if !group.reader.skip => {
                 let sub_reader_name = prefixed_type_name(name, group);
-                idents.push(&group.ident);
+                let group_ident = &group.ident;
+                let key_str = item.name().to_string();
+                idents.push(group_ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> #sub_reader_name));
                 let mut parents = parents.clone();
                 parents.push(PathItem::Static(group.ident.clone(), item.name().into()));
@@ -138,7 +180,10 @@ fn generate_structs(
                     parents,
                     "",
                 )?));
-                attrs.push(group.attrs.to_vec());
+                attrs.push(reader_field_attrs(&group.attrs));
+                serialize_entries.push(quote! {
+                    map.serialize_entry(#key_str, &self.#group_ident)?;
+                });
                 vis.push(match group.reader.private {
                     true => parse_quote!(),
                     false => parse_quote!(pub),
@@ -191,7 +236,7 @@ fn generate_structs(
     let doc_comment_attr =
         (!doc_comment.is_empty()).then(|| quote_spanned!(name.span()=> #[doc = #doc_comment]));
     Ok(quote_spanned! {name.span()=>
-        #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
+        #[derive(::doku::Document, Debug, Clone)]
         #[non_exhaustive]
         #doc_comment_attr
         pub struct #name {
@@ -201,13 +246,23 @@ fn generate_structs(
             )*
         }
 
+        impl ::serde::Serialize for #name {
+            fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                use ::serde::ser::SerializeMap;
+                let mut map = serializer.serialize_map(None)?;
+                #(#serialize_entries)*
+                map.end()
+            }
+        }
+
         #(
-            #[derive(::serde::Serialize, Clone, Debug)]
-            #[serde(into = "()")] // Just a hack to support serialization, required for doku
+            #[derive(Clone, Debug)]
             pub struct #lr_names(::once_cell::sync::OnceCell<#lr_tys>, #lr_dto_tys);
 
-            impl From<#lr_names> for () {
-                fn from(_: #lr_names) {}
+            impl ::serde::Serialize for #lr_names {
+                fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                    self.0.get().serialize(serializer)
+                }
             }
 
             #lazy_reader_impls
@@ -223,6 +278,52 @@ fn visibility(field: &ConfigurableField) -> syn::Visibility {
     } else {
         parse_quote!(pub)
     }
+}
+
+/// Transform field attributes for use in reader struct field declarations.
+///
+/// Reader structs no longer use `#[derive(serde::Serialize)]` — they have a custom `impl
+/// Serialize` that calls getter methods for lazy reader fields. Without the derive, serde helper
+/// attributes registered by that derive (`#[serde(rename)]`, `#[serde(alias)]`) become invalid
+/// and produce "cannot find attribute serde in this scope" errors (doku's Document derive only
+/// registers `doku` as a helper attribute namespace, not `serde`).
+///
+/// - `#[serde(rename = "...")]` is converted to `#[doku(rename = "...")]` so that doku still
+///   displays the correct key name in `tedge config list --doc`. The rename is also applied in
+///   the custom Serialize impl via `field.name()`, which returns the renamed name.
+/// - `#[serde(alias = "...")]` is dropped entirely. Alias handling for deprecated key names is
+///   generated statically by the query module (`group_deprecated_aliases`), which no longer
+///   relies on doku's `Field::aliases` populated by this attribute.
+/// - All other attributes are passed through unchanged.
+fn reader_field_attrs(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
+    attrs
+        .iter()
+        .flat_map(|attr| {
+            if !attr.path().is_ident("serde") {
+                return vec![attr.clone()];
+            }
+            let Ok(list) = attr.meta.require_list() else {
+                panic!("unexpected #[serde(...)] attribute shape in reader field: {:?}", attr.meta);
+            };
+            let Ok(nv) = list.parse_args::<syn::MetaNameValue>() else {
+                panic!("unexpected #[serde(...)] attribute content in reader field: expected name = value, got {:?}", list.tokens);
+            };
+            if nv.path.is_ident("rename") {
+                let value = &nv.value;
+                vec![parse_quote!(#[doku(rename = #value)])]
+            } else if nv.path.is_ident("alias") {
+                // Aliases are no longer needed on reader struct fields: they only affected
+                // deserialization (which reader structs don't support) and doku Field::aliases
+                // (which is replaced by statically-generated aliases in generate_writable_keys).
+                vec![]
+            } else {
+                panic!(
+                    "unexpected #[serde({})] attribute on reader field — add explicit handling in reader_field_attrs()",
+                    nv.path.get_ident().map_or_else(|| "?".to_owned(), |i| i.to_string())
+                );
+            }
+        })
+        .collect()
 }
 
 fn find_field<'a>(
@@ -807,21 +908,38 @@ mod tests {
         let file: syn::File = syn::parse2(actual).unwrap();
 
         let expected = parse_quote! {
-            #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
+            #[derive(::doku::Document, Debug, Clone)]
             #[non_exhaustive]
             pub struct TEdgeConfigReader {
                 pub device: TEdgeConfigReaderDevice,
             }
-            #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
+            impl ::serde::Serialize for TEdgeConfigReader {
+                fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                    use ::serde::ser::SerializeMap;
+                    let mut map = serializer.serialize_map(None)?;
+                    map.serialize_entry("device", &self.device)?;
+                    map.end()
+                }
+            }
+            #[derive(::doku::Document, Debug, Clone)]
             #[non_exhaustive]
             pub struct TEdgeConfigReaderDevice {
                 id: LazyReaderDeviceId,
             }
-            #[derive(::serde::Serialize, Clone, Debug)]
-            #[serde(into = "()")]
+            impl ::serde::Serialize for TEdgeConfigReaderDevice {
+                fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                    use ::serde::ser::SerializeMap;
+                    let mut map = serializer.serialize_map(None)?;
+                    map.serialize_entry("id", self.id())?;
+                    map.end()
+                }
+            }
+            #[derive(Clone, Debug)]
             pub struct LazyReaderDeviceId(::once_cell::sync::OnceCell<String>, ());
-            impl From<LazyReaderDeviceId> for () {
-                fn from(_: LazyReaderDeviceId) {}
+            impl ::serde::Serialize for LazyReaderDeviceId {
+                fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                    self.0.get().serialize(serializer)
+                }
             }
             impl TEdgeConfigReaderDevice {
                 pub fn id(&self) -> &String {
@@ -853,8 +971,9 @@ mod tests {
         .unwrap();
         let mut file: syn::File = syn::parse2(actual).unwrap();
         let target: syn::Type = parse_quote!(TEdgeConfigReaderDevice);
-        file.items
-            .retain(|i| matches!(i, Item::Impl(ItemImpl { self_ty, .. }) if **self_ty == target));
+        file.items.retain(
+            |i| matches!(i, Item::Impl(ItemImpl { self_ty, trait_, .. }) if **self_ty == target && trait_.is_none()),
+        );
 
         let expected = parse_quote! {
             impl TEdgeConfigReaderDevice {
@@ -893,7 +1012,7 @@ mod tests {
 
         // Should contain no fields as all have been skipped
         let expected = parse_quote! {
-            #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
+            #[derive(::doku::Document, Debug, Clone)]
             #[non_exhaustive]
             pub struct TEdgeConfigReaderC8y {}
         };
@@ -928,7 +1047,7 @@ mod tests {
         file.items.retain(|s| matches!(s, Item::Struct(ItemStruct { ident, ..}) if ident == "TEdgeConfigReaderTest"));
 
         let expected = parse_quote! {
-            #[derive(::doku::Document, ::serde::Serialize, Debug, Clone)]
+            #[derive(::doku::Document, Debug, Clone)]
             #[non_exhaustive]
             pub struct TEdgeConfigReaderTest {
                 read_via_function: LazyReaderTestReadViaFunction,

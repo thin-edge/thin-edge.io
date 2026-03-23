@@ -5053,6 +5053,7 @@ dependencies = [
  "collectd_ext",
  "flockfile",
  "mqtt_channel",
+ "rcgen",
  "serde",
  "strum",
  "tedge_actors",

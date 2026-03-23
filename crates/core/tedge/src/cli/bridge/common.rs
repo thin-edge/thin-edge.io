@@ -113,7 +113,7 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
         config,
         auth_method,
         profile,
-        None,
+        &toml::Table::new(),
         &mut visitor,
     )
     .await

@@ -48,6 +48,7 @@ tracing = { workspace = true }
 yansi = { workspace = true }
 
 [dev-dependencies]
+rcgen = { workspace = true }
 tedge_config = { workspace = true, features = ["test"] }
 tedge_test_utils = { workspace = true }
 tracing-subscriber = { workspace = true }

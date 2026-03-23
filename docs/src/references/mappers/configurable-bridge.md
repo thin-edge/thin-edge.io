@@ -21,6 +21,7 @@ When the built-in bridge is enabled, the bridge rules for Cumulocity, Azure and 
 ## Syntax
 
 A basic bridge rule looks something like:
+
 ```toml
 [[rule]]
 local_prefix = "c8y/"
@@ -74,7 +75,6 @@ topic = "shadow/#"
 direction = "bidirectional"
 ```
 
-
 ### Configuration variable interpolation
 
 You can interpolate variables inside `local_prefix`, `remote_prefix` and `topic` from three namespaces:
@@ -118,6 +118,8 @@ url = "mqtt.thingsboard.io:8883"
 [bridge]
 topic_prefix = "v1/devices/me"  # custom field, accessible as ${mapper.bridge.topic_prefix}
 ```
+
+The values defined by `mapper.toml` can then be used to adapt the bridge rules:
 
 ```toml
 # /etc/tedge/mappers/thingsboard/bridge/rules.toml
@@ -288,10 +290,12 @@ The Cumulocity built-in behavior is configured in the file `/etc/tedge/mappers/c
 
 :::note
 To enable this feature, you need to enable the built-in bridge:
+
 ```
-$ sudo tedge config set mqtt.bridge.built-in true
-$ sudo tedge reconnect c8y
+sudo tedge config set mqtt.bridge.built-in true
+sudo tedge reconnect c8y
 ```
+
 :::
 
 These files can also be manually edited to add or remove rules

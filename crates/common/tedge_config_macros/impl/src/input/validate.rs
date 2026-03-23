@@ -53,6 +53,10 @@ pub struct ConfigurationGroup {
     pub reader: ReaderSettings,
     pub ident: syn::Ident,
     pub contents: Vec<FieldOrGroup>,
+    /// Deprecated names for this group (from `#[tedge_config(deprecated_name = "...")]`).
+    /// These are also pushed into `attrs` as `#[serde(alias)]` for DTO deserialization,
+    /// but preserved here so that alias maps can be generated without relying on serde attrs.
+    pub deprecated_names: Vec<String>,
 }
 
 impl ConfigurationGroup {
@@ -63,6 +67,10 @@ impl ConfigurationGroup {
 
     pub fn rename(&self) -> Option<&str> {
         Some(self.rename.as_ref()?.as_str())
+    }
+
+    pub fn deprecated_names(&self) -> &[String] {
+        &self.deprecated_names
     }
 }
 
@@ -85,9 +93,11 @@ impl TryFrom<super::parse::ConfigurationGroup> for ConfigurationGroup {
             "supply an alias for a group",
         )?;
 
+        let mut deprecated_names = Vec::new();
         for name in value.deprecated_names {
             // TODO similar errors to fields?
             let name_str = name.as_str();
+            deprecated_names.push(name_str.to_owned());
             value
                 .attrs
                 .push(parse_quote_spanned! {name.span() => #[serde(alias = #name_str)]})
@@ -100,6 +110,7 @@ impl TryFrom<super::parse::ConfigurationGroup> for ConfigurationGroup {
             reader: value.reader,
             ident: value.ident,
             contents: combine_errors(value.content.into_iter().map(<_>::try_from))?,
+            deprecated_names,
         })
     }
 }
@@ -221,6 +232,7 @@ pub enum ConfigurableField {
 pub struct ReadOnlyField {
     pub attrs: Vec<syn::Attribute>,
     pub deprecated_keys: Vec<SpannedValue<String>>,
+    pub deprecated_names: Vec<String>,
     pub readonly: ReadonlySettings,
     pub rename: Option<SpannedValue<String>>,
     pub dto: FieldDtoSettings,
@@ -302,6 +314,7 @@ impl ReadWriteField {
 pub struct ReadWriteField {
     pub attrs: Vec<syn::Attribute>,
     pub deprecated_keys: Vec<SpannedValue<String>>,
+    pub deprecated_names: Vec<String>,
     pub rename: Option<SpannedValue<String>>,
     pub dto: FieldDtoSettings,
     pub reader: ReaderSettings,
@@ -415,6 +428,13 @@ impl ConfigurableField {
         keys.iter().map(|key| key.as_str())
     }
 
+    pub fn deprecated_names(&self) -> &[String] {
+        match self {
+            Self::ReadOnly(field) => &field.deprecated_names,
+            Self::ReadWrite(field) => &field.deprecated_names,
+        }
+    }
+
     pub fn from(&self) -> Option<&syn::Type> {
         match self {
             Self::ReadOnly(field) => &field.from,
@@ -471,6 +491,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             );
         }
 
+        let mut deprecated_names = Vec::new();
         for name in value.deprecated_names {
             let name_str = name.as_str();
             if name.contains('.') {
@@ -479,6 +500,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                     format!("this a path rather than a field or group name. Did you mean to use #[tedge_config(deprecated_key = \"{name_str}\")] instead?")
                 ));
             }
+            deprecated_names.push(name_str.to_owned());
             value
                 .attrs
                 .push(parse_quote_spanned! {name.span()=> #[serde(alias = #name_str)]})
@@ -522,6 +544,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             Ok(Self::ReadOnly(ReadOnlyField {
                 attrs: value.attrs,
                 deprecated_keys: value.deprecated_keys,
+                deprecated_names,
                 rename: value.rename,
                 ident: value.ident.unwrap(),
                 readonly,
@@ -534,6 +557,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             Ok(Self::ReadWrite(ReadWriteField {
                 attrs: value.attrs,
                 deprecated_keys: value.deprecated_keys,
+                deprecated_names,
                 rename: value.rename,
                 examples: value.examples,
                 ident: value.ident.unwrap(),
