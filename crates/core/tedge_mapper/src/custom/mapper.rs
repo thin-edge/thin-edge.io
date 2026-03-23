@@ -33,6 +33,7 @@ use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::use_credentials;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_bridge::MqttOptions;
+use tedge_utils::file::create_directory_with_defaults;
 use tedge_watch_ext::WatchActorBuilder;
 
 /// A user-defined mapper instance, identified by its name.
@@ -66,16 +67,16 @@ impl CustomMapper {
 /// [`validate_and_load`], then used directly to drive [`start`].
 #[derive(Debug)]
 pub enum MapperStartup {
-    /// The mapper directory has a `flows/` subdirectory but no `bridge/`.
+    /// The mapper directory has no `bridge/` subdirectory.
     /// Only the flows engine will be started; no cloud MQTT connection.
+    /// The `flows/` directory is created automatically on startup if it
+    /// does not exist.
     FlowsOnly,
     /// The mapper directory has a `bridge/` subdirectory (with a valid
-    /// `mapper.toml`). The MQTT bridge will be started. `has_flows` indicates
-    /// whether a `flows/` subdirectory is also present.
-    WithBridge {
-        config: Box<CustomMapperConfig>,
-        has_flows: bool,
-    },
+    /// `mapper.toml`). The MQTT bridge will be started. The flows engine
+    /// is also always started; the `flows/` directory is created
+    /// automatically on startup if it does not exist.
+    WithBridge { config: Box<CustomMapperConfig> },
 }
 
 /// Validates the mapper directory and loads its configuration in one step.
@@ -83,9 +84,11 @@ pub enum MapperStartup {
 /// This is the single point of startup validation for a user-defined mapper.
 /// The validation sequence is:
 /// 1. The mapper directory must exist.
-/// 2. At least one of `bridge/` or `flows/` must be present — an empty
-///    directory would start with nothing to do.
-/// 3. If `bridge/` is present, `mapper.toml` must exist and be valid.
+/// 2. If `bridge/` is present, `mapper.toml` must exist and be valid.
+///
+/// If `bridge/` is absent, [`MapperStartup::FlowsOnly`] is returned — the
+/// flows engine will always be started. The `flows/` directory is created
+/// automatically by [`build_flows_actors`] if it does not exist.
 ///
 /// Returns a typed [`MapperStartup`] that describes what should be started,
 /// eliminating the need for callers to re-inspect the directory state.
@@ -117,23 +120,12 @@ pub async fn validate_and_load(
     }
 
     let has_bridge_dir = mapper_dir.join("bridge").is_dir();
-    let has_flows_dir = mapper_dir.join("flows").is_dir();
-
-    // 2. At least one active component required.
-    if !has_bridge_dir && !has_flows_dir {
-        anyhow::bail!(
-            "Custom mapper directory '{}' contains neither a 'bridge/' nor a 'flows/' \
-             directory — the mapper would do nothing. Add bridge rules, flow scripts, \
-             or both.",
-            mapper_dir
-        );
-    }
 
     if !has_bridge_dir {
         return Ok(MapperStartup::FlowsOnly);
     }
 
-    // 3. bridge/ present — mapper.toml is required for connection settings.
+    // 2. bridge/ present — mapper.toml is required for connection settings.
     let config = load_mapper_config(mapper_dir).await?.ok_or_else(|| {
         anyhow::anyhow!(
             "Mapper directory '{mapper_dir}' contains a 'bridge/' subdirectory but no \
@@ -144,12 +136,14 @@ pub async fn validate_and_load(
 
     Ok(MapperStartup::WithBridge {
         config: Box::new(config),
-        has_flows: has_flows_dir,
     })
 }
 
 /// Lists available mappers by scanning the mappers root directory for subdirectories
-/// that contain a `mapper.toml` file.
+/// that look like a mapper — i.e. contain a `mapper.toml`, a `bridge/` subdirectory,
+/// or a `flows/` subdirectory. Flows-only mappers may have none of these yet (the
+/// `flows/` directory is created automatically at runtime), so a plain subdirectory
+/// is also considered a candidate.
 async fn list_available_mappers(mappers_root: &Utf8Path) -> Vec<String> {
     let Ok(mut entries) = tokio::fs::read_dir(mappers_root).await else {
         return Vec::new();
@@ -164,13 +158,8 @@ async fn list_available_mappers(mappers_root: &Utf8Path) -> Vec<String> {
             continue;
         }
         let path = Utf8PathBuf::from(entry.path().to_string_lossy().into_owned());
-        if tokio::fs::try_exists(path.join("mapper.toml"))
-            .await
-            .unwrap_or(false)
-        {
-            if let Some(name) = path.file_name() {
-                names.push(name.to_string());
-            }
+        if let Some(name) = path.file_name() {
+            names.push(name.to_string());
         }
     }
     names.sort();
@@ -312,7 +301,10 @@ async fn build_flows_actors(
     );
 
     let flows_dir = mapper_dir.join("flows");
-    let flows = ConnectedFlowRegistry::new(flows_dir);
+    create_directory_with_defaults(&flows_dir)
+        .await
+        .with_context(|| format!("Failed to create flows directory '{flows_dir}'"))?;
+    let flows = ConnectedFlowRegistry::new(&flows_dir);
     let fs_actor = FsWatchActorBuilder::new();
     let cmd_watcher_actor = WatchActorBuilder::new();
     let flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;
@@ -367,25 +359,15 @@ impl TEdgeComponent for CustomMapper {
             runtime.spawn(bridge_actor).await?;
         }
 
-        let has_flows = matches!(
-            startup,
-            MapperStartup::FlowsOnly
-                | MapperStartup::WithBridge {
-                    has_flows: true,
-                    ..
-                }
-        );
-        if has_flows {
-            let (mut flows_mapper, mut fs_actor, mut cmd_watcher_actor) =
-                build_flows_actors(&mapper_dir, &service_name, &tedge_config).await?;
-            flows_mapper.connect(&mut mqtt_actor);
-            flows_mapper.connect_fs(&mut fs_actor);
-            flows_mapper.connect_cmd(&mut cmd_watcher_actor);
+        let (mut flows_mapper, mut fs_actor, mut cmd_watcher_actor) =
+            build_flows_actors(&mapper_dir, &service_name, &tedge_config).await?;
+        flows_mapper.connect(&mut mqtt_actor);
+        flows_mapper.connect_fs(&mut fs_actor);
+        flows_mapper.connect_cmd(&mut cmd_watcher_actor);
 
-            runtime.spawn(flows_mapper).await?;
-            runtime.spawn(fs_actor).await?;
-            runtime.spawn(cmd_watcher_actor).await?;
-        }
+        runtime.spawn(flows_mapper).await?;
+        runtime.spawn(fs_actor).await?;
+        runtime.spawn(cmd_watcher_actor).await?;
 
         runtime.spawn(mqtt_actor).await?;
         runtime.run_to_completion().await?;
@@ -470,6 +452,27 @@ mod tests {
             );
         }
 
+        /// Flows-only mapper with no mapper.toml still appears in available list.
+        #[tokio::test]
+        async fn error_lists_flows_only_mappers_without_mapper_toml() {
+            let ttd = TempTedgeDir::new();
+            let config_dir = ttd.utf8_path();
+            // A flows-only mapper: just a directory, no mapper.toml
+            tokio::fs::create_dir_all(config_dir.join("mappers/myflows"))
+                .await
+                .unwrap();
+
+            let mapper_dir = config_dir.join("mappers/nonexistent");
+            let err = validate_and_load(&mapper_dir, config_dir)
+                .await
+                .unwrap_err();
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("myflows"),
+                "Error should list flows-only mapper with no mapper.toml: {msg}"
+            );
+        }
+
         /// No mappers exist → error still mentions missing directory (not a panic).
         #[tokio::test]
         async fn error_when_no_mappers_exist() {
@@ -490,9 +493,9 @@ mod tests {
             );
         }
 
-        /// Directory exists but has neither bridge/ nor flows/ → error about no active components.
+        /// No bridge/ dir → FlowsOnly regardless of whether flows/ exists.
         #[tokio::test]
-        async fn errors_when_no_active_components() {
+        async fn starts_in_flows_only_mode_even_if_flows_directory_does_not_exist() {
             let ttd = TempTedgeDir::new();
             let config_dir = ttd.utf8_path();
             let mapper_dir = config_dir.join("mappers/testmapper");
@@ -501,13 +504,10 @@ mod tests {
                 .await
                 .unwrap();
 
-            let err = validate_and_load(&mapper_dir, config_dir)
-                .await
-                .unwrap_err();
-            let msg = format!("{err}");
+            let startup = validate_and_load(&mapper_dir, config_dir).await.unwrap();
             assert!(
-                msg.contains("bridge") && msg.contains("flows"),
-                "Error should mention both bridge/ and flows/: {msg}"
+                matches!(startup, MapperStartup::FlowsOnly),
+                "Expected FlowsOnly"
             );
         }
 
@@ -548,7 +548,7 @@ mod tests {
             );
         }
 
-        /// bridge/ + mapper.toml, no flows/ → WithBridge { has_flows: false }.
+        /// bridge/ + mapper.toml, no flows/ → WithBridge.
         #[tokio::test]
         async fn with_bridge_only_when_no_flows_dir() {
             let ttd = TempTedgeDir::new();
@@ -566,18 +566,12 @@ mod tests {
 
             let startup = validate_and_load(&mapper_dir, config_dir).await.unwrap();
             assert!(
-                matches!(
-                    startup,
-                    MapperStartup::WithBridge {
-                        has_flows: false,
-                        ..
-                    }
-                ),
-                "Expected WithBridge {{ has_flows: false }}"
+                matches!(startup, MapperStartup::WithBridge { .. }),
+                "Expected WithBridge {{ }}"
             );
         }
 
-        /// bridge/ + mapper.toml + flows/ → WithBridge { has_flows: true }.
+        /// bridge/ + mapper.toml + flows/ → WithBridge.
         #[tokio::test]
         async fn with_bridge_and_flows_when_both_present() {
             let ttd = TempTedgeDir::new();
@@ -598,14 +592,8 @@ mod tests {
 
             let startup = validate_and_load(&mapper_dir, config_dir).await.unwrap();
             assert!(
-                matches!(
-                    startup,
-                    MapperStartup::WithBridge {
-                        has_flows: true,
-                        ..
-                    }
-                ),
-                "Expected WithBridge {{ has_flows: true }}"
+                matches!(startup, MapperStartup::WithBridge { .. }),
+                "Expected WithBridge {{ }}"
             );
         }
 
@@ -629,6 +617,30 @@ mod tests {
             assert!(
                 msg.contains("mapper.toml"),
                 "Error should mention mapper.toml: {msg}"
+            );
+        }
+    }
+
+    mod build_flows_actors {
+        use super::*;
+        use tedge_config::TEdgeConfig;
+        use tedge_test_utils::fs::TempTedgeDir;
+
+        /// flows/ directory is created automatically when it does not exist.
+        #[tokio::test]
+        async fn creates_flows_directory_if_absent() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            let tedge_config = TEdgeConfig::load_toml_str("");
+
+            build_flows_actors(&mapper_dir, "tedge-mapper-testmapper", &tedge_config)
+                .await
+                .unwrap();
+
+            assert!(
+                mapper_dir.join("flows").is_dir(),
+                "flows/ directory should have been created"
             );
         }
     }
