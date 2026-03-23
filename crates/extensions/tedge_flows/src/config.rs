@@ -106,9 +106,6 @@ pub enum OutputConfig {
 
     #[serde(rename = "file")]
     File { path: Utf8PathBuf },
-
-    #[serde(rename = "context")]
-    Context,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -404,7 +401,6 @@ impl TryFrom<OutputConfig> for FlowOutput {
                 topic: topic.map(into_topic).transpose()?,
             },
             OutputConfig::File { path } => FlowOutput::File { path },
-            OutputConfig::Context => FlowOutput::Context,
         })
     }
 }
@@ -618,7 +614,6 @@ mod tests {
     }
 
     #[test_case(FlowOutput::Mqtt { topic: Some(Topic::new("te/another/test").unwrap()) }; "mqtt output different topic")]
-    #[test_case(FlowOutput::Context; "context output")]
     #[test_case(FlowOutput::Mqtt { topic: None }; "mqtt output without fixed topic")]
     fn no_loop_detected_for_different_output_types(output: FlowOutput) {
         let input = FlowInput::Mqtt {

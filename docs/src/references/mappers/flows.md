@@ -321,15 +321,6 @@ accept_topics = "c8y/#"
 path = "/var/run/tedge/flows.log"
 ```
 
-The output of flow can also be directed to the global context aka `context.mapper`.
-The main usage is for a flow to store and share metadata received as retained MQTT messages,
-so this metadata can be used by other transformation flows;
-the canonical example being a context flow populating the context with measurement units to be used by a measurement publisher flow.
-
-```toml
-[output.context]
-```
-
 ## %%te%% flow mapper
 
 The extensible mapper is launched as a regular mapper:
