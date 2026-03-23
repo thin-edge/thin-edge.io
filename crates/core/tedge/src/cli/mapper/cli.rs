@@ -4,7 +4,9 @@ use crate::log::MaybeFancy;
 use crate::ConfigError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use pad::PadStr;
 use tedge_config::TEdgeConfig;
+use yansi::Paint;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum MapperCli {
@@ -79,11 +81,17 @@ impl Command for ListMappersCommand {
             eprintln!("No mappers found under '{}'", self.mappers_root);
             return Ok(());
         }
-        for (name, cloud_type) in mappers {
-            if let Some(cloud) = &cloud_type {
-                println!("{name}\tcloud_type={cloud}");
+        let max_width = mappers.iter().map(|(name, _)| name.len()).max().unwrap_or(0);
+        for (name, cloud_type) in &mappers {
+            let padded = name.pad_to_width_with_alignment(max_width, pad::Alignment::Right);
+            if let Some(cloud) = cloud_type {
+                println!(
+                    "{}  {}",
+                    padded.yellow(),
+                    format!("cloud_type={cloud}").dim()
+                );
             } else {
-                println!("{name}");
+                println!("{}", padded.yellow());
             }
         }
         Ok(())
