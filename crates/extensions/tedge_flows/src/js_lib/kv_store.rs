@@ -21,6 +21,13 @@ pub struct FlowContextHandle {
 struct LayeredKVStore {
     global: BTreeMap<String, JsonValue>,
     scoped: HashMap<FlowContext, BTreeMap<String, JsonValue>>,
+    updates: Vec<FlowContextUpdate>,
+}
+
+#[derive(Debug)]
+pub enum FlowContextUpdate {
+    Inserted { key: String },
+    Removed { key: String },
 }
 
 pub trait KVStore: Send + Sync {
@@ -68,7 +75,7 @@ impl FlowContextHandle {
 
     pub(crate) fn insert(&self, context: &FlowContext, key: &str, value: impl Into<JsonValue>) {
         let mut data = self.handle.lock().unwrap();
-        data.insert(context, key, value);
+        data.update(context, key, value);
     }
 
     pub(crate) fn keys(&self, context: &FlowContext) -> Vec<String> {
@@ -80,11 +87,16 @@ impl FlowContextHandle {
         data.remove(context, key);
     }
 
-    fn store_as_userdata(&self, ctx: &Ctx<'_>) {
+    pub(crate) fn drain_updates(&mut self) -> Vec<FlowContextUpdate> {
+        let mut data = self.handle.lock().unwrap();
+        data.updates.drain(..).collect()
+    }
+
+    pub(crate) fn store_as_userdata(&self, ctx: &Ctx<'_>) {
         let _ = ctx.store_userdata(self.clone());
     }
 
-    fn get_from_userdata(ctx: &Ctx<'_>) -> Self {
+    pub(crate) fn get_from_userdata(ctx: &Ctx<'_>) -> Self {
         match ctx.userdata::<Self>() {
             None => panic!("tedge-flows context has not been initialized!"),
             Some(userdata) => userdata.deref().clone(),
@@ -124,10 +136,10 @@ impl LayeredKVStore {
         }
     }
 
-    fn insert(&mut self, context: &FlowContext, key: &str, value: impl Into<JsonValue>) {
+    fn update(&mut self, context: &FlowContext, key: &str, value: impl Into<JsonValue>) {
         match value.into() {
             JsonValue::Null => self.remove(context, key),
-            value => self.entry(context).set_value(key, value),
+            value => self.insert(context, key, value),
         }
     }
 
@@ -138,9 +150,23 @@ impl LayeredKVStore {
         }
     }
 
+    fn insert(&mut self, context: &FlowContext, key: &str, value: JsonValue) {
+        self.entry(context).set_value(key, value);
+        if context.is_global() {
+            self.updates.push(FlowContextUpdate::Inserted {
+                key: key.to_string(),
+            });
+        }
+    }
+
     pub fn remove(&mut self, context: &FlowContext, key: &str) {
         if let Some(map) = self.context_mut(context) {
             map.set_value(key, JsonValue::Null);
+            if context.is_global() {
+                self.updates.push(FlowContextUpdate::Removed {
+                    key: key.to_string(),
+                });
+            }
         }
     }
 }

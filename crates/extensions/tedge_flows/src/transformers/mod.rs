@@ -1,6 +1,7 @@
 use crate::config::ConfigError;
 use crate::js_value::JsonValue;
 use crate::FlowContextHandle;
+use crate::FlowContextUpdate;
 use crate::FlowError;
 use crate::LoadError;
 use crate::Message;
@@ -45,6 +46,19 @@ pub trait Transformer: Send + Sync + 'static {
     fn on_startup(
         &mut self,
         _timestamp: SystemTime,
+        _context: &FlowContextHandle,
+    ) -> Result<Vec<Message>, FlowError> {
+        Ok(vec![])
+    }
+
+    fn has_context_update(&self) -> bool {
+        false
+    }
+
+    fn on_context_update(
+        &self,
+        _timestamp: SystemTime,
+        _update: &FlowContextUpdate,
         _context: &FlowContextHandle,
     ) -> Result<Vec<Message>, FlowError> {
         Ok(vec![])
@@ -199,6 +213,73 @@ config = { topics = ["units/#"] }
         assert_eq!(
             step.on_message(&runtime, datetime, &input).await.unwrap(),
             vec![input]
+        );
+    }
+
+    #[tokio::test]
+    async fn reacting_on_context_update() {
+        let step = r#"
+builtin = "on-context-update"
+"#;
+
+        #[derive(Clone)]
+        struct OnContextUpdate;
+
+        impl Transformer for OnContextUpdate {
+            fn name(&self) -> &str {
+                "on-context-update"
+            }
+
+            fn set_config(&mut self, _: JsonValue) -> Result<(), ConfigError> {
+                Ok(())
+            }
+
+            fn on_message(
+                &mut self,
+                _: SystemTime,
+                message: &Message,
+                _: &FlowContextHandle,
+            ) -> Result<Vec<Message>, FlowError> {
+                Ok(vec![message.clone()])
+            }
+
+            fn has_context_update(&self) -> bool {
+                true
+            }
+
+            fn on_context_update(
+                &self,
+                _timestamp: SystemTime,
+                update: &FlowContextUpdate,
+                _context: &FlowContextHandle,
+            ) -> Result<Vec<Message>, FlowError> {
+                Ok(vec![Message::new("context-update", format!("{update:?}"))])
+            }
+        }
+
+        let mut transformers = BuiltinTransformers::new();
+        transformers.register(OnContextUpdate);
+
+        let (runtime, mut step) = step_instance(&transformers, step).await;
+
+        runtime.context_handle().set_value(
+            "foo-key",
+            json!({
+                "foo": 42
+            })
+            .into(),
+        );
+
+        let datetime = SystemTime::UNIX_EPOCH + Duration::from_secs(1763050414);
+        let updates = runtime.context_handle().drain_updates();
+        assert_eq!(
+            step.on_context_update(&runtime, datetime, updates.get(0).unwrap())
+                .await
+                .unwrap(),
+            vec![Message::new(
+                "context-update",
+                r#"Inserted { key: "foo-key" }"#
+            ),]
         );
     }
 

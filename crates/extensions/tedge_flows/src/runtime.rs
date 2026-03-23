@@ -174,6 +174,20 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
         out_messages
     }
 
+    pub async fn on_context_update(&mut self, timestamp: SystemTime) -> Vec<FlowResult> {
+        let mut out_messages = vec![];
+        for update in self.context_handle().drain_updates() {
+            for flow in self.registry.flows_mut() {
+                let flow_output = flow
+                    .as_mut()
+                    .on_context_update(&self.js_runtime, &mut self.stats, timestamp, &update)
+                    .await;
+                out_messages.push(flow_output);
+            }
+        }
+        out_messages
+    }
+
     pub async fn dump_processing_stats<P: StatsPublisher>(
         &self,
         publisher: &P,

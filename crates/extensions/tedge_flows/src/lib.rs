@@ -29,6 +29,7 @@ use crate::stats::StatsFilter;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 pub use js_lib::kv_store::FlowContextHandle;
+pub use js_lib::kv_store::FlowContextUpdate;
 pub use js_runtime::JsRuntimeConfig;
 pub use js_value::JsonValue;
 use std::convert::Infallible;

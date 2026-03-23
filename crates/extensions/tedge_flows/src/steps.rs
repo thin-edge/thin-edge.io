@@ -3,6 +3,7 @@ use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::js_value::JsonValue;
 use crate::transformers::Transformer;
+use crate::FlowContextUpdate;
 use crate::FlowError;
 use crate::LoadError;
 use crate::Message;
@@ -236,6 +237,21 @@ impl FlowStep {
         self.started_at = Some(Instant::now());
 
         output
+    }
+
+    /// React to a context update
+    pub async fn on_context_update(
+        &mut self,
+        js: &JsRuntime,
+        timestamp: SystemTime,
+        update: &FlowContextUpdate,
+    ) -> Result<Vec<Message>, FlowError> {
+        match &mut self.handler {
+            StepHandler::JsScript(_, _) => Ok(vec![]),
+            StepHandler::Transformer(_, builtin) => {
+                builtin.on_context_update(timestamp, update, &js.context_handle())
+            }
+        }
     }
 }
 

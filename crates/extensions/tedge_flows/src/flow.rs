@@ -2,6 +2,7 @@ use crate::input_source::PollingSourceError;
 use crate::js_runtime::JsRuntime;
 use crate::stats::Counter;
 use crate::steps::FlowStep;
+use crate::FlowContextUpdate;
 use crate::LoadError;
 use camino::Utf8PathBuf;
 use serde_json::json;
@@ -373,6 +374,53 @@ impl Flow {
             messages = current_startup_messages;
         }
 
+        Ok(messages)
+    }
+
+    pub async fn on_context_update(
+        &mut self,
+        js_runtime: &JsRuntime,
+        stats: &mut Counter,
+        timestamp: SystemTime,
+        update: &FlowContextUpdate,
+    ) -> FlowResult {
+        let result = self
+            .on_context_update_steps(js_runtime, stats, timestamp, update)
+            .await;
+        self.publish(result)
+    }
+
+    async fn on_context_update_steps(
+        &mut self,
+        js_runtime: &JsRuntime,
+        stats: &mut Counter,
+        timestamp: SystemTime,
+        update: &FlowContextUpdate,
+    ) -> Result<Vec<Message>, FlowError> {
+        let mut messages = vec![];
+        for step in self.steps.iter_mut() {
+            // React on the context update
+            let mut transformed_messages = step
+                .on_context_update(js_runtime, timestamp, update)
+                .await?;
+
+            // Process then the messages triggered upstream by the context update
+            let js = step.source().to_string();
+            for message in messages.iter() {
+                let step_started_at = stats.flow_step_start(&js, "onMessage");
+                let step_output = step.on_message(js_runtime, timestamp, message).await;
+                match &step_output {
+                    Ok(messages) => {
+                        stats.flow_step_done(&js, "onMessage", step_started_at, messages.len())
+                    }
+                    Err(_) => stats.flow_step_failed(&js, "onMessage"),
+                }
+                transformed_messages.extend(step_output?);
+            }
+
+            // Iterate with all the messages collected at this step
+            messages = transformed_messages;
+        }
         Ok(messages)
     }
 
