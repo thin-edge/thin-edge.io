@@ -1041,7 +1041,9 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             let cert_path = dir.join("cert-no-cn.pem");
             let key_path = dir.join("key-no-cn.pem");
             tokio::fs::write(&cert_path, cert.pem()).await.unwrap();
-            tokio::fs::write(&key_path, key.serialize_pem()).await.unwrap();
+            tokio::fs::write(&key_path, key.serialize_pem())
+                .await
+                .unwrap();
             (cert_path, key_path)
         }
 

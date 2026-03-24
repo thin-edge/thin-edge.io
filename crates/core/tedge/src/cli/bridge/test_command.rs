@@ -8,102 +8,42 @@ use tedge_mqtt_bridge::config_toml::ExpandedBridgeRule;
 use tedge_mqtt_bridge::BridgeRule;
 use yansi::Paint as _;
 
-use super::common::cloud_name;
 use super::common::load_bridge_rules;
+use super::common::load_bridge_rules_for_custom_mapper;
 use super::common::print_non_configurable_or_disabled;
 use super::common::print_non_expansions;
+use super::common::resolve_cloud;
 use super::common::DetailLevel;
 use crate::cli::common::Cloud;
-use crate::cli::common::CloudArg;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 
 /// Tests where a specific MQTT topic would be forwarded by the bridge
 #[derive(clap::Args, Debug, Eq, PartialEq)]
 pub struct BridgeTestCmd {
-    #[clap(subcommand)]
-    cloud: CloudTopicArg,
+    /// The cloud or custom mapper to test (e.g. c8y, aws, az, or a custom mapper name)
+    cloud: String,
+
+    /// The MQTT topic to test (local or remote, wildcards are not supported)
+    topic: String,
+
+    /// The cloud profile you wish to use
+    ///
+    /// [env: TEDGE_CLOUD_PROFILE]
+    #[clap(long)]
+    profile: Option<ProfileName>,
 
     /// Show skipped rules (e.g. due to unmet conditions or empty template loops)
-    #[clap(long, global = true)]
+    #[clap(long)]
     debug: bool,
-}
-
-#[derive(clap::Subcommand, Debug, Clone, Eq, PartialEq)]
-enum CloudTopicArg {
-    #[cfg(feature = "c8y")]
-    C8y {
-        /// The cloud profile you wish to use
-        ///
-        /// [env: TEDGE_CLOUD_PROFILE]
-        #[clap(long)]
-        profile: Option<ProfileName>,
-
-        /// The MQTT topic to test (local or remote, wildcards are not supported)
-        topic: String,
-    },
-    #[cfg(feature = "aws")]
-    Aws {
-        /// The cloud profile you wish to use
-        ///
-        /// [env: TEDGE_CLOUD_PROFILE]
-        #[clap(long)]
-        profile: Option<ProfileName>,
-
-        /// The MQTT topic to test (local or remote, wildcards are not supported)
-        topic: String,
-    },
-    #[cfg(feature = "azure")]
-    Az {
-        /// The cloud profile you wish to use
-        ///
-        /// [env: TEDGE_CLOUD_PROFILE]
-        #[clap(long)]
-        profile: Option<ProfileName>,
-
-        /// The MQTT topic to test (local or remote, wildcards are not supported)
-        topic: String,
-    },
-}
-
-impl CloudTopicArg {
-    fn cloud_arg(&self) -> CloudArg {
-        match self {
-            #[cfg(feature = "c8y")]
-            Self::C8y { profile, .. } => CloudArg::C8y {
-                profile: profile.clone(),
-            },
-            #[cfg(feature = "aws")]
-            Self::Aws { profile, .. } => CloudArg::Aws {
-                profile: profile.clone(),
-            },
-            #[cfg(feature = "azure")]
-            Self::Az { profile, .. } => CloudArg::Az {
-                profile: profile.clone(),
-            },
-        }
-    }
-
-    fn topic(&self) -> &str {
-        match self {
-            #[cfg(feature = "c8y")]
-            Self::C8y { topic, .. } => topic,
-            #[cfg(feature = "aws")]
-            Self::Aws { topic, .. } => topic,
-            #[cfg(feature = "azure")]
-            Self::Az { topic, .. } => topic,
-        }
-    }
 }
 
 #[async_trait::async_trait]
 impl Command for BridgeTestCmd {
     fn description(&self) -> String {
-        let cloud_arg = self.cloud.cloud_arg();
-        let cloud_name = cloud_name(&Cloud::try_from(cloud_arg).unwrap());
         format!(
-            "test bridge topic routing for {cloud_name}: {}",
-            self.cloud.topic()
+            "test bridge topic routing for {}: {}",
+            self.cloud, self.topic
         )
     }
 
@@ -114,7 +54,7 @@ impl Command for BridgeTestCmd {
         } else {
             DetailLevel::Normal
         };
-        let status = run_test(&mut std::io::stdout(), &self.cloud, &config, detail).await?;
+        let status = run_test(&mut std::io::stdout(), self, &config, detail).await?;
         match status {
             Status::MatchesFound => std::process::exit(0),
             Status::NoMatches => std::process::exit(2),
@@ -124,42 +64,51 @@ impl Command for BridgeTestCmd {
 
 async fn run_test(
     w: &mut impl Write,
-    cloud_topic: &CloudTopicArg,
+    cmd: &BridgeTestCmd,
     config: &TEdgeConfig,
     detail: DetailLevel,
 ) -> anyhow::Result<Status> {
-    let cloud_arg = cloud_topic.cloud_arg();
-    let cloud = Cloud::try_from(cloud_arg.clone())?;
-    let topic = cloud_topic.topic();
-    reject_wildcards(topic)?;
+    reject_wildcards(&cmd.topic)?;
 
-    match &cloud_arg {
-        #[cfg(feature = "c8y")]
-        CloudArg::C8y { .. } => {
-            use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+    match resolve_cloud(&cmd.cloud, cmd.profile.clone()) {
+        Some(cloud) => match &cloud {
+            #[cfg(feature = "c8y")]
+            Cloud::C8y(_) => {
+                use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+                if let Some((rules, non_expansions)) =
+                    load_bridge_rules::<C8yMapperSpecificConfig>(w, config, &cloud, detail).await?
+                {
+                    if detail == DetailLevel::Debug {
+                        print_non_expansions(w, &non_expansions);
+                    }
+                    if !rules.is_empty() {
+                        return Ok(print_topic_matches(w, &cmd.topic, &rules));
+                    }
+                }
+                Ok(Status::NoMatches)
+            }
+            #[cfg(feature = "aws")]
+            Cloud::Aws(_) => {
+                print_non_configurable_or_disabled(w, config, &cloud);
+                Ok(Status::NoMatches)
+            }
+            #[cfg(feature = "azure")]
+            Cloud::Azure(_) => {
+                print_non_configurable_or_disabled(w, config, &cloud);
+                Ok(Status::NoMatches)
+            }
+        },
+        None => {
             if let Some((rules, non_expansions)) =
-                load_bridge_rules::<C8yMapperSpecificConfig>(w, config, &cloud, detail).await?
+                load_bridge_rules_for_custom_mapper(w, &cmd.cloud, config, detail).await?
             {
                 if detail == DetailLevel::Debug {
                     print_non_expansions(w, &non_expansions);
                 }
                 if !rules.is_empty() {
-                    Ok(print_topic_matches(w, topic, &rules))
-                } else {
-                    Ok(Status::NoMatches)
+                    return Ok(print_topic_matches(w, &cmd.topic, &rules));
                 }
-            } else {
-                Ok(Status::NoMatches)
             }
-        }
-        #[cfg(feature = "aws")]
-        CloudArg::Aws { .. } => {
-            print_non_configurable_or_disabled(w, config, &cloud);
-            Ok(Status::NoMatches)
-        }
-        #[cfg(feature = "azure")]
-        CloudArg::Az { .. } => {
-            print_non_configurable_or_disabled(w, config, &cloud);
             Ok(Status::NoMatches)
         }
     }
@@ -367,13 +316,21 @@ mod tests {
     }
 
     fn render_test(
-        cloud_topic: &CloudTopicArg,
+        cloud: &str,
+        topic: &str,
+        profile: Option<ProfileName>,
         config: &TEdgeConfig,
         detail: DetailLevel,
     ) -> String {
+        let cmd = BridgeTestCmd {
+            cloud: cloud.to_string(),
+            topic: topic.to_string(),
+            profile,
+            debug: detail == DetailLevel::Debug,
+        };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let mut buf = Vec::new();
-        rt.block_on(run_test(&mut buf, cloud_topic, config, detail))
+        rt.block_on(run_test(&mut buf, &cmd, config, detail))
             .unwrap();
         strip_ansi(&String::from_utf8(buf).unwrap())
     }
@@ -382,14 +339,7 @@ mod tests {
     fn c8y_not_connected() {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_with_root(tmp.path(), &c8y_toml(""));
-        let output = render_test(
-            &CloudTopicArg::C8y {
-                profile: None,
-                topic: "te/measurements".into(),
-            },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_test("c8y", "te/measurements", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("Not connected to Cumulocity"),
             "output was: {output}"
@@ -404,14 +354,7 @@ mod tests {
             "aws.url = \"example.amazonaws.com\"\n\
              mqtt.bridge.built_in = true\n",
         );
-        let output = render_test(
-            &CloudTopicArg::Aws {
-                profile: None,
-                topic: "some/topic".into(),
-            },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_test("aws", "some/topic", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("not yet configurable"),
             "output was: {output}"
@@ -436,14 +379,7 @@ topic = "measurements"
 "#,
         );
 
-        let output = render_test(
-            &CloudTopicArg::C8y {
-                profile: None,
-                topic: "te/measurements".into(),
-            },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_test("c8y", "te/measurements", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("c8y/measurements"),
             "should show forwarded topic: {output}"
@@ -472,14 +408,7 @@ topic = "operations"
 "#,
         );
 
-        let output = render_test(
-            &CloudTopicArg::C8y {
-                profile: None,
-                topic: "c8y/operations".into(),
-            },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_test("c8y", "c8y/operations", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("te/operations"),
             "should show forwarded topic: {output}"
@@ -508,14 +437,7 @@ topic = "health"
 "#,
         );
 
-        let output = render_test(
-            &CloudTopicArg::C8y {
-                profile: None,
-                topic: "te/health".into(),
-            },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_test("c8y", "te/health", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("c8y/health"),
             "should show forwarded topic: {output}"
@@ -545,14 +467,7 @@ direction = "outbound"
 "#,
         );
 
-        let output = render_test(
-            &CloudTopicArg::C8y {
-                profile: None,
-                topic: "password-only".into(),
-            },
-            &config,
-            DetailLevel::Debug,
-        );
+        let output = render_test("c8y", "password-only", None, &config, DetailLevel::Debug);
         assert!(
             output.contains("Skipped rules"),
             "Output should mention skipped rules: {output}"
@@ -578,14 +493,7 @@ direction = "outbound"
 "#,
         );
 
-        let output = render_test(
-            &CloudTopicArg::C8y {
-                profile: None,
-                topic: "password-only".into(),
-            },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_test("c8y", "password-only", None, &config, DetailLevel::Normal);
         assert!(
             !output.contains("Skipped rules"),
             "Output should not mention skipped rules: {output}"
@@ -614,14 +522,7 @@ topic = "measurements"
 "#,
         );
 
-        let output = render_test(
-            &CloudTopicArg::C8y {
-                profile: None,
-                topic: "unrelated/topic".into(),
-            },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_test("c8y", "unrelated/topic", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("No matching bridge rule"),
             "output was: {output}"
@@ -629,14 +530,22 @@ topic = "measurements"
     }
 
     fn render_test_err(
-        cloud_topic: &CloudTopicArg,
+        cloud: &str,
+        topic: &str,
+        profile: Option<ProfileName>,
         config: &TEdgeConfig,
         detail: DetailLevel,
     ) -> String {
+        let cmd = BridgeTestCmd {
+            cloud: cloud.to_string(),
+            topic: topic.to_string(),
+            profile,
+            debug: detail == DetailLevel::Debug,
+        };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let mut buf = Vec::new();
         let err = rt
-            .block_on(run_test(&mut buf, cloud_topic, config, detail))
+            .block_on(run_test(&mut buf, &cmd, config, detail))
             .unwrap_err();
         format!("{err}")
     }
@@ -645,14 +554,7 @@ topic = "measurements"
     fn rejects_hash_wildcard() {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_with_root(tmp.path(), &c8y_toml(""));
-        let error = render_test_err(
-            &CloudTopicArg::C8y {
-                profile: None,
-                topic: "c8y/s/us/#".into(),
-            },
-            &config,
-            DetailLevel::Normal,
-        );
+        let error = render_test_err("c8y", "c8y/s/us/#", None, &config, DetailLevel::Normal);
         assert!(
             error.contains("Wildcard"),
             "should reject # wildcard: {error}"
@@ -663,14 +565,7 @@ topic = "measurements"
     fn rejects_plus_wildcard() {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_with_root(tmp.path(), &c8y_toml(""));
-        let error = render_test_err(
-            &CloudTopicArg::C8y {
-                profile: None,
-                topic: "c8y/+/us".into(),
-            },
-            &config,
-            DetailLevel::Normal,
-        );
+        let error = render_test_err("c8y", "c8y/+/us", None, &config, DetailLevel::Normal);
         assert!(
             error.contains("Wildcard"),
             "should reject + wildcard: {error}"
@@ -680,15 +575,65 @@ topic = "measurements"
     #[test]
     fn description_includes_cloud_name_and_topic() {
         let cmd = BridgeTestCmd {
-            cloud: CloudTopicArg::C8y {
-                profile: None,
-                topic: "te/measurements".into(),
-            },
+            cloud: "c8y".to_string(),
+            topic: "te/measurements".to_string(),
+            profile: None,
             debug: false,
         };
         assert_eq!(
             cmd.description(),
-            "test bridge topic routing for Cumulocity: te/measurements"
+            "test bridge topic routing for c8y: te/measurements"
+        );
+    }
+
+    #[test]
+    fn custom_mapper_topic_matches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bridge_dir = tmp.path().join("mappers/thingsboard/bridge");
+        std::fs::create_dir_all(&bridge_dir).unwrap();
+        std::fs::write(
+            bridge_dir.join("test.toml"),
+            r#"
+[[rule]]
+local_prefix = "te/"
+remote_prefix = "tb/"
+direction = "outbound"
+topic = "telemetry"
+"#,
+        )
+        .unwrap();
+        let config = config_with_root(tmp.path(), "");
+        let output = render_test(
+            "thingsboard",
+            "te/telemetry",
+            None,
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            output.contains("tb/telemetry"),
+            "should show forwarded topic: {output}"
+        );
+        assert!(
+            output.contains("outbound"),
+            "should show direction: {output}"
+        );
+    }
+
+    #[test]
+    fn custom_mapper_not_found() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), "");
+        let output = render_test(
+            "thingsboard",
+            "some/topic",
+            None,
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            output.contains("not found"),
+            "should indicate mapper not found: {output}"
         );
     }
 }

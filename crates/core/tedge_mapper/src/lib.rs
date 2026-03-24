@@ -66,6 +66,8 @@ pub mod c8y;
 mod collectd;
 mod core;
 mod custom;
+/// Re-export custom mapper config for use by bridge inspection commands.
+pub use custom::config as custom_mapper_config;
 mod flows;
 
 /// Set the cloud profile either from the CLI argument or env variable,

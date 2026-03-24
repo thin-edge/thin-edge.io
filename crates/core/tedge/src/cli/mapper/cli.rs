@@ -81,7 +81,11 @@ impl Command for ListMappersCommand {
             eprintln!("No mappers found under '{}'", self.mappers_root);
             return Ok(());
         }
-        let max_width = mappers.iter().map(|(name, _)| name.len()).max().unwrap_or(0);
+        let max_width = mappers
+            .iter()
+            .map(|(name, _)| name.len())
+            .max()
+            .unwrap_or(0);
         for (name, cloud_type) in &mappers {
             let padded = name.pad_to_width_with_alignment(max_width, pad::Alignment::Right);
             if let Some(cloud) = cloud_type {

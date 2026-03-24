@@ -64,26 +64,26 @@ impl CloudArg {
                 _ => Ok(None),
             }
         };
-        Ok(match self {
+        match self {
             #[cfg(feature = "aws")]
             Self::Aws {
                 profile: Some(profile),
-            } => Cloud::aws(Some(profile)),
+            } => Ok(Cloud::aws(Some(profile))),
             #[cfg(feature = "azure")]
             Self::Az {
                 profile: Some(profile),
-            } => Cloud::az(Some(profile)),
+            } => Ok(Cloud::az(Some(profile))),
             #[cfg(feature = "c8y")]
             Self::C8y {
                 profile: Some(profile),
-            } => Cloud::c8y(Some(profile)),
+            } => Ok(Cloud::c8y(Some(profile))),
             #[cfg(feature = "aws")]
-            Self::Aws { profile: None } => Cloud::aws(read_env()?),
+            Self::Aws { profile: None } => Ok(Cloud::aws(read_env()?)),
             #[cfg(feature = "azure")]
-            Self::Az { profile: None } => Cloud::az(read_env()?),
+            Self::Az { profile: None } => Ok(Cloud::az(read_env()?)),
             #[cfg(feature = "c8y")]
-            Self::C8y { profile: None } => Cloud::c8y(read_env()?),
-        })
+            Self::C8y { profile: None } => Ok(Cloud::c8y(read_env()?)),
+        }
     }
 }
 
