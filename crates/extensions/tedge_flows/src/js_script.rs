@@ -824,6 +824,30 @@ export function onMessage(message) {
         );
     }
 
+    #[tokio::test]
+    async fn using_crypto_random_uuid() {
+        let js = r#"
+export function onMessage(message) {
+    let payload = crypto.randomUUID()
+    return { "topic": "test", "payload": payload}
+}
+        "#;
+        let (runtime, mut script) = runtime_with(js).await;
+
+        let input = Message::new("test", "get random uuid");
+        let messages = script
+            .on_message(&runtime, SystemTime::now(), &input)
+            .await
+            .unwrap();
+        let generated_uuid_str = messages.get(0).unwrap().payload_str().unwrap();
+        let generated_uuid = uuid::Uuid::parse_str(generated_uuid_str);
+        assert!(generated_uuid.is_ok());
+        assert_eq!(
+            uuid::Variant::RFC4122,
+            generated_uuid.unwrap().get_variant()
+        );
+    }
+
     async fn runtime_with(js: &str) -> (JsRuntime, FlowStep) {
         let mut runtime = JsRuntime::with_default().await.unwrap();
         let mut script = JsScript::new("toml|1|js".to_owned(), "toml".into(), "js".into());

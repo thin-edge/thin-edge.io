@@ -471,6 +471,8 @@ The following builtin objects are exported:
 - [`TextDecoder`](https://developer.mozilla.org/en-US/docs/Web/API/TextDecoder)
   - Only `utf-8` is supported 
 - [`TextEncoder`](https://developer.mozilla.org/en-US/docs/Web/API/TextEncoder)
+- [`crypto.randomUUID`](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID)
+  - Generate v4 UUIDs
 
 ## Builtin transformations
 

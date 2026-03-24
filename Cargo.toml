@@ -227,6 +227,7 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 try-traits = "0.1"
 url = "2.3"
+uuid = { version = "1.22", features = ["v4", "rng-rand"] }
 uzers = "0.12"
 walkdir = "2"
 which = "8.0"

@@ -32,6 +32,7 @@ time = { workspace = true }
 tokio = { workspace = true, features = ["fs", "macros", "time", "sync"] }
 toml = { workspace = true, features = ["parse"] }
 tracing = { workspace = true }
+uuid = { workspace = true }
 
 # Enable the bindgen feature for target triples whose bindings are not shipped by rquickjs.
 # Requires libclang-dev and the appropriate build toolchain for the target (e.g., libc6-dev).
