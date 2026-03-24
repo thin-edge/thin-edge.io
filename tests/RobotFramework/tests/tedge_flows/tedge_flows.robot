@@ -442,6 +442,26 @@ Params are dynamically reloaded
     ...    date_from=${start}
     ...    message_contains=Hello World!
 
+    # `params.toml.template` provides default values when `params.toml` is broken or incomplete
+    ${start}    Get Unix Timestamp
+    Execute Command    rm /etc/tedge/mappers/local/flows/greeting-flows/params.toml
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/greeting-flows/updated-params.toml
+    ...    /etc/tedge/mappers/local/flows/greeting-flows/params.toml.template
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
+    ...    date_from=${start}
+    ...    message_contains=greeting-flows/hello.toml
+
+    # The greeting message from params.toml.template is used
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub hello/in hi
+    Should Have MQTT Messages
+    ...    topic=hello/out
+    ...    minimum=1
+    ...    date_from=${start}
+    ...    message_contains=Enjoy your day!
+
 Flow with static mqtt topic loop is rejected at load time
     Install Flow    infinite-loop-flows    mqtt-static-loop.toml
     Service Logs Should Contain    tedge-mapper-local    Flow 'mqtt-static-loop' defines an infinite loop

@@ -32,7 +32,7 @@ Install a new flow
     ...    {"name": "local/hello-flow", "version": "1.0.0", "softwareType": "flow", "url": "${V1_URL}"}
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
     Device Should Have Installed Software    {"softwareType": "flow", "name": "local/hello-flow", "version": "1.0.0"}
-    Verify a flow is working    message_contains=hello to undefined
+    Verify a flow is working    message_contains=hello to Bob
 
 Install a new nested flow
     ${OPERATION}=    Install Software
@@ -40,7 +40,7 @@ Install a new nested flow
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
     Device Should Have Installed Software
     ...    {"softwareType": "flow", "name": "local/nested/hello-flow", "version": "1.0.0"}
-    Verify a flow is working    message_contains=hello to undefined
+    Verify a flow is working    message_contains=hello to Bob
 
 Install fails with invalid module name
     ${OPERATION}=    Install Software
@@ -59,7 +59,7 @@ Update a flow without params.toml
     ...    {"name": "local/hello-flow", "version": "2.0.0", "softwareType": "flow", "url": "${V2_URL}"}
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
     Device Should Have Installed Software    {"softwareType": "flow", "name": "local/hello-flow", "version": "2.0.0"}
-    Verify a flow is working    message_contains=hi to undefined
+    Verify a flow is working    message_contains=hi to Bob
 
 Update a flow with params.toml
     [Setup]    Transfer hello-flow v1.0.0    with_params_toml=True
@@ -67,7 +67,7 @@ Update a flow with params.toml
     ...    {"name": "local/hello-flow", "version": "2.0.0", "softwareType": "flow", "url": "${V2_URL}"}
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
     Device Should Have Installed Software    {"softwareType": "flow", "name": "local/hello-flow", "version": "2.0.0"}
-    Verify a flow is working    message_contains=hi to Bob
+    Verify a flow is working    message_contains=hi to Mary
 
 Uninstall a flow entirely
     [Setup]    Transfer hello-flow v1.0.0    with_params_toml=False
@@ -135,7 +135,9 @@ Transfer hello-flow v1.0.0
     Execute Command    cp -r /usr/local/tedge/hello-flow /etc/tedge/mappers/local/flows/hello-flow
     IF    '${with_params_toml}'=='True'
         Execute Command
-        ...    cp /etc/tedge/mappers/local/flows/hello-flow/params.toml.template /etc/tedge/mappers/local/flows/hello-flow/params.toml
+        ...    cmd=cp /etc/tedge/mappers/local/flows/hello-flow/params.toml.template /etc/tedge/mappers/local/flows/hello-flow/params.toml
+        Execute Command
+        ...    cmd=sed -i 's/call = "Bob"/call = "Mary"/' /etc/tedge/mappers/local/flows/hello-flow/params.toml
     END
 
 Verify a flow is working
