@@ -272,6 +272,9 @@ as provided by the flow authors, provided the flow steps are configured after pa
 
 When a flow use parameters, the advice is to provide an example file called `params.toml.template`
 which contains the list of parameterizable values that the user can set.
+The parameters of a flow are then derived as a combination of `params.toml.template` (the default values)
+and `params.toml` (the user-provided values).
+
 To parameterize a flow, the user should copy the `params.toml.template` file to the `params.toml` location,
 and then customize any of the values inside the file.
 Ideally the `params.toml.template` includes some documentation about each parameter to assist the user.

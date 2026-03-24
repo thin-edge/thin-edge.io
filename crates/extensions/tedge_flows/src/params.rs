@@ -33,28 +33,39 @@ impl Params {
         "params.toml"
     }
 
-    pub fn is_params_file(path: &Utf8Path) -> bool {
-        path.file_name() == Some(Params::filename())
+    pub fn template_filename() -> &'static str {
+        "params.toml.template"
     }
 
+    pub fn is_params_file(path: &Utf8Path) -> bool {
+        let name = path.file_name();
+        name == Some(Params::filename()) || name == Some(Params::template_filename())
+    }
+
+    /// Load the `params.toml` attached to the flow with the given path
+    ///
+    /// If there is a `params.toml.template` this file is read first and is used for params default values.
+    /// To avoid breaking flows, an ill-formed params.toml file is read as an empty set of params.
     pub async fn load_flow_params(path: &Utf8Path) -> Result<Params, LoadError> {
         let Some(directory) = path.parent() else {
             return Ok(Params::default());
         };
-        // To avoid breaking flows, an ill-formed params.toml file is read as empty set of params
-        Self::load_params(directory)
+        let default_params = Self::load_params(&directory.join(Self::template_filename()))
             .await
             .map_err(|err| log::warn!("{err:?}"))
-            .or(Ok(Params::default()))
+            .unwrap_or_default();
+        let user_params = Self::load_params(&directory.join(Self::filename()))
+            .await
+            .map_err(|err| log::warn!("{err:?}"))
+            .unwrap_or_default();
+        Ok(default_params.merge(user_params))
     }
 
-    /// Load the `params.toml` used by all the flows of the given directory
-    pub async fn load_params(directory: &Utf8Path) -> Result<Params, LoadError> {
-        let path = directory.join(Self::filename());
-        if let Ok(true) = tokio::fs::try_exists(&path).await {
+    pub async fn load_params(path: &Utf8Path) -> Result<Params, LoadError> {
+        if let Ok(true) = tokio::fs::try_exists(path).await {
             let content = read_to_string(&path)
                 .await
-                .map_err(|err| LoadError::from_io(err, &path))?;
+                .map_err(|err| LoadError::from_io(err, path))?;
             Self::load_toml(&content)
         } else {
             Ok(Params::default())
@@ -64,6 +75,11 @@ impl Params {
     pub fn load_toml(content: &str) -> Result<Params, LoadError> {
         let params = toml::from_str(content)?;
         Ok(Params { params })
+    }
+
+    pub fn merge(mut self, other: Params) -> Self {
+        self.params.extend(other.params);
+        self
     }
 
     pub fn substitute_all(
@@ -149,6 +165,34 @@ impl Params {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn merge_defaults() {
+        let default_params = Params::load_toml(
+            r#"
+            x = 1
+            y = 2
+        "#,
+        )
+        .unwrap();
+        let user_params = Params::load_toml(
+            r#"
+            y = 42
+            z = 3
+        "#,
+        )
+        .unwrap();
+
+        let params = default_params.merge(user_params);
+
+        for (expr, value) in [
+            ("${.params.x}", json!(1)),
+            ("${.params.y}", json!(42)),
+            ("${.params.z}", json!(3)),
+        ] {
+            assert_eq!(params.substitute_path(expr).unwrap(), value);
+        }
+    }
 
     #[test]
     fn substitute_path() {
