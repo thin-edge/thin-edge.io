@@ -8,6 +8,7 @@ use tedge_actors::Actor;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_api::mqtt_topics::Channel;
@@ -33,24 +34,32 @@ impl Actor for TwinManagerActor {
     async fn run(mut self) -> Result<(), RuntimeError> {
         let mut inventory_map = self.load_inventory_json()?;
         // Wait until the very fist message is received (at least the agent health status is guaranteed)
-        if let Some(mut msg) = self.messages.recv().await {
-            loop {
-                if let Ok((_, Channel::EntityTwinData { fragment_key })) = self
-                    .config
-                    .mqtt_schema
-                    .entity_channel_of(msg.topic.as_ref())
-                {
-                    // If a twin data message for the same key is available,
-                    // ignore the value in inventory JSON
-                    inventory_map.remove(&fragment_key);
-                }
+        // Use try_recv() instead of recv() so that shutdown signals are NOT silently consumed:
+        // recv() maps Err(RuntimeRequest::Shutdown) to None, which drops the signal from the channel.
+        // The drain loop below would then block forever waiting for a signal that will never come.
+        match self.messages.try_recv().await {
+            Err(RuntimeRequest::Shutdown) => return Ok(()),
+            Ok(None) => {}
+            Ok(Some(mut msg)) => {
+                loop {
+                    if let Ok((_, Channel::EntityTwinData { fragment_key })) = self
+                        .config
+                        .mqtt_schema
+                        .entity_channel_of(msg.topic.as_ref())
+                    {
+                        // If a twin data message for the same key is available,
+                        // ignore the value in inventory JSON
+                        inventory_map.remove(&fragment_key);
+                    }
 
-                // If no more messages are available for up to 1 second, that's taken as a cue that
-                // all existing twin messages have been delivered and break out of the loop
-                msg = match timeout(Duration::from_secs(1), self.messages.recv()).await {
-                    Ok(Some(next)) => next,
-                    _ => break,
-                };
+                    // If no more messages are available for up to 1 second, that's taken as a cue that
+                    // all existing twin messages have been delivered and break out of the loop
+                    msg = match timeout(Duration::from_secs(1), self.messages.try_recv()).await {
+                        Ok(Ok(Some(next))) => next,
+                        Ok(Err(RuntimeRequest::Shutdown)) => return Ok(()),
+                        _ => break,
+                    };
+                }
             }
         }
 

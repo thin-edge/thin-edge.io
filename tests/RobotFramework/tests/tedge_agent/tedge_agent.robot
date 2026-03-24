@@ -40,6 +40,23 @@ Converter and file transfer service are not running on a child device
     # Only parent converter should convert the message
     Should Have MQTT Messages    te/device/main///m/    minimum=1    maximum=1
 
+Tedge-agent restarts cleanly without timeout
+    [Documentation]    Regression test for \#4041
+    ...    TwinManagerActor used to deadlock on shutdown, causing a 60s timeout
+
+    ${start_time}=    Get Unix Timestamp
+    Restart Service    tedge-agent
+    Restart Service    tedge-agent
+    Service Should Be Running    tedge-agent
+    ${end_time}=    Get Unix Timestamp
+
+    ${JOURNAL_LOG}=    Execute Command    journalctl -u tedge-agent --since "@${start_time}" --no-pager
+    Should Not Contain    ${JOURNAL_LOG}    ERROR Runtime: Timeout waiting for all actors to shutdown
+
+    ${elapsed}=    Evaluate    ${end_time} - ${start_time}
+    Should Be True    ${elapsed} < 60
+    ...    msg=tedge-agent took ${elapsed}s to restart, expected less than 60s
+
 
 *** Keywords ***
 Custom Setup
