@@ -15,6 +15,7 @@ mod steps;
 mod transformers;
 
 use crate::actor::FlowsMapper;
+pub use crate::config::derive_flow_name;
 pub use crate::config::ConfigError;
 pub use crate::config::FlowConfig;
 pub use crate::connected_flow::ConnectedFlowRegistry;
