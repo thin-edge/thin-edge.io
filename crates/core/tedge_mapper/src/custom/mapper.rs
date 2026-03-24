@@ -19,6 +19,7 @@ use certificate::PemCertificate;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
+use tedge_config::tedge_toml::Cloud;
 use tedge_config::tedge_toml::MqttAuthClientConfigCloudBroker;
 use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
 use tedge_config::tedge_toml::PrivateKeyType;
@@ -230,9 +231,18 @@ pub async fn build_cloud_mqtt_options(
             .context("Failed to read device.key_path from tedge config")?
             .into(),
     };
-    let device_id = config.device.as_ref().and_then(|d| d.id.clone());
+    let device_id = config
+        .device
+        .as_ref()
+        .and_then(|d| d.id.clone())
+        .or_else(|| {
+            tedge_config
+                .device_id(None::<Cloud<'_>>)
+                .ok()
+                .filter(|id| !id.is_empty())
+        });
 
-    match effective_auth {
+    let device_id = match effective_auth {
         AuthMethod::Certificate => {
             let tls_config = MqttAuthConfigCloudBroker {
                 ca_path,
@@ -245,16 +255,12 @@ pub async fn build_cloud_mqtt_options(
             .context("Failed to create MQTT TLS config")?;
             cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
 
-            // device.id takes precedence over cert CN
-            let client_id = device_id.or_else(|| {
-                PemCertificate::from_pem_file(&effective_cert)
-                    .and_then(|cert| cert.subject_common_name())
-                    .ok()
-                    .filter(|cn| !cn.is_empty())
-            });
-            if let Some(id) = client_id {
-                cloud_config.set_client_id(id);
-            }
+            // cert CN takes precedence over device.id
+            PemCertificate::from_pem_file(&effective_cert)
+                .and_then(|cert| cert.subject_common_name())
+                .ok()
+                .filter(|cn| !cn.is_empty())
+                .or(device_id)
         }
         AuthMethod::Password => {
             let creds_path = config.credentials_path.as_deref().with_context(|| {
@@ -266,11 +272,17 @@ pub async fn build_cloud_mqtt_options(
             let (username, password) = read_mapper_credentials(creds_path).await?;
             use_credentials(&mut cloud_config, &ca_path, username, password)?;
 
-            // Apply explicit device.id if set
-            if let Some(id) = device_id {
-                cloud_config.set_client_id(id);
-            }
+            device_id
         }
+    };
+
+    if let Some(id) = device_id {
+        cloud_config.set_client_id(id);
+    } else {
+        anyhow::bail!(
+            "No MQTT client ID could be determined: configure 'device.id' in \
+             '{mapper_dir}/mapper.toml'"
+        );
     }
 
     configure_proxy(tedge_config, &mut cloud_config)?;
@@ -674,15 +686,6 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
 /r6GH5QYt7+JYa9+tUaFgfEH5mhjdOb7/g==\n\
 -----END EC PRIVATE KEY-----\n";
 
-        /// Writes TEST_CERT_PEM and TEST_KEY_PEM to `dir` and returns (cert_path, key_path).
-        async fn write_test_cert(dir: &camino::Utf8Path) -> (Utf8PathBuf, Utf8PathBuf) {
-            let cert = dir.join("cert.pem");
-            let key = dir.join("key.pem");
-            tokio::fs::write(&cert, TEST_CERT_PEM).await.unwrap();
-            tokio::fs::write(&key, TEST_KEY_PEM).await.unwrap();
-            (cert, key)
-        }
-
         #[tokio::test]
         async fn missing_url_returns_error_with_file_path_hint() {
             let ttd = TempTedgeDir::new();
@@ -705,7 +708,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         async fn auto_without_credentials_resolves_to_certificate() {
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-            let (cert, key) = write_test_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -721,7 +724,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         async fn explicit_certificate_method_resolves_to_certificate() {
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-            let (cert, key) = write_test_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -763,7 +766,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             )
             .await
             .unwrap();
-            let tedge_config = TEdgeConfig::load_toml_str("");
+            let tedge_config = TEdgeConfig::load_toml_str("device.id = \"test-device\"");
             let mut config = make_config(Some("mqtt.example.com:1883"));
             config.credentials_path = Some(creds_path);
 
@@ -784,7 +787,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             )
             .await
             .unwrap();
-            let tedge_config = TEdgeConfig::load_toml_str("");
+            let tedge_config = TEdgeConfig::load_toml_str("device.id = \"test-device\"");
             let mut config = make_config(Some("mqtt.example.com:1883"));
             config.auth_method = AuthMethodConfig::Password;
             config.credentials_path = Some(creds_path);
@@ -807,7 +810,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 "device.cert_path = \"/nonexistent/tedge-cert.pem\"\n\
                  device.key_path = \"/nonexistent/tedge-key.pem\"\n",
             );
-            let (mapper_cert, mapper_key) = write_test_cert(ttd.utf8_path()).await;
+            let (mapper_cert, mapper_key) = write_cert(ttd.utf8_path()).await;
             let mut config = make_config(Some("mqtt.example.com:1883"));
             config.device = Some(crate::custom::config::DeviceConfig {
                 id: None,
@@ -829,7 +832,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             // the error mentions those paths (not a missing-cert-path error).
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
-            let (cert, key) = write_test_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -842,11 +845,11 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         }
 
         #[tokio::test]
-        async fn explicit_device_id_is_used_as_mqtt_client_id() {
-            // When device.id is set in mapper.toml it takes precedence over the cert CN.
+        async fn explicit_device_id_is_overridden_by_certificate_cn() {
+            // When a cert CN is present it takes precedence over device.id.
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
-            let (cert, key) = write_test_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -864,8 +867,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                     .unwrap();
             assert_eq!(
                 mqtt_opts.client_id(),
-                "my-explicit-device-id",
-                "device.id should be used as the MQTT client ID"
+                "localhost",
+                "certificate CN should be used as the MQTT client ID instead of the configured device.id"
             );
         }
 
@@ -874,7 +877,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             // When device.id is absent the cert's CN ("localhost" in TEST_CERT_PEM) is used.
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
-            let (cert, key) = write_test_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -892,6 +895,122 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             );
         }
 
+        #[tokio::test]
+        async fn password_auth_uses_mapper_toml_device_id_as_client_id() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let creds_path = ttd.utf8_path().join("creds.toml");
+            write_creds(&creds_path).await;
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mut config = make_config(Some("mqtt.example.com:1883"));
+            config.credentials_path = Some(creds_path);
+            config.device = Some(crate::custom::config::DeviceConfig {
+                id: Some("mapper-device".to_string()),
+                cert_path: None,
+                key_path: None,
+                root_cert_path: None,
+            });
+
+            let (mqtt_opts, _) =
+                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                mqtt_opts.client_id(),
+                "mapper-device",
+                "device.id from mapper.toml should be used as the MQTT client ID"
+            );
+        }
+
+        #[tokio::test]
+        async fn password_auth_uses_tedge_config_device_id_as_client_id() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let creds_path = ttd.utf8_path().join("creds.toml");
+            write_creds(&creds_path).await;
+            let tedge_config = TEdgeConfig::load_toml_str("device.id = \"tedge-device\"");
+            let mut config = make_config(Some("mqtt.example.com:1883"));
+            config.credentials_path = Some(creds_path);
+
+            let (mqtt_opts, _) =
+                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                mqtt_opts.client_id(),
+                "tedge-device",
+                "device.id from tedge.toml should be used as the MQTT client ID when not set in mapper.toml"
+            );
+        }
+
+        #[tokio::test]
+        async fn password_auth_without_device_id_returns_error() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let creds_path = ttd.utf8_path().join("creds.toml");
+            write_creds(&creds_path).await;
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mut config = make_config(Some("mqtt.example.com:1883"));
+            config.credentials_path = Some(creds_path);
+
+            let err = build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                .await
+                .unwrap_err();
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("device.id"),
+                "Error should mention device.id: {msg}"
+            );
+        }
+
+        #[tokio::test]
+        async fn cert_auth_falls_back_to_device_id_when_cert_has_no_cn() {
+            // When the cert has no CN, device.id should be used as the MQTT client ID.
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let (cert, key) = write_cert_no_cn(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+            let mut config = make_config(Some("mqtt.example.com:1883"));
+            config.device = Some(crate::custom::config::DeviceConfig {
+                id: Some("fallback-device".to_string()),
+                cert_path: None,
+                key_path: None,
+                root_cert_path: None,
+            });
+
+            let (mqtt_opts, _) =
+                build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                mqtt_opts.client_id(),
+                "fallback-device",
+                "device.id should be used as the MQTT client ID when the cert has no CN"
+            );
+        }
+
+        #[tokio::test]
+        async fn cert_auth_without_cn_or_device_id_returns_error() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let (cert, key) = write_cert_no_cn(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+            let config = make_config(Some("mqtt.example.com:1883"));
+
+            let err = build_cloud_mqtt_options(&config, "svc", &mapper_dir, &tedge_config)
+                .await
+                .unwrap_err();
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("device.id"),
+                "Error should mention device.id: {msg}"
+            );
+        }
+
         fn make_config(url: Option<&str>) -> CustomMapperConfig {
             CustomMapperConfig {
                 table: toml::Table::new(),
@@ -901,6 +1020,38 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 auth_method: AuthMethodConfig::Auto,
                 credentials_path: None,
             }
+        }
+
+        /// Writes TEST_CERT_PEM and TEST_KEY_PEM to `dir` and returns (cert_path, key_path).
+        async fn write_cert(dir: &camino::Utf8Path) -> (Utf8PathBuf, Utf8PathBuf) {
+            let cert = dir.join("cert.pem");
+            let key = dir.join("key.pem");
+            tokio::fs::write(&cert, TEST_CERT_PEM).await.unwrap();
+            tokio::fs::write(&key, TEST_KEY_PEM).await.unwrap();
+            (cert, key)
+        }
+
+        /// Generates a self-signed certificate with no CommonName and writes it to `dir`.
+        async fn write_cert_no_cn(dir: &camino::Utf8Path) -> (Utf8PathBuf, Utf8PathBuf) {
+            let key = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+            let mut params = rcgen::CertificateParams::default();
+            params.distinguished_name = rcgen::DistinguishedName::new();
+            let issuer = rcgen::Issuer::from_params(&params, &key);
+            let cert = params.signed_by(&key, &issuer).unwrap();
+            let cert_path = dir.join("cert-no-cn.pem");
+            let key_path = dir.join("key-no-cn.pem");
+            tokio::fs::write(&cert_path, cert.pem()).await.unwrap();
+            tokio::fs::write(&key_path, key.serialize_pem()).await.unwrap();
+            (cert_path, key_path)
+        }
+
+        async fn write_creds(path: &Utf8PathBuf) {
+            tokio::fs::write(
+                path,
+                "[credentials]\nusername = \"user\"\npassword = \"pass\"\n",
+            )
+            .await
+            .unwrap();
         }
     }
 }
