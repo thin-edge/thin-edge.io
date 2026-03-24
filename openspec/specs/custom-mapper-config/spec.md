@@ -7,15 +7,19 @@ Defines how custom mappers are configured on disk under `/etc/tedge/mappers/`, i
 ## Requirements
 
 ### Requirement: Custom mapper directory layout
-A mapper SHALL be defined by a directory under `/etc/tedge/mappers/` containing a `mapper.toml` file. No prefix distinguishes built-in from user-defined mappers — the directory structure is identical for both. The directory MAY also contain a `bridge/` subdirectory with bridge rule TOML files and a `flows/` subdirectory with flow scripts. An empty directory is also valid on disk, but invoking it is an error (see runtime spec).
+A mapper SHALL be defined by a directory under `/etc/tedge/mappers/`. No `mapper.toml` is required — the directory's existence is sufficient. No prefix distinguishes built-in from user-defined mappers. The directory MAY contain any combination of: a `mapper.toml` with connection and cloud settings, a `bridge/` subdirectory with bridge rule TOML files, and a `flows/` subdirectory with flow scripts. An empty directory is valid and will start in flows-only mode.
+
+The mapper SHALL always create the `flows/` subdirectory within the mapper directory on startup if it does not already exist. This ensures flow scripts can be installed at runtime without restarting the mapper process.
 
 Mapper names SHALL match `[a-z][a-z0-9-]*` (lowercase ASCII letters, digits, and hyphens; must start with a letter). A mapper name containing an underscore SHALL be rejected with a hard error at startup. This restriction enables bijective mapping to environment variable names.
 
-Directories under `/etc/tedge/mappers/` that contain no `mapper.toml` are not recognised as mappers and generate a warning (under the no-prefix D1 approach) or are matched by name pattern (under the `+` prefix approach).
+#### Scenario: User-defined mapper recognised by directory existence
+- **WHEN** a user creates `/etc/tedge/mappers/thingsboard/` (empty)
+- **THEN** `tedge-mapper thingsboard` SHALL recognise `thingsboard` as a valid mapper and start in flows-only mode
 
-#### Scenario: User-defined mapper recognised by mapper.toml presence
-- **WHEN** a user creates `/etc/tedge/mappers/thingsboard/mapper.toml`
-- **THEN** `tedge-mapper thingsboard` SHALL recognise `thingsboard` as a valid mapper and start
+#### Scenario: flows/ created automatically on startup
+- **WHEN** `tedge-mapper thingsboard` starts and `/etc/tedge/mappers/thingsboard/flows/` does not exist
+- **THEN** the mapper SHALL create `/etc/tedge/mappers/thingsboard/flows/` before starting
 
 #### Scenario: Full user-defined mapper with bridge and flows
 - **WHEN** a user creates `/etc/tedge/mappers/thingsboard/` containing `mapper.toml`, `bridge/rules.toml`, and `flows/telemetry.js`
@@ -26,7 +30,7 @@ Directories under `/etc/tedge/mappers/` that contain no `mapper.toml` are not re
 - **THEN** `tedge-mapper thingsboard` SHALL report an error indicating that bridge rules require connection settings (`mapper.toml`)
 
 #### Scenario: Built-in and user-defined mappers coexist as peers
-- **WHEN** `/etc/tedge/mappers/` contains `c8y/` (pre-installed, with `mapper.toml`) and `thingsboard/` (user-created, with `mapper.toml`)
+- **WHEN** `/etc/tedge/mappers/` contains `c8y/` (pre-installed) and `thingsboard/` (user-created, with `mapper.toml`)
 - **THEN** both directories SHALL be recognised as valid mapper directories with equal standing
 
 #### Scenario: Mapper name with underscore rejected
@@ -40,11 +44,17 @@ Directories under `/etc/tedge/mappers/` that contain no `mapper.toml` are not re
 ### Requirement: Custom mapper configuration file
 When present, a mapper's `mapper.toml` SHALL contain connection and device identity settings needed to establish the MQTT bridge to the cloud, plus an optional `cloud_type` field identifying the built-in cloud integration this mapper instance targets. The `mapper.toml` is OPTIONAL — it is only required when the mapper establishes a cloud connection via the built-in MQTT bridge.
 
-For user-defined mappers, `mapper.toml` is parsed directly; it is not part of the global `tedge_config` schema. For built-in mappers (`c8y`, `az`, `aws`), `mapper.toml` is backed by `TEdgeConfig`; values are written via `tedge config set` as before.
+For user-defined mappers, `mapper.toml` is parsed directly and is not part of the global `tedge_config` schema. Certain fields (device cert and key paths) are inherited from the root `tedge.toml` when absent from `mapper.toml`.
+
+For built-in mappers (`c8y`, `az`, `aws`), `mapper.toml` is backed by `TEdgeConfig` and values are written via `tedge config set`. Built-in mappers are not required to have a `mapper.toml` on disk — the file is only created when the mapper configuration is upgraded via `tedge config upgrade`. Until upgraded, built-in mappers read their configuration directly from the root `tedge.toml`.
 
 #### Scenario: Configuration with connection details
-- **WHEN** a mapper's `mapper.toml` contains a top-level `url` field in `{host}:{port}` format, and a `[device]` section with `cert_path` and `key_path` fields
+- **WHEN** a user-defined mapper's `mapper.toml` contains a top-level `url` field and a `[device]` section with `cert_path` and `key_path` fields
 - **THEN** the mapper SHALL use these values to configure the MQTT bridge connection
+
+#### Scenario: Device cert fields inherited from root tedge.toml
+- **WHEN** a user-defined mapper's `mapper.toml` does not contain `[device] cert_path` or `key_path` and the root `tedge.toml` has these fields configured
+- **THEN** the mapper SHALL use the root `tedge.toml` values as fallback
 
 #### Scenario: Configuration with additional custom fields
 - **WHEN** a mapper's `mapper.toml` contains additional TOML keys beyond the required connection and device settings (e.g. `[bridge]` with `topic_prefix`)
@@ -63,8 +73,44 @@ For user-defined mappers, `mapper.toml` is parsed directly; it is not part of th
 - **THEN** `tedge mapper list` SHALL display the mapper without a cloud type annotation
 
 #### Scenario: Built-in mapper.toml pre-populated with cloud_type
-- **WHEN** the built-in `c8y` mapper directory is inspected
-- **THEN** its `mapper.toml` SHALL contain `cloud_type = "c8y"` as pre-populated by packaging
+- **WHEN** the built-in `c8y` mapper directory is inspected after `tedge config upgrade`
+- **THEN** its `mapper.toml` SHALL contain `cloud_type = "c8y"`
+
+#### Scenario: Built-in mapper without mapper.toml
+- **WHEN** the built-in `c8y` mapper has not been upgraded via `tedge config upgrade`
+- **THEN** no `c8y/mapper.toml` file need exist — the mapper reads its configuration from the root `tedge.toml`
+
+### Requirement: Path fields in user-defined mapper.toml support relative paths
+Path fields in a user-defined mapper's `mapper.toml` (`device.cert_path`, `device.key_path`, `device.root_cert_path`, `credentials_path`) SHALL support relative paths. Relative paths are resolved relative to the mapper directory at parse time, so all downstream code sees absolute paths. Absolute paths are returned unchanged.
+
+This behaviour applies to user-defined mappers only. Built-in mapper configuration is managed via `tedge config set`, which always stores absolute paths.
+
+#### Scenario: Relative cert path resolved against mapper directory
+- **WHEN** a user-defined mapper's `mapper.toml` contains `[device] cert_path = "cert.pem"` and the mapper directory is `/etc/tedge/mappers/thingsboard/`
+- **THEN** the mapper SHALL resolve the path to `/etc/tedge/mappers/thingsboard/cert.pem`
+
+#### Scenario: Absolute path returned unchanged
+- **WHEN** a user-defined mapper's `mapper.toml` contains `[device] cert_path = "/etc/tedge/device-certs/tedge-certificate.pem"`
+- **THEN** the mapper SHALL use that path as-is without modification
+
+### Requirement: Bridge requires a resolvable device ID
+To start the MQTT bridge, a user-defined mapper MUST be able to determine a device ID. The device ID is resolved as follows: if a client certificate is configured and its Common Name (CN) is non-empty, the CN is used as the device ID. Otherwise, `device.id` from `mapper.toml` is used. If neither source yields a non-empty device ID, the bridge SHALL fail to start with a clear error.
+
+#### Scenario: Device ID from certificate CN
+- **WHEN** `device.cert_path` is configured and the certificate's CN is `my-device` and `device.id` is also set in `mapper.toml`
+- **THEN** the mapper SHALL use `my-device` (the certificate CN) as the device ID, ignoring `device.id`
+
+#### Scenario: Device ID from mapper.toml when cert CN is absent
+- **WHEN** `device.id = "my-device"` is set in `mapper.toml` and no certificate is configured
+- **THEN** the mapper SHALL use `my-device` as the device ID
+
+#### Scenario: Bridge fails when no device ID can be determined
+- **WHEN** the mapper uses password authentication and no `device.id` is set in `mapper.toml`
+- **THEN** the bridge SHALL fail to start with a clear error indicating that a device ID is required
+
+#### Scenario: Bridge fails when certificate CN is empty and no device.id set
+- **WHEN** a certificate is configured but its CN is empty, and `device.id` is not set in `mapper.toml`
+- **THEN** the bridge SHALL fail to start with a clear error indicating that a device ID is required
 
 ### Requirement: Custom mapper config is separate from global tedge_config
 User-defined mapper configuration SHALL NOT be part of the `define_tedge_config!` macro or the global `tedge_config` schema. Users SHALL configure user-defined mappers by editing the mapper's `mapper.toml` directly or via `tedge mapper config get` (read-only in this change). The `tedge config set/get` commands apply only to built-in mapper config backed by `TEdgeConfig`.

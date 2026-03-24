@@ -7,7 +7,7 @@ Defines the `tedge mapper` subcommands for inspecting and reading configuration 
 ## Requirements
 
 ### Requirement: tedge mapper list
-`tedge mapper list` SHALL scan `/etc/tedge/mappers/` and print all directories that are recognised mappers: a directory is a recognised mapper if it contains a `mapper.toml` file, a `flows/` subdirectory, or both. For each mapper, the output SHALL include the mapper name and its `cloud_type` value if present in `mapper.toml`.
+`tedge mapper list` SHALL scan `/etc/tedge/mappers/` and print all subdirectories, since any directory under that path is a valid mapper. For each mapper, the output SHALL include the mapper name and its `cloud_type` value if present in `mapper.toml`.
 
 #### Scenario: Listing mappers with and without cloud_type
 - **WHEN** `/etc/tedge/mappers/` contains `c8y/` (with `cloud_type = "c8y"`), `thingsboard/` (no `cloud_type`), and `production/` (with `cloud_type = "c8y"`)
@@ -17,13 +17,13 @@ Defines the `tedge mapper` subcommands for inspecting and reading configuration 
 - **WHEN** `/etc/tedge/mappers/` contains `thingsboard/flows/` (with flow scripts) but no `thingsboard/mapper.toml`
 - **THEN** `tedge mapper list` SHALL include `thingsboard` with no `cloud_type` annotation
 
-#### Scenario: Empty mappers directory
-- **WHEN** `/etc/tedge/mappers/` contains no recognised mapper directories
-- **THEN** `tedge mapper list` SHALL print nothing (or an empty list)
+#### Scenario: Empty mapper directory is included
+- **WHEN** `/etc/tedge/mappers/` contains `thingsboard/` (empty directory, no `mapper.toml` or `flows/`)
+- **THEN** `tedge mapper list` SHALL include `thingsboard` with no `cloud_type` annotation
 
-#### Scenario: Directories without mapper.toml or flows/ are excluded
-- **WHEN** `/etc/tedge/mappers/` contains `thingsboard/mapper.toml` and `leftover/` (no `mapper.toml` and no `flows/`)
-- **THEN** `tedge mapper list` SHALL include `thingsboard` but SHALL NOT include `leftover`
+#### Scenario: Empty mappers directory
+- **WHEN** `/etc/tedge/mappers/` contains no subdirectories
+- **THEN** `tedge mapper list` SHALL print nothing (or an empty list)
 
 ### Requirement: tedge mapper config get
 `tedge mapper config get <name>.<key>` SHALL read a value from the named mapper's `mapper.toml`. The argument is split on the first `.`: the segment before the first `.` is the mapper name; the remainder is the TOML key path (supporting nested keys with further `.` separators). Output SHALL be the raw string value, matching `tedge config get` behaviour.

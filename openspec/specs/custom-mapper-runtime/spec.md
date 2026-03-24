@@ -13,22 +13,23 @@ At startup, the mapper name is validated by `validate_and_load`, which performs 
 1. Matches `[a-z][a-z0-9-]*` — otherwise hard error
 2. Does not start with `bridge-` — otherwise hard error (would collide with the `tedge-mapper-bridge-{name}` bridge sub-service naming pattern)
 3. The mapper directory exists — otherwise error listing available mappers
-3. At least one of `bridge/` or `flows/` is present — otherwise error (nothing to do)
 4. If `bridge/` is present, `mapper.toml` must also be present and valid — otherwise error
+
+The mapper SHALL then create the `flows/` subdirectory if it does not already exist, and start in flows-only mode if no bridge is configured.
 
 Extra arguments after the name SHALL be rejected with a clear error.
 
 #### Scenario: Starting a user-defined mapper by name
-- **WHEN** a user runs `tedge-mapper thingsboard` and `/etc/tedge/mappers/thingsboard/` exists with at least a `flows/` or `bridge/` subdirectory
+- **WHEN** a user runs `tedge-mapper thingsboard` and `/etc/tedge/mappers/thingsboard/` exists
 - **THEN** `tedge-mapper` SHALL start the mapper, launching whichever of the MQTT bridge and flows engine are applicable given the directory contents
+
+#### Scenario: Empty mapper directory starts in flows-only mode
+- **WHEN** a user runs `tedge-mapper mycloud` and `/etc/tedge/mappers/mycloud/` exists but is empty
+- **THEN** `tedge-mapper` SHALL start successfully in flows-only mode and SHALL create `/etc/tedge/mappers/mycloud/flows/`
 
 #### Scenario: Mapper directory does not exist
 - **WHEN** a user runs `tedge-mapper mycloud` and no directory `/etc/tedge/mappers/mycloud/` exists
 - **THEN** `tedge-mapper` SHALL report an error indicating that no mapper configuration was found for `mycloud` and SHALL list available user-defined mappers
-
-#### Scenario: Mapper directory has no bridge/ or flows/
-- **WHEN** a user runs `tedge-mapper mycloud` and `/etc/tedge/mappers/mycloud/` exists but contains neither a `bridge/` nor a `flows/` subdirectory
-- **THEN** `tedge-mapper` SHALL report an error indicating the mapper has nothing to do
 
 #### Scenario: Mapper directory has flows/ but no mapper.toml
 - **WHEN** a user runs `tedge-mapper mycloud` and `/etc/tedge/mappers/mycloud/flows/` exists but no `mapper.toml` is present
@@ -42,8 +43,12 @@ Extra arguments after the name SHALL be rejected with a clear error.
 A mapper SHALL start the built-in MQTT bridge and/or the flows engine depending on the contents of its directory. There SHALL be no built-in cloud-specific converter — all message transformation is handled by user-provided flow scripts or bridge rules.
 
 #### Scenario: Mapper starts bridge when mapper.toml is present
-- **WHEN** a mapper starts and its `mapper.toml` contains valid connection settings (URL, port, TLS certificates)
+- **WHEN** a mapper starts and its `mapper.toml` contains valid connection settings and a resolvable device ID (from the certificate CN or `device.id`)
 - **THEN** the mapper SHALL establish an MQTT bridge between the local broker and the configured cloud endpoint
+
+#### Scenario: Bridge fails to start without a resolvable device ID
+- **WHEN** a mapper starts with `mapper.toml` present but no device ID can be determined (password auth with no `device.id` set, or certificate CN is empty and `device.id` is absent)
+- **THEN** the mapper SHALL fail to start the bridge with a clear error indicating that a device ID is required
 
 #### Scenario: Mapper starts flows engine when flows directory is present
 - **WHEN** a mapper starts and its `flows/` directory contains flow scripts
@@ -61,33 +66,26 @@ A mapper SHALL start the built-in MQTT bridge and/or the flows engine depending 
 - **WHEN** a mapper starts and its directory has no `mapper.toml`
 - **THEN** the mapper SHALL start successfully with only the flows engine (no MQTT bridge to cloud)
 
-#### Scenario: Empty mapper directory
+#### Scenario: Empty mapper directory starts in flows-only mode
 - **WHEN** a mapper starts and its directory has no `mapper.toml`, `bridge/`, or `flows/`
-- **THEN** the mapper SHALL exit with an error indicating that neither connection settings nor flow scripts are present
+- **THEN** the mapper SHALL start successfully in flows-only mode and SHALL create the `flows/` subdirectory
 
-### Requirement: Startup scan warns about unrecognised and misconfigured mapper directories
-On startup, the mapper SHALL scan `/etc/tedge/mappers/` and emit warnings for directories that appear misconfigured, to help users spot typos or incomplete setups. Two distinct cases are warned:
+### Requirement: Startup scan warns about misconfigured mapper directories
+On startup, the mapper SHALL scan `/etc/tedge/mappers/` and emit a warning for any subdirectory that contains a `bridge/` subdirectory but no `mapper.toml`. Such a directory will fail to start — bridge rules require connection settings — and is likely a configuration mistake.
 
-1. **Unrecognised directory**: a subdirectory that contains neither a `mapper.toml` file nor a `flows/` subdirectory. Such a directory is not a valid mapper and will be ignored.
-2. **Empty flows directory**: a flows-only mapper directory (no `mapper.toml`) whose `flows/` subdirectory exists but contains no flow definition files. The mapper is recognised but has nothing to run.
+All other directories (including empty ones) are considered valid mapper directories and do not generate a warning.
 
-Built-in mapper directories (`c8y`, `az`, `aws`, `collectd`, `local`, and their profile variants such as `c8y.prod`) always have a `flows/` subdirectory populated with flow scripts, so they are naturally recognised without a `mapper.toml` and will not trigger either warning.
+#### Scenario: bridge/ without mapper.toml warns
+- **WHEN** `/etc/tedge/mappers/thingsboard/bridge/` exists but no `/etc/tedge/mappers/thingsboard/mapper.toml` is present
+- **THEN** the mapper SHALL emit a warning that `thingsboard` has bridge rules but no `mapper.toml` and will fail to start
 
-#### Scenario: Unrecognised directory warns and is ignored
-- **WHEN** `/etc/tedge/mappers/stale-dir/` exists with neither `mapper.toml` nor `flows/`
-- **THEN** the mapper SHALL emit a warning that `stale-dir` is unrecognised and will be ignored
+#### Scenario: Empty directory does not warn
+- **WHEN** `/etc/tedge/mappers/thingsboard/` exists but is empty
+- **THEN** no warning SHALL be emitted — an empty directory is a valid unstarted mapper
 
-#### Scenario: Flows-only mapper with empty flows/ warns
-- **WHEN** `/etc/tedge/mappers/thingsboard/flows/` exists but contains no flow definition files, and no `mapper.toml` is present
-- **THEN** the mapper SHALL emit a warning that `thingsboard` has a `flows/` directory but no flow scripts are defined
-
-#### Scenario: Flows-only mapper with scripts does not warn
-- **WHEN** `/etc/tedge/mappers/thingsboard/flows/` contains at least one flow definition file and no `mapper.toml` is present
-- **THEN** no startup warning SHALL be emitted for `thingsboard`
-
-#### Scenario: Built-in mapper directory does not warn
-- **WHEN** `/etc/tedge/mappers/c8y/` exists with a populated `flows/` subdirectory but no `mapper.toml`
-- **THEN** no warning SHALL be emitted — it has `flows/` (so not unrecognised) and `flows/` is non-empty (so no empty-flows warning)
+#### Scenario: flows-only directory does not warn
+- **WHEN** `/etc/tedge/mappers/thingsboard/flows/` exists with flow scripts but no `mapper.toml`
+- **THEN** no warning SHALL be emitted
 
 ### Requirement: Service identity follows naming conventions
 A mapper's service identity SHALL use `tedge-mapper-{name}` as the service name. This matches the naming convention of built-in mappers (`tedge-mapper-c8y`, `tedge-mapper-az`, `tedge-mapper-aws`) and is not tied to any specific init system.
