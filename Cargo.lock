@@ -5333,6 +5333,7 @@ dependencies = [
  "futures",
  "glob",
  "humantime",
+ "rand 0.9.1",
  "rquickjs",
  "serde",
  "serde_json",

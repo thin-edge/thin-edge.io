@@ -15,6 +15,7 @@ camino = { workspace = true, features = ["serde1"] }
 futures = { workspace = true }
 glob = { workspace = true }
 humantime = { workspace = true }
+rand = { workspace = true }
 rquickjs = { version = "0.11", default-features = false, features = [
     "futures",
     "macro",

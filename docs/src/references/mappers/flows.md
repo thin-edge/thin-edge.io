@@ -473,6 +473,10 @@ The following builtin objects are exported:
 - [`TextEncoder`](https://developer.mozilla.org/en-US/docs/Web/API/TextEncoder)
 - [`crypto.randomUUID`](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID)
   - Generate v4 UUIDs
+- [`crypto.getRandomValues`](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues)
+  - Get cryptographically strong random values
+  - Supported: `Int8Array`, `Uint8Array`, `Int16Array`, `Uint16Array`, `Int32Array`, `Uint32Array`
+  - Not supported: `Uint8ClampedArray`, `BigInt64Array`, `BigUint64Array` 
 
 ## Builtin transformations
 
