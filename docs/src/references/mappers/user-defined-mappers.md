@@ -10,7 +10,7 @@ import ProposalBanner from '@site/src/components/ProposalBanner'
 
 ## Overview
 
-In addition to the built-in cloud mappers (Cumulocity, Azure, AWS), thin-edge supports user-defined mappers that can bridge a device to any cloud platform.
+In addition to the built-in cloud mappers (Cumulocity, Azure, AWS), thin-edge supports user-defined mappers that can bridge a device to any IoT cloud platform with an MQTT interface.
 
 A user-defined mapper is a directory under `/etc/tedge/mappers/` that contains a `mapper.toml` configuration file.
 Starting the mapper with `tedge-mapper <name>` will look for this directory and run the mapper using the flows engine and/or MQTT bridge configured within it.
@@ -48,7 +48,6 @@ A minimal `mapper.toml` that connects to a ThingsBoard broker using certificate 
 
 ```toml
 url = "mqtt.thingsboard.io:8883"
-cloud_type = "thingsboard"  # optional, informational
 
 [device]
 cert_path = "cert.pem"         # relative paths resolved to mapper dir
@@ -60,9 +59,6 @@ A full example with all supported fields:
 ```toml
 # Cloud broker URL — required for MQTT bridge
 url = "mqtt.example.com:8883"
-
-# Identifies the cloud integration (informational — dispatch not yet implemented)
-cloud_type = "thingsboard"
 
 # Authentication: auto (default), certificate, or password
 auth_method = "auto"
