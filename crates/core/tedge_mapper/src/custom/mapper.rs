@@ -11,8 +11,8 @@ use crate::custom::config::load_mapper_config;
 use crate::custom::config::read_mapper_credentials;
 use crate::custom::config::scan_mappers_shallow;
 use crate::custom::config::CustomMapperConfig;
-use crate::custom::resolve::EffectiveMapperConfig;
 use crate::custom::resolve::resolve_effective_config;
+use crate::custom::resolve::EffectiveMapperConfig;
 use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
@@ -165,15 +165,9 @@ pub async fn build_cloud_mqtt_options(
     mapper_dir: &Utf8Path,
     tedge_config: &TEdgeConfig,
 ) -> anyhow::Result<(MqttOptions, AuthMethod)> {
-    let url = config
-        .url
-        .as_ref()
-        .map(|s| &s.value)
-        .with_context(|| {
-            format!(
-                "'{mapper_dir}/mapper.toml' is missing a 'url' field required for the MQTT bridge"
-            )
-        })?;
+    let url = config.url.as_ref().map(|s| &s.value).with_context(|| {
+        format!("'{mapper_dir}/mapper.toml' is missing a 'url' field required for the MQTT bridge")
+    })?;
 
     let mut cloud_config = MqttOptions::new(service_name, url.host().to_string(), url.port().0);
     cloud_config.set_clean_session(config.bridge.clean_session);
@@ -649,8 +643,13 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
 /r6GH5QYt7+JYa9+tUaFgfEH5mhjdOb7/g==\n\
 -----END EC PRIVATE KEY-----\n";
 
-        async fn resolve(config: &CustomMapperConfig, tedge_config: &TEdgeConfig) -> EffectiveMapperConfig {
-            resolve_effective_config(config, tedge_config).await.unwrap()
+        async fn resolve(
+            config: &CustomMapperConfig,
+            tedge_config: &TEdgeConfig,
+        ) -> EffectiveMapperConfig {
+            resolve_effective_config(config, tedge_config)
+                .await
+                .unwrap()
         }
 
         #[tokio::test]
@@ -665,7 +664,10 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 .await
                 .unwrap_err();
             let msg = format!("{err}");
-            assert!(msg.contains("mapper.toml"), "Error should mention mapper.toml: {msg}");
+            assert!(
+                msg.contains("mapper.toml"),
+                "Error should mention mapper.toml: {msg}"
+            );
             assert!(msg.contains("url"), "Error should mention url: {msg}");
         }
 
@@ -717,7 +719,10 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 .await
                 .unwrap_err();
             let msg = format!("{err}");
-            assert!(msg.contains("credentials_path"), "Error should mention credentials_path: {msg}");
+            assert!(
+                msg.contains("credentials_path"),
+                "Error should mention credentials_path: {msg}"
+            );
         }
 
         #[tokio::test]
@@ -725,8 +730,12 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
             let creds_path = ttd.utf8_path().join("creds.toml");
-            tokio::fs::write(&creds_path, "[credentials]\nusername = \"alice\"\npassword = \"secret\"\n")
-                .await.unwrap();
+            tokio::fs::write(
+                &creds_path,
+                "[credentials]\nusername = \"alice\"\npassword = \"secret\"\n",
+            )
+            .await
+            .unwrap();
             let tedge_config = TEdgeConfig::load_toml_str("device.id = \"test-device\"");
             let mut config = make_config(Some("mqtt.example.com:1883"));
             config.credentials_path = Some(creds_path);
@@ -743,8 +752,12 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             let ttd = TempTedgeDir::new();
             let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
             let creds_path = ttd.utf8_path().join("creds.toml");
-            tokio::fs::write(&creds_path, "[credentials]\nusername = \"bob\"\npassword = \"pass\"\n")
-                .await.unwrap();
+            tokio::fs::write(
+                &creds_path,
+                "[credentials]\nusername = \"bob\"\npassword = \"pass\"\n",
+            )
+            .await
+            .unwrap();
             let tedge_config = TEdgeConfig::load_toml_str("device.id = \"test-device\"");
             let mut config = make_config(Some("mqtt.example.com:1883"));
             config.auth_method = AuthMethodConfig::Password;
@@ -853,7 +866,10 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 .await
                 .unwrap_err();
             let msg = format!("{err}");
-            assert!(msg.contains("device.id"), "Error should mention device.id: {msg}");
+            assert!(
+                msg.contains("device.id"),
+                "Error should mention device.id: {msg}"
+            );
         }
 
         #[tokio::test]
@@ -871,7 +887,10 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 .await
                 .unwrap_err();
             let msg = format!("{err}");
-            assert!(msg.contains("device.id"), "Error should mention device.id: {msg}");
+            assert!(
+                msg.contains("device.id"),
+                "Error should mention device.id: {msg}"
+            );
         }
 
         fn make_config(url: Option<&str>) -> CustomMapperConfig {
@@ -902,14 +921,19 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             let cert_path = dir.join("cert-no-cn.pem");
             let key_path = dir.join("key-no-cn.pem");
             tokio::fs::write(&cert_path, cert.pem()).await.unwrap();
-            tokio::fs::write(&key_path, key.serialize_pem()).await.unwrap();
+            tokio::fs::write(&key_path, key.serialize_pem())
+                .await
+                .unwrap();
             (cert_path, key_path)
         }
 
         async fn write_creds(path: &Utf8PathBuf) {
-            tokio::fs::write(path, "[credentials]\nusername = \"user\"\npassword = \"pass\"\n")
-                .await
-                .unwrap();
+            tokio::fs::write(
+                path,
+                "[credentials]\nusername = \"user\"\npassword = \"pass\"\n",
+            )
+            .await
+            .unwrap();
         }
     }
 }

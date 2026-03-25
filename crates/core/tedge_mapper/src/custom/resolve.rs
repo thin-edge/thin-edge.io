@@ -161,7 +161,10 @@ pub async fn resolve_effective_config(
     );
 
     let root_cert_path = resolve_path_sourced(
-        config.device.as_ref().and_then(|d| d.root_cert_path.as_ref()),
+        config
+            .device
+            .as_ref()
+            .and_then(|d| d.root_cert_path.as_ref()),
         &config.table,
         &["device", "root_cert_path"],
         || None,
@@ -206,11 +209,9 @@ fn resolve_path_sourced(
         Some(path) => {
             let original_str = walk_table_str(table, table_key_path);
             let source = match original_str {
-                Some(s) if !Utf8Path::new(s).is_absolute() => {
-                    ConfigSource::MapperTomlResolved {
-                        original: s.to_string(),
-                    }
-                }
+                Some(s) if !Utf8Path::new(s).is_absolute() => ConfigSource::MapperTomlResolved {
+                    original: s.to_string(),
+                },
                 _ => ConfigSource::MapperToml,
             };
             Some(Sourced {
@@ -305,8 +306,8 @@ async fn resolve_device_id(
 mod tests {
     use super::*;
     use crate::custom::config::load_mapper_config;
-    use crate::custom::config::DeviceConfig;
     use crate::custom::config::BridgeConfig;
+    use crate::custom::config::DeviceConfig;
     use camino::Utf8PathBuf;
     use tedge_config::TEdgeConfig;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -350,7 +351,9 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         let cert_path = dir.join("cert-no-cn.pem");
         let key_path = dir.join("key-no-cn.pem");
         tokio::fs::write(&cert_path, cert.pem()).await.unwrap();
-        tokio::fs::write(&key_path, key.serialize_pem()).await.unwrap();
+        tokio::fs::write(&key_path, key.serialize_pem())
+            .await
+            .unwrap();
         (cert_path, key_path)
     }
 
@@ -519,9 +522,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         let mapper_dir = ttd.utf8_path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         let (cert, key) = write_cert(ttd.utf8_path()).await;
-        let toml = format!(
-            "[device]\ncert_path = \"{cert}\"\nkey_path = \"{key}\"\n"
-        );
+        let toml = format!("[device]\ncert_path = \"{cert}\"\nkey_path = \"{key}\"\n");
         tokio::fs::write(mapper_dir.join("mapper.toml"), &toml)
             .await
             .unwrap();
@@ -607,6 +608,9 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             effective.root_cert_path.value,
             Utf8PathBuf::from("/etc/ssl/certs")
         );
-        assert!(matches!(effective.root_cert_path.source, ConfigSource::Default));
+        assert!(matches!(
+            effective.root_cert_path.source,
+            ConfigSource::Default
+        ));
     }
 }

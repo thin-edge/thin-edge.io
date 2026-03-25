@@ -232,15 +232,12 @@ impl Command for MapperConfigGetCommand {
             return Err(err.into());
         }
 
-        let raw = load_mapper_config(&mapper_dir)
-            .await
-            .map_err(anyhow::Error::from)?
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Mapper '{}' has no mapper.toml at '{mapper_dir}'",
-                    self.mapper_name
-                )
-            })?;
+        let raw = load_mapper_config(&mapper_dir).await?.ok_or_else(|| {
+            anyhow::anyhow!(
+                "Mapper '{}' has no mapper.toml at '{mapper_dir}'",
+                self.mapper_name
+            )
+        })?;
 
         if SCHEMA_KEYS.contains(&self.toml_key.as_str()) {
             let effective = resolve_effective_config(&raw, &config).await?;
@@ -895,8 +892,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             // No mapper.toml written
 
-            let result =
-                run_get(&mappers_root, "tb", "url", TEdgeConfig::load_toml_str("")).await;
+            let result = run_get(&mappers_root, "tb", "url", TEdgeConfig::load_toml_str("")).await;
             assert!(result.is_err(), "should error when mapper.toml is absent");
             let msg = format!("{}", result.unwrap_err());
             assert!(
