@@ -6,6 +6,11 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use pad::PadStr;
 use tedge_config::TEdgeConfig;
+use tedge_mapper::custom_mapper_config::load_mapper_config;
+use tedge_mapper::custom_mapper_config::scan_mappers_shallow;
+use tedge_mapper::custom_mapper_resolve::resolve_effective_config;
+use tedge_mapper::custom_mapper_resolve::ConfigSource;
+use tedge_mapper::custom_mapper_resolve::EffectiveMapperConfig;
 use yansi::Paint;
 
 #[derive(clap::Subcommand, Debug)]
@@ -26,11 +31,25 @@ pub enum MapperConfigCmd {
     ///
     /// The key is in the form `<mapper-name>.<toml-key-path>`, e.g. `thingsboard.url`
     /// or `thingsboard.device.cert_path`.
+    ///
+    /// Schema-level keys (`url`, `device.id`, `device.cert_path`, `device.key_path`,
+    /// `device.root_cert_path`) return the *effective* value — including cert CN inference
+    /// and `tedge.toml` fallbacks — with a source annotation on stderr.
+    /// All other keys are read directly from `mapper.toml`.
     Get {
         /// The key to look up, e.g. `thingsboard.url`
         key: String,
     },
 }
+
+/// Schema-level keys handled by `resolve_effective_config` rather than raw TOML walk.
+const SCHEMA_KEYS: &[&str] = &[
+    "url",
+    "device.id",
+    "device.cert_path",
+    "device.key_path",
+    "device.root_cert_path",
+];
 
 #[async_trait::async_trait]
 impl BuildCommand for MapperCli {
@@ -64,7 +83,60 @@ fn split_mapper_key(key: &str) -> Result<(String, String), ConfigError> {
     }
 }
 
-/// `tedge mapper list` — prints all mappers under the mappers root with their cloud type.
+/// One row of output for `tedge mapper list`.
+struct MapperRow {
+    name: String,
+    cloud_type: String,
+    url: String,
+    device_id: String,
+}
+
+/// Builds the display rows for `tedge mapper list` by resolving the effective
+/// configuration for each mapper. Errors for individual mappers are swallowed
+/// so that one broken mapper does not prevent the rest from being listed.
+async fn build_mapper_rows(
+    mappers_root: &Utf8Path,
+    mappers: &[(String, Option<toml::Table>)],
+    config: &TEdgeConfig,
+) -> Vec<MapperRow> {
+    let mut rows = Vec::with_capacity(mappers.len());
+    for (name, raw_table) in mappers {
+        let cloud_type = raw_table
+            .as_ref()
+            .and_then(|t| t.get("cloud_type"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let mapper_dir = mappers_root.join(name);
+        let (url, device_id) = match load_mapper_config(&mapper_dir).await {
+            Ok(Some(raw)) => match resolve_effective_config(&raw, config).await {
+                Ok(effective) => {
+                    let url = effective
+                        .url
+                        .map(|u| u.value.to_string())
+                        .unwrap_or_default();
+                    let device_id = effective
+                        .device_id
+                        .map(|d| format!("{} [{}]", d.value, d.source.short_tag()))
+                        .unwrap_or_default();
+                    (url, device_id)
+                }
+                Err(_) => (String::new(), String::new()),
+            },
+            _ => (String::new(), String::new()),
+        };
+        rows.push(MapperRow {
+            name: name.clone(),
+            cloud_type,
+            url,
+            device_id,
+        });
+    }
+    rows
+}
+
+/// `tedge mapper list` — prints all mappers under the mappers root with their
+/// cloud type, url, and effective device identity.
 struct ListMappersCommand {
     mappers_root: Utf8PathBuf,
 }
@@ -75,34 +147,55 @@ impl Command for ListMappersCommand {
         "list available mappers".to_string()
     }
 
-    async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let mappers = scan_mappers(&self.mappers_root).await;
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        let mappers = scan_mappers_shallow(&self.mappers_root).await;
         if mappers.is_empty() {
             eprintln!("No mappers found under '{}'", self.mappers_root);
             return Ok(());
         }
-        let max_width = mappers
+
+        let rows = build_mapper_rows(&self.mappers_root, &mappers, &config).await;
+
+        let name_w = rows.iter().map(|r| r.name.len()).max().unwrap_or(0);
+        let cloud_type_w = rows.iter().map(|r| r.cloud_type.len()).max().unwrap_or(0);
+        let url_w = rows
             .iter()
-            .map(|(name, _)| name.len())
+            .map(|r| r.url.len())
             .max()
-            .unwrap_or(0);
-        for (name, cloud_type) in &mappers {
-            let padded = name.pad_to_width_with_alignment(max_width, pad::Alignment::Right);
-            if let Some(cloud) = cloud_type {
-                println!(
-                    "{}  {}",
-                    padded.yellow(),
-                    format!("cloud_type={cloud}").dim()
-                );
+            .unwrap_or(0)
+            .max("url".len());
+
+        for row in &rows {
+            let name = row
+                .name
+                .pad_to_width_with_alignment(name_w, pad::Alignment::Right);
+            let cloud_type = row.cloud_type.pad_to_width(cloud_type_w);
+            let url = row.url.pad_to_width(url_w);
+            if row.device_id.is_empty() && row.url.is_empty() && row.cloud_type.is_empty() {
+                println!("{}", name.yellow());
             } else {
-                println!("{}", padded.yellow());
+                println!(
+                    "{}  {}  {}  {}",
+                    name.yellow(),
+                    url.dim(),
+                    row.device_id.dim(),
+                    cloud_type.dim(),
+                );
             }
         }
         Ok(())
     }
 }
 
-/// `tedge mapper config get thingsboard.url` — reads a TOML key from a mapper's mapper.toml.
+/// `tedge mapper config get thingsboard.url` — returns an effective config value.
+///
+/// Schema-level keys (`url`, `device.id`, `device.cert_path`, `device.key_path`,
+/// `device.root_cert_path`) are resolved via [`resolve_effective_config`] so that
+/// cert CN inference and `tedge.toml` fallbacks are applied. A source annotation
+/// (e.g. `# inferred from certificate CN (...)`) is written to stderr.
+///
+/// All other keys are read directly from `mapper.toml` with a `# from mapper.toml`
+/// annotation on stderr.
 struct MapperConfigGetCommand {
     mappers_root: Utf8PathBuf,
     mapper_name: String,
@@ -118,10 +211,10 @@ impl Command for MapperConfigGetCommand {
         )
     }
 
-    async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         let mapper_dir = self.mappers_root.join(&self.mapper_name);
         if !tokio::fs::try_exists(&mapper_dir).await.unwrap_or(false) {
-            let available = scan_mappers(&self.mappers_root).await;
+            let available = scan_mappers_shallow(&self.mappers_root).await;
             let err: anyhow::Error = if available.is_empty() {
                 anyhow::anyhow!(
                     "Mapper '{}' not found. No mappers configured under '{}'.",
@@ -139,36 +232,89 @@ impl Command for MapperConfigGetCommand {
             return Err(err.into());
         }
 
-        let mapper_toml_path = mapper_dir.join("mapper.toml");
-        let content = tokio::fs::read_to_string(&mapper_toml_path)
+        let raw = load_mapper_config(&mapper_dir)
             .await
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    anyhow::anyhow!(
-                        "Mapper '{}' has no mapper.toml at '{}'",
-                        self.mapper_name,
-                        mapper_toml_path
-                    )
-                } else {
-                    anyhow::anyhow!("Failed to read '{}': {e}", mapper_toml_path)
-                }
+            .map_err(anyhow::Error::from)?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Mapper '{}' has no mapper.toml at '{mapper_dir}'",
+                    self.mapper_name
+                )
             })?;
 
-        let table: toml::Table = content
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Failed to parse '{}': {e}", mapper_toml_path))?;
+        if SCHEMA_KEYS.contains(&self.toml_key.as_str()) {
+            let effective = resolve_effective_config(&raw, &config).await?;
+            print_schema_key(&self.toml_key, &effective, &mapper_dir)?;
+        } else {
+            let value = walk_toml_key(&raw.table, &self.toml_key).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Key '{}' not found in '{mapper_dir}/mapper.toml'",
+                    self.toml_key
+                )
+            })?;
+            println!("{}", toml_value_to_string(value));
+            eprintln!("# {}", ConfigSource::MapperToml);
+        }
 
-        let value = walk_toml_key(&table, &self.toml_key).ok_or_else(|| {
-            anyhow::anyhow!(
-                "Key '{}' not found in '{}'",
-                self.toml_key,
-                mapper_toml_path
-            )
-        })?;
-
-        println!("{}", toml_value_to_string(value));
         Ok(())
     }
+}
+
+/// Prints the effective value of a schema-level key to stdout and its source annotation
+/// to stderr.  Returns an error if the key has no value (e.g. `device.id` when the cert
+/// is unreadable under cert auth).
+fn print_schema_key(
+    key: &str,
+    effective: &EffectiveMapperConfig,
+    mapper_dir: &camino::Utf8Path,
+) -> anyhow::Result<()> {
+    match key {
+        "url" => {
+            let s = effective.url.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("Key 'url' not set in '{mapper_dir}/mapper.toml'")
+            })?;
+            println!("{}", s.value);
+            eprintln!("# {}", s.source);
+        }
+        "device.id" => {
+            let s = effective.device_id.as_ref().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Cannot determine device.id for mapper at '{mapper_dir}': \
+                     certificate authentication is configured but the certificate is unreadable. \
+                     Set 'device.id' explicitly in '{mapper_dir}/mapper.toml' to override."
+                )
+            })?;
+            println!("{}", s.value);
+            eprintln!("# {}", s.source);
+        }
+        "device.cert_path" => {
+            let s = effective.cert_path.as_ref().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Key 'device.cert_path' is not set in '{mapper_dir}/mapper.toml' \
+                     and is not configured in tedge.toml"
+                )
+            })?;
+            println!("{}", s.value);
+            eprintln!("# {}", s.source);
+        }
+        "device.key_path" => {
+            let s = effective.key_path.as_ref().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Key 'device.key_path' is not set in '{mapper_dir}/mapper.toml' \
+                     and is not configured in tedge.toml"
+                )
+            })?;
+            println!("{}", s.value);
+            eprintln!("# {}", s.source);
+        }
+        "device.root_cert_path" => {
+            let s = &effective.root_cert_path;
+            println!("{}", s.value);
+            eprintln!("# {}", s.source);
+        }
+        _ => unreachable!("unexpected schema key: {key}"),
+    }
+    Ok(())
 }
 
 /// Walks a dotted key path through a TOML table, e.g. `"device.cert_path"`.
@@ -197,203 +343,33 @@ fn toml_value_to_string(value: &toml::Value) -> String {
     }
 }
 
-/// Scans `mappers_root` and returns `(name, cloud_type)` for each subdirectory.
-///
-/// Every subdirectory is treated as a potential mapper — a flows-only mapper
-/// may have no `mapper.toml` and no `flows/` directory before its first
-/// startup (the `flows/` directory is created automatically when the mapper
-/// starts). If a `mapper.toml` is present, its `cloud_type` field is read and
-/// included in the output.
-async fn scan_mappers(mappers_root: &Utf8Path) -> Vec<(String, Option<String>)> {
-    let Ok(mut entries) = tokio::fs::read_dir(mappers_root).await else {
-        return Vec::new();
-    };
-
-    let mut mappers = Vec::new();
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let Ok(ft) = entry.file_type().await else {
-            continue;
-        };
-        if !ft.is_dir() {
-            continue;
-        }
-        let path = Utf8PathBuf::from(entry.path().to_string_lossy().into_owned());
-        let mapper_toml = path.join("mapper.toml");
-        let has_mapper_toml = tokio::fs::try_exists(&mapper_toml).await.unwrap_or(false);
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let cloud_type = if has_mapper_toml {
-            read_cloud_type(&mapper_toml).await
-        } else {
-            None
-        };
-        mappers.push((name, cloud_type));
-    }
-    mappers.sort_by(|(a, _), (b, _)| a.cmp(b));
-    mappers
-}
-
-/// Reads the `cloud_type` string from a `mapper.toml` if present.
-async fn read_cloud_type(mapper_toml: &Utf8Path) -> Option<String> {
-    let content = tokio::fs::read_to_string(mapper_toml).await.ok()?;
-    let table: toml::Table = content.parse().ok()?;
-    table
-        .get("cloud_type")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tedge_test_utils::fs::TempTedgeDir;
 
-    mod list_mappers {
-        use super::*;
+    // Test EC certificate (CN = "localhost") and matching private key.
+    const TEST_CERT_PEM: &str = "\
+-----BEGIN CERTIFICATE-----\n\
+MIIBnzCCAUWgAwIBAgIUSTUtJUfUdERMKBwsfdRv9IbvQicwCgYIKoZIzj0EAwIw\n\
+FDESMBAGA1UEAwwJbG9jYWxob3N0MCAXDTIzMTExNDE2MDUwOVoYDzMwMjMwMzE3\n\
+MTYwNTA5WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwWTATBgcqhkjOPQIBBggqhkjO\n\
+PQMBBwNCAAR2SVEPD34AAxFuk0xYm60p7hA7+1SW+sFHazBRg32ifFd0o2Mn+Tf+\n\
+voYflBi3v4lhr361RoWB8QfmaGN05vv+o3MwcTAdBgNVHQ4EFgQUAb4jQ7RQ/xyg\n\
+cZM+We8ik29/oxswHwYDVR0jBBgwFoAUAb4jQ7RQ/xygcZM+We8ik29/oxswIQYD\n\
+VR0RBBowGIIJbG9jYWxob3N0ggsqLmxvY2FsaG9zdDAMBgNVHRMBAf8EAjAAMAoG\n\
+CCqGSM49BAMCA0gAMEUCIA6QrxoDHQJqoly7d8VN0sj0eDvfFpbbZdSnzBd6R8AP\n\
+AiEAm/PAH3IPGuHRBIpdC0rNR8F/l3WcN9I9984qKZdG5rs=\n\
+-----END CERTIFICATE-----\n";
 
-        #[tokio::test]
-        async fn empty_mappers_dir_returns_empty() {
-            let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
-            tokio::fs::create_dir_all(&mappers_root).await.unwrap();
+    const TEST_KEY_PEM: &str = "\
+-----BEGIN EC PRIVATE KEY-----\n\
+MHcCAQEEIBX2Z/NKGEX14QbH4kb5GXom0pqSPfX0mxdWbLb86apEoAoGCCqGSM49\n\
+AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
+/r6GH5QYt7+JYa9+tUaFgfEH5mhjdOb7/g==\n\
+-----END EC PRIVATE KEY-----\n";
 
-            assert!(scan_mappers(&mappers_root).await.is_empty());
-        }
-
-        #[tokio::test]
-        async fn dir_without_mapper_toml_or_flows_is_included() {
-            // A mapper directory before first startup has no flows/ yet — it
-            // should still appear in the list.
-            let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
-            tokio::fs::create_dir_all(mappers_root.join("mymapper"))
-                .await
-                .unwrap();
-
-            let mappers = scan_mappers(&mappers_root).await;
-            assert_eq!(mappers, vec![("mymapper".to_string(), None)]);
-        }
-
-        #[tokio::test]
-        async fn flows_only_mapper_is_included() {
-            let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
-            let flows_dir = mappers_root.join("thingsboard/flows");
-            tokio::fs::create_dir_all(&flows_dir).await.unwrap();
-            tokio::fs::write(
-                flows_dir.join("telemetry.toml"),
-                "input.mqtt.topics = [\"te/+/+/+/+/m/+\"]\n",
-            )
-            .await
-            .unwrap();
-
-            let mappers = scan_mappers(&mappers_root).await;
-            assert_eq!(mappers, vec![("thingsboard".to_string(), None)]);
-        }
-
-        #[tokio::test]
-        async fn flows_only_mapper_without_flows_dir_is_included() {
-            // Before first startup the flows/ dir doesn't exist yet — mapper should still appear.
-            let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
-            tokio::fs::create_dir_all(mappers_root.join("thingsboard"))
-                .await
-                .unwrap();
-
-            let mappers = scan_mappers(&mappers_root).await;
-            assert_eq!(mappers, vec![("thingsboard".to_string(), None)]);
-        }
-
-        #[tokio::test]
-        async fn flows_only_mapper_with_empty_flows_dir_is_included() {
-            let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
-            tokio::fs::create_dir_all(mappers_root.join("thingsboard/flows"))
-                .await
-                .unwrap();
-
-            let mappers = scan_mappers(&mappers_root).await;
-            assert_eq!(mappers, vec![("thingsboard".to_string(), None)]);
-        }
-
-        #[tokio::test]
-        async fn mapper_with_both_mapper_toml_and_flows_is_included_once() {
-            let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
-            let mapper_dir = mappers_root.join("c8y");
-            tokio::fs::create_dir_all(mapper_dir.join("flows"))
-                .await
-                .unwrap();
-            tokio::fs::write(mapper_dir.join("mapper.toml"), "cloud_type = \"c8y\"\n")
-                .await
-                .unwrap();
-
-            let mappers = scan_mappers(&mappers_root).await;
-            assert_eq!(mappers, vec![("c8y".to_string(), Some("c8y".to_string()))]);
-        }
-
-        #[tokio::test]
-        async fn lists_mapper_with_cloud_type() {
-            let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
-            let c8y_dir = mappers_root.join("c8y");
-            tokio::fs::create_dir_all(&c8y_dir).await.unwrap();
-            tokio::fs::write(c8y_dir.join("mapper.toml"), "cloud_type = \"c8y\"\n")
-                .await
-                .unwrap();
-
-            let mappers = scan_mappers(&mappers_root).await;
-            assert_eq!(mappers, vec![("c8y".to_string(), Some("c8y".to_string()))]);
-        }
-
-        #[tokio::test]
-        async fn lists_mapper_without_cloud_type() {
-            let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
-            let tb_dir = mappers_root.join("thingsboard");
-            tokio::fs::create_dir_all(&tb_dir).await.unwrap();
-            tokio::fs::write(
-                tb_dir.join("mapper.toml"),
-                "url = \"tb.example.com:8883\"\n",
-            )
-            .await
-            .unwrap();
-
-            let mappers = scan_mappers(&mappers_root).await;
-            assert_eq!(mappers, vec![("thingsboard".to_string(), None)]);
-        }
-
-        #[tokio::test]
-        async fn lists_mixed_built_in_and_user_defined() {
-            let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
-
-            for (name, content) in [
-                ("c8y", "cloud_type = \"c8y\"\n"),
-                ("thingsboard", "url = \"tb.example.com:8883\"\n"),
-            ] {
-                let dir = mappers_root.join(name);
-                tokio::fs::create_dir_all(&dir).await.unwrap();
-                tokio::fs::write(dir.join("mapper.toml"), content)
-                    .await
-                    .unwrap();
-            }
-            // directory without mapper.toml — now included as a flows-only mapper
-            tokio::fs::create_dir_all(mappers_root.join("myflows"))
-                .await
-                .unwrap();
-
-            let mappers = scan_mappers(&mappers_root).await;
-            assert_eq!(mappers.len(), 3);
-            assert!(mappers
-                .iter()
-                .any(|(n, ct)| n == "c8y" && ct.as_deref() == Some("c8y")));
-            assert!(mappers
-                .iter()
-                .any(|(n, ct)| n == "thingsboard" && ct.is_none()));
-        }
-    }
-
-    mod config_get {
+    mod split_key {
         use super::*;
 
         #[test]
@@ -414,6 +390,10 @@ mod tests {
         fn errors_without_dot() {
             assert!(split_mapper_key("thingsboard").is_err());
         }
+    }
+
+    mod walk_toml {
+        use super::*;
 
         #[test]
         fn walk_top_level_key() {
@@ -446,6 +426,511 @@ mod tests {
             let table: toml::Table = "url = \"mqtt.example.com\"\n".parse().unwrap();
             // "url" is a string, not a table — can't descend further
             assert!(walk_toml_key(&table, "url.host").is_none());
+        }
+    }
+
+    mod list_mappers {
+        use super::*;
+
+        #[tokio::test]
+        async fn empty_mappers_dir_returns_empty() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(&mappers_root).await.unwrap();
+
+            assert!(scan_mappers_shallow(&mappers_root).await.is_empty());
+        }
+
+        #[tokio::test]
+        async fn dir_without_mapper_toml_or_flows_is_included() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_root.join("mymapper"))
+                .await
+                .unwrap();
+
+            let mappers = scan_mappers_shallow(&mappers_root).await;
+            let names: Vec<_> = mappers.iter().map(|(n, _)| n.as_str()).collect();
+            assert_eq!(names, vec!["mymapper"]);
+        }
+
+        #[tokio::test]
+        async fn flows_only_mapper_is_included() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let flows_dir = mappers_root.join("thingsboard/flows");
+            tokio::fs::create_dir_all(&flows_dir).await.unwrap();
+
+            let mappers = scan_mappers_shallow(&mappers_root).await;
+            let names: Vec<_> = mappers.iter().map(|(n, _)| n.as_str()).collect();
+            assert_eq!(names, vec!["thingsboard"]);
+        }
+
+        #[tokio::test]
+        async fn lists_mapper_with_cloud_type_in_table() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let c8y_dir = mappers_root.join("c8y");
+            tokio::fs::create_dir_all(&c8y_dir).await.unwrap();
+            tokio::fs::write(c8y_dir.join("mapper.toml"), "cloud_type = \"c8y\"\n")
+                .await
+                .unwrap();
+
+            let mappers = scan_mappers_shallow(&mappers_root).await;
+            assert_eq!(mappers.len(), 1);
+            assert_eq!(mappers[0].0, "c8y");
+            let table = mappers[0].1.as_ref().unwrap();
+            assert_eq!(
+                table.get("cloud_type").and_then(|v| v.as_str()),
+                Some("c8y")
+            );
+        }
+
+        #[tokio::test]
+        async fn lists_mapper_without_cloud_type() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let tb_dir = mappers_root.join("thingsboard");
+            tokio::fs::create_dir_all(&tb_dir).await.unwrap();
+            tokio::fs::write(
+                tb_dir.join("mapper.toml"),
+                "url = \"tb.example.com:8883\"\n",
+            )
+            .await
+            .unwrap();
+
+            let mappers = scan_mappers_shallow(&mappers_root).await;
+            assert_eq!(mappers.len(), 1);
+            assert_eq!(mappers[0].0, "thingsboard");
+        }
+
+        #[tokio::test]
+        async fn lists_mixed_mappers_sorted() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            for name in ["zz-mapper", "aa-mapper", "mm-mapper"] {
+                tokio::fs::create_dir_all(mappers_root.join(name))
+                    .await
+                    .unwrap();
+            }
+            let mappers = scan_mappers_shallow(&mappers_root).await;
+            let names: Vec<_> = mappers.iter().map(|(n, _)| n.as_str()).collect();
+            assert_eq!(names, vec!["aa-mapper", "mm-mapper", "zz-mapper"]);
+        }
+
+        #[tokio::test]
+        async fn cert_cn_shown_with_tag_in_device_id_column() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            let cert = mapper_dir.join("cert.pem");
+            let key = mapper_dir.join("key.pem");
+            tokio::fs::write(&cert, TEST_CERT_PEM).await.unwrap();
+            tokio::fs::write(&key, TEST_KEY_PEM).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                format!(
+                    "url = \"mqtt.example.com:8883\"\n\
+                     [device]\ncert_path = \"{cert}\"\nkey_path = \"{key}\"\n"
+                ),
+            )
+            .await
+            .unwrap();
+
+            let mappers = scan_mappers_shallow(&mappers_root).await;
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let rows = build_mapper_rows(&mappers_root, &mappers, &tedge_config).await;
+
+            assert_eq!(rows.len(), 1);
+            assert_eq!(
+                rows[0].device_id, "localhost [cert CN]",
+                "device_id should show CN with [cert CN] tag"
+            );
+        }
+
+        #[tokio::test]
+        async fn tedge_toml_device_id_shown_with_tag() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            let creds = ttd.utf8_path().join("creds.toml");
+            tokio::fs::write(
+                &creds,
+                "[credentials]\nusername = \"u\"\npassword = \"p\"\n",
+            )
+            .await
+            .unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                format!("url = \"mqtt.example.com:8883\"\ncredentials_path = \"{creds}\"\n"),
+            )
+            .await
+            .unwrap();
+
+            let mappers = scan_mappers_shallow(&mappers_root).await;
+            let tedge_config =
+                tedge_config::TEdgeConfig::load_toml_str("device.id = \"root-device\"");
+            let rows = build_mapper_rows(&mappers_root, &mappers, &tedge_config).await;
+
+            assert_eq!(rows.len(), 1);
+            assert_eq!(
+                rows[0].device_id, "root-device [tedge.toml]",
+                "device_id should show tedge.toml value with [tedge.toml] tag"
+            );
+        }
+
+        #[tokio::test]
+        async fn unreadable_cert_leaves_device_id_blank() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "url = \"mqtt.example.com:8883\"\n\
+                 [device]\ncert_path = \"/nonexistent/cert.pem\"\nkey_path = \"/nonexistent/key.pem\"\n",
+            )
+            .await
+            .unwrap();
+
+            let mappers = scan_mappers_shallow(&mappers_root).await;
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let rows = build_mapper_rows(&mappers_root, &mappers, &tedge_config).await;
+
+            // Command must not fail — the mapper is still listed
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].name, "tb");
+            assert!(
+                rows[0].device_id.is_empty(),
+                "device_id should be blank for unreadable cert, got: {:?}",
+                rows[0].device_id
+            );
+        }
+
+        #[tokio::test]
+        async fn flows_only_mapper_has_blank_url_and_identity() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_root.join("thingsboard/flows"))
+                .await
+                .unwrap();
+
+            let mappers = scan_mappers_shallow(&mappers_root).await;
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let rows = build_mapper_rows(&mappers_root, &mappers, &tedge_config).await;
+
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].name, "thingsboard");
+            assert!(
+                rows[0].url.is_empty(),
+                "url should be blank for flows-only mapper"
+            );
+            assert!(
+                rows[0].device_id.is_empty(),
+                "device_id should be blank for flows-only mapper"
+            );
+            assert!(
+                rows[0].cloud_type.is_empty(),
+                "cloud_type should be blank for flows-only mapper"
+            );
+        }
+
+        #[tokio::test]
+        async fn cloud_type_shown_for_mappers_that_set_it() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            // c8y and production have cloud_type; thingsboard does not
+            for (name, content) in [
+                ("c8y", "cloud_type = \"c8y\"\n"),
+                ("production", "cloud_type = \"c8y\"\n"),
+                ("thingsboard", "url = \"mqtt.tb.io:8883\"\n"),
+            ] {
+                let dir = mappers_root.join(name);
+                tokio::fs::create_dir_all(&dir).await.unwrap();
+                tokio::fs::write(dir.join("mapper.toml"), content)
+                    .await
+                    .unwrap();
+            }
+
+            let mappers = scan_mappers_shallow(&mappers_root).await;
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let rows = build_mapper_rows(&mappers_root, &mappers, &tedge_config).await;
+
+            assert_eq!(rows.len(), 3);
+            let by_name: std::collections::HashMap<_, _> =
+                rows.iter().map(|r| (r.name.as_str(), r)).collect();
+            assert_eq!(by_name["c8y"].cloud_type, "c8y");
+            assert_eq!(by_name["production"].cloud_type, "c8y");
+            assert!(
+                by_name["thingsboard"].cloud_type.is_empty(),
+                "thingsboard should have no cloud_type"
+            );
+        }
+    }
+
+    mod config_get {
+        use super::*;
+        use tedge_config::TEdgeConfig;
+
+        async fn write_cert(dir: &camino::Utf8Path) -> (camino::Utf8PathBuf, camino::Utf8PathBuf) {
+            let cert = dir.join("cert.pem");
+            let key = dir.join("key.pem");
+            tokio::fs::write(&cert, TEST_CERT_PEM).await.unwrap();
+            tokio::fs::write(&key, TEST_KEY_PEM).await.unwrap();
+            (cert, key)
+        }
+
+        /// Helper: runs a config-get for `<mapper_name>.<key>` against `mappers_root`.
+        async fn run_get(
+            mappers_root: &camino::Utf8Path,
+            mapper_name: &str,
+            key: &str,
+            tedge_config: TEdgeConfig,
+        ) -> Result<(), anyhow::Error> {
+            let cmd = MapperConfigGetCommand {
+                mappers_root: mappers_root.to_owned(),
+                mapper_name: mapper_name.to_string(),
+                toml_key: key.to_string(),
+            };
+            cmd.execute(tedge_config).await.map_err(|e| match e {
+                MaybeFancy::Unfancy(e) => e,
+                MaybeFancy::Fancy(f) => anyhow::anyhow!("{f}"),
+            })
+        }
+
+        #[tokio::test]
+        async fn url_returns_effective_value() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "url = \"mqtt.example.com:8883\"\n",
+            )
+            .await
+            .unwrap();
+
+            // Just ensure it doesn't error and we can call it
+            let result = run_get(
+                &mappers_root,
+                "tb",
+                "url",
+                TEdgeConfig::load_toml_str("device.id = \"test\""),
+            )
+            .await;
+            assert!(result.is_ok(), "config get url should succeed: {result:?}");
+        }
+
+        #[tokio::test]
+        async fn device_id_inferred_from_cert_cn() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "url = \"mqtt.example.com:8883\"\n",
+            )
+            .await
+            .unwrap();
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+
+            let result = run_get(&mappers_root, "tb", "device.id", tedge_config).await;
+            assert!(
+                result.is_ok(),
+                "device.id should be resolved from cert CN: {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn device_id_falls_back_to_tedge_toml() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            // Password auth — no cert, tedge.toml has device.id
+            let creds = ttd.utf8_path().join("creds.toml");
+            tokio::fs::write(
+                &creds,
+                "[credentials]\nusername = \"u\"\npassword = \"p\"\n",
+            )
+            .await
+            .unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                format!("url = \"mqtt.example.com:8883\"\ncredentials_path = \"{creds}\"\n"),
+            )
+            .await
+            .unwrap();
+            let tedge_config = TEdgeConfig::load_toml_str("device.id = \"root-device\"");
+
+            let result = run_get(&mappers_root, "tb", "device.id", tedge_config).await;
+            assert!(
+                result.is_ok(),
+                "device.id should fall back to tedge.toml: {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn device_id_errors_when_cert_unreadable() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "url = \"mqtt.example.com:8883\"\n",
+            )
+            .await
+            .unwrap();
+            // Cert path set but file doesn't exist
+            let tedge_config = TEdgeConfig::load_toml_str(
+                "device.cert_path = \"/nonexistent/cert.pem\"\n\
+                 device.key_path = \"/nonexistent/key.pem\"\n",
+            );
+
+            let result = run_get(&mappers_root, "tb", "device.id", tedge_config).await;
+            assert!(result.is_err(), "should error when cert unreadable");
+            let msg = format!("{}", result.unwrap_err());
+            assert!(
+                msg.contains("unreadable") || msg.contains("certificate"),
+                "error should mention certificate: {msg}"
+            );
+        }
+
+        #[tokio::test]
+        async fn relative_cert_path_resolved_to_absolute() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            // Write cert files in mapper_dir so relative path resolves
+            tokio::fs::write(mapper_dir.join("cert.pem"), TEST_CERT_PEM)
+                .await
+                .unwrap();
+            tokio::fs::write(mapper_dir.join("key.pem"), TEST_KEY_PEM)
+                .await
+                .unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "url = \"mqtt.example.com:8883\"\n\
+                 [device]\ncert_path = \"cert.pem\"\nkey_path = \"key.pem\"\n",
+            )
+            .await
+            .unwrap();
+
+            let result = run_get(
+                &mappers_root,
+                "tb",
+                "device.cert_path",
+                TEdgeConfig::load_toml_str(""),
+            )
+            .await;
+            assert!(
+                result.is_ok(),
+                "relative cert_path should resolve: {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn missing_mapper_errors_with_available_list() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_root.join("existing"))
+                .await
+                .unwrap();
+
+            let result = run_get(
+                &mappers_root,
+                "nonexistent",
+                "url",
+                TEdgeConfig::load_toml_str(""),
+            )
+            .await;
+            assert!(result.is_err());
+            let msg = format!("{}", result.unwrap_err());
+            assert!(
+                msg.contains("existing"),
+                "error should list available mappers: {msg}"
+            );
+        }
+
+        #[tokio::test]
+        async fn custom_key_returns_raw_toml_value() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "url = \"mqtt.example.com:8883\"\n[bridge]\ntopic_prefix = \"tb\"\n",
+            )
+            .await
+            .unwrap();
+
+            let result = run_get(
+                &mappers_root,
+                "tb",
+                "bridge.topic_prefix",
+                TEdgeConfig::load_toml_str(""),
+            )
+            .await;
+            assert!(
+                result.is_ok(),
+                "custom key passthrough should succeed: {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn mapper_without_toml_errors() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            // No mapper.toml written
+
+            let result =
+                run_get(&mappers_root, "tb", "url", TEdgeConfig::load_toml_str("")).await;
+            assert!(result.is_err(), "should error when mapper.toml is absent");
+            let msg = format!("{}", result.unwrap_err());
+            assert!(
+                msg.contains("mapper.toml"),
+                "error should mention mapper.toml: {msg}"
+            );
+        }
+
+        #[tokio::test]
+        async fn missing_key_errors() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            let mapper_dir = mappers_root.join("tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "url = \"mqtt.example.com:8883\"\n",
+            )
+            .await
+            .unwrap();
+
+            let result = run_get(
+                &mappers_root,
+                "tb",
+                "nonexistent.key",
+                TEdgeConfig::load_toml_str(""),
+            )
+            .await;
+            assert!(result.is_err(), "should error when key is not found");
+            let msg = format!("{}", result.unwrap_err());
+            assert!(
+                msg.contains("nonexistent.key") || msg.contains("not found"),
+                "error should mention the missing key: {msg}"
+            );
         }
     }
 }

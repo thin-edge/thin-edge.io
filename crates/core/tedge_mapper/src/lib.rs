@@ -68,6 +68,8 @@ mod core;
 mod custom;
 /// Re-export custom mapper config for use by bridge inspection commands.
 pub use custom::config as custom_mapper_config;
+/// Re-export custom mapper config resolution for use by CLI commands.
+pub use custom::resolve as custom_mapper_resolve;
 mod flows;
 
 /// Set the cloud profile either from the CLI argument or env variable,
