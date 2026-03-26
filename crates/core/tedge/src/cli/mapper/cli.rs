@@ -6,7 +6,6 @@ use crate::log::MaybeFancy;
 use crate::ConfigError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use pad::PadStr;
 use tedge_config::TEdgeConfig;
 use tedge_mapper::custom_mapper_config::load_mapper_config;
 use tedge_mapper::custom_mapper_config::scan_mappers_shallow;
@@ -147,26 +146,15 @@ impl Command for ListMappersCommand {
 
         let rows = build_mapper_rows(&self.mappers_root, &mappers, &config).await;
 
-        let name_w = rows.iter().map(|r| r.name.len()).max().unwrap_or(0);
-        let cloud_type_w = rows.iter().map(|r| r.cloud_type.len()).max().unwrap_or(0);
-        let url_w = rows
-            .iter()
-            .map(|r| r.url.len())
-            .max()
-            .unwrap_or(0)
-            .max("url".len());
-
         for row in &rows {
-            let name = row
-                .name
-                .pad_to_width_with_alignment(name_w, pad::Alignment::Right);
-            let cloud_type = row.cloud_type.pad_to_width(cloud_type_w);
-            let url = row.url.pad_to_width(url_w);
+            let name = &row.name;
+            let cloud_type = &row.cloud_type;
+            let url = &row.url;
             if row.device_id.is_empty() && row.url.is_empty() && row.cloud_type.is_empty() {
                 println!("{}", name.yellow());
             } else {
                 println!(
-                    "{}  {}  {}  {}",
+                    "{}\t{}\t{}\t{}",
                     name.yellow(),
                     url.dim(),
                     row.device_id.dim(),

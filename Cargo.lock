@@ -5055,6 +5055,7 @@ dependencies = [
  "mqtt_channel",
  "rcgen",
  "serde",
+ "serde_json",
  "strum",
  "tedge_actors",
  "tedge_api",
