@@ -1,7 +1,7 @@
 input.mqtt.topics = ["hello/in"]
 
 steps = [
-    { script = "hello.js", config = { greeting = "${.params.hello.greeting}" } }
+    { script = "hello.js", config = { greeting = "${params.hello.greeting}" } }
 ]
 
 output.mqtt.topic = "hello/out"

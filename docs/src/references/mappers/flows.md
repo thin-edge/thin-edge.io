@@ -249,8 +249,8 @@ reformat = true
 ```
 
 These values can then be used as parameters by all the flows which definition `.toml` file sites in the same directory.
-The parameter values are injected in flow and step configuration using template expression such as `${.params.debug}`
-or `${.params.time.format}`.
+The parameter values are injected in flow and step configuration using template expression such as `${params.debug}`
+or `${params.time.format}`.
 
 Below shows a simplistic example of the parameterization of a flow:
 
@@ -262,7 +262,7 @@ input.mqtt.topics = ["foo"]
 
 [[steps]]
 script = "main.js"
-config = { debug = "${.params.debug}", format = "${.params.time.format}" }
+config = { debug = "${params.debug}", format = "${params.time.format}" }
 ```
 
 :::note
