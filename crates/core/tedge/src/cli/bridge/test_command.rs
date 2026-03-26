@@ -49,6 +49,7 @@ impl Command for BridgeTestCmd {
 
     #[mutants::skip]
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        tedge_mapper::warn_misconfigured_mapper_dirs(&config.root_dir().join("mappers")).await;
         let detail = if self.debug {
             DetailLevel::Debug
         } else {

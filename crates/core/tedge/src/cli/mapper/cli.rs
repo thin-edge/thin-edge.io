@@ -6,13 +6,11 @@ use crate::log::MaybeFancy;
 use crate::ConfigError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use tedge_config::cli::format_config_set_cmd;
 use tedge_config::TEdgeConfig;
 use tedge_mapper::custom_mapper_config::load_mapper_config;
 use tedge_mapper::custom_mapper_config::scan_mappers_shallow;
 use tedge_mapper::custom_mapper_resolve::resolve_effective_config;
 use tedge_mapper::custom_mapper_resolve::ConfigGetResult;
-use tedge_mapper::custom_mapper_resolve::ConfigSource;
 use tedge_mqtt_bridge::AuthMethod;
 use yansi::Paint;
 
@@ -139,6 +137,7 @@ impl Command for ListMappersCommand {
     }
 
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        tedge_mapper::warn_misconfigured_mapper_dirs(&self.mappers_root).await;
         let mappers = scan_mappers_shallow(&self.mappers_root).await;
         if mappers.is_empty() {
             eprintln!("No mappers found under '{}'", self.mappers_root);
@@ -274,13 +273,6 @@ impl MapperConfigGetCommand {
         };
         writeln!(out, "{}", sourced.value)?;
         writeln!(err, "# {}", sourced.source)?;
-        if matches!(sourced.source, ConfigSource::TedgeConfig) {
-            writeln!(
-                err,
-                "# To change this, use: {}",
-                format_config_set_cmd(&self.mapper_name, &self.toml_key)
-            )?;
-        }
 
         Ok(())
     }

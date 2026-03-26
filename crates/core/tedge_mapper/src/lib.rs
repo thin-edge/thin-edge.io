@@ -66,6 +66,8 @@ pub mod c8y;
 mod collectd;
 mod core;
 mod custom;
+/// Re-export mapper directory warnings for use by CLI commands.
+pub use core::mappers_dir::warn_misconfigured_mapper_dirs;
 /// Re-export custom mapper config for use by bridge inspection commands.
 pub use custom::config as custom_mapper_config;
 /// Re-export custom mapper config resolution for use by CLI commands.
@@ -217,7 +219,7 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
     )?;
 
     let mappers_dir = mapper_opt.common.config_dir.join("mappers");
-    core::mappers_dir::warn_unrecognised_mapper_dirs(&mappers_dir).await;
+    core::mappers_dir::warn_misconfigured_mapper_dirs(&mappers_dir).await;
 
     // Run only one instance of a mapper (if enabled)
     let mut _flock = None;

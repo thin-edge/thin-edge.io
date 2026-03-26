@@ -235,28 +235,28 @@ impl EffectiveMapperConfig {
                     value: s.value.to_string(),
                     source: s.source.clone(),
                 }),
-                None => ConfigGetResult::NotSet,
+                None => self.get_from_tables(key),
             },
             "device.id" => match &self.device_id {
                 Some(s) => ConfigGetResult::Value(Sourced {
                     value: s.value.clone(),
                     source: s.source.clone(),
                 }),
-                None => ConfigGetResult::NotSet,
+                None => self.get_from_tables(key),
             },
             "device.cert_path" => match &self.cert_path {
                 Some(s) => ConfigGetResult::Value(Sourced {
                     value: s.value.to_string(),
                     source: s.source.clone(),
                 }),
-                None => ConfigGetResult::NotSet,
+                None => self.get_from_tables(key),
             },
             "device.key_path" => match &self.key_path {
                 Some(s) => ConfigGetResult::Value(Sourced {
                     value: s.value.to_string(),
                     source: s.source.clone(),
                 }),
-                None => ConfigGetResult::NotSet,
+                None => self.get_from_tables(key),
             },
             "device.root_cert_path" => ConfigGetResult::Value(Sourced {
                 value: self.root_cert_path.value.to_string(),
@@ -267,7 +267,7 @@ impl EffectiveMapperConfig {
                     value: s.value.to_string(),
                     source: s.source.clone(),
                 }),
-                None => ConfigGetResult::NotSet,
+                None => self.get_from_tables(key),
             },
             "auth_method" => ConfigGetResult::Value(Sourced {
                 value: match self.effective_auth.value {
@@ -276,32 +276,40 @@ impl EffectiveMapperConfig {
                 },
                 source: self.effective_auth.source.clone(),
             }),
-            _ => {
-                // Check mapper.toml first — user-set values take priority and are
-                // attributed to mapper.toml. If only found in raw_table (i.e. it came
-                // from the overlay), attribute it to TedgeConfig instead. This branch
-                // is only reachable when an overlay was supplied (i.e. a built-in mapper)
-                // see ConfigSource::TedgeConfig.
-                if let Some(v) = walk_table_value(&self.mapper_table, key.split('.')) {
-                    return ConfigGetResult::Value(Sourced {
-                        value: toml_value_display(v),
-                        source: ConfigSource::MapperToml,
-                    });
-                }
-                if let Some(v) = walk_table_value(&self.raw_table, key.split('.')) {
-                    return ConfigGetResult::Value(Sourced {
-                        value: toml_value_display(v),
-                        source: ConfigSource::TedgeConfig,
-                    });
-                }
-                // Key not found in any TOML table — use the schema JSON to determine
-                // whether the key is a known field (NotSet) or entirely unrecognised
-                // (UnknownKey).
-                match walk_json_value(&self.schema, key.split('.')) {
-                    Some(_) => ConfigGetResult::NotSet,
-                    None => ConfigGetResult::UnknownKey,
-                }
-            }
+            _ => self.get_from_tables(key),
+        }
+    }
+
+    /// Looks up a key in the TOML tables, falling back to the schema to
+    /// distinguish `NotSet` from `UnknownKey`.
+    ///
+    /// Used both by the catch-all branch of [`get`] and as the fallback when
+    /// a typed schema-level field is `None` (the value may still be present
+    /// in the overlay from `tedge.toml`).
+    fn get_from_tables(&self, key: &str) -> ConfigGetResult {
+        // Check mapper.toml first — user-set values take priority and are
+        // attributed to mapper.toml. If only found in raw_table (i.e. it came
+        // from the overlay), attribute it to TedgeConfig instead. This branch
+        // is only reachable when an overlay was supplied (i.e. a built-in mapper)
+        // see ConfigSource::TedgeConfig.
+        if let Some(v) = walk_table_value(&self.mapper_table, key.split('.')) {
+            return ConfigGetResult::Value(Sourced {
+                value: toml_value_display(v),
+                source: ConfigSource::MapperToml,
+            });
+        }
+        if let Some(v) = walk_table_value(&self.raw_table, key.split('.')) {
+            return ConfigGetResult::Value(Sourced {
+                value: toml_value_display(v),
+                source: ConfigSource::TedgeConfig,
+            });
+        }
+        // Key not found in any TOML table — use the schema JSON to determine
+        // whether the key is a known field (NotSet) or entirely unrecognised
+        // (UnknownKey).
+        match walk_json_value(&self.schema, key.split('.')) {
+            Some(_) => ConfigGetResult::NotSet,
+            None => ConfigGetResult::UnknownKey,
         }
     }
 
@@ -1259,6 +1267,57 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             assert!(matches!(
                 sourced.source,
                 ConfigSource::MapperTomlResolved { .. }
+            ));
+        }
+
+        #[tokio::test]
+        async fn schema_key_url_falls_through_to_overlay() {
+            // Built-in mapper scenario: url is set in tedge.toml (overlay),
+            // not in mapper.toml. get("url") should find it via the overlay.
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None); // url is None in mapper.toml
+            let overlay: toml::Table = "url = \"mqtt.example.com:8883\"\n".parse().unwrap();
+
+            let effective = resolve_effective_config(&config, &tedge_config, Some(&overlay), None)
+                .await
+                .unwrap();
+
+            let sourced = effective.get("url").unwrap_value();
+            assert_eq!(sourced.value, "mqtt.example.com:8883");
+            assert!(matches!(sourced.source, ConfigSource::TedgeConfig));
+        }
+
+        #[tokio::test]
+        async fn schema_key_credentials_path_falls_through_to_overlay() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let overlay: toml::Table = "credentials_path = \"/etc/tedge/credentials.toml\"\n"
+                .parse()
+                .unwrap();
+
+            let effective = resolve_effective_config(&config, &tedge_config, Some(&overlay), None)
+                .await
+                .unwrap();
+
+            let sourced = effective.get("credentials_path").unwrap_value();
+            assert_eq!(sourced.value, "/etc/tedge/credentials.toml");
+            assert!(matches!(sourced.source, ConfigSource::TedgeConfig));
+        }
+
+        #[tokio::test]
+        async fn schema_key_not_set_without_overlay_still_returns_not_set() {
+            // Without an overlay, a None typed field with no raw_table entry is NotSet.
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            assert!(matches!(effective.get("url"), ConfigGetResult::NotSet));
+            assert!(matches!(
+                effective.get("credentials_path"),
+                ConfigGetResult::NotSet
             ));
         }
     }
