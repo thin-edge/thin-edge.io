@@ -302,27 +302,7 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         content: &str,
     ) -> Result<(), UpdateFlowRegistryError> {
         let dir = self.store().config_dir();
-        let flow_path = dir.join(name).with_extension("toml");
-        let disabled_flow_path = flow_path.with_extension("toml.disabled");
-        let template_path = flow_path.with_extension("toml.template");
-
-        // Don't update the flow definition if overridden or disabled
-        let prior_flow = tokio::fs::read(&flow_path).await.ok();
-        let prior_template = tokio::fs::read(&template_path).await.ok();
-        let overridden = prior_flow != prior_template;
-        let disabled = tokio::fs::try_exists(&disabled_flow_path)
-            .await
-            .unwrap_or(false);
-        let update_flow = !overridden && !disabled;
-
-        // Persist a copy of flow definition to be used by users as a template for their flows.
-        file::create_directory_with_defaults(dir).await?;
-        fs::atomically_write_file_async(template_path.as_std_path(), content.as_bytes()).await?;
-
-        if update_flow {
-            fs::atomically_write_file_async(flow_path.as_std_path(), content.as_bytes()).await?;
-        }
-
+        fs::persist_file_with_template(dir, &format!("{}.toml", name), content).await?;
         Ok(())
     }
 

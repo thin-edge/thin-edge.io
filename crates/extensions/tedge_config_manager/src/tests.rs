@@ -822,3 +822,125 @@ async fn execute_config_set_operation_step_file_not_found() -> Result<(), anyhow
 
     Ok(())
 }
+
+fn test_config(tempdir: &TempTedgeDir) -> ConfigManagerConfig {
+    ConfigManagerConfig {
+        config_dir: tempdir.path().to_path_buf(),
+        plugin_dirs: vec![],
+        plugin_config_dir: tempdir.path().join("plugins"),
+        plugin_config_path: tempdir
+            .path()
+            .join("plugins/tedge-configuration-plugin.toml"),
+        tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
+        ops_dir: tempdir.dir("operations").utf8_path_buf(),
+        mqtt_schema: MqttSchema::default(),
+        config_snapshot_meta_topic: Topic::new_unchecked(
+            "te/device/main///cmd/config_snapshot/meta",
+        ),
+        config_update_meta_topic: Topic::new_unchecked("te/device/main///cmd/config_update/meta"),
+        config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
+        config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
+        tedge_http_host: Arc::from("localhost"),
+        config_snapshot_enabled: false,
+        config_update_enabled: false,
+        sudo_enabled: false,
+    }
+}
+
+#[tokio::test]
+async fn test_init_creates_config_and_template() -> anyhow::Result<()> {
+    let tempdir = TempTedgeDir::new();
+
+    let config = test_config(&tempdir);
+
+    ConfigManagerBuilder::init(&config).await?;
+
+    let toml_file = config.ops_dir.join("config_update.toml");
+    let template_file = config.ops_dir.join("config_update.toml.template");
+
+    assert!(toml_file.exists(), "config_update.toml should exist");
+    assert!(
+        template_file.exists(),
+        "config_update.toml.template should exist"
+    );
+
+    let toml_content = tokio::fs::read_to_string(&toml_file).await?;
+    let template_content = tokio::fs::read_to_string(&template_file).await?;
+
+    assert_eq!(
+        toml_content, template_content,
+        "Initial config and template should have identical content"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_init_preserves_customized_config() -> anyhow::Result<()> {
+    let tempdir = TempTedgeDir::new();
+
+    let config = test_config(&tempdir);
+
+    // Simulate an older template, which should be different from the latest template
+    let template_file = config.ops_dir.join("config_update.toml.template");
+    let older_template = "# Older template\noperation = \"config_update\"";
+    tokio::fs::write(&template_file, older_template).await?;
+
+    // User customizes the config file, making it different from the template
+    let toml_file = config.ops_dir.join("config_update.toml");
+    let original_content = "# User customized workflow\noperation = \"config_update\"";
+    tokio::fs::write(&toml_file, original_content).await?;
+
+    // Init simulates an upgrade from a previous version
+    ConfigManagerBuilder::init(&config).await?;
+
+    // Verify config was NOT overwritten
+    let toml_content = tokio::fs::read_to_string(&toml_file).await?;
+    assert_eq!(
+        toml_content, original_content,
+        "Customized config should remain unchanged"
+    );
+
+    // Verify template WAS updated with original content
+    let template_content = tokio::fs::read_to_string(&template_file).await?;
+    let latest_template = include_str!("resources/config_update.toml");
+    assert_eq!(
+        template_content, latest_template,
+        "Template should be updated to latest content"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_init_updates_both_when_identical() -> anyhow::Result<()> {
+    let tempdir = TempTedgeDir::new();
+
+    let config = test_config(&tempdir);
+
+    let old_template = "# Old workflow\noperation = \"config_update\"";
+    let template_file = config.ops_dir.join("config_update.toml.template");
+    tokio::fs::write(&template_file, old_template).await?;
+    let toml_file = config.ops_dir.join("config_update.toml");
+    tokio::fs::write(&toml_file, old_template).await?;
+
+    // Init should replace the old workflow definition with the latest one,
+    // since both config and template are identical, indicating that user has not customized it
+    ConfigManagerBuilder::init(&config).await?;
+
+    // Both files should have been overwritten
+    let latest_template = include_str!("resources/config_update.toml");
+    let toml_content_after = tokio::fs::read_to_string(&toml_file).await?;
+    let template_content = tokio::fs::read_to_string(&template_file).await?;
+
+    assert_eq!(
+        toml_content_after, latest_template,
+        "Config content should remain valid"
+    );
+    assert_eq!(
+        toml_content_after, template_content,
+        "Config and template should still be identical"
+    );
+
+    Ok(())
+}

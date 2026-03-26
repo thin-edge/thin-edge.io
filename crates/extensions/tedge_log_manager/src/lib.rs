@@ -34,10 +34,8 @@ use tedge_api::workflow::SyncOnCommand;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::move_file;
-use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
-use tedge_utils::fs::AtomFileError;
 use toml::toml;
 
 #[cfg(test)]
@@ -61,7 +59,7 @@ impl LogManagerBuilder {
         plugin_config: PluginConfig,
         fs_notify: &mut impl MessageSource<FsWatchEvent, Vec<PathBuf>>,
         uploader_actor: &mut impl Service<LogUploadRequest, LogUploadResult>,
-    ) -> Result<Self, FileError> {
+    ) -> Result<Self, anyhow::Error> {
         Self::init(&config).await?;
 
         let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
@@ -80,7 +78,7 @@ impl LogManagerBuilder {
         })
     }
 
-    pub async fn init(config: &LogManagerConfig) -> Result<(), FileError> {
+    pub async fn init(config: &LogManagerConfig) -> Result<(), anyhow::Error> {
         if config.plugin_config_path.exists() {
             return Ok(());
         }
@@ -107,12 +105,7 @@ impl LogManagerBuilder {
             path = agent_logs_path
         }
         .to_string();
-        atomically_write_file_sync(&config.plugin_config_path, example_config.as_bytes()).map_err(
-            |AtomFileError::WriteError { source, .. }| FileError::FileCreateFailed {
-                file: config.plugin_config_path.to_string_lossy().to_string(),
-                from: source,
-            },
-        )?;
+        atomically_write_file_sync(&config.plugin_config_path, example_config.as_bytes())?;
 
         Ok(())
     }
