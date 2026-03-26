@@ -182,13 +182,34 @@ where
         .labelled("auth method condition")
 }
 
+/// Parser for `${mapper.some.key}` - a boolean mapper reference
+fn mapper_condition<'tokens, 'src: 'tokens, I>(
+) -> impl Parser<'tokens, I, Condition, extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>> + Clone
+where
+    I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
+{
+    just(Token::Op("!"))
+        .or_not()
+        .then_ignore(just(Token::VarStart))
+        .then_ignore(just(Token::Ident("mapper")))
+        .then_ignore(just(Token::Dot))
+        .then(dotted_path().spanned())
+        .then_ignore(just(Token::VarEnd))
+        .map(|(negation, (parts, span)): (_, Span<Vec<&str>>)| {
+            let key = parts.join(".");
+            let target = negation.is_none();
+            Condition::MapperIs(target, key, span.into_range())
+        })
+        .labelled("mapper config reference (e.g. '${mapper.enabled}')")
+}
+
 /// Main condition parser
 fn condition_parser<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Condition, extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
 {
-    choice((config_condition(), auth_condition())).labelled("condition")
+    choice((config_condition(), auth_condition(), mapper_condition())).labelled("condition")
 }
 
 impl std::str::FromStr for AuthMethod {

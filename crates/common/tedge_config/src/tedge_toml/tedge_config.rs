@@ -69,7 +69,9 @@ use tedge_config_macros::*;
 use tracing::error;
 
 mod mqtt_config;
+pub use mqtt_config::MqttAuthClientConfigCloudBroker;
 pub use mqtt_config::MqttAuthConfigCloudBroker;
+pub use mqtt_config::PrivateKeyType;
 pub use mqtt_config::TEdgeMqttClientAuthConfig;
 
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
@@ -583,6 +585,11 @@ define_tedge_config! {
         #[serde(skip)]
         mapper_config_file: Utf8PathBuf,
 
+        /// Identifies this mapper directory as belonging to the Cumulocity cloud integration.
+        /// Written into `mapper.toml` automatically; not user-configurable via the CLI.
+        #[tedge_config(reader(skip))]
+        cloud_type: CloudType,
+
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
         // Config consumers should use `c8y.http`/`c8y.mqtt` as appropriate, hence this field is private
@@ -839,6 +846,11 @@ define_tedge_config! {
         #[serde(skip)]
         mapper_config_file: Utf8PathBuf,
 
+        /// Identifies this mapper directory as belonging to the Azure IoT cloud integration.
+        /// Written into `mapper.toml` automatically; not user-configurable via the CLI.
+        #[tedge_config(reader(skip))]
+        cloud_type: CloudType,
+
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
         url: ConnectUrl,
@@ -933,6 +945,11 @@ define_tedge_config! {
         #[tedge_config(reader(skip))]
         #[serde(skip)]
         mapper_config_file: Utf8PathBuf,
+
+        /// Identifies this mapper directory as belonging to the AWS IoT cloud integration.
+        /// Written into `mapper.toml` automatically; not user-configurable via the CLI.
+        #[tedge_config(reader(skip))]
+        cloud_type: CloudType,
 
         /// Endpoint URL of AWS IoT tenant
         #[tedge_config(example = "your-endpoint.amazonaws.com")]
@@ -1421,6 +1438,10 @@ impl TEdgeConfigReader {
         self.c8y.entries()
     }
 
+    pub fn c8y_reader(&self, profile: Option<&str>) -> anyhow::Result<&TEdgeConfigReaderC8y> {
+        Ok(self.c8y.try_get(profile)?)
+    }
+
     pub fn az_keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
         self.az.keys()
     }
@@ -1882,7 +1903,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
             .dir("c8y")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -1905,7 +1926,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
             .dir("c8y.myprofile")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -1928,7 +1949,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
             .dir("c8y.myprofile")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -1949,7 +1970,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
             .dir("c8y")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
 
@@ -2003,7 +2024,7 @@ mod tests {
     async fn mapper_config_falls_back_to_tedge_toml_config_if_only_another_cloud_is_using_new_format(
     ) {
         let ttd = TempTedgeDir::new();
-        ttd.dir("mappers").dir("c8y").file("tedge.toml");
+        ttd.dir("mappers").dir("c8y").file("mapper.toml");
         ttd.file("tedge.toml").with_toml_content(toml::toml! {
             az.url = "az.url"
         });
@@ -2055,7 +2076,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("mappers")
             .dir("c8y")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "example.com"
             });
@@ -2077,19 +2098,19 @@ mod tests {
         let mappers_dir = ttd.dir("mappers");
         mappers_dir
             .dir("c8y")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "default.example.com"
             });
         mappers_dir
             .dir("c8y.profile1")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "profile1.example.com"
             });
         mappers_dir
             .dir("c8y.profile2")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "profile2.example.com"
             });
@@ -2121,14 +2142,14 @@ mod tests {
         // C8y mapper with no profile directory
         ttd.dir("mappers")
             .dir("c8y")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "c8y.example.com"
             });
         // Az mapper with no profile directory
         ttd.dir("mappers")
             .dir("az")
-            .file("tedge.toml")
+            .file("mapper.toml")
             .with_toml_content(toml::toml! {
                 url = "az.example.com"
             });

@@ -1,17 +1,18 @@
 use std::io::Write;
 
 use pad::PadStr;
+use tedge_config::tedge_toml::ProfileName;
 use tedge_mqtt_bridge::config_toml::Direction;
 use tedge_mqtt_bridge::config_toml::ExpandedBridgeRule;
 use yansi::Paint as _;
 
-use super::common::cloud_name;
 use super::common::load_bridge_rules;
+use super::common::load_bridge_rules_for_custom_mapper;
 use super::common::print_non_configurable_or_disabled;
 use super::common::print_non_expansions;
+use super::common::resolve_cloud;
 use super::common::DetailLevel;
 use crate::cli::common::Cloud;
-use crate::cli::common::CloudArg;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use tedge_config::TEdgeConfig;
@@ -19,47 +20,73 @@ use tedge_config::TEdgeConfig;
 /// Shows the current bridge configuration
 #[derive(clap::Args, Debug, Eq, PartialEq)]
 pub struct BridgeInspectCmd {
-    #[clap(subcommand)]
-    cloud: CloudArg,
+    /// The cloud or custom mapper to inspect (e.g. c8y, aws, az, or a custom mapper name)
+    cloud: String,
+
+    /// The cloud profile you wish to use
+    ///
+    /// [env: TEDGE_CLOUD_PROFILE]
+    #[clap(long)]
+    profile: Option<ProfileName>,
 
     /// Show skipped rules (e.g. due to unmet conditions or empty template loops)
-    #[clap(long, global = true)]
+    #[clap(long)]
     debug: bool,
 }
 
 #[async_trait::async_trait]
 impl Command for BridgeInspectCmd {
     fn description(&self) -> String {
-        let cloud_name = cloud_name(&Cloud::try_from(self.cloud.clone()).unwrap());
-        format!("inspect the bridge configuration for {cloud_name}")
+        format!("inspect the bridge configuration for {}", self.cloud)
     }
 
     #[mutants::skip]
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        tedge_mapper::warn_misconfigured_mapper_dirs(&config.root_dir().join("mappers")).await;
         let detail = if self.debug {
             DetailLevel::Debug
         } else {
             DetailLevel::Normal
         };
-        run_inspect(&mut std::io::stdout(), &self.cloud, &config, detail).await?;
+        run_inspect(&mut std::io::stdout(), self, &config, detail).await?;
         Ok(())
     }
 }
 
 async fn run_inspect(
     w: &mut impl Write,
-    cloud_arg: &CloudArg,
+    cmd: &BridgeInspectCmd,
     config: &TEdgeConfig,
     detail: DetailLevel,
 ) -> anyhow::Result<()> {
-    let cloud = Cloud::try_from(cloud_arg.clone())?;
-
-    match cloud_arg {
-        #[cfg(feature = "c8y")]
-        CloudArg::C8y { .. } => {
-            use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+    match resolve_cloud(&cmd.cloud, cmd.profile.clone()) {
+        Some(cloud) => match &cloud {
+            #[cfg(feature = "c8y")]
+            Cloud::C8y(_) => {
+                use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+                if let Some((rules, non_expansions)) =
+                    load_bridge_rules::<C8yMapperSpecificConfig>(w, config, &cloud, detail).await?
+                {
+                    if detail == DetailLevel::Debug {
+                        print_non_expansions(w, &non_expansions);
+                    }
+                    if !rules.is_empty() {
+                        print_rules(w, rules);
+                    }
+                }
+            }
+            #[cfg(feature = "aws")]
+            Cloud::Aws(_) => {
+                print_non_configurable_or_disabled(w, config, &cloud);
+            }
+            #[cfg(feature = "azure")]
+            Cloud::Azure(_) => {
+                print_non_configurable_or_disabled(w, config, &cloud);
+            }
+        },
+        None => {
             if let Some((rules, non_expansions)) =
-                load_bridge_rules::<C8yMapperSpecificConfig>(w, config, &cloud, detail).await?
+                load_bridge_rules_for_custom_mapper(w, &cmd.cloud, config, detail).await?
             {
                 if detail == DetailLevel::Debug {
                     print_non_expansions(w, &non_expansions);
@@ -68,14 +95,6 @@ async fn run_inspect(
                     print_rules(w, rules);
                 }
             }
-        }
-        #[cfg(feature = "aws")]
-        CloudArg::Aws { .. } => {
-            print_non_configurable_or_disabled(w, config, &cloud);
-        }
-        #[cfg(feature = "azure")]
-        CloudArg::Az { .. } => {
-            print_non_configurable_or_disabled(w, config, &cloud);
         }
     }
 
@@ -294,11 +313,7 @@ mod tests {
     fn c8y_not_connected() {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_with_root(tmp.path(), &c8y_toml(""));
-        let output = render_inspect(
-            &CloudArg::C8y { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("c8y", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("Not connected to Cumulocity"),
             "output was: {output}"
@@ -312,11 +327,7 @@ mod tests {
         let cloud = Cloud::c8y(None);
         mark_connected(tmp.path(), &cloud);
 
-        let output = render_inspect(
-            &CloudArg::C8y { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("c8y", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("No bridge configuration directory found"),
             "output was: {output}"
@@ -331,11 +342,7 @@ mod tests {
         mark_connected(tmp.path(), &cloud);
         std::fs::create_dir_all(tmp.path().join("mappers/c8y/bridge")).unwrap();
 
-        let output = render_inspect(
-            &CloudArg::C8y { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("c8y", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("No bridge configuration files found"),
             "output was: {output}"
@@ -362,11 +369,7 @@ mod tests {
         )
         .unwrap();
 
-        let output = render_inspect(
-            &CloudArg::C8y { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("c8y", None, &config, DetailLevel::Normal);
         assert!(
             !output.contains("Skipped rules"),
             "Output should not mention skipped rules as none were skipped: {output}"
@@ -405,11 +408,7 @@ Bidirectional
         )
         .unwrap();
 
-        let output = render_inspect(
-            &CloudArg::C8y { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("c8y", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("Failed to read bridge config files"),
             "should show error message, actual output: {output}"
@@ -428,11 +427,7 @@ Bidirectional
             "c8y.url = \"example.cumulocity.com\"\n\
              mqtt.bridge.built_in = false\n",
         );
-        let output = render_inspect(
-            &CloudArg::C8y { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("c8y", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("Built-in bridge is disabled"),
             "output was: {output}"
@@ -454,11 +449,7 @@ Bidirectional
         let cloud = Cloud::c8y(None);
         mark_connected(tmp.path(), &cloud);
 
-        let output = render_inspect(
-            &CloudArg::C8y { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("c8y", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("Built-in bridge is disabled"),
             "output was: {output}"
@@ -477,11 +468,7 @@ Bidirectional
             "aws.url = \"example.amazonaws.com\"\n\
              mqtt.bridge.built_in = true\n",
         );
-        let output = render_inspect(
-            &CloudArg::Aws { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("aws", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("not yet configurable"),
             "output was: {output}"
@@ -497,11 +484,7 @@ Bidirectional
             "aws.url = \"example.amazonaws.com\"\n\
              mqtt.bridge.built_in = false\n",
         );
-        let output = render_inspect(
-            &CloudArg::Aws { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("aws", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("Built-in bridge is disabled"),
             "output was: {output}"
@@ -516,11 +499,7 @@ Bidirectional
             "az.url = \"example.azure-devices.net\"\n\
              mqtt.bridge.built_in = true\n",
         );
-        let output = render_inspect(
-            &CloudArg::Az { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("az", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("not yet configurable"),
             "output was: {output}"
@@ -536,11 +515,7 @@ Bidirectional
             "az.url = \"example.azure-devices.net\"\n\
              mqtt.bridge.built_in = false\n",
         );
-        let output = render_inspect(
-            &CloudArg::Az { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("az", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("Built-in bridge is disabled"),
             "output was: {output}"
@@ -567,11 +542,7 @@ Bidirectional
         )
         .unwrap();
 
-        let output = render_inspect(
-            &CloudArg::C8y { profile: None },
-            &config,
-            DetailLevel::Debug,
-        );
+        let output = render_inspect("c8y", None, &config, DetailLevel::Debug);
         assert!(
             output.contains("Skipped rules"),
             "Output should mention skipped rules: {output}"
@@ -598,11 +569,7 @@ Bidirectional
         )
         .unwrap();
 
-        let output = render_inspect(
-            &CloudArg::C8y { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("c8y", None, &config, DetailLevel::Normal);
         assert!(
             !output.contains("Skipped rules"),
             "Output should not mention skipped rules: {output}"
@@ -635,11 +602,7 @@ direction = "outbound"
         // Create the disabled marker
         std::fs::write(bridge_dir.join("test.toml.disabled"), "").unwrap();
 
-        let output = render_inspect(
-            &CloudArg::C8y { profile: None },
-            &config,
-            DetailLevel::Normal,
-        );
+        let output = render_inspect("c8y", None, &config, DetailLevel::Normal);
         assert!(
             output.contains("Skipping:"),
             "should mention skipped file: {output}"
@@ -729,12 +692,96 @@ Bidirectional
     #[test]
     fn description_includes_cloud_name() {
         let cmd = BridgeInspectCmd {
-            cloud: CloudArg::C8y { profile: None },
+            cloud: "c8y".to_string(),
+            profile: None,
             debug: false,
         };
         assert_eq!(
             cmd.description(),
-            "inspect the bridge configuration for Cumulocity"
+            "inspect the bridge configuration for c8y"
+        );
+    }
+
+    #[test]
+    fn custom_mapper_not_found() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), "");
+        let output = render_inspect("thingsboard", None, &config, DetailLevel::Normal);
+        assert!(
+            output.contains("not found"),
+            "should indicate mapper not found: {output}"
+        );
+    }
+
+    #[test]
+    fn custom_mapper_no_bridge_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("mappers/thingsboard")).unwrap();
+        let config = config_with_root(tmp.path(), "");
+        let output = render_inspect("thingsboard", None, &config, DetailLevel::Normal);
+        assert!(
+            output.contains("No bridge configuration directory"),
+            "should indicate no bridge dir: {output}"
+        );
+    }
+
+    #[test]
+    fn custom_mapper_with_rules() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bridge_dir = tmp.path().join("mappers/thingsboard/bridge");
+        std::fs::create_dir_all(&bridge_dir).unwrap();
+        std::fs::write(
+            bridge_dir.join("test.toml"),
+            r#"
+[[rule]]
+local_prefix = "te/"
+remote_prefix = "tb/"
+direction = "outbound"
+topic = "telemetry"
+"#,
+        )
+        .unwrap();
+        let config = config_with_root(tmp.path(), "");
+        let output = render_inspect("thingsboard", None, &config, DetailLevel::Normal);
+        assert!(
+            output.contains("te/telemetry"),
+            "should show local topic: {output}"
+        );
+        assert!(
+            output.contains("tb/telemetry"),
+            "should show remote topic: {output}"
+        );
+    }
+
+    #[test]
+    fn custom_mapper_with_mapper_toml() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mapper_dir = tmp.path().join("mappers/thingsboard");
+        let bridge_dir = mapper_dir.join("bridge");
+        std::fs::create_dir_all(&bridge_dir).unwrap();
+        std::fs::write(
+            mapper_dir.join("mapper.toml"),
+            r#"
+cloud_host = "mqtt.thingsboard.cloud"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            bridge_dir.join("test.toml"),
+            r#"
+[[rule]]
+local_prefix = "te/"
+remote_prefix = "${mapper.cloud_host}/"
+direction = "outbound"
+topic = "data"
+"#,
+        )
+        .unwrap();
+        let config = config_with_root(tmp.path(), "");
+        let output = render_inspect("thingsboard", None, &config, DetailLevel::Normal);
+        assert!(
+            output.contains("mqtt.thingsboard.cloud/data"),
+            "template expansion should resolve mapper vars: {output}"
         );
     }
 
@@ -796,10 +843,20 @@ Bidirectional
         std::fs::write(dir.join(&*cloud.mosquitto_config_filename()), "").unwrap();
     }
 
-    fn render_inspect(cloud_arg: &CloudArg, config: &TEdgeConfig, detail: DetailLevel) -> String {
+    fn render_inspect(
+        cloud: &str,
+        profile: Option<ProfileName>,
+        config: &TEdgeConfig,
+        detail: DetailLevel,
+    ) -> String {
+        let cmd = BridgeInspectCmd {
+            cloud: cloud.to_string(),
+            profile,
+            debug: detail == DetailLevel::Debug,
+        };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let mut buf = Vec::new();
-        rt.block_on(run_inspect(&mut buf, cloud_arg, config, detail))
+        rt.block_on(run_inspect(&mut buf, &cmd, config, detail))
             .unwrap();
         strip_ansi(&String::from_utf8(buf).unwrap())
     }

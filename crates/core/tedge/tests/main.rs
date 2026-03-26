@@ -500,7 +500,7 @@ mod tests {
         set_config_cmd.assert().success();
 
         let migrated_toml =
-            std::fs::read_to_string(temp_dir.path().join(format!("mappers/{cloud}/tedge.toml")))?;
+            std::fs::read_to_string(temp_dir.path().join(format!("mappers/{cloud}/mapper.toml")))?;
         assert_eq!(migrated_toml.trim(), "url = \"new.example.com\"");
 
         // tedge.toml will be created when `tedge config set` runs
@@ -535,7 +535,7 @@ mod tests {
         let migrated_toml = std::fs::read_to_string(
             temp_dir
                 .path()
-                .join(format!("mappers/{cloud}.profile/tedge.toml")),
+                .join(format!("mappers/{cloud}.profile/mapper.toml")),
         )
         .unwrap();
         assert_eq!(migrated_toml.trim(), "url = \"new.example.com\"");
@@ -572,7 +572,7 @@ mod tests {
         let migrated_toml = std::fs::read_to_string(
             temp_dir
                 .path()
-                .join(format!("mappers/{cloud}.profile/tedge.toml")),
+                .join(format!("mappers/{cloud}.profile/mapper.toml")),
         )
         .unwrap();
         assert_eq!(migrated_toml.trim(), "url = \"new.example.com\"");
@@ -593,7 +593,7 @@ mod tests {
     fn setup_migrated_default(temp_dir: &tempfile::TempDir, cloud: &str) {
         let cloud_dir = temp_dir.path().join("mappers").join(cloud);
         std::fs::create_dir_all(&cloud_dir).unwrap();
-        let config_path = cloud_dir.join("tedge.toml");
+        let config_path = cloud_dir.join("mapper.toml");
         std::fs::write(config_path, "url = \"example.com\"\n").unwrap();
     }
 
@@ -603,7 +603,7 @@ mod tests {
             .join("mappers")
             .join(format!("{cloud}.{profile}"));
         std::fs::create_dir_all(&profile_dir).unwrap();
-        let config_path = profile_dir.join("tedge.toml");
+        let config_path = profile_dir.join("mapper.toml");
         std::fs::write(config_path, "url = \"example.com\"\n").unwrap();
     }
 

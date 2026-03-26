@@ -8,6 +8,7 @@ use crate::az::mapper::AzureMapper;
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
+use crate::custom::mapper::CustomMapper;
 use crate::flows::GenMapper;
 use anyhow::Context;
 use camino::Utf8Path;
@@ -26,6 +27,36 @@ use tedge_utils::file::create_directory_with_defaults;
 use tracing::error;
 use tracing::log::warn;
 
+/// Validates that a mapper name matches `[a-z][a-z0-9-]*` and does not start with `bridge-`.
+///
+/// Underscores are forbidden because they would create ambiguity in the
+/// `MAPPER_{NAME}_{KEY}` environment variable scheme.
+///
+/// Names starting with `bridge-` are forbidden because they would produce a service name of
+/// `tedge-mapper-bridge-{rest}`, which collides with the bridge sub-service naming pattern.
+fn validate_mapper_name(name: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(!name.is_empty(), "Mapper name cannot be empty");
+    let mut chars = name.chars();
+    let first = chars.next().unwrap();
+    anyhow::ensure!(
+        first.is_ascii_lowercase(),
+        "Invalid mapper name '{name}': must start with a lowercase ASCII letter"
+    );
+    for ch in chars {
+        anyhow::ensure!(
+            matches!(ch, 'a'..='z' | '0'..='9' | '-'),
+            "Invalid mapper name '{name}': names must match [a-z][a-z0-9-]* \
+             (underscores are not allowed)"
+        );
+    }
+    anyhow::ensure!(
+        !name.starts_with("bridge-"),
+        "Invalid mapper name '{name}': names starting with 'bridge-' are reserved \
+         (would collide with the bridge sub-service name 'tedge-mapper-bridge-{name}')"
+    );
+    Ok(())
+}
+
 #[cfg(feature = "aws")]
 mod aws;
 #[cfg(feature = "azure")]
@@ -34,6 +65,13 @@ mod az;
 pub mod c8y;
 mod collectd;
 mod core;
+mod custom;
+/// Re-export mapper directory warnings for use by CLI commands.
+pub use core::mappers_dir::warn_misconfigured_mapper_dirs;
+/// Re-export custom mapper config for use by bridge inspection commands.
+pub use custom::config as custom_mapper_config;
+/// Re-export custom mapper config resolution for use by CLI commands.
+pub use custom::resolve as custom_mapper_resolve;
 mod flows;
 
 /// Set the cloud profile either from the CLI argument or env variable,
@@ -55,8 +93,8 @@ macro_rules! read_and_set_var {
     };
 }
 
-fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
-    match component_name {
+fn lookup_component(component_name: MapperName) -> anyhow::Result<Box<dyn TEdgeComponent>> {
+    Ok(match component_name {
         #[cfg(feature = "azure")]
         MapperName::Az { profile } => Box::new(AzureMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
@@ -70,8 +108,18 @@ fn lookup_component(component_name: MapperName) -> Box<dyn TEdgeComponent> {
         MapperName::C8y { profile } => Box::new(CumulocityMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
+        MapperName::UserDefined(mut args) => {
+            let name = args.remove(0);
+            validate_mapper_name(&name)?;
+            anyhow::ensure!(
+                args.is_empty(),
+                "User-defined mapper '{name}' does not accept additional arguments, \
+                 got: {args:?}. Global flags (e.g. --config-dir) must appear before the mapper name."
+            );
+            Box::new(CustomMapper { name })
+        }
         MapperName::Local => Box::new(GenMapper),
-    }
+    })
 }
 
 #[derive(Debug, Parser)]
@@ -121,6 +169,11 @@ pub enum MapperName {
     },
     Collectd,
     Local,
+    /// Run a user-defined mapper from `/etc/tedge/mappers/{name}/`.
+    ///
+    /// The mapper name must match `[a-z][a-z0-9-]*`.
+    #[clap(external_subcommand)]
+    UserDefined(Vec<String>),
 }
 
 impl fmt::Display for MapperName {
@@ -145,6 +198,11 @@ impl fmt::Display for MapperName {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-c8y@{profile}"),
             MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
+            MapperName::UserDefined(args) => write!(
+                f,
+                "tedge-mapper-{}",
+                args.first().map(String::as_str).unwrap_or("<unknown>")
+            ),
             MapperName::Local => write!(f, "tedge-mapper-local"),
         }
     }
@@ -152,13 +210,16 @@ impl fmt::Display for MapperName {
 
 pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<()> {
     let mapper_name = mapper_opt.name.to_string();
-    let component = lookup_component(mapper_opt.name);
+    let component = lookup_component(mapper_opt.name)?;
 
     log_init(
         "tedge-mapper",
         &mapper_opt.common.log_args,
         &mapper_opt.common.config_dir,
     )?;
+
+    let mappers_dir = mapper_opt.common.config_dir.join("mappers");
+    core::mappers_dir::warn_misconfigured_mapper_dirs(&mappers_dir).await;
 
     // Run only one instance of a mapper (if enabled)
     let mut _flock = None;
@@ -222,4 +283,58 @@ pub(crate) async fn flow_registry(
     let mut flows = ConnectedFlowRegistry::new(flows_dir);
     load_builtin_transformers(&mut flows);
     Ok(flows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod mapper_name_display {
+        use super::*;
+
+        #[test]
+        fn user_defined_display() {
+            let name = MapperName::UserDefined(vec!["thingsboard".to_string()]);
+            assert_eq!(name.to_string(), "tedge-mapper-thingsboard");
+        }
+    }
+
+    mod validate_mapper_name_tests {
+        use super::*;
+
+        #[test]
+        fn valid_name() {
+            assert!(validate_mapper_name("thingsboard").is_ok());
+            assert!(validate_mapper_name("my-cloud").is_ok());
+            assert!(validate_mapper_name("abc123").is_ok());
+        }
+
+        #[test]
+        fn empty_name_errors() {
+            assert!(validate_mapper_name("").is_err());
+        }
+
+        #[test]
+        fn underscore_errors() {
+            let err = validate_mapper_name("my_cloud").unwrap_err();
+            assert!(format!("{err}").contains("underscores are not allowed"));
+        }
+
+        #[test]
+        fn uppercase_errors() {
+            let err = validate_mapper_name("MyCloud").unwrap_err();
+            assert!(format!("{err}").contains("lowercase"));
+        }
+
+        #[test]
+        fn starts_with_digit_errors() {
+            assert!(validate_mapper_name("1cloud").is_err());
+        }
+
+        #[test]
+        fn bridge_prefix_errors() {
+            let err = validate_mapper_name("bridge-cloud").unwrap_err();
+            assert!(format!("{err}").contains("bridge-"));
+        }
+    }
 }

@@ -30,6 +30,7 @@ mod flows;
 mod http;
 mod init;
 pub mod log;
+mod mapper;
 mod mqtt;
 mod reconnect;
 mod refresh_bridges;
@@ -154,6 +155,10 @@ pub enum TEdgeOpt {
     #[clap(subcommand)]
     Flows(flows::TEdgeFlowsCli),
 
+    /// Manage and inspect mappers
+    #[clap(subcommand)]
+    Mapper(mapper::MapperCli),
+
     /// Run thin-edge services and plugins
     Run(ComponentOpt),
 
@@ -232,6 +237,7 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Http(opt) => opt.build_command(config).await,
             TEdgeOpt::Reconnect(opt) => opt.build_command(config).await,
             TEdgeOpt::Flows(opt) => opt.build_command(config).await,
+            TEdgeOpt::Mapper(opt) => opt.build_command(config).await,
             TEdgeOpt::Bridge(opt) => opt.build_command(config).await,
             TEdgeOpt::Run(_) => {
                 // This method has to be kept in sync with tedge::redirect_if_multicall()

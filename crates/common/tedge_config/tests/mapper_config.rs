@@ -9,7 +9,7 @@ async fn empty_new_config_uses_tedge_toml_defaults() {
 
     ttd.dir("mappers")
         .dir("c8y")
-        .file("tedge.toml")
+        .file("mapper.toml")
         .with_raw_content("");
 
     ttd.file("tedge.toml").with_toml_content(toml::toml! {
@@ -97,11 +97,14 @@ mod default_location_mode {
                 ttd.path().join("mappers").exists(),
                 "mappers dir should exist"
             );
-            let c8y_tedge_toml =
-                tokio::fs::read_to_string(ttd.path().join("mappers/c8y/tedge.toml"))
+            let c8y_mapper_toml =
+                tokio::fs::read_to_string(ttd.path().join("mappers/c8y/mapper.toml"))
                     .await
                     .unwrap();
-            assert_eq!(c8y_tedge_toml.trim(), "url = \"example.com\"");
+            assert_eq!(
+                c8y_mapper_toml.trim(),
+                "cloud_type = \"c8y\"\nurl = \"example.com\""
+            );
         }
     }
 
@@ -132,12 +135,12 @@ mod default_location_mode {
             let tedge_toml = tokio::fs::read_to_string(ttd.path().join("tedge.toml"))
                 .await
                 .unwrap();
-            let c8y_tedge_toml =
-                tokio::fs::read_to_string(ttd.path().join("mappers/c8y/tedge.toml"))
+            let c8y_mapper_toml =
+                tokio::fs::read_to_string(ttd.path().join("mappers/c8y/mapper.toml"))
                     .await
                     .unwrap();
             assert_eq!(tedge_toml, "");
-            assert_eq!(c8y_tedge_toml.trim(), "url = \"example.com\"");
+            assert_eq!(c8y_mapper_toml.trim(), "url = \"example.com\"");
         }
 
         #[tokio::test]
@@ -167,12 +170,12 @@ mod default_location_mode {
             let tedge_toml = tokio::fs::read_to_string(ttd.path().join("tedge.toml"))
                 .await
                 .unwrap();
-            let c8y_tedge_toml =
-                tokio::fs::read_to_string(ttd.path().join("mappers/c8y/tedge.toml"))
+            let c8y_mapper_toml =
+                tokio::fs::read_to_string(ttd.path().join("mappers/c8y/mapper.toml"))
                     .await
                     .unwrap();
             assert!(!tedge_toml.contains("c8y"));
-            assert_eq!(c8y_tedge_toml.trim(), "url = \"example.com\"");
+            assert_eq!(c8y_mapper_toml.trim(), "url = \"example.com\"");
         }
 
         #[tokio::test]

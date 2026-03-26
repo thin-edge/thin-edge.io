@@ -19,11 +19,15 @@ c8y_api = { workspace = true, optional = true }
 c8y_auth_proxy = { workspace = true, optional = true }
 c8y_mapper_ext = { workspace = true, optional = true }
 camino = { workspace = true }
+certificate = { workspace = true }
 clap = { workspace = true }
 clock = { workspace = true }
 collectd_ext = { workspace = true }
 flockfile = { workspace = true }
 mqtt_channel = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
@@ -40,12 +44,15 @@ tedge_uploader_ext = { workspace = true }
 tedge_utils = { workspace = true }
 tedge_watch_ext = { workspace = true }
 tokio = { workspace = true }
+toml = { workspace = true }
 tracing = { workspace = true }
 yansi = { workspace = true }
 
 [dev-dependencies]
+rcgen = { workspace = true }
 tedge_config = { workspace = true, features = ["test"] }
 tedge_test_utils = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [features]
 default = ["aws", "azure", "c8y"]

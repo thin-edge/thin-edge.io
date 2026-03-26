@@ -348,6 +348,56 @@ async fn mqtt_bridge_config(
     Ok((bridge_config, cloud_config, reconnect_message_mapper))
 }
 
+/// Returns the effective mapper config for the c8y built-in mapper.
+///
+/// Serialises the full C8y reader (with all defaults applied) as the TOML overlay and
+/// JSON schema, then merges any user `mapper.toml` overrides. This is the same config
+/// path that [`bridge_rules`] uses at runtime, so CLI commands always reflect the real
+/// values.
+pub async fn resolve_effective_mapper_config(
+    tedge_config: &TEdgeConfig,
+    cloud_profile: Option<&ProfileName>,
+) -> anyhow::Result<crate::custom::resolve::EffectiveMapperConfig> {
+    let mapper_config_dir =
+        tedge_config.mapper_config_dir::<C8yMapperSpecificConfig>(cloud_profile);
+    // Serialize the full c8y reader (defaults applied) as the base mapper config so that
+    // built-in bridge files (e.g. mqtt-core.toml) can use ${mapper.*} template references
+    // for any c8y config key without manual enumeration.
+    let c8y_reader = tedge_config.c8y_reader(cloud_profile.map(|p| p.as_ref()))?;
+    let toml_str =
+        toml::to_string_pretty(c8y_reader).context("failed to serialise c8y config to TOML")?;
+    let mapper_table: toml::Table =
+        toml::from_str(&toml_str).context("failed to parse serialised c8y config as TOML table")?;
+    // JSON serialisation preserves OptionalConfig::Empty as null, giving a complete schema
+    // that includes keys with no configured value. This lets get() distinguish NotSet from
+    // UnknownKey for c8y-specific optional keys that are absent from the TOML overlay.
+    let schema_json =
+        serde_json::to_value(c8y_reader).context("failed to serialise c8y config to JSON")?;
+    let mapper_config = crate::custom::config::load_mapper_config(&mapper_config_dir)
+        .await?
+        .unwrap_or_else(|| crate::custom::config::CustomMapperConfig {
+            table: toml::Table::new(),
+            cloud_type: None,
+            url: None,
+            device: None,
+            bridge: crate::custom::config::BridgeConfig::default(),
+            auth_method: crate::custom::config::AuthMethodConfig::Auto,
+            credentials_path: None,
+        });
+    let mapper_name = match cloud_profile {
+        Some(profile) => format!("c8y.{profile}"),
+        None => "c8y".to_string(),
+    };
+    crate::custom::resolve::resolve_effective_config(
+        &mapper_config,
+        tedge_config,
+        Some(&mapper_table),
+        Some(schema_json),
+    )
+    .await
+    .map(|c| c.with_mapper_name(mapper_name))
+}
+
 pub async fn bridge_rules(
     tedge_config: &TEdgeConfig,
     cloud_profile: Option<&ProfileName>,
@@ -379,8 +429,16 @@ pub async fn bridge_rules(
         warn!("failed to set file permissions for '{bridge_config_dir}': {err}");
     }
 
-    load_bridge_rules_from_directory(&bridge_config_dir, tedge_config, auth_method, cloud_profile)
-        .await
+    let effective = resolve_effective_mapper_config(tedge_config, cloud_profile).await?;
+
+    load_bridge_rules_from_directory(
+        &bridge_config_dir,
+        tedge_config,
+        auth_method,
+        cloud_profile,
+        &effective,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -396,6 +454,8 @@ mod tests {
     }
 
     mod template_rules {
+        use camino::Utf8PathBuf;
+
         use super::*;
 
         fn has_local_subscription(config: &BridgeConfig, topic: &str) -> bool {
@@ -527,6 +587,108 @@ mqtt_service.topics = ["custom/topic"]
 
             assert!(has_remote_subscription(&rules, "s/dt"));
             assert!(has_local_subscription(&rules, "custom/s/us/#"));
+        }
+
+        #[tokio::test]
+        async fn mqtt_service_local_prefix_uses_custom_topic_prefix() {
+            // Verifies that both the mqtt/out and mqtt/in local_prefix rules expand
+            // ${mapper.bridge.topic_prefix} from the serialised C8y config, not the
+            // old ${config.c8y.bridge.topic_prefix} literal.  Previously the mqtt/out
+            // rule was left on the old notation during the ${mapper.*} migration.
+            let (_ttd, config) = load_config(
+                r#"
+[c8y]
+bridge.topic_prefix = "custom"
+mqtt_service.enabled = true
+mqtt_service.topics = ["custom/topic"]
+"#,
+            )
+            .await;
+            let rules = bridge_rules(&config, None, AuthMethod::Certificate)
+                .await
+                .unwrap();
+
+            // Outbound: bridge subscribes locally to custom/mqtt/out/#
+            assert!(has_local_subscription(&rules, "custom/mqtt/out/#"));
+            // Inbound: bridge subscribes remotely to custom/topic (the for-loop item)
+            // The local_prefix "custom/mqtt/in/" is where it publishes locally — not a subscription.
+            assert!(has_remote_subscription(&rules, "custom/topic"));
+        }
+
+        #[tokio::test]
+        async fn user_bridge_file_can_use_mapper_namespace() {
+            let (ttd, _config) = load_config("").await;
+            // Create a mapper.toml with a value ${mapper.*} can reference
+            let mapper_dir = ttd.path().join("mappers/c8y");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "device.id = \"test-device-id\"\n",
+            )
+            .await
+            .unwrap();
+            // Create a supplemental bridge file that uses ${mapper.url}
+            let bridge_dir = mapper_dir.join("bridge");
+            tokio::fs::create_dir_all(&bridge_dir).await.unwrap();
+            tokio::fs::write(
+                bridge_dir.join("custom.toml"),
+                "local_prefix = \"\"\nremote_prefix = \"\"\n\n[[rule]]\ntopic = \"${mapper.device.id}/#\"\ndirection = \"inbound\"\n",
+            )
+            .await
+            .unwrap();
+
+            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+            let rules = bridge_rules(&config, None, AuthMethod::Certificate)
+                .await
+                .unwrap();
+
+            assert!(rules
+                .remote_subscriptions()
+                .any(|t| t == "test-device-id/#"));
+        }
+
+        #[tokio::test]
+        async fn mapper_namespace_can_read_lazy_values() {
+            let (ttd, _config) = load_config("").await;
+            // Create a mapper.toml with a value ${mapper.*} can reference
+            let mapper_dir: Utf8PathBuf = ttd.path().join("mappers/c8y").try_into().unwrap();
+            let certificate = rcgen::generate_simple_self_signed(vec!["my-device".into()]).unwrap();
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(mapper_dir.join("cert.pem"), certificate.cert.pem())
+                .await
+                .unwrap();
+            tokio::fs::write(
+                mapper_dir.join("key.pem"),
+                certificate.signing_key.serialize_pem(),
+            )
+            .await
+            .unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                format!("device.cert_path = \"{mapper_dir}/cert.pem\"\ndevice.key_path = \"./key.pem\"\n"),
+            )
+            .await
+            .unwrap();
+            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+
+            // Create a supplemental bridge file that uses ${mapper.device.id}
+            let bridge_dir = mapper_dir.join("bridge");
+            tokio::fs::create_dir_all(&bridge_dir).await.unwrap();
+            tokio::fs::write(
+                bridge_dir.join("mqtt-core.toml"),
+                "local_prefix = \"\"\nremote_prefix = \"\"\n\n[[rule]]\ntopic = \"${mapper.device.id}/#\"\ndirection = \"inbound\"\n",
+            )
+            .await
+            .unwrap();
+
+            let rules = bridge_rules(&config, None, AuthMethod::Certificate)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                rules.remote_subscriptions().collect::<Vec<_>>(),
+                vec!["rcgen self signed cert/#"]
+            );
         }
     }
 }

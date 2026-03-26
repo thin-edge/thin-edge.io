@@ -6,6 +6,20 @@ use clap::ValueHint;
 use clap_complete::ArgValueCandidates;
 use clap_complete::CompletionCandidate;
 
+/// Formats a `tedge config set` command for a built-in mapper key.
+///
+/// The `mapper_name` may be bare (e.g. `"c8y"`) or profile-qualified
+/// (e.g. `"c8y.prod"`). In the latter case the profile is passed via
+/// `--profile` so the command is valid for the named profile.
+pub fn format_config_set_cmd(mapper_name: &str, config_key: &str) -> String {
+    match mapper_name.split_once('.') {
+        Some((cloud, profile)) => {
+            format!("tedge config set {cloud}.{config_key} <value> --profile {profile}")
+        }
+        None => format!("tedge config set {mapper_name}.{config_key} <value>"),
+    }
+}
+
 /// CLI arguments that should be handled by all thin-edge components.
 #[derive(Args, Debug, PartialEq, Eq, Clone)]
 pub struct CommonArgs {

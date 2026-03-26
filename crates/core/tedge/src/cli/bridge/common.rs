@@ -13,13 +13,17 @@ use tedge_config::tedge_toml::mapper_config::ExpectedCloudType;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_bridge::config_toml::ExpandedBridgeRule;
+use tedge_mqtt_bridge::config_toml::MapperConfigLookup;
 use tedge_mqtt_bridge::config_toml::NonExpansionReason;
+use tedge_mqtt_bridge::config_toml::TableMapperLookup;
 use tedge_mqtt_bridge::visit_bridge_config_dir;
 use tedge_mqtt_bridge::AuthMethod;
 use tedge_mqtt_bridge::BridgeConfigVisitor;
 use yansi::Paint as _;
 
 use crate::cli::common::MaybeBorrowedCloud;
+
+pub use crate::cli::common::resolve_cloud;
 
 /// Controls how much detail is shown in bridge command output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,9 +79,8 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
     cloud: &MaybeBorrowedCloud<'_>,
     detail: DetailLevel,
 ) -> anyhow::Result<Option<(Vec<ExpandedBridgeRule>, Vec<NonExpansionContext>)>> {
-    let bridge_config_dir = config
-        .mapper_config_dir::<Cloud>(cloud.profile_name())
-        .join("bridge");
+    let mapper_dir = config.mapper_config_dir::<Cloud>(cloud.profile_name());
+    let bridge_config_dir = mapper_dir.join("bridge");
 
     if !config.mqtt.bridge.built_in {
         print_built_in_bridge_disabled(w, config, cloud);
@@ -106,6 +109,20 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
 
     let profile = cloud.profile_name();
     let auth_method = get_auth_method::<Cloud>(config, profile)?;
+    let mapper_lookup: Box<dyn MapperConfigLookup> = match Cloud::expected_cloud_type() {
+        CloudType::C8y => Box::new(
+            tedge_mapper::c8y::mapper::resolve_effective_mapper_config(config, profile).await?,
+        ),
+        _ => match tedge_mapper::custom_mapper_config::load_mapper_config(&mapper_dir).await? {
+            Some(raw) => Box::new(
+                tedge_mapper::custom_mapper_resolve::resolve_effective_config(
+                    &raw, config, None, None,
+                )
+                .await?,
+            ),
+            None => Box::new(TableMapperLookup(toml::Table::new())),
+        },
+    };
     let mut visitor = InspectVisitor::new();
 
     if let Err(e) = visit_bridge_config_dir(
@@ -113,6 +130,130 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
         config,
         auth_method,
         profile,
+        &*mapper_lookup,
+        &mut visitor,
+    )
+    .await
+    {
+        tracing::error!("{e:#}");
+        writeln!(w, "{}", "Failed to read bridge config files".red())?;
+        return Ok(None);
+    }
+
+    for filename in &visitor.disabled_files {
+        writeln!(w, "{} {} (disabled)", "Skipping:".dim(), filename.dim())?;
+    }
+
+    match visitor.status {
+        Status::NoTemplates => {
+            writeln!(w, "{}", "No bridge configuration files found.".yellow())?;
+            return Ok(None);
+        }
+        Status::Empty => {
+            writeln!(
+                w,
+                "{}",
+                "Bridge config files exist, but no rules were generated".yellow()
+            )?;
+
+            if detail == DetailLevel::Normal {
+                writeln!(
+                    w,
+                    "{} {}",
+                    "Help:".blue().bold(),
+                    "Try running with the `--debug` flag to see more information on disabled rules"
+                        .blue()
+                )?;
+            }
+        }
+        Status::NonEmpty => (),
+    }
+
+    Ok(Some((visitor.rules, visitor.non_expansions)))
+}
+
+/// Loads bridge rules for a custom (user-defined) mapper.
+///
+/// Returns `None` if an early-return message was already printed to `w`
+/// (e.g. mapper directory not found, no bridge directory).
+pub async fn load_bridge_rules_for_custom_mapper(
+    w: &mut impl Write,
+    name: &str,
+    config: &TEdgeConfig,
+    detail: DetailLevel,
+) -> anyhow::Result<Option<(Vec<ExpandedBridgeRule>, Vec<NonExpansionContext>)>> {
+    let mapper_dir = config.root_dir().join("mappers").join(name);
+
+    if !mapper_dir.exists() {
+        writeln!(
+            w,
+            "{}",
+            format!("Custom mapper '{name}' not found at {mapper_dir}").yellow()
+        )?;
+        return Ok(None);
+    }
+
+    // Load mapper.toml for auth method and ${mapper.*} template expansion.
+    let mapper_config = tedge_mapper::custom_mapper_config::load_mapper_config(&mapper_dir).await?;
+
+    let (auth_method, mapper_lookup): (_, Box<dyn MapperConfigLookup>) = match &mapper_config {
+        Some(cfg) => {
+            let has_credentials = cfg.credentials_path.is_some();
+            let auth = match cfg.auth_method {
+                tedge_mapper::custom_mapper_config::AuthMethodConfig::Certificate => {
+                    AuthMethod::Certificate
+                }
+                tedge_mapper::custom_mapper_config::AuthMethodConfig::Password => {
+                    AuthMethod::Password
+                }
+                tedge_mapper::custom_mapper_config::AuthMethodConfig::Auto => {
+                    if has_credentials {
+                        AuthMethod::Password
+                    } else {
+                        AuthMethod::Certificate
+                    }
+                }
+            };
+            let effective = tedge_mapper::custom_mapper_resolve::resolve_effective_config(
+                cfg, config, None, None,
+            )
+            .await?;
+            (auth, Box::new(effective))
+        }
+        None => (
+            AuthMethod::Certificate,
+            Box::new(TableMapperLookup(toml::Table::new())),
+        ),
+    };
+
+    let bridge_dir = mapper_dir.join("bridge");
+    if !bridge_dir.exists() {
+        writeln!(
+            w,
+            "{}",
+            format!("No bridge configuration directory found for custom mapper '{name}'").yellow()
+        )?;
+        writeln!(w, "Expected bridge rules at: {}", bridge_dir.bright_blue())?;
+        return Ok(None);
+    }
+
+    let _ = writeln!(
+        w,
+        "{} custom mapper '{}'",
+        "Bridge configuration for".bold(),
+        name.bold()
+    );
+    let _ = writeln!(w, "Reading from: {}", bridge_dir.bright_blue());
+    let _ = writeln!(w);
+
+    let mut visitor = InspectVisitor::new();
+
+    if let Err(e) = visit_bridge_config_dir(
+        &bridge_dir,
+        config,
+        auth_method,
+        None,
+        &*mapper_lookup,
         &mut visitor,
     )
     .await

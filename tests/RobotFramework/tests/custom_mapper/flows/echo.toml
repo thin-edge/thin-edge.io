@@ -1,0 +1,6 @@
+input.mqtt.topics = ["custom/test/in"]
+
+steps = []
+
+[output.mqtt]
+topic = "custom/test/out"

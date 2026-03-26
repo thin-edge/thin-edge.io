@@ -1,0 +1,87 @@
+name: minimalist
+version: 3
+description: |
+  A lean workflow: a single design doc (replacing the proposal/design split),
+  per-capability specs for verification and syncing, and a task checklist.
+artifacts:
+  - id: design
+    generates: design.md
+    description: |
+      A decision-focused design document for a developer familiar with the codebase.
+      Captures what changes, key decisions and their rationale, non-goals, and
+      trade-offs. Also identifies the capabilities being introduced or modified,
+      which the specs artifact uses to create the right spec files.
+    template: design.md
+    instruction: |
+      Target audience: a developer with a reasonable understanding of the codebase.
+      Do NOT re-explain how the system works unless it is directly relevant to a decision.
+      Do NOT duplicate what existing documentation already covers — link to it instead.
+
+      Structure:
+      1. **Goal** (1-3 sentences): what this change does and why, at a level that
+         would orient a reviewer. No extended motivation section.
+      2. **Decisions**: the key design choices made, each with:
+         - What was decided (concise statement)
+         - Why (the non-obvious reason — skip if the answer is "obviously the right thing")
+         - Alternatives rejected (only if meaningfully considered)
+      3. **Non-goals / deferred work**: what is explicitly out of scope, and why.
+      4. **Risks / trade-offs**: things that could go wrong or that sacrifice something.
+         Omit if there are none worth noting.
+      5. **Capabilities**: which specs will be created or modified.
+         - **New Capabilities**: list as kebab-case names (each becomes specs/<name>/spec.md)
+         - **Modified Capabilities**: list existing spec names from openspec/specs/ whose
+           requirements are changing
+
+      Keep each decision tight. If a decision is obvious or self-evident from the
+      code, omit the rationale. Prefer one clear paragraph over bullet lists for
+      nuanced trade-offs.
+    requires: []
+
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Per-capability specs with WHEN/THEN scenarios for verification and syncing.
+    template: spec.md
+    instruction: |
+      Create one spec file per capability listed in the design's Capabilities section.
+      Use the same format as the spec-driven schema so that openspec can validate
+      and sync them correctly.
+
+      - New capabilities: specs/<capability>/spec.md
+      - Modified capabilities: use the existing spec folder name from openspec/specs/
+
+      Delta operations (use ## headers):
+      - **ADDED Requirements**: New capabilities
+      - **MODIFIED Requirements**: Changed behavior — MUST include full updated content
+      - **REMOVED Requirements**: Deprecated features — MUST include **Reason** and **Migration**
+
+      Format:
+      - Each requirement: `### Requirement: <name>` followed by a description
+      - Use SHALL/MUST for normative requirements
+      - Each scenario: `#### Scenario: <name>` with WHEN/THEN format (exactly 4 hashtags)
+      - Every requirement MUST have at least one scenario
+
+      Keep scenarios focused on observable behavior, not implementation. Each scenario
+      is a potential test case — write them at the level a reviewer or test author needs.
+    requires:
+      - design
+
+  - id: tasks
+    generates: tasks.md
+    description: A concise, single-line markdown checklist of implementation tasks.
+    template: tasks.md
+    instruction: |
+      Generate a flat markdown checklist. Group tasks under headings only if
+      there are more than ~10 tasks and grouping genuinely aids navigation.
+      Each task is a single line — no sub-bullets, no explanations.
+      Do NOT explain the tasks or add commentary.
+      Use `- [ ] Task description` format so openspec can track progress.
+    requires:
+      - specs
+      - design
+
+apply:
+  requires: [tasks]
+  tracks: tasks.md
+  instruction: |
+    Read context files (design.md and specs), work through pending tasks, mark
+    complete as you go. Pause if you hit blockers or need clarification.

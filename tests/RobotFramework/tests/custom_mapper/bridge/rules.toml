@@ -1,0 +1,6 @@
+local_prefix = "custom-local/"
+remote_prefix = "custom-remote/"
+
+[[rule]]
+topic = "test"
+direction = "outbound"

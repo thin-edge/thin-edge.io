@@ -100,6 +100,9 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
 
     let (static_alias, deprecated_keys) = deprecated_keys(reader_paths.iter());
     let iter_updated = deprecated_keys.iter().map(|k| &k.iter_field);
+    let group_aliases = group_deprecated_aliases(None, items);
+    let (deprecated_paths, canonical_paths): (Vec<_>, Vec<_>) =
+        group_aliases.iter().cloned().unzip();
 
     let fallback_branch: Option<syn::Arm> = readonly_args
         .0
@@ -153,13 +156,14 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
             use ::once_cell::sync::Lazy;
             use ::std::borrow::Cow;
             use ::std::collections::HashMap;
-            use ::doku::*;
 
             static ALIASES: Lazy<HashMap<Cow<'static, str>, Cow<'static, str>>> = Lazy::new(|| {
-                let ty = TEdgeConfigReader::ty();
-                let TypeKind::Struct { fields, transparent: false } = ty.kind else { panic!("Expected struct but got {:?}", ty.kind) };
-                let Fields::Named { fields } = fields else { panic!("Expected named fields but got {:?}", fields)};
-                let mut aliases = struct_field_aliases(None, &fields);
+                let mut aliases: HashMap<Cow<'static, str>, Cow<'static, str>> = HashMap::new();
+                // Statically generated aliases from `#[tedge_config(deprecated_name)]` on groups
+                #(
+                    aliases.insert(Cow::Borrowed(#deprecated_paths), Cow::Borrowed(#canonical_paths));
+                )*
+                // Deprecated keys (from `#[tedge_config(deprecated_key)]` on fields)
                 #(
                     if let Some(alias) = aliases.insert(Cow::Borrowed(#static_alias), ReadableKey::#iter_updated.to_cow_str()) {
                         panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `deprecated_key` for one of these configurations?", #static_alias, alias, ReadableKey::#iter_updated.to_cow_str());
@@ -187,6 +191,92 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
             }
         }
     }
+}
+
+/// Generates (deprecated_path, canonical_path) alias pairs from `deprecated_names` on
+/// both fields and groups throughout the configuration tree.
+///
+/// - For a group with canonical name `az` and deprecated_name `azure`, and sub-field
+///   `mapper.timestamp`, this generates `("azure.mapper.timestamp", "az.mapper.timestamp")`.
+/// - For a field with canonical name `new_name` and deprecated_name `old_name` under group
+///   `group`, this generates `("group.old_name", "group.new_name")`.
+///
+/// These pairs are inserted into the static alias map in `replace_aliases`.
+fn group_deprecated_aliases(prefix: Option<&str>, items: &[FieldOrGroup]) -> Vec<(String, String)> {
+    let mut aliases = Vec::new();
+    for item in items {
+        match item {
+            FieldOrGroup::Group(g) | FieldOrGroup::Multi(g) => {
+                let canonical_name = g.name();
+                let canonical_prefix = match prefix {
+                    Some(p) => format!("{p}.{canonical_name}"),
+                    None => canonical_name.to_string(),
+                };
+                // Aliases from deprecated names of this group
+                for dep_name in g.deprecated_names() {
+                    let dep_prefix = match prefix {
+                        Some(p) => format!("{p}.{dep_name}"),
+                        None => dep_name.to_string(),
+                    };
+                    for leaf in reader_leaf_paths(None, &g.contents) {
+                        aliases.push((
+                            format!("{dep_prefix}.{leaf}"),
+                            format!("{canonical_prefix}.{leaf}"),
+                        ));
+                    }
+                }
+                // Recurse into sub-items
+                aliases.extend(group_deprecated_aliases(
+                    Some(&canonical_prefix),
+                    &g.contents,
+                ));
+            }
+            FieldOrGroup::Field(f) if !f.reader().skip => {
+                let canonical_name = f.name();
+                let canonical_path = match prefix {
+                    Some(p) => format!("{p}.{canonical_name}"),
+                    None => canonical_name.to_string(),
+                };
+                // Aliases from deprecated names of this field
+                for dep_name in f.deprecated_names() {
+                    let dep_path = match prefix {
+                        Some(p) => format!("{p}.{dep_name}"),
+                        None => dep_name.to_string(),
+                    };
+                    aliases.push((dep_path, canonical_path.clone()));
+                }
+            }
+            FieldOrGroup::Field(_) => {}
+        }
+    }
+    aliases
+}
+
+/// Returns dot-separated paths to all reader-visible leaf fields under `items`.
+fn reader_leaf_paths(prefix: Option<&str>, items: &[FieldOrGroup]) -> Vec<String> {
+    let mut paths = Vec::new();
+    for item in items {
+        match item {
+            FieldOrGroup::Group(g) | FieldOrGroup::Multi(g) => {
+                let name = g.name();
+                let sub_prefix = match prefix {
+                    Some(p) => format!("{p}.{name}"),
+                    None => name.to_string(),
+                };
+                paths.extend(reader_leaf_paths(Some(&sub_prefix), &g.contents));
+            }
+            FieldOrGroup::Field(f) if !f.reader().skip => {
+                let name = f.name();
+                let path = match prefix {
+                    Some(p) => format!("{p}.{name}"),
+                    None => name.to_string(),
+                };
+                paths.push(path);
+            }
+            FieldOrGroup::Field(_) => {}
+        }
+    }
+    paths
 }
 
 fn configuration_strings<'a>(

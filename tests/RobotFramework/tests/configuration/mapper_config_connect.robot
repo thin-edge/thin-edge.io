@@ -48,7 +48,7 @@ Connect Output Shows Migrated Config Path After Migration
 
     # Verify: Shows mapper config file as source
     Should Contain    ${output}    mapper configuration file
-    Should Contain    ${output}    /etc/tedge/mappers/c8y/tedge.toml
+    Should Contain    ${output}    /etc/tedge/mappers/c8y/mapper.toml
 
 Connect Output Shows Profile Config Path
     [Documentation]    Verify tedge connect shows correct path for profiled config
@@ -66,7 +66,7 @@ Connect Output Shows Profile Config Path
 
     # Verify: Shows profile-specific mapper config file
     Should Contain    ${output}    mapper configuration file
-    Should Contain    ${output}    /etc/tedge/mappers/c8y.production/tedge.toml
+    Should Contain    ${output}    /etc/tedge/mappers/c8y.production/mapper.toml
 
 Connect Test Mode Works With Migrated Config
     [Documentation]    Verify test mode validates configuration correctly
@@ -79,7 +79,7 @@ Connect Test Mode Works With Migrated Config
 
     # Verify: Test mode completes and shows config
     Should Contain    ${output}    mapper configuration file
-    Should Contain    ${output}    /etc/tedge/mappers/c8y/tedge.toml
+    Should Contain    ${output}    /etc/tedge/mappers/c8y/mapper.toml
 
 Azure Connect Shows Migrated Config Path
     [Documentation]    Spot-check: Verify Azure connect shows correct config path
@@ -92,7 +92,7 @@ Azure Connect Shows Migrated Config Path
 
     # Verify: Shows Azure mapper config file
     Should Contain    ${output}    mapper configuration file
-    Should Contain    ${output}    /etc/tedge/mappers/az/tedge.toml
+    Should Contain    ${output}    /etc/tedge/mappers/az/mapper.toml
 
 AWS Connect Shows Migrated Config Path
     [Documentation]    Spot-check: Verify AWS connect shows correct config path
@@ -105,4 +105,4 @@ AWS Connect Shows Migrated Config Path
 
     # Verify: Shows AWS mapper config file
     Should Contain    ${output}    mapper configuration file
-    Should Contain    ${output}    /etc/tedge/mappers/aws/tedge.toml
+    Should Contain    ${output}    /etc/tedge/mappers/aws/mapper.toml

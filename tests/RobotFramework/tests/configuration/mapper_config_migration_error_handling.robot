@@ -159,7 +159,7 @@ Migration Recovers From Interrupted Previous Attempt
     # Simulate partial migration: manually create default profile config
     Execute Command    sudo -u tedge mkdir -p /etc/tedge/mappers/c8y    timeout=0
     Execute Command
-    ...    sudo -u tedge sh -c 'echo "url \= \\"default.c8y.io\\"" > /etc/tedge/mappers/c8y/tedge.toml'
+    ...    sudo -u tedge sh -c 'echo "url \= \\"default.c8y.io\\"" > /etc/tedge/mappers/c8y/mapper.toml'
     ...    retries=0
     ...    timeout=0
 
@@ -227,7 +227,7 @@ Migration Creates Parent Directories With Correct Permissions
     Should Match Regexp    ${c8y_perms}    ^7[0-9][0-9]$
 
     # Verify file permissions (should be 644)
-    ${file_perms}=    Execute Command    stat -c '%a' /etc/tedge/mappers/c8y/tedge.toml
+    ${file_perms}=    Execute Command    stat -c '%a' /etc/tedge/mappers/c8y/mapper.toml
     Should Be Equal    ${file_perms.strip()}    644
 
     # Verify ownership
