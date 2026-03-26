@@ -15,6 +15,7 @@ camino = { workspace = true, features = ["serde1"] }
 futures = { workspace = true }
 glob = { workspace = true }
 humantime = { workspace = true }
+rand = { workspace = true }
 rquickjs = { version = "0.11", default-features = false, features = [
     "futures",
     "macro",
@@ -32,6 +33,7 @@ time = { workspace = true }
 tokio = { workspace = true, features = ["fs", "macros", "time", "sync"] }
 toml = { workspace = true, features = ["parse"] }
 tracing = { workspace = true }
+uuid = { workspace = true }
 
 # Enable the bindgen feature for target triples whose bindings are not shipped by rquickjs.
 # Requires libclang-dev and the appropriate build toolchain for the target (e.g., libc6-dev).

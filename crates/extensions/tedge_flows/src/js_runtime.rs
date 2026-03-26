@@ -261,6 +261,7 @@ impl JsWorker {
     async fn run(mut self, store: FlowContextHandle) {
         rquickjs::async_with!(self.context => |ctx| {
             js_lib::console::init(&ctx);
+            js_lib::crypto::init(&ctx);
             js_lib::text_decoder::init(&ctx);
             js_lib::text_encoder::init(&ctx);
             store.init(&ctx);

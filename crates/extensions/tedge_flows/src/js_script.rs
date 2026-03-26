@@ -824,6 +824,86 @@ export function onMessage(message) {
         );
     }
 
+    #[tokio::test]
+    async fn using_crypto_random_uuid() {
+        let js = r#"
+export function onMessage(message) {
+    let payload = crypto.randomUUID()
+    return { "topic": "test", "payload": payload}
+}
+        "#;
+        let (runtime, mut script) = runtime_with(js).await;
+
+        let input = Message::new("test", "get random uuid");
+        let messages = script
+            .on_message(&runtime, SystemTime::now(), &input)
+            .await
+            .unwrap();
+        let generated_uuid_str = messages.get(0).unwrap().payload_str().unwrap();
+        let generated_uuid = uuid::Uuid::parse_str(generated_uuid_str);
+        assert!(generated_uuid.is_ok());
+        assert_eq!(
+            uuid::Variant::RFC4122,
+            generated_uuid.unwrap().get_variant()
+        );
+    }
+
+    #[tokio::test]
+    async fn using_crypto_get_random_numbers() {
+        for typed_array in [
+            "Int8Array(7)",
+            "Uint8Array(7)",
+            // "Uint8ClampedArray(2)", // Seems to be not supported by rquickjs
+            "Int16Array(2)",
+            "Uint16Array(2)",
+            "Int32Array(2)",
+            "Uint32Array(5)",
+            // "BigInt64Array(2)", // Not working
+            // "BigUint64Array(2)",  // Not working
+            "Float32Array(2)", // Not required
+            "Float64Array(5)", // Not required
+        ] {
+            let js = format!(
+                r#"
+    export function onMessage(message) {{
+        const array = new {typed_array};
+        for (const num of array) {{
+          if (num != 0) {{ throw new Error("Expect {typed_array} to be 0-initialized"); }}
+        }}
+        const updated_array = crypto.getRandomValues(array);
+        if (updated_array != array) {{
+            throw new Error("Expect {typed_array} to be returned");
+        }}
+        let zero_count = 0
+        for (const num of array) {{
+          if (num == 0) {{ zero_count += 1; }}
+        }}
+        if (zero_count == array.length) {{
+            throw new Error("Expect {typed_array} to be populated with random values");
+        }}
+
+        const payload = {{
+            values: array.values().toArray(),
+        }}
+        return {{ "topic": "test", "payload": JSON.stringify(payload) }}
+    }}
+            "#
+            );
+            let (runtime, mut script) = runtime_with(&js).await;
+
+            let input = Message::new("test", format!("get random {typed_array}"));
+            let output = script
+                .on_message(&runtime, SystemTime::now(), &input)
+                .await
+                .unwrap();
+            let values = serde_json::from_str::<serde_json::Value>(
+                output.get(0).unwrap().payload_str().unwrap(),
+            )
+            .unwrap();
+            eprintln!("Random {typed_array}: {}", values.get("values").unwrap());
+        }
+    }
+
     async fn runtime_with(js: &str) -> (JsRuntime, FlowStep) {
         let mut runtime = JsRuntime::with_default().await.unwrap();
         let mut script = JsScript::new("toml|1|js".to_owned(), "toml".into(), "js".into());
