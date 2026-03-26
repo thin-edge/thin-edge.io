@@ -87,7 +87,11 @@ impl Actor for FlowsMapper {
         self.notify_flows_status().await?;
         self.on_startup().await?;
 
-        while let Some(message) = self.next_message().await {
+        loop {
+            self.on_context_update().await?;
+            let Some(message) = self.next_message().await else {
+                break;
+            };
             match message {
                 InputMessage::Tick(_) => {
                     self.on_source_poll().await?;
@@ -292,6 +296,14 @@ impl FlowsMapper {
     async fn on_startup(&mut self) -> Result<(), RuntimeError> {
         let timestamp = SystemTime::now();
         for messages in self.processor.on_startup(timestamp).await {
+            self.publish_result(messages).await?;
+        }
+        Ok(())
+    }
+
+    async fn on_context_update(&mut self) -> Result<(), RuntimeError> {
+        let timestamp = SystemTime::now();
+        for messages in self.processor.on_context_update(timestamp).await {
             self.publish_result(messages).await?;
         }
         Ok(())

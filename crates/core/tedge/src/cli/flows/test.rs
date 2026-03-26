@@ -50,17 +50,17 @@ impl Command for TestCommand {
             TEdgeFlowsCli::load_context(processor.context_handle(), context).await?;
         }
 
-        // we need a tick before calling on_message to run onStartup
-        processor.on_startup(SystemTime::now()).await;
+        let timestamp = self.processing_time.unwrap_or_else(SystemTime::now);
+        self.on_startup(&mut processor, timestamp).await;
+
         if let Some(message) = &self.message {
-            let timestamp = self.processing_time.unwrap_or_else(SystemTime::now);
-            self.process(&mut processor, message.clone(), timestamp)
+            self.on_message(&mut processor, message.clone(), timestamp)
                 .await;
         } else {
             let mut stdin = BufReader::new(tokio::io::stdin());
             while let Some(message) = next_message(&mut stdin).await {
                 let timestamp = self.processing_time.unwrap_or_else(SystemTime::now);
-                self.process(&mut processor, message, timestamp).await;
+                self.on_message(&mut processor, message, timestamp).await;
             }
         }
         if self.final_on_interval {
@@ -68,14 +68,14 @@ impl Command for TestCommand {
             let now = processor
                 .last_interval_deadline()
                 .unwrap_or_else(Instant::now);
-            self.tick(&mut processor, timestamp, now).await;
+            self.on_interval(&mut processor, timestamp, now).await;
         }
         Ok(())
     }
 }
 
 impl TestCommand {
-    async fn process(
+    async fn on_message(
         &self,
         processor: &mut MessageProcessor<BaseFlowRegistry>,
         mut message: Message,
@@ -95,14 +95,15 @@ impl TestCommand {
             .on_message(timestamp, &source, &message)
             .await
             .into_iter()
-            .for_each(|msg| self.print_messages(msg))
+            .for_each(|msg| self.print_messages(msg));
+
+        self.on_context_update(processor, timestamp).await;
     }
 
-    async fn tick(
+    async fn on_startup(
         &self,
         processor: &mut MessageProcessor<BaseFlowRegistry>,
         timestamp: SystemTime,
-        now: Instant,
     ) {
         processor
             .on_startup(timestamp)
@@ -110,8 +111,31 @@ impl TestCommand {
             .into_iter()
             .for_each(|msg| self.print_messages(msg));
 
+        self.on_context_update(processor, timestamp).await;
+    }
+
+    async fn on_interval(
+        &self,
+        processor: &mut MessageProcessor<BaseFlowRegistry>,
+        timestamp: SystemTime,
+        now: Instant,
+    ) {
         processor
             .on_interval(timestamp, now)
+            .await
+            .into_iter()
+            .for_each(|msg| self.print_messages(msg));
+
+        self.on_context_update(processor, timestamp).await;
+    }
+
+    async fn on_context_update(
+        &self,
+        processor: &mut MessageProcessor<BaseFlowRegistry>,
+        timestamp: SystemTime,
+    ) {
+        processor
+            .on_context_update(timestamp)
             .await
             .into_iter()
             .for_each(|msg| self.print_messages(msg))

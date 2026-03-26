@@ -87,12 +87,14 @@ For instance, the builtin flow for measurements is defined by the file `/etc/ted
 with the default content as follows:
 
 ```toml
-input.mqtt.topics = ["te/+/+/+/+/m/+", "te/device/main/service/tedge-mapper-c8y/status/entities"]
+input.mqtt.topics = ["te/+/+/+/+/m/+"]
+
+config = { topic_root = "te" }
 
 steps = [
     { builtin = "add-timestamp", config = { property = "time", format = "unix", reformat = false } },
-    { builtin = "cache-early-messages", config = { topic_root = "te" } },
-    { builtin = "into-c8y-measurements", config = { topic_root = "te" } },
+    { builtin = "cache-early-messages" },
+    { builtin = "into-c8y-measurements" },
     { builtin = "limit-payload-size", config = { max_size = 16184 } },
 ]
 

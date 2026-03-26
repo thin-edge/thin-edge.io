@@ -591,29 +591,24 @@ Transform a [%%te%% alarm](../../../understand/thin-edge-json/#alarms) into a [C
 
 ### `cache-early-messages`
 
-Cache all messages for an entity (the main device, a child device or a service), till a birth message is received.
+Cache all messages for an entity (the main device, a child device or a service),
+till that entity is registered, and its metadata is stored in the mapper context.
 
-The typical usage is to use a two-level flow, where `cache-early-messages` is used to postpone any message transformation till
-the second step is ready to process them, the source entities being fully registered and their metadata properly cached in the flows `context.mapper`.
+The typical usage is to use a two-step flow, where `cache-early-messages` is used
+to postpone message transformations till the second step is ready to process them.
+Any message that is received for an entity that is not registered yet is cached
+and only released when the source entity is properly registered and its metadata stored in flows `context.mapper`.
 
 ```toml
-input.mqtt.topics = ["te/+/+/+/+/m/+", "te/device/main/service/tedge-mapper-c8y/status/entities"]
+input.mqtt.topics = ["te/+/+/+/+/m/+"]
 
 config = { topic_root = "te" }
 
+# Cache measurements till source metadata are stored in the context
 [[steps]]
 builtin = "cache-early-messages"
-config = { mapper_topic_id = "device/main/service/tedge-mapper-c8y" }
 
+# Process measurements assuming source metadata are available
 [[steps]]
 builtin = "into-c8y-measurements"
 ```
-
-- The default for the Cumulocity mapper is to publish birth messages on `te/device/main/service/tedge-mapper-c8y/status/entities`
-- This is configurable. A custom mapper (which topic id is `a/b/c/d`) is expected to publish finalized entity registration
-  on `te/a/b/c/d/status/entities`.
-- A birth message is composed of
-  - the registered entity topic identifier,
-  - its status `registered` or `unregistered`
-  - a unix timestamp
-  - `{ "entity": "device/child-xyz//", "status": "registered", "time": 1774011963.456 }`

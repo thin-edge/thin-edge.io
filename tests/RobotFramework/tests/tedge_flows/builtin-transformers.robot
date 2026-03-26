@@ -50,13 +50,14 @@ Test c8y specific transformers with tedge flows cli and initial context (provide
     Should Contain    ${transformed_msg}    item="type":"environment"
     [Teardown]    Uninstall Flow    custom-measurements
 
-Test c8y flows with tedge flows cli
+Test c8y flows with tedge flows cli and child registration
+    Skip    msg=This cannot work till the registration is extracted from c8y-mapper into a flow
+    # See https://github.com/thin-edge/thin-edge.io/issues/4068
     ${installed_flows}    Execute Command    tedge flows list --mapper c8y
     Should Contain    ${installed_flows}    measurements
     ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-measurements/c8y.samples    /etc/tedge/data/
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-measurements/context.json    /etc/tedge/data/
     ${transformed_msg}    Execute Command
-    ...    cat /etc/tedge/data/c8y.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --mapper c8y --context /etc/tedge/data/context.json
+    ...    cat /etc/tedge/data/c8y.samples | awk '{ print $2 }' FS\='INPUT:' | tedge flows test --mapper c8y
     ...    strip=True
     ${expected_msg}    Execute Command
     ...    cat /etc/tedge/data/c8y.samples | awk '{ if ($2) print $2 }' FS\='OUTPUT: '
@@ -64,6 +65,18 @@ Test c8y flows with tedge flows cli
     Should Be Equal
     ...    ${transformed_msg}
     ...    ${expected_msg}
+
+Test c8y flows with tedge flows cli and a pre-built context
+    ${installed_flows}    Execute Command    tedge flows list --mapper c8y
+    Should Contain    ${installed_flows}    measurements
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-measurements/context.json    /etc/tedge/data/
+    ${transformed_msg}    Execute Command
+    ...    tedge flows test --mapper c8y --context /etc/tedge/data/context.json te/device/child-xyz///m/environment '{"temperature": 258.0, "time":"2025-06-27T13:33:53.493Z"}'
+    Should Contain
+    ...    ${transformed_msg}
+    ...    item="externalSource":{"externalId":"raspberry-007-child-xyz","type":"c8y_Serial"}
+    Should Contain    ${transformed_msg}    item="temperature":{"temperature":{"value":258.0}}
+    Should Contain    ${transformed_msg}    item="type":"environment"
 
 Apply c8y specific transformers with tedge-mapper local
     Install Flow    custom-measurements

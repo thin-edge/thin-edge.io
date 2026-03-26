@@ -2,7 +2,6 @@ use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::entity_cache::UpdateOutcome;
-use crate::mea::entities::C8yEntityBirth;
 use crate::service_monitor::is_c8y_bridge_established;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -178,19 +177,10 @@ impl C8yMapperActor {
         pending_entities: Vec<RegisteredEntityData>,
     ) -> Result<(), RuntimeError> {
         for pending_entity in pending_entities {
-            let entity_topic_id = &pending_entity.reg_message.topic_id;
-            let birth_message = C8yEntityBirth::birth_message(
-                &self.converter.mqtt_schema,
-                &self.converter.config.service_topic_id,
-                entity_topic_id,
-            );
-
             let mut reg_message = pending_entity.reg_message;
             self.converter.append_id_if_not_given(&mut reg_message);
             let reg_message = reg_message.to_mqtt_message(&self.converter.mqtt_schema);
             self.process_message(reg_message).await?;
-
-            self.mqtt_publisher.send(birth_message).await?;
 
             // Convert and publish cached data messages
             for pending_data_message in pending_entity.data_messages {
