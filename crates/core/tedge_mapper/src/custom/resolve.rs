@@ -9,6 +9,7 @@
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
+use tedge_config::cli::format_config_set_cmd;
 use tedge_config::models::HostPort;
 use tedge_config::models::SecondsOrHumanTime;
 use tedge_config::models::MQTT_TLS_PORT;
@@ -314,18 +315,10 @@ impl EffectiveMapperConfig {
 
     fn not_set_help(&self, path: &str) -> String {
         if self.is_builtin {
-            // Replicate the tedge_config_set_cmd logic from tedge/src/cli/mapper/cli.rs
-            // (we can't import it here due to the dependency direction).
-            let cmd = match self.mapper_name.split_once('.') {
-                Some((cloud, profile)) => {
-                    format!("tedge config set {cloud}.{path} <value> --profile {profile}")
-                }
-                None if self.mapper_name.is_empty() => {
-                    format!("tedge config set <cloud>.{path} <value>")
-                }
-                None => {
-                    format!("tedge config set {}.{path} <value>", self.mapper_name)
-                }
+            let cmd = if self.mapper_name.is_empty() {
+                format!("tedge config set <cloud>.{path} <value>")
+            } else {
+                format_config_set_cmd(&self.mapper_name, path)
             };
             format!("Configure this via '{cmd}'")
         } else {

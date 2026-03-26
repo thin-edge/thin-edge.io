@@ -6,6 +6,7 @@ use crate::log::MaybeFancy;
 use crate::ConfigError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use tedge_config::cli::format_config_set_cmd;
 use tedge_config::TEdgeConfig;
 use tedge_mapper::custom_mapper_config::load_mapper_config;
 use tedge_mapper::custom_mapper_config::scan_mappers_shallow;
@@ -277,25 +278,11 @@ impl MapperConfigGetCommand {
             writeln!(
                 err,
                 "# To change this, use: {}",
-                tedge_config_set_cmd(&self.mapper_name, &self.toml_key)
+                format_config_set_cmd(&self.mapper_name, &self.toml_key)
             )?;
         }
 
         Ok(())
-    }
-}
-
-/// Formats a `tedge config set` command for a built-in mapper key.
-///
-/// The `mapper_name` may be bare (e.g. `"c8y"`) or profile-qualified
-/// (e.g. `"c8y.prod"`). In the latter case the profile is passed via
-/// `--profile` so the command is valid for the named profile.
-fn tedge_config_set_cmd(mapper_name: &str, toml_key: &str) -> String {
-    match mapper_name.split_once('.') {
-        Some((cloud, profile)) => {
-            format!("tedge config set {cloud}.{toml_key} <value> --profile {profile}")
-        }
-        None => format!("tedge config set {mapper_name}.{toml_key} <value>"),
     }
 }
 
@@ -304,13 +291,13 @@ mod tests {
     use super::*;
     use tedge_test_utils::fs::TempTedgeDir;
 
-    mod tedge_config_set_cmd_fn {
-        use super::*;
+    mod format_config_set_cmd_fn {
+        use tedge_config::cli::format_config_set_cmd;
 
         #[test]
         fn bare_mapper_name() {
             assert_eq!(
-                tedge_config_set_cmd("c8y", "topic_prefix"),
+                format_config_set_cmd("c8y", "topic_prefix"),
                 "tedge config set c8y.topic_prefix <value>"
             );
         }
@@ -318,7 +305,7 @@ mod tests {
         #[test]
         fn profile_qualified_mapper_name() {
             assert_eq!(
-                tedge_config_set_cmd("c8y.prod", "mqtt.port"),
+                format_config_set_cmd("c8y.prod", "mqtt.port"),
                 "tedge config set c8y.mqtt.port <value> --profile prod"
             );
         }
@@ -326,7 +313,7 @@ mod tests {
         #[test]
         fn nested_toml_key() {
             assert_eq!(
-                tedge_config_set_cmd("az", "device.cert_path"),
+                format_config_set_cmd("az", "device.cert_path"),
                 "tedge config set az.device.cert_path <value>"
             );
         }
