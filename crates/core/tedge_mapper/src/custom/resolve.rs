@@ -10,6 +10,7 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
 use tedge_config::models::HostPort;
+use tedge_config::models::SecondsOrHumanTime;
 use tedge_config::models::MQTT_TLS_PORT;
 use tedge_config::tedge_toml::Cloud;
 use tedge_config::TEdgeConfig;
@@ -27,8 +28,17 @@ pub enum ConfigSource {
     /// Value was a relative path in `mapper.toml`; the stored value is the resolved
     /// absolute form. The original relative string is preserved for display.
     MapperTomlResolved { original: String },
-    /// Value was not set in `mapper.toml` and was inherited from the root `tedge.toml`.
+    /// Value was not set in `mapper.toml` and was inherited from the root `tedge.toml`
+    /// via a schema field (e.g. cert path, device id).
     TedgeToml,
+    /// Value was not set in `mapper.toml` but is provided by the built-in mapper
+    /// configuration (derived from `tedge.toml`). Users should change this via
+    /// `tedge config set` rather than by editing `mapper.toml` directly.
+    ///
+    /// Only returned by [`EffectiveMapperConfig::get`] when an overlay was supplied
+    /// to [`resolve_effective_config`] — custom mapper calls pass `None` so this
+    /// variant is unreachable for custom mappers.
+    TedgeConfig,
     /// Value was inferred from the Subject Common Name of the device certificate.
     CertificateCN { cert_path: Utf8PathBuf },
     /// Value is the schema default (not present in any configuration file).
@@ -40,7 +50,7 @@ impl ConfigSource {
     pub fn short_tag(&self) -> &'static str {
         match self {
             ConfigSource::MapperToml | ConfigSource::MapperTomlResolved { .. } => "mapper.toml",
-            ConfigSource::TedgeToml => "tedge.toml",
+            ConfigSource::TedgeToml | ConfigSource::TedgeConfig => "tedge.toml",
             ConfigSource::CertificateCN { .. } => "cert CN",
             ConfigSource::Default => "default",
         }
@@ -58,6 +68,9 @@ impl std::fmt::Display for ConfigSource {
             ConfigSource::TedgeToml => {
                 write!(f, "not set in mapper.toml, inherited from tedge.toml")
             }
+            ConfigSource::TedgeConfig => {
+                write!(f, "from tedge.toml")
+            }
             ConfigSource::CertificateCN { cert_path } => {
                 write!(f, "inferred from certificate CN ({cert_path})")
             }
@@ -73,6 +86,33 @@ pub struct Sourced<T> {
     pub source: ConfigSource,
 }
 
+/// Result of [`EffectiveMapperConfig::get`].
+///
+/// Distinguishes three outcomes that `Option<T>` would collapse:
+/// - [`Value`](Self::Value): the key is set and has an effective value.
+/// - [`NotSet`](Self::NotSet): the key is a recognised schema field but has no configured value.
+/// - [`UnknownKey`](Self::UnknownKey): the key is not in the schema and was not found in the
+///   mapper's TOML table — it is likely a typo or an unsupported key.
+#[derive(Debug)]
+pub enum ConfigGetResult {
+    /// Key found — includes the effective value and its origin.
+    Value(Sourced<String>),
+    /// Key is recognised (schema-level or in overlay schema) but has no configured value.
+    NotSet,
+    /// Key is not a schema field and was not present in the mapper's TOML table.
+    UnknownKey,
+}
+
+#[cfg(test)]
+impl ConfigGetResult {
+    fn unwrap_value(self) -> Sourced<String> {
+        match self {
+            Self::Value(s) => s,
+            other => panic!("called unwrap_value on {other:?}"),
+        }
+    }
+}
+
 /// The fully resolved effective configuration for a mapper instance.
 ///
 /// Produced by [`resolve_effective_config`]. All path fields are absolute and all
@@ -83,6 +123,21 @@ pub struct Sourced<T> {
 /// to display.
 #[derive(Debug)]
 pub struct EffectiveMapperConfig {
+    /// Contents of `mapper.toml` before any overlay is applied. Used by `get()` to
+    /// distinguish keys the user set explicitly from those supplied by the built-in
+    /// mapper configuration.
+    mapper_table: toml::Table,
+    /// Merged table: `mapper.toml` overlaid with the built-in mapper config (e.g. c8y).
+    /// Private: callers use `to_template_table()` and `get()` instead.
+    raw_table: toml::Table,
+    /// Null-preserving JSON schema used by `get()` to distinguish [`ConfigGetResult::NotSet`]
+    /// from [`ConfigGetResult::UnknownKey`] for keys not found in the TOML tables.
+    ///
+    /// For custom mappers this is built from [`CustomMapperConfig`] by
+    /// [`build_custom_mapper_schema`]. For built-in mappers it is supplied by the caller
+    /// (e.g. from `serde_json::to_value(c8y_reader)` so that `OptionalConfig::Empty` fields
+    /// appear as `null` rather than being omitted as they would be in TOML serialisation).
+    schema: serde_json::Value,
     /// Cloud broker URL (from `mapper.toml`), if configured.
     pub url: Option<Sourced<HostPort<MQTT_TLS_PORT>>>,
     /// Effective MQTT client ID. `None` when cert auth is in use but the cert is
@@ -96,12 +151,199 @@ pub struct EffectiveMapperConfig {
     pub root_cert_path: Sourced<Utf8PathBuf>,
     /// Credentials file path for password authentication (`mapper.toml` only).
     pub credentials_path: Option<Sourced<Utf8PathBuf>>,
-    /// Resolved effective authentication method (after `auto` expansion).
-    pub effective_auth: AuthMethod,
+    /// Resolved effective authentication method (after `auto` expansion), with source.
+    pub effective_auth: Sourced<AuthMethod>,
     /// MQTT bridge settings (keepalive interval, clean session).
     pub bridge: BridgeConfig,
-    /// Raw TOML table from `mapper.toml`, used for custom key lookups.
-    pub table: toml::Table,
+}
+
+impl EffectiveMapperConfig {
+    /// Returns a TOML table for `${mapper.*}` template expansion in bridge rules.
+    ///
+    /// Starts from the stored raw table (mapper.toml, possibly overlaid with built-in
+    /// mapper config) so that non-schema keys such as `bridge.topic_prefix` remain
+    /// accessible, then overlays the effective resolved values for schema-level keys
+    /// (`device.id`, `device.cert_path`, etc.) so that cert CN inference and
+    /// `tedge.toml` fallbacks are reflected in templates.
+    ///
+    /// The struct fields are the single source of truth: adding a new field to
+    /// [`EffectiveMapperConfig`] and wiring it in here is sufficient — no separate
+    /// list of manual inserts to keep in sync elsewhere.
+    pub fn to_template_table(&self) -> toml::Table {
+        let mut table = self.raw_table.clone();
+
+        let device = table
+            .entry("device".to_string())
+            .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+
+        if let toml::Value::Table(dt) = device {
+            if let Some(id) = &self.device_id {
+                dt.insert("id".to_string(), toml::Value::String(id.value.clone()));
+            }
+            if let Some(cert) = &self.cert_path {
+                dt.insert(
+                    "cert_path".to_string(),
+                    toml::Value::String(cert.value.to_string()),
+                );
+            }
+            if let Some(key) = &self.key_path {
+                dt.insert(
+                    "key_path".to_string(),
+                    toml::Value::String(key.value.to_string()),
+                );
+            }
+            dt.insert(
+                "root_cert_path".to_string(),
+                toml::Value::String(self.root_cert_path.value.to_string()),
+            );
+        }
+
+        if let Some(u) = &self.url {
+            table.insert("url".to_string(), toml::Value::String(u.value.to_string()));
+        }
+
+        table
+    }
+
+    /// Returns the effective value of a config key, with source annotation.
+    ///
+    /// Schema-level keys (`url`, `device.id`, `device.cert_path`, `device.key_path`,
+    /// `device.root_cert_path`, `credentials_path`, `auth_method`) are resolved first
+    /// and return the effective value with full source tracking. All other keys fall back
+    /// to walking the raw TOML table. If a key is not found in any TOML table, the stored
+    /// schema JSON is consulted to distinguish [`ConfigGetResult::NotSet`] (key is
+    /// schema-valid but has no configured value) from [`ConfigGetResult::UnknownKey`].
+    pub fn get(&self, key: &str) -> ConfigGetResult {
+        match key {
+            "url" => match &self.url {
+                Some(s) => ConfigGetResult::Value(Sourced {
+                    value: s.value.to_string(),
+                    source: s.source.clone(),
+                }),
+                None => ConfigGetResult::NotSet,
+            },
+            "device.id" => match &self.device_id {
+                Some(s) => ConfigGetResult::Value(Sourced {
+                    value: s.value.clone(),
+                    source: s.source.clone(),
+                }),
+                None => ConfigGetResult::NotSet,
+            },
+            "device.cert_path" => match &self.cert_path {
+                Some(s) => ConfigGetResult::Value(Sourced {
+                    value: s.value.to_string(),
+                    source: s.source.clone(),
+                }),
+                None => ConfigGetResult::NotSet,
+            },
+            "device.key_path" => match &self.key_path {
+                Some(s) => ConfigGetResult::Value(Sourced {
+                    value: s.value.to_string(),
+                    source: s.source.clone(),
+                }),
+                None => ConfigGetResult::NotSet,
+            },
+            "device.root_cert_path" => ConfigGetResult::Value(Sourced {
+                value: self.root_cert_path.value.to_string(),
+                source: self.root_cert_path.source.clone(),
+            }),
+            "credentials_path" => match &self.credentials_path {
+                Some(s) => ConfigGetResult::Value(Sourced {
+                    value: s.value.to_string(),
+                    source: s.source.clone(),
+                }),
+                None => ConfigGetResult::NotSet,
+            },
+            "auth_method" => ConfigGetResult::Value(Sourced {
+                value: match self.effective_auth.value {
+                    AuthMethod::Certificate => "certificate".to_string(),
+                    AuthMethod::Password => "password".to_string(),
+                },
+                source: self.effective_auth.source.clone(),
+            }),
+            _ => {
+                // Check mapper.toml first — user-set values take priority and are
+                // attributed to mapper.toml. If only found in raw_table (i.e. it came
+                // from the overlay), attribute it to TedgeConfig instead. This branch
+                // is only reachable when an overlay was supplied (i.e. a built-in mapper)
+                // see ConfigSource::TedgeConfig.
+                if let Some(v) = walk_table_value(&self.mapper_table, key.split('.')) {
+                    return ConfigGetResult::Value(Sourced {
+                        value: toml_value_display(v),
+                        source: ConfigSource::MapperToml,
+                    });
+                }
+                if let Some(v) = walk_table_value(&self.raw_table, key.split('.')) {
+                    return ConfigGetResult::Value(Sourced {
+                        value: toml_value_display(v),
+                        source: ConfigSource::TedgeConfig,
+                    });
+                }
+                // Key not found in any TOML table — use the schema JSON to determine
+                // whether the key is a known field (NotSet) or entirely unrecognised
+                // (UnknownKey).
+                match walk_json_value(&self.schema, key.split('.')) {
+                    Some(_) => ConfigGetResult::NotSet,
+                    None => ConfigGetResult::UnknownKey,
+                }
+            }
+        }
+    }
+}
+
+/// Mirror of [`CustomMapperConfig`] used solely to produce a null-preserving JSON schema.
+///
+/// All optional fields serialise to `null` (via `Option<T>`) rather than being omitted,
+/// so callers can distinguish [`ConfigGetResult::NotSet`] from [`ConfigGetResult::UnknownKey`].
+/// The `device` section is always present (never `null` at the top level) so that sub-keys
+/// such as `device.cert_path` are always reachable in the serialised schema.
+#[derive(serde::Serialize)]
+struct CustomMapperSchema<'a> {
+    url: Option<&'a HostPort<MQTT_TLS_PORT>>,
+    device: DeviceSchema<'a>,
+    bridge: BridgeSchema<'a>,
+    auth_method: AuthMethodConfig,
+    credentials_path: Option<&'a Utf8PathBuf>,
+}
+
+#[derive(serde::Serialize)]
+struct DeviceSchema<'a> {
+    id: Option<&'a str>,
+    cert_path: Option<&'a Utf8Path>,
+    key_path: Option<&'a Utf8Path>,
+    root_cert_path: Option<&'a Utf8Path>,
+}
+
+#[derive(serde::Serialize)]
+struct BridgeSchema<'a> {
+    clean_session: bool,
+    keepalive_interval: Option<&'a SecondsOrHumanTime>,
+}
+
+/// Builds a null-preserving JSON schema from a [`CustomMapperConfig`].
+///
+/// Every field in the mapper schema is present in the returned value: optional fields that
+/// are not configured appear as `null`. The `device` section is always expanded to its
+/// sub-fields so that keys like `device.cert_path` are reachable even when no `[device]`
+/// section was set in `mapper.toml`.
+fn build_custom_mapper_schema(config: &CustomMapperConfig) -> serde_json::Value {
+    let d = config.device.as_ref();
+    serde_json::to_value(CustomMapperSchema {
+        url: config.url.as_ref(),
+        device: DeviceSchema {
+            id: d.and_then(|d| d.id.as_deref()),
+            cert_path: d.and_then(|d| d.cert_path.as_deref()),
+            key_path: d.and_then(|d| d.key_path.as_deref()),
+            root_cert_path: d.and_then(|d| d.root_cert_path.as_deref()),
+        },
+        bridge: BridgeSchema {
+            clean_session: config.bridge.clean_session,
+            keepalive_interval: config.bridge.keepalive_interval.as_ref(),
+        },
+        auth_method: config.auth_method,
+        credentials_path: config.credentials_path.as_ref(),
+    })
+    .expect("schema serialisation is infallible")
 }
 
 /// Resolves a [`CustomMapperConfig`] into an [`EffectiveMapperConfig`].
@@ -115,20 +357,35 @@ pub struct EffectiveMapperConfig {
 ///
 /// Missing path values are returned as `None`; callers are responsible for failing
 /// if a required field is absent.
+///
+/// `schema_override` supplies a null-preserving JSON schema for [`EffectiveMapperConfig::get`].
+/// Built-in mappers (e.g. c8y) should pass `serde_json::to_value(reader)?` so that
+/// `OptionalConfig::Empty` fields appear as `null` in the schema rather than being omitted as
+/// they would be under TOML serialisation. When `None`, the schema is derived from `config`
+/// via [`build_custom_mapper_schema`].
 pub async fn resolve_effective_config(
     config: &CustomMapperConfig,
     tedge_config: &TEdgeConfig,
+    overlay: Option<&toml::Table>,
+    schema_override: Option<serde_json::Value>,
 ) -> anyhow::Result<EffectiveMapperConfig> {
     let effective_auth = match config.auth_method {
-        AuthMethodConfig::Certificate => AuthMethod::Certificate,
-        AuthMethodConfig::Password => AuthMethod::Password,
-        AuthMethodConfig::Auto => {
-            if config.credentials_path.is_some() {
+        AuthMethodConfig::Certificate => Sourced {
+            value: AuthMethod::Certificate,
+            source: ConfigSource::MapperToml,
+        },
+        AuthMethodConfig::Password => Sourced {
+            value: AuthMethod::Password,
+            source: ConfigSource::MapperToml,
+        },
+        AuthMethodConfig::Auto => Sourced {
+            value: if config.credentials_path.is_some() {
                 AuthMethod::Password
             } else {
                 AuthMethod::Certificate
-            }
-        }
+            },
+            source: ConfigSource::Default,
+        },
     };
 
     let url = config.url.clone().map(|u| Sourced {
@@ -179,10 +436,26 @@ pub async fn resolve_effective_config(
         source: ConfigSource::MapperToml,
     });
 
-    let device_id =
-        resolve_device_id(config, tedge_config, &effective_auth, cert_path.as_ref()).await;
+    let device_id = resolve_device_id(
+        config,
+        tedge_config,
+        &effective_auth.value,
+        cert_path.as_ref(),
+    )
+    .await;
+
+    let mapper_table = config.table.clone();
+    let mut raw_table = config.table.clone();
+    if let Some(ov) = overlay {
+        deep_merge(&mut raw_table, ov);
+    }
+
+    let schema = schema_override.unwrap_or_else(|| build_custom_mapper_schema(config));
 
     Ok(EffectiveMapperConfig {
+        mapper_table,
+        raw_table,
+        schema,
         url,
         device_id,
         cert_path,
@@ -191,8 +464,72 @@ pub async fn resolve_effective_config(
         credentials_path,
         effective_auth,
         bridge: config.bridge.clone(),
-        table: config.table.clone(),
     })
+}
+
+/// Recursively merges `overlay` onto `base`. Overlay values win on conflict; for
+/// tables, the merge descends recursively so non-conflicting keys are preserved.
+fn deep_merge(base: &mut toml::Table, overlay: &toml::Table) {
+    for (key, value) in overlay {
+        match (base.get_mut(key), value) {
+            (Some(toml::Value::Table(base_t)), toml::Value::Table(overlay_t)) => {
+                deep_merge(base_t, overlay_t);
+            }
+            _ => {
+                base.insert(key.clone(), value.clone());
+            }
+        }
+    }
+}
+
+/// Walks a nested JSON object and returns the value at the given key path.
+///
+/// Returns `None` if any segment is absent. Returning `Some(serde_json::Value::Null)` means
+/// the path exists in the schema but the value is not configured.
+fn walk_json_value(
+    json: &serde_json::Value,
+    keys: impl IntoIterator<Item: AsRef<str>>,
+) -> Option<&serde_json::Value> {
+    let mut current = json;
+    let mut iter = keys.into_iter().peekable();
+    loop {
+        let key = iter.next()?;
+        let key = key.as_ref();
+        let obj = current.as_object()?;
+        current = obj.get(key)?;
+        if iter.peek().is_none() {
+            return Some(current);
+        }
+    }
+}
+
+/// Walks a nested TOML table and returns the value at the given key path.
+fn walk_table_value(
+    table: &toml::Table,
+    keys: impl IntoIterator<Item: AsRef<str>>,
+) -> Option<&toml::Value> {
+    let mut current = table;
+    let mut iter = keys.into_iter().peekable();
+    loop {
+        let key = iter.next()?;
+        let key = key.as_ref();
+        if iter.peek().is_none() {
+            return current.get(key);
+        }
+        current = current.get(key)?.as_table()?;
+    }
+}
+
+/// Renders a TOML value as a plain string for display.
+fn toml_value_display(value: &toml::Value) -> String {
+    match value {
+        toml::Value::String(s) => s.clone(),
+        toml::Value::Integer(i) => i.to_string(),
+        toml::Value::Float(f) => f.to_string(),
+        toml::Value::Boolean(b) => b.to_string(),
+        toml::Value::Datetime(d) => d.to_string(),
+        toml::Value::Array(_) | toml::Value::Table(_) => value.to_string(),
+    }
 }
 
 /// Resolves a path field, preserving information about whether it was a relative
@@ -207,7 +544,7 @@ fn resolve_path_sourced(
 ) -> Option<Sourced<Utf8PathBuf>> {
     match resolved {
         Some(path) => {
-            let original_str = walk_table_str(table, table_key_path);
+            let original_str = walk_table_value(table, table_key_path).and_then(|v| v.as_str());
             let source = match original_str {
                 Some(s) if !Utf8Path::new(s).is_absolute() => ConfigSource::MapperTomlResolved {
                     original: s.to_string(),
@@ -224,16 +561,6 @@ fn resolve_path_sourced(
             source: ConfigSource::TedgeToml,
         }),
     }
-}
-
-/// Walks a nested TOML table to retrieve a string value at the given key path.
-fn walk_table_str<'a>(table: &'a toml::Table, keys: &[&str]) -> Option<&'a str> {
-    let mut current = table;
-    let (last, rest) = keys.split_last()?;
-    for key in rest {
-        current = current.get(*key)?.as_table()?;
-    }
-    current.get(*last)?.as_str()
 }
 
 /// Resolves the effective MQTT client ID with source annotation.
@@ -360,6 +687,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     fn make_config(url: Option<&str>) -> CustomMapperConfig {
         CustomMapperConfig {
             table: toml::Table::new(),
+            cloud_type: None,
             url: url.map(|u| u.parse().unwrap()),
             device: None,
             bridge: BridgeConfig::default(),
@@ -379,7 +707,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         ));
         let config = make_config(Some("mqtt.example.com:1883"));
 
-        let effective = resolve_effective_config(&config, &tedge_config)
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
             .await
             .unwrap();
 
@@ -405,7 +733,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             root_cert_path: None,
         });
 
-        let effective = resolve_effective_config(&config, &tedge_config)
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
             .await
             .unwrap();
 
@@ -430,7 +758,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             root_cert_path: None,
         });
 
-        let effective = resolve_effective_config(&config, &tedge_config)
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
             .await
             .unwrap();
 
@@ -450,7 +778,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         );
         let config = make_config(Some("mqtt.example.com:1883"));
 
-        let effective = resolve_effective_config(&config, &tedge_config)
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
             .await
             .unwrap();
 
@@ -482,7 +810,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             root_cert_path: None,
         });
 
-        let effective = resolve_effective_config(&config, &tedge_config)
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
             .await
             .unwrap();
 
@@ -507,7 +835,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         let mut config = make_config(Some("mqtt.example.com:1883"));
         config.credentials_path = Some(creds_path);
 
-        let effective = resolve_effective_config(&config, &tedge_config)
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
             .await
             .unwrap();
 
@@ -529,7 +857,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
         let tedge_config = TEdgeConfig::load_toml_str("");
 
-        let effective = resolve_effective_config(&config, &tedge_config)
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
             .await
             .unwrap();
 
@@ -555,7 +883,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
         let tedge_config = TEdgeConfig::load_toml_str("");
 
-        let effective = resolve_effective_config(&config, &tedge_config)
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
             .await
             .unwrap();
 
@@ -582,7 +910,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         // No cert_path in mapper.toml
         let config = make_config(Some("mqtt.example.com:1883"));
 
-        let effective = resolve_effective_config(&config, &tedge_config)
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
             .await
             .unwrap();
 
@@ -600,7 +928,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         let tedge_config = TEdgeConfig::load_toml_str("");
         let config = make_config(None);
 
-        let effective = resolve_effective_config(&config, &tedge_config)
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
             .await
             .unwrap();
 
@@ -612,5 +940,403 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             effective.root_cert_path.source,
             ConfigSource::Default
         ));
+    }
+
+    mod deep_merge_fn {
+        use super::*;
+
+        fn parse(toml: &str) -> toml::Table {
+            toml.parse().unwrap()
+        }
+
+        #[test]
+        fn overlay_wins_on_conflict() {
+            let mut base = parse("url = \"base.example.com\"\n");
+            let overlay = parse("url = \"overlay.example.com\"\n");
+            deep_merge(&mut base, &overlay);
+            assert_eq!(base["url"].as_str().unwrap(), "overlay.example.com");
+        }
+
+        #[test]
+        fn non_conflicting_keys_preserved() {
+            let mut base = parse("a = \"from-base\"\n");
+            let overlay = parse("b = \"from-overlay\"\n");
+            deep_merge(&mut base, &overlay);
+            assert_eq!(base["a"].as_str().unwrap(), "from-base");
+            assert_eq!(base["b"].as_str().unwrap(), "from-overlay");
+        }
+
+        #[test]
+        fn table_merge_is_recursive() {
+            let mut base = parse("[device]\nid = \"base-id\"\ncert_path = \"/base/cert.pem\"\n");
+            let overlay = parse("[device]\nid = \"overlay-id\"\n");
+            deep_merge(&mut base, &overlay);
+            let device = base["device"].as_table().unwrap();
+            // overlay wins on the conflicting key
+            assert_eq!(device["id"].as_str().unwrap(), "overlay-id");
+            // non-conflicting key from base is preserved
+            assert_eq!(device["cert_path"].as_str().unwrap(), "/base/cert.pem");
+        }
+    }
+
+    mod get_method {
+        use super::*;
+
+        #[tokio::test]
+        async fn schema_key_device_id_from_cert_cn() {
+            let ttd = TempTedgeDir::new();
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+            let config = make_config(Some("mqtt.example.com:1883"));
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            let sourced = effective.get("device.id").unwrap_value();
+            assert_eq!(sourced.value, "localhost");
+            assert!(matches!(sourced.source, ConfigSource::CertificateCN { .. }));
+        }
+
+        #[tokio::test]
+        async fn schema_key_cert_path_from_tedge_toml_fallback() {
+            let ttd = TempTedgeDir::new();
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+            // mapper.toml has no cert_path → falls back to tedge.toml
+            let config = make_config(Some("mqtt.example.com:1883"));
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            let sourced = effective.get("device.cert_path").unwrap_value();
+            assert_eq!(sourced.value, cert.to_string());
+            assert!(matches!(sourced.source, ConfigSource::TedgeToml));
+        }
+
+        #[tokio::test]
+        async fn non_schema_key_from_raw_table() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mut config = make_config(None);
+            config.table = "[bridge]\ntopic_prefix = \"c8y\"\n".parse().unwrap();
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            let sourced = effective.get("bridge.topic_prefix").unwrap_value();
+            assert_eq!(sourced.value, "c8y");
+            assert!(matches!(sourced.source, ConfigSource::MapperToml));
+        }
+
+        #[tokio::test]
+        async fn non_schema_key_from_overlay_is_attributed_to_tedge_config() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let overlay: toml::Table = "[smartrest]\ntemplates = [\"12345\"]\n".parse().unwrap();
+
+            let effective = resolve_effective_config(&config, &tedge_config, Some(&overlay), None)
+                .await
+                .unwrap();
+
+            let sourced = effective.get("smartrest.templates").unwrap_value();
+            assert_eq!(sourced.value, "[\"12345\"]");
+            // Key came from the overlay (built-in mapper config), not mapper.toml
+            assert!(matches!(sourced.source, ConfigSource::TedgeConfig));
+        }
+
+        #[tokio::test]
+        async fn mapper_toml_key_shadows_overlay_key() {
+            // If the same key is set in both mapper.toml and the overlay, the
+            // mapper.toml value wins and is attributed to MapperToml.
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mut config = make_config(None);
+            config.table = "[smartrest]\ntemplates = [\"local\"]\n".parse().unwrap();
+            let overlay: toml::Table = "[smartrest]\ntemplates = [\"overlay\"]\n".parse().unwrap();
+
+            let effective = resolve_effective_config(&config, &tedge_config, Some(&overlay), None)
+                .await
+                .unwrap();
+
+            let sourced = effective.get("smartrest.templates").unwrap_value();
+            assert_eq!(sourced.value, "[\"local\"]");
+            assert!(matches!(sourced.source, ConfigSource::MapperToml));
+        }
+
+        #[tokio::test]
+        async fn unknown_key_returns_unknown_key() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            assert!(matches!(
+                effective.get("nonexistent.key"),
+                ConfigGetResult::UnknownKey
+            ));
+        }
+
+        #[tokio::test]
+        async fn schema_key_not_set_returns_not_set() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None); // url is None
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            // url has no default in tedge config — confirmed not set
+            assert!(matches!(effective.get("url"), ConfigGetResult::NotSet));
+            // credentials_path is None in the config and has no fallback
+            assert!(matches!(
+                effective.get("credentials_path"),
+                ConfigGetResult::NotSet
+            ));
+        }
+
+        #[tokio::test]
+        async fn schema_key_shadows_raw_table_value() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            write_cert(&mapper_dir).await;
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "[device]\ncert_path = \"cert.pem\"\nkey_path = \"key.pem\"\n",
+            )
+            .await
+            .unwrap();
+            let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+            let tedge_config = TEdgeConfig::load_toml_str("");
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            let sourced = effective.get("device.cert_path").unwrap_value();
+            // get() returns the resolved absolute path (schema value), not the raw relative string
+            assert!(
+                sourced.value.starts_with('/'),
+                "expected absolute path, got: {}",
+                sourced.value
+            );
+            assert!(matches!(
+                sourced.source,
+                ConfigSource::MapperTomlResolved { .. }
+            ));
+        }
+    }
+
+    mod source_messages {
+        use super::*;
+
+        #[tokio::test]
+        async fn absolute_cert_path_in_mapper_toml() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            let (cert, key) = write_cert(&mapper_dir).await;
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                format!("[device]\ncert_path = \"{cert}\"\nkey_path = \"{key}\"\n"),
+            )
+            .await
+            .unwrap();
+            let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+            let tedge_config = TEdgeConfig::load_toml_str("");
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                effective.cert_path.unwrap().source.to_string(),
+                "from mapper.toml"
+            );
+        }
+
+        #[tokio::test]
+        async fn relative_cert_path_in_mapper_toml() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            write_cert(&mapper_dir).await;
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "[device]\ncert_path = \"cert.pem\"\nkey_path = \"key.pem\"\n",
+            )
+            .await
+            .unwrap();
+            let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+            let tedge_config = TEdgeConfig::load_toml_str("");
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                effective.cert_path.unwrap().source.to_string(),
+                "relative path 'cert.pem' in mapper.toml, resolved to absolute"
+            );
+        }
+
+        #[tokio::test]
+        async fn cert_path_inherited_from_tedge_toml() {
+            let ttd = TempTedgeDir::new();
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+            let config = make_config(Some("mqtt.example.com:1883"));
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                effective.cert_path.unwrap().source.to_string(),
+                "not set in mapper.toml, inherited from tedge.toml"
+            );
+        }
+
+        #[tokio::test]
+        async fn device_id_inferred_from_cert_cn() {
+            let ttd = TempTedgeDir::new();
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+            let config = make_config(Some("mqtt.example.com:1883"));
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                effective.device_id.unwrap().source.to_string(),
+                format!("inferred from certificate CN ({cert})")
+            );
+        }
+
+        #[tokio::test]
+        async fn root_cert_path_uses_default() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                effective.root_cert_path.source.to_string(),
+                "schema default"
+            );
+        }
+
+        #[tokio::test]
+        async fn device_id_falls_back_to_tedge_toml() {
+            let ttd = TempTedgeDir::new();
+            let creds = ttd.utf8_path().join("creds.toml");
+            tokio::fs::write(
+                &creds,
+                "[credentials]\nusername = \"u\"\npassword = \"p\"\n",
+            )
+            .await
+            .unwrap();
+            let tedge_config = TEdgeConfig::load_toml_str("device.id = \"root-device\"");
+            let mut config = make_config(Some("mqtt.example.com:1883"));
+            config.credentials_path = Some(creds);
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                effective.device_id.unwrap().source.to_string(),
+                "not set in mapper.toml, inherited from tedge.toml"
+            );
+        }
+
+        #[tokio::test]
+        async fn short_tags_match_expected_labels() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/tb");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+            let config = make_config(Some("mqtt.example.com:1883"));
+
+            let effective = resolve_effective_config(&config, &tedge_config, None, None)
+                .await
+                .unwrap();
+
+            // cert CN → "cert CN"
+            assert_eq!(effective.device_id.unwrap().source.short_tag(), "cert CN");
+            // tedge.toml fallback → "tedge.toml"
+            assert_eq!(
+                effective.cert_path.unwrap().source.short_tag(),
+                "tedge.toml"
+            );
+            // default → "default"
+            assert_eq!(effective.root_cert_path.source.short_tag(), "default");
+        }
+    }
+
+    mod to_template_table_fn {
+        use super::*;
+
+        #[tokio::test]
+        async fn overlay_keys_survive_into_template_table() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let overlay: toml::Table = "[smartrest]\ntemplates = [\"12345\"]\n".parse().unwrap();
+
+            let effective = resolve_effective_config(&config, &tedge_config, Some(&overlay), None)
+                .await
+                .unwrap();
+
+            let table = effective.to_template_table();
+            assert!(
+                table
+                    .get("smartrest")
+                    .and_then(|v| v.as_table())
+                    .and_then(|t| t.get("templates"))
+                    .is_some(),
+                "overlay key should be visible in template table"
+            );
+        }
+
+        #[tokio::test]
+        async fn cert_cn_overrides_overlay_device_id_in_template_table() {
+            // The overlay (e.g. from the c8y config) may contain a device.id, but the
+            // cert CN — computed during resolve — must take precedence.
+            let ttd = TempTedgeDir::new();
+            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+            ));
+            let config = make_config(Some("mqtt.example.com:1883"));
+            let overlay: toml::Table = "[device]\nid = \"overlay-id\"\n".parse().unwrap();
+
+            let effective = resolve_effective_config(&config, &tedge_config, Some(&overlay), None)
+                .await
+                .unwrap();
+
+            let table = effective.to_template_table();
+            let id = table["device"]["id"].as_str().unwrap();
+            assert_eq!(
+                id, "localhost",
+                "cert CN should take precedence over overlay device.id"
+            );
+        }
     }
 }

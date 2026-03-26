@@ -55,9 +55,47 @@ tedge mapper list
 tedge mapper config get <name>.<key>
 ```
 
-`list` scans all subdirectories under `/etc/tedge/mappers/` and prints name + `cloud_type` (from `mapper.toml` if present). `config get` splits on the first `.` to extract mapper name and TOML key path, then reads and walks `mapper.toml`.
+`list` scans all subdirectories under `/etc/tedge/mappers/` and prints name, `cloud_type` (from `mapper.toml` if present), `url`, and effective device identity with a bracketed source tag. `config get` splits on the first `.` to extract mapper name and TOML key path, then returns the effective resolved value for schema-level keys or the raw TOML value for all other keys.
 
 A dedicated subcommand rather than extending `tedge config` — mapper config is intentionally outside the `define_tedge_config!` schema and should grow independently.
+
+### Effective config resolution: shared layer for CLI and runtime
+
+A `resolve_effective_config(config: &CustomMapperConfig, tedge_config: &TEdgeConfig) -> EffectiveMapperConfig` function in `custom/resolve.rs` applies all fallback and inference logic once, shared between the mapper runtime and the CLI commands:
+
+- `device.cert_path` / `device.key_path`: `mapper.toml` → root `tedge.toml`
+- `device.root_cert_path`: `mapper.toml` → `/etc/ssl/certs`
+- `device.id`: certificate CN (if cert auth and cert readable) → explicit `device.id` in `mapper.toml` → root `tedge.toml` device_id → `None` if cert unreadable
+
+`build_cloud_mqtt_options` becomes a thin MQTT-wiring function that takes `EffectiveMapperConfig` with no further resolution logic. `tedge mapper config get` and `tedge mapper list` call the same function.
+
+### `Sourced<T>` tracks the origin of each resolved value
+
+```rust
+pub struct Sourced<T> { pub value: T, pub source: ConfigSource }
+
+pub enum ConfigSource {
+    MapperToml,
+    MapperTomlResolved { original: String },  // relative path → absolute
+    TedgeToml,
+    CertificateCN { cert_path: Utf8PathBuf },
+    Default,
+}
+```
+
+Every field in `EffectiveMapperConfig` is `Sourced<T>`. The display layer decides whether to surface the source annotation. This makes the origin traceable without special-casing in callers.
+
+### `config get` prints the value on stdout, annotation on stderr
+
+The value is always bare on stdout so it remains scriptable. The source annotation is always written to stderr — not gated on `IsTerminal`. Scripts that capture stdout get only the value; stderr carries the human-readable explanation unconditionally.
+
+All keys go through a unified lookup on `EffectiveMapperConfig`. Schema-level keys (`url`, `device.id`, `device.cert_path`, `device.key_path`, `device.root_cert_path`, `credentials_path`, `auth_method`) return the effective resolved value with full source tracking. All other keys return the raw TOML value with a `# from mapper.toml` annotation. There is no hardcoded list of schema keys in the CLI — the distinction is handled inside `EffectiveMapperConfig.get()`.
+
+### Certificate CN inference is best-effort in `config get` and `list`
+
+When cert auth is in use and the cert file cannot be read, `device.id` is omitted from output rather than falling back to the `tedge.toml` device_id. Falling back would be misleading: at runtime the mapper uses the cert CN as the MQTT client ID, so showing a different id implies a false picture of what the mapper will do.
+
+`list` never fails the entire command due to a single mapper's cert being unreadable — the id column is left blank for that mapper and the command continues.
 
 ### Env var override scheme (design only — implementation deferred)
 

@@ -21,20 +21,7 @@ use yansi::Paint as _;
 
 use crate::cli::common::MaybeBorrowedCloud;
 
-pub type Cloud = MaybeBorrowedCloud<'static>;
-
-/// Resolve a cloud name string to a known `Cloud`, or `None` for custom mappers.
-pub fn resolve_cloud(name: &str, profile: Option<ProfileName>) -> Option<Cloud> {
-    match name {
-        #[cfg(feature = "c8y")]
-        "c8y" => Some(Cloud::c8y(profile)),
-        #[cfg(feature = "aws")]
-        "aws" => Some(Cloud::aws(profile)),
-        #[cfg(feature = "azure")]
-        "az" => Some(Cloud::az(profile)),
-        _ => None,
-    }
-}
+pub use crate::cli::common::resolve_cloud;
 
 /// Controls how much detail is shown in bridge command output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,9 +77,8 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
     cloud: &MaybeBorrowedCloud<'_>,
     detail: DetailLevel,
 ) -> anyhow::Result<Option<(Vec<ExpandedBridgeRule>, Vec<NonExpansionContext>)>> {
-    let bridge_config_dir = config
-        .mapper_config_dir::<Cloud>(cloud.profile_name())
-        .join("bridge");
+    let mapper_dir = config.mapper_config_dir::<Cloud>(cloud.profile_name());
+    let bridge_config_dir = mapper_dir.join("bridge");
 
     if !config.mqtt.bridge.built_in {
         print_built_in_bridge_disabled(w, config, cloud);
@@ -121,6 +107,21 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
 
     let profile = cloud.profile_name();
     let auth_method = get_auth_method::<Cloud>(config, profile)?;
+    let mapper_table = match Cloud::expected_cloud_type() {
+        CloudType::C8y => {
+            tedge_mapper::c8y::mapper::resolve_effective_mapper_config(config, profile)
+                .await?
+                .to_template_table()
+        }
+        _ => match tedge_mapper::custom_mapper_config::load_mapper_config(&mapper_dir).await? {
+            Some(raw) => tedge_mapper::custom_mapper_resolve::resolve_effective_config(
+                &raw, config, None, None,
+            )
+            .await?
+            .to_template_table(),
+            None => toml::Table::new(),
+        },
+    };
     let mut visitor = InspectVisitor::new();
 
     if let Err(e) = visit_bridge_config_dir(
@@ -128,7 +129,7 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
         config,
         auth_method,
         profile,
-        &toml::Table::new(),
+        &mapper_table,
         &mut visitor,
     )
     .await
@@ -212,7 +213,11 @@ pub async fn load_bridge_rules_for_custom_mapper(
                     }
                 }
             };
-            (auth, cfg.table.clone())
+            let effective = tedge_mapper::custom_mapper_resolve::resolve_effective_config(
+                cfg, config, None, None,
+            )
+            .await?;
+            (auth, effective.to_template_table())
         }
         None => (AuthMethod::Certificate, toml::Table::new()),
     };

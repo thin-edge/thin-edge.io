@@ -9,12 +9,13 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use tedge_config::models::CloudType;
 use tedge_config::models::HostPort;
 use tedge_config::models::SecondsOrHumanTime;
 use tedge_config::models::MQTT_TLS_PORT;
 
 /// Authentication method for the cloud broker connection.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthMethodConfig {
     /// Use certificate auth if cert/key are present, fall back to password auth if
@@ -51,6 +52,8 @@ pub enum AuthMethodConfig {
 pub struct CustomMapperConfig {
     /// The complete TOML table — used for `${mapper.*}` template expansion.
     pub table: toml::Table,
+    /// Cloud integration type, if this mapper delegates to a built-in cloud integration.
+    pub cloud_type: Option<CloudType>,
     /// Cloud broker URL in `{host}:{port}` format (port defaults to 8883).
     pub url: Option<HostPort<MQTT_TLS_PORT>>,
     /// Device identity and TLS certificate settings.
@@ -91,6 +94,7 @@ pub struct BridgeConfig {
 
 #[derive(Debug, serde::Deserialize)]
 struct RawConfig {
+    cloud_type: Option<CloudType>,
     url: Option<HostPort<MQTT_TLS_PORT>>,
     device: Option<DeviceConfig>,
     #[serde(default)]
@@ -140,6 +144,7 @@ pub async fn load_mapper_config(
 
     let config = CustomMapperConfig {
         table,
+        cloud_type: raw.cloud_type,
         url: raw.url,
         device,
         bridge: raw.bridge,
@@ -254,6 +259,63 @@ pub async fn read_mapper_credentials(
 mod tests {
     use super::*;
     use tedge_test_utils::fs::TempTedgeDir;
+
+    #[tokio::test]
+    async fn cloud_type_parses_known_values() {
+        let ttd = TempTedgeDir::new();
+        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+
+        for (toml_val, expected) in [
+            ("c8y", tedge_config::models::CloudType::C8y),
+            ("az", tedge_config::models::CloudType::Az),
+            ("aws", tedge_config::models::CloudType::Aws),
+        ] {
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                format!("cloud_type = \"{toml_val}\"\n"),
+            )
+            .await
+            .unwrap();
+            let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+            assert_eq!(config.cloud_type, Some(expected));
+        }
+    }
+
+    #[tokio::test]
+    async fn cloud_type_rejects_unknown_value() {
+        let ttd = TempTedgeDir::new();
+        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+        tokio::fs::write(
+            mapper_dir.join("mapper.toml"),
+            "cloud_type = \"notacloud\"\n",
+        )
+        .await
+        .unwrap();
+
+        let err = load_mapper_config(&mapper_dir).await.unwrap_err();
+        assert!(
+            format!("{err}").contains("notacloud") || format!("{err}").contains("cloud_type"),
+            "error should mention the invalid value: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn cloud_type_absent_gives_none() {
+        let ttd = TempTedgeDir::new();
+        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+        tokio::fs::write(
+            mapper_dir.join("mapper.toml"),
+            "url = \"mqtt.example.com:8883\"\n",
+        )
+        .await
+        .unwrap();
+
+        let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+        assert_eq!(config.cloud_type, None);
+    }
 
     #[tokio::test]
     async fn returns_none_when_file_not_found() {

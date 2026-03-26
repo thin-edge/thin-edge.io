@@ -291,6 +291,27 @@ mod tests {
 
     use super::*;
 
+    // Test EC certificate (CN = "localhost") and matching private key.
+    const TEST_CERT_PEM: &str = "\
+-----BEGIN CERTIFICATE-----\n\
+MIIBnzCCAUWgAwIBAgIUSTUtJUfUdERMKBwsfdRv9IbvQicwCgYIKoZIzj0EAwIw\n\
+FDESMBAGA1UEAwwJbG9jYWxob3N0MCAXDTIzMTExNDE2MDUwOVoYDzMwMjMwMzE3\n\
+MTYwNTA5WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwWTATBgcqhkjOPQIBBggqhkjO\n\
+PQMBBwNCAAR2SVEPD34AAxFuk0xYm60p7hA7+1SW+sFHazBRg32ifFd0o2Mn+Tf+\n\
+voYflBi3v4lhr361RoWB8QfmaGN05vv+o3MwcTAdBgNVHQ4EFgQUAb4jQ7RQ/xyg\n\
+cZM+We8ik29/oxswHwYDVR0jBBgwFoAUAb4jQ7RQ/xygcZM+We8ik29/oxswIQYD\n\
+VR0RBBowGIIJbG9jYWxob3N0ggsqLmxvY2FsaG9zdDAMBgNVHRMBAf8EAjAAMAoG\n\
+CCqGSM49BAMCA0gAMEUCIA6QrxoDHQJqoly7d8VN0sj0eDvfFpbbZdSnzBd6R8AP\n\
+AiEAm/PAH3IPGuHRBIpdC0rNR8F/l3WcN9I9984qKZdG5rs=\n\
+-----END CERTIFICATE-----\n";
+
+    const TEST_KEY_PEM: &str = "\
+-----BEGIN EC PRIVATE KEY-----\n\
+MHcCAQEEIBX2Z/NKGEX14QbH4kb5GXom0pqSPfX0mxdWbLb86apEoAoGCCqGSM49\n\
+AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
+/r6GH5QYt7+JYa9+tUaFgfEH5mhjdOb7/g==\n\
+-----END EC PRIVATE KEY-----\n";
+
     fn config_with_root(root: &std::path::Path, toml: &str) -> TEdgeConfig {
         TEdgeConfig::load_toml_str_with_root_dir(root, toml)
     }
@@ -617,6 +638,185 @@ topic = "telemetry"
         assert!(
             output.contains("outbound"),
             "should show direction: {output}"
+        );
+    }
+
+    #[test]
+    fn c8y_bridge_rule_expands_mapper_toml_template() {
+        // Regression test: bridge rules that use ${mapper.*} variables must be
+        // resolved against the mapper's mapper.toml, not an empty table.
+        // Reverting the fix in load_bridge_rules causes expansion to fail with
+        // "Key 'bridge.topic_prefix' not found in mapper config", which prevents
+        // any rules from being loaded (output: "Failed to read bridge config files"
+        // rather than a matched rule).
+        let tmp = tempfile::tempdir().unwrap();
+        let mapper_dir = tmp.path().join("mappers/c8y");
+        std::fs::create_dir_all(&mapper_dir).unwrap();
+        std::fs::write(
+            mapper_dir.join("mapper.toml"),
+            "[bridge]\ntopic_prefix = \"c8y\"\n",
+        )
+        .unwrap();
+        write_bridge_toml(
+            tmp.path(),
+            "mqtt-core.toml",
+            r#"
+[[rule]]
+local_prefix = "${mapper.bridge.topic_prefix}/"
+remote_prefix = ""
+direction = "outbound"
+topic = "s/us"
+"#,
+        );
+        let config = config_with_root(tmp.path(), &c8y_toml(""));
+        let cloud = Cloud::c8y(None);
+        mark_connected(tmp.path(), &cloud);
+
+        let output = render_test("c8y", "c8y/s/us", None, &config, DetailLevel::Normal);
+        assert!(
+            !output.contains("Failed to read bridge config files"),
+            "template expansion should not fail: {output}"
+        );
+        assert!(
+            output.contains("s/us"),
+            "${{mapper.bridge.topic_prefix}} should expand to 'c8y' from mapper.toml: {output}"
+        );
+    }
+
+    #[test]
+    fn custom_mapper_bridge_rule_expands_mapper_toml_template() {
+        // Regression test: custom mapper bridge rules that use ${mapper.*} variables
+        // must be resolved against the mapper's mapper.toml.
+        // Reverting the fix in load_bridge_rules_for_custom_mapper causes expansion
+        // to fail with "Key 'bridge.topic_prefix' not found in mapper config".
+        let tmp = tempfile::tempdir().unwrap();
+        let mapper_dir = tmp.path().join("mappers/thingsboard");
+        let bridge_dir = mapper_dir.join("bridge");
+        std::fs::create_dir_all(&bridge_dir).unwrap();
+        std::fs::write(
+            mapper_dir.join("mapper.toml"),
+            "[bridge]\ntopic_prefix = \"tb\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            bridge_dir.join("test.toml"),
+            r#"
+[[rule]]
+local_prefix = "${mapper.bridge.topic_prefix}/"
+remote_prefix = ""
+direction = "outbound"
+topic = "telemetry"
+"#,
+        )
+        .unwrap();
+        let config = config_with_root(tmp.path(), "");
+
+        let output = render_test(
+            "thingsboard",
+            "tb/telemetry",
+            None,
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            !output.contains("Failed to read bridge config files"),
+            "template expansion should not fail: {output}"
+        );
+        assert!(
+            output.contains("telemetry"),
+            "${{mapper.bridge.topic_prefix}} should expand to 'tb' from mapper.toml: {output}"
+        );
+    }
+
+    #[test]
+    fn c8y_bridge_rule_expands_device_id_from_cert_cn() {
+        // ${mapper.device.id} should resolve to the cert CN when device.id is not
+        // set explicitly in mapper.toml.
+        let tmp = tempfile::tempdir().unwrap();
+        let mapper_dir = tmp.path().join("mappers/c8y");
+        std::fs::create_dir_all(&mapper_dir).unwrap();
+        std::fs::write(mapper_dir.join("cert.pem"), TEST_CERT_PEM).unwrap();
+        std::fs::write(mapper_dir.join("key.pem"), TEST_KEY_PEM).unwrap();
+        std::fs::write(
+            mapper_dir.join("mapper.toml"),
+            // Relative paths — resolved against the mapper dir by load_mapper_config
+            "[device]\ncert_path = \"cert.pem\"\nkey_path = \"key.pem\"\n",
+        )
+        .unwrap();
+        write_bridge_toml(
+            tmp.path(),
+            "test.toml",
+            r#"
+[[rule]]
+local_prefix = "${mapper.device.id}/"
+remote_prefix = ""
+direction = "outbound"
+topic = "s/us"
+"#,
+        );
+        let config = config_with_root(tmp.path(), &c8y_toml(""));
+        let cloud = Cloud::c8y(None);
+        mark_connected(tmp.path(), &cloud);
+
+        // CN of TEST_CERT_PEM is "localhost"
+        let output = render_test("c8y", "localhost/s/us", None, &config, DetailLevel::Normal);
+        assert!(
+            !output.contains("Failed to read bridge config files"),
+            "template expansion should not fail: {output}"
+        );
+        assert!(
+            output.contains("s/us"),
+            "${{mapper.device.id}} should expand to cert CN 'localhost': {output}"
+        );
+    }
+
+    #[test]
+    fn custom_mapper_bridge_rule_expands_device_id_from_tedge_toml() {
+        // ${mapper.device.id} should resolve from the root tedge.toml when the mapper
+        // uses password auth and device.id is not set in mapper.toml.
+        let tmp = tempfile::tempdir().unwrap();
+        let mapper_dir = tmp.path().join("mappers/thingsboard");
+        let bridge_dir = mapper_dir.join("bridge");
+        std::fs::create_dir_all(&bridge_dir).unwrap();
+        std::fs::write(
+            mapper_dir.join("creds.toml"),
+            "[credentials]\nusername = \"u\"\npassword = \"p\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            mapper_dir.join("mapper.toml"),
+            // credentials_path forces password auth; no device.id set
+            "credentials_path = \"creds.toml\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            bridge_dir.join("test.toml"),
+            r#"
+[[rule]]
+local_prefix = "${mapper.device.id}/"
+remote_prefix = ""
+direction = "outbound"
+topic = "telemetry"
+"#,
+        )
+        .unwrap();
+        // device.id inherited from root tedge.toml
+        let config = config_with_root(tmp.path(), "device.id = \"root-device\"");
+
+        let output = render_test(
+            "thingsboard",
+            "root-device/telemetry",
+            None,
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            !output.contains("Failed to read bridge config files"),
+            "template expansion should not fail: {output}"
+        );
+        assert!(
+            output.contains("telemetry"),
+            "${{mapper.device.id}} should expand to 'root-device' from tedge.toml: {output}"
         );
     }
 

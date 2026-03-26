@@ -149,6 +149,19 @@ impl Cloud {
     }
 }
 
+/// Resolve a cloud name string to a known `Cloud`, or `None` for custom mappers.
+pub fn resolve_cloud(name: &str, profile: Option<ProfileName>) -> Option<Cloud> {
+    match name {
+        #[cfg(feature = "c8y")]
+        "c8y" => Some(Cloud::c8y(profile)),
+        #[cfg(feature = "aws")]
+        "aws" => Some(Cloud::aws(profile)),
+        #[cfg(feature = "azure")]
+        "az" => Some(Cloud::az(profile)),
+        _ => None,
+    }
+}
+
 impl<'a> CloudBorrow<'a> {
     #[cfg(feature = "c8y")]
     pub fn c8y_borrowed(profile: Option<&'a ProfileName>) -> Self {

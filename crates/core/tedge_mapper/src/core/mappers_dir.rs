@@ -4,12 +4,18 @@
 //! one of: a `mapper.toml` file or a `flows/` subdirectory. Directories with neither are
 //! unrecognised and generate a warning. Flows-only mapper directories (with `flows/` but no
 //! `mapper.toml`) generate a separate warning if their `flows/` directory is empty.
+//!
+//! Mappers that have a `bridge/` directory but no `mapper.toml` will always fail to start,
+//! since bridge rules require the connection settings from `mapper.toml`. These generate a
+//! targeted warning pointing the user at the fix.
 
 use camino::Utf8Path;
 use tracing::warn;
 
 /// Scans the mappers directory and emits warnings for:
 /// - directories that have neither `mapper.toml` nor a `flows/` subdirectory (unrecognised)
+/// - directories that have a `bridge/` subdirectory but no `mapper.toml` (will always fail
+///   to start — bridge rules require the connection settings in `mapper.toml`)
 /// - directories that have an empty `flows/` subdirectory and no `mapper.toml` (flows-only
 ///   mapper with no scripts defined)
 ///
@@ -19,6 +25,13 @@ pub async fn warn_unrecognised_mapper_dirs(mappers_dir: &Utf8Path) {
         warn!(
             "Unrecognised mapper directory '{mappers_dir}/{name}': no 'mapper.toml' or 'flows/' found. \
              This directory will be ignored.",
+        );
+    }
+    for name in collect_bridge_without_mapper_dirs(mappers_dir).await {
+        warn!(
+            "Mapper '{name}' has a 'bridge/' directory but no 'mapper.toml': the mapper will \
+             fail to start. Add 'mapper.toml' to configure the connection or remove the \
+             'bridge/' directory.",
         );
     }
     for name in collect_empty_flows_mapper_dirs(mappers_dir).await {
@@ -59,6 +72,39 @@ pub(crate) async fn collect_unrecognised_mapper_dirs(mappers_dir: &Utf8Path) -> 
         }
     }
     unrecognised
+}
+
+/// Returns the names of mapper directories that have a `bridge/` subdirectory but no
+/// `mapper.toml`. These mappers will always fail to start because bridge rules require
+/// the connection settings provided by `mapper.toml`.
+///
+/// This is exposed for testing; callers should normally use `warn_unrecognised_mapper_dirs`.
+pub(crate) async fn collect_bridge_without_mapper_dirs(mappers_dir: &Utf8Path) -> Vec<String> {
+    let Ok(mut entries) = tokio::fs::read_dir(mappers_dir).await else {
+        return Vec::new();
+    };
+
+    let mut broken = Vec::new();
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let Ok(file_type) = entry.file_type().await else {
+            continue;
+        };
+        if !file_type.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let path = camino::Utf8PathBuf::from(entry.path().to_string_lossy().into_owned());
+        let has_mapper_toml = tokio::fs::try_exists(path.join("mapper.toml"))
+            .await
+            .unwrap_or(false);
+        let has_bridge_dir = tokio::fs::try_exists(path.join("bridge"))
+            .await
+            .unwrap_or(false);
+        if has_bridge_dir && !has_mapper_toml {
+            broken.push(name);
+        }
+    }
+    broken
 }
 
 /// Returns the names of flows-only mapper directories whose `flows/` subdirectory is empty.
@@ -283,6 +329,82 @@ mod tests {
             assert!(
                 captured.iter().any(|m| m.contains("thingsboard")),
                 "Expected a warning for 'thingsboard' (empty flows/), got: {captured:?}"
+            );
+        }
+    }
+
+    mod bridge_without_mapper_toml {
+        use super::*;
+        use tedge_test_utils::fs::TempTedgeDir;
+
+        #[tokio::test]
+        async fn bridge_dir_without_mapper_toml_is_flagged() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard/bridge"))
+                .await
+                .unwrap();
+
+            let broken = collect_bridge_without_mapper_dirs(&mappers_dir).await;
+            assert!(
+                broken.contains(&"thingsboard".to_string()),
+                "'thingsboard' (bridge/ but no mapper.toml) should be flagged: {broken:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn bridge_dir_with_mapper_toml_is_not_flagged() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard/bridge"))
+                .await
+                .unwrap();
+            tokio::fs::write(mappers_dir.join("thingsboard/mapper.toml"), "")
+                .await
+                .unwrap();
+
+            let broken = collect_bridge_without_mapper_dirs(&mappers_dir).await;
+            assert!(
+                !broken.contains(&"thingsboard".to_string()),
+                "'thingsboard' (bridge/ and mapper.toml present) should not be flagged: {broken:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn dir_without_bridge_subdir_is_not_flagged() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard"))
+                .await
+                .unwrap();
+
+            let broken = collect_bridge_without_mapper_dirs(&mappers_dir).await;
+            assert!(
+                broken.is_empty(),
+                "Dir with no bridge/ should not be flagged: {broken:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn bridge_without_mapper_toml_emits_warn_log() {
+            let warnings = CapturedWarnings::install();
+
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_dir.join("thingsboard/bridge"))
+                .await
+                .unwrap();
+
+            warn_unrecognised_mapper_dirs(&mappers_dir).await;
+
+            let captured = warnings.get();
+            assert!(
+                captured.iter().any(|m| m.contains("thingsboard")),
+                "Expected a warning mentioning 'thingsboard': {captured:?}"
+            );
+            assert!(
+                captured.iter().any(|m| m.contains("bridge")),
+                "Warning should mention 'bridge/': {captured:?}"
             );
         }
     }

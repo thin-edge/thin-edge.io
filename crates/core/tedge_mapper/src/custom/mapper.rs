@@ -177,7 +177,7 @@ pub async fn build_cloud_mqtt_options(
 
     let ca_path = &config.root_cert_path.value;
 
-    match config.effective_auth {
+    match config.effective_auth.value {
         AuthMethod::Certificate => {
             let cert_path = config
                 .cert_path
@@ -240,7 +240,7 @@ pub async fn build_cloud_mqtt_options(
 
     configure_proxy(tedge_config, &mut cloud_config)?;
 
-    Ok((cloud_config, config.effective_auth))
+    Ok((cloud_config, config.effective_auth.value))
 }
 
 /// Constructs the flows-mapper builder and its supporting file-watch actors.
@@ -300,7 +300,7 @@ impl TEdgeComponent for CustomMapper {
             let health_topic =
                 service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
 
-            let effective = resolve_effective_config(config, &tedge_config).await?;
+            let effective = resolve_effective_config(config, &tedge_config, None, None).await?;
             let (cloud_config, effective_auth) =
                 build_cloud_mqtt_options(&effective, &service_name, &mapper_dir, &tedge_config)
                     .await?;
@@ -310,7 +310,7 @@ impl TEdgeComponent for CustomMapper {
                 &tedge_config,
                 effective_auth,
                 None,
-                &effective.table,
+                &effective.to_template_table(),
             )
             .await?;
 
@@ -647,7 +647,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             config: &CustomMapperConfig,
             tedge_config: &TEdgeConfig,
         ) -> EffectiveMapperConfig {
-            resolve_effective_config(config, tedge_config)
+            resolve_effective_config(config, tedge_config, None, None)
                 .await
                 .unwrap()
         }
@@ -896,6 +896,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         fn make_config(url: Option<&str>) -> CustomMapperConfig {
             CustomMapperConfig {
                 table: toml::Table::new(),
+                cloud_type: None,
                 url: url.map(|u| u.parse().unwrap()),
                 device: None,
                 bridge: BridgeConfig::default(),
