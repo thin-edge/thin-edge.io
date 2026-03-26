@@ -1,4 +1,15 @@
+mod mapper_config;
 mod parsing;
+
+pub use mapper_config::collect_string_array;
+pub use mapper_config::toml_scalar_to_string;
+pub use mapper_config::walk_toml_path;
+pub use mapper_config::MapperArrayResult;
+pub use mapper_config::MapperConfigLookup;
+pub use mapper_config::MapperKeyResult;
+pub use mapper_config::TableMapperLookup;
+pub use mapper_config::WalkResult;
+
 use serde::Deserialize;
 use serde::Serialize;
 use serde_spanned::Spanned;
@@ -117,7 +128,7 @@ impl PersistedBridgeConfig {
         config: &TEdgeConfig,
         auth_method: AuthMethod,
         cloud_profile: Option<&ProfileName>,
-        mapper_config: &toml::Table,
+        mapper_config: &dyn mapper_config::MapperConfigLookup,
     ) -> Result<(Vec<ExpandedBridgeRule>, Vec<NonExpansionReason>), Vec<ExpandError>> {
         let static_cfg = || StaticTemplateConfig {
             tedge: config,
@@ -456,7 +467,11 @@ pub enum AuthMethod {
 
 impl Expandable for Condition {
     type Target = bool;
-    type Config<'a> = (&'a TEdgeConfig, AuthMethod, &'a toml::Table);
+    type Config<'a> = (
+        &'a TEdgeConfig,
+        AuthMethod,
+        &'a dyn mapper_config::MapperConfigLookup,
+    );
 
     fn expand(
         &self,
@@ -618,13 +633,13 @@ fn expand_spanned<T: Expandable>(
 impl Expandable for Spanned<Iterable> {
     type Target = TemplatesSet;
     type Config<'a>
-        = (&'a TEdgeConfig, &'a toml::Table)
+        = (&'a TEdgeConfig, &'a dyn mapper_config::MapperConfigLookup)
     where
         Self: 'a;
 
     fn expand(
         &self,
-        (tedge_config, mapper_config): (&TEdgeConfig, &toml::Table),
+        (tedge_config, mapper_config): (&TEdgeConfig, &dyn mapper_config::MapperConfigLookup),
         cloud_profile: Option<&ProfileName>,
     ) -> Result<Self::Target, ExpandError> {
         match self.get_ref() {
@@ -636,14 +651,9 @@ impl Expandable for Spanned<Iterable> {
                         std::marker::PhantomData,
                     )
                     .expand(tedge_config, cloud_profile),
-                    ForReference::Mapper(key, key_span) => {
-                        let table = mapper_config;
-                        Ok(TemplatesSet(expand_mapper_key_as_array(
-                            &key,
-                            table,
-                            key_span.into_range(),
-                        )?))
-                    }
+                    ForReference::Mapper(key, key_span) => Ok(TemplatesSet(
+                        expand_mapper_key_as_array(&key, mapper_config, key_span.into_range())?,
+                    )),
                 }
             }
             Iterable::Literal(values) => Ok(TemplatesSet(values.clone())),
@@ -719,12 +729,12 @@ where
 struct TemplateConfig<'a> {
     tedge: &'a TEdgeConfig,
     r#for: &'a str,
-    mapper_config: &'a toml::Table,
+    mapper_config: &'a dyn mapper_config::MapperConfigLookup,
 }
 
 struct StaticTemplateConfig<'a> {
     tedge: &'a TEdgeConfig,
-    mapper_config: &'a toml::Table,
+    mapper_config: &'a dyn mapper_config::MapperConfigLookup,
 }
 
 /// Expands a tedge.toml config key and return its value
@@ -815,6 +825,7 @@ impl Expandable for LoopTemplate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mapper_config::TableMapperLookup;
 
     mod persisted_bridge_config {
         use super::*;
@@ -1032,7 +1043,11 @@ topic_prefix = "changed"
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = true");
             assert!(condition
                 .expand(
-                    (&tedge_config, AuthMethod::Certificate, &toml::Table::new()),
+                    (
+                        &tedge_config,
+                        AuthMethod::Certificate,
+                        &TableMapperLookup(toml::Table::new())
+                    ),
                     None
                 )
                 .unwrap());
@@ -1047,7 +1062,11 @@ topic_prefix = "changed"
                 tedge_config::TEdgeConfig::load_toml_str("c8y.mqtt_service.enabled = true");
             assert!(!condition
                 .expand(
-                    (&tedge_config, AuthMethod::Certificate, &toml::Table::new()),
+                    (
+                        &tedge_config,
+                        AuthMethod::Certificate,
+                        &TableMapperLookup(toml::Table::new())
+                    ),
                     None
                 )
                 .unwrap());
@@ -1135,7 +1154,7 @@ direction = "inbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -1171,7 +1190,7 @@ direction = "inbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -1207,7 +1226,7 @@ direction = "inbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -1244,7 +1263,7 @@ direction = "inbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -1315,7 +1334,7 @@ direction = "inbound"
                         &tedge_config,
                         AuthMethod::Certificate,
                         None,
-                        &toml::Table::new(),
+                        &TableMapperLookup(toml::Table::new()),
                     )
                     .unwrap_err();
 
@@ -1358,7 +1377,7 @@ c8y.smartrest.templates = ["a", "b"]
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap();
 
@@ -1390,7 +1409,7 @@ c8y.smartrest.templates = ["a", "b"]
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap();
 
@@ -1423,7 +1442,7 @@ direction = "inbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -1470,7 +1489,7 @@ direction = "outbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -1519,7 +1538,7 @@ direction = "outbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -1586,7 +1605,7 @@ smartrest.templates = ["template1", "template2", "template3"]
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap();
 
@@ -1635,7 +1654,7 @@ bridge.topic_prefix = "test"
                     &tedge_config,
                     AuthMethod::Certificate,
                     Some(&"test".parse().unwrap()),
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap();
 
@@ -1670,7 +1689,7 @@ c8y.mqtt_service.enabled = false
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap();
 
@@ -1700,7 +1719,7 @@ c8y.mqtt_service.enabled = true
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap();
 
@@ -1726,7 +1745,7 @@ direction = "outbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap();
 
@@ -1737,7 +1756,7 @@ direction = "outbound"
                     &tedge_config,
                     AuthMethod::Password,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap();
 
@@ -1764,7 +1783,7 @@ direction = "outbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap();
 
@@ -1775,7 +1794,7 @@ direction = "outbound"
                     &tedge_config,
                     AuthMethod::Password,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap();
 
@@ -1801,7 +1820,7 @@ direction = "outbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -1833,7 +1852,7 @@ direction = "outbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -1884,7 +1903,7 @@ direction = "inbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -1925,7 +1944,7 @@ direction = "inbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -1967,7 +1986,7 @@ direction = "inbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
@@ -2012,7 +2031,7 @@ direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
-            let mapper_table: toml::Table = toml::toml! { topic_prefix = "tb" };
+            let mapper_table = TableMapperLookup(toml::toml! { topic_prefix = "tb" });
 
             let expanded = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
@@ -2034,7 +2053,8 @@ direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
-            let mapper_table: toml::Table = toml::toml! { cloud_topic = "v1/devices/me/telemetry" };
+            let mapper_table =
+                TableMapperLookup(toml::toml! { cloud_topic = "v1/devices/me/telemetry" });
 
             let expanded = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
@@ -2057,7 +2077,7 @@ direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
-            let mapper_table: toml::Table = toml::toml! { topic_prefix = "v1/devices/me" };
+            let mapper_table = TableMapperLookup(toml::toml! { topic_prefix = "v1/devices/me" });
 
             let expanded = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
@@ -2087,13 +2107,13 @@ direction = "outbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
             assert!(!errs.is_empty());
             assert!(
-                errs[0].message.contains("not found"),
+                errs[0].message.contains("Unknown"),
                 "Error should indicate the key was not found: {}",
                 errs[0].message
             );
@@ -2118,13 +2138,13 @@ direction = "outbound"
                     &tedge_config,
                     AuthMethod::Certificate,
                     None,
-                    &toml::Table::new(),
+                    &TableMapperLookup(toml::Table::new()),
                 )
                 .unwrap_err();
 
             assert!(!errs.is_empty());
             assert!(
-                errs[0].message.contains("not found"),
+                errs[0].message.contains("Unknown"),
                 "Error should indicate the key was not found: {}",
                 errs[0].message
             );
@@ -2143,7 +2163,7 @@ direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
-            let mapper_table: toml::Table = toml::toml! { topics = ["a", "b"] };
+            let mapper_table = TableMapperLookup(toml::toml! { topics = ["a", "b"] });
 
             let expanded = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
@@ -2168,13 +2188,13 @@ direction = "outbound"
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
-            let mapper_true: toml::Table = toml::toml! { enabled = true };
+            let mapper_true = TableMapperLookup(toml::toml! { enabled = true });
             let enabled = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_true)
                 .unwrap();
             assert_eq!(enabled.0.len(), 1);
 
-            let mapper_false: toml::Table = toml::toml! { enabled = false };
+            let mapper_false = TableMapperLookup(toml::toml! { enabled = false });
             let disabled = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_false)
                 .unwrap();
@@ -2196,14 +2216,14 @@ direction = "outbound"
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
 
             // When enabled = true, the negated condition should suppress the rule
-            let mapper_true: toml::Table = toml::toml! { enabled = true };
+            let mapper_true = TableMapperLookup(toml::toml! { enabled = true });
             let suppressed = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_true)
                 .unwrap();
             assert_eq!(suppressed.0.len(), 0);
 
             // When enabled = false, the negated condition should include the rule
-            let mapper_false: toml::Table = toml::toml! { enabled = false };
+            let mapper_false = TableMapperLookup(toml::toml! { enabled = false });
             let included = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_false)
                 .unwrap();
@@ -2224,8 +2244,8 @@ direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
-            let mapper_table: toml::Table =
-                toml::toml! { bridge = { topic_prefix = "v1/devices/me" } };
+            let mapper_table =
+                TableMapperLookup(toml::toml! { bridge = { topic_prefix = "v1/devices/me" } });
 
             let expanded = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
@@ -2248,7 +2268,7 @@ direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
-            let mapper_table: toml::Table = toml::toml! { unrelated = "value" };
+            let mapper_table = TableMapperLookup(toml::toml! { unrelated = "value" });
 
             let errs = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
@@ -2256,7 +2276,7 @@ direction = "outbound"
 
             assert!(!errs.is_empty());
             assert!(
-                errs[0].message.contains("'topics'") && errs[0].message.contains("not found"),
+                errs[0].message.contains("'topics'") && errs[0].message.contains("Unknown"),
                 "Error should identify the missing key: {}",
                 errs[0].message
             );
@@ -2275,7 +2295,7 @@ direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
-            let mapper_table: toml::Table = toml::toml! { topics = "not-an-array" };
+            let mapper_table = TableMapperLookup(toml::toml! { topics = "not-an-array" });
 
             let errs = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)
@@ -2302,7 +2322,7 @@ direction = "outbound"
 "#;
             let config: PersistedBridgeConfig = toml::from_str(toml).unwrap();
             let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
-            let mapper_table: toml::Table = toml::toml! { topics = [1, 2, 3] };
+            let mapper_table = TableMapperLookup(toml::toml! { topics = [1, 2, 3] });
 
             let errs = config
                 .expand(&tedge_config, AuthMethod::Certificate, None, &mapper_table)

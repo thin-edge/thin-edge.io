@@ -13,7 +13,9 @@ use tedge_config::tedge_toml::mapper_config::ExpectedCloudType;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_bridge::config_toml::ExpandedBridgeRule;
+use tedge_mqtt_bridge::config_toml::MapperConfigLookup;
 use tedge_mqtt_bridge::config_toml::NonExpansionReason;
+use tedge_mqtt_bridge::config_toml::TableMapperLookup;
 use tedge_mqtt_bridge::visit_bridge_config_dir;
 use tedge_mqtt_bridge::AuthMethod;
 use tedge_mqtt_bridge::BridgeConfigVisitor;
@@ -107,19 +109,18 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
 
     let profile = cloud.profile_name();
     let auth_method = get_auth_method::<Cloud>(config, profile)?;
-    let mapper_table = match Cloud::expected_cloud_type() {
-        CloudType::C8y => {
-            tedge_mapper::c8y::mapper::resolve_effective_mapper_config(config, profile)
-                .await?
-                .to_template_table()
-        }
+    let mapper_lookup: Box<dyn MapperConfigLookup> = match Cloud::expected_cloud_type() {
+        CloudType::C8y => Box::new(
+            tedge_mapper::c8y::mapper::resolve_effective_mapper_config(config, profile).await?,
+        ),
         _ => match tedge_mapper::custom_mapper_config::load_mapper_config(&mapper_dir).await? {
-            Some(raw) => tedge_mapper::custom_mapper_resolve::resolve_effective_config(
-                &raw, config, None, None,
-            )
-            .await?
-            .to_template_table(),
-            None => toml::Table::new(),
+            Some(raw) => Box::new(
+                tedge_mapper::custom_mapper_resolve::resolve_effective_config(
+                    &raw, config, None, None,
+                )
+                .await?,
+            ),
+            None => Box::new(TableMapperLookup(toml::Table::new())),
         },
     };
     let mut visitor = InspectVisitor::new();
@@ -129,7 +130,7 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
         config,
         auth_method,
         profile,
-        &mapper_table,
+        &*mapper_lookup,
         &mut visitor,
     )
     .await
@@ -195,7 +196,7 @@ pub async fn load_bridge_rules_for_custom_mapper(
     // Load mapper.toml for auth method and ${mapper.*} template expansion.
     let mapper_config = tedge_mapper::custom_mapper_config::load_mapper_config(&mapper_dir).await?;
 
-    let (auth_method, mapper_table) = match &mapper_config {
+    let (auth_method, mapper_lookup): (_, Box<dyn MapperConfigLookup>) = match &mapper_config {
         Some(cfg) => {
             let has_credentials = cfg.credentials_path.is_some();
             let auth = match cfg.auth_method {
@@ -217,9 +218,12 @@ pub async fn load_bridge_rules_for_custom_mapper(
                 cfg, config, None, None,
             )
             .await?;
-            (auth, effective.to_template_table())
+            (auth, Box::new(effective))
         }
-        None => (AuthMethod::Certificate, toml::Table::new()),
+        None => (
+            AuthMethod::Certificate,
+            Box::new(TableMapperLookup(toml::Table::new())),
+        ),
     };
 
     let bridge_dir = mapper_dir.join("bridge");
@@ -249,7 +253,7 @@ pub async fn load_bridge_rules_for_custom_mapper(
         config,
         auth_method,
         None,
-        &mapper_table,
+        &*mapper_lookup,
         &mut visitor,
     )
     .await

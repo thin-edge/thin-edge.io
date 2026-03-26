@@ -14,7 +14,14 @@ use tedge_config::models::SecondsOrHumanTime;
 use tedge_config::models::MQTT_TLS_PORT;
 use tedge_config::tedge_toml::Cloud;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::config_toml::collect_string_array;
+use tedge_mqtt_bridge::config_toml::toml_scalar_to_string;
+use tedge_mqtt_bridge::config_toml::walk_toml_path;
 use tedge_mqtt_bridge::config_toml::AuthMethod;
+use tedge_mqtt_bridge::config_toml::MapperArrayResult;
+use tedge_mqtt_bridge::config_toml::MapperConfigLookup;
+use tedge_mqtt_bridge::config_toml::MapperKeyResult;
+use tedge_mqtt_bridge::config_toml::WalkResult;
 
 use crate::custom::config::AuthMethodConfig;
 use crate::custom::config::BridgeConfig;
@@ -155,6 +162,13 @@ pub struct EffectiveMapperConfig {
     pub effective_auth: Sourced<AuthMethod>,
     /// MQTT bridge settings (keepalive interval, clean session).
     pub bridge: BridgeConfig,
+    /// `true` when this config was built from a built-in mapper (an overlay was applied).
+    /// Used to tailor error help text: built-in mapper keys should point to `tedge config set`,
+    /// not `mapper.toml`.
+    is_builtin: bool,
+    /// The mapper name (e.g. `"c8y"` or `"c8y.prod"`), used to prefix keys in error messages
+    /// and to generate `tedge config set` commands. Empty string when not set.
+    mapper_name: String,
 }
 
 impl EffectiveMapperConfig {
@@ -287,6 +301,125 @@ impl EffectiveMapperConfig {
                     None => ConfigGetResult::UnknownKey,
                 }
             }
+        }
+    }
+
+    /// Returns a `with_mapper_name` builder that sets the mapper name used
+    /// to prefix keys in error messages and generate `tedge config set` commands.
+    /// Only meaningful for built-in mappers (e.g. `"c8y"`, `"c8y.prod"`).
+    pub fn with_mapper_name(mut self, name: impl Into<String>) -> Self {
+        self.mapper_name = name.into();
+        self
+    }
+
+    fn not_set_help(&self, path: &str) -> String {
+        if self.is_builtin {
+            // Replicate the tedge_config_set_cmd logic from tedge/src/cli/mapper/cli.rs
+            // (we can't import it here due to the dependency direction).
+            let cmd = match self.mapper_name.split_once('.') {
+                Some((cloud, profile)) => {
+                    format!("tedge config set {cloud}.{path} <value> --profile {profile}")
+                }
+                None if self.mapper_name.is_empty() => {
+                    format!("tedge config set <cloud>.{path} <value>")
+                }
+                None => {
+                    format!("tedge config set {}.{path} <value>", self.mapper_name)
+                }
+            };
+            format!("Configure this via '{cmd}'")
+        } else {
+            format!("Set '{path}' in mapper.toml")
+        }
+    }
+
+    /// Returns the display key for error messages.
+    /// For built-in mappers this prefixes with `<mapper_name>.` (e.g. `"c8y.url"`)
+    /// since that is how the key is addressed via `tedge config set`.
+    /// For custom mappers the plain path is used — the key lives in `mapper.toml`
+    /// without any namespace prefix.
+    fn display_key(&self, path: &str) -> Option<String> {
+        if self.is_builtin && !self.mapper_name.is_empty() {
+            Some(format!("{}.{path}", self.mapper_name))
+        } else {
+            None
+        }
+    }
+
+    /// Classifies a missing key as `NotSet` or `UnknownKey`.
+    ///
+    /// Schema-level keys (those matched by `is_schema_key`) are always `NotSet`;
+    /// other keys consult the JSON schema to decide.
+    fn not_found_scalar(&self, path: &str, is_schema_key: bool) -> MapperKeyResult {
+        if is_schema_key {
+            MapperKeyResult::NotSet {
+                help: Some(self.not_set_help(path)),
+                display_key: self.display_key(path),
+            }
+        } else {
+            match walk_json_value(&self.schema, path.split('.')) {
+                Some(_) => MapperKeyResult::NotSet {
+                    help: Some(self.not_set_help(path)),
+                    display_key: self.display_key(path),
+                },
+                None => MapperKeyResult::UnknownKey,
+            }
+        }
+    }
+}
+
+impl MapperConfigLookup for EffectiveMapperConfig {
+    fn lookup_scalar(&self, path: &str) -> MapperKeyResult {
+        // Schema-level keys: first try the effective typed value (cert CN inference,
+        // tedge.toml fallbacks). If the typed field is not set, fall through to raw_table
+        // so that an explicit mapper.toml value (e.g. `device.id`) is still usable even
+        // when the typed resolution path is unavailable (e.g. cert not readable yet).
+        //
+        // N.B. When adding a new typed field to `EffectiveMapperConfig`, remember to add
+        // the corresponding dotted path here so it participates in the typed resolution
+        // path. Otherwise the field will only be reachable via the raw TOML fallback.
+        let is_schema_key = matches!(
+            path,
+            "url"
+                | "device.id"
+                | "device.cert_path"
+                | "device.key_path"
+                | "device.root_cert_path"
+                | "credentials_path"
+                | "auth_method"
+        );
+        if is_schema_key {
+            if let ConfigGetResult::Value(s) = self.get(path) {
+                return MapperKeyResult::Value(s.value);
+            }
+        }
+
+        // Walk the raw table (mapper.toml + overlay) with scalar type checks.
+        match walk_toml_path(&self.raw_table, path) {
+            WalkResult::Found(v) => match toml_scalar_to_string(v) {
+                Some(s) => MapperKeyResult::Value(s),
+                None => MapperKeyResult::NotScalar,
+            },
+            WalkResult::BadIntermediatePath { intermediate } => {
+                MapperKeyResult::BadIntermediatePath { intermediate }
+            }
+            WalkResult::NotFound => self.not_found_scalar(path, is_schema_key),
+        }
+    }
+
+    fn lookup_array(&self, path: &str) -> MapperArrayResult {
+        match walk_toml_path(&self.raw_table, path) {
+            WalkResult::Found(v) => collect_string_array(v),
+            WalkResult::BadIntermediatePath { intermediate } => {
+                MapperArrayResult::BadIntermediatePath { intermediate }
+            }
+            WalkResult::NotFound => match walk_json_value(&self.schema, path.split('.')) {
+                Some(_) => MapperArrayResult::NotSet {
+                    help: Some(self.not_set_help(path)),
+                    display_key: self.display_key(path),
+                },
+                None => MapperArrayResult::UnknownKey,
+            },
         }
     }
 }
@@ -446,6 +579,7 @@ pub async fn resolve_effective_config(
 
     let mapper_table = config.table.clone();
     let mut raw_table = config.table.clone();
+    let is_builtin = overlay.is_some();
     if let Some(ov) = overlay {
         deep_merge(&mut raw_table, ov);
     }
@@ -464,6 +598,8 @@ pub async fn resolve_effective_config(
         credentials_path,
         effective_auth,
         bridge: config.bridge.clone(),
+        is_builtin,
+        mapper_name: String::new(),
     })
 }
 
@@ -1336,6 +1472,292 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             assert_eq!(
                 id, "localhost",
                 "cert CN should take precedence over overlay device.id"
+            );
+        }
+    }
+
+    // ========================================================================
+    // MapperConfigLookup integration tests
+    // ========================================================================
+
+    mod mapper_config_lookup {
+        use super::*;
+        use tedge_mqtt_bridge::config_toml::MapperArrayResult;
+        use tedge_mqtt_bridge::config_toml::MapperConfigLookup;
+        use tedge_mqtt_bridge::config_toml::MapperKeyResult;
+
+        // Helper: resolve a custom mapper config (no overlay = custom mapper behaviour).
+        async fn resolve_custom(
+            config: &CustomMapperConfig,
+            tedge_config: &TEdgeConfig,
+        ) -> EffectiveMapperConfig {
+            resolve_effective_config(config, tedge_config, None, None)
+                .await
+                .unwrap()
+        }
+
+        // Helper: resolve with a built-in overlay (is_builtin = true).
+        async fn resolve_builtin(
+            config: &CustomMapperConfig,
+            tedge_config: &TEdgeConfig,
+            overlay: &toml::Table,
+        ) -> EffectiveMapperConfig {
+            resolve_effective_config(config, tedge_config, Some(overlay), None)
+                .await
+                .unwrap()
+                .with_mapper_name("c8y")
+        }
+
+        #[tokio::test]
+        async fn custom_mapper_url_set_returns_value() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(Some("custom.example.com:8883"));
+            let effective = resolve_custom(&config, &tedge_config).await;
+
+            let result = effective.lookup_scalar("url");
+            assert!(
+                matches!(result, MapperKeyResult::Value(ref s) if s.contains("custom.example.com")),
+                "expected Value, got {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn custom_mapper_url_unset_returns_not_set_with_mapper_toml_hint() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let effective = resolve_custom(&config, &tedge_config).await;
+
+            let result = effective.lookup_scalar("url");
+            let MapperKeyResult::NotSet { help, .. } = result else {
+                panic!("expected NotSet, got {result:?}");
+            };
+            let help = help.expect("help text should be present");
+            assert!(
+                help.contains("mapper.toml"),
+                "custom mapper help should mention mapper.toml: {help}"
+            );
+        }
+
+        #[tokio::test]
+        async fn builtin_mapper_url_unset_returns_not_set_with_tedge_config_hint() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let overlay = toml::Table::new();
+            let effective = resolve_builtin(&config, &tedge_config, &overlay).await;
+
+            let result = effective.lookup_scalar("url");
+            let MapperKeyResult::NotSet { help, .. } = result else {
+                panic!("expected NotSet, got {result:?}");
+            };
+            let help = help.expect("help text should be present");
+            assert!(
+                help.contains("tedge config set"),
+                "built-in mapper help should mention 'tedge config set': {help}"
+            );
+        }
+
+        #[tokio::test]
+        async fn builtin_mapper_url_unset_display_key_has_mapper_prefix() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let overlay = toml::Table::new();
+            let effective = resolve_builtin(&config, &tedge_config, &overlay).await;
+
+            let result = effective.lookup_scalar("url");
+            let MapperKeyResult::NotSet { display_key, .. } = result else {
+                panic!("expected NotSet, got {result:?}");
+            };
+            assert_eq!(
+                display_key.as_deref(),
+                Some("c8y.url"),
+                "built-in mapper display_key should be 'c8y.url'"
+            );
+        }
+
+        #[tokio::test]
+        async fn builtin_mapper_url_unset_help_contains_full_tedge_config_set_command() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let overlay = toml::Table::new();
+            let effective = resolve_builtin(&config, &tedge_config, &overlay).await;
+
+            let result = effective.lookup_scalar("url");
+            let MapperKeyResult::NotSet { help, .. } = result else {
+                panic!("expected NotSet, got {result:?}");
+            };
+            let help = help.expect("help text should be present");
+            assert!(
+                help.contains("tedge config set c8y.url"),
+                "help should contain full 'tedge config set c8y.url <value>' command: {help}"
+            );
+        }
+
+        #[tokio::test]
+        async fn builtin_mapper_with_profile_url_unset_help_uses_profile_flag() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let overlay = toml::Table::new();
+            let effective = resolve_effective_config(&config, &tedge_config, Some(&overlay), None)
+                .await
+                .unwrap()
+                .with_mapper_name("c8y.prod");
+
+            let result = effective.lookup_scalar("url");
+            let MapperKeyResult::NotSet { help, display_key } = result else {
+                panic!("expected NotSet, got {result:?}");
+            };
+            let help = help.expect("help text should be present");
+            assert!(
+                help.contains("--profile prod"),
+                "help should contain '--profile prod': {help}"
+            );
+            assert!(
+                help.contains("tedge config set c8y.url"),
+                "help should contain 'tedge config set c8y.url': {help}"
+            );
+            assert_eq!(
+                display_key.as_deref(),
+                Some("c8y.prod.url"),
+                "display_key should be 'c8y.prod.url'"
+            );
+        }
+
+        #[tokio::test]
+        async fn custom_mapper_url_unset_display_key_is_none() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let effective = resolve_custom(&config, &tedge_config).await;
+
+            let result = effective.lookup_scalar("url");
+            let MapperKeyResult::NotSet { display_key, .. } = result else {
+                panic!("expected NotSet, got {result:?}");
+            };
+            assert_eq!(
+                display_key, None,
+                "custom mapper should not set display_key (no namespace prefix)"
+            );
+        }
+
+        #[tokio::test]
+        async fn builtin_mapper_url_set_in_overlay_returns_value() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let overlay: toml::Table = "url = \"overlay.example.com:8883\"\n".parse().unwrap();
+            let effective = resolve_builtin(&config, &tedge_config, &overlay).await;
+
+            let result = effective.lookup_scalar("url");
+            assert!(
+                matches!(result, MapperKeyResult::Value(ref s) if s.contains("overlay.example.com")),
+                "expected Value from overlay, got {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn builtin_mapper_url_set_in_mapper_toml_takes_precedence_over_overlay() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(Some("mapper-toml.example.com:8883"));
+            let overlay: toml::Table = "url = \"overlay.example.com:8883\"\n".parse().unwrap();
+            let effective = resolve_builtin(&config, &tedge_config, &overlay).await;
+
+            let result = effective.lookup_scalar("url");
+            // The url field in make_config sets config.url, and the overlay also sets url.
+            // The effective url is from config.url (mapper.toml), not the overlay.
+            assert!(
+                matches!(result, MapperKeyResult::Value(ref s) if s.contains("mapper-toml.example.com")),
+                "mapper.toml url should take precedence over overlay, got {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn unknown_key_returns_unknown_key() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let effective = resolve_custom(&config, &tedge_config).await;
+
+            let result = effective.lookup_scalar("this.key.does.not.exist");
+            assert!(
+                matches!(result, MapperKeyResult::UnknownKey),
+                "expected UnknownKey, got {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn non_schema_key_from_mapper_toml_returns_value() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mut config = make_config(None);
+            config.table = "bridge.topic_prefix = \"custom/prefix\"\n".parse().unwrap();
+            let effective = resolve_custom(&config, &tedge_config).await;
+
+            let result = effective.lookup_scalar("bridge.topic_prefix");
+            assert!(
+                matches!(result, MapperKeyResult::Value(ref s) if s == "custom/prefix"),
+                "expected Value, got {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn array_key_present_returns_values() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mut config = make_config(None);
+            config.table = "topics = [\"a\", \"b\", \"c\"]\n".parse().unwrap();
+            let effective = resolve_custom(&config, &tedge_config).await;
+
+            let result = effective.lookup_array("topics");
+            assert!(
+                matches!(result, MapperArrayResult::Values(ref v) if v == &["a", "b", "c"]),
+                "expected Values([\"a\", \"b\", \"c\"]), got {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn array_schema_key_absent_returns_not_set() {
+            // `url` is in the schema but has no configured value.
+            // Arrays are looked up via raw_table, so "url" as an array is not found,
+            // but it IS in the schema → NotSet.
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let effective = resolve_custom(&config, &tedge_config).await;
+
+            let result = effective.lookup_array("url");
+            assert!(
+                matches!(result, MapperArrayResult::NotSet { .. }),
+                "expected NotSet, got {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn array_non_schema_key_absent_returns_unknown_key() {
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let config = make_config(None);
+            let effective = resolve_custom(&config, &tedge_config).await;
+
+            let result = effective.lookup_array("nonexistent.topics");
+            assert!(
+                matches!(result, MapperArrayResult::UnknownKey),
+                "expected UnknownKey, got {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn device_id_from_explicit_mapper_toml_is_returned_when_cert_unavailable() {
+            // Cert auth, no cert configured — device_id typed field is None.
+            // But mapper.toml explicitly sets device.id, so raw_table has it.
+            // lookup_scalar("device.id") should return Value from raw_table fallback.
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let mut config = make_config(None);
+            config.table = "device.id = \"explicit-from-mapper\"\n".parse().unwrap();
+            config.device = Some(crate::custom::config::DeviceConfig {
+                id: Some("explicit-from-mapper".into()),
+                cert_path: None,
+                key_path: None,
+                root_cert_path: None,
+            });
+            let effective = resolve_custom(&config, &tedge_config).await;
+
+            let result = effective.lookup_scalar("device.id");
+            assert!(
+                matches!(result, MapperKeyResult::Value(ref s) if s == "explicit-from-mapper"),
+                "expected Value from raw_table fallback, got {result:?}"
             );
         }
     }

@@ -310,7 +310,7 @@ impl TEdgeComponent for CustomMapper {
                 &tedge_config,
                 effective_auth,
                 None,
-                &effective.to_template_table(),
+                &effective,
             )
             .await?;
 

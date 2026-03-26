@@ -384,6 +384,10 @@ pub async fn resolve_effective_mapper_config(
             auth_method: crate::custom::config::AuthMethodConfig::Auto,
             credentials_path: None,
         });
+    let mapper_name = match cloud_profile {
+        Some(profile) => format!("c8y.{profile}"),
+        None => "c8y".to_string(),
+    };
     crate::custom::resolve::resolve_effective_config(
         &mapper_config,
         tedge_config,
@@ -391,6 +395,7 @@ pub async fn resolve_effective_mapper_config(
         Some(schema_json),
     )
     .await
+    .map(|c| c.with_mapper_name(mapper_name))
 }
 
 pub async fn bridge_rules(
@@ -431,7 +436,7 @@ pub async fn bridge_rules(
         tedge_config,
         auth_method,
         cloud_profile,
-        &effective.to_template_table(),
+        &effective,
     )
     .await
 }

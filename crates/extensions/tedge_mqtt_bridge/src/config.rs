@@ -1,6 +1,7 @@
 use crate::config_toml::Direction;
 use crate::config_toml::ExpandError;
 use crate::config_toml::ExpandedBridgeRule;
+use crate::config_toml::MapperConfigLookup;
 use crate::config_toml::NonExpansionReason;
 use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
@@ -295,7 +296,7 @@ pub fn expand_bridge_rules(
     tedge_config: &TEdgeConfig,
     auth_method: AuthMethod,
     cloud_profile: Option<&ProfileName>,
-    mapper_config: &toml::Table,
+    mapper_config: &dyn MapperConfigLookup,
 ) -> Result<(Vec<ExpandedBridgeRule>, Vec<NonExpansionReason>), InvalidBridgeRule> {
     let config: crate::config_toml::PersistedBridgeConfig =
         toml::from_str(toml_template).map_err(|e| {

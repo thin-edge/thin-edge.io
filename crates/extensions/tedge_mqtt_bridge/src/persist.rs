@@ -17,6 +17,7 @@ use crate::config::expand_bridge_rules;
 use crate::config::BridgeConfig;
 use crate::config_toml::AuthMethod;
 use crate::config_toml::ExpandedBridgeRule;
+use crate::config_toml::MapperConfigLookup;
 use crate::config_toml::NonExpansionReason;
 
 /// Persists a bridge config file using the three-file pattern:
@@ -102,7 +103,7 @@ pub async fn visit_bridge_config_dir(
     tedge_config: &TEdgeConfig,
     auth_method: AuthMethod,
     cloud_profile: Option<&ProfileName>,
-    mapper_config: &toml::Table,
+    mapper_config: &dyn MapperConfigLookup,
     visitor: &mut impl BridgeConfigVisitor,
 ) -> anyhow::Result<()> {
     let mut read_dir = tokio::fs::read_dir(dir)
@@ -154,7 +155,7 @@ pub async fn load_bridge_rules_from_directory(
     tedge_config: &TEdgeConfig,
     auth_method: AuthMethod,
     cloud_profile: Option<&ProfileName>,
-    mapper_config: &toml::Table,
+    mapper_config: &dyn MapperConfigLookup,
 ) -> anyhow::Result<BridgeConfig> {
     struct RuntimeVisitor(BridgeConfig);
 
@@ -187,6 +188,7 @@ pub async fn load_bridge_rules_from_directory(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config_toml::TableMapperLookup;
     use tedge_test_utils::fs::TempTedgeDir;
 
     mod persist_bridge_config_file {
@@ -364,7 +366,7 @@ mod tests {
                 &tedge_config,
                 AuthMethod::Certificate,
                 None,
-                &toml::Table::new(),
+                &TableMapperLookup(toml::Table::new()),
             )
             .await
             .unwrap();
@@ -402,7 +404,7 @@ mod tests {
                 &tedge_config,
                 AuthMethod::Certificate,
                 None,
-                &toml::Table::new(),
+                &TableMapperLookup(toml::Table::new()),
             )
             .await
             .unwrap();
