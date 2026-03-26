@@ -215,20 +215,20 @@ Create Mapper Service File
 
 Create Flows Only Mapper
     [Arguments]    ${name}
-    Execute Command    mkdir -p /etc/tedge/mappers/${name}/flows
+    Execute Command    mkdir -p /etc/tedge/mappers/${name}/flows && chown -R tedge:tedge /etc/tedge/mappers/${name}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/echo.toml    /etc/tedge/mappers/${name}/flows/
     Create Mapper Service File    ${name}
 
 Create Bridge Mapper
     [Arguments]    ${name}
-    Execute Command    mkdir -p /etc/tedge/mappers/${name}/bridge
+    Execute Command    mkdir -p /etc/tedge/mappers/${name}/bridge && chown -R tedge:tedge /etc/tedge/mappers/${name}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/mapper.toml    /etc/tedge/mappers/${name}/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/bridge/rules.toml    /etc/tedge/mappers/${name}/bridge/
     Create Mapper Service File    ${name}
 
 Create Password Bridge Mapper
     [Arguments]    ${name}
-    Execute Command    mkdir -p /etc/tedge/mappers/${name}/bridge
+    Execute Command    mkdir -p /etc/tedge/mappers/${name}/bridge && chown -R tedge:tedge /etc/tedge/mappers/${name}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/mapper-password.toml    /etc/tedge/mappers/${name}/mapper.toml
     ThinEdgeIO.Transfer To Device    ${CURDIR}/credentials.toml    /etc/tedge/mappers/${name}/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/bridge/rules.toml    /etc/tedge/mappers/${name}/bridge/
@@ -236,8 +236,7 @@ Create Password Bridge Mapper
 
 Create Full Mapper
     [Arguments]    ${name}
-    Execute Command    mkdir -p /etc/tedge/mappers/${name}/bridge
-    Execute Command    mkdir -p /etc/tedge/mappers/${name}/flows
+    Execute Command    mkdir -p /etc/tedge/mappers/${name}/bridge /etc/tedge/mappers/${name}/flows && chown -R tedge:tedge /etc/tedge/mappers/${name}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/mapper.toml    /etc/tedge/mappers/${name}/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/bridge/rules.toml    /etc/tedge/mappers/${name}/bridge/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/echo.toml    /etc/tedge/mappers/${name}/flows/
@@ -245,8 +244,8 @@ Create Full Mapper
 
 Create Two Concurrent Mappers
     [Arguments]    ${name_a}    ${name_b}
-    Execute Command    mkdir -p /etc/tedge/mappers/${name_a}/flows
-    Execute Command    mkdir -p /etc/tedge/mappers/${name_b}/flows
+    Execute Command    mkdir -p /etc/tedge/mappers/${name_a}/flows && chown -R tedge:tedge /etc/tedge/mappers/${name_a}
+    Execute Command    mkdir -p /etc/tedge/mappers/${name_b}/flows && chown -R tedge:tedge /etc/tedge/mappers/${name_b}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/alpha-echo.toml    /etc/tedge/mappers/${name_a}/flows/echo.toml
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/beta-echo.toml    /etc/tedge/mappers/${name_b}/flows/echo.toml
     Create Mapper Service File    ${name_a}
