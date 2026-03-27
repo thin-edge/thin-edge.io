@@ -8,6 +8,7 @@ use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Error;
 use camino::Utf8PathBuf;
+use clap::ValueHint;
 use std::str::FromStr;
 use std::time::SystemTime;
 use tedge_config::TEdgeConfig;
@@ -33,7 +34,7 @@ pub enum TEdgeFlowsCli {
         /// Path to the directory of flows and steps
         ///
         /// Default to /etc/tedge/mappers/$MAPPER.$PROFILE/flows
-        #[clap(long, global = true)]
+        #[clap(long, value_hint = ValueHint::DirPath, global = true)]
         flows_dir: Option<Utf8PathBuf>,
 
         /// List flows processing messages published on this topic
@@ -56,7 +57,7 @@ pub enum TEdgeFlowsCli {
         /// Path to the directory of flows and steps
         ///
         /// Default to /etc/tedge/mappers/$MAPPER.$PROFILE/flows
-        #[clap(long, global = true)]
+        #[clap(long, value_hint = ValueHint::DirPath, global = true)]
         flows_dir: Option<Utf8PathBuf>,
 
         /// Path to the flow step script or TOML flow definition
@@ -207,7 +208,10 @@ impl TEdgeFlowsCli {
         flows_dir: &Utf8PathBuf,
         js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
-        let mut processor = Self::init_processor(flows_dir, js_config)
+        let flows_dir = flows_dir
+            .canonicalize_utf8()
+            .context("Invalid flows-dir path")?;
+        let mut processor = Self::init_processor(&flows_dir, js_config)
             .await
             .with_context(|| format!("loading flows and steps from {flows_dir}"))?;
         processor.load_all_flows().await;
