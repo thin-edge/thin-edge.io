@@ -367,10 +367,24 @@ impl<'js> JsModules<'js> {
 
 impl LoadError {
     fn from_js(ctx: &Ctx<'_>, err: Error) -> Self {
-        if let Some(ex) = ctx.catch().as_exception() {
+        let caught = ctx.catch();
+        if let Some(ex) = caught.as_exception() {
             LoadError::JsException {
                 message: ex.message().unwrap_or_default(),
                 stack: ex.stack().unwrap_or_default(),
+            }
+        } else if let Some(s) = caught.as_string() {
+            // OOM: QuickJS couldn't allocate the Exception object and fell back to
+            // storing "out of memory" as a string atom.
+            LoadError::JsException {
+                message: s.to_string().unwrap_or_default(),
+                stack: String::new(),
+            }
+        } else if caught.is_null() && matches!(err, Error::Exception) {
+            // Severe OOM: QuickJS couldn't allocate any exception value at all.
+            LoadError::JsException {
+                message: "out of memory".to_owned(),
+                stack: String::new(),
             }
         } else {
             err.into()
