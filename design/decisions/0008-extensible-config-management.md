@@ -92,35 +92,24 @@ The agent uses the plugins as follows:
 
 ### Phase 1
 
-- Similar to log management, config plugins are defined under `/etc/tedge/config-plugins`.
+- Similar to log management, config plugins are defined under `/usr/share/tedge/config-plugins`.
 - Config plugins can be used to perform any pre/post processing steps before/after a configuration file is updated by the agent.
 - A config plugin needs to support the following sub-commands:
   - `list`: List all the config types supported by this plugin.
     Used to detect if this is a valid plugin if it exits with exit code 0.
     The types must be printed with one type per line.
-  - `get <type> <tmp-target-file-path>`: Get the existing configuration for the given type.
-  - `set <type> [--url <new-config-url>] [--file <new-config-file-path>]`: Update the existing config file
-- Existing file-based config management using `tedge-configuration-plugin.toml` is moved to a default `file` plugin.
-- The `tedge-configuration-plugin.toml` entries are provided an optional `exec` field to run any commands
-  after the config file update, as follows:
-  ```
-  [[files]]
-  type = "collectd"
-  path = "/etc/collectd/collectd.conf"
-  exec = "systemctl restart collectd"
-
-  [[files]]
-  type = "nginx"
-  path = "/etc/nginx/nginx.conf"
-  exec = "systemctl reload nginx"
-  ```
-- The `file` plugin's is implemented as follows:
-  - `list`: list all the config types listed in `tedge-configuration-plugin.toml`.
-  - `get`: Copy the contents of the existing configuration to the temp target file argument passed to it.
-  - `set`: Replace the existing config file with new config file in the argument
-     and execute the command specified in the `exec` field, if one is provided.
-- For non file based configurations, that can't be defined in the `tedge-configuration-plugin.toml`,
-  they must have dedicated plugins that declare their types in the `list` command.
+  - `get <type>`: Get the existing configuration for the given type and write it to **stdout**.
+  - `prepare <type> <new-config-path> --work-dir <dir>`: Prepare for a config update.
+    Typically validates the new configuration and saves a backup to `--work-dir`.
+    The agent creates the `--work-dir` directory before calling `prepare` and passes
+    the same path to `set`, `verify`, and `rollback` so plugins can share state across stages.
+    The agent deletes the work directory once the operation completes.
+  - `set <type> <new-config-path> --work-dir <dir>`: Apply the new configuration.
+    Typically moves the file into place and restarts/reloads the service.
+  - `verify <type> --work-dir <dir>`: Verify the configuration was applied successfully.
+    Typically checks that the service is running correctly.
+  - `rollback <type> --work-dir <dir>`: Roll back to the previous configuration.
+    Typically restores the backup saved to `--work-dir` by `prepare`.
 
 The agent uses the plugins as follows:
 
@@ -138,50 +127,66 @@ The agent uses the plugins as follows:
   The `type` passed to the `get` command would not include the plugin suffix.
   If there is no explicit suffix, it is delegated to the default file plugin.
 - When a `config_update` request is received for a type, the following actions are performed in sequence:
-  - Call `get` command of the corresponding plugin and cache the target temporary file as a backup.
-  - Call `set` command of the corresponding plugin with the updated config path in the argument.
-  - If `set` commands fail, call the `set` command again with the original config file backup as the target.
+  - Call `prepare` command of the corresponding plugin with the downloaded config file and `--work-dir`.
+  - Call `set` command of the corresponding plugin with the downloaded config file and `--work-dir`.
+  - Call `verify` command of the corresponding plugin with `--work-dir`.
+  - If `set` or `verify` fail, call the `rollback` command with `--work-dir` to restore the previous state.
+  - Delete the work directory once the operation completes.
 
-### Phase 2
+### Phase 2 (Implemented)
 
 Instead of the `executing` phase of `config_update` workflow doing everything in that single step,
-break it down into multiple smaller stages that corresponds to each plugin command/phase as well as follows:
+it is broken down into multiple smaller stages corresponding to each plugin command as follows.
+This helps users override a single stage (e.g. `download`) while reusing the rest of the built-in steps.
 
-```config_update.toml
+The workflow is installed at `/etc/tedge/operations/config_update.toml` on first startup and can be
+customized by the user:
+
+```toml title="file: /etc/tedge/operations/config_update.toml"
 operation = "config_update"
+on_error = "failed"
 
 [init]
-action = "proceed"
-on_success = "scheduled"
-
-[scheduled]
 action = "proceed"
 on_success = "executing"
 
 [executing]
-action = "builtin:config_update:executing"
+action = "proceed"
 on_success = "download"
 
 [download]
-action = "builtin:download"
+action = "download"
 on_success = "prepare"
 
 [prepare]
-action = "builtin:backup_file"
-on_success = "apply"
+action = "builtin:config_update:prepare"
+input.setFrom = "${.payload.downloadedPath}"
+on_success = "set"
 
-[apply]
-action = "builtin:set_file"
-on_success = "validate"
-
-[validate]
-action = "builtin:config_update:validate"
-on_success = "commit"
+[set]
+action = "builtin:config_update:set"
+on_success = "evaluate-agent-restart"
 on_error = "rollback"
 
-[commit]
-action = "builtin:config_update:apply"
+[evaluate-agent-restart]
+script = "test ${.payload.restartAgent} = true"
+on_exit.0 = "restart-agent"
+on_exit.1 = "verify"
+
+[restart-agent]
+action = "restart-agent"
+on_exec = "await-agent-restart"
+
+[await-agent-restart]
+action = "await-agent-restart"
+timeout_second = 90
+on_timeout = "rollback"
+on_success = "verify"
+
+[verify]
+action = "builtin:config_update:verify"
 on_success = "successful"
+on_error = "rollback"
 
 [rollback]
 action = "builtin:config_update:rollback"
@@ -193,25 +198,3 @@ action = "cleanup"
 [failed]
 action = "cleanup"
 ```
-
-This helps customers override a single stage like `download` to do it their way,
-while still reusing the rest of the functionality as-is.
-
-### Unresolved problems
-
-1. When a new piece of software is installed on the device,
-   which mostly would have come with its own configurations and log files,
-   how to "notify tedge" so that it refreshes its
-   - updated software list
-   - supported config list
-   - updated logs list
-2. Even if a REST API or inotify API to refresh the agent is provided,
-   who would trigger this when a software is installed by various installation methods like:
-   - software packages by distros
-   - containers spawned by docker, podman, kubernetes etc
-   Do they all provide hook points to trigger additional actions when a new thing is installed?
-
-Since the installation of a new software is most likely to add new configurations and log,
-the agent may do this all-in-one refresh implicitly whenever a `software_update` is performed.
-The external refresh APIs only need to be used when new software is added outside the purview of tedge,
-either manually by a device user, or an external software management system on the same device.

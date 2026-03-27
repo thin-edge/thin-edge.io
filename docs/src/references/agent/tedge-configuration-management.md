@@ -37,13 +37,13 @@ In summary, the responsibilities of the agent regarding configuration management
   * to define the list of files under configuration management,
   * to notify the local MQTT bus when this list is updated,
   * to upload these files to the tedge file transfer repository on demand,
-  * to download the files pushed from the tedge file transfer repository,
-  * to ensure that the target files are atomically updated after a successful download,
+  * to download files pushed from the tedge file transfer repository,
+  * to delegate preparation, application, verification, and rollback of config updates to config plugins,
   * to notify the device software when the configuration is updated.
 
 By contrast, the agent is not responsible for:
   * checking that the uploaded files are well-formed,
-  * restarting the configured processes,
+  * restarting the configured processes (this is delegated to config plugins),
   * establishing any direct connection to clouds.
 
 A user-specific component installed on the device
@@ -58,6 +58,7 @@ A user-specific component installed on the device
 
 The configuration file used by the agent for configuration management is stored by default
 under `/etc/tedge/plugins/tedge-configuration-plugin.toml`.
+The file-based config types defined in this file are handle by the built-in `file` plugin.
 
 This [TOML](https://toml.io/en/) file defines the list of files to be managed by the agent.
 Each configuration file is defined by a record with:
@@ -132,6 +133,26 @@ The behavior of the agent is also controlled by the configuration of %%te%%:
 * `tedge config get mqtt.topic_root`: the root of the [MQTT topic scheme](../mqtt-api.md) to publish and subscribe.
 * `tedge config get mqtt.device_topic_id`: the identifier of the [MQTT topic scheme](../mqtt-api.md) to publish and subscribe.
 
+## Config Plugins
+
+In addition to the file-based entries in `tedge-configuration-plugin.toml`,
+configuration types can be provided by external plugins installed at `/usr/share/tedge/config-plugins` as well.
+Each plugin is an executable that responds to `list`, `get`, `prepare`, `set`, `verify`, and `rollback` sub-commands.
+
+When a plugin provides a type, the type name is published with a `::plugin-name` suffix
+to distinguish it from file-based types.
+For example, a plugin named `lighttpd` advertising `lighttpd.conf` makes the agent to publish:
+
+```sh te2mqtt formats=v1
+tedge mqtt pub -r 'te/device/main///cmd/config_snapshot' '{
+  "types": ["tedge-configuration-plugin", "tedge.toml", "lighttpd.conf::lighttpd"]
+}'
+```
+
+The suffix is stripped before the type is passed to the plugin sub-commands.
+
+See [Configuration Management Plugins](../../extend/config-management.md) for details on authoring plugins.
+
 ## Handling config snapshot commands
 
 During a config snapshot operation, the agent uploads a requested configuration file to the tedge file transfer repository.
@@ -160,6 +181,8 @@ The `tedgeUrl` is an optional field. If the user does not provide the URL, the a
 Upon receiving a configuration snapshot command, the agent performs the following actions:
    1. The agent uses the `type` information (`mosquitto`) to look up the target path from the `tedge-configuration-plugin.toml` file
    and retrieves the requested configuration content from the corresponding `path`(`/etc/mosquitto/mosquitto.conf`).
+   For a plugin-backed type such as `lighttpd.conf::lighttpd`, the agent calls the plugin's `get` command
+   and captures its stdout as the snapshot content.
    2. It then performs a `PUT` request to the `tedgeUrl` specified in the command's payload to upload the content.
 
 Throughout the process, the agent updates the command status via MQTT by publishing a retained message
@@ -225,12 +248,34 @@ tedge mqtt pub -r 'te/device/main///cmd/config_update/1234' '{
 }'
 ```
 
-Upon receiving a configuration update command, the agent performs the following actions:
-   1. It performs a `GET` request to the `tedgeUrl` specified in the command to retrieve the content.
-   2. The agent then uses the `type` information (`mosquitto`) to to look up the target path from the `tedge-configuration-plugin.toml` file
-   and applies the new configuration content to the corresponding `path`(`/etc/mosquitto/mosquitto.conf`).
-   If `tedge` user/group does not have write permissions to the path and its parent directory,
-   [`tedge-write`](../tedge-write.md) will be used in combination with `sudo` for permission elevation.
+Upon receiving a configuration update command,
+the agent executes the `config_update` workflow as defined in `/etc/tedge/operations/config_update.toml`,
+which performs the following actions in sequence:
+
+1. `download`: The agent downloads the new configuration file from the URL in the command payload
+   using the built-in `download` action. The path of the downloaded file is stored as `downloadedPath`
+   in the operation payload for subsequent steps.
+1. `prepare`: The agent creates a temporary work directory to be passed as `--work-dir` to subsequent plugin commands
+   and calls the plugin's `prepare` command (`builtin:config_update:prepare`).
+   The plugin may perform steps like validating the new configuration or
+   save a backup of the current configuration to the work directory.
+1. `set`: The agent calls the plugin's `set` command (`builtin:config_update:set`) to apply the new configuration.
+   If this step fails, the workflow proceeds to `rollback`.
+1. `evaluate-agent-restart`: — If `"restartAgent": true` was set in the command payload,
+   the agent proceeds to the `restart-agent` state or else proceed directly to `verify`.
+1. `restart-agent`: The agent triggers a self-restart and immediately proceeds to `await-agent-restart` state.
+1. `await-agent-restart`: Verify whether the restart succeeded.
+1. `verify`: The agent calls the plugin's `verify` command (`builtin:config_update:verify`) to
+   confirm the update was applied correctly.
+   On success, work directory is deleted and proceed to `successful` state.
+   On failure, the workflow proceeds to `rollback`.
+1. `rollback` (on error): The agent calls the plugin's `rollback` command
+   (`builtin:config_update:rollback`) to restore the previous configuration.
+   Irrespective of the success or failure of this step, proceed to the `failed` state,
+   after deleing the work directory.
+
+For file-based config types defined in `tedge-configuration-plugin.toml`,
+the built-in `file` plugin handles all plugin commands.
 
 Throughout the process, the agent updates the command status via MQTT
 by publishing a retained message to the same `<root>/<identifier>/cmd/config_update/<id>` topic
@@ -261,16 +306,49 @@ sequenceDiagram
   participant Mapper
   participant Child Agent
   participant Main Agent
+  participant Plugin
 
   Mapper->>Main Agent: Make a target config file ready
   Mapper->>Child Agent: tedge config_update command (Status: init)
   Child Agent->>Mapper: Status: executing
-  alt No error
-    Child Agent->>Main Agent: GET the config file [HTTP]
-    Main Agent-->>Child Agent: Return the content [HTTP]
-    Child Agent->>Child Agent: Apply the config
-    Child Agent->>Mapper: Status: successful
-  else Any error occurs
+  Child Agent->>Main Agent: GET the config file [HTTP]
+  Main Agent-->>Child Agent: Return the content [HTTP]
+  Child Agent->>Plugin: prepare <type> <downloaded-path> --work-dir <dir>
+  Plugin-->>Child Agent: exit 0 (backup saved to work-dir)
+  Child Agent->>Plugin: set <type> <downloaded-path> --work-dir <dir>
+  alt set succeeded
+    Plugin-->>Child Agent: exit 0
+    Child Agent->>Plugin: verify <type> --work-dir <dir>
+    alt verify succeeded
+      Plugin-->>Child Agent: exit 0
+      Child Agent->>Mapper: Status: successful
+    else verify failed
+      Plugin-->>Child Agent: non-zero exit
+      Child Agent->>Plugin: rollback <type> --work-dir <dir>
+      Child Agent->>Mapper: Status: failed
+    end
+  else set failed
+    Plugin-->>Child Agent: non-zero exit
+    Child Agent->>Plugin: rollback <type> --work-dir <dir>
     Child Agent->>Mapper: Status: failed
   end
 ```
+
+## Refresh Supported Config Types
+
+To ensure that any newly installed services or configuration sources are immediately available for configuration management,
+`tedge-agent` automatically reloads the plugins and refreshes the supported config types on the following events:
+
+* A new config plugin is installed in the plugin directory (`/usr/share/tedge/config-plugins`)
+* The `tedge-config-plugin.toml` file is updated
+* A new software is installed with the agent (via the `software_update` command)
+
+A refresh can also be triggered manually by sending sync signals to the agent as follows:
+
+```sh
+tedge mqtt pub te/device/main/service/tedge-agent/signal/sync_config '{}'
+```
+
+The agent reacts to all these events by gathering the latest supported config types from all the installed plugins
+by invoking the `list` command on them,
+and publishes the aggregated types to the `te/device/main///cmd/config_snapshot` and `te/device/main///cmd/config_update` meta topics.
