@@ -10,6 +10,27 @@ Test Tags           theme:tedge_flows
 
 
 *** Test Cases ***
+Normalizes flows-dir path
+    [Documentation]    Checks flows are printed correctly when using relative paths, e.g. `.`, `../` or when using symlinks
+    VAR    ${flows_dir}    /etc/tedge/mappers/local/flows
+    VAR    ${child_dir}    ${flows_dir}/childdir
+    Execute Command    cmd=mkdir ${child_dir}
+    VAR    ${symlink}    ${flows_dir}.link
+    Execute Command    cmd=ln -s ${flows_dir} ${symlink}
+
+    ${out1}    Execute Command    cmd=cd ${flows_dir} && tedge flows test --flows-dir . "" "" 2>&1    exp_exit_code=0
+    ${out2}    Execute Command    cmd=cd ${child_dir} && tedge flows test --flows-dir ../ "" "" 2>&1    exp_exit_code=0
+    ${out3}    Execute Command    cmd=tedge flows test --flows-dir ${symlink} "" "" 2>&1    exp_exit_code=0
+
+    # test shouldn't fail due to invalid path (path containing .)
+    # TODO: should we return an error exit code if any flow in test failed to compile? Currently we return 0.
+    VAR    ${fail_due_to_invalid_path}    Failed to compile flow on-startup.toml: Not a valid filename for a flow
+    Should Not Contain    ${out1}    ${fail_due_to_invalid_path}
+    Should Not Contain    ${out2}    ${fail_due_to_invalid_path}
+    Should Not Contain    ${out3}    ${fail_due_to_invalid_path}
+
+    Execute Command    rm -r ${child_dir} ${symlink}
+
 Add missing timestamps
     ${transformed_msg}    Execute Command
     ...    tedge flows test --processing-time "2025-06-27 11:31:02" te/device/main///m/ '{}'

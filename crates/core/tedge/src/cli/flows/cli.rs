@@ -208,7 +208,10 @@ impl TEdgeFlowsCli {
         flows_dir: &Utf8PathBuf,
         js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
-        let mut processor = Self::init_processor(flows_dir, js_config)
+        let flows_dir = flows_dir
+            .canonicalize_utf8()
+            .context("Invalid flows-dir path")?;
+        let mut processor = Self::init_processor(&flows_dir, js_config)
             .await
             .with_context(|| format!("loading flows and steps from {flows_dir}"))?;
         processor.load_all_flows().await;
