@@ -57,8 +57,8 @@ pub struct StepConfig {
     config: Map<String, Value>,
 
     #[serde(default)]
-    #[serde(deserialize_with = "parse_optional_human_duration")]
-    interval: Option<Duration>,
+    #[serde(deserialize_with = "parse_human_interval")]
+    interval: Option<IntervalConfig>,
 }
 
 #[derive(Deserialize)]
@@ -85,8 +85,8 @@ pub enum InputConfig {
         topic: Option<String>,
 
         #[serde(default)]
-        #[serde(deserialize_with = "parse_optional_human_duration")]
-        interval: Option<Duration>,
+        #[serde(deserialize_with = "parse_human_interval")]
+        interval: Option<IntervalConfig>,
     },
 
     #[serde(rename = "process")]
@@ -97,8 +97,8 @@ pub enum InputConfig {
         topic: Option<String>,
 
         #[serde(default)]
-        #[serde(deserialize_with = "parse_optional_human_duration")]
-        interval: Option<Duration>,
+        #[serde(deserialize_with = "parse_human_interval")]
+        interval: Option<IntervalConfig>,
     },
 }
 
@@ -110,6 +110,13 @@ pub enum OutputConfig {
 
     #[serde(rename = "file")]
     File { path: Utf8PathBuf },
+}
+
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+pub enum IntervalConfig {
+    Duration(Duration),
+    ParamExpr(String),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -128,6 +135,9 @@ pub enum ConfigError {
 
     #[error("Not a valid step configuration: {0}")]
     IncorrectSetting(String),
+
+    #[error("Not a valid interval duration: {0}")]
+    IncorrectInterval(String),
 
     #[error("Flow '{name}' defines an infinite loop: the output topic '{output_topic}' matches input filter '{input_filter}'")]
     MqttInfiniteLoop {
@@ -227,20 +237,20 @@ impl FlowConfig {
         FlowConfig::from_step(script.to_owned())
     }
 
-    async fn load_flow(path: &Utf8Path) -> Result<FlowConfig, LoadError> {
+    async fn load_flow(path: &Utf8Path) -> Result<FlowConfig, ConfigError> {
         let specs = read_to_string(path)
             .await
             .map_err(|err| LoadError::from_io(err, path))?;
-        let flow: FlowConfig = toml::from_str(&specs)?;
+        let flow: FlowConfig = toml::from_str(&specs).map_err(LoadError::from)?;
 
         let params = Params::load_flow_params(path).await?;
         flow.substitute_params(&params)
     }
 
-    fn substitute_params(mut self, params: &Params) -> Result<Self, LoadError> {
+    fn substitute_params(mut self, params: &Params) -> Result<Self, ConfigError> {
         self.config = params.substitute_all(&self.config)?;
         for step in self.steps.iter_mut() {
-            step.config = params.substitute_all(&step.config)?;
+            step.substitute_params(params)?;
         }
 
         Ok(FlowConfig {
@@ -316,6 +326,18 @@ impl FlowConfig {
 }
 
 impl StepConfig {
+    pub fn substitute_params(&mut self, params: &Params) -> Result<(), ConfigError> {
+        self.config = params.substitute_all(&self.config)?;
+        if let Some(interval) = self.interval.take() {
+            self.interval = Some(interval.substitute_params(params)?);
+        }
+        Ok(())
+    }
+
+    pub fn interval(&self) -> Result<Option<Duration>, ConfigError> {
+        self.interval.as_ref().map(|i| i.duration()).transpose()
+    }
+
     pub fn with_shared_config(mut self, shared_config: &Map<String, Value>) -> Self {
         for (k, v) in shared_config.iter() {
             if !self.config.contains_key(k) {
@@ -327,7 +349,11 @@ impl StepConfig {
 
     pub fn with_interval_as_config(mut self) -> Self {
         let key = "interval";
-        let interval = self.interval.unwrap_or(Duration::from_secs(1));
+        let interval = self
+            .interval()
+            .ok()
+            .flatten()
+            .unwrap_or(Duration::from_secs(1));
         if !self.config.contains_key(key) {
             self.config
                 .insert(key.to_string(), interval.as_secs().into());
@@ -357,7 +383,7 @@ impl StepConfig {
         };
         let step = step
             .with_config(config)?
-            .with_interval(self.interval, flow.as_str());
+            .with_interval(self.interval()?, flow.as_str());
         Ok(step)
     }
 
@@ -397,7 +423,7 @@ impl StepConfig {
 }
 
 impl InputConfig {
-    fn substitute_params(self, params: &Params) -> Result<Self, LoadError> {
+    fn substitute_params(self, params: &Params) -> Result<Self, ConfigError> {
         match self {
             InputConfig::Mqtt { topics } => Ok(InputConfig::Mqtt {
                 topics: topics
@@ -412,7 +438,7 @@ impl InputConfig {
             } => Ok(InputConfig::File {
                 path,
                 topic: topic.map(|t| params.substitute_inner_paths(&t)),
-                interval,
+                interval: interval.map(|i| i.substitute_params(params)).transpose()?,
             }),
             InputConfig::Process {
                 command,
@@ -421,7 +447,7 @@ impl InputConfig {
             } => Ok(InputConfig::Process {
                 command: params.substitute_inner_paths(&command),
                 topic: topic.map(|t| params.substitute_inner_paths(&t)),
-                interval,
+                interval: interval.map(|i| i.substitute_params(params)).transpose()?,
             }),
         }
     }
@@ -440,12 +466,13 @@ impl TryFrom<InputConfig> for FlowInput {
                 interval,
             } => {
                 let topic = topic.unwrap_or_else(|| path.clone().to_string());
-                match interval {
-                    Some(interval) if !interval.is_zero() => FlowInput::PollFile {
+                match interval.map(|i| i.duration()) {
+                    Some(Ok(interval)) if !interval.is_zero() => FlowInput::PollFile {
                         topic,
                         path,
                         interval,
                     },
+                    Some(Err(e)) => return Err(e),
                     _ => FlowInput::StreamFile { topic, path },
                 }
             }
@@ -455,12 +482,13 @@ impl TryFrom<InputConfig> for FlowInput {
                 interval,
             } => {
                 let topic = topic.unwrap_or_else(|| command.clone());
-                match interval {
-                    Some(interval) if !interval.is_zero() => FlowInput::PollCommand {
+                match interval.map(|i| i.duration()) {
+                    Some(Ok(interval)) if !interval.is_zero() => FlowInput::PollCommand {
                         topic,
                         command,
                         interval,
                     },
+                    Some(Err(e)) => return Err(e),
                     _ => FlowInput::StreamCommand { topic, command },
                 }
             }
@@ -492,6 +520,27 @@ impl TryFrom<OutputConfig> for FlowOutput {
     }
 }
 
+impl IntervalConfig {
+    fn substitute_params(self, params: &Params) -> Result<Self, ConfigError> {
+        match &self {
+            IntervalConfig::Duration(_) => Ok(self),
+            IntervalConfig::ParamExpr(expr) => {
+                let interval = params.substitute_inner_paths(expr);
+                let duration = humantime::parse_duration(&interval)
+                    .map_err(|_| ConfigError::IncorrectInterval(interval))?;
+                Ok(IntervalConfig::Duration(duration))
+            }
+        }
+    }
+
+    fn duration(&self) -> Result<Duration, ConfigError> {
+        match self {
+            IntervalConfig::Duration(duration) => Ok(*duration),
+            IntervalConfig::ParamExpr(expr) => Err(ConfigError::IncorrectInterval(expr.clone())),
+        }
+    }
+}
+
 fn into_topic(name: String) -> Result<Topic, ConfigError> {
     Topic::new(&name).map_err(|_| ConfigError::IncorrectTopic(name))
 }
@@ -508,17 +557,17 @@ pub(crate) fn topic_filters<S: AsRef<str> + ToString>(
     Ok(topics)
 }
 
-fn parse_optional_human_duration<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+fn parse_human_interval<'de, D>(deserializer: D) -> Result<Option<IntervalConfig>, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
     let value = String::deserialize(deserializer)?;
     if value.trim().is_empty() {
         Ok(None)
+    } else if let Ok(duration) = humantime::parse_duration(&value) {
+        Ok(Some(IntervalConfig::Duration(duration)))
     } else {
-        humantime::parse_duration(&value)
-            .map_err(|_| serde::de::Error::custom("Invalid duration"))
-            .map(Some)
+        Ok(Some(IntervalConfig::ParamExpr(value)))
     }
 }
 
@@ -637,7 +686,7 @@ mod tests {
             let step = StepConfig {
                 step: StepSpec::Transformer("some-step".to_string()),
                 config: config.clone(),
-                interval,
+                interval: interval.map(IntervalConfig::Duration),
             };
             assert_eq!(&step.with_interval_as_config().config, merged_config);
         }
@@ -768,6 +817,40 @@ topic = "te/device/main///e/"
         let expected_flow_toml = r#"
         input.mqtt.topics = [ "input", "c8y/#", "te/device/child-xyz///e/"]
         output.mqtt.topic = "c8y/output"
+        "#;
+
+        let params = Params::load_toml(params_toml).unwrap();
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
+
+        assert_eq!(expected_flow, flow.substitute_params(&params).unwrap());
+    }
+
+    #[test]
+    fn params_substitute_intervals() {
+        let params_toml = r#"
+        hourly = "3600s"
+        daily = "24h"
+        "#;
+
+        let flow_toml = r#"
+        [input.process]
+        command = "/some/command"
+        interval = "${params.daily}"
+
+        [[steps]]
+        script = "main.js"
+        interval = "${params.hourly}"
+        "#;
+
+        let expected_flow_toml = r#"
+        [input.process]
+        command = "/some/command"
+        interval = "24h"
+
+        [[steps]]
+        script = "main.js"
+        interval = "3600s"
         "#;
 
         let params = Params::load_toml(params_toml).unwrap();
