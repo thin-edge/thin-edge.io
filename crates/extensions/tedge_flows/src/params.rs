@@ -20,8 +20,8 @@ use tracing::log;
 /// ```toml
 /// [[steps]]
 /// script = "main.js"
-/// config.y = "${.params.x.y}"
-/// config.debug = "${.params.debug}"
+/// config.y = "${params.x.y}"
+/// config.debug = "${params.debug}"
 /// ```
 #[derive(serde::Deserialize, Default)]
 pub struct Params {
@@ -124,7 +124,7 @@ impl Params {
         else {
             return Ok(expr.into());
         };
-        let Some(path) = path.trim().strip_prefix(".params") else {
+        let Some(path) = path.trim().strip_prefix("params") else {
             return Err(LoadError::UnknownParam {
                 path: path.to_string(),
             });
@@ -132,7 +132,7 @@ impl Params {
         match Self::get(&self.params, path.strip_prefix('.')) {
             Ok(value) => Ok(value),
             Err(unknown_path) => Err(LoadError::UnknownParam {
-                path: format!(".params.{unknown_path}",),
+                path: format!("params.{unknown_path}",),
             }),
         }
     }
@@ -186,9 +186,9 @@ mod tests {
         let params = default_params.merge(user_params);
 
         for (expr, value) in [
-            ("${.params.x}", json!(1)),
-            ("${.params.y}", json!(42)),
-            ("${.params.z}", json!(3)),
+            ("${params.x}", json!(1)),
+            ("${params.y}", json!(42)),
+            ("${params.z}", json!(3)),
         ] {
             assert_eq!(params.substitute_path(expr).unwrap(), value);
         }
@@ -206,11 +206,11 @@ mod tests {
         .unwrap();
 
         for (expr, value) in [
-            ("${.params.x}", json!(42)),
-            ("${.params.y.a}", json!("foo")),
-            ("${.params.z}", json!([1, 2, 3])),
+            ("${params.x}", json!(42)),
+            ("${params.y.a}", json!("foo")),
+            ("${params.z}", json!([1, 2, 3])),
             (
-                "${.params}",
+                "${params}",
                 json!({"x": 42, "y": {"a": "foo", "b": "bar"}, "z": [1,2,3]}),
             ),
             ("hello", json!("hello")),
@@ -231,10 +231,10 @@ mod tests {
         .unwrap();
 
         for (expr, unknown_path) in [
-            ("${.config}", ".config"),
-            ("${.params.foo}", ".params.foo"),
-            ("${.params.foo.a}", ".params.foo"),
-            ("${.params.z.a}", ".params.z.*"),
+            ("${config}", "config"),
+            ("${params.foo}", "params.foo"),
+            ("${params.foo.a}", "params.foo"),
+            ("${params.z.a}", "params.z.*"),
         ] {
             let LoadError::UnknownParam { path } = params.substitute_path(expr).unwrap_err() else {
                 panic!("An error is expected");
@@ -255,10 +255,10 @@ mod tests {
         .unwrap();
 
         let config = json!({
-            "x": "${.params.x}",
-            "y": "${.params.y}",
+            "x": "${params.x}",
+            "y": "${params.y}",
             "z": "unchanged",
-            "unknown": "${.params.unknown}"
+            "unknown": "${params.unknown}"
         });
 
         let expected = json!({
