@@ -23,6 +23,7 @@ use tracing::error;
 use tracing::info;
 
 #[derive(Deserialize)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct FlowConfig {
     // meta info
     version: Option<String>,
@@ -47,6 +48,7 @@ pub struct FlowConfig {
 }
 
 #[derive(Deserialize)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub struct StepConfig {
     #[serde(flatten)]
     step: StepSpec,
@@ -60,6 +62,7 @@ pub struct StepConfig {
 }
 
 #[derive(Deserialize)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub enum StepSpec {
     #[serde(rename = "builtin")]
     Transformer(String),
@@ -69,6 +72,7 @@ pub enum StepSpec {
 }
 
 #[derive(Clone, Deserialize)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub enum InputConfig {
     #[serde(rename = "mqtt")]
     Mqtt { topics: Vec<String> },
@@ -99,6 +103,7 @@ pub enum InputConfig {
 }
 
 #[derive(Deserialize)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
 pub enum OutputConfig {
     #[serde(rename = "mqtt")]
     Mqtt { topic: Option<String> },
@@ -226,15 +231,24 @@ impl FlowConfig {
         let specs = read_to_string(path)
             .await
             .map_err(|err| LoadError::from_io(err, path))?;
-        let mut flow: FlowConfig = toml::from_str(&specs)?;
+        let flow: FlowConfig = toml::from_str(&specs)?;
 
         let params = Params::load_flow_params(path).await?;
-        flow.config = params.substitute_all(&flow.config)?;
-        for step in flow.steps.iter_mut() {
+        flow.substitute_params(&params)
+    }
+
+    fn substitute_params(mut self, params: &Params) -> Result<Self, LoadError> {
+        self.config = params.substitute_all(&self.config)?;
+        for step in self.steps.iter_mut() {
             step.config = params.substitute_all(&step.config)?;
         }
 
-        Ok(flow)
+        Ok(FlowConfig {
+            input: self.input.substitute_params(params)?,
+            output: self.output.substitute_params(params)?,
+            errors: self.errors.substitute_params(params)?,
+            ..self
+        })
     }
 
     pub fn from_step(script: Utf8PathBuf) -> Self {
@@ -382,6 +396,37 @@ impl StepConfig {
     }
 }
 
+impl InputConfig {
+    fn substitute_params(self, params: &Params) -> Result<Self, LoadError> {
+        match self {
+            InputConfig::Mqtt { topics } => Ok(InputConfig::Mqtt {
+                topics: topics
+                    .into_iter()
+                    .map(|t| params.substitute_inner_paths(&t))
+                    .collect(),
+            }),
+            InputConfig::File {
+                path,
+                topic,
+                interval,
+            } => Ok(InputConfig::File {
+                path,
+                topic: topic.map(|t| params.substitute_inner_paths(&t)),
+                interval,
+            }),
+            InputConfig::Process {
+                command,
+                topic,
+                interval,
+            } => Ok(InputConfig::Process {
+                command: params.substitute_inner_paths(&command),
+                topic: topic.map(|t| params.substitute_inner_paths(&t)),
+                interval,
+            }),
+        }
+    }
+}
+
 impl TryFrom<InputConfig> for FlowInput {
     type Error = ConfigError;
     fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
@@ -420,6 +465,17 @@ impl TryFrom<InputConfig> for FlowInput {
                 }
             }
         })
+    }
+}
+
+impl OutputConfig {
+    fn substitute_params(self, params: &Params) -> Result<Self, LoadError> {
+        match self {
+            OutputConfig::Mqtt { topic } => Ok(OutputConfig::Mqtt {
+                topic: topic.map(|t| params.substitute_inner_paths(&t)),
+            }),
+            OutputConfig::File { path } => Ok(OutputConfig::File { path }),
+        }
     }
 }
 
@@ -644,12 +700,80 @@ mod tests {
         assert!(detect_loop("my-flow", &input, &output, true).is_ok());
     }
 
-    #[test_case(FlowOutput::Mqtt { topic: Some(Topic::new("te/another/test").unwrap()) }; "mqtt output different topic")]
+    #[test_case(FlowOutput::Mqtt { topic: Some(Topic::new("te/another/test").unwrap()) }; "mqtt output different topic"
+    )]
     #[test_case(FlowOutput::Mqtt { topic: None }; "mqtt output without fixed topic")]
     fn no_loop_detected_for_different_output_types(output: FlowOutput) {
         let input = FlowInput::Mqtt {
             topics: TopicFilter::new_unchecked("te/loop/+"),
         };
         assert!(detect_loop("my-flow", &input, &output, false).is_ok());
+    }
+
+    #[test]
+    fn params_substitution() {
+        let params_toml = r#"
+        topic.in = "continuous-deployments/deployments/default/rollout"
+        topic.out = "te/device/main///e/"
+        group_name = "foo-group-name"
+        arch = "x86_64"
+        "#;
+
+        let flow_toml = r#"
+        [input.process]
+topic = "${params.topic.in}"
+command = """tedge http post /c8y/service/foo/${params.group_name} --data '{"arch":"${params.arch}"}'"""
+interval = "3600s"
+
+[[steps]]
+script = "main.js"
+
+[output.mqtt]
+topic = "${params.topic.out}"
+"#;
+
+        let expected_flow_toml = r#"
+        [input.process]
+topic = "continuous-deployments/deployments/default/rollout"
+command = """tedge http post /c8y/service/foo/foo-group-name --data '{"arch":"x86_64"}'"""
+interval = "3600s"
+
+[[steps]]
+script = "main.js"
+
+[output.mqtt]
+topic = "te/device/main///e/"
+"#;
+
+        let params = Params::load_toml(params_toml).unwrap();
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
+
+        assert_eq!(expected_flow, flow.substitute_params(&params).unwrap());
+    }
+
+    #[test]
+    fn params_substitute_mqtt_topics() {
+        let params_toml = r#"
+        topic.in = "input"
+        topic.out = "output"
+        child = "child-xyz"
+        "#;
+
+        let flow_toml = r#"
+        input.mqtt.topics = [ "${params.topic.in}", "c8y/#", "te/device/${params.child}///e/"]
+        output.mqtt.topic = "c8y/${params.topic.out}"
+        "#;
+
+        let expected_flow_toml = r#"
+        input.mqtt.topics = [ "input", "c8y/#", "te/device/child-xyz///e/"]
+        output.mqtt.topic = "c8y/output"
+        "#;
+
+        let params = Params::load_toml(params_toml).unwrap();
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
+
+        assert_eq!(expected_flow, flow.substitute_params(&params).unwrap());
     }
 }
