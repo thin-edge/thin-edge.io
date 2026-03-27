@@ -436,7 +436,7 @@ impl InputConfig {
                 topic,
                 interval,
             } => Ok(InputConfig::File {
-                path,
+                path: params.substitute_inner_paths(path.as_str()).into(),
                 topic: topic.map(|t| params.substitute_inner_paths(&t)),
                 interval: interval.map(|i| i.substitute_params(params)).transpose()?,
             }),
@@ -502,7 +502,9 @@ impl OutputConfig {
             OutputConfig::Mqtt { topic } => Ok(OutputConfig::Mqtt {
                 topic: topic.map(|t| params.substitute_inner_paths(&t)),
             }),
-            OutputConfig::File { path } => Ok(OutputConfig::File { path }),
+            OutputConfig::File { path } => Ok(OutputConfig::File {
+                path: params.substitute_inner_paths(path.as_str()).into(),
+            }),
         }
     }
 }
@@ -851,6 +853,30 @@ topic = "te/device/main///e/"
         [[steps]]
         script = "main.js"
         interval = "3600s"
+        "#;
+
+        let params = Params::load_toml(params_toml).unwrap();
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
+
+        assert_eq!(expected_flow, flow.substitute_params(&params).unwrap());
+    }
+
+    #[test]
+    fn params_substitute_paths() {
+        let params_toml = r#"
+        mosquitto.log = "/var/log/mosquitto/mosquitto.log"
+        tedge.errors = "/var/log/tedge/errors.log"
+        "#;
+
+        let flow_toml = r#"
+        input.file.path = "${params.mosquitto.log}"
+        output.file.path = "${params.tedge.errors}"
+        "#;
+
+        let expected_flow_toml = r#"
+        input.file.path = "/var/log/mosquitto/mosquitto.log"
+        output.file.path = "/var/log/tedge/errors.log"
         "#;
 
         let params = Params::load_toml(params_toml).unwrap();
