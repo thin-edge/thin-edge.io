@@ -8,6 +8,7 @@ use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Error;
 use camino::Utf8PathBuf;
+use clap::ValueHint;
 use std::str::FromStr;
 use std::time::SystemTime;
 use tedge_config::TEdgeConfig;
@@ -33,7 +34,7 @@ pub enum TEdgeFlowsCli {
         /// Path to the directory of flows and steps
         ///
         /// Default to /etc/tedge/mappers/$MAPPER.$PROFILE/flows
-        #[clap(long, global = true)]
+        #[clap(long, value_hint = ValueHint::DirPath, global = true)]
         flows_dir: Option<Utf8PathBuf>,
 
         /// List flows processing messages published on this topic
@@ -56,7 +57,7 @@ pub enum TEdgeFlowsCli {
         /// Path to the directory of flows and steps
         ///
         /// Default to /etc/tedge/mappers/$MAPPER.$PROFILE/flows
-        #[clap(long, global = true)]
+        #[clap(long, value_hint = ValueHint::DirPath, global = true)]
         flows_dir: Option<Utf8PathBuf>,
 
         /// Path to the flow step script or TOML flow definition
