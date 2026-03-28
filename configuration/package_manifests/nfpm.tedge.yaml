@@ -74,6 +74,11 @@ deb:
     Vcs-Git: ${CI_PROJECT_URL}
   compression: xz
 
+replaces:
+  - tedge-flows-plugin
+provides:
+  - tedge-flows-plugin
+
 contents:
   # binary
   - src: .build/tedge
