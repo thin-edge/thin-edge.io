@@ -1,0 +1,22 @@
+[package]
+name = "netdata_collector"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = { workspace = true }
+netdata-plugin = "0.2.0"
+serde_json = { workspace = true }
+tedge_actors = { workspace = true }
+tedge_api = { workspace = true }
+time = { workspace = true }
+
+[lints]
+workspace = true
