@@ -59,3 +59,13 @@ fi
 if [ -d /usr/share/fish/completions ]; then
     tedge completions fish > /usr/share/fish/completions/tedge.fish ||:
 fi
+
+# On debian set the default plugin to apt to reduce friction if users
+# have not been using types and with the addition of the flow plugin
+# that it might cause unexpected failures
+if command -V apt >/dev/null 2>&1 && [ -x /etc/tedge/sm-plugins/apt ]; then
+    if ! tedge config get software.plugin.default >/dev/null 2>&1; then
+        echo "Setting default software plugin to apt" >&2
+        tedge config set software.plugin.default apt ||:
+    fi
+fi
