@@ -74,6 +74,11 @@ deb:
     Vcs-Git: ${CI_PROJECT_URL}
   compression: xz
 
+replaces:
+  - tedge-flows-plugin
+provides:
+  - tedge-flows-plugin
+
 contents:
   # binary
   - src: .build/tedge
@@ -92,6 +97,12 @@ contents:
     file_info:
       mode: 0644
     packager: rpm
+  
+  # preset software management plugins
+  # flow management
+  - src: /usr/bin/tedge-flows-plugin
+    dst: /etc/tedge/sm-plugins/flow
+    type: symlink
 
   # preset config plugins
 

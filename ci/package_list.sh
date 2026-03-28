@@ -10,7 +10,6 @@ RELEASE_PACKAGES=(
     c8y-remote-access-plugin
     c8y-firmware-plugin
     tedge-p11-server
-    tedge-flows-plugin
 )
 export RELEASE_PACKAGES
 

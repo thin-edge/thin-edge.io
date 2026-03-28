@@ -33,7 +33,6 @@ overrides:
         # Watchdog does not make sense on apk as it does not use systemd
         # - tedge-watchdog = ${APK_VERSION}
         - tedge-apt-plugin = ${APK_VERSION}
-        - tedge-flows-plugin = ${APK_VERSION}
         - c8y-remote-access-plugin = ${APK_VERSION}
         - c8y-firmware-plugin = ${APK_VERSION}
   rpm:
@@ -48,7 +47,6 @@ overrides:
         - tedge-watchdog = ${RPM_VERSION}-1
         # tedge-apt-plugin does not make sense on rpm
         # - tedge-apt-plugin = ${RPM_VERSION}-1
-        - tedge-flows-plugin = ${RPM_VERSION}-1
         - c8y-remote-access-plugin = ${RPM_VERSION}-1
         - c8y-firmware-plugin = ${RPM_VERSION}-1
   deb:
@@ -59,7 +57,6 @@ overrides:
         - tedge-agent (= ${DEB_VERSION})
         - tedge-watchdog (= ${DEB_VERSION})
         - tedge-apt-plugin (= ${DEB_VERSION})
-        - tedge-flows-plugin (= ${DEB_VERSION})
         - c8y-remote-access-plugin (= ${DEB_VERSION})
         - c8y-firmware-plugin (= ${DEB_VERSION})
 
