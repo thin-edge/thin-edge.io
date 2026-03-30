@@ -122,7 +122,7 @@ impl Params {
             .strip_prefix("${")
             .and_then(|path| path.strip_suffix("}"))
         else {
-            return Ok(expr.into());
+            return Ok(self.substitute_inner_paths(expr).into());
         };
         let Some(path) = path.trim().strip_prefix("params") else {
             return Err(LoadError::UnknownParam {
@@ -135,6 +135,37 @@ impl Params {
                 path: format!("params.{unknown_path}",),
             }),
         }
+    }
+
+    /// Substitute param values for the path expressions of an input string
+    ///
+    /// Compared to substitute_path which returns JSON value,
+    /// this method operate on strings. The path expressions of the input are replaced
+    /// by the string value reference by the path expressions.
+    ///
+    /// If a path reference a parameter value that is not a string,
+    /// the string representation of that value is inserted.
+    ///
+    /// If a path reference no known parameter, the string "null" is used the replacement string.
+    pub fn substitute_inner_paths(&self, input: &str) -> String {
+        input
+            .split_inclusive('}')
+            .flat_map(|s| match s.find("${") {
+                None => vec![s.to_string()],
+                Some(i) => {
+                    let (prefix, expr) = s.split_at(i);
+                    let value = self
+                        .substitute_path(expr)
+                        .map_err(|err| log::warn!("{err:?}"))
+                        .unwrap_or(Value::Null);
+                    let value_str = match value {
+                        Value::String(s) => s.to_string(),
+                        _ => value.to_string(),
+                    };
+                    vec![prefix.to_string(), value_str]
+                }
+            })
+            .collect()
     }
 
     fn get(values: &Map<String, Value>, steps: Option<&str>) -> Result<Value, String> {
@@ -214,8 +245,38 @@ mod tests {
                 json!({"x": 42, "y": {"a": "foo", "b": "bar"}, "z": [1,2,3]}),
             ),
             ("hello", json!("hello")),
+            (
+                "x = ${params.x} and y = ${params.y.a}",
+                json!("x = 42 and y = foo"),
+            ),
         ] {
             assert_eq!(params.substitute_path(expr).unwrap(), value);
+        }
+    }
+
+    #[test]
+    fn substitute_inner_paths() {
+        let params = Params::load_toml(
+            r#"
+        x = 42
+        y = { a = "foo", b = "bar" }
+        z = [1,2,3]
+        "#,
+        )
+        .unwrap();
+
+        for (expr, value) in [
+            (
+                "x = ${params.x} and y = ${params.y.a}",
+                "x = 42 and y = foo",
+            ),
+            ("-- ${params.x} --", "-- 42 --"),
+            ("-- ${params.y.a} --", "-- foo --"),
+            ("-- ${params.z} --", "-- [1,2,3] --"),
+            ("-- ${params.y} --", r#"-- {"a":"foo","b":"bar"} --"#),
+            ("-- ${params.unknown} --", r#"-- null --"#),
+        ] {
+            assert_eq!(params.substitute_inner_paths(expr).as_str(), value);
         }
     }
 
