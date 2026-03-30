@@ -63,7 +63,7 @@ pub enum TEdgeFlowsCli {
         /// Path to the flow step script or TOML flow definition
         ///
         /// If none is provided, applies all the matching flows
-        #[clap(long)]
+        #[clap(long, value_hint = ValueHint::FilePath)]
         flow: Option<Utf8PathBuf>,
 
         /// JSON object used to initialize the flow mapper context
