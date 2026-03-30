@@ -70,6 +70,18 @@ use tedge_utils::file::create_directory_with_defaults;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
+// Helper to publish a registration message and consume mapper responses
+// (mapped registration + supported-ops) so tests can proceed with a clean
+// input/output interaction. We skip 2 messages because the mapper now
+// emits a supported-operations (`114`) record on registration.
+pub(crate) async fn publish_registration_and_consume<B>(mqtt: &mut B, msg: MqttMessage)
+where
+    B: tedge_actors::Sender<MqttMessage> + MessageReceiverExt<MqttMessage>,
+{
+    mqtt.send(msg).await.expect("Send failed");
+    mqtt.skip(2).await;
+}
+
 #[tokio::test]
 async fn mapper_publishes_init_messages_on_startup() {
     // Start SM Mapper
@@ -144,6 +156,7 @@ async fn child_device_registration_mapping() {
     ))
     .await
     .unwrap();
+    mqtt.skip(1).await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -169,6 +182,7 @@ async fn child_device_registration_mapping() {
     ))
     .await
     .unwrap();
+    mqtt.skip(1).await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -213,6 +227,7 @@ async fn custom_topic_scheme_registration_mapping() {
         )],
     )
     .await;
+    mqtt.skip(1).await;
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/custom/child1//"),
@@ -229,6 +244,7 @@ async fn custom_topic_scheme_registration_mapping() {
         )],
     )
     .await;
+    mqtt.skip(1).await;
 
     // Service with custom scheme
     mqtt.send(MqttMessage::new(
@@ -270,7 +286,7 @@ async fn service_registration_mapping() {
     .await
     .unwrap();
 
-    mqtt.skip(2).await; // Skip mappings of above child device creation messages and republished messages with @id
+    mqtt.skip(4).await; // Skip mappings of above child device creation messages and republished messages with @id
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/collectd"),
@@ -383,13 +399,14 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
-        r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
+    publish_registration_and_consume(
+        &mut mqtt,
+        MqttMessage::new(
+            &Topic::new_unchecked("te/device/external_sensor//"),
+            r#"{"@type": "child-device"}"#,
+        ),
+    )
+    .await;
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/external_sensor///a/temperature_high"),
@@ -467,13 +484,14 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
-        r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
+    publish_registration_and_consume(
+        &mut mqtt,
+        MqttMessage::new(
+            &Topic::new_unchecked("te/device/external_sensor//"),
+            r#"{"@type": "child-device"}"#,
+        ),
+    )
+    .await;
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///a/custom_temperature_alarm"
@@ -569,13 +587,14 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
     skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
-        r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
+    publish_registration_and_consume(
+        &mut mqtt,
+        MqttMessage::new(
+            &Topic::new_unchecked("te/device/external_sensor//"),
+            r#"{"@type": "child-device"}"#,
+        ),
+    )
+    .await;
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///a/child_custom_msg_pressure_alarm"
@@ -622,13 +641,14 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
     skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
-        r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
+    publish_registration_and_consume(
+        &mut mqtt,
+        MqttMessage::new(
+            &Topic::new_unchecked("te/device/external_sensor//"),
+            r#"{"@type": "child-device"}"#,
+        ),
+    )
+    .await;
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///a/child_msg_to_text_pressure_alarm"
@@ -714,13 +734,14 @@ async fn c8y_mapper_child_alarm_empty_payload() {
     skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
-        r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
+    publish_registration_and_consume(
+        &mut mqtt,
+        MqttMessage::new(
+            &Topic::new_unchecked("te/device/external_sensor//"),
+            r#"{"@type": "child-device"}"#,
+        ),
+    )
+    .await;
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/external_sensor///a/empty_temperature_alarm"),
@@ -795,13 +816,14 @@ async fn c8y_mapper_child_event() {
     skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
-        r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
+    publish_registration_and_consume(
+        &mut mqtt,
+        MqttMessage::new(
+            &Topic::new_unchecked("te/device/external_sensor//"),
+            r#"{"@type": "child-device"}"#,
+        ),
+    )
+    .await;
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///e/custom_event"
@@ -857,7 +879,7 @@ async fn c8y_mapper_child_service_event() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(2).await; // Skip the mapped registration messages
+    mqtt.skip(4).await; // Skip the mapped registration messages
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor/service/service_child/e/custom_event"
@@ -961,7 +983,7 @@ async fn c8y_mapper_child_service_alarm() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(2).await; // Skip the mapped registration messages
+    mqtt.skip(3).await; // Skip the mapped registration messages
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor/service/service_child/a/custom_alarm"
@@ -1261,7 +1283,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
+    mqtt.skip(2).await; // Skip the mapped registration message
 
     // Add a new operation for the child device
     // Simulate FsEvent for the creation of a new operation file
@@ -1335,6 +1357,7 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
     )
     .await
     .expect("Send failed");
+
     mqtt.send(
         MqttMessage::new(
             &Topic::new_unchecked("te/device/child11//"),
@@ -1355,10 +1378,12 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
         &mut mqtt,
         [
             ("c8y/s/us", "101,child1,child1,thin-edge.io-child,false"),
+            ("c8y/s/us/child1", "114"),
             (
                 "c8y/s/us/child1",
                 "101,child11,child11,thin-edge.io-child,false",
             ),
+            ("c8y/s/us/child11", "114"),
         ],
     )
     .await;
@@ -2283,7 +2308,7 @@ async fn mapper_converts_custom_operation_for_child_device() {
     );
     mqtt.send(reg_message).await.unwrap();
 
-    mqtt.skip(1).await;
+    mqtt.skip(2).await;
 
     // indicate that child device supports the operation
     let capability_message = MqttMessage::new(
@@ -2378,10 +2403,12 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
                 "c8y/s/us",
                 "101,immediate_child,immediate_child,thin-edge.io-child,false",
             ),
+            ("c8y/s/us/immediate_child", "114"),
             (
                 "c8y/s/us/immediate_child",
                 "101,nested_child,nested_child,thin-edge.io-child,false",
             ),
+            ("c8y/s/us/nested_child", "114"),
             (
                 "c8y/s/us/nested_child",
                 "303,ThinEdgeAlarm,Temperature high,2023-10-13T15:00:07.172674353Z",
@@ -2435,10 +2462,12 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
                 "c8y/s/us",
                 "101,immediate_child,immediate_child,thin-edge.io-child,false",
             ),
+            ("c8y/s/us/immediate_child", "114"),
             (
                 "c8y/s/us/immediate_child",
                 "101,nested_child,nested_child,thin-edge.io-child,false",
             ),
+            ("c8y/s/us/nested_child", "114"),
         ],
     )
     .await;
@@ -2507,7 +2536,7 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
         .await
         .unwrap();
 
-    mqtt.skip(3).await;
+    mqtt.skip(5).await;
 
     // Expect child device service creating minor temperature alarm messages
     assert_received_contains_str(
@@ -2569,7 +2598,7 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
     .await
     .unwrap();
 
-    mqtt.skip(3).await;
+    mqtt.skip(5).await;
 
     // Expect nested child device service creating the event messages
     assert_received_includes_json(
@@ -2876,7 +2905,7 @@ async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device()
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
+    mqtt.skip(2).await; // Skip the mapped registration message
 
     // Simulate config_snapshot cmd metadata message
     mqtt.send(MqttMessage::new(
@@ -2977,6 +3006,7 @@ async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device()
 
 #[tokio::test]
 async fn mapper_publishes_all_supported_operations_on_signal() {
+    // marcel: AFAIK this layout isn't explained anywhere
     let ttd = TempTedgeDir::new();
     ttd.dir("operations").dir("c8y").file("c8y_Restart");
     ttd.dir("operations")
@@ -3029,8 +3059,9 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(3).await; // Skip registration messages
+    mqtt.skip(5).await; // Skip registration messages
 
+    // TODO: in the future this may sync more than what's currently tested
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/tedge-mapper-c8y/signal/sync"),
         "{}",
