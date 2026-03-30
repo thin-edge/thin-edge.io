@@ -2,7 +2,6 @@
 use std::result::Result::Ok;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::DeviceTopicId;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::mqtt_topics::ServiceTopicId;
@@ -17,14 +16,22 @@ pub async fn start_basic_actors(
 ) -> Result<(Runtime, MqttActorBuilder), anyhow::Error> {
     let mut runtime = Runtime::new();
 
-    let mut mqtt_actor = get_mqtt_actor(mapper_name, config).await?;
+    let device_topic_id = &config.mqtt.device_topic_id;
+    let session_name = if device_topic_id.is_default_main_device() {
+        mapper_name.to_string()
+    } else {
+        format!("{mapper_name}#{device_topic_id}")
+    };
+    let mut mqtt_actor = get_mqtt_actor(&session_name, config).await?;
 
     //Instantiate health monitor actor
     let service = Service {
         service_topic_id: ServiceTopicId::new(
-            EntityTopicId::default_main_service(mapper_name).unwrap(),
+            device_topic_id
+                .default_service_for_device(mapper_name)
+                .unwrap(),
         ),
-        device_topic_id: DeviceTopicId::new(EntityTopicId::default_main_device()),
+        device_topic_id: DeviceTopicId::new(device_topic_id.clone()),
     };
     let mqtt_schema = MqttSchema::with_root(config.mqtt.topic_root.clone());
     let health_actor = HealthMonitorBuilder::from_service_topic_id(
