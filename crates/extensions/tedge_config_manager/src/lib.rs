@@ -47,12 +47,10 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
-use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::move_file;
-use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
-use tedge_utils::fs::AtomFileError;
+use tedge_utils::fs::persist_file_with_template;
 use toml::toml;
 
 /// An instance of the config manager
@@ -71,7 +69,7 @@ impl ConfigManagerBuilder {
         fs_notify: &mut impl MessageSource<FsWatchEvent, Vec<PathBuf>>,
         downloader_actor: &mut impl Service<ConfigDownloadRequest, ConfigDownloadResult>,
         uploader_actor: &mut impl Service<ConfigUploadRequest, ConfigUploadResult>,
-    ) -> Result<Self, FileError> {
+    ) -> Result<Self, anyhow::Error> {
         Self::init(&config).await?;
 
         let box_builder = SimpleMessageBoxBuilder::new("Tedge-Config-Manager", 16);
@@ -105,13 +103,14 @@ impl ConfigManagerBuilder {
         );
     }
 
-    pub async fn init(config: &ConfigManagerConfig) -> Result<(), FileError> {
-        let workflow_file = config.ops_dir.join("config_update.toml");
-        if !workflow_file.exists() {
-            let workflow_definition = include_str!("resources/config_update.toml");
+    pub async fn init(config: &ConfigManagerConfig) -> Result<(), anyhow::Error> {
+        // Initialize config_update.toml with template pattern:
+        // - Always update config_update.toml.template with the latest template definition
+        // - Only update config_update.toml if it doesn't exist or hasn't been customized by the user
+        let workflow_definition = include_str!("resources/config_update.toml");
 
-            create_file_with_defaults(workflow_file, Some(workflow_definition)).await?;
-        }
+        persist_file_with_template(&config.ops_dir, "config_update.toml", workflow_definition)
+            .await?;
 
         if config.plugin_config_path.exists() {
             return Ok(());
@@ -153,12 +152,7 @@ impl ConfigManagerBuilder {
             mode = 0o644
         }
         .to_string();
-        atomically_write_file_sync(&config.plugin_config_path, example_config.as_bytes()).map_err(
-            |AtomFileError::WriteError { source, .. }| FileError::FileCreateFailed {
-                file: config.plugin_config_path.to_string_lossy().to_string(),
-                from: source,
-            },
-        )?;
+        atomically_write_file_sync(&config.plugin_config_path, example_config.as_bytes())?;
 
         Ok(())
     }

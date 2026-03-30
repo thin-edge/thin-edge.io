@@ -17,15 +17,38 @@ ${CONFIG_URL}       None
 
 *** Test Cases ***
 Default Workflow
+    ${original_config}    Execute Command    cat /etc/tedge/operations/config_update.toml
+    ${original_template}    Execute Command    cat /etc/tedge/operations/config_update.toml.template
+
+    Should Be Equal    ${original_config}    ${original_template}
+
     Update Config And Verify
 
 Workflow Override With Custom Set Script
+    ${original_config}    Execute Command    cat /etc/tedge/operations/config_update.toml
+    ${original_template}    Execute Command    cat /etc/tedge/operations/config_update.toml.template
+
     # Workflow with custom set script
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/config_update_custom_set.toml
     ...    /etc/tedge/operations/config_update.toml
 
+    ${updated_config}    Execute Command    cat /etc/tedge/operations/config_update.toml
+    Should Not Be Equal    ${original_config}    ${updated_config}
+
     Update Config And Verify
+
+    Execute Command    systemctl restart tedge-agent
+
+    ${config_after_restart}    Execute Command    cat /etc/tedge/operations/config_update.toml
+    ${template_after_restart}    Execute Command    cat /etc/tedge/operations/config_update.toml.template
+
+    # Verify customized config was preserved (not overwritten)
+    Should Be Equal    ${config_after_restart}    ${updated_config}
+    Should Be Equal    ${template_after_restart}    ${original_template}
+
+    # Verify the two files now have different content
+    Should Not Be Equal    ${config_after_restart}    ${template_after_restart}
 
 Legacy Workflow
     # Legacy workflow definition
