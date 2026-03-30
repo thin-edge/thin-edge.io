@@ -9,7 +9,6 @@ use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
 use crate::custom::mapper::CustomMapper;
-use crate::flows::GenMapper;
 use anyhow::Context;
 use camino::Utf8Path;
 use clap::Parser;
@@ -72,7 +71,6 @@ pub use core::mappers_dir::warn_misconfigured_mapper_dirs;
 pub use custom::config as custom_mapper_config;
 /// Re-export custom mapper config resolution for use by CLI commands.
 pub use custom::resolve as custom_mapper_resolve;
-mod flows;
 
 /// Set the cloud profile either from the CLI argument or env variable,
 /// then set the environment variable so child processes automatically
@@ -118,7 +116,6 @@ fn lookup_component(component_name: MapperName) -> anyhow::Result<Box<dyn TEdgeC
             );
             Box::new(CustomMapper { name })
         }
-        MapperName::Local => Box::new(GenMapper),
     })
 }
 
@@ -168,7 +165,6 @@ pub enum MapperName {
         profile: Option<ProfileName>,
     },
     Collectd,
-    Local,
     /// Run a user-defined mapper from `/etc/tedge/mappers/{name}/`.
     ///
     /// The mapper name must match `[a-z][a-z0-9-]*`.
@@ -203,7 +199,6 @@ impl fmt::Display for MapperName {
                 "tedge-mapper-{}",
                 args.first().map(String::as_str).unwrap_or("<unknown>")
             ),
-            MapperName::Local => write!(f, "tedge-mapper-local"),
         }
     }
 }

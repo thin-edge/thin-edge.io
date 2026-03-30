@@ -25,7 +25,6 @@ use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
 use tedge_config::tedge_toml::PrivateKeyType;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
-use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowsMapperBuilder;
 use tedge_flows::FlowsMapperConfig;
 use tedge_mqtt_bridge::config_toml::AuthMethod;
@@ -269,7 +268,7 @@ async fn build_flows_actors(
     create_directory_with_defaults(&flows_dir)
         .await
         .with_context(|| format!("Failed to create flows directory '{flows_dir}'"))?;
-    let flows = ConnectedFlowRegistry::new(&flows_dir);
+    let flows = crate::flow_registry(flows_dir).await?;
     let fs_actor = FsWatchActorBuilder::new();
     let cmd_watcher_actor = WatchActorBuilder::new();
     let flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;
