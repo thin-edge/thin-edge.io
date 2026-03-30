@@ -246,6 +246,10 @@ debug = false
 [time]
 format = "unix"
 reformat = true
+
+[interval]
+hourly = "3600s"
+daily = "24h"
 ```
 
 These values can then be used as parameters by all the flows which definition `.toml` file sites in the same directory.
@@ -263,6 +267,7 @@ input.mqtt.topics = ["foo"]
 [[steps]]
 script = "main.js"
 config = { debug = "${params.debug}", format = "${params.time.format}" }
+interval = "${params.hourly}"
 ```
 
 :::note
@@ -278,6 +283,37 @@ and `params.toml` (the user-provided values).
 To parameterize a flow, the user should copy the `params.toml.template` file to the `params.toml` location,
 and then customize any of the values inside the file.
 Ideally the `params.toml.template` includes some documentation about each parameter to assist the user.
+:::
+
+Parameter values can be used to parameterize the following parts of a flow:
+
+- Flow input
+  - `input.mqtt.topics`
+  - `input.process.topic`
+  - `input.process.command` 
+  - `input.process.interval` 
+  - `input.file.topic`
+  - `input.file.path` 
+  - `input.file.interval`
+- Flow config
+  - `config.*`
+- Steps
+  - `steps[].config.*`
+  - `steps[].interval`
+- Flow output
+  - `output.mqtt.topic` 
+  - `output.file.path` 
+
+:::note
+Substitution rules differ slightly when applied to `config` objects compared to topics, commands, paths and intervals.
+
+For flows and steps config objects, a substitution applies to a given config property,
+as in `config = { x = ${params.some.parameter}, y = ${params.another.parameter}  }`
+and the substituted values can be arbitrary values (strings, numbers, booleans, arrays or objects).
+
+For topics, commands, paths and intervals, several substitutions can be applied to build a string
+(a topic, command, path or interval definition) from several independent parameters,
+as in `input.mqtt.topics = [ "te/device/${params.child}/service/${params.service}/m/${params.measurement.type}" ]`
 :::
 
 ### Transformation
