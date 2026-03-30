@@ -1668,12 +1668,16 @@ pub(crate) mod tests {
 
         let messages = converter.convert(&in_message).await;
 
+        // TODO: only assert things relevant to what the test tests
         assert_messages_matching(
             &messages,
-            [(
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child,false".into(),
-            )],
+            [
+                (
+                    "c8y/s/us",
+                    "101,test-device:device:child1,child1,thin-edge.io-child,false".into(),
+                ),
+                ("c8y/s/us/test-device:device:child1", "114".into()),
+            ],
         );
     }
 
@@ -1706,10 +1710,13 @@ pub(crate) mod tests {
 
         assert_messages_matching(
             &messages,
-            [(
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child,true".into(),
-            )],
+            [
+                (
+                    "c8y/s/us",
+                    "101,test-device:device:child1,child1,thin-edge.io-child,true".into(),
+                ),
+                ("c8y/s/us/test-device:device:child1", "114".into()),
+            ],
         );
     }
 
