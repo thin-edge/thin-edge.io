@@ -1,3 +1,4 @@
+use crate::cli::common::mapper_config_key_completions;
 use crate::cli::common::resolve_cloud;
 use crate::cli::common::MaybeBorrowedCloud;
 use crate::command::BuildCommand;
@@ -6,6 +7,7 @@ use crate::log::MaybeFancy;
 use crate::ConfigError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use clap_complete::ArgValueCandidates;
 use tedge_config::TEdgeConfig;
 use tedge_mapper::custom_mapper_config::load_mapper_config;
 use tedge_mapper::custom_mapper_config::scan_mappers_shallow;
@@ -39,6 +41,7 @@ pub enum MapperConfigCmd {
     /// All other keys are read directly from `mapper.toml`.
     Get {
         /// The key to look up, e.g. `thingsboard.url`
+        #[arg(add(ArgValueCandidates::new(mapper_config_key_completions)))]
         key: String,
     },
 }
