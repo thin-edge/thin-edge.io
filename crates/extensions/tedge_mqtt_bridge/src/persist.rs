@@ -9,7 +9,6 @@ use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::change_mode;
 use tedge_utils::file::change_user_and_group;
-use tedge_utils::file::{self};
 use tedge_utils::fs;
 use tracing::warn;
 
@@ -36,38 +35,23 @@ pub async fn persist_bridge_config_file(
     content: &str,
 ) -> anyhow::Result<()> {
     let config_path = dir.join(name).with_extension("toml");
-    let disabled_config_path = dir.join(name).with_extension("toml.disabled");
     let template_path = dir.join(name).with_extension("toml.template");
 
+    // Persist a copy of bridge config definition to be used by users as a template.
     // Don't update the flow definition if overridden or disabled
-    let prior_config = tokio::fs::read(&config_path).await.ok();
-    let prior_template = tokio::fs::read(&template_path).await.ok();
-    let overridden = prior_config != prior_template;
-    let disabled = tokio::fs::try_exists(&disabled_config_path)
+    let name_toml = format!("{}.toml", name);
+    fs::persist_file_with_template(dir, &name_toml, content)
         .await
-        .unwrap_or(false);
-    let update_flow = !overridden && !disabled;
+        .map_err(anyhow::Error::msg)?;
 
-    // Persist a copy of bridge config definition to be used by users as a template
-    file::create_directory_with_defaults(dir).await?;
-    fs::atomically_write_file_async(&template_path, content.as_bytes()).await?;
-
-    if let Err(err) = change_user_and_group(&template_path, "tedge", "tedge").await {
-        warn!("failed to set file ownership for '{template_path}': {err}");
-    }
-
-    if let Err(err) = change_mode(&template_path, 0o644).await {
-        warn!("failed to set file permissions for '{template_path}': {err}");
-    }
-
-    if update_flow {
-        fs::atomically_write_file_async(&config_path, content.as_bytes()).await?;
-        if let Err(err) = change_user_and_group(&config_path, "tedge", "tedge").await {
-            warn!("failed to set file ownership for '{config_path}': {err}");
+    // Set file ownership and permissions on both files
+    for path in [&config_path, &template_path] {
+        if let Err(err) = change_user_and_group(path, "tedge", "tedge").await {
+            warn!("failed to set file ownership for '{path}': {err}");
         }
 
-        if let Err(err) = change_mode(&config_path, 0o644).await {
-            warn!("failed to set file permissions for '{config_path}': {err}");
+        if let Err(err) = change_mode(path, 0o644).await {
+            warn!("failed to set file permissions for '{path}': {err}");
         }
     }
 
