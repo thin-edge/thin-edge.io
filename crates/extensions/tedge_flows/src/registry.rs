@@ -2,6 +2,7 @@ use crate::config::ConfigError;
 use crate::config::FlowConfig;
 use crate::flow::Flow;
 use crate::js_runtime::JsRuntime;
+use crate::params::MapperParams;
 use crate::transformers::BuiltinTransformers;
 use crate::transformers::Transformer;
 use crate::transformers::TransformerBuilder;
@@ -27,19 +28,23 @@ pub trait FlowRegistry {
     fn store(&self) -> &FlowStore<Self::Flow>;
     fn store_mut(&mut self) -> &mut FlowStore<Self::Flow>;
 
+    fn mapper_params(&self) -> &dyn MapperParams;
+
     fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + '_;
 }
 
 pub struct BaseFlowRegistry {
     flows: FlowStore<Flow>,
     builtins: BuiltinTransformers,
+    mapper_params: Box<dyn MapperParams>,
 }
 
 impl BaseFlowRegistry {
-    pub fn new(config_dir: impl AsRef<Utf8Path>) -> Self {
+    pub fn new(mapper_params: impl MapperParams, flows_dir: impl AsRef<Utf8Path>) -> Self {
         BaseFlowRegistry {
-            flows: FlowStore::new(config_dir),
+            flows: FlowStore::new(flows_dir),
             builtins: BuiltinTransformers::default(),
+            mapper_params: Box::new(mapper_params),
         }
     }
 }
@@ -66,6 +71,10 @@ impl FlowRegistry for BaseFlowRegistry {
 
     fn builtins_mut(&mut self) -> &mut BuiltinTransformers {
         &mut self.builtins
+    }
+
+    fn mapper_params(&self) -> &dyn MapperParams {
+        self.mapper_params.as_ref()
     }
 
     fn deadlines(&self) -> impl Iterator<Item = tokio::time::Instant> + '_ {
@@ -169,7 +178,8 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
     }
 
     async fn load_all_flows_from_dir(&mut self, path: &Utf8Path, js_runtime: &mut JsRuntime) {
-        let (loaded_flows, unloaded_flows) = FlowConfig::load_all_flows(path).await;
+        let mapper_config = self.mapper_params();
+        let (loaded_flows, unloaded_flows) = FlowConfig::load_all_flows(mapper_config, path).await;
         for (path, config) in loaded_flows.into_iter() {
             self.load_config(js_runtime, &path, config).await;
         }
@@ -179,7 +189,8 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
     }
 
     async fn load_single_flow(&mut self, js_runtime: &mut JsRuntime, flow: &Utf8Path) {
-        if let Some(config) = FlowConfig::load_single_flow(flow).await {
+        let mapper_config = self.mapper_params();
+        if let Some(config) = FlowConfig::load_single_flow(mapper_config, flow).await {
             self.load_config(js_runtime, flow, config).await;
         } else {
             self.store_mut().add_unloaded(flow.to_owned());
@@ -203,7 +214,8 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
             return;
         }
         info!(target: "flows", "Loading flow {path}");
-        if let Some(config) = FlowConfig::load_single_flow(path).await {
+        let mapper_config = self.mapper_params();
+        if let Some(config) = FlowConfig::load_single_flow(mapper_config, path).await {
             self.load_config(js_runtime, path, config).await;
         } else {
             self.store_mut().add_unloaded(path.to_owned());

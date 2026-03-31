@@ -4,7 +4,7 @@ use crate::flow::FlowOutput;
 use crate::flow::FlowResult;
 use crate::flow::Message;
 use crate::flow::SourceTag;
-use crate::params::Params;
+use crate::params::is_params_file;
 use crate::registry::FlowRegistryExt;
 use crate::registry::RegistrationStatus;
 use crate::runtime::MessageProcessor;
@@ -490,7 +490,7 @@ impl FlowsMapper {
     async fn on_path_updated(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
         if path.is_dir() {
             self.on_directory_updated(path).await?;
-        } else if Params::is_params_file(path) {
+        } else if is_params_file(path) {
             self.on_params_updated(path).await?;
         } else if path.is_file() {
             self.on_file_updated(path).await?;
@@ -503,7 +503,7 @@ impl FlowsMapper {
 
     /// Remove all flows and scripts that are currently loaded if they are prefixed by the path.
     async fn on_path_removed(&mut self, path: &Utf8Path) -> Result<(), RuntimeError> {
-        if Params::is_params_file(path) {
+        if is_params_file(path) {
             return self.on_params_updated(path).await;
         }
 

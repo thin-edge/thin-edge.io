@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 
 #[cfg(feature = "aws")]
@@ -268,6 +269,8 @@ pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
 pub(crate) async fn flow_registry(
     flows_dir: impl AsRef<Utf8Path>,
 ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
+    let mapper_config = HashMap::new();
+
     if let Err(err) = create_directory_with_defaults(flows_dir.as_ref()).await {
         error!(
             "failed to create flow directory '{}': {err}",
@@ -275,7 +278,7 @@ pub(crate) async fn flow_registry(
         );
         return Err(err)?;
     };
-    let mut flows = ConnectedFlowRegistry::new(flows_dir);
+    let mut flows = ConnectedFlowRegistry::new(mapper_config, flows_dir);
     load_builtin_transformers(&mut flows);
     Ok(flows)
 }

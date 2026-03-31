@@ -10,6 +10,7 @@ use crate::input_source::FilePollingSource;
 use crate::input_source::FileStreamingSource;
 use crate::input_source::PollingSource;
 use crate::input_source::StreamingSource;
+use crate::params::MapperParams;
 use crate::registry::FlowRegistry;
 use crate::registry::FlowStore;
 use crate::transformers::BuiltinTransformers;
@@ -135,13 +136,15 @@ fn polling_source(input: FlowInput) -> Option<Box<dyn PollingSource>> {
 pub struct ConnectedFlowRegistry {
     flows: FlowStore<ConnectedFlow>,
     builtins: BuiltinTransformers,
+    mapper_params: Box<dyn MapperParams>,
 }
 
 impl ConnectedFlowRegistry {
-    pub fn new(config_dir: impl AsRef<Utf8Path>) -> Self {
+    pub fn new(mapper_params: impl MapperParams, flows_dir: impl AsRef<Utf8Path>) -> Self {
         ConnectedFlowRegistry {
-            flows: FlowStore::new(config_dir),
+            flows: FlowStore::new(flows_dir),
             builtins: BuiltinTransformers::default(),
+            mapper_params: Box::new(mapper_params),
         }
     }
 }
@@ -168,6 +171,10 @@ impl FlowRegistry for ConnectedFlowRegistry {
 
     fn builtins_mut(&mut self) -> &mut BuiltinTransformers {
         &mut self.builtins
+    }
+
+    fn mapper_params(&self) -> &dyn MapperParams {
+        self.mapper_params.as_ref()
     }
 
     fn deadlines(&self) -> impl Iterator<Item = Instant> + '_ {

@@ -9,6 +9,7 @@ use anyhow::Context;
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use clap::ValueHint;
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::SystemTime;
 use tedge_config::TEdgeConfig;
@@ -198,7 +199,8 @@ impl TEdgeFlowsCli {
         flows_dir: &Utf8PathBuf,
         js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, LoadError> {
-        let mut registry = BaseFlowRegistry::new(flows_dir);
+        let mapper_config = HashMap::new();
+        let mut registry = BaseFlowRegistry::new(mapper_config, flows_dir);
         tedge_mapper::load_builtin_transformers(&mut registry);
         let context = FlowContextHandle::default();
         MessageProcessor::with_context(registry, js_config, context).await

@@ -14,6 +14,7 @@ use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::proxy_url::Protocol;
 use c8y_api::smartrest::topic::C8yTopic;
 use serde_json::json;
+use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
@@ -3213,7 +3214,8 @@ pub(crate) async fn c8y_mapper_builder(
     create_directory_with_defaults(flows_dir.clone())
         .await
         .unwrap();
-    let mut flows = ConnectedFlowRegistry::new(flows_dir);
+    let mapper_config = HashMap::new();
+    let mut flows = ConnectedFlowRegistry::new(mapper_config, flows_dir);
     crate::load_builtin_transformers(&mut flows);
     c8y_mapper_builder
         .persist_builtin_flows(&mut flows)
