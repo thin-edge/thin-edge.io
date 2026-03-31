@@ -8,7 +8,6 @@ use yansi::Paint as _;
 
 use super::common::load_bridge_rules;
 use super::common::load_bridge_rules_for_custom_mapper;
-use super::common::print_non_configurable_or_disabled;
 use super::common::print_non_expansions;
 use super::common::resolve_cloud;
 use super::common::DetailLevel;
@@ -80,11 +79,31 @@ async fn run_inspect(
             }
             #[cfg(feature = "aws")]
             Cloud::Aws(_) => {
-                print_non_configurable_or_disabled(w, config, &cloud);
+                use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
+                if let Some((rules, non_expansions)) =
+                    load_bridge_rules::<AwsMapperSpecificConfig>(w, config, &cloud, detail).await?
+                {
+                    if detail == DetailLevel::Debug {
+                        print_non_expansions(w, &non_expansions);
+                    }
+                    if !rules.is_empty() {
+                        print_rules(w, rules);
+                    }
+                }
             }
             #[cfg(feature = "azure")]
             Cloud::Azure(_) => {
-                print_non_configurable_or_disabled(w, config, &cloud);
+                use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
+                if let Some((rules, non_expansions)) =
+                    load_bridge_rules::<AzMapperSpecificConfig>(w, config, &cloud, detail).await?
+                {
+                    if detail == DetailLevel::Debug {
+                        print_non_expansions(w, &non_expansions);
+                    }
+                    if !rules.is_empty() {
+                        print_rules(w, rules);
+                    }
+                }
             }
         },
         None => {
@@ -464,7 +483,7 @@ Bidirectional
     }
 
     #[test]
-    fn aws_built_in_bridge_not_configurable() {
+    fn aws_not_connected_shows_message() {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_with_root(
             tmp.path(),
@@ -472,10 +491,7 @@ Bidirectional
              mqtt.bridge.built_in = true\n",
         );
         let output = render_inspect("aws", None, &config, DetailLevel::Normal);
-        assert!(
-            output.contains("not yet configurable"),
-            "output was: {output}"
-        );
+        assert!(output.contains("Not connected"), "output was: {output}");
         assert!(output.contains("AWS"), "output was: {output}");
     }
 
@@ -495,7 +511,7 @@ Bidirectional
     }
 
     #[test]
-    fn azure_built_in_bridge_not_configurable() {
+    fn azure_not_connected_shows_message() {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_with_root(
             tmp.path(),
@@ -503,10 +519,7 @@ Bidirectional
              mqtt.bridge.built_in = true\n",
         );
         let output = render_inspect("az", None, &config, DetailLevel::Normal);
-        assert!(
-            output.contains("not yet configurable"),
-            "output was: {output}"
-        );
+        assert!(output.contains("Not connected"), "output was: {output}");
         assert!(output.contains("Azure"), "output was: {output}");
     }
 
@@ -839,11 +852,38 @@ topic = "data"
         )
     }
 
+    fn aws_toml(extra: &str) -> String {
+        format!(
+            "aws.url = \"example.amazonaws.com\"\n\
+             mqtt.bridge.built_in = true\n\
+             {extra}"
+        )
+    }
+
+    fn az_toml(extra: &str) -> String {
+        format!(
+            "az.url = \"example.azure-devices.net\"\n\
+             mqtt.bridge.built_in = true\n\
+             {extra}"
+        )
+    }
+
     /// Create the mosquitto config file that signals the cloud is connected
     fn mark_connected(root: &std::path::Path, cloud: &Cloud) {
         let dir = root.join("mosquitto-conf");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join(&*cloud.mosquitto_config_filename()), "").unwrap();
+    }
+
+    fn write_bridge_toml_for(
+        root: &std::path::Path,
+        cloud_name: &str,
+        filename: &str,
+        content: &str,
+    ) {
+        let bridge_dir = root.join(format!("mappers/{cloud_name}/bridge"));
+        std::fs::create_dir_all(&bridge_dir).unwrap();
+        std::fs::write(bridge_dir.join(filename), content).unwrap();
     }
 
     fn render_inspect(
@@ -862,5 +902,81 @@ topic = "data"
         rt.block_on(run_inspect(&mut buf, &cmd, config, detail))
             .unwrap();
         strip_ansi(&String::from_utf8(buf).unwrap())
+    }
+
+    #[test]
+    fn aws_not_connected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &aws_toml(""));
+        let output = render_inspect("aws", None, &config, DetailLevel::Normal);
+        assert!(output.contains("Not connected"), "output was: {output}");
+    }
+
+    #[test]
+    fn aws_with_bridge_rules() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &aws_toml(""));
+        let cloud = Cloud::aws(None);
+        mark_connected(tmp.path(), &cloud);
+        write_bridge_toml_for(
+            tmp.path(),
+            "aws",
+            "test.toml",
+            r#"
+[[rule]]
+local_prefix = "aws/"
+remote_prefix = "thinedge/test-device/"
+direction = "outbound"
+topic = "td/#"
+"#,
+        );
+
+        let output = render_inspect("aws", None, &config, DetailLevel::Normal);
+        assert!(
+            output.contains("aws/td/#"),
+            "should show local topic: {output}"
+        );
+        assert!(
+            output.contains("thinedge/test-device/td/#"),
+            "should show remote topic: {output}"
+        );
+    }
+
+    #[test]
+    fn az_not_connected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &az_toml(""));
+        let output = render_inspect("az", None, &config, DetailLevel::Normal);
+        assert!(output.contains("Not connected"), "output was: {output}");
+    }
+
+    #[test]
+    fn az_with_bridge_rules() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(tmp.path(), &az_toml(""));
+        let cloud = Cloud::az(None);
+        mark_connected(tmp.path(), &cloud);
+        write_bridge_toml_for(
+            tmp.path(),
+            "az",
+            "test.toml",
+            r#"
+[[rule]]
+local_prefix = "az/"
+remote_prefix = "devices/test-device/"
+direction = "outbound"
+topic = "messages/events/#"
+"#,
+        );
+
+        let output = render_inspect("az", None, &config, DetailLevel::Normal);
+        assert!(
+            output.contains("az/messages/events/#"),
+            "should show local topic: {output}"
+        );
+        assert!(
+            output.contains("devices/test-device/messages/events/#"),
+            "should show remote topic: {output}"
+        );
     }
 }

@@ -1443,7 +1443,7 @@ impl TEdgeConfigReader {
     }
 
     pub fn c8y_reader(&self, profile: Option<&str>) -> anyhow::Result<&TEdgeConfigReaderC8y> {
-        Ok(self.c8y.try_get(profile)?)
+        self.c8y.try_get(profile).map_err(Into::into)
     }
 
     pub fn az_keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
@@ -1458,6 +1458,10 @@ impl TEdgeConfigReader {
         self.az.entries()
     }
 
+    pub fn az_reader(&self, profile: Option<&str>) -> anyhow::Result<&TEdgeConfigReaderAz> {
+        self.az.try_get(profile).map_err(Into::into)
+    }
+
     pub fn aws_keys(&self) -> impl Iterator<Item = Option<&ProfileName>> {
         self.aws.keys()
     }
@@ -1468,6 +1472,10 @@ impl TEdgeConfigReader {
 
     pub fn aws_entries(&self) -> impl Iterator<Item = (Option<&str>, &TEdgeConfigReaderAws)> {
         self.aws.entries()
+    }
+
+    pub fn aws_reader(&self, profile: Option<&str>) -> anyhow::Result<&TEdgeConfigReaderAws> {
+        self.aws.try_get(profile).map_err(Into::into)
     }
 
     pub fn cloud_client_tls_config(&self) -> rustls::ClientConfig {

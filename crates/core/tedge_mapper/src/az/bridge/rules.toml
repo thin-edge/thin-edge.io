@@ -1,0 +1,44 @@
+# Bridge rules for Azure IoT Hub.
+#
+# Azure IoT Hub MQTT reference: https://learn.microsoft.com/en-us/azure/iot/iot-mqtt-connect-to-iot-hub
+
+local_prefix = "${mapper.bridge.topic_prefix}/"
+
+# Device-to-cloud messages
+[[rule]]
+remote_prefix = "devices/${mapper.device.id}/"
+topic = "messages/events/#"
+direction = "outbound"
+
+# Cloud-to-device messages
+[[rule]]
+remote_prefix = "devices/${mapper.device.id}/"
+topic = "messages/devicebound/#"
+direction = "inbound"
+
+# Direct methods (request/response)
+[[rule]]
+remote_prefix = "$iothub/"
+topic = "methods/res/#"
+direction = "outbound"
+
+[[rule]]
+remote_prefix = "$iothub/"
+topic = "methods/POST/#"
+direction = "inbound"
+
+# Digital twin
+[[rule]]
+remote_prefix = "$iothub/"
+topic = "twin/GET/#"
+direction = "outbound"
+
+[[rule]]
+remote_prefix = "$iothub/"
+topic = "twin/PATCH/#"
+direction = "outbound"
+
+[[rule]]
+remote_prefix = "$iothub/"
+topic = "twin/res/#"
+direction = "inbound"

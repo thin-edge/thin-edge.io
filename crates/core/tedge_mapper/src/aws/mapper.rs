@@ -7,15 +7,20 @@ use async_trait::async_trait;
 use aws_mapper_ext::AwsConverter;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
-use tedge_config::models::TopicPrefix;
 use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_flows::FlowsMapperBuilder;
+use tedge_mqtt_bridge::load_bridge_rules_from_directory;
+use tedge_mqtt_bridge::persist_bridge_config_file;
 use tedge_mqtt_bridge::rumqttc::Transport;
+use tedge_mqtt_bridge::AuthMethod;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
+use tedge_utils::file::change_mode;
+use tedge_utils::file::change_user_and_group;
+use tedge_utils::file::create_directory_with_user_group;
 use tedge_watch_ext::WatchActorBuilder;
 use tracing::warn;
 use yansi::Paint;
@@ -42,7 +47,7 @@ impl TEdgeComponent for AwsMapper {
             let device_id = aws_config.device.id()?;
             let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
 
-            let rules = built_in_bridge_rules(&device_id, prefix)?;
+            let rules = bridge_rules(&tedge_config, self.profile.as_ref()).await?;
 
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 device_id,
@@ -106,35 +111,186 @@ impl TEdgeComponent for AwsMapper {
     }
 }
 
-fn built_in_bridge_rules(
-    remote_client_id: &str,
-    topic_prefix: &TopicPrefix,
-) -> Result<BridgeConfig, anyhow::Error> {
-    let local_prefix = format!("{topic_prefix}/");
-    let device_id_prefix = format!("thinedge/{remote_client_id}/");
-    let things_prefix = format!("$aws/things/{remote_client_id}/");
-    let conn_check = format!("thinedge/devices/{remote_client_id}/test-connection");
-    let mut bridge = BridgeConfig::new();
-
-    // telemetry/command topics for use by the user
-    bridge.forward_from_local("td/#", local_prefix.clone(), device_id_prefix.clone())?;
-    bridge.forward_from_remote("cmd/#", local_prefix.clone(), device_id_prefix)?;
-
-    // topic to interact with the shadow of the device
-    bridge.forward_bidirectionally("shadow/#", local_prefix.clone(), things_prefix.clone())?;
-
-    // echo topic mapping to check the connection
-    bridge.forward_from_local(
-        "",
-        format!("{local_prefix}test-connection"),
-        conn_check.clone(),
-    )?;
-    bridge.forward_from_remote("", format!("{local_prefix}connection-success"), conn_check)?;
-
-    Ok(bridge)
+pub async fn resolve_effective_mapper_config(
+    tedge_config: &TEdgeConfig,
+    cloud_profile: Option<&ProfileName>,
+) -> anyhow::Result<crate::custom::resolve::EffectiveMapperConfig> {
+    let mapper_config_dir =
+        tedge_config.mapper_config_dir::<AwsMapperSpecificConfig>(cloud_profile);
+    let aws_reader = tedge_config.aws_reader(cloud_profile.map(|p| p.as_ref()))?;
+    let mapper_table = crate::custom::resolve::reader_to_toml_table(aws_reader)?;
+    let schema_json =
+        serde_json::to_value(aws_reader).context("failed to serialise aws config to JSON")?;
+    let mapper_config = crate::custom::config::load_mapper_config(&mapper_config_dir)
+        .await?
+        .unwrap_or_else(|| crate::custom::config::CustomMapperConfig {
+            table: toml::Table::new(),
+            cloud_type: None,
+            url: None,
+            device: None,
+            bridge: crate::custom::config::BridgeConfig::default(),
+            auth_method: crate::custom::config::AuthMethodConfig::Auto,
+            credentials_path: None,
+        });
+    let mapper_name = match cloud_profile {
+        Some(profile) => format!("aws.{profile}"),
+        None => "aws".to_string(),
+    };
+    crate::custom::resolve::resolve_effective_config(
+        &mapper_config,
+        tedge_config,
+        Some(&mapper_table),
+        Some(schema_json),
+    )
+    .await
+    .map(|c| c.with_mapper_name(mapper_name))
 }
 
-#[test]
-fn bridge_rules_are_valid() {
-    built_in_bridge_rules("test-device-id", &"aws".try_into().unwrap()).unwrap();
+async fn bridge_rules(
+    tedge_config: &TEdgeConfig,
+    cloud_profile: Option<&ProfileName>,
+) -> anyhow::Result<BridgeConfig> {
+    let mapper_config_dir =
+        tedge_config.mapper_config_dir::<AwsMapperSpecificConfig>(cloud_profile);
+    if let Err(err) =
+        create_directory_with_user_group(mapper_config_dir.clone(), "tedge", "tedge", 0o755).await
+    {
+        warn!("failed to set file ownership for '{mapper_config_dir}': {err}");
+    }
+
+    let bridge_config_dir = mapper_config_dir.join("bridge");
+
+    persist_bridge_config_file(
+        &bridge_config_dir,
+        "rules",
+        include_str!("bridge/rules.toml"),
+    )
+    .await?;
+
+    if let Err(err) = change_user_and_group(&bridge_config_dir, "tedge", "tedge").await {
+        warn!("failed to set file ownership for '{bridge_config_dir}': {err}");
+    }
+
+    if let Err(err) = change_mode(&bridge_config_dir, 0o755).await {
+        warn!("failed to set file permissions for '{bridge_config_dir}': {err}");
+    }
+
+    let effective = resolve_effective_mapper_config(tedge_config, cloud_profile).await?;
+
+    load_bridge_rules_from_directory(
+        &bridge_config_dir,
+        tedge_config,
+        AuthMethod::Certificate,
+        cloud_profile,
+        &effective,
+    )
+    .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    #[tokio::test]
+    async fn bridge_rules_load_from_toml_with_correct_topics() {
+        let ttd = create_test_dir("aws.url = \"test.test.io\"").await;
+        let (certificate, key) = make_self_signed_cert("test-device-id");
+        let mapper_dir: camino::Utf8PathBuf = ttd.path().join("mappers/aws").try_into().unwrap();
+        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+        tokio::fs::write(mapper_dir.join("cert.pem"), certificate.pem())
+            .await
+            .unwrap();
+        tokio::fs::write(mapper_dir.join("key.pem"), key.serialize_pem())
+            .await
+            .unwrap();
+        tokio::fs::write(
+            mapper_dir.join("mapper.toml"),
+            format!(
+                "device.cert_path = \"{mapper_dir}/cert.pem\"\ndevice.key_path = \"{mapper_dir}/key.pem\"\n",
+            ),
+        )
+        .await
+        .unwrap();
+        let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+
+        let rules = bridge_rules(&config, None).await.unwrap();
+
+        // Telemetry/command topics
+        assert!(has_local_subscription(&rules, "aws/td/#"));
+        assert!(has_remote_subscription(
+            &rules,
+            "thinedge/test-device-id/cmd/#"
+        ));
+
+        // Device shadow (bidirectional)
+        assert!(has_local_subscription(&rules, "aws/shadow/#"));
+        assert!(has_remote_subscription(
+            &rules,
+            "$aws/things/test-device-id/shadow/#"
+        ));
+
+        // Connection check
+        assert!(has_local_subscription(&rules, "aws/test-connection"));
+        assert!(has_remote_subscription(
+            &rules,
+            "thinedge/devices/test-device-id/test-connection"
+        ));
+    }
+
+    #[tokio::test]
+    async fn custom_topic_prefix_applied() {
+        let ttd =
+            create_test_dir("aws.url = \"test.test.io\"\naws.bridge.topic_prefix = \"custom-aws\"")
+                .await;
+        let (certificate, key) = make_self_signed_cert("test-device-id");
+        let mapper_dir: camino::Utf8PathBuf = ttd.path().join("mappers/aws").try_into().unwrap();
+        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+        tokio::fs::write(mapper_dir.join("cert.pem"), certificate.pem())
+            .await
+            .unwrap();
+        tokio::fs::write(mapper_dir.join("key.pem"), key.serialize_pem())
+            .await
+            .unwrap();
+        tokio::fs::write(
+            mapper_dir.join("mapper.toml"),
+            format!(
+                "device.cert_path = \"{mapper_dir}/cert.pem\"\ndevice.key_path = \"{mapper_dir}/key.pem\"\nbridge.topic_prefix = \"custom-aws\"\n",
+            ),
+        )
+        .await
+        .unwrap();
+        let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+
+        let rules = bridge_rules(&config, None).await.unwrap();
+
+        assert!(has_local_subscription(&rules, "custom-aws/td/#"));
+        assert!(has_local_subscription(&rules, "custom-aws/shadow/#"));
+    }
+
+    async fn create_test_dir(toml: &str) -> TempTedgeDir {
+        let ttd = TempTedgeDir::new();
+        ttd.file("tedge.toml").with_raw_content(toml);
+        ttd
+    }
+
+    fn make_self_signed_cert(cn: &str) -> (rcgen::Certificate, rcgen::KeyPair) {
+        let key = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+        let mut params = rcgen::CertificateParams::default();
+        params.distinguished_name = rcgen::DistinguishedName::new();
+        params
+            .distinguished_name
+            .push(rcgen::DnType::CommonName, cn);
+        let issuer = rcgen::Issuer::from_params(&params, &key);
+        let cert = params.signed_by(&key, &issuer).unwrap();
+        (cert, key)
+    }
+
+    fn has_local_subscription(config: &BridgeConfig, topic: &str) -> bool {
+        config.local_subscriptions().any(|t| t == topic)
+    }
+
+    fn has_remote_subscription(config: &BridgeConfig, topic: &str) -> bool {
+        config.remote_subscriptions().any(|t| t == topic)
+    }
 }

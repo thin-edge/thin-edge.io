@@ -6,6 +6,7 @@
 //! the mapper runtime and the `tedge mapper config get` / `tedge mapper list` CLI
 //! commands so that both reflect exactly the same values.
 
+use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
@@ -536,6 +537,20 @@ fn build_custom_mapper_schema(config: &CustomMapperConfig) -> serde_json::Value 
         credentials_path: config.credentials_path.as_ref(),
     })
     .expect("schema serialisation is infallible")
+}
+
+/// Converts a cloud-specific config reader directly to a [`toml::Table`] without
+/// going through a string intermediate.
+pub fn reader_to_toml_table(reader: &impl serde::Serialize) -> anyhow::Result<toml::Table> {
+    let value =
+        toml::Value::try_from(reader).context("failed to serialise config reader to TOML value")?;
+    match value {
+        toml::Value::Table(t) => Ok(t),
+        other => anyhow::bail!(
+            "expected config reader to serialise as a TOML table, got {}",
+            other.type_str()
+        ),
+    }
 }
 
 /// Resolves a [`CustomMapperConfig`] into an [`EffectiveMapperConfig`].

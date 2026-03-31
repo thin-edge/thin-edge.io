@@ -11,7 +11,6 @@ use yansi::Paint as _;
 
 use super::common::load_bridge_rules;
 use super::common::load_bridge_rules_for_custom_mapper;
-use super::common::print_non_configurable_or_disabled;
 use super::common::print_non_expansions;
 use super::common::resolve_cloud;
 use super::common::DetailLevel;
@@ -93,12 +92,32 @@ async fn run_test(
             }
             #[cfg(feature = "aws")]
             Cloud::Aws(_) => {
-                print_non_configurable_or_disabled(w, config, &cloud);
+                use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
+                if let Some((rules, non_expansions)) =
+                    load_bridge_rules::<AwsMapperSpecificConfig>(w, config, &cloud, detail).await?
+                {
+                    if detail == DetailLevel::Debug {
+                        print_non_expansions(w, &non_expansions);
+                    }
+                    if !rules.is_empty() {
+                        return Ok(print_topic_matches(w, &cmd.topic, &rules));
+                    }
+                }
                 Ok(Status::NoMatches)
             }
             #[cfg(feature = "azure")]
             Cloud::Azure(_) => {
-                print_non_configurable_or_disabled(w, config, &cloud);
+                use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
+                if let Some((rules, non_expansions)) =
+                    load_bridge_rules::<AzMapperSpecificConfig>(w, config, &cloud, detail).await?
+                {
+                    if detail == DetailLevel::Debug {
+                        print_non_expansions(w, &non_expansions);
+                    }
+                    if !rules.is_empty() {
+                        return Ok(print_topic_matches(w, &cmd.topic, &rules));
+                    }
+                }
                 Ok(Status::NoMatches)
             }
         },
@@ -372,7 +391,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     }
 
     #[test]
-    fn aws_not_configurable() {
+    fn aws_not_connected() {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_with_root(
             tmp.path(),
@@ -380,9 +399,92 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
              mqtt.bridge.built_in = true\n",
         );
         let output = render_test("aws", "some/topic", None, &config, DetailLevel::Normal);
+        assert!(output.contains("Not connected"), "output was: {output}");
+    }
+
+    #[test]
+    fn aws_topic_matches_outbound_rule() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(
+            tmp.path(),
+            "aws.url = \"example.amazonaws.com\"\n\
+             mqtt.bridge.built_in = true\n",
+        );
+        let cloud = Cloud::aws(None);
+        mark_connected(tmp.path(), &cloud);
+        let bridge_dir = tmp.path().join("mappers/aws/bridge");
+        std::fs::create_dir_all(&bridge_dir).unwrap();
+        std::fs::write(
+            bridge_dir.join("test.toml"),
+            r#"
+[[rule]]
+local_prefix = "aws/"
+remote_prefix = "thinedge/test-device/"
+direction = "outbound"
+topic = "td/#"
+"#,
+        )
+        .unwrap();
+
+        let output = render_test(
+            "aws",
+            "aws/td/temperature",
+            None,
+            &config,
+            DetailLevel::Normal,
+        );
         assert!(
-            output.contains("not yet configurable"),
-            "output was: {output}"
+            output.contains("thinedge/test-device/td/temperature"),
+            "should show forwarded topic: {output}"
+        );
+    }
+
+    #[test]
+    fn az_not_connected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(
+            tmp.path(),
+            "az.url = \"example.azure-devices.net\"\n\
+             mqtt.bridge.built_in = true\n",
+        );
+        let output = render_test("az", "some/topic", None, &config, DetailLevel::Normal);
+        assert!(output.contains("Not connected"), "output was: {output}");
+    }
+
+    #[test]
+    fn az_topic_matches_outbound_rule() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(
+            tmp.path(),
+            "az.url = \"example.azure-devices.net\"\n\
+             mqtt.bridge.built_in = true\n",
+        );
+        let cloud = Cloud::az(None);
+        mark_connected(tmp.path(), &cloud);
+        let bridge_dir = tmp.path().join("mappers/az/bridge");
+        std::fs::create_dir_all(&bridge_dir).unwrap();
+        std::fs::write(
+            bridge_dir.join("test.toml"),
+            r#"
+[[rule]]
+local_prefix = "az/"
+remote_prefix = "devices/test-device/"
+direction = "outbound"
+topic = "messages/events/#"
+"#,
+        )
+        .unwrap();
+
+        let output = render_test(
+            "az",
+            "az/messages/events/temp",
+            None,
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            output.contains("devices/test-device/messages/events/temp"),
+            "should show forwarded topic: {output}"
         );
     }
 
@@ -838,6 +940,68 @@ topic = "telemetry"
         assert!(
             output.contains("not found"),
             "should indicate mapper not found: {output}"
+        );
+    }
+
+    #[test]
+    fn aws_empty_rules_returns_no_matches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(
+            tmp.path(),
+            "aws.url = \"example.amazonaws.com\"\n\
+             mqtt.bridge.built_in = true\n",
+        );
+        let cloud = Cloud::aws(None);
+        mark_connected(tmp.path(), &cloud);
+        let bridge_dir = tmp.path().join("mappers/aws/bridge");
+        std::fs::create_dir_all(&bridge_dir).unwrap();
+        std::fs::write(
+            bridge_dir.join("empty.toml"),
+            "# No rules defined\n",
+        )
+        .unwrap();
+
+        let output = render_test(
+            "aws",
+            "aws/td/temperature",
+            None,
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            output.contains("no rules were generated"),
+            "should indicate no rules: {output}"
+        );
+    }
+
+    #[test]
+    fn az_empty_rules_returns_no_matches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_with_root(
+            tmp.path(),
+            "az.url = \"example.azure-devices.net\"\n\
+             mqtt.bridge.built_in = true\n",
+        );
+        let cloud = Cloud::az(None);
+        mark_connected(tmp.path(), &cloud);
+        let bridge_dir = tmp.path().join("mappers/az/bridge");
+        std::fs::create_dir_all(&bridge_dir).unwrap();
+        std::fs::write(
+            bridge_dir.join("empty.toml"),
+            "# No rules defined\n",
+        )
+        .unwrap();
+
+        let output = render_test(
+            "az",
+            "az/messages/events/temp",
+            None,
+            &config,
+            DetailLevel::Normal,
+        );
+        assert!(
+            output.contains("no rules were generated"),
+            "should indicate no rules: {output}"
         );
     }
 }

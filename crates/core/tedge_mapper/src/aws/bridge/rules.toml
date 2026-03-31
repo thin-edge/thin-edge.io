@@ -1,0 +1,37 @@
+# Bridge rules for AWS IoT Core.
+#
+# AWS IoT Core MQTT reference: https://docs.aws.amazon.com/iot/latest/developerguide/mqtt.html
+
+local_prefix = "${mapper.bridge.topic_prefix}/"
+
+# Telemetry (device-to-cloud)
+[[rule]]
+remote_prefix = "thinedge/${mapper.device.id}/"
+topic = "td/#"
+direction = "outbound"
+
+# Commands (cloud-to-device)
+[[rule]]
+remote_prefix = "thinedge/${mapper.device.id}/"
+topic = "cmd/#"
+direction = "inbound"
+
+# Device shadow
+[[rule]]
+remote_prefix = "$aws/things/${mapper.device.id}/"
+topic = "shadow/#"
+direction = "bidirectional"
+
+# Connection check (outbound)
+[[rule]]
+local_prefix = "${mapper.bridge.topic_prefix}/test-connection"
+remote_prefix = "thinedge/devices/${mapper.device.id}/test-connection"
+topic = ""
+direction = "outbound"
+
+# Connection check (inbound)
+[[rule]]
+local_prefix = "${mapper.bridge.topic_prefix}/connection-success"
+remote_prefix = "thinedge/devices/${mapper.device.id}/test-connection"
+topic = ""
+direction = "inbound"
