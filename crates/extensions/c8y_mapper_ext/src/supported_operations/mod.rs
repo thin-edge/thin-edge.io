@@ -38,7 +38,6 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::error;
 use tracing::warn;
 
 type ExternalId = String;
@@ -165,8 +164,7 @@ impl SupportedOperations {
     /// device.
     ///
     /// All operation files from the given operation directory are loaded and set as the new supported operation set for
-    /// a given device. Invalid operation files are ignored. If the device is a child device and the directory doesn't
-    /// exist, the operation set is considered empty.
+    /// a given device. Invalid operation files are ignored.
     ///
     /// If the supported operation set changed, `Ok(true)` is returned to denote that this change should be sent to the
     /// cloud.
@@ -177,15 +175,10 @@ impl SupportedOperations {
     ) -> Result<bool, anyhow::Error> {
         // load operations from the directory
         let dir = self.base_ops_dir_for_device(device_xid);
-        let new_operations = match Operations::try_new(dir, bridge_config) {
-            Err(OperationsError::ReadDirError { .. }) => {
-                return Ok(self.operations_by_xid.remove(device_xid).is_some());
-            }
-            Err(err) => return Err(err.into()),
-            Ok(operations) => operations,
-        };
+        let new_operations = Operations::try_new(dir, bridge_config)?;
 
         // the current supported operations set is empty
+        // TODO: simplify
         let Some(current_operations) = self.operations_by_xid.get_mut(device_xid) else {
             self.operations_by_xid
                 .insert(device_xid.to_string(), new_operations);

@@ -207,9 +207,11 @@ impl CumulocityConverter {
             );
             operations
         };
-        let supported_operations = SupportedOperations {
+        let operation_manager = SupportedOperations {
             device_id: device_id.clone(),
+
             base_ops_dir: Arc::clone(&config.ops_dir),
+
             operations_by_xid,
         };
 
@@ -248,7 +250,7 @@ impl CumulocityConverter {
             config: Arc::new(config),
             mapper_config,
             device_name: device_id,
-            supported_operations,
+            supported_operations: operation_manager,
             operation_logs,
             http_proxy,
             mqtt_publisher,
@@ -350,21 +352,6 @@ impl CumulocityConverter {
 
         if let Some(reg_message) = reg_message {
             messages.push(reg_message);
-        }
-
-        if matches!(
-            input.r#type,
-            EntityType::ChildDevice | EntityType::MainDevice
-        ) {
-            // supported operations message needs to be sent only after the c8y registration message
-            self.supported_operations
-                .load_all(external_id.as_ref(), &self.config.bridge_config)?;
-            let supported_ops = self.supported_operations.create_supported_operations(
-                external_id.as_ref(),
-                &self.config.bridge_config.c8y_prefix,
-            )?;
-
-            messages.push(supported_ops);
         }
 
         for (fragment_key, fragment_value) in input.twin_data.iter() {
