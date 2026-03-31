@@ -955,11 +955,7 @@ topic = "telemetry"
         mark_connected(tmp.path(), &cloud);
         let bridge_dir = tmp.path().join("mappers/aws/bridge");
         std::fs::create_dir_all(&bridge_dir).unwrap();
-        std::fs::write(
-            bridge_dir.join("empty.toml"),
-            "# No rules defined\n",
-        )
-        .unwrap();
+        std::fs::write(bridge_dir.join("empty.toml"), "# No rules defined\n").unwrap();
 
         let output = render_test(
             "aws",
@@ -986,11 +982,7 @@ topic = "telemetry"
         mark_connected(tmp.path(), &cloud);
         let bridge_dir = tmp.path().join("mappers/az/bridge");
         std::fs::create_dir_all(&bridge_dir).unwrap();
-        std::fs::write(
-            bridge_dir.join("empty.toml"),
-            "# No rules defined\n",
-        )
-        .unwrap();
+        std::fs::write(bridge_dir.join("empty.toml"), "# No rules defined\n").unwrap();
 
         let output = render_test(
             "az",
