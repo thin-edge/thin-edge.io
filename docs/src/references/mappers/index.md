@@ -14,5 +14,6 @@ This section covers the specification of various mappers like cloud data mappers
 - Azure Mapper
 - AWS Mapper
 - Collectd Mapper
+- Custom mappers which connection, bridge rules and mapping transformations are fully configurable
 
 <DocCardList />

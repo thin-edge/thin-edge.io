@@ -1,12 +1,8 @@
 ---
 title: User-defined mappers
 tags: [Reference, Mappers, Cloud]
-sidebar_position: 5
+sidebar_position: 2
 ---
-
-import ProposalBanner from '@site/src/components/ProposalBanner'
-
-<ProposalBanner/>
 
 ## Overview
 
