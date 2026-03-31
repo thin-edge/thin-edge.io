@@ -1,0 +1,6 @@
+url = "localhost:18885"
+auth_method = "password"
+credentials_path = "credentials.toml"
+
+[bridge]
+tls = "off"

@@ -10,6 +10,7 @@ use crate::core::mqtt::configure_proxy;
 use crate::custom::config::load_mapper_config;
 use crate::custom::config::read_mapper_credentials;
 use crate::custom::config::scan_mappers_shallow;
+use crate::custom::config::BridgeTls;
 use crate::custom::config::CustomMapperConfig;
 use crate::custom::resolve::resolve_effective_config;
 use crate::custom::resolve::EffectiveMapperConfig;
@@ -18,6 +19,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use tedge_actors::MessageSink;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::MqttAuthClientConfigCloudBroker;
@@ -174,7 +176,23 @@ pub async fn build_cloud_mqtt_options(
         cloud_config.set_keep_alive(interval.duration());
     }
 
+    let tls_enabled = match config.bridge.tls {
+        BridgeTls::On => true,
+        BridgeTls::Off => false,
+        BridgeTls::Auto => match url.port().0 {
+            1883 => false,
+            _ => true, // 8883 and any other port default to TLS on
+        },
+    };
+
     let ca_path = &config.root_cert_path.value;
+
+    if !tls_enabled && config.effective_auth.value == AuthMethod::Certificate {
+        anyhow::bail!(
+            "certificate authentication requires TLS, but TLS is disabled for this mapper. \
+             Either set `[bridge]\ntls = \"on\"` in mapper.toml, or change the auth method."
+        );
+    }
 
     match config.effective_auth.value {
         AuthMethod::Certificate => {
@@ -198,16 +216,18 @@ pub async fn build_cloud_mqtt_options(
                          for certificate authentication"
                     )
                 })?;
-            let tls_config = MqttAuthConfigCloudBroker {
-                ca_path: ca_path.clone(),
-                client: Some(MqttAuthClientConfigCloudBroker {
-                    cert_file: cert_path.clone(),
-                    private_key: PrivateKeyType::File(key_path.clone()),
-                }),
+            if tls_enabled {
+                let tls_config = MqttAuthConfigCloudBroker {
+                    ca_path: ca_path.clone(),
+                    client: Some(MqttAuthClientConfigCloudBroker {
+                        cert_file: cert_path.clone(),
+                        private_key: PrivateKeyType::File(key_path.clone()),
+                    }),
+                }
+                .to_rustls_client_config()
+                .context("Failed to create MQTT TLS config")?;
+                cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
             }
-            .to_rustls_client_config()
-            .context("Failed to create MQTT TLS config")?;
-            cloud_config.set_transport(Transport::tls_with_config(tls_config.into()));
         }
         AuthMethod::Password => {
             let creds_path = config
@@ -221,7 +241,11 @@ pub async fn build_cloud_mqtt_options(
                     )
                 })?;
             let (username, password) = read_mapper_credentials(creds_path).await?;
-            use_credentials(&mut cloud_config, ca_path, username, password)?;
+            if tls_enabled {
+                use_credentials(&mut cloud_config, ca_path, username, password)?;
+            } else {
+                cloud_config.set_credentials(username, password);
+            }
         }
     }
 
@@ -285,6 +309,19 @@ async fn build_flows_actors(
     Ok((flows_mapper, fs_actor, cmd_watcher_actor))
 }
 
+/// Builds the empty retained message used to clear a stale bridge service
+/// health status when the mapper starts in flows-only mode.
+fn bridge_health_clear_message(
+    mapper: &CustomMapper,
+    tedge_config: &TEdgeConfig,
+) -> mqtt_channel::MqttMessage {
+    let bridge_service_name = mapper.bridge_service_name();
+    let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+    let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
+    let health_topic = service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
+    mqtt_channel::MqttMessage::new(&health_topic, vec![]).with_retain()
+}
+
 #[async_trait]
 impl TEdgeComponent for CustomMapper {
     async fn start(
@@ -332,6 +369,13 @@ impl TEdgeComponent for CustomMapper {
             )
             .await;
             runtime.spawn(bridge_actor).await?;
+        } else {
+            // Flows-only mode: clear any stale retained bridge health message
+            // from a previous run that had a bridge configured.
+            let clear_msg = bridge_health_clear_message(self, &tedge_config);
+            let mut sender = mqtt_actor.get_sender();
+            // Best-effort: if the MQTT actor has already shut down the error is harmless.
+            let _ = sender.send(clear_msg).await;
         }
 
         let (mut flows_mapper, mut fs_actor, mut cmd_watcher_actor) =
@@ -353,6 +397,29 @@ impl TEdgeComponent for CustomMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod flows_only_deregistration {
+        use super::*;
+        use tedge_config::TEdgeConfig;
+
+        #[test]
+        fn flows_only_startup_publishes_empty_retained_message_to_bridge_health_topic() {
+            let mapper = CustomMapper {
+                name: "thingsboard".to_string(),
+            };
+            let tedge_config = TEdgeConfig::load_toml_str("");
+            let msg = bridge_health_clear_message(&mapper, &tedge_config);
+            assert_eq!(
+                msg.topic.name,
+                "te/device/main/service/tedge-mapper-bridge-thingsboard/status/health"
+            );
+            assert!(
+                msg.payload_bytes().is_empty(),
+                "payload should be empty to clear the retained message"
+            );
+            assert!(msg.retain, "message must be retained");
+        }
+    }
 
     mod service_names {
         use super::*;
@@ -687,7 +754,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
-            let config = make_config(Some("mqtt.example.com:1883"));
+            let config = make_config(Some("mqtt.example.com:8883"));
             let effective = resolve(&config, &tedge_config).await;
 
             let (_, auth) = build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
@@ -704,7 +771,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
-            let mut config = make_config(Some("mqtt.example.com:1883"));
+            let mut config = make_config(Some("mqtt.example.com:8883"));
             config.auth_method = AuthMethodConfig::Certificate;
             let effective = resolve(&config, &tedge_config).await;
 
@@ -787,7 +854,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                  device.key_path = \"/nonexistent/tedge-key.pem\"\n",
             );
             let (mapper_cert, mapper_key) = write_cert(ttd.utf8_path()).await;
-            let mut config = make_config(Some("mqtt.example.com:1883"));
+            let mut config = make_config(Some("mqtt.example.com:8883"));
             config.device = Some(DeviceConfig {
                 id: None,
                 cert_path: Some(mapper_cert),
@@ -809,7 +876,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
-            let config = make_config(Some("mqtt.example.com:1883"));
+            let config = make_config(Some("mqtt.example.com:8883"));
             let effective = resolve(&config, &tedge_config).await;
 
             build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
@@ -825,7 +892,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
-            let config = make_config(Some("mqtt.example.com:1883"));
+            let config = make_config(Some("mqtt.example.com:8883"));
             let effective = resolve(&config, &tedge_config).await;
 
             let (mqtt_opts, _) =
@@ -888,7 +955,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
-            let config = make_config(Some("mqtt.example.com:1883"));
+            let config = make_config(Some("mqtt.example.com:8883"));
             let effective = resolve(&config, &tedge_config).await;
 
             let err = build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
@@ -943,6 +1010,141 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             )
             .await
             .unwrap();
+        }
+
+        mod tls {
+            use super::*;
+            use crate::custom::config::BridgeTls;
+
+            #[tokio::test]
+            async fn tls_off_with_password_auth_connects_without_tls() {
+                let ttd = TempTedgeDir::new();
+                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+                let creds_path = ttd.utf8_path().join("creds.toml");
+                write_creds(&creds_path).await;
+                let tedge_config = TEdgeConfig::load_toml_str("device.id = \"test-device\"");
+                let mut config = make_config(Some("mqtt.example.com:1883"));
+                config.bridge.tls = BridgeTls::Off;
+                config.credentials_path = Some(creds_path);
+                let effective = resolve(&config, &tedge_config).await;
+
+                build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap();
+            }
+
+            #[tokio::test]
+            async fn tls_on_with_cert_auth_connects_with_tls() {
+                let ttd = TempTedgeDir::new();
+                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+                let (cert, key) = write_cert(ttd.utf8_path()).await;
+                let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                    "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+                ));
+                let mut config = make_config(Some("mqtt.example.com:8883"));
+                config.bridge.tls = BridgeTls::On;
+                let effective = resolve(&config, &tedge_config).await;
+
+                build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap();
+            }
+
+            #[tokio::test]
+            async fn auto_port_8883_infers_tls_on() {
+                let ttd = TempTedgeDir::new();
+                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+                let (cert, key) = write_cert(ttd.utf8_path()).await;
+                let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                    "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+                ));
+                let config = make_config(Some("mqtt.example.com:8883"));
+                assert_eq!(config.bridge.tls, BridgeTls::Auto);
+                let effective = resolve(&config, &tedge_config).await;
+
+                build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap();
+            }
+
+            #[tokio::test]
+            async fn auto_port_1883_infers_tls_off() {
+                let ttd = TempTedgeDir::new();
+                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+                let creds_path = ttd.utf8_path().join("creds.toml");
+                write_creds(&creds_path).await;
+                let tedge_config = TEdgeConfig::load_toml_str("device.id = \"test-device\"");
+                let mut config = make_config(Some("mqtt.example.com:1883"));
+                config.credentials_path = Some(creds_path);
+                assert_eq!(config.bridge.tls, BridgeTls::Auto);
+                let effective = resolve(&config, &tedge_config).await;
+
+                build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap();
+            }
+
+            #[tokio::test]
+            async fn other_port_defaults_to_tls_on() {
+                let ttd = TempTedgeDir::new();
+                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+                let (cert, key) = write_cert(ttd.utf8_path()).await;
+                let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                    "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+                ));
+                let config = make_config(Some("mqtt.example.com:9999"));
+                assert_eq!(config.bridge.tls, BridgeTls::Auto);
+                let effective = resolve(&config, &tedge_config).await;
+
+                build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap();
+            }
+
+            #[tokio::test]
+            async fn tls_off_with_cert_auth_fails() {
+                let ttd = TempTedgeDir::new();
+                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+                let (cert, key) = write_cert(ttd.utf8_path()).await;
+                let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                    "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+                ));
+                let mut config = make_config(Some("mqtt.example.com:8883"));
+                config.bridge.tls = BridgeTls::Off;
+                config.auth_method = AuthMethodConfig::Certificate;
+                let effective = resolve(&config, &tedge_config).await;
+
+                let err = build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap_err();
+                assert_eq!(
+                    err.to_string(),
+                    "certificate authentication requires TLS, but TLS is disabled for this mapper. \
+                     Either set `[bridge]\ntls = \"on\"` in mapper.toml, or change the auth method."
+                );
+            }
+
+            #[tokio::test]
+            async fn auto_tls_inferred_off_with_cert_auth_fails() {
+                let ttd = TempTedgeDir::new();
+                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+                let (cert, key) = write_cert(ttd.utf8_path()).await;
+                let tedge_config = TEdgeConfig::load_toml_str(&format!(
+                    "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+                ));
+                let mut config = make_config(Some("mqtt.example.com:1883"));
+                config.auth_method = AuthMethodConfig::Certificate;
+                let effective = resolve(&config, &tedge_config).await;
+
+                let err = build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                    .await
+                    .unwrap_err();
+                assert_eq!(
+                    err.to_string(),
+                    "certificate authentication requires TLS, but TLS is disabled for this mapper. \
+                     Either set `[bridge]\ntls = \"on\"` in mapper.toml, or change the auth method."
+                );
+            }
         }
     }
 }

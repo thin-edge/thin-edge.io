@@ -593,7 +593,7 @@ mqtt_service.topics = ["custom/topic"]
         async fn mqtt_service_local_prefix_uses_custom_topic_prefix() {
             // Verifies that both the mqtt/out and mqtt/in local_prefix rules expand
             // ${mapper.bridge.topic_prefix} from the serialised C8y config, not the
-            // old ${config.c8y.bridge.topic_prefix} literal.  Previously the mqtt/out
+            // old ${tedge.c8y.bridge.topic_prefix} literal.  Previously the mqtt/out
             // rule was left on the old notation during the ${mapper.*} migration.
             let (_ttd, config) = load_config(
                 r#"

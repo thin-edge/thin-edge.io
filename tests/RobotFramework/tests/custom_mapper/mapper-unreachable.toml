@@ -1,0 +1,6 @@
+url = "localhost:19999"
+
+[device]
+root_cert_path = "/tmp/tb-ca.crt"
+cert_path = "/tmp/tb-client.crt"
+key_path = "/tmp/tb-client.key"

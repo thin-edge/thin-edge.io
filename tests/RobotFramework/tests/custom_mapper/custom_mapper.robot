@@ -160,6 +160,84 @@ Two custom mapper profiles run concurrently without interfering
 
     [Teardown]    Stop And Remove Two Mappers    test-alpha    test-beta
 
+Custom mapper with bridge.tls off forwards messages over plain TCP
+    [Documentation]    A custom mapper with `bridge.tls = off` connects to a plain (non-TLS) MQTT
+    ...    broker and forwards messages. This proves the TLS-skip code path works end-to-end.
+    [Setup]    Create Non TLS Bridge Mapper    test-notls
+
+    Start Service    tedge-mapper-test-notls
+    Service Should Be Running    tedge-mapper-test-notls
+
+    # Wait for the bridge to report healthy
+    ${bridge_health}=    Should Have MQTT Messages
+    ...    te/device/main/service/tedge-mapper-bridge-test-notls/status/health
+    ...    minimum=1
+    ...    message_contains="status":"up"
+
+    # Subscribe on the plain-TCP remote broker before publishing (credentials required)
+    Execute Command
+    ...    bash -c 'mosquitto_sub -p 18885 -u testuser -P testpass -t "custom-remote/#" -C 1 -W 15 > /tmp/tb-notls-received.txt 2>&1 &'
+    Sleep    0.5s
+
+    Execute Command    tedge mqtt pub custom-local/test '{"value":77}'
+
+    ${msg}=    Execute Command
+    ...    timeout 12 bash -c 'until [ -s /tmp/tb-notls-received.txt ]; do sleep 0.5; done; cat /tmp/tb-notls-received.txt'
+    Should Contain    ${msg}    77
+
+    [Teardown]    Stop And Remove Mapper    test-notls
+
+Stale bridge health is cleared when mapper switches to flows-only
+    [Documentation]    When a mapper previously ran with a bridge (leaving a retained "up" on the
+    ...    bridge health topic), and is then reconfigured to flows-only and restarted, the mapper
+    ...    publishes an empty retained message to the bridge health topic. This deregisters the
+    ...    stale bridge service from the entity store.
+    [Setup]    Create Bridge Mapper    test-stale
+
+    # Phase 1: Start the bridge mapper so it leaves a retained "up" on the bridge health topic
+    Start Service    tedge-mapper-test-stale
+    Service Should Be Running    tedge-mapper-test-stale
+
+    Should Have MQTT Messages
+    ...    te/device/main/service/tedge-mapper-bridge-test-stale/status/health
+    ...    minimum=1
+    ...    message_contains="status":"up"
+
+    # Stop the mapper; the retained "up" message is still on the broker
+    Execute Command    systemctl stop tedge-mapper-test-stale
+
+    # Phase 2: Reconfigure to flows-only (remove bridge/, add flows/)
+    Execute Command    rm -rf /etc/tedge/mappers/test-stale/bridge
+    Execute Command
+    ...    mkdir -p /etc/tedge/mappers/test-stale/flows && chown -R tedge:tedge /etc/tedge/mappers/test-stale
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/echo.toml    /etc/tedge/mappers/test-stale/flows/
+
+    # Phase 3: Restart in flows-only mode — should clear the stale bridge health
+    Start Service    tedge-mapper-test-stale
+    Service Should Be Running    tedge-mapper-test-stale
+
+    # The stale retained "up" should now be replaced by an empty message.
+    # Verify by checking that `tedge mapper test` does NOT report the bridge as healthy
+    # (the mapper health check should pass, but no bridge check should occur since
+    # there is no bridge/ directory).
+
+    # Wait for mapper to report healthy first
+    Execute Command    tedge mqtt pub 'te/device/main/service/tedge-mapper-test-stale/cmd/health/check' ''
+    Should Have MQTT Messages
+    ...    te/device/main/service/tedge-mapper-test-stale/status/health
+    ...    minimum=1
+    ...    message_contains="status":"up"
+
+    # Verify the bridge health topic no longer has a non-empty retained message.
+    # Subscribe with -C 1 -W 3 — if only an empty retained message exists, mosquitto_sub
+    # returns nothing (empty retained payloads clear the retained state).
+    ${bridge_msg}=    Execute Command
+    ...    timeout 5 mosquitto_sub -t 'te/device/main/service/tedge-mapper-bridge-test-stale/status/health' -C 1 -W 3 || true
+    ...    strip=${True}
+    Should Be Empty    ${bridge_msg}
+
+    [Teardown]    Stop And Remove Mapper    test-stale
+
 
 *** Keywords ***
 Custom Setup
@@ -196,14 +274,21 @@ Start Remote TLS Broker
     ...    sh -c 'echo listener 18884 > /tmp/tb-passwd.conf; echo certfile /tmp/tb-server.crt >> /tmp/tb-passwd.conf; echo keyfile /tmp/tb-server.key >> /tmp/tb-passwd.conf; echo allow_anonymous false >> /tmp/tb-passwd.conf; echo password_file /tmp/tb-passwd.txt >> /tmp/tb-passwd.conf; echo log_dest file /tmp/tb-passwd-mosquitto.log >> /tmp/tb-passwd.conf'
     Execute Command    mosquitto -c /tmp/tb-passwd.conf -d
     Sleep    0.5s
+    # Plain TCP broker on port 18885 — no TLS, password auth, for bridge.tls=off testing
+    Execute Command
+    ...    sh -c 'echo listener 18885 > /tmp/tb-notls.conf; echo allow_anonymous false >> /tmp/tb-notls.conf; echo password_file /tmp/tb-passwd.txt >> /tmp/tb-notls.conf; echo log_dest file /tmp/tb-notls-mosquitto.log >> /tmp/tb-notls.conf'
+    Execute Command    mosquitto -c /tmp/tb-notls.conf -d
+    Sleep    0.5s
 
 Stop Remote TLS Broker
     Execute Command    cat /tmp/tb-mosquitto.log    ignore_exit_code=True
     Execute Command    cat /tmp/tb-passwd-mosquitto.log    ignore_exit_code=True
+    Execute Command    cat /tmp/tb-notls-mosquitto.log    ignore_exit_code=True
     Execute Command    pkill -f 'mosquitto -c /tmp/tb.conf'    ignore_exit_code=True
     Execute Command    pkill -f 'mosquitto -c /tmp/tb-passwd.conf'    ignore_exit_code=True
+    Execute Command    pkill -f 'mosquitto -c /tmp/tb-notls.conf'    ignore_exit_code=True
     Execute Command
-    ...    rm -f /tmp/tb-ca.crt /tmp/tb-ca.key /tmp/tb-ca.srl /tmp/tb-server.crt /tmp/tb-server.key /tmp/tb-server.csr /tmp/tb-server.ext /tmp/tb-client.crt /tmp/tb-client.key /tmp/tb.conf /tmp/tb-mosquitto.log /tmp/tb-received.txt /tmp/tb-passwd.txt /tmp/tb-passwd.conf /tmp/tb-passwd-mosquitto.log /tmp/tb-pw-received.txt
+    ...    rm -f /tmp/tb-ca.crt /tmp/tb-ca.key /tmp/tb-ca.srl /tmp/tb-server.crt /tmp/tb-server.key /tmp/tb-server.csr /tmp/tb-server.ext /tmp/tb-client.crt /tmp/tb-client.key /tmp/tb.conf /tmp/tb-mosquitto.log /tmp/tb-received.txt /tmp/tb-passwd.txt /tmp/tb-passwd.conf /tmp/tb-passwd-mosquitto.log /tmp/tb-pw-received.txt /tmp/tb-notls.conf /tmp/tb-notls-mosquitto.log /tmp/tb-notls-received.txt
     ...    timeout=0
     ...    retries=0
 
@@ -241,6 +326,14 @@ Create Full Mapper
     ThinEdgeIO.Transfer To Device    ${CURDIR}/mapper.toml    /etc/tedge/mappers/${name}/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/bridge/rules.toml    /etc/tedge/mappers/${name}/bridge/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/echo.toml    /etc/tedge/mappers/${name}/flows/
+    Create Mapper Service File    ${name}
+
+Create Non TLS Bridge Mapper
+    [Arguments]    ${name}
+    Execute Command    mkdir -p /etc/tedge/mappers/${name}/bridge && chown -R tedge:tedge /etc/tedge/mappers/${name}
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/mapper-notls.toml    /etc/tedge/mappers/${name}/mapper.toml
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/credentials.toml    /etc/tedge/mappers/${name}/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/bridge/rules.toml    /etc/tedge/mappers/${name}/bridge/
     Create Mapper Service File    ${name}
 
 Create Two Concurrent Mappers

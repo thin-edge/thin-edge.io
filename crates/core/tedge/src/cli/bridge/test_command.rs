@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::io::Write;
 
+use clap_complete::ArgValueCandidates;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_bridge::config_toml::Direction;
@@ -14,6 +15,7 @@ use super::common::print_non_configurable_or_disabled;
 use super::common::print_non_expansions;
 use super::common::resolve_cloud;
 use super::common::DetailLevel;
+use crate::cli::common::mapper_name_completions;
 use crate::cli::common::Cloud;
 use crate::command::Command;
 use crate::log::MaybeFancy;
@@ -22,6 +24,7 @@ use crate::log::MaybeFancy;
 #[derive(clap::Args, Debug, Eq, PartialEq)]
 pub struct BridgeTestCmd {
     /// The cloud or custom mapper to test (e.g. c8y, aws, az, or a custom mapper name)
+    #[arg(add(ArgValueCandidates::new(mapper_name_completions)))]
     cloud: String,
 
     /// The MQTT topic to test (local or remote, wildcards are not supported)

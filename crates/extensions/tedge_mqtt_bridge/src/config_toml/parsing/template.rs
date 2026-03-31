@@ -1,7 +1,7 @@
 //! Chumsky-based parser for template strings
 //!
 //! Templates can contain:
-//! - `${config.some.key}` - config variable references
+//! - `${tedge.some.key}` - config variable references
 //! - `${varname}` - template variables (for template rules)
 //! - literal text
 //!
@@ -144,7 +144,7 @@ fn lexer<'src>() -> impl Parser<
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TemplateComponent<'src> {
-    /// A config reference like `${config.c8y.url}` - stores just `c8y.url`
+    /// A config reference like `${tedge.c8y.url}` - stores just `c8y.url`
     Config(String, OffsetSpan),
     /// A mapper config reference like `${mapper.bridge.topic_prefix}` - stores just `bridge.topic_prefix`
     Mapper(String, OffsetSpan),
@@ -169,7 +169,7 @@ where
         .labelled("dotted path (e.g. 'c8y.url')")
 }
 
-/// Parser for variable contents - either `config.some.key`, `mapper.some.key`, or `item`
+/// Parser for variable contents - either `tedge.some.key`, `mapper.some.key`, or `item`
 fn var_content_parser<'tokens, 'src: 'tokens, I>() -> impl Parser<
     'tokens,
     I,
@@ -179,12 +179,12 @@ fn var_content_parser<'tokens, 'src: 'tokens, I>() -> impl Parser<
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
 {
-    let config_ref = just(Token::Ident("config"))
+    let config_ref = just(Token::Ident("tedge"))
         .ignore_then(just(Token::Dot))
         .ignore_then(
             dotted_path().map_with(|parts, e| TemplateComponent::Config(parts.join("."), e.span())),
         )
-        .labelled("config reference (e.g. 'config.c8y.url')");
+        .labelled("tedge config reference (e.g. 'tedge.c8y.url')");
 
     let mapper_ref = just(Token::Ident("mapper"))
         .ignore_then(just(Token::Dot))
@@ -290,9 +290,9 @@ fn expand_mapper_component(
     expand_mapper_key(path, mapper_config, key_span.into())
 }
 
-/// A parsed for-loop source — either a `${config.*}` or `${mapper.*}` reference.
+/// A parsed for-loop source — either a `${tedge.*}` or `${mapper.*}` reference.
 pub enum ForReference {
-    Config(String, OffsetSpan),
+    Tedge(String, OffsetSpan),
     Mapper(String, OffsetSpan),
 }
 
@@ -302,12 +302,12 @@ where
     I: ValueInput<'tokens, Token = Token<'src>, Span = OffsetSpan>,
 {
     let config = just(Token::VarStart)
-        .ignore_then(just(Token::Ident("config")))
+        .ignore_then(just(Token::Ident("tedge")))
         .ignore_then(just(Token::Dot))
         .ignore_then(dotted_path().map_with(|parts, e| (parts.join("."), e.span())))
         .then_ignore(just(Token::VarEnd))
-        .map(|(key, span)| ForReference::Config(key, span))
-        .labelled("config reference (e.g. '${config.c8y.topics}')");
+        .map(|(key, span)| ForReference::Tedge(key, span))
+        .labelled("tedge config reference (e.g. '${tedge.c8y.topics}')");
 
     let mapper = just(Token::VarStart)
         .ignore_then(just(Token::Ident("mapper")))
@@ -320,7 +320,7 @@ where
     choice((config, mapper))
 }
 
-/// Parse a for-loop source reference — either `${config.*}` or `${mapper.*}`.
+/// Parse a for-loop source reference — either `${tedge.*}` or `${mapper.*}`.
 pub fn parse_for_reference(src: &toml::Spanned<String>) -> Result<ForReference, ExpandError> {
     let offset = src.span().start + 1;
     let input = src.get_ref();
@@ -353,7 +353,7 @@ pub fn parse_for_reference(src: &toml::Spanned<String>) -> Result<ForReference, 
     if let Some(e) = parse_errs.into_iter().next() {
         return Err(ExpandError {
             message: format!("{e}"),
-            help: Some("Use format: ${config.key} or ${mapper.key}".into()),
+            help: Some("Use format: ${tedge.key} or ${mapper.key}".into()),
             span: e.span().into_range(),
         });
     }
@@ -470,7 +470,7 @@ pub fn expand_config_template(
             TemplateComponent::Item => {
                 return Err(ExpandError {
                     message: "Variable 'item' is only valid inside template rules".into(),
-                    help: Some("Use 'config.<key>' for config references".into()),
+                    help: Some("Use 'tedge.<key>' for config references".into()),
                     span: span.into(),
                 });
             }
@@ -536,7 +536,7 @@ mod tests {
 
     #[test]
     fn parses_config_reference() {
-        let input = toml_spanned("${config.c8y.url}");
+        let input = toml_spanned("${tedge.c8y.url}");
         let components = parse_template(&input).unwrap();
         assert_eq!(components.len(), 1);
         let TemplateComponent::Config(ref var_name, span) = components[0].0 else {
@@ -556,7 +556,7 @@ mod tests {
 
     #[test]
     fn parses_mixed_template() {
-        let input = toml_spanned("prefix/${config.c8y.bridge.topic_prefix}/${item}/suffix");
+        let input = toml_spanned("prefix/${tedge.c8y.bridge.topic_prefix}/${item}/suffix");
         let components = parse_template(&input).unwrap();
         assert_eq!(components.len(), 5);
         assert_eq!(components[0].0, TemplateComponent::Text("prefix/"));
@@ -572,7 +572,7 @@ mod tests {
 
     #[test]
     fn template_tokens_can_be_stringified() {
-        let raw_input = "prefix/${config.c8y.bridge.topic_prefix}/${item}/suffix";
+        let raw_input = "prefix/${tedge.c8y.bridge.topic_prefix}/${item}/suffix";
         let components = lexer()
             .parse(raw_input.with_context(0))
             .into_result()
@@ -762,7 +762,7 @@ mod tests {
         use crate::config_toml::TableMapperLookup;
         let config = TEdgeConfig::load_toml_str("mqtt.port = 1883");
         let mapper = TableMapperLookup(toml::toml! { topic_prefix = "tb" });
-        let input = toml_spanned("${mapper.topic_prefix}/${config.mqtt.port}");
+        let input = toml_spanned("${mapper.topic_prefix}/${tedge.mqtt.port}");
         let result = expand_config_template(&input, &config, None, &mapper).unwrap();
         assert_eq!(result, "tb/1883");
     }
@@ -773,14 +773,14 @@ mod tests {
 
     #[test]
     fn span_points_to_config_reference() {
-        let input = toml_spanned("${config.c8y.url}");
+        let input = toml_spanned("${tedge.c8y.url}");
         let components = parse_template(&input).unwrap();
         assert_eq!(components.len(), 1);
 
         let (_, span) = &components[0];
         assert_eq!(
             extract_toml_span(&input, span.into_range()),
-            "${config.c8y.url}"
+            "${tedge.c8y.url}"
         );
     }
 
@@ -796,7 +796,7 @@ mod tests {
 
     #[test]
     fn spans_in_mixed_template_point_to_correct_components() {
-        let input = toml_spanned("prefix/${config.key}/${item}/suffix");
+        let input = toml_spanned("prefix/${tedge.key}/${item}/suffix");
         let components = parse_template(&input).unwrap();
         assert_eq!(components.len(), 5);
 
@@ -805,10 +805,10 @@ mod tests {
             extract_toml_span(&input, components[0].1.into_range()),
             "prefix/"
         );
-        // "${config.key}"
+        // "${tedge.key}"
         assert_eq!(
             extract_toml_span(&input, components[1].1.into_range()),
-            "${config.key}"
+            "${tedge.key}"
         );
         // "/"
         assert_eq!(extract_toml_span(&input, components[2].1.into_range()), "/");
@@ -846,7 +846,7 @@ mod tests {
     fn error_offset_for_invalid_config_key() {
         use crate::config_toml::TableMapperLookup;
         let config = TEdgeConfig::load_toml_str("");
-        let input = toml_spanned("prefix/${config.invalid.key}/suffix");
+        let input = toml_spanned("prefix/${tedge.invalid.key}/suffix");
         let err = expand_config_template(
             &input,
             &config,

@@ -6,6 +6,7 @@ use std::fmt;
 use std::path::Path;
 use tedge_config::get_config_dir;
 use tedge_config::tedge_toml::ProfileName;
+use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::TEdgeConfig;
 use tedge_system_services::SystemService;
 
@@ -151,6 +152,16 @@ impl Cloud {
 
 /// Resolve a cloud name string to a known `Cloud`, or `None` for custom mappers.
 pub fn resolve_cloud(name: &str, profile: Option<ProfileName>) -> Option<Cloud> {
+    // If no explicit profile is given and the name looks like `<cloud>.<profile>`,
+    // split and treat the second segment as the profile name.
+    if profile.is_none() {
+        if let Some((cloud, profile_str)) = name.split_once('.') {
+            if let Ok(parsed_profile) = profile_str.parse::<ProfileName>() {
+                return resolve_cloud(cloud, Some(parsed_profile));
+            }
+        }
+    }
+
     match name {
         #[cfg(feature = "c8y")]
         "c8y" => Some(Cloud::c8y(profile)),
@@ -236,6 +247,132 @@ impl MaybeBorrowedCloud<'_> {
 /// It will use the configuration directory as set by the
 /// `TEDGE_CONFIGURATION_DIR` environment variable, or `/etc/tedge` if
 /// that is not set
+/// Completion candidates for mapper name arguments.
+///
+/// Scans the `mappers/` directory under `TEDGE_CONFIG_DIR` (or the compiled-in
+/// default) and returns subdirectory names.
+pub fn mapper_name_completions() -> Vec<CompletionCandidate> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(mapper_name_completions_for_config_dir(get_config_dir()))
+    })
+}
+
+async fn mapper_name_completions_for_config_dir(dir: impl AsRef<Path>) -> Vec<CompletionCandidate> {
+    let mappers_root = dir.as_ref().join("mappers");
+    let Ok(mut entries) = tokio::fs::read_dir(&mappers_root).await else {
+        return vec![];
+    };
+    let mut names = Vec::new();
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let Ok(ft) = entry.file_type().await else {
+            continue;
+        };
+        if ft.is_dir() {
+            names.push(CompletionCandidate::new(
+                entry.file_name().to_string_lossy().into_owned(),
+            ));
+        }
+    }
+    names.sort_by(|a, b| a.get_value().cmp(b.get_value()));
+    names
+}
+
+/// Completion candidates for `tedge mapper config get`.
+///
+/// The argument format is `<mapper-name>.<key>`, so completions are:
+/// - For built-in clouds (`c8y`, `az`, `aws` + profiles): the `tedge.toml`
+///   config keys from `ReadableKey` matching that cloud prefix.
+/// - For custom mappers (on-disk only): the cross-product of the mapper name
+///   and the custom mapper schema keys.
+pub fn mapper_config_key_completions() -> Vec<CompletionCandidate> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(mapper_config_key_completions_for_config_dir(
+            get_config_dir(),
+        ))
+    })
+}
+
+/// Returns `true` if `name` is a known built-in cloud name.
+pub fn is_builtin_cloud(name: &str) -> bool {
+    #[cfg(feature = "c8y")]
+    if name == "c8y" {
+        return true;
+    }
+    #[cfg(feature = "azure")]
+    if name == "az" {
+        return true;
+    }
+    #[cfg(feature = "aws")]
+    if name == "aws" {
+        return true;
+    }
+    let _ = name;
+    false
+}
+
+async fn mapper_config_key_completions_for_config_dir(
+    dir: impl AsRef<Path>,
+) -> Vec<CompletionCandidate> {
+    let mut candidates = Vec::new();
+
+    let readable_completions: Vec<_> = ReadableKey::completions()
+        .into_iter()
+        .map(|c| {
+            let key = c.get_value().to_str().unwrap_or_default().to_string();
+            (key, c)
+        })
+        .collect();
+
+    // Non-profiled built-in clouds: offer the real tedge.toml config keys
+    // directly (e.g. `c8y.url`, `c8y.smartrest.templates`), excluding
+    // profile-qualified variants (`c8y.profiles.*.url`).
+    for (key, _) in &readable_completions {
+        let first = key.split('.').next().unwrap_or_default();
+        if !is_builtin_cloud(first) {
+            continue;
+        }
+        if !key.contains(".profiles.") {
+            candidates.push(CompletionCandidate::new(key));
+        }
+    }
+
+    let disk_names = mapper_name_completions_for_config_dir(&dir).await;
+    let schema_keys = tedge_mapper::custom_mapper_resolve::custom_mapper_schema_keys();
+
+    for name in &disk_names {
+        let name_str = name.get_value().to_str().unwrap_or_default();
+        let first_segment = name_str.split('.').next().unwrap_or(name_str);
+
+        if is_builtin_cloud(first_segment) {
+            if name_str == first_segment {
+                // Non-profiled built-in (e.g. "c8y") — already covered above.
+                continue;
+            }
+            // Profiled built-in cloud (e.g. "c8y.new"): rewrite non-profiled
+            // ReadableKey keys for this cloud by inserting the profile name.
+            // `c8y.url` → `c8y.new.url`, `c8y.device.cert_path` → `c8y.new.device.cert_path`
+            let profile = &name_str[first_segment.len() + 1..]; // e.g. "new"
+            for (key, _c) in &readable_completions {
+                if key.split('.').next() == Some(first_segment) && !key.contains(".profiles.") {
+                    // key = "c8y.url" → suffix = "url"
+                    let suffix = &key[first_segment.len() + 1..];
+                    candidates.push(CompletionCandidate::new(format!(
+                        "{first_segment}.{profile}.{suffix}"
+                    )));
+                }
+            }
+        } else {
+            // Custom mapper: cross-product of name × schema keys.
+            for key in &schema_keys {
+                candidates.push(CompletionCandidate::new(format!("{name_str}.{key}")));
+            }
+        }
+    }
+
+    candidates
+}
+
 pub fn profile_completions() -> Vec<CompletionCandidate> {
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current()
@@ -259,6 +396,7 @@ async fn profile_completions_for_config_dir(dir: impl AsRef<Path>) -> Vec<Comple
 mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
 
+    use crate::cli::common::mapper_config_key_completions_for_config_dir;
     use crate::cli::common::profile_completions_for_config_dir;
 
     #[tokio::test]
@@ -297,5 +435,89 @@ mod tests {
             .collect::<Vec<_>>();
         completions.sort();
         completions
+    }
+
+    #[tokio::test]
+    async fn mapper_config_key_completions_include_profiled_builtin_clouds() {
+        let ttd = TempTedgeDir::new();
+        let mappers = ttd.dir("mappers");
+        mappers
+            .dir("c8y.staging")
+            .file("mapper.toml")
+            .with_raw_content("");
+        let completions = mapper_config_key_completions_for_config_dir(ttd.path()).await;
+        let keys: Vec<String> = completions
+            .iter()
+            .map(|c| c.get_value().to_str().unwrap().to_owned())
+            .collect();
+        // Profiled built-in cloud should get the c8y tedge.toml keys rewritten
+        // with the profile name (not the limited custom mapper schema keys).
+        assert!(
+            keys.contains(&"c8y.staging.url".to_string()),
+            "expected c8y.staging.url in completions, got: {keys:?}"
+        );
+        // c8y-specific keys should appear (not just generic schema keys)
+        assert!(
+            keys.contains(&"c8y.staging.smartrest.templates".to_string()),
+            "expected c8y.staging.smartrest.templates in completions, got: {keys:?}"
+        );
+        // Non-profiled c8y keys should still be present
+        assert!(
+            keys.contains(&"c8y.url".to_string()),
+            "expected c8y.url in completions, got: {keys:?}"
+        );
+        // ReadableKey profile format should NOT appear
+        assert!(
+            !keys.iter().any(|k| k.contains(".profiles.")),
+            "should not contain .profiles. keys, got: {keys:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "azure")]
+    async fn mapper_config_key_completions_include_profiled_az_cloud() {
+        let ttd = TempTedgeDir::new();
+        let mappers = ttd.dir("mappers");
+        mappers
+            .dir("az.eu")
+            .file("mapper.toml")
+            .with_raw_content("");
+        let completions = mapper_config_key_completions_for_config_dir(ttd.path()).await;
+        let keys: Vec<String> = completions
+            .iter()
+            .map(|c| c.get_value().to_str().unwrap().to_owned())
+            .collect();
+        assert!(
+            keys.contains(&"az.eu.url".to_string()),
+            "expected az.eu.url in completions, got: {keys:?}"
+        );
+        assert!(
+            !keys.iter().any(|k| k.contains(".profiles.")),
+            "should not contain .profiles. keys, got: {keys:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "aws")]
+    async fn mapper_config_key_completions_include_profiled_aws_cloud() {
+        let ttd = TempTedgeDir::new();
+        let mappers = ttd.dir("mappers");
+        mappers
+            .dir("aws.us-east")
+            .file("mapper.toml")
+            .with_raw_content("");
+        let completions = mapper_config_key_completions_for_config_dir(ttd.path()).await;
+        let keys: Vec<String> = completions
+            .iter()
+            .map(|c| c.get_value().to_str().unwrap().to_owned())
+            .collect();
+        assert!(
+            keys.contains(&"aws.us-east.url".to_string()),
+            "expected aws.us-east.url in completions, got: {keys:?}"
+        );
+        assert!(
+            !keys.iter().any(|k| k.contains(".profiles.")),
+            "should not contain .profiles. keys, got: {keys:?}"
+        );
     }
 }

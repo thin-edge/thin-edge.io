@@ -3,11 +3,11 @@ pub use self::command::*;
 pub use self::error::*;
 
 #[cfg(feature = "aws")]
-mod aws;
+pub(crate) mod aws;
 #[cfg(feature = "azure")]
-mod azure;
+pub(crate) mod azure;
 #[cfg(feature = "c8y")]
-mod c8y;
+pub(crate) mod c8y;
 mod cli;
 mod command;
 mod error;

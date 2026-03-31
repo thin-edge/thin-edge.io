@@ -81,6 +81,19 @@ pub struct DeviceConfig {
     pub root_cert_path: Option<Utf8PathBuf>,
 }
 
+/// TLS transport control for the cloud broker connection.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BridgeTls {
+    /// Always use TLS, regardless of port.
+    On,
+    /// Never use TLS (plain TCP). Incompatible with certificate authentication.
+    Off,
+    /// Infer from port: 8883 → TLS on, 1883 → TLS off, other → TLS on.
+    #[default]
+    Auto,
+}
+
 /// MQTT bridge connection settings.
 #[derive(Debug, Default, Clone, serde::Deserialize)]
 pub struct BridgeConfig {
@@ -90,6 +103,9 @@ pub struct BridgeConfig {
     pub clean_session: bool,
     /// MQTT keepalive interval
     pub keepalive_interval: Option<SecondsOrHumanTime>,
+    /// TLS transport control: on, off, or auto (default).
+    #[serde(default)]
+    pub tls: BridgeTls,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -183,8 +199,27 @@ fn resolve_relative(base: &Utf8Path, path: Utf8PathBuf) -> Utf8PathBuf {
     if path.is_absolute() {
         path
     } else {
-        base.join(path)
+        normalize_path(base.join(path))
     }
+}
+
+/// Lexically normalizes a path by collapsing `.` and `..` components.
+///
+/// Does not access the filesystem — no symlink resolution, no existence check.
+/// `..` at the root is a no-op (cannot escape the root of an absolute path).
+pub fn normalize_path(path: Utf8PathBuf) -> Utf8PathBuf {
+    use camino::Utf8Component;
+    let mut result = Utf8PathBuf::new();
+    for component in path.components() {
+        match component {
+            Utf8Component::CurDir => {}
+            Utf8Component::ParentDir => {
+                result.pop();
+            }
+            other => result.push(other),
+        }
+    }
+    result
 }
 
 /// Scans `mappers_root` and returns `(name, table)` for each subdirectory.
@@ -534,6 +569,39 @@ key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
         );
     }
 
+    mod normalize_path {
+        use super::*;
+
+        #[test]
+        fn dot_dot_collapses_parent() {
+            assert_eq!(
+                normalize_path("/etc/tedge/mappers/thingsboard/../../certs/device.pem".into()),
+                Utf8PathBuf::from("/etc/tedge/certs/device.pem")
+            );
+        }
+
+        #[test]
+        fn clean_path_is_unchanged() {
+            assert_eq!(
+                normalize_path("/etc/tedge/mappers/thingsboard/cert.pem".into()),
+                Utf8PathBuf::from("/etc/tedge/mappers/thingsboard/cert.pem")
+            );
+        }
+
+        #[test]
+        fn dot_components_are_removed() {
+            assert_eq!(
+                normalize_path("/etc/./tedge/./cert.pem".into()),
+                Utf8PathBuf::from("/etc/tedge/cert.pem")
+            );
+        }
+
+        #[test]
+        fn dot_dot_at_root_is_no_op() {
+            assert_eq!(normalize_path("/../etc".into()), Utf8PathBuf::from("/etc"));
+        }
+    }
+
     mod relative_paths {
         use super::*;
 
@@ -601,6 +669,27 @@ key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
             assert_eq!(
                 device.cert_path.unwrap(),
                 mapper_dir.join("certs/device.pem")
+            );
+        }
+
+        #[tokio::test]
+        async fn dot_dot_in_relative_path_is_normalized() {
+            let ttd = TempTedgeDir::new();
+            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            tokio::fs::write(
+                mapper_dir.join("mapper.toml"),
+                "[device]\ncert_path = \"../../certs/device.pem\"\nkey_path = \"../../certs/device.key\"\n",
+            )
+            .await
+            .unwrap();
+
+            let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+            let device = config.device.unwrap();
+            assert_eq!(
+                device.cert_path.unwrap(),
+                ttd.utf8_path().join("certs/device.pem"),
+                "../../ should be resolved and normalized away"
             );
         }
 
