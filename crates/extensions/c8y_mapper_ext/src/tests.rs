@@ -3160,7 +3160,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 pub(crate) struct TestHandleBuilder {
     pub c8y: C8yMapperBuilder,
     pub flows: FlowsMapperBuilder,
-    pub mqtt: MockMqtt,
+    pub mqtt: MockMqttBoxBuilder,
     pub http: FakeServerBoxBuilder<HttpRequest, HttpResult>,
     pub fs: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent>,
     pub ul: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult>,
@@ -3180,7 +3180,7 @@ pub(crate) async fn c8y_mapper_builder(
         tmp_dir.dir(".tedge-mapper-c8y");
     }
 
-    let mut mqtt_builder = MockMqtt::new();
+    let mut mqtt_builder = MockMqttBoxBuilder::new();
     let mut http_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
         FakeServerBoxBuilder::default();
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
@@ -3372,14 +3372,14 @@ pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<HttpRequest, Ht
     });
 }
 
-pub(crate) struct MockMqtt {
+pub(crate) struct MockMqttBoxBuilder {
     input_sender: mpsc::Sender<MqttRequest>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     output_sender: Vec<(TopicFilter, DynSender<MqttMessage>)>,
     input_receiver: LoggingReceiver<MqttRequest>,
 }
 
-impl MockMqtt {
+impl MockMqttBoxBuilder {
     pub fn new() -> Self {
         let (input_sender, input_receiver) = mpsc::channel(16);
         let (signal_sender, signal_receiver) = mpsc::channel(4);
@@ -3387,7 +3387,7 @@ impl MockMqtt {
         let input_receiver =
             LoggingReceiver::new("MockMQTT".to_string(), input_receiver, signal_receiver);
 
-        MockMqtt {
+        MockMqttBoxBuilder {
             input_sender,
             signal_sender,
             output_sender,
@@ -3407,19 +3407,19 @@ impl MockMqtt {
     }
 }
 
-impl MessageSource<MqttMessage, TopicFilter> for MockMqtt {
+impl MessageSource<MqttMessage, TopicFilter> for MockMqttBoxBuilder {
     fn connect_sink(&mut self, config: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
         self.output_sender.push((config, peer.get_sender()));
     }
 }
 
-impl MessageSink<MqttMessage> for MockMqtt {
+impl MessageSink<MqttMessage> for MockMqttBoxBuilder {
     fn get_sender(&self) -> DynSender<MqttMessage> {
         self.input_sender.sender_clone()
     }
 }
 
-impl MessageSource<MqttMessage, &mut DynSubscriptions> for MockMqtt {
+impl MessageSource<MqttMessage, &mut DynSubscriptions> for MockMqttBoxBuilder {
     fn connect_sink(
         &mut self,
         config: &mut DynSubscriptions,
@@ -3432,13 +3432,13 @@ impl MessageSource<MqttMessage, &mut DynSubscriptions> for MockMqtt {
     }
 }
 
-impl MessageSink<MqttRequest> for MockMqtt {
+impl MessageSink<MqttRequest> for MockMqttBoxBuilder {
     fn get_sender(&self) -> DynSender<MqttRequest> {
         self.input_sender.sender_clone()
     }
 }
 
-impl RuntimeRequestSink for MockMqtt {
+impl RuntimeRequestSink for MockMqttBoxBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.signal_sender.sender_clone()
     }
