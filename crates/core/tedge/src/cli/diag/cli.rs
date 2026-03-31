@@ -4,6 +4,7 @@ use crate::command::Command;
 use crate::warning;
 use crate::ConfigError;
 use camino::Utf8PathBuf;
+use clap::ValueHint;
 use std::collections::BTreeSet;
 use tedge_config::models::AbsolutePath;
 use tedge_config::models::SecondsOrHumanTime;
@@ -16,11 +17,11 @@ pub enum TEdgeDiagCli {
     /// Collect diagnostic information by running device-specific scripts
     Collect {
         /// Directory where diagnostic plugins are stored. The paths from diag.plugin_dir will be used by default
-        #[clap(long, value_delimiter = ',')]
+        #[clap(long, value_delimiter = ',', value_hint = ValueHint::DirPath)]
         plugin_dir: Option<Vec<String>>,
 
         /// Directory where output tarball and temporary output files are stored. The path from tmp.path will be used by default
-        #[clap(long)]
+        #[clap(long, value_hint = ValueHint::DirPath)]
         output_dir: Option<Utf8PathBuf>,
 
         /// Filename (without .tar.gz) for the output tarball
