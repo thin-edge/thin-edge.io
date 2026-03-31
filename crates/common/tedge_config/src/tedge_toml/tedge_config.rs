@@ -1050,6 +1050,10 @@ define_tedge_config! {
         device_topic_id: EntityTopicId,
 
         bind: {
+            #[tedge_config(example = "true", default(value = true))]
+            /// Creates a mosquitto bridge configuration file with recommended listener settings
+            enabled: bool,
+
             /// The address mosquitto binds to for internal use
             #[tedge_config(example = "127.0.0.1", default(variable = "Ipv4Addr::LOCALHOST"))]
             address: IpAddr,

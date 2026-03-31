@@ -911,12 +911,14 @@ impl ConnectCommand {
             Cloud::Azure(_) => (),
         }
 
-        if let Err(err) =
-            write_generic_mosquitto_config_to_file(tedge_config, common_mosquitto_config).await
-        {
-            // We want to preserve previous errors and therefore discard result of this function.
-            let _ = clean_up(tedge_config, bridge_config);
-            return Err(err.into());
+        if tedge_config.mqtt.bind.enabled {
+            if let Err(err) =
+                write_generic_mosquitto_config_to_file(tedge_config, common_mosquitto_config).await
+            {
+                // We want to preserve previous errors and therefore discard result of this function.
+                let _ = clean_up(tedge_config, bridge_config);
+                return Err(err.into());
+            }
         }
 
         if bridge_config.bridge_location == BridgeLocation::Mosquitto {
