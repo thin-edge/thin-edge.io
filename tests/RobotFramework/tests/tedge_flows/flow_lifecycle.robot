@@ -268,7 +268,6 @@ Flow is reloaded after package-style replacement
 Custom Setup
     ${DEVICE_SN}    Setup
     Set Suite Variable    $DEVICE_SN
-    Execute Command    mkdir -p /etc/tedge/mappers/local/flows
     Restart Service    tedge-mapper-local
 
 Install Lifecycle Flow

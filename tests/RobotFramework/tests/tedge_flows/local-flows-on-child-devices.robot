@@ -11,12 +11,10 @@ Test Tags           theme:tedge_flows
 *** Test Cases ***
 Child devices can run their own tedge-mapper-local
     Set Device Context    ${PARENT_SN}
-    Execute Command    mkdir -p /etc/tedge/mappers/local/flows
     Execute Command    rm -fr /etc/tedge/mappers/local/flows/*
     Restart Service    tedge-mapper-local
 
     Set Device Context    ${CHILD_SN}
-    Execute Command    mkdir -p /etc/tedge/mappers/local/flows
     ThinEdgeIO.Transfer To Device    ${CURDIR}/greeting-flows/*    /etc/tedge/mappers/local/flows/greeting-flows/
     ${start}=    Get Unix Timestamp
     Restart Service    tedge-mapper-local
