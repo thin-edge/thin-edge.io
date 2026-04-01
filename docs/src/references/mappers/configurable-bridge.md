@@ -81,17 +81,17 @@ You can interpolate variables inside `local_prefix`, `remote_prefix` and `topic`
 
 | Namespace | Source | Example |
 |-----------|--------|---------|
-| `${config.*}` | Global `tedge.toml` (same values as `tedge config get`) | `${config.c8y.bridge.topic_prefix}` |
+| `${tedge.*}` | Global `tedge.toml` (same values as `tedge config get`) | `${tedge.c8y.bridge.topic_prefix}` |
 | `${connection.*}` | Active connection context (`auth_method`) | `${connection.auth_method}` |
-| `${mapper.*}` | Mapper's own `mapper.toml` (user-defined mappers only) | `${mapper.bridge.topic_prefix}` |
+| `${mapper.*}` | Mapper's own config (same values as `tedge mapper config get`) | `${mapper.bridge.topic_prefix}` |
 
-#### `${config.*}` — global config
+#### `${tedge.*}` — global config
 
 Resolves against `tedge.toml` using the same stringification as `tedge config get <key>`:
 
 ```toml
 [[rule]]
-local_prefix = "${config.c8y.bridge.topic_prefix}/"
+local_prefix = "${tedge.c8y.bridge.topic_prefix}/"
 remote_prefix = ""
 topic = "s/us"
 direction = "outbound"
@@ -99,15 +99,17 @@ direction = "outbound"
 
 ```toml
 [[rule]]
-local_prefix = "${config.aws.bridge.topic_prefix}/"
-remote_prefix = "$aws/things/${config.aws.device.id}"
+local_prefix = "${tedge.aws.bridge.topic_prefix}/"
+remote_prefix = "$aws/things/${tedge.aws.device.id}"
 topic = "shadow/#"
 direction = "bidirectional"
 ```
 
 #### `${mapper.*}` — mapper-local config
 
-For user-defined mappers, the entire `mapper.toml` is available under the `${mapper.*}` namespace. Any key you define in `mapper.toml` — including custom fields in sections — is accessible in bridge rules.
+Every mapper — built-in (Cumulocity, Azure, AWS) and user-defined — exposes its configuration under the `${mapper.*}` namespace.
+For built-in mappers, the values are derived from the corresponding `tedge.toml`/`mapper.toml` settings.
+For user-defined mappers, the entire `mapper.toml` is available — including any custom fields you define.
 
 This is useful for values specific to your cloud integration that don't belong in the global `tedge.toml`:
 
@@ -133,10 +135,6 @@ direction = "outbound"
 
 This forwards messages from `tb/telemetry` on the local broker to `v1/devices/me/telemetry` on the ThingsBoard broker.
 
-:::note
-The `${mapper.*}` namespace is only available in bridge rules for user-defined mappers. It cannot be used in `if = "..."` conditions or `for = "..."` template loops.
-:::
-
 ### Template rules
 
 You may wish to define multiple rules using a pattern:
@@ -144,7 +142,7 @@ You may wish to define multiple rules using a pattern:
 ```toml
 [[template_rule]]
 # Iterating over an array in tedge config
-for = "${config.c8y.smartrest.templates}"
+for = "${tedge.c8y.smartrest.templates}"
 topic = "s/uc/${item}"
 
 [[template_rule]]
@@ -160,10 +158,10 @@ A rule (or an entire file) can be enabled conditionally. Currently this supports
 ```toml
 remote_prefix = ""
 # If `c8y.mqtt_service.enabled` is set to `false`, all rules in this file will be disabled
-if = "${config.c8y.mqtt_service.enabled}"
+if = "${mapper.mqtt_service.enabled}"
 
 [[rule]]
-local_prefix = "${config.c8y.bridge.topic_prefix}/mqtt/out/"
+local_prefix = "${mapper.bridge.topic_prefix}/mqtt/out/"
 topic = "#"
 direction = "outbound"
 ```
@@ -227,9 +225,15 @@ If you are using named profiles, specify the profile with `--profile`:
 tedge bridge inspect c8y --profile production
 ```
 
-:::note
-`tedge bridge inspect` currently only supports clouds with configurable bridge rules (Cumulocity). For AWS and Azure, the built-in bridge rules are not yet configurable.
-:::
+You can also inspect AWS or Azure bridge configurations:
+
+```sh
+tedge bridge inspect aws
+```
+
+```sh
+tedge bridge inspect az
+```
 
 ### `tedge bridge test`
 
@@ -282,6 +286,16 @@ Error: Wildcard characters (#, +) are not supported. Provide a concrete topic to
 
 All matching rules are displayed, which can help identify unexpected overlaps if multiple rules match the same topic.
 
+You can also test AWS and Azure bridge routing:
+
+```sh
+tedge bridge test aws aws/td/temperature
+```
+
+```sh
+tedge bridge test az az/messages/events/temp
+```
+
 ## Template file structure
 
 ### Cumulocity
@@ -317,3 +331,19 @@ $ mv /etc/tedge/mappers/c8y/bridge/mqtt-core.toml /etc/tedge/mappers/c8y/bridge/
 
 Alternatively, a builtin bridge configuration can be disabled by simply removing its definition
 and keeping the associated `.toml.template` file as a witness.
+
+### Azure
+
+The Azure built-in bridge rules are configured in `/etc/tedge/mappers/az/bridge/rules.toml`.
+The file is auto-generated on first startup and uses the same TOML syntax and variable interpolation as Cumulocity rules.
+It can be manually edited, extended with additional rule files in the same directory, or disabled by renaming to `.toml.disabled`.
+
+If the auto-generated file has been modified, the Azure mapper will only update its template copy at `/etc/tedge/mappers/az/bridge/rules.toml.template`.
+
+### AWS
+
+The AWS built-in bridge rules are configured in `/etc/tedge/mappers/aws/bridge/rules.toml`.
+The file is auto-generated on first startup and uses the same TOML syntax and variable interpolation as Cumulocity rules.
+It can be manually edited, extended with additional rule files in the same directory, or disabled by renaming to `.toml.disabled`.
+
+If the auto-generated file has been modified, the AWS mapper will only update its template copy at `/etc/tedge/mappers/aws/bridge/rules.toml.template`.
