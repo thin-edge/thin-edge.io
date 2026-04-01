@@ -348,7 +348,7 @@ On your %%te%% device, run the following steps:
 
 1. On your local machine, create a custom operation instance in Cumulocity
 
-    Below shows an example of creating the operation using the [go-c8y-cli)](https://goc8ycli.netlify.app/) cli tool. It assumes you have already activated your go-c8y-cli session which points to your intended Cumulocity tenant.
+    Below shows an example of creating the operation using the [go-c8y-cli)](https://c8y.app/) cli tool. It assumes you have already activated your go-c8y-cli session which points to your intended Cumulocity tenant.
 
     ```sh
     c8y operations create \

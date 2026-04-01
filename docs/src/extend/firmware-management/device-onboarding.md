@@ -56,16 +56,16 @@ On your machine (not the target device that will be on-boarded) you will need on
     If you are using an image built using **Rugix**, the authorized ssh key/s should have been included in the image. If you can't ssh into your device please review the [build instructions](../building-image/rugix/tutorial/#clone-project) again to make sure the correct ssh key/s was added during build time.
     :::
 
-3. [go-c8y-cli](https://goc8ycli.netlify.app/docs/installation/shell-installation/)
+3. [go-c8y-cli](https://c8y.app/docs/installation/shell-installation/)
 
 4. go-c8y-cli extension [c8y-tedge](https://github.com/thin-edge/c8y-tedge)
 
 
 #### Setting up go-c8y-cli
 
-1. Install [go-c8y-cli](https://goc8ycli.netlify.app/docs/installation/shell-installation/) as per the instructions
+1. Install [go-c8y-cli](https://c8y.app/docs/installation/shell-installation/) as per the instructions
 
-2. Install the [go-c8y-cli](https://goc8ycli.netlify.app/docs/installation/shell-installation/) extension, [c8y-tedge](https://github.com/thin-edge/c8y-tedge)
+2. Install the [go-c8y-cli](https://c8y.app/docs/installation/shell-installation/) extension, [c8y-tedge](https://github.com/thin-edge/c8y-tedge)
 
     ```sh
     c8y extension install thin-edge/c8y-tedge

@@ -219,7 +219,7 @@ It is recommended to provide a local certificate authority (CA) signing certific
 The following dependencies are requires for the instructions:
 
 * openssl
-* Optional: [go-c8y-cli](https://goc8ycli.netlify.app/) to upload the CA certificate using the CLI
+* Optional: [go-c8y-cli](https://c8y.app/) to upload the CA certificate using the CLI
 
 **Procedure**
 
@@ -245,7 +245,7 @@ The following dependencies are requires for the instructions:
     * Activate *Auto Registration*
 
 
-    Alternatively, if you are a [go-c8y-cli](https://goc8ycli.netlify.app/) user, then you can use the following command to upload the CA certificate to Cumulocity.
+    Alternatively, if you are a [go-c8y-cli](https://c8y.app/) user, then you can use the following command to upload the CA certificate to Cumulocity.
 
     ```sh
     c8y devicemanagement certificates create \

@@ -40,7 +40,7 @@ The following process can be used to enable the certificate-authority feature an
 
 1. Enable the Cumulocity **certificate-authority** feature toggle
 
-    Feature toggles can be controlled by using the [Cumulocity REST API](https://cumulocity.com/api/core/#tag/Feature-toggles-API), or by using [go-c8y-cli](https://goc8ycli.netlify.app/). For convenience, the go-c8y-cli commands are shown below:
+    Feature toggles can be controlled by using the [Cumulocity REST API](https://cumulocity.com/api/core/#tag/Feature-toggles-API), or by using [go-c8y-cli](https://c8y.app/). For convenience, the go-c8y-cli commands are shown below:
 
     ```sh tab={"label":"From Current Tenant"}
     c8y features enable --key certificate-authority
@@ -90,13 +90,13 @@ For instructions on how to register a device using the Cumulocity Device Managem
 
 ### Using CLI Commands
 
-Below describes the steps to register a new device using a combination of [go-c8y-cli](https://goc8ycli.netlify.app/) commands and %%te%%.
+Below describes the steps to register a new device using a combination of [go-c8y-cli](https://c8y.app/) commands and %%te%%.
 
 :::note
 go-c8y-cli simply uses the Cumulocity REST API to perform the actions, this means that you can also do the same steps by using the API directly.
 :::
 
-1. Register the device using [go-c8y-cli](https://goc8ycli.netlify.app/)
+1. Register the device using [go-c8y-cli](https://c8y.app/)
 
     <UserContext>
 
