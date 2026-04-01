@@ -1,12 +1,8 @@
 ---
 title: Builtin mapping rules
 tags: [Reference, Flows, Mappers, Cloud]
-sidebar_position: 3
+sidebar_position: 5
 ---
-
-import ProposalBanner from '@site/src/components/ProposalBanner'
-
-<ProposalBanner/>
 
 ## Concepts
 

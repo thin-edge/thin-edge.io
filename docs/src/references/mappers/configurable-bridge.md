@@ -4,10 +4,6 @@ tags: [Reference, Mappers, Cloud]
 sidebar_position: 3
 ---
 
-import ProposalBanner from '@site/src/components/ProposalBanner'
-
-<ProposalBanner/>
-
 ## Overview
 
 The built-in bridge forwards MQTT messages between the local broker and the cloud. By default, %%te%% provides bridge rules that handle standard communication patterns for Cumulocity, Azure, and AWS. However, you may need to customize this behavior—for example, to bridge additional topics, disable unused rules, or adapt to your cloud tenant's specific topic structure.

@@ -1,12 +1,8 @@
 ---
 title: User-defined mapping rules
 tags: [Reference, Flows, Mappers, Cloud]
-sidebar_position: 2
+sidebar_position: 4
 ---
-
-import ProposalBanner from '@site/src/components/ProposalBanner'
-
-<ProposalBanner/>
 
 ## Concepts
 
