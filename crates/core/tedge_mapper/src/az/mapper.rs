@@ -223,6 +223,8 @@ mod tests {
 
         // Device-to-cloud messages
         assert!(has_local_subscription(&rules, "az/messages/events/#"));
+
+        // Cloud-to-device messages
         assert!(has_remote_subscription(
             &rules,
             "devices/test-device-id/messages/devicebound/#"
