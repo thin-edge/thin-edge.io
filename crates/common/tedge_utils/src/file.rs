@@ -14,16 +14,16 @@ use uzers::get_user_by_name;
 
 #[derive(thiserror::Error, Debug)]
 pub enum FileError {
-    #[error("Creating the directory failed: {dir:?}.")]
+    #[error("Creating the directory failed: {dir:?}. Reason: {from}")]
     DirectoryCreateFailed { dir: String, from: std::io::Error },
 
-    #[error("Creating the file failed: {file:?}.")]
+    #[error("Creating the file failed: {file:?}. Reason: {from}")]
     FileCreateFailed { file: String, from: std::io::Error },
 
-    #[error("Failed to change owner: {name:?}.")]
+    #[error("Failed to change owner: {name:?}. Reason: {from}")]
     MetaDataError { name: String, from: std::io::Error },
 
-    #[error("Failed to change permissions of file: {name:?}.")]
+    #[error("Failed to change permissions of file: {name:?}. Reason: {from}")]
     ChangeModeError { name: String, from: std::io::Error },
 
     #[error("User not found: {user:?}.")]
@@ -38,7 +38,7 @@ pub enum FileError {
     #[error("The path is not accessible. {path:?}")]
     PathNotAccessible { path: PathBuf },
 
-    #[error("Writing the content to the file failed: {file:?}.")]
+    #[error("Writing the content to the file failed: {file:?}. Reason: {from}")]
     WriteContentFailed { file: String, from: std::io::Error },
 
     #[error("Could not save the file {file:?} to disk. Received error: {from:?}.")]
@@ -397,6 +397,18 @@ impl PermissionEntry {
             }),
         }
     }
+}
+
+/// Creates a `PermissionEntry` from plain `user` and `group` strings.
+///
+/// Empty strings are treated as unset and mapped to `None`, so ownership
+/// is left unchanged for whichever field is empty.
+pub fn permissions(user: &str, group: &str, mode: u32) -> PermissionEntry {
+    PermissionEntry::new(
+        (!user.is_empty()).then_some(user.to_string()),
+        (!group.is_empty()).then_some(group.to_string()),
+        Some(mode),
+    )
 }
 
 /// Overwrite the content of existing file. The file permissions will be kept.

@@ -62,7 +62,7 @@ impl RefreshBridgesCmd {
             // (attempt to) reassert ownership of the certificate and key
             // This is necessary when upgrading from the mosquitto bridge to the built-in bridge
             if let Ok(bridge_config) = super::connect::bridge_config(&config, &cloud).await {
-                super::connect::chown_certificate_and_key(&bridge_config).await;
+                super::connect::chown_certificate_and_key(&bridge_config, &config).await;
 
                 if bridge_config.bridge_location == BridgeLocation::BuiltIn
                     && clouds.contains(&cloud)

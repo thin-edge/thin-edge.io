@@ -24,7 +24,15 @@ pub enum SystemTomlError {
     InvalidLogLevel { name: String },
 }
 
-#[derive(Deserialize, Debug, Default, Eq, PartialEq)]
+fn default_tedge_user() -> String {
+    "tedge".to_string()
+}
+
+fn default_tedge_group() -> String {
+    "tedge".to_string()
+}
+
+#[derive(Deserialize, Debug, Eq, PartialEq)]
 pub struct SystemConfig {
     #[serde(default)]
     pub init: services::InitConfig,
@@ -32,6 +40,24 @@ pub struct SystemConfig {
     pub log: HashMap<String, String>,
     #[serde(default)]
     pub system: SystemSpecificCommands,
+    /// The OS user that owns thin-edge files and directories (default: "tedge")
+    #[serde(default = "default_tedge_user")]
+    pub user: String,
+    /// The OS group that owns thin-edge files and directories (default: "tedge")
+    #[serde(default = "default_tedge_group")]
+    pub group: String,
+}
+
+impl Default for SystemConfig {
+    fn default() -> Self {
+        Self {
+            init: services::InitConfig::default(),
+            log: HashMap::default(),
+            system: SystemSpecificCommands::default(),
+            user: default_tedge_user(),
+            group: default_tedge_group(),
+        }
+    }
 }
 
 impl SystemConfig {
@@ -188,6 +214,27 @@ mod tests {
         assert_eq!(config, expected_config);
 
         Ok(())
+    }
+
+    #[test]
+    fn deserialize_custom_user_and_group() {
+        let config: SystemConfig = toml::from_str(
+            r#"
+            user = "custom_user"
+            group = "custom_group"
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.user, "custom_user");
+        assert_eq!(config.group, "custom_group");
+    }
+
+    #[test]
+    fn default_user_and_group_is_tedge() {
+        let config = SystemConfig::default();
+        assert_eq!(config.user, "tedge");
+        assert_eq!(config.group, "tedge");
     }
 
     // Need to return TempDir, otherwise the dir will be deleted when this function ends.
