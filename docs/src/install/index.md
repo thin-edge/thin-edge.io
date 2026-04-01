@@ -36,6 +36,24 @@ export https_proxy="http://127.0.0.1:8080"
 export https_proxy="http://user:password@127.0.0.1:8080"
 ```
 
+### Installing pre-releases {#pre-release}
+
+%%te%% also provides access to early features via pre-releases. Every time a pull request is merged into the **main** branch of the [project](https://github.com/thin-edge/thin-edge.io), we build and publish pre-release packages to our package repository on [Cloudsmith](https://broadcasts.cloudsmith.com/thinedge). This lets you try out new features immediately in non-production environments. While all pull requests must pass our automated unit and system tests, we do not recommend using the pre-release channel in production, as behaviour and APIs may still change before the next official release.
+
+You can install the pre-release version using the same convenience script used for installing the latest official version, but specifying the `--channel main` flag as shown below:
+
+```sh tab={"label":"curl"}
+curl -fsSL https://thin-edge.io/install.sh | sh -s -- --channel main
+```
+
+```sh tab={"label":"wget"}
+wget -O - https://thin-edge.io/install.sh | sh -s -- --channel main
+```
+
+:::info
+If you prefer setting up the repository yourself, then you can follow the instructions for installing the package directly from our [Cloudsmith page](https://broadcasts.cloudsmith.com/thinedge/tedge-main?page=1&query=name%3Atedge-full+tag%3Alatest).
+:::
+
 ### Update using a package manager
 
 %%te%% and its components can be updated by running the install.sh script again, or using the Linux package manager on your distribution.
