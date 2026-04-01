@@ -5,7 +5,7 @@ Suite Setup         Custom Setup
 Suite Teardown      Get Logs
 Test Teardown       Remove Lifecycle Flow
 
-Test Tags           theme:tedge_flows
+Test Tags           theme:flows
 
 
 *** Variables ***

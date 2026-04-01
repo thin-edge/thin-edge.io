@@ -236,7 +236,8 @@ Create Password Bridge Mapper
 
 Create Full Mapper
     [Arguments]    ${name}
-    Execute Command    mkdir -p /etc/tedge/mappers/${name}/bridge /etc/tedge/mappers/${name}/flows && chown -R tedge:tedge /etc/tedge/mappers/${name}
+    Execute Command
+    ...    mkdir -p /etc/tedge/mappers/${name}/bridge /etc/tedge/mappers/${name}/flows && chown -R tedge:tedge /etc/tedge/mappers/${name}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/mapper.toml    /etc/tedge/mappers/${name}/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/bridge/rules.toml    /etc/tedge/mappers/${name}/bridge/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/flows/echo.toml    /etc/tedge/mappers/${name}/flows/

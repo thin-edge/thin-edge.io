@@ -13,11 +13,11 @@ use crate::custom::config::scan_mappers_shallow;
 use crate::custom::config::CustomMapperConfig;
 use crate::custom::resolve::resolve_effective_config;
 use crate::custom::resolve::EffectiveMapperConfig;
+use anyhow::bail;
 use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::MqttAuthClientConfigCloudBroker;
@@ -25,7 +25,6 @@ use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
 use tedge_config::tedge_toml::PrivateKeyType;
 use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
-use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowsMapperBuilder;
 use tedge_flows::FlowsMapperConfig;
 use tedge_mqtt_bridge::config_toml::AuthMethod;
@@ -254,7 +253,16 @@ async fn build_flows_actors(
     service_name: &str,
     tedge_config: &TEdgeConfig,
 ) -> anyhow::Result<(FlowsMapperBuilder, FsWatchActorBuilder, WatchActorBuilder)> {
-    let service_topic_id = EntityTopicId::default_main_service(service_name)?;
+    let Some(service_topic_id) = &tedge_config
+        .mqtt
+        .device_topic_id
+        .default_service_for_device(service_name)
+    else {
+        bail!(
+            "Unknown topic id for {service_name} on {}",
+            tedge_config.mqtt.device_topic_id
+        );
+    };
     let te = &tedge_config.mqtt.topic_root;
     let stats_config = &tedge_config.flows.stats;
     let service_config = FlowsMapperConfig::new(
@@ -269,7 +277,7 @@ async fn build_flows_actors(
     create_directory_with_defaults(&flows_dir)
         .await
         .with_context(|| format!("Failed to create flows directory '{flows_dir}'"))?;
-    let flows = ConnectedFlowRegistry::new(&flows_dir);
+    let flows = crate::flow_registry(flows_dir).await?;
     let fs_actor = FsWatchActorBuilder::new();
     let cmd_watcher_actor = WatchActorBuilder::new();
     let flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;

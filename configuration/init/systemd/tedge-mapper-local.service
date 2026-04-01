@@ -5,6 +5,8 @@ After=syslog.target network.target mosquitto.service
 [Service]
 User=tedge
 ExecStartPre=+-/usr/bin/tedge init
+ExecStartPre=+mkdir -p /etc/tedge/mappers/local
+ExecStartPre=+chown -R tedge:tedge /etc/tedge/mappers/local
 ExecStart=/usr/bin/tedge-mapper local
 Restart=on-failure
 RestartPreventExitStatus=255
