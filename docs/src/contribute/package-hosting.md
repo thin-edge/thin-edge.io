@@ -4,71 +4,212 @@ tags: [Contribute, Packaging]
 description: Package hosting of %%te%% components
 ---
 
-In additional to the %%te%% install script, the packages are also publicly hosted APT repository.
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+In additional to the %%te%% install script, the packages are also publicly hosted in a package repository. You can also browse the [repositories](https://broadcasts.cloudsmith.com/thinedge) to have a look at the different packages available.
 
 ## Official releases
 
 The following APT repositories contain the official releases of %%te%%. The packages will have a nice `x.y.z` version number, and all of the packages go through our full suite of automated and manual testing.
-
-The packages are the same ones which are uploaded to the [GitHub Releases](https://github.com/thin-edge/thin-edge.io/releases) page.
 
 ### tedge-release (default)
 
 This is the default repository that most users should be using.
 
 **Setup script**
-```sh
-curl -1sLf \
-  'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.deb.sh' \
+
+<Tabs groupId="download-command">
+  <TabItem value="wget" label="wget" default>
+
+```sh tab={"label":"Debian/Ubuntu"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.deb.sh' \
   | sudo -E bash
 ```
+
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.rpm.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"Alpine"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.alpine.sh' \
+  | sudo -E bash
+```
+
+  </TabItem>
+  <TabItem value="curl" label="curl">
+
+```sh tab={"label":"Debian/Ubuntu"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.deb.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.rpm.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"Alpine"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release/setup.alpine.sh' \
+  | sudo -E bash
+```
+
+  </TabItem>
+</Tabs>
+
 
 **Supported Architectures**
 * `amd64`
 * `arm64`
 * `armhf` (armv7)
+* `i386`
+* `riscv64`
 
 ### tedge-release-armv6
 
-If you are using a Raspberry Pi with a `armv6l` CPU Architecture, then you will need to use this repository.
+If you are using a Raspberry Pi with an `armv6l` CPU Architecture, then you will need to use this repository.
 
-```sh
-curl -1sLf \
-  'https://dl.cloudsmith.io/public/thinedge/tedge-release-armv6/setup.deb.sh' \
+
+<Tabs groupId="download-command">
+  <TabItem value="wget" label="wget" default>
+
+```sh tab={"label":"Debian/Ubuntu"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-release-armv6/setup.deb.sh' \
   | sudo -E bash
 ```
+
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-release-armv6/setup.rpm.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"Alpine"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-release-armv6/setup.alpine.sh' \
+  | sudo -E bash
+```
+
+  </TabItem>
+  <TabItem value="curl" label="curl">
+
+```sh tab={"label":"Debian/Ubuntu"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release-armv6/setup.deb.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release-armv6/setup.rpm.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"Alpine"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-release-armv6/setup.alpine.sh' \
+  | sudo -E bash
+```
+
+  </TabItem>
+</Tabs>
+
 
 **Supported Architectures**
 * `armhf` (armv6)
 
 ## Pre releases
 
-The latest built packages from the `main` branch of the project. The packages go through the same automated testing process as the official releases, however they are not tagged in git, so the version numbers will look like `0.8.1-171-ga72e5432` (see the [Version syntax](#version-syntax) for description about the version).
+The latest built packages from the `main` branch of the project. These packages go through the same automated testing process as the official releases, however they are not tagged in git, so the version numbers will look like `1.7.2~529+g79fe55f` (see the [Version syntax](#version-syntax) for description about the version).
 
 These repositories allow you to test new features as they get merged to `main`, rather than waiting for the official release. However it is still advised to only use these repositories for development and testing purposes as the official versions go through additional testing.
 
 ### tedge-main
 
-```sh
-curl -1sLf \
-  'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' \
+<Tabs groupId="download-command">
+  <TabItem value="wget" label="wget" default>
+
+```sh tab={"label":"Debian/Ubuntu"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' \
   | sudo -E bash
 ```
+
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.rpm.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"Alpine"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.alpine.sh' \
+  | sudo -E bash
+```
+
+  </TabItem>
+  <TabItem value="curl" label="curl">
+
+```sh tab={"label":"Debian/Ubuntu"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.rpm.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"Alpine"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.alpine.sh' \
+  | sudo -E bash
+```
+
+  </TabItem>
+</Tabs>
 
 **Supported Architectures**
 * `amd64`
 * `arm64`
 * `armhf` (armv7)
+* `i386`
+* `riscv64`
 
 ### tedge-main-armv6
 
-If you are using a Raspberry Pi with a `armv6l` CPU Architecture, then you will need to use this repository.
+If you are using a Raspberry Pi with an `armv6l` CPU Architecture, then you will need to use this repository.
 
-```sh
-curl -1sLf \
-  'https://dl.cloudsmith.io/public/thinedge/tedge-main-armv6/setup.deb.sh' \
+<Tabs groupId="download-command">
+  <TabItem value="wget" label="wget" default>
+
+```sh tab={"label":"Debian/Ubuntu"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-main-armv6/setup.deb.sh' \
   | sudo -E bash
 ```
+
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-main-armv6/setup.rpm.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"Alpine"}
+wget -O - 'https://dl.cloudsmith.io/public/thinedge/tedge-main-armv6/setup.alpine.sh' \
+  | sudo -E bash
+```
+
+  </TabItem>
+  <TabItem value="curl" label="curl">
+
+```sh tab={"label":"Debian/Ubuntu"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main-armv6/setup.deb.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main-armv6/setup.rpm.sh' \
+  | sudo -E bash
+```
+
+```sh tab={"label":"Alpine"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main-armv6/setup.alpine.sh' \
+  | sudo -E bash
+```
+
+  </TabItem>
+</Tabs>
 
 **Supported Architectures**
 * `armhf` (armv6)
@@ -113,10 +254,10 @@ sudo apt-get update
 The version is automatically generated from the source code management tool, git. The version is based on the commit used to build the packages and its distance from the last tag (e.g. the last official released version).
 
 ```sh
-{base_version}-{distance}g{git_sha}
+{base_version}~{distance}g{git_sha}
 
 # Example
-0.8.1-171-ga72e5432
+1.7.2~529+g79fe55f
 ```
 
 |Part|Description|
