@@ -5,7 +5,7 @@ Library             Cumulocity
 Suite Setup         Custom Setup
 Suite Teardown      Custom Teardown
 
-Test Tags           theme:tedge_flows
+Test Tags           theme:flows
 
 
 *** Test Cases ***

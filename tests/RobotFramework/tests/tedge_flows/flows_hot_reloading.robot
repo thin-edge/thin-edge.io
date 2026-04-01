@@ -4,7 +4,7 @@ Library             ThinEdgeIO
 Suite Setup         Custom Setup
 Suite Teardown      Get Logs
 
-Test Tags           theme:tedge_flows
+Test Tags           theme:flows
 
 
 *** Variables ***
