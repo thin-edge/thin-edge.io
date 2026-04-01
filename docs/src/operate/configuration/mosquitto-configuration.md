@@ -4,6 +4,23 @@ tags: [Operate, Configuration, MQTT]
 description: Mosquitto specific configuration guide
 ---
 
+## Disabling the default mosquitto listener configuration {#mosquitto-bind-enabled}
+
+By default, `tedge connect` creates the file `/etc/tedge/mosquitto-conf/tedge-mosquitto.conf`,
+which configures mosquitto listener settings (bind address and port) recommended for %%te%%.
+
+If you manage your own mosquitto configuration — for example because you are running an external
+mosquitto broker or have custom listener settings — you can tell %%te%% **not** to create that file:
+
+```sh
+sudo tedge config set mqtt.bind.enabled false
+```
+
+With this setting, `tedge connect` will skip writing `tedge-mosquitto.conf` entirely,
+leaving your existing mosquitto configuration untouched.
+You are then responsible for ensuring that mosquitto is configured to match the
+`mqtt.bind.address` and `mqtt.bind.port` values used by %%te%%.
+
 ## Configuring mosquitto bind address and port {#mosquitto-bind-address}
 
 Configuring a mosquitto port and bind address in %%te%% is a three-step process.

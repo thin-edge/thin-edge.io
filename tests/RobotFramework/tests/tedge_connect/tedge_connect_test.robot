@@ -6,8 +6,8 @@ Documentation       Run connection test while being connected and check the posi
 Resource            ../../resources/common.resource
 Library             ThinEdgeIO
 
-Suite Setup         Suite Setup
 Suite Teardown      Get Suite Logs
+Test Setup          Setup
 
 Test Tags           theme:cli    theme:mqtt    theme:c8y
 
@@ -42,7 +42,7 @@ tedge_connect_test_negative
     ...    stderr=${True}
 
 tedge_connect_test_sm_services
-    ${output}=    Execute Command    sudo tedge connect c8y    stdout=${False}    stderr=${True}
+    ${output}=    Execute Command    sudo tedge reconnect c8y    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Enabling tedge-agent... ✓
     Should Contain    ${output}    Enabling tedge-mapper-c8y... ✓
     Should Not Contain
@@ -70,10 +70,10 @@ tedge reconnect restarts mapper
 Check absence of OpenSSL Error messages #3024
     Skip
     ...    msg=This test is flaky. There is client (yet to be identified) that fails to connect on port 8883 leading to OpenSSL Error
-    ${SuiteStart}=    Get Suite Start Time
+    ${TestStartSeconds}=    Get Test Start Time
     # Only checkout output if mosquitto is being used
     ${output}=    Execute Command
-    ...    systemctl is-active mosquitto && journalctl -u mosquitto -n 5000 --since "@${SuiteStartSeconds}" || true
+    ...    systemctl is-active mosquitto && journalctl -u mosquitto -n 5000 --since "@${TestStartSeconds}" || true
     Should Not Contain    ${output}    OpenSSL Error
 
 tedge reconnect validates and uses the new certificate if any
@@ -117,13 +117,14 @@ tedge reconnect rejects any new invalid certificate
     ${new-cert}=    Execute Command    cat "$(tedge config get c8y.device.cert_path).new"
     Should Contain    ${new-cert}    garbage
 
+tedge connect does not create tedge-mosquitto.conf when mqtt.bind.enabled is false
+    Execute Command    mv /etc/tedge/mosquitto-conf/tedge-mosquitto.conf /etc/tedge/mosquitto-conf/custom.conf
+    Execute Command    sudo tedge config set mqtt.bind.enabled false
+    Execute Command    sudo tedge reconnect c8y
+    File Should Not Exist    /etc/tedge/mosquitto-conf/tedge-mosquitto.conf
+
 
 *** Keywords ***
-Suite Setup
-    Setup
-    ${SuiteStartSeconds}=    Get Unix Timestamp
-    Set Suite Variable    $SuiteStartSeconds
-
 Should Have File Permissions
     [Arguments]    ${file}    ${expected_permissions}
     ${FILE_MODE_OWNERSHIP}=    Execute Command    stat -c '%a %U:%G' ${file}    strip=${True}
