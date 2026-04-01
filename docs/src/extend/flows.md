@@ -5,7 +5,7 @@ sidebar_position: 2
 description: Write custom IoT data logic on the device using JavaScript
 ---
 
-This tutorial walks through how to write your own custom logic using %%te%% flows; from a simple data mapping example to more advanced topics like aggregation and cross-flow communication.
+This tutorial walks through how to write your own custom logic using %%te%% flows; from a simple data mapping example to more advanced topics like aggregation and cross-flow communication. If you're looking for just the technical details, see the [reference](../references/mappers/flows.md) page.
 
 ## Overview
 
@@ -63,7 +63,7 @@ The `message` object provides:
 - `message.time` — message timestamp as a JavaScript `Date`
 
 The `context` object provides:
-- `context.config` — configuration values declared in `flow.toml`, and typically mapped values from the `params.toml` file (though mapping is done explicitly)
+- `context.config` — configuration values declared in `flow.toml`, and typically mapped to values from the `params.toml` file
 - `context.mapper` — key-value store shared across **all flows** in the same mapper instance
 - `context.flow` — key-value store shared across scripts within the **same flow**
 - `context.script` — key-value store private to a single script instance; persisted across hot-reloads of the script
@@ -470,7 +470,7 @@ yes '[c8y/measurement/measurements/create] {"temp":{"temp":{"value":37.9}},"time
 ```
 
 :::note Context is not persisted
-`context.mapper` values are in-memory only. If the mapper process restarts, all counters reset to zero. For this monitoring use case that is acceptable — the rate monitor resumes counting from restart. If permanent state is required, consider writing to a file instead.
+`context.mapper` values are in-memory only. If the mapper process restarts, all counters reset to zero. For this monitoring use case that is acceptable — the rate monitor resumes counting from restart.
 :::
 
 ---
