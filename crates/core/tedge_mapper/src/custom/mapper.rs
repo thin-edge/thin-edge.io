@@ -1027,9 +1027,18 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 config.credentials_path = Some(creds_path);
                 let effective = resolve(&config, &tedge_config).await;
 
-                build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
-                    .await
-                    .unwrap();
+                let (config, _) =
+                    build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                        .await
+                        .unwrap();
+
+                assert!(
+                    matches!(
+                        config.transport(),
+                        tedge_mqtt_bridge::rumqttc::Transport::Tcp
+                    ),
+                    "Transport should be plain TCP when TLS is disabled",
+                );
             }
 
             #[tokio::test]
@@ -1044,9 +1053,18 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 config.bridge.tls.enable = BridgeTlsEnable::True;
                 let effective = resolve(&config, &tedge_config).await;
 
-                build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
-                    .await
-                    .unwrap();
+                let (config, _) =
+                    build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                        .await
+                        .unwrap();
+
+                assert!(
+                    matches!(
+                        config.transport(),
+                        tedge_mqtt_bridge::rumqttc::Transport::Tls(..)
+                    ),
+                    "Transport should be TLS",
+                );
             }
 
             #[tokio::test]
@@ -1061,9 +1079,18 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 assert_eq!(config.bridge.tls.enable, BridgeTlsEnable::Auto);
                 let effective = resolve(&config, &tedge_config).await;
 
-                build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
-                    .await
-                    .unwrap();
+                let (config, _) =
+                    build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                        .await
+                        .unwrap();
+
+                assert!(
+                    matches!(
+                        config.transport(),
+                        tedge_mqtt_bridge::rumqttc::Transport::Tls(..)
+                    ),
+                    "Transport should be TLS",
+                );
             }
 
             #[tokio::test]
@@ -1078,9 +1105,18 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 assert_eq!(config.bridge.tls.enable, BridgeTlsEnable::Auto);
                 let effective = resolve(&config, &tedge_config).await;
 
-                build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
-                    .await
-                    .unwrap();
+                let (config, _) =
+                    build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                        .await
+                        .unwrap();
+
+                assert!(
+                    matches!(
+                        config.transport(),
+                        tedge_mqtt_bridge::rumqttc::Transport::Tcp
+                    ),
+                    "Transport should be plain TCP",
+                );
             }
 
             #[tokio::test]
@@ -1095,9 +1131,18 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 assert_eq!(config.bridge.tls.enable, BridgeTlsEnable::Auto);
                 let effective = resolve(&config, &tedge_config).await;
 
-                build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
-                    .await
-                    .unwrap();
+                let (config, _) =
+                    build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
+                        .await
+                        .unwrap();
+
+                assert!(
+                    matches!(
+                        config.transport(),
+                        tedge_mqtt_bridge::rumqttc::Transport::Tls(..)
+                    ),
+                    "Transport should be TLS",
+                );
             }
 
             #[tokio::test]
