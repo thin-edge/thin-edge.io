@@ -145,37 +145,33 @@ sudo tedge config set c8y.url "$C8Y_URL"
 
 ### Certificate
 
-%%te%% connects via MQTT protocol using a X.509 certificate for authentication. To do so, a certificate must be trusted by Cumulocity. A certificate is trusted when it is added to the trusted certificates and is in an activated state.
+%%te%% connects via MQTT using a X.509 certificate for authentication. The certificate must be trusted by Cumulocity before a connection can be established. The recommended approach is to use the [Cumulocity Certificate Authority](../operate/c8y/connect.md#cumulocity-certificate-authority), which issues and registers the device certificate automatically.
 
-First, we need to create the device certificate locally (If the device certificate is already uploaded, directly via the UI to Cumulocity this step can be skipped).
+:::note
+A Tenant Manager must create a CA certificate for the tenant before devices can use this feature. See the [Certificate Management Reference Guide](../references/certificate-management.md#enable-cumulocity-certificate-authority) for instructions.
 
-<UserContext>
-
-```sh
-sudo tedge cert create --device-id "$DEVICE_ID"
-```
-
-</UserContext>
-
-The device id is a unique identifier e.g. the MAC address that identifies the physical device.
-
-Before you can upload the device's certificate to Cumulocity, your Cumulocity user must have the **Tenant Manager** Global Role assigned to it. For details on how to do this, see the [docs](connect-c8y.md#common-errors-403).
-
-The certificate is uploaded to the Cumulocity Tenant via:
-
-<UserContext>
-
-```sh
-sudo tedge cert upload c8y --user "$C8Y_USER"
-```
-
-</UserContext>
-
-If the password prompt appears, enter your password.
-
-:::info
-In a production environment, it is not recommended to use the above self-signed certificate, which is for demo purposes. If you plan to use this tutorial as a basis for production, please have a look here: [Registering devices using certificates](https://cumulocity.com/docs/device-integration/device-certificates/#registering-devices-using-certificates).
+[Self-signed certificates](../operate/c8y/connect.md#self-signed-certificates) or a third-party CA can also be used. See [Making the cloud trust the device](../operate/c8y/connect.md#making-the-cloud-trust-the-device) for all available options.
 :::
+
+To register and download the device certificate using the Cumulocity Certificate Authority:
+
+1. In the Cumulocity *Device Management* UI, go to *Devices* &rarr; *Registration*, click *Register device* &rarr; *General*, and select *"Create device certificates during device registration"*. Enter the device ID and a one-time password, then click *Next*.
+
+    :::tip
+    Make a note of the one-time password — you will need it on the device.
+    :::
+
+1. On the device, run the following command to download the certificate:
+
+    <UserContext>
+
+    ```sh
+    sudo tedge cert download c8y --device-id "$DEVICE_ID"
+    ```
+
+    </UserContext>
+
+    You will be prompted for the one-time password set in the previous step.
 
 ### Connect
 

@@ -29,17 +29,13 @@ See this [tutorial](connect-azure.md), if you want to connect Azure IoT instead.
 See this [tutorial](connect-aws.md), if you want to connect AWS IoT instead.
 
 Before you try to connect your device to Cumulocity, you need:
-* The url of the endpoint to connect (e.g. `eu-latest.cumulocity.com`).
-* Your credentials to connect Cumulocity:
-    * Your tenant identifier (e.g. `t00000007`), a user name and password.
-    * None of these credentials will be stored on the device.
-    * These are only required once, to register the device.
+* The URL of your Cumulocity tenant (e.g. `eu-latest.cumulocity.com`).
+* Access to the Cumulocity Device Management UI to register the device.
 
 If not done yet, [install %%te%% on your device](../install/index.md).
 
 You can now use the [`tedge` command](../references/cli/index.md) to:
-* [create a certificate for you device](connect-c8y.md#create-the-certificate),
-* [make the device certificate trusted by Cumulocity](connect-c8y.md#make-the-device-trusted-by-cumulocity),
+* [register and download the device certificate](connect-c8y.md#register-the-device-and-obtain-a-certificate),
 * [connect the device](connect-c8y.md#connect-the-device), and
 * [send your first telemetry data](#sending-your-first-telemetry-data).
 
@@ -124,71 +120,56 @@ openssl s_client -connect $C8Y_URL:443 -showcerts 2>/dev/null </dev/null \
 
 </UserContext>
 
-## Create the certificate
+## Register the device and obtain a certificate {#register-the-device-and-obtain-a-certificate}
 
-The `tedge cert create` command creates a self-signed certificate which can be used for testing purpose.
+%%te%% authenticates to Cumulocity using a X.509 device certificate. The recommended way to obtain one is via the [Cumulocity Certificate Authority](../operate/c8y/connect.md#cumulocity-certificate-authority): the CA's certificate is trusted by Cumulocity, and any device certificate it signs is automatically trusted — no per-device certificate upload required.
 
-A single argument is required: an identifier for the device.
-This identifier will be used to uniquely identify your devices among others in your cloud tenant.
-This identifier will be also used as the Common Name (CN) of the certificate.
-Indeed, this certificate aims to authenticate that this device is actually the device with that identity.
+:::note
+A Tenant Manager must create a CA certificate for the tenant before devices can use this feature. See the [Certificate Management Reference Guide](../references/certificate-management.md#enable-cumulocity-certificate-authority) for instructions.
+
+If the Cumulocity CA feature is not available on your tenant, you can use a [self-signed certificate](#self-signed-certificate) instead, though this is only recommended for development and testing.
+:::
+
+1. In the Cumulocity *Device Management* UI, navigate to *Devices* &rarr; *Registration*
+
+1. Click *Register device* &rarr; *General* and select *"Create device certificates during device registration"*
+
+1. Enter the device ID and a one-time password, then click *Next*
+
+    :::tip
+    Copy the one-time password — you will need it on the device in the next step.
+    :::
+
+1. On the device, run the following command to download the certificate:
+
+    <UserContext>
+
+    ```sh
+    sudo tedge cert download c8y --device-id "$DEVICE_ID"
+    ```
+
+    </UserContext>
+
+    You will be prompted for the one-time password set in the previous step.
+
+### Alternative: self-signed certificate {#self-signed-certificate}
+
+For development and testing purposes, you can create a self-signed certificate on the device and upload it directly to Cumulocity.
 
 <UserContext>
 
 ```sh
 sudo tedge cert create --device-id "$DEVICE_ID"
-```
-
-</UserContext>
-
-```text title="Output"
-Certificate was successfully created
-```
-
-You can then check the content of that certificate.
-
-```sh
-sudo tedge cert show
-```
-
-<UserContext>
-
-```text title="Output"
-Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
-Subject: CN=$DEVICE_ID, O=Thin Edge, OU=Test Device
-Issuer: CN=$DEVICE_ID, O=Thin Edge, OU=Test Device
-Valid from: Tue, 09 Feb 2021 17:16:52 +0000
-Valid up to: Tue, 11 May 2021 17:16:52 +0000
-Thumbprint: CDBF4EC17AA02829CAC4E4C86ABB82B0FE423D3E
-```
-
-</UserContext>
-
-You may notice that the issuer of this certificate is the device itself.
-This is a self-signed certificate.
-To use a certificate signed by your Certificate Authority,
-see the reference guide of [`tedge cert`](../references/cli/tedge-cert.md).
-
-## Make the device trusted by Cumulocity
-
-For a certificate to be trusted by Cumulocity,
-one needs to add the certificate of the signing authority to the list of trusted certificates.
-In the Cumulocity GUI, navigate to "Device Management/Management/Trusted certificates"
-in order to see this list for your Cumulocity tenant.
-
-Here, the device certificate is self-signed and has to be directly trusted by Certificate.
-This can be done:
-* either with the GUI: upload the certificate from your device (`/etc/tedge/device-certs/tedge-certificate.pem`)
-  to your tenant "Device Management/Management/Trusted certificates".
-* or using the `tedge cert upload c8y` command.
-
-<UserContext>
-
-```sh
 sudo tedge cert upload c8y --user "$C8Y_USER"
 ```
 
 </UserContext>
+
+:::note
+`tedge cert upload` requires a Cumulocity user with the **Tenant Manager** Global Role. See the [401](#common-errors-401) and [403](#common-errors-403) error sections if you run into problems.
+:::
+
+For a full overview of all certificate options (including third-party CAs), see [Making the cloud trust the device](../operate/c8y/connect.md#making-the-cloud-trust-the-device).
 
 ## Connect the device
 
@@ -363,7 +344,7 @@ Caused by:
 
 ### 401 - Unauthorized {#common-errors-401}
 
-The 401 (Unauthorized) error means either the user and/or password is invalid for the configured Cumulocity url that was set in the `tedge config set c8y.url <url>` command.
+The 401 (Unauthorized) error applies when using `tedge cert upload c8y` (the [self-signed certificate path](#self-signed-certificate)). It means the user and/or password is invalid for the configured Cumulocity URL.
 
 Check the following items to help you diagnose the root cause of the problem:
 
@@ -375,7 +356,7 @@ Check the following items to help you diagnose the root cause of the problem:
 
 ### 403 - Forbidden {#common-errors-403}
 
-The 403 (Forbidden) error means that your user/password is correct however you do not have sufficient permissions to add the %%te%%'s device certificate to the Cumulocity's [Trusted certificates](https://cumulocity.com/docs/device-integration/device-certificates/).
+The 403 (Forbidden) error applies when using `tedge cert upload c8y` (the [self-signed certificate path](#self-signed-certificate)). It means your credentials are correct but your user does not have sufficient permissions to add a trusted certificate to Cumulocity.
 
 Your Cumulocity user **MUST** be assigned the **Tenant Manager** Global Role in order to add new trusted certificates to Cumulocity. Global roles can be assigned to users via the Cumulocity **Administration** application under Accounts &rarr; Users &rarr; `<your username>` &rarr; Global Roles section. Below shows a screenshot of the **Tenant Manager** role that your user needs to be assigned to.
 
