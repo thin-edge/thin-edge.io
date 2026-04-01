@@ -1,0 +1,3 @@
+# system.toml with no user or group keys - both should default to "tedge"
+[system]
+reboot = ["init", "6"]

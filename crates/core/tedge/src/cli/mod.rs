@@ -97,13 +97,17 @@ pub enum Component {
 pub enum TEdgeOpt {
     /// Initialize Thin Edge
     Init {
-        /// The user who will own the directories created
-        #[clap(long, default_value = "tedge")]
-        user: String,
+        /// The user who will own the directories created.
+        /// Overrides the value from system.toml [user].
+        /// Defaults to "tedge" if not provided here or in system.toml either.
+        #[clap(long)]
+        user: Option<String>,
 
-        /// The group who will own the directories created
-        #[clap(long, default_value = "tedge")]
-        group: String,
+        /// The group who will own the directories created.
+        /// Overrides the value from system.toml [group].
+        /// Defaults to "tedge" if not provided here or in system.toml either.
+        #[clap(long)]
+        group: Option<String>,
 
         /// Create symlinks to the tedge binary using a relative path
         /// (e.g. ./tedge) instead of an absolute path (e.g. /usr/bin/tedge)
@@ -226,6 +230,7 @@ impl BuildCommand for TEdgeOpt {
                 group,
                 relative_links,
             } => Ok(Box::new(TEdgeInitCmd::new(user, group, relative_links))),
+
             TEdgeOpt::Upload(opt) => opt.build_command(config).await,
             TEdgeOpt::Cert(opt) => opt.build_command(config).await,
             TEdgeOpt::Config(opt) => opt.build_command(config).await,

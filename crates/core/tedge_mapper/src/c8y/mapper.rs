@@ -40,9 +40,8 @@ use tedge_mqtt_bridge::QoS;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
-use tedge_utils::file::change_mode;
-use tedge_utils::file::change_user_and_group;
-use tedge_utils::file::create_directory_with_user_group;
+use tedge_utils::file;
+use tedge_utils::file::create_directory_and_update_ownership;
 use tedge_watch_ext::WatchActorBuilder;
 use tracing::warn;
 use yansi::Paint;
@@ -402,8 +401,12 @@ pub async fn bridge_rules(
 ) -> anyhow::Result<BridgeConfig> {
     let mapper_config_dir =
         tedge_config.mapper_config_dir::<C8yMapperSpecificConfig>(cloud_profile);
+    let system_config = tedge_config.read_system_config();
+    let (user, group) = (system_config.user, system_config.group);
+    let permissions = file::permissions(&user, &group, 0o755);
+
     if let Err(err) =
-        create_directory_with_user_group(mapper_config_dir.clone(), "tedge", "tedge", 0o755).await
+        create_directory_and_update_ownership(mapper_config_dir.clone(), &permissions).await
     {
         warn!("failed to set file ownership for '{mapper_config_dir}': {err}");
     }
@@ -415,15 +418,13 @@ pub async fn bridge_rules(
         &bridge_config_dir,
         "mqtt-core",
         include_str!("bridge/mqtt-core.toml"),
+        &user,
+        &group,
     )
     .await?;
 
-    if let Err(err) = change_user_and_group(&bridge_config_dir, "tedge", "tedge").await {
-        warn!("failed to set file ownership for '{bridge_config_dir}': {err}");
-    }
-
-    if let Err(err) = change_mode(&bridge_config_dir, 0o755).await {
-        warn!("failed to set file permissions for '{bridge_config_dir}': {err}");
+    if let Err(err) = permissions.apply(bridge_config_dir.as_std_path()).await {
+        warn!("failed to set file ownership/permissions for '{bridge_config_dir}': {err}");
     }
 
     let effective = resolve_effective_mapper_config(tedge_config, cloud_profile).await?;

@@ -29,6 +29,7 @@ use tedge_config::models::HTTPS_PORT;
 use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::CloudConfig;
 use tedge_config::tedge_toml::ProfileName;
+use tedge_config::SystemConfig;
 use tedge_config::TEdgeConfig;
 use tracing::debug;
 
@@ -229,9 +230,10 @@ pub enum CA {
 impl BuildCommand for TEdgeCertCli {
     async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let (user, group) = if config.mqtt.bridge.built_in {
-            ("tedge", "tedge")
+            let system_config = SystemConfig::try_new(config.root_dir()).unwrap_or_default();
+            (system_config.user, system_config.group)
         } else {
-            (crate::BROKER_USER, crate::BROKER_USER)
+            (crate::BROKER_USER.to_owned(), crate::BROKER_USER.to_owned())
         };
 
         let csr_template = CsrTemplate {
