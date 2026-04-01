@@ -18,10 +18,12 @@ Flows-only custom mapper starts and processes messages
     ${pid}=    Service Should Be Running    tedge-mapper-test-flows
 
     # Health topic should appear for the mapper service
+    ${health_start}=    Get Unix Timestamp
     Execute Command    tedge mqtt pub 'te/device/main/service/tedge-mapper-test-flows/cmd/health/check' ''
     ${messages}=    Should Have MQTT Messages
     ...    te/device/main/service/tedge-mapper-test-flows/status/health
     ...    minimum=1
+    ...    date_from=${health_start}
     Should Contain    ${messages[0]}    "status":"up"
 
     # Flow processes messages: publish to custom/test/in, expect output on custom/test/out
@@ -42,6 +44,7 @@ Custom mapper with bridge forwards messages to remote broker
     ...    on the remote broker.
     [Setup]    Create Bridge Mapper    test-bridge
 
+    ${start}=    Get Unix Timestamp
     Start Service    tedge-mapper-test-bridge
     Service Should Be Running    tedge-mapper-test-bridge
 
@@ -49,6 +52,7 @@ Custom mapper with bridge forwards messages to remote broker
     ${bridge_health}=    Should Have MQTT Messages
     ...    te/device/main/service/tedge-mapper-bridge-test-bridge/status/health
     ...    minimum=1
+    ...    date_from=${start}
     ...    message_contains="status":"up"
 
     # Subscribe on the remote broker in the background before publishing, so no messages are missed
@@ -71,6 +75,7 @@ Custom mapper with bridge using username/password auth forwards messages to remo
     ...    the local prefix to the remote prefix.
     [Setup]    Create Password Bridge Mapper    test-password-bridge
 
+    ${start}=    Get Unix Timestamp
     Start Service    tedge-mapper-test-password-bridge
     Service Should Be Running    tedge-mapper-test-password-bridge
 
@@ -78,6 +83,7 @@ Custom mapper with bridge using username/password auth forwards messages to remo
     ${bridge_health}=    Should Have MQTT Messages
     ...    te/device/main/service/tedge-mapper-bridge-test-password-bridge/status/health
     ...    minimum=1
+    ...    date_from=${start}
     ...    message_contains="status":"up"
 
     # Subscribe on the remote (password) broker in the background before publishing
@@ -104,10 +110,12 @@ Custom mapper with bridge, mapper.toml, and flows starts all subsystems
     ${pid}=    Service Should Be Running    tedge-mapper-test-full
 
     # Mapper health
+    ${health_start}=    Get Unix Timestamp
     Execute Command    tedge mqtt pub 'te/device/main/service/tedge-mapper-test-full/cmd/health/check' ''
     ${messages}=    Should Have MQTT Messages
     ...    te/device/main/service/tedge-mapper-test-full/status/health
     ...    minimum=1
+    ...    date_from=${health_start}
     Should Contain    ${messages[0]}    "pid":${pid}
 
     # Flows engine still processes messages even when bridge is configured
@@ -133,16 +141,20 @@ Two custom mapper profiles run concurrently without interfering
     Service Should Be Running    tedge-mapper-test-beta
 
     # Both mappers report health independently
+    ${alpha_health_start}=    Get Unix Timestamp
     Execute Command    tedge mqtt pub 'te/device/main/service/tedge-mapper-test-alpha/cmd/health/check' ''
     ${alpha_health}=    Should Have MQTT Messages
     ...    te/device/main/service/tedge-mapper-test-alpha/status/health
     ...    minimum=1
+    ...    date_from=${alpha_health_start}
     Should Contain    ${alpha_health[0]}    "status":"up"
 
+    ${beta_health_start}=    Get Unix Timestamp
     Execute Command    tedge mqtt pub 'te/device/main/service/tedge-mapper-test-beta/cmd/health/check' ''
     ${beta_health}=    Should Have MQTT Messages
     ...    te/device/main/service/tedge-mapper-test-beta/status/health
     ...    minimum=1
+    ...    date_from=${beta_health_start}
     Should Contain    ${beta_health[0]}    "status":"up"
 
     # Messages to alpha do not appear on beta's output and vice versa
@@ -165,6 +177,7 @@ Custom mapper with bridge.tls.enable false forwards messages over plain TCP
     ...    broker and forwards messages. This proves the TLS-skip code path works end-to-end.
     [Setup]    Create Non TLS Bridge Mapper    test-notls
 
+    ${start}=    Get Unix Timestamp
     Start Service    tedge-mapper-test-notls
     Service Should Be Running    tedge-mapper-test-notls
 
@@ -172,6 +185,7 @@ Custom mapper with bridge.tls.enable false forwards messages over plain TCP
     ${bridge_health}=    Should Have MQTT Messages
     ...    te/device/main/service/tedge-mapper-bridge-test-notls/status/health
     ...    minimum=1
+    ...    date_from=${start}
     ...    message_contains="status":"up"
 
     # Subscribe on the plain-TCP remote broker before publishing (credentials required)
@@ -195,12 +209,14 @@ Stale bridge health is cleared when mapper switches to flows-only
     [Setup]    Create Bridge Mapper    test-stale
 
     # Phase 1: Start the bridge mapper so it leaves a retained "up" on the bridge health topic
+    ${phase1_start}=    Get Unix Timestamp
     Start Service    tedge-mapper-test-stale
     Service Should Be Running    tedge-mapper-test-stale
 
     Should Have MQTT Messages
     ...    te/device/main/service/tedge-mapper-bridge-test-stale/status/health
     ...    minimum=1
+    ...    date_from=${phase1_start}
     ...    message_contains="status":"up"
 
     # Stop the mapper; the retained "up" message is still on the broker
@@ -222,10 +238,12 @@ Stale bridge health is cleared when mapper switches to flows-only
     # there is no bridge/ directory).
 
     # Wait for mapper to report healthy first
+    ${health_start}=    Get Unix Timestamp
     Execute Command    tedge mqtt pub 'te/device/main/service/tedge-mapper-test-stale/cmd/health/check' ''
     Should Have MQTT Messages
     ...    te/device/main/service/tedge-mapper-test-stale/status/health
     ...    minimum=1
+    ...    date_from=${health_start}
     ...    message_contains="status":"up"
 
     # Verify the bridge health topic no longer has a non-empty retained message.
