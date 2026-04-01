@@ -261,8 +261,11 @@ pub(crate) fn flows_config(
 }
 
 pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
+    #[cfg(feature = "c8y")]
     c8y_mapper_ext::load_builtin_transformers(flows);
+    #[cfg(feature = "azure")]
     az_mapper_ext::load_builtin_transformers(flows);
+    #[cfg(feature = "aws")]
     aws_mapper_ext::load_builtin_transformers(flows);
 }
 
