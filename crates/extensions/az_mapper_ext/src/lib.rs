@@ -57,7 +57,8 @@ impl AzureConverter {
         };
 
         format!(
-            r#"
+            r#"version = "{version}"
+
 input.mqtt.topics = {input_topics}
 
 steps = [
@@ -73,6 +74,7 @@ errors.mqtt.topic = "{errors_topic}"
             max_size = self.size_threshold,
             output_topic = self.output_topic,
             errors_topic = self.errors_topic,
+            version = env!("CARGO_PKG_VERSION"),
         )
     }
 }

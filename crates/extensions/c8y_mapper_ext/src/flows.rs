@@ -48,9 +48,11 @@ impl C8yMapperBuilder {
         let topic_prefix = mqtt_schema.root.as_str();
         let errors_topic = mqtt_schema.error_topic();
         let input_topics = self.configured_topics(&format!("{topic_prefix}/+/+/+/+/m/+/meta"));
+        let version = env!("CARGO_PKG_VERSION");
 
         format!(
-            r#"
+            r#"version = "{version}"
+
 input.mqtt.topics = {input_topics:?}
 
 steps = [
@@ -73,9 +75,12 @@ topic = "{errors_topic}"
         let c8y_prefix = &self.config.bridge_config.c8y_prefix;
         let max_size = self.config.max_mqtt_payload_size;
         let input_topics = self.configured_topics(&format!("{topic_prefix}/+/+/+/+/m/+"));
+        let version = env!("CARGO_PKG_VERSION");
 
         format!(
-            r#"input.mqtt.topics = {input_topics:?}
+            r#"version = "{version}"
+
+input.mqtt.topics = {input_topics:?}
 
 config = {{ topic_root = "{topic_prefix}" }}
 
@@ -102,9 +107,12 @@ topic = "{errors_topic}"
         let c8y_prefix = &self.config.bridge_config.c8y_prefix;
         let max_mqtt_payload_size = self.config.max_mqtt_payload_size;
         let input_topics = self.configured_topics(&format!("{topic_prefix}/+/+/+/+/e/+"));
+        let version = env!("CARGO_PKG_VERSION");
 
         format!(
-            r#"input.mqtt.topics = {input_topics:?}
+            r#"version = "{version}"
+
+input.mqtt.topics = {input_topics:?}
 
 config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
 
@@ -134,9 +142,12 @@ topic = "{errors_topic}"
         if !input_topics.is_empty() {
             input_topics.push(format!("{internal_alarms}#"));
         }
+        let version = env!("CARGO_PKG_VERSION");
 
         format!(
-            r#"input.mqtt.topics = {input_topics:?}
+            r#"version = "{version}"
+
+input.mqtt.topics = {input_topics:?}
 
 config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
 
@@ -162,9 +173,12 @@ topic = "{errors_topic}"
         let main_device = &self.config.device_topic_id;
         let errors_topic = mqtt_schema.error_topic();
         let input_topics = self.configured_topics(&format!("{topic_prefix}/+/+/+/+/status/health"));
+        let version = env!("CARGO_PKG_VERSION");
 
         format!(
-            r#"input.mqtt.topics = {input_topics:?}
+            r#"version = "{version}"
+
+input.mqtt.topics = {input_topics:?}
 
 config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
 

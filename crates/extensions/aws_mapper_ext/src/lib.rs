@@ -62,7 +62,8 @@ impl AwsConverter {
         };
 
         format!(
-            r#"
+            r#"version = "{version}"
+
 input.mqtt.topics = {input_topics}
 
 steps = [
@@ -78,6 +79,7 @@ errors.mqtt.topic = "{errors_topic}"
             topic_prefix = self.topic_prefix,
             max_size = self.size_threshold,
             errors_topic = self.errors_topic,
+            version = env!("CARGO_PKG_VERSION"),
         )
     }
 }
