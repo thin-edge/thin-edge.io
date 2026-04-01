@@ -15,12 +15,15 @@ List flows
     # restart tedge-agent to send a new software list
     Restart Service    tedge-agent
 
+    ${tedge_version}=    Execute Command    cmd=tedge --version | cut -d' ' -f2    strip=${True}
+    ${expected_version}=    ThinEdgeIO.Escape Pattern    ${tedge_version}    is_json=${True}
+
     Device Should Have Installed Software
-    ...    {"softwareType": "flow", "name": "c8y/alarms"}
-    ...    {"softwareType": "flow", "name": "c8y/events"}
-    ...    {"softwareType": "flow", "name": "c8y/measurements"}
-    ...    {"softwareType": "flow", "name": "c8y/health"}
-    ...    {"softwareType": "flow", "name": "c8y/units"}
+    ...    {"softwareType": "flow", "name": "c8y/alarms", "version": "${expected_version}"}
+    ...    {"softwareType": "flow", "name": "c8y/events", "version": "${expected_version}"}
+    ...    {"softwareType": "flow", "name": "c8y/measurements", "version": "${expected_version}"}
+    ...    {"softwareType": "flow", "name": "c8y/health", "version": "${expected_version}"}
+    ...    {"softwareType": "flow", "name": "c8y/units", "version": "${expected_version}"}
     ...    {"softwareType": "flow", "name": "local/default-flow", "version": "1.0.0"}
     ...    {"softwareType": "flow", "name": "local/default-flow/other", "version": "3.0.0"}
     ...    {"softwareType": "flow", "name": "local/default-flow/layer1", "version": "0.0.0"}
