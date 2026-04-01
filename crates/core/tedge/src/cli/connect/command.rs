@@ -102,6 +102,19 @@ impl Command for ConnectCommand {
     }
 
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        if let Cloud::Custom(ref name) = self.cloud {
+            if self.is_test_connection {
+                return wait_for_custom_mapper_health(&tedge_config, name)
+                    .await
+                    .map_err(Into::into);
+            } else {
+                return Err(anyhow::anyhow!(
+                    "'tedge connect' is not supported for custom mappers (only --test is available)."
+                )
+                .into());
+            }
+        }
+
         let bridge_config = bridge_config(&tedge_config, &self.cloud)
             .await
             .map_err(anyhow::Error::new)?;
@@ -290,6 +303,7 @@ impl ConnectCommand {
             Cloud::Aws(_) => (),
             #[cfg(feature = "azure")]
             Cloud::Azure(_) => (),
+            Cloud::Custom(_) => unreachable!("custom mappers are handled before connect_bridge"),
         }
 
         if connection_check_success {
@@ -400,6 +414,9 @@ impl ConnectCommand {
             Cloud::Aws(_) => Ok(()),
             #[cfg(feature = "azure")]
             Cloud::Azure(_) => Ok(()),
+            Cloud::Custom(_) => {
+                unreachable!("custom mappers are handled before connect_with_new_certificate")
+            }
         }
     }
 }
@@ -418,6 +435,7 @@ async fn credentials_path_for(
         Cloud::Aws(_) => Ok(None),
         #[cfg(feature = "azure")]
         Cloud::Azure(_) => Ok(None),
+        Cloud::Custom(_) => Ok(None),
     }
 }
 
@@ -459,6 +477,7 @@ impl ConnectCommand {
             Cloud::Aws(_) => Ok(None),
             #[cfg(feature = "azure")]
             Cloud::Azure(_) => Ok(None),
+            Cloud::Custom(_) => Ok(None),
         }
     }
 
@@ -497,6 +516,9 @@ impl ConnectCommand {
             }
             #[cfg(feature = "c8y")]
             Cloud::C8y(profile) => check_device_status_c8y(tedge_config, profile.as_deref()).await,
+            Cloud::Custom(_) => {
+                unreachable!("custom mappers are handled before check_connection")
+            }
         };
         spinner.finish(res)
     }
@@ -524,6 +546,167 @@ impl ConnectCommand {
             );
         }
     }
+}
+
+/// Check health of a custom mapper (and its bridge, if one is configured).
+///
+/// Subscribes to the mapper and bridge health topics on the local MQTT broker
+/// and waits up to [`RESPONSE_TIMEOUT`] for each to report `"up"`. The bridge
+/// phase is skipped entirely when the mapper's `bridge/` directory does not
+/// exist, because a flows-only mapper never publishes bridge health.
+async fn wait_for_custom_mapper_health(
+    tedge_config: &TEdgeConfig,
+    mapper_name: &str,
+) -> Result<(), Fancy<ConnectError>> {
+    let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+    let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
+
+    let mapper_service = format!("tedge-mapper-{mapper_name}");
+    let bridge_service = format!("tedge-mapper-bridge-{mapper_name}");
+
+    let mapper_health = service_health_topic(&mqtt_schema, &device_topic_id, &mapper_service).name;
+    let bridge_health = service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service).name;
+
+    let bridge_dir = tedge_config
+        .root_dir()
+        .join("mappers")
+        .join(mapper_name)
+        .join("bridge");
+    let has_bridge = tokio::fs::try_exists(&bridge_dir).await.unwrap_or(false);
+
+    const CLIENT_ID: &str = "check_connection_custom_mapper";
+
+    let mut mqtt_options = tedge_config
+        .mqtt_config()
+        .map_err(ConnectError::from)?
+        .with_session_prefix(CLIENT_ID)
+        .rumqttc_options()
+        .map_err(ConnectError::from)?;
+    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
+
+    let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
+
+    client
+        .subscribe(&mapper_health, rumqttc::QoS::AtLeastOnce)
+        .await
+        .map_err(ConnectError::from)?;
+    if has_bridge {
+        client
+            .subscribe(&bridge_health, rumqttc::QoS::AtLeastOnce)
+            .await
+            .map_err(ConnectError::from)?;
+    }
+
+    // Poll the MQTT event loop, tracking the health of each service separately.
+    // We show a spinner per service so the user can see which one is slow.
+    //
+    // Both subscriptions are active from the start, so a bridge health message
+    // that arrives before the mapper spinner closes is simply tracked and the
+    // bridge spinner finishes instantly in the second phase.
+    let mut mapper_up = false;
+    let mut bridge_up = false;
+    let mut fatal: Option<ConnectError> = None;
+
+    // Phase 1 – wait for mapper health (accumulate bridge health if it arrives early)
+    let mapper_spinner = Spinner::start(format!("Waiting for {mapper_service} to be up"));
+    loop {
+        match event_loop.poll().await {
+            Ok(rumqttc::Event::Incoming(rumqttc::Packet::Publish(msg))) => {
+                let payload = std::str::from_utf8(&msg.payload).unwrap_or_default();
+                if msg.topic == mapper_health && payload.contains("\"up\"") {
+                    mapper_up = true;
+                    break;
+                } else if has_bridge && msg.topic == bridge_health && payload.contains("\"up\"") {
+                    bridge_up = true;
+                }
+            }
+            Ok(rumqttc::Event::Outgoing(rumqttc::Outgoing::PingReq)) => break,
+            Ok(rumqttc::Event::Incoming(rumqttc::Incoming::Disconnect)) => {
+                fatal = Some(ConnectError::Anyhow(anyhow::anyhow!(
+                    "Client was disconnected from mosquitto during connection check"
+                )));
+                break;
+            }
+            Err(e) => {
+                fatal = Some(ConnectError::Anyhow(
+                    anyhow::Error::from(e)
+                        .context("Failed to connect to mosquitto for connection check"),
+                ));
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    let mapper_result = match fatal.take() {
+        Some(err) => Err(err),
+        None if mapper_up => Ok(()),
+        None => Err(ConnectError::Anyhow(anyhow::anyhow!(
+            "{mapper_service} did not report as up"
+        ))),
+    };
+    mapper_spinner.finish(mapper_result)?;
+
+    if !mapper_up || !has_bridge {
+        let _ = client.disconnect().await;
+        loop {
+            match event_loop.poll().await {
+                Ok(rumqttc::Event::Outgoing(rumqttc::Outgoing::Disconnect)) | Err(_) => break,
+                _ => {}
+            }
+        }
+        return Ok(());
+    }
+
+    // Phase 2 – wait for bridge health (may already be done)
+    let bridge_spinner = Spinner::start(format!("Waiting for {bridge_service} to be up"));
+    if !bridge_up {
+        loop {
+            match event_loop.poll().await {
+                Ok(rumqttc::Event::Incoming(rumqttc::Packet::Publish(msg))) => {
+                    let payload = std::str::from_utf8(&msg.payload).unwrap_or_default();
+                    if msg.topic == bridge_health && payload.contains("\"up\"") {
+                        bridge_up = true;
+                        break;
+                    }
+                }
+                Ok(rumqttc::Event::Outgoing(rumqttc::Outgoing::PingReq)) => break,
+                Ok(rumqttc::Event::Incoming(rumqttc::Incoming::Disconnect)) => {
+                    fatal = Some(ConnectError::Anyhow(anyhow::anyhow!(
+                        "Client was disconnected from mosquitto during connection check"
+                    )));
+                    break;
+                }
+                Err(e) => {
+                    fatal = Some(ConnectError::Anyhow(
+                        anyhow::Error::from(e)
+                            .context("Failed to connect to mosquitto for connection check"),
+                    ));
+                    break;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let bridge_result = match fatal.take() {
+        Some(err) => Err(err),
+        None if bridge_up => Ok(()),
+        None => Err(ConnectError::Anyhow(anyhow::anyhow!(
+            "{bridge_service} did not report as up"
+        ))),
+    };
+    bridge_spinner.finish(bridge_result)?;
+
+    let _ = client.disconnect().await;
+    loop {
+        match event_loop.poll().await {
+            Ok(rumqttc::Event::Outgoing(rumqttc::Outgoing::Disconnect)) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    Ok(())
 }
 
 fn warn_if_cert_cn_invalid(bridge_config: &BridgeConfig) {
@@ -577,6 +760,7 @@ fn validate_config(config: &TEdgeConfig, cloud: &MaybeBorrowedCloud<'_>) -> anyh
             disallow_matching_bridge_topic_prefix(&configs)?;
             disallow_matching_proxy_bind_port(&configs)?;
         }
+        MaybeBorrowedCloud::Custom(_) => {}
     }
     Ok(())
 }
@@ -828,6 +1012,9 @@ pub async fn bridge_config(
 
             Ok(BridgeConfig::from(params))
         }
+        MaybeBorrowedCloud::Custom(_) => {
+            unreachable!("custom mappers are handled before bridge_config is called")
+        }
     }
 }
 
@@ -909,6 +1096,7 @@ impl ConnectCommand {
             Cloud::Aws(_) => (),
             #[cfg(feature = "azure")]
             Cloud::Azure(_) => (),
+            Cloud::Custom(_) => unreachable!("custom mappers are handled before new_bridge"),
         }
 
         if tedge_config.mqtt.bind.enabled {
@@ -1539,6 +1727,175 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let (_ttd, mut config) = bridge_config_with_cn("my:invalid:device");
             config.auth_type = AuthType::Basic;
             assert!(check_cert_cn(&config).is_ok());
+        }
+    }
+
+    mod wait_for_custom_mapper_health {
+        use super::super::wait_for_custom_mapper_health;
+        use tedge_config::TEdgeConfig;
+        use tedge_test_utils::fs::TempTedgeDir;
+
+        #[tokio::test]
+        async fn succeeds_when_mapper_health_arrives() {
+            let broker = mqtt_tests::test_mqtt_broker();
+            let ttd = TempTedgeDir::new();
+            let config = config_pointing_at_broker(broker.port, &ttd);
+
+            // Publish mapper health before the check starts (retained so it's
+            // delivered as soon as the subscription is set up)
+            broker
+                .publish_with_opts(
+                    "te/device/main/service/tedge-mapper-mytest/status/health",
+                    r#"{"status":"up"}"#,
+                    rumqttc::QoS::AtLeastOnce,
+                    true,
+                )
+                .await
+                .unwrap();
+
+            wait_for_custom_mapper_health(&config, "mytest")
+                .await
+                .expect("health check should succeed");
+
+            // Clean up retained message
+            broker
+                .publish_with_opts(
+                    "te/device/main/service/tedge-mapper-mytest/status/health",
+                    "",
+                    rumqttc::QoS::AtLeastOnce,
+                    true,
+                )
+                .await
+                .unwrap();
+        }
+
+        #[tokio::test]
+        async fn succeeds_for_bridge_mapper_when_both_health_topics_arrive() {
+            let broker = mqtt_tests::test_mqtt_broker();
+            let ttd = TempTedgeDir::new();
+            // Create bridge/ dir so the check knows a bridge is expected
+            ttd.dir("mappers").dir("bridgetest").dir("bridge");
+            let config = config_pointing_at_broker(broker.port, &ttd);
+
+            broker
+                .publish_with_opts(
+                    "te/device/main/service/tedge-mapper-bridgetest/status/health",
+                    r#"{"status":"up"}"#,
+                    rumqttc::QoS::AtLeastOnce,
+                    true,
+                )
+                .await
+                .unwrap();
+            broker
+                .publish_with_opts(
+                    "te/device/main/service/tedge-mapper-bridge-bridgetest/status/health",
+                    r#"{"status":"up"}"#,
+                    rumqttc::QoS::AtLeastOnce,
+                    true,
+                )
+                .await
+                .unwrap();
+
+            wait_for_custom_mapper_health(&config, "bridgetest")
+                .await
+                .expect("health check should succeed");
+
+            for topic in [
+                "te/device/main/service/tedge-mapper-bridgetest/status/health",
+                "te/device/main/service/tedge-mapper-bridge-bridgetest/status/health",
+            ] {
+                broker
+                    .publish_with_opts(topic, "", rumqttc::QoS::AtLeastOnce, true)
+                    .await
+                    .unwrap();
+            }
+        }
+
+        #[tokio::test]
+        async fn skips_bridge_phase_for_flows_only_mapper() {
+            let broker = mqtt_tests::test_mqtt_broker();
+            let ttd = TempTedgeDir::new();
+            // No bridge/ dir — flows-only mapper
+            let config = config_pointing_at_broker(broker.port, &ttd);
+
+            broker
+                .publish_with_opts(
+                    "te/device/main/service/tedge-mapper-flowsonly/status/health",
+                    r#"{"status":"up"}"#,
+                    rumqttc::QoS::AtLeastOnce,
+                    true,
+                )
+                .await
+                .unwrap();
+
+            // Should return Ok immediately after mapper health, without waiting
+            // for a bridge health that never comes
+            wait_for_custom_mapper_health(&config, "flowsonly")
+                .await
+                .expect("health check should succeed without bridge");
+
+            broker
+                .publish_with_opts(
+                    "te/device/main/service/tedge-mapper-flowsonly/status/health",
+                    "",
+                    rumqttc::QoS::AtLeastOnce,
+                    true,
+                )
+                .await
+                .unwrap();
+        }
+
+        #[tokio::test]
+        async fn bridge_health_arriving_after_mapper_exercises_phase2_loop() {
+            let broker = mqtt_tests::test_mqtt_broker();
+            let ttd = TempTedgeDir::new();
+            ttd.dir("mappers").dir("ph2test").dir("bridge");
+            let config = config_pointing_at_broker(broker.port, &ttd);
+
+            // Mapper health is retained so Phase 1 resolves immediately.
+            // Bridge health is NOT pre-published; a background task delivers it
+            // after a short delay so that Phase 2 must actually poll the event loop.
+            broker
+                .publish_with_opts(
+                    "te/device/main/service/tedge-mapper-ph2test/status/health",
+                    r#"{"status":"up"}"#,
+                    rumqttc::QoS::AtLeastOnce,
+                    true,
+                )
+                .await
+                .unwrap();
+
+            tokio::spawn(async {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                mqtt_tests::test_mqtt_broker()
+                    .publish(
+                        "te/device/main/service/tedge-mapper-bridge-ph2test/status/health",
+                        r#"{"status":"up"}"#,
+                    )
+                    .await
+                    .unwrap();
+            });
+
+            wait_for_custom_mapper_health(&config, "ph2test")
+                .await
+                .expect("health check should succeed");
+
+            broker
+                .publish_with_opts(
+                    "te/device/main/service/tedge-mapper-ph2test/status/health",
+                    "",
+                    rumqttc::QoS::AtLeastOnce,
+                    true,
+                )
+                .await
+                .unwrap();
+        }
+
+        fn config_pointing_at_broker(port: u16, ttd: &TempTedgeDir) -> TEdgeConfig {
+            TEdgeConfig::load_toml_str_with_root_dir(
+                ttd.path(),
+                &format!("mqtt.client.port = {port}"),
+            )
         }
     }
 }

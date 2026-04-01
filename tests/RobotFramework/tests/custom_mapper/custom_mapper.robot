@@ -256,6 +256,64 @@ Stale bridge health is cleared when mapper switches to flows-only
 
     [Teardown]    Stop And Remove Mapper    test-stale
 
+tedge connect --test succeeds for a running custom bridge mapper
+    [Documentation]    When a bridge custom mapper is running, `tedge connect <name> --test`
+    ...    should wait for both the mapper and bridge health topics to report "up".
+    [Setup]    Create Bridge Mapper    test-connect-bridge
+
+    Start Service    tedge-mapper-test-connect-bridge
+    Service Should Be Running    tedge-mapper-test-connect-bridge
+
+    ${output}=    Execute Command
+    ...    sudo tedge connect test-connect-bridge --test
+    ...    stdout=${False}    stderr=${True}
+    Should Contain    ${output}    tedge-mapper-test-connect-bridge
+    Should Contain    ${output}    tedge-mapper-bridge-test-connect-bridge
+
+    [Teardown]    Stop And Remove Mapper    test-connect-bridge
+
+tedge connect --test succeeds for a running flows-only custom mapper
+    [Documentation]    When a flows-only custom mapper is running, `tedge connect <name> --test`
+    ...    should wait only for the mapper health topic (no bridge phase) and succeed.
+    [Setup]    Create Flows Only Mapper    test-connect-flows
+
+    Start Service    tedge-mapper-test-connect-flows
+    Service Should Be Running    tedge-mapper-test-connect-flows
+
+    ${output}=    Execute Command
+    ...    sudo tedge connect test-connect-flows --test
+    ...    stdout=${False}    stderr=${True}
+    Should Contain    ${output}    tedge-mapper-test-connect-flows
+    Should Not Contain    ${output}    tedge-mapper-bridge-test-connect-flows
+
+    [Teardown]    Stop And Remove Mapper    test-connect-flows
+
+tedge connect --test fails when the custom mapper is not running
+    [Documentation]    When the mapper service is not started, `tedge connect <name> --test`
+    ...    should time out waiting for health and exit with a non-zero code.
+    [Setup]    Create Flows Only Mapper    test-connect-down
+
+    ${output}=    Execute Command
+    ...    sudo tedge connect test-connect-down --test
+    ...    exp_exit_code=1
+    ...    stdout=${False}    stderr=${True}
+    Should Contain    ${output}    tedge-mapper-test-connect-down
+
+    [Teardown]    Stop And Remove Mapper    test-connect-down
+
+tedge connect without --test gives a helpful error for custom mappers
+    [Documentation]    Running `tedge connect <custom-mapper>` without --test is not supported
+    ...    and should exit non-zero with a message that mentions --test.
+    [Setup]    Create Flows Only Mapper    test-connect-no-test
+
+    ${output}=    Execute Command
+    ...    sudo tedge connect test-connect-no-test
+    ...    exp_exit_code=1
+    ...    stdout=${False}    stderr=${True}
+    Should Contain    ${output}    --test
+
+    [Teardown]    Stop And Remove Mapper    test-connect-no-test
+
 
 *** Keywords ***
 Custom Setup

@@ -42,6 +42,23 @@ pub enum CloudArg {
     },
 }
 
+/// A free-form cloud/mapper name for `tedge connect`, which accepts both
+/// built-in cloud names (c8y, az, aws) and custom mapper names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectCloudArg {
+    pub name: String,
+    pub profile: Option<ProfileName>,
+}
+
+impl ConnectCloudArg {
+    pub fn into_cloud(self) -> Cloud {
+        match resolve_cloud(&self.name, self.profile) {
+            Some(cloud) => cloud,
+            None => Cloud::Custom(self.name),
+        }
+    }
+}
+
 impl TryFrom<CloudArg> for Cloud {
     type Error = anyhow::Error;
 
@@ -101,22 +118,21 @@ pub enum MaybeBorrowedCloud<'a> {
     Azure(Option<Cow<'a, ProfileName>>),
     #[cfg(feature = "aws")]
     Aws(Option<Cow<'a, ProfileName>>),
+    #[strum(serialize = "custom")]
+    Custom(String),
 }
 
 impl fmt::Display for MaybeBorrowedCloud<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                #[cfg(feature = "c8y")]
-                Self::C8y(_) => "Cumulocity",
-                #[cfg(feature = "azure")]
-                Self::Azure(_) => "Azure",
-                #[cfg(feature = "aws")]
-                Self::Aws(_) => "Aws",
-            }
-        )
+        match self {
+            #[cfg(feature = "c8y")]
+            Self::C8y(_) => write!(f, "Cumulocity"),
+            #[cfg(feature = "azure")]
+            Self::Azure(_) => write!(f, "Azure"),
+            #[cfg(feature = "aws")]
+            Self::Aws(_) => write!(f, "Aws"),
+            Self::Custom(name) => write!(f, "{name}"),
+        }
     }
 }
 
@@ -129,6 +145,9 @@ impl<'a> From<&'a MaybeBorrowedCloud<'a>> for tedge_config::tedge_toml::Cloud<'a
             MaybeBorrowedCloud::Azure(p) => tedge_config::tedge_toml::Cloud::Az(p.as_deref()),
             #[cfg(feature = "aws")]
             MaybeBorrowedCloud::Aws(p) => tedge_config::tedge_toml::Cloud::Aws(p.as_deref()),
+            MaybeBorrowedCloud::Custom(_) => {
+                unreachable!("Custom mappers do not have a tedge_toml::Cloud representation")
+            }
         }
     }
 }
@@ -206,6 +225,9 @@ impl MaybeBorrowedCloud<'_> {
                 name: "tedge-mapper-c8y",
                 profile: profile.as_deref(),
             },
+            Self::Custom(_) => {
+                unreachable!("mapper_service is not used for custom mappers")
+            }
         }
     }
 
@@ -223,6 +245,7 @@ impl MaybeBorrowedCloud<'_> {
             Self::Azure(None) => "az-bridge.conf".into(),
             #[cfg(feature = "azure")]
             Self::Azure(Some(profile)) => format!("az@{profile}-bridge.conf").into(),
+            Self::Custom(name) => format!("{name}-bridge.conf").into(),
         }
     }
 
@@ -234,6 +257,7 @@ impl MaybeBorrowedCloud<'_> {
             Self::Aws(profile) => profile.as_deref(),
             #[cfg(feature = "azure")]
             Self::Azure(profile) => profile.as_deref(),
+            Self::Custom(_) => None,
         }
     }
 }
@@ -519,5 +543,69 @@ mod tests {
             !keys.iter().any(|k| k.contains(".profiles.")),
             "should not contain .profiles. keys, got: {keys:?}"
         );
+    }
+
+    mod connect_cloud_arg {
+        use super::super::Cloud;
+        use super::super::ConnectCloudArg;
+
+        #[test]
+        fn c8y_resolves_to_builtin_cloud() {
+            assert!(matches!(arg("c8y").into_cloud(), Cloud::C8y(None)));
+        }
+
+        #[test]
+        fn az_resolves_to_builtin_cloud() {
+            assert!(matches!(arg("az").into_cloud(), Cloud::Azure(None)));
+        }
+
+        #[test]
+        fn aws_resolves_to_builtin_cloud() {
+            assert!(matches!(arg("aws").into_cloud(), Cloud::Aws(None)));
+        }
+
+        #[test]
+        fn unknown_name_resolves_to_custom() {
+            let cloud = arg("thingsboard").into_cloud();
+            assert!(matches!(cloud, Cloud::Custom(ref n) if n == "thingsboard"));
+        }
+
+        #[test]
+        fn c8y_with_profile_resolves_to_builtin_with_profile() {
+            assert!(matches!(
+                arg_with_profile("c8y", "prod").into_cloud(),
+                Cloud::C8y(Some(_))
+            ));
+        }
+
+        #[test]
+        fn dotted_c8y_name_resolves_as_profile() {
+            // "c8y.prod" without an explicit profile flag should be treated as c8y + profile "prod"
+            assert!(matches!(arg("c8y.prod").into_cloud(), Cloud::C8y(Some(_))));
+        }
+
+        #[test]
+        fn dotted_custom_name_stays_custom() {
+            // A dotted name whose first segment is not a known cloud is still custom
+            let cloud = arg("my-mapper.prod").into_cloud();
+            assert!(
+                matches!(cloud, Cloud::Custom(ref n) if n == "my-mapper.prod"),
+                "expected Custom(my-mapper.prod), got {cloud:?}"
+            );
+        }
+
+        fn arg(name: &str) -> ConnectCloudArg {
+            ConnectCloudArg {
+                name: name.into(),
+                profile: None,
+            }
+        }
+
+        fn arg_with_profile(name: &str, profile: &str) -> ConnectCloudArg {
+            ConnectCloudArg {
+                name: name.into(),
+                profile: Some(profile.parse().unwrap()),
+            }
+        }
     }
 }

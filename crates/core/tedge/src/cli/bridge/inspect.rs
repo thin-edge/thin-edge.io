@@ -105,6 +105,7 @@ async fn run_inspect(
                     }
                 }
             }
+            Cloud::Custom(_) => unreachable!("resolve_cloud never returns Custom"),
         },
         None => {
             if let Some((rules, non_expansions)) =

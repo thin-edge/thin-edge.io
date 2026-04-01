@@ -42,6 +42,7 @@ pub fn cloud_name(cloud: &MaybeBorrowedCloud<'_>) -> &'static str {
         MaybeBorrowedCloud::Aws { .. } => "AWS",
         #[cfg(feature = "azure")]
         MaybeBorrowedCloud::Azure { .. } => "Azure",
+        MaybeBorrowedCloud::Custom(_) => unreachable!("cloud_name is not used for custom mappers"),
     }
 }
 
