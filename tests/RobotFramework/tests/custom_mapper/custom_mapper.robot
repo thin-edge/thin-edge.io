@@ -160,8 +160,8 @@ Two custom mapper profiles run concurrently without interfering
 
     [Teardown]    Stop And Remove Two Mappers    test-alpha    test-beta
 
-Custom mapper with bridge.tls off forwards messages over plain TCP
-    [Documentation]    A custom mapper with `bridge.tls = off` connects to a plain (non-TLS) MQTT
+Custom mapper with bridge.tls.enable false forwards messages over plain TCP
+    [Documentation]    A custom mapper with `bridge.tls.enable = "false"` connects to a plain (non-TLS) MQTT
     ...    broker and forwards messages. This proves the TLS-skip code path works end-to-end.
     [Setup]    Create Non TLS Bridge Mapper    test-notls
 

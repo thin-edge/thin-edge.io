@@ -272,25 +272,17 @@ impl EffectiveMapperConfig {
                 None => self.get_from_tables(key),
             },
             "auth_method" => ConfigGetResult::Value(Sourced {
-                value: match self.effective_auth.value {
-                    AuthMethod::Certificate => "certificate".to_string(),
-                    AuthMethod::Password => "password".to_string(),
-                },
+                value: self.effective_auth.value.to_string(),
                 source: self.effective_auth.source.clone(),
             }),
-            "bridge.tls" => {
-                let (value, source) = match walk_table_value(&self.mapper_table, ["bridge", "tls"])
-                {
-                    Some(_) => (self.bridge.tls, ConfigSource::MapperToml),
-                    None => (self.bridge.tls, ConfigSource::Default),
-                };
-                let tls_str = match value {
-                    BridgeTls::On => "on",
-                    BridgeTls::Off => "off",
-                    BridgeTls::Auto => "auto",
-                };
+            "bridge.tls.enable" => {
+                let (value, source) =
+                    match walk_table_value(&self.mapper_table, ["bridge", "tls", "enable"]) {
+                        Some(_) => (self.bridge.tls.enable, ConfigSource::MapperToml),
+                        None => (self.bridge.tls.enable, ConfigSource::Default),
+                    };
                 ConfigGetResult::Value(Sourced {
-                    value: tls_str.to_string(),
+                    value: value.to_string(),
                     source,
                 })
             }

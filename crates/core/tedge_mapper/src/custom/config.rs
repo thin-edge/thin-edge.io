@@ -81,14 +81,24 @@ pub struct DeviceConfig {
     pub root_cert_path: Option<Utf8PathBuf>,
 }
 
-/// TLS transport control for the cloud broker connection.
+/// TLS settings for the cloud broker connection.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub struct BridgeTls {
+    /// Whether TLS is enabled for the cloud broker connection.
+    pub enable: BridgeTlsEnable,
+}
+
+/// TLS transport control for the cloud broker connection.
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize, strum::Display,
+)]
 #[serde(rename_all = "lowercase")]
-pub enum BridgeTls {
+#[strum(serialize_all = "lowercase")]
+pub enum BridgeTlsEnable {
     /// Always use TLS, regardless of port.
-    On,
+    True,
     /// Never use TLS (plain TCP). Incompatible with certificate authentication.
-    Off,
+    False,
     /// Infer from port: 8883 → TLS on, 1883 → TLS off, other → TLS on.
     #[default]
     Auto,

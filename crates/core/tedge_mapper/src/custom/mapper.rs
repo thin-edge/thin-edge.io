@@ -10,7 +10,7 @@ use crate::core::mqtt::configure_proxy;
 use crate::custom::config::load_mapper_config;
 use crate::custom::config::read_mapper_credentials;
 use crate::custom::config::scan_mappers_shallow;
-use crate::custom::config::BridgeTls;
+use crate::custom::config::BridgeTlsEnable;
 use crate::custom::config::CustomMapperConfig;
 use crate::custom::resolve::resolve_effective_config;
 use crate::custom::resolve::EffectiveMapperConfig;
@@ -176,10 +176,10 @@ pub async fn build_cloud_mqtt_options(
         cloud_config.set_keep_alive(interval.duration());
     }
 
-    let tls_enabled = match config.bridge.tls {
-        BridgeTls::On => true,
-        BridgeTls::Off => false,
-        BridgeTls::Auto => match url.port().0 {
+    let tls_enabled = match config.bridge.tls.enable {
+        BridgeTlsEnable::True => true,
+        BridgeTlsEnable::False => false,
+        BridgeTlsEnable::Auto => match url.port().0 {
             1883 => false,
             _ => true, // 8883 and any other port default to TLS on
         },
@@ -1014,7 +1014,6 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
 
         mod tls {
             use super::*;
-            use crate::custom::config::BridgeTls;
 
             #[tokio::test]
             async fn tls_off_with_password_auth_connects_without_tls() {
@@ -1024,7 +1023,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 write_creds(&creds_path).await;
                 let tedge_config = TEdgeConfig::load_toml_str("device.id = \"test-device\"");
                 let mut config = make_config(Some("mqtt.example.com:1883"));
-                config.bridge.tls = BridgeTls::Off;
+                config.bridge.tls.enable = BridgeTlsEnable::False;
                 config.credentials_path = Some(creds_path);
                 let effective = resolve(&config, &tedge_config).await;
 
@@ -1042,7 +1041,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                     "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
                 ));
                 let mut config = make_config(Some("mqtt.example.com:8883"));
-                config.bridge.tls = BridgeTls::On;
+                config.bridge.tls.enable = BridgeTlsEnable::True;
                 let effective = resolve(&config, &tedge_config).await;
 
                 build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
@@ -1059,7 +1058,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                     "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
                 ));
                 let config = make_config(Some("mqtt.example.com:8883"));
-                assert_eq!(config.bridge.tls, BridgeTls::Auto);
+                assert_eq!(config.bridge.tls.enable, BridgeTlsEnable::Auto);
                 let effective = resolve(&config, &tedge_config).await;
 
                 build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
@@ -1076,7 +1075,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 let tedge_config = TEdgeConfig::load_toml_str("device.id = \"test-device\"");
                 let mut config = make_config(Some("mqtt.example.com:1883"));
                 config.credentials_path = Some(creds_path);
-                assert_eq!(config.bridge.tls, BridgeTls::Auto);
+                assert_eq!(config.bridge.tls.enable, BridgeTlsEnable::Auto);
                 let effective = resolve(&config, &tedge_config).await;
 
                 build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
@@ -1093,7 +1092,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                     "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
                 ));
                 let config = make_config(Some("mqtt.example.com:9999"));
-                assert_eq!(config.bridge.tls, BridgeTls::Auto);
+                assert_eq!(config.bridge.tls.enable, BridgeTlsEnable::Auto);
                 let effective = resolve(&config, &tedge_config).await;
 
                 build_cloud_mqtt_options(&effective, "svc", &mapper_dir, &tedge_config)
@@ -1110,7 +1109,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                     "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
                 ));
                 let mut config = make_config(Some("mqtt.example.com:8883"));
-                config.bridge.tls = BridgeTls::Off;
+                config.bridge.tls.enable = BridgeTlsEnable::False;
                 config.auth_method = AuthMethodConfig::Certificate;
                 let effective = resolve(&config, &tedge_config).await;
 

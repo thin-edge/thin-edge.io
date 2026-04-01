@@ -3,4 +3,4 @@ auth_method = "password"
 credentials_path = "credentials.toml"
 
 [bridge]
-tls = "off"
+tls.enable = "false"
