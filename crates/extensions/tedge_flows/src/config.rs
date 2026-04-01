@@ -634,6 +634,7 @@ fn detect_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::empty_mapper_params;
     use camino::Utf8PathBuf;
     use serde_json::json;
     use std::time::Duration;
@@ -811,7 +812,7 @@ script = "main.js"
 topic = "te/device/main///e/"
 "#;
 
-        let mapper_config = mapper_config();
+        let mapper_config = empty_mapper_params();
         let params = Params::load_toml(mapper_config.as_ref(), params_toml).unwrap();
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
         let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
@@ -837,7 +838,7 @@ topic = "te/device/main///e/"
         output.mqtt.topic = "c8y/output"
         "#;
 
-        let mapper_config = mapper_config();
+        let mapper_config = empty_mapper_params();
         let params = Params::load_toml(mapper_config.as_ref(), params_toml).unwrap();
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
         let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
@@ -872,7 +873,7 @@ topic = "te/device/main///e/"
         interval = "3600s"
         "#;
 
-        let mapper_config = mapper_config();
+        let mapper_config = empty_mapper_params();
         let params = Params::load_toml(mapper_config.as_ref(), params_toml).unwrap();
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
         let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
@@ -897,15 +898,11 @@ topic = "te/device/main///e/"
         output.file.path = "/var/log/tedge/errors.log"
         "#;
 
-        let mapper_config = mapper_config();
+        let mapper_config = empty_mapper_params();
         let params = Params::load_toml(mapper_config.as_ref(), params_toml).unwrap();
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
         let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
 
         assert_eq!(expected_flow, flow.substitute_params(&params).unwrap());
-    }
-
-    fn mapper_config() -> Box<dyn MapperParams> {
-        Box::new(HashMap::new())
     }
 }

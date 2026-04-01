@@ -88,9 +88,12 @@ impl TEdgeComponent for AwsMapper {
             aws_config.mapper.mqtt.max_payload_size.0,
             aws_config.topics.to_string(),
         );
+        let mapper_dir = config_dir.join("mappers").join("aws");
         let flows_dir =
             tedge_flows::flows_dir(config_dir, "aws", self.profile.as_ref().map(|p| p.as_ref()));
-        let mut flows = crate::flow_registry(flows_dir).await?;
+        let mapper_config =
+            crate::effective_mapper_config(&tedge_config, "aws", mapper_dir).await?;
+        let mut flows = crate::flow_registry(mapper_config, flows_dir).await?;
         aws_converter.persist_builtin_flow(&mut flows).await?;
         let service_config = flows_config(&tedge_config, &aws_mapper_name)?;
 

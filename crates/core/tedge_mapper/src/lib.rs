@@ -66,6 +66,7 @@ pub mod c8y;
 mod collectd;
 mod core;
 mod custom;
+use crate::custom_mapper_resolve::EffectiveMapperConfig;
 /// Re-export mapper directory warnings for use by CLI commands.
 pub use core::mappers_dir::warn_misconfigured_mapper_dirs;
 /// Re-export custom mapper config for use by bridge inspection commands.
@@ -270,10 +271,9 @@ pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
 }
 
 pub(crate) async fn flow_registry(
+    mapper_config: Option<EffectiveMapperConfig>,
     flows_dir: impl AsRef<Utf8Path>,
 ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
-    let mapper_config = HashMap::new();
-
     if let Err(err) = create_directory_with_defaults(flows_dir.as_ref()).await {
         error!(
             "failed to create flow directory '{}': {err}",
@@ -281,9 +281,46 @@ pub(crate) async fn flow_registry(
         );
         return Err(err)?;
     };
-    let mut flows = ConnectedFlowRegistry::new(mapper_config, flows_dir);
+
+    let mut flows = match mapper_config {
+        None => ConnectedFlowRegistry::new(HashMap::new(), flows_dir),
+        Some(effective_mapper_config) => {
+            ConnectedFlowRegistry::new(effective_mapper_config, flows_dir)
+        }
+    };
+
     load_builtin_transformers(&mut flows);
     Ok(flows)
+}
+
+pub async fn effective_mapper_config(
+    tedge_config: &TEdgeConfig,
+    mapper_name: &str,
+    mapper_dir: impl AsRef<Utf8Path>,
+) -> anyhow::Result<Option<EffectiveMapperConfig>> {
+    let Some(raw) = custom::config::load_mapper_config(mapper_dir.as_ref()).await? else {
+        return Ok(None);
+    };
+    match mapper_name {
+        #[cfg(feature = "c8y")]
+        "c8y" => Ok(Some(
+            c8y::mapper::resolve_effective_mapper_config(tedge_config, None).await?,
+        )),
+
+        #[cfg(feature = "aws")]
+        "aws" => Ok(Some(
+            aws::mapper::resolve_effective_mapper_config(tedge_config, profile.as_ref()).await?,
+        )),
+
+        #[cfg(feature = "azure")]
+        "az" => Ok(Some(
+            az::mapper::resolve_effective_mapper_config(tedge_config, profile.as_ref()).await?,
+        )),
+
+        _ => Ok(Some(
+            custom::resolve::resolve_effective_config(&raw, tedge_config, None, None).await?,
+        )),
+    }
 }
 
 #[cfg(test)]

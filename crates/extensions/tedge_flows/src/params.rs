@@ -19,13 +19,17 @@ use tracing::log;
 /// config.device = "${mapper.device.id}"
 /// ```
 pub trait MapperParams: 'static + Send + Sync {
-    fn get_value(&self, key: &str) -> Option<&str>;
+    fn get_value(&self, key: &str) -> Option<String>;
 }
 
 impl MapperParams for HashMap<String, String> {
-    fn get_value(&self, key: &str) -> Option<&str> {
-        self.get(key).map(|value| value.as_str())
+    fn get_value(&self, key: &str) -> Option<String> {
+        self.get(key).map(|value| value.to_owned())
     }
+}
+
+pub fn empty_mapper_params() -> Box<dyn MapperParams> {
+    Box::new(HashMap::default())
 }
 
 /// The params.toml is an optional file, that can be created by the user to customize flows

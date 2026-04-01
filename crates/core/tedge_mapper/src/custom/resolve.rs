@@ -16,6 +16,7 @@ use tedge_config::models::SecondsOrHumanTime;
 use tedge_config::models::MQTT_TLS_PORT;
 use tedge_config::tedge_toml::Cloud;
 use tedge_config::TEdgeConfig;
+use tedge_flows::MapperParams;
 use tedge_mqtt_bridge::config_toml::collect_string_array;
 use tedge_mqtt_bridge::config_toml::toml_scalar_to_string;
 use tedge_mqtt_bridge::config_toml::walk_toml_path;
@@ -432,6 +433,15 @@ impl MapperConfigLookup for EffectiveMapperConfig {
                 },
                 None => MapperArrayResult::UnknownKey,
             },
+        }
+    }
+}
+
+impl MapperParams for EffectiveMapperConfig {
+    fn get_value(&self, key: &str) -> Option<String> {
+        match self.get(key) {
+            ConfigGetResult::Value(s) => Some(s.value),
+            _ => None,
         }
     }
 }

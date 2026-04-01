@@ -162,9 +162,12 @@ impl TEdgeComponent for CumulocityMapper {
             None
         };
 
+        let mapper_dir = cfg_dir.join("mappers").join("c8y");
         let flows_dir =
             tedge_flows::flows_dir(cfg_dir, "c8y", self.profile.as_ref().map(|p| p.as_ref()));
-        let mut flows = crate::flow_registry(flows_dir).await?;
+        let mapper_config =
+            crate::effective_mapper_config(&tedge_config, "c8y", mapper_dir).await?;
+        let mut flows = crate::flow_registry(mapper_config, flows_dir).await?;
         c8y_mapper_actor.persist_builtin_flows(&mut flows).await?;
         let service_config = flows_config(&tedge_config, &c8y_mapper_name)?;
 

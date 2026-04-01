@@ -20,6 +20,7 @@ pub use crate::config::ConfigError;
 pub use crate::config::FlowConfig;
 pub use crate::connected_flow::ConnectedFlowRegistry;
 pub use crate::flow::*;
+pub use crate::params::empty_mapper_params;
 pub use crate::params::MapperParams;
 pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;

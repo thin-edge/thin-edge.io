@@ -35,7 +35,6 @@ use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::use_credentials;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_bridge::MqttOptions;
-use tedge_utils::file::create_directory_with_defaults;
 use tedge_watch_ext::WatchActorBuilder;
 
 /// A user-defined mapper instance, identified by its name.
@@ -298,10 +297,13 @@ async fn build_flows_actors(
     );
 
     let flows_dir = mapper_dir.join("flows");
-    create_directory_with_defaults(&flows_dir)
-        .await
-        .with_context(|| format!("Failed to create flows directory '{flows_dir}'"))?;
-    let flows = crate::flow_registry(flows_dir).await?;
+    let mapper_config = crate::effective_mapper_config(
+        tedge_config,
+        mapper_dir.file_name().unwrap_or("local"),
+        mapper_dir,
+    )
+    .await?;
+    let flows = crate::flow_registry(mapper_config, flows_dir).await?;
     let fs_actor = FsWatchActorBuilder::new();
     let cmd_watcher_actor = WatchActorBuilder::new();
     let flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;
