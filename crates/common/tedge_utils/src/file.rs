@@ -457,6 +457,12 @@ pub async fn change_user_and_group(
 }
 
 pub fn change_user_and_group_sync(path: &Path, user: &str, group: &str) -> Result<(), FileError> {
+    match (user, group) {
+        ("", "") => return Ok(()),
+        ("", group) => return change_group_sync(path, group),
+        (user, "") => return change_user_sync(path, user),
+        _ => {}
+    }
     let metadata = get_metadata_sync(path)?;
     debug!("Changing ownership of path: {path:?} with user: {user} and group: {group}",);
     let ud = get_user_by_name(&user)
