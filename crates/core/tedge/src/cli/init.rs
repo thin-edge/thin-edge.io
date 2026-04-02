@@ -120,7 +120,7 @@ impl TEdgeInitCmd {
         };
 
         let entity_store_file = agent_state_dir.join("entity_store.jsonl");
-        if entity_store_file.exists() && !user.is_empty() && !group.is_empty() {
+        if entity_store_file.exists() {
             file_permissions
                 .apply(entity_store_file.as_std_path())
                 .await?;
