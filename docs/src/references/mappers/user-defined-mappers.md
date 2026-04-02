@@ -34,10 +34,11 @@ The mapper name must:
 - start with a lowercase ASCII letter (`a`–`z`)
 - contain only lowercase letters, digits, and hyphens (`-`)
 - not contain underscores or uppercase letters
+- not start with `bridge-` (reserved for internal bridge sub-service naming)
 
 Valid names: `thingsboard`, `my-cloud`, `edge-platform`
 
-Invalid names: `ThingsBoard`, `my_cloud`, `1cloud`
+Invalid names: `ThingsBoard`, `my_cloud`, `1cloud`, `bridge-example`
 
 ### `mapper.toml`
 
@@ -86,6 +87,12 @@ clean_session = false
 
 # MQTT keepalive interval (e.g. "60s", "2m")
 # keepalive_interval = "60s"
+
+# TLS transport control: "auto" (default), "on", or "off".
+# auto: infer from port (8883 → TLS on, 1883 → TLS off, other → TLS on)
+# on: always use TLS regardless of port
+# off: never use TLS (plain TCP, incompatible with certificate authentication)
+# tls.enable = "auto"
 
 # Any additional fields you add here are available as ${mapper.*} in bridge rules.
 # For example, this field is accessible as ${mapper.bridge.topic_prefix}.
@@ -154,16 +161,19 @@ This is distinct from `tedge-mapper`, which is the mapper daemon binary that act
 
 ### `tedge mapper list`
 
-Lists all configured mappers under `/etc/tedge/mappers/` (directories that contain a `mapper.toml`), along with their `cloud_type` if set.
+Lists all configured mappers under `/etc/tedge/mappers/`, along with their URL, device identity, and `cloud_type` if set.
+Directories that contain a `mapper.toml` or a `flows/` subdirectory are included.
 
 ```sh
 tedge mapper list
 ```
 
 ```text title="Example output"
-c8y       cloud_type=c8y
-thingsboard
+c8y mqtt.cumulocity.com:8883 my-device [tedge.toml] c8y
+thingsboard mqtt.thingsboard.io:8883 my-device [mapper.toml]
 ```
+
+Output columns are tab-separated: **name**, **URL**, **device ID** (with source annotation), and **cloud_type**.
 
 ### `tedge mapper config get`
 

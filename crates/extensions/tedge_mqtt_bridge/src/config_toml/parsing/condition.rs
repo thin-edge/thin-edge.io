@@ -128,7 +128,7 @@ where
         .labelled("dotted path")
 }
 
-/// Parser for `${config.some.key}` - a boolean config reference
+/// Parser for `${tedge.some.key}` - a boolean config reference
 fn config_condition<'tokens, 'src: 'tokens, I>(
 ) -> impl Parser<'tokens, I, Condition, extra::Err<Rich<'tokens, Token<'src>, OffsetSpan>>> + Clone
 where
@@ -137,7 +137,7 @@ where
     just(Token::Op("!"))
         .or_not()
         .then_ignore(just(Token::VarStart))
-        .then_ignore(just(Token::Ident("config")))
+        .then_ignore(just(Token::Ident("tedge")))
         .then_ignore(just(Token::Dot))
         .then(dotted_path().spanned())
         .then_ignore(just(Token::VarEnd))
@@ -149,7 +149,7 @@ where
                 ConfigReference(Spanned::new(span.into_range(), key), PhantomData),
             )
         })
-        .labelled("config reference")
+        .labelled("tedge config reference")
 }
 
 /// Parser for `${connection.auth_method} == 'value'`
@@ -284,7 +284,7 @@ mod tests {
 
     #[test]
     fn lexer_tokenizes_config_reference() {
-        let input = "${config.c8y.enabled}";
+        let input = "${tedge.c8y.enabled}";
         let (tokens, errs) = lexer().parse(input.with_context(0)).into_output_errors();
         assert!(errs.is_empty(), "Lexer errors: {errs:?}");
         let tokens: Vec<_> = tokens.unwrap().into_iter().map(|(t, _)| t).collect();
@@ -292,7 +292,7 @@ mod tests {
             tokens,
             vec![
                 Token::VarStart,
-                Token::Ident("config"),
+                Token::Ident("tedge"),
                 Token::Dot,
                 Token::Ident("c8y"),
                 Token::Dot,
@@ -324,19 +324,19 @@ mod tests {
 
     #[test]
     fn parses_config_reference() {
-        let result = parse_condition_str("${config.c8y.mqtt_service.enabled}").unwrap();
+        let result = parse_condition_str("${tedge.c8y.mqtt_service.enabled}").unwrap();
         assert_eq!(
             result,
-            Condition::Is(true, "${config.c8y.mqtt_service.enabled}".parse().unwrap(),)
+            Condition::Is(true, "${tedge.c8y.mqtt_service.enabled}".parse().unwrap(),)
         );
     }
 
     #[test]
     fn parses_negated_config_reference() {
-        let result = parse_condition_str("!${config.c8y.mqtt_service.enabled}").unwrap();
+        let result = parse_condition_str("!${tedge.c8y.mqtt_service.enabled}").unwrap();
         assert_eq!(
             result,
-            Condition::Is(false, "${config.c8y.mqtt_service.enabled}".parse().unwrap(),)
+            Condition::Is(false, "${tedge.c8y.mqtt_service.enabled}".parse().unwrap(),)
         );
     }
 
@@ -376,7 +376,7 @@ mod tests {
 
     #[test]
     fn rejects_missing_closing_brace() {
-        let result = parse_condition_str("${config.some.key");
+        let result = parse_condition_str("${tedge.some.key");
         assert!(result.is_err());
     }
 
@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn tokens_preserve_spans() {
-        let input = "${config.key}";
+        let input = "${tedge.key}";
         let (tokens, _) = lexer().parse(input.with_context(0)).into_output_errors();
         let tokens = tokens.unwrap();
 
@@ -468,7 +468,7 @@ mod tests {
 
         // Error message should say what was expected
         assert!(
-            message.contains("config") && message.contains("connection"),
+            message.contains("tedge") && message.contains("connection"),
             "Error should mention valid variable types: {message}"
         );
 

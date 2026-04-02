@@ -53,22 +53,6 @@ pub struct NonExpansionContext {
     pub reason: NonExpansionReason,
 }
 
-/// Print messages for clouds that don't yet support configurable bridge rules.
-///
-/// If the built-in bridge is disabled, shows the mosquitto config path.
-/// Otherwise, shows that the cloud's bridge rules are not yet configurable.
-pub fn print_non_configurable_or_disabled(
-    w: &mut impl Write,
-    config: &TEdgeConfig,
-    cloud: &MaybeBorrowedCloud<'_>,
-) {
-    if !config.mqtt.bridge.built_in {
-        print_built_in_bridge_disabled(w, config, cloud);
-    } else {
-        print_built_in_bridge_non_configurable(w, cloud);
-    }
-}
-
 /// Loads bridge rules after performing all precondition checks.
 ///
 /// Returns `None` if an early-return message was already printed to `w`
@@ -113,15 +97,12 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
         CloudType::C8y => Box::new(
             tedge_mapper::c8y::mapper::resolve_effective_mapper_config(config, profile).await?,
         ),
-        _ => match tedge_mapper::custom_mapper_config::load_mapper_config(&mapper_dir).await? {
-            Some(raw) => Box::new(
-                tedge_mapper::custom_mapper_resolve::resolve_effective_config(
-                    &raw, config, None, None,
-                )
-                .await?,
-            ),
-            None => Box::new(TableMapperLookup(toml::Table::new())),
-        },
+        CloudType::Az => Box::new(
+            tedge_mapper::az::mapper::resolve_effective_mapper_config(config, profile).await?,
+        ),
+        CloudType::Aws => Box::new(
+            tedge_mapper::aws::mapper::resolve_effective_mapper_config(config, profile).await?,
+        ),
     };
     let mut visitor = InspectVisitor::new();
 
@@ -327,14 +308,6 @@ pub fn print_not_connected(w: &mut impl Write, cloud: &MaybeBorrowedCloud<'_>) {
     } else {
         let _ = writeln!(w, "Not connected to {name}");
     }
-}
-
-fn print_built_in_bridge_non_configurable(w: &mut impl Write, cloud: &MaybeBorrowedCloud<'_>) {
-    let _ = writeln!(
-        w,
-        "Built-in bridge rules are not yet configurable for {}",
-        cloud_name(cloud).yellow()
-    );
 }
 
 fn print_header(w: &mut impl Write, bridge_config_dir: &Utf8Path, cloud: &MaybeBorrowedCloud<'_>) {

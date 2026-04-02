@@ -57,9 +57,9 @@ fn validate_mapper_name(name: &str) -> anyhow::Result<()> {
 }
 
 #[cfg(feature = "aws")]
-mod aws;
+pub mod aws;
 #[cfg(feature = "azure")]
-mod az;
+pub mod az;
 #[cfg(feature = "c8y")]
 pub mod c8y;
 mod collectd;

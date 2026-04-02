@@ -6,6 +6,7 @@
 //! the mapper runtime and the `tedge mapper config get` / `tedge mapper list` CLI
 //! commands so that both reflect exactly the same values.
 
+use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::PemCertificate;
@@ -26,6 +27,7 @@ use tedge_mqtt_bridge::config_toml::WalkResult;
 
 use crate::custom::config::AuthMethodConfig;
 use crate::custom::config::BridgeConfig;
+use crate::custom::config::BridgeTls;
 use crate::custom::config::CustomMapperConfig;
 
 /// Tracks the origin of a resolved configuration value.
@@ -270,12 +272,20 @@ impl EffectiveMapperConfig {
                 None => self.get_from_tables(key),
             },
             "auth_method" => ConfigGetResult::Value(Sourced {
-                value: match self.effective_auth.value {
-                    AuthMethod::Certificate => "certificate".to_string(),
-                    AuthMethod::Password => "password".to_string(),
-                },
+                value: self.effective_auth.value.to_string(),
                 source: self.effective_auth.source.clone(),
             }),
+            "bridge.tls.enable" => {
+                let (value, source) =
+                    match walk_table_value(&self.mapper_table, ["bridge", "tls", "enable"]) {
+                        Some(_) => (self.bridge.tls.enable, ConfigSource::MapperToml),
+                        None => (self.bridge.tls.enable, ConfigSource::Default),
+                    };
+                ConfigGetResult::Value(Sourced {
+                    value: value.to_string(),
+                    source,
+                })
+            }
             _ => self.get_from_tables(key),
         }
     }
@@ -388,6 +398,7 @@ impl MapperConfigLookup for EffectiveMapperConfig {
                 | "device.root_cert_path"
                 | "credentials_path"
                 | "auth_method"
+                | "bridge.tls"
         );
         if is_schema_key {
             if let ConfigGetResult::Value(s) = self.get(path) {
@@ -452,6 +463,45 @@ struct DeviceSchema<'a> {
 struct BridgeSchema<'a> {
     clean_session: bool,
     keepalive_interval: Option<&'a SecondsOrHumanTime>,
+    tls: BridgeTls,
+}
+
+/// Returns all known schema-level key paths for a custom mapper config (e.g. `"device.cert_path"`).
+///
+/// Keys are derived from the [`CustomMapperSchema`] struct by serialising an empty schema and
+/// collecting all dotted leaf paths, so this stays in sync with the schema automatically.
+pub fn custom_mapper_schema_keys() -> Vec<String> {
+    let schema = build_custom_mapper_schema(&CustomMapperConfig {
+        table: toml::Table::new(),
+        cloud_type: None,
+        url: None,
+        device: None,
+        bridge: BridgeConfig::default(),
+        auth_method: AuthMethodConfig::Auto,
+        credentials_path: None,
+    });
+    collect_schema_leaf_keys(&schema, String::new())
+}
+
+fn collect_schema_leaf_keys(value: &serde_json::Value, prefix: String) -> Vec<String> {
+    if let serde_json::Value::Object(map) = value {
+        let mut keys = Vec::new();
+        for (k, v) in map {
+            let path = if prefix.is_empty() {
+                k.clone()
+            } else {
+                format!("{prefix}.{k}")
+            };
+            if matches!(v, serde_json::Value::Object(_)) {
+                keys.extend(collect_schema_leaf_keys(v, path));
+            } else {
+                keys.push(path);
+            }
+        }
+        keys
+    } else {
+        vec![prefix]
+    }
 }
 
 /// Builds a null-preserving JSON schema from a [`CustomMapperConfig`].
@@ -473,11 +523,26 @@ fn build_custom_mapper_schema(config: &CustomMapperConfig) -> serde_json::Value 
         bridge: BridgeSchema {
             clean_session: config.bridge.clean_session,
             keepalive_interval: config.bridge.keepalive_interval.as_ref(),
+            tls: config.bridge.tls,
         },
         auth_method: config.auth_method,
         credentials_path: config.credentials_path.as_ref(),
     })
     .expect("schema serialisation is infallible")
+}
+
+/// Converts a cloud-specific config reader directly to a [`toml::Table`] without
+/// going through a string intermediate.
+pub fn reader_to_toml_table(reader: &impl serde::Serialize) -> anyhow::Result<toml::Table> {
+    let value =
+        toml::Value::try_from(reader).context("failed to serialise config reader to TOML value")?;
+    match value {
+        toml::Value::Table(t) => Ok(t),
+        other => anyhow::bail!(
+            "expected config reader to serialise as a TOML table, got {}",
+            other.type_str()
+        ),
+    }
 }
 
 /// Resolves a [`CustomMapperConfig`] into an [`EffectiveMapperConfig`].

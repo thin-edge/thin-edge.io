@@ -1,3 +1,4 @@
+use crate::cli::common::mapper_config_key_completions;
 use crate::cli::common::resolve_cloud;
 use crate::cli::common::MaybeBorrowedCloud;
 use crate::command::BuildCommand;
@@ -6,6 +7,7 @@ use crate::log::MaybeFancy;
 use crate::ConfigError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use clap_complete::ArgValueCandidates;
 use tedge_config::TEdgeConfig;
 use tedge_mapper::custom_mapper_config::load_mapper_config;
 use tedge_mapper::custom_mapper_config::scan_mappers_shallow;
@@ -39,6 +41,7 @@ pub enum MapperConfigCmd {
     /// All other keys are read directly from `mapper.toml`.
     Get {
         /// The key to look up, e.g. `thingsboard.url`
+        #[arg(add(ArgValueCandidates::new(mapper_config_key_completions)))]
         key: String,
     },
 }
@@ -51,27 +54,8 @@ impl BuildCommand for MapperCli {
             MapperCli::List => Ok(ListMappersCommand { mappers_root }.into_boxed()),
             MapperCli::Config {
                 cmd: MapperConfigCmd::Get { key },
-            } => {
-                let (mapper_name, toml_key) = split_mapper_key(&key)?;
-                Ok(MapperConfigGetCommand {
-                    mappers_root,
-                    mapper_name,
-                    toml_key,
-                }
-                .into_boxed())
-            }
+            } => Ok(MapperConfigGetCommand { mappers_root, key }.into_boxed()),
         }
-    }
-}
-
-/// Splits `thingsboard.device.cert_path` into `("thingsboard", "device.cert_path")`.
-fn split_mapper_key(key: &str) -> Result<(String, String), ConfigError> {
-    match key.split_once('.') {
-        Some((name, rest)) => Ok((name.to_string(), rest.to_string())),
-        None => Err(anyhow::anyhow!(
-            "Invalid key '{key}': expected format '<mapper-name>.<toml-key>', e.g. 'thingsboard.url'"
-        )
-        .into()),
     }
 }
 
@@ -177,17 +161,13 @@ impl Command for ListMappersCommand {
 /// annotation on stderr.
 struct MapperConfigGetCommand {
     mappers_root: Utf8PathBuf,
-    mapper_name: String,
-    toml_key: String,
+    key: String,
 }
 
 #[async_trait::async_trait]
 impl Command for MapperConfigGetCommand {
     fn description(&self) -> String {
-        format!(
-            "get config key '{}' for mapper '{}'",
-            self.toml_key, self.mapper_name
-        )
+        format!("get config key '{}'", self.key)
     }
 
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
@@ -204,21 +184,30 @@ impl MapperConfigGetCommand {
         out: &mut impl std::io::Write,
         err: &mut impl std::io::Write,
     ) -> anyhow::Result<()> {
-        let mapper_dir = self.mappers_root.join(&self.mapper_name);
+        let available = scan_mappers_shallow(&self.mappers_root).await;
+        let mapper_names: Vec<&str> = available.iter().map(|(n, _)| n.as_str()).collect();
+
+        let (mapper_name, toml_key) = split_key_by_known_mappers(&self.key, &mapper_names)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Invalid key '{}': expected format '<mapper-name>.<toml-key>', e.g. 'thingsboard.url'",
+                    self.key
+                )
+            })?;
+
+        let mapper_dir = self.mappers_root.join(mapper_name);
         if !tokio::fs::try_exists(&mapper_dir).await.unwrap_or(false) {
-            let available = scan_mappers_shallow(&self.mappers_root).await;
             let e: anyhow::Error = if available.is_empty() {
                 anyhow::anyhow!(
                     "Mapper '{}' not found. No mappers configured under '{}'.",
-                    self.mapper_name,
+                    mapper_name,
                     self.mappers_root
                 )
             } else {
-                let names: Vec<_> = available.into_iter().map(|(n, _)| n).collect();
                 anyhow::anyhow!(
                     "Mapper '{}' not found. Available mappers: {}",
-                    self.mapper_name,
-                    names.join(", ")
+                    mapper_name,
+                    mapper_names.join(", ")
                 )
             };
             return Err(e);
@@ -227,47 +216,63 @@ impl MapperConfigGetCommand {
         // For built-in mappers (c8y, aws, az) the effective config is derived from the
         // cloud reader in tedge.toml (with mapper.toml as an optional override), exactly
         // as the mapper does at runtime. For custom mappers mapper.toml is required.
-        let effective = match resolve_cloud(&self.mapper_name, None) {
+        let effective = match resolve_cloud(mapper_name, None) {
             #[cfg(feature = "c8y")]
-            Some(MaybeBorrowedCloud::C8y(_)) => {
-                tedge_mapper::c8y::mapper::resolve_effective_mapper_config(&config, None).await?
+            Some(MaybeBorrowedCloud::C8y(profile)) => {
+                tedge_mapper::c8y::mapper::resolve_effective_mapper_config(
+                    &config,
+                    profile.as_deref(),
+                )
+                .await?
+            }
+            #[cfg(feature = "azure")]
+            Some(MaybeBorrowedCloud::Azure(profile)) => {
+                tedge_mapper::az::mapper::resolve_effective_mapper_config(
+                    &config,
+                    profile.as_deref(),
+                )
+                .await?
+            }
+            #[cfg(feature = "aws")]
+            Some(MaybeBorrowedCloud::Aws(profile)) => {
+                tedge_mapper::aws::mapper::resolve_effective_mapper_config(
+                    &config,
+                    profile.as_deref(),
+                )
+                .await?
             }
             _ => {
                 let raw = load_mapper_config(&mapper_dir).await?.ok_or_else(|| {
                     anyhow::anyhow!(
                         "Mapper '{}' has no mapper.toml at '{mapper_dir}'",
-                        self.mapper_name
+                        mapper_name
                     )
                 })?;
                 resolve_effective_config(&raw, &config, None, None).await?
             }
         };
-        let sourced = match effective.get(&self.toml_key) {
+        let sourced = match effective.get(toml_key) {
             ConfigGetResult::Value(s) => s,
             ConfigGetResult::NotSet => {
-                let e = if self.toml_key == "device.id"
+                let e = if toml_key == "device.id"
                     && matches!(effective.effective_auth.value, AuthMethod::Certificate)
                 {
                     anyhow::anyhow!(
                         "Cannot determine device.id for mapper '{}': \
                          certificate authentication is configured but the certificate is unreadable. \
                          Set 'device.id' explicitly in '{mapper_dir}/mapper.toml' to override.",
-                        self.mapper_name
+                        mapper_name
                     )
                 } else {
-                    anyhow::anyhow!(
-                        "Key '{}' is not set for mapper '{}'",
-                        self.toml_key,
-                        self.mapper_name
-                    )
+                    anyhow::anyhow!("Key '{}' is not set for mapper '{}'", toml_key, mapper_name)
                 };
                 return Err(e);
             }
             ConfigGetResult::UnknownKey => {
                 return Err(anyhow::anyhow!(
                     "Unknown mapper config key: {}.{}",
-                    self.mapper_name,
-                    self.toml_key
+                    mapper_name,
+                    toml_key
                 ));
             }
         };
@@ -276,6 +281,29 @@ impl MapperConfigGetCommand {
 
         Ok(())
     }
+}
+
+/// Splits `"c8y.new.url"` into `("c8y.new", "url")` when `"c8y.new"` is a
+/// known mapper, preferring the two-segment prefix over the one-segment prefix.
+/// Falls back to splitting at the first dot when no mapper name matches.
+/// Returns `None` if the key contains no dot.
+fn split_key_by_known_mappers<'a>(
+    key: &'a str,
+    mapper_names: &[&str],
+) -> Option<(&'a str, &'a str)> {
+    // Try the two-segment prefix first (e.g. "c8y.new" from "c8y.new.url").
+    if let Some((first_seg, after_first)) = key.split_once('.') {
+        if let Some((second_seg, rest)) = after_first.split_once('.') {
+            let two_seg_end = first_seg.len() + 1 + second_seg.len();
+            let two_seg_prefix = &key[..two_seg_end];
+            if mapper_names.contains(&two_seg_prefix) {
+                return Some((two_seg_prefix, rest));
+            }
+        }
+        // Fall back to one-segment prefix.
+        return Some((first_seg, after_first));
+    }
+    None
 }
 
 #[cfg(test)]
@@ -336,26 +364,50 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         use super::*;
 
         #[test]
-        fn splits_key_correctly() {
-            let (name, key) = split_mapper_key("thingsboard.url").unwrap();
+        fn splits_key_with_known_mapper() {
+            let (name, key) =
+                split_key_by_known_mappers("thingsboard.url", &["thingsboard"]).unwrap();
             assert_eq!(name, "thingsboard");
             assert_eq!(key, "url");
         }
 
         #[test]
-        fn splits_nested_key_correctly() {
-            let (name, key) = split_mapper_key("thingsboard.device.cert_path").unwrap();
+        fn splits_nested_key_with_known_mapper() {
+            let (name, key) =
+                split_key_by_known_mappers("thingsboard.device.cert_path", &["thingsboard"])
+                    .unwrap();
             assert_eq!(name, "thingsboard");
             assert_eq!(key, "device.cert_path");
         }
 
         #[test]
-        fn errors_without_dot() {
-            let err = split_mapper_key("thingsboard").unwrap_err();
-            assert_eq!(
-                err.to_string(),
-                "Invalid key 'thingsboard': expected format '<mapper-name>.<toml-key>', e.g. 'thingsboard.url'"
-            );
+        fn prefers_two_segment_mapper_name() {
+            let (name, key) =
+                split_key_by_known_mappers("c8y.new.url", &["c8y", "c8y.new"]).unwrap();
+            assert_eq!(name, "c8y.new");
+            assert_eq!(key, "url");
+        }
+
+        #[test]
+        fn prefers_two_segment_mapper_for_nested_key() {
+            let (name, key) =
+                split_key_by_known_mappers("c8y.new.device.cert_path", &["c8y", "c8y.new"])
+                    .unwrap();
+            assert_eq!(name, "c8y.new");
+            assert_eq!(key, "device.cert_path");
+        }
+
+        #[test]
+        fn falls_back_to_first_dot_when_no_mapper_matches() {
+            let (name, key) =
+                split_key_by_known_mappers("unknown.device.cert_path", &["c8y"]).unwrap();
+            assert_eq!(name, "unknown");
+            assert_eq!(key, "device.cert_path");
+        }
+
+        #[test]
+        fn returns_none_without_dot() {
+            assert!(split_key_by_known_mappers("thingsboard", &["thingsboard"]).is_none());
         }
     }
 
@@ -618,18 +670,16 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             stderr: String,
         }
 
-        /// Runs `tedge mapper config get <mapper_name>.<key>` and returns the captured
-        /// stdout/stderr on success, or the error message on failure.
+        /// Runs `tedge mapper config get <full_key>` where full_key is
+        /// e.g. "tb.url" or "c8y.prod.url".
         async fn run_get(
             mappers_root: &camino::Utf8Path,
-            mapper_name: &str,
-            key: &str,
+            full_key: &str,
             tedge_config: TEdgeConfig,
         ) -> Result<GetOutput, anyhow::Error> {
             let cmd = MapperConfigGetCommand {
                 mappers_root: mappers_root.to_owned(),
-                mapper_name: mapper_name.to_string(),
-                toml_key: key.to_string(),
+                key: full_key.to_owned(),
             };
             let mut out = Vec::<u8>::new();
             let mut err = Vec::<u8>::new();
@@ -653,7 +703,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             .await
             .unwrap();
 
-            let output = run_get(&mappers_root, "tb", "url", TEdgeConfig::load_toml_str(""))
+            let output = run_get(&mappers_root, "tb.url", TEdgeConfig::load_toml_str(""))
                 .await
                 .unwrap();
             assert_eq!(output.stdout.trim(), "mqtt.example.com:8883");
@@ -677,7 +727,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
 
-            let output = run_get(&mappers_root, "tb", "device.id", tedge_config)
+            let output = run_get(&mappers_root, "tb.device.id", tedge_config)
                 .await
                 .unwrap();
             assert_eq!(output.stdout.trim(), "localhost");
@@ -708,7 +758,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             .unwrap();
             let tedge_config = TEdgeConfig::load_toml_str("device.id = \"root-device\"");
 
-            let output = run_get(&mappers_root, "tb", "device.id", tedge_config)
+            let output = run_get(&mappers_root, "tb.device.id", tedge_config)
                 .await
                 .unwrap();
             assert_eq!(output.stdout.trim(), "root-device");
@@ -735,7 +785,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                  device.key_path = \"/nonexistent/key.pem\"\n",
             );
 
-            let result = run_get(&mappers_root, "tb", "device.id", tedge_config).await;
+            let result = run_get(&mappers_root, "tb.device.id", tedge_config).await;
             let msg = format!("{}", result.unwrap_err());
             assert_eq!(
                 msg,
@@ -769,8 +819,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
 
             let output = run_get(
                 &mappers_root,
-                "tb",
-                "device.cert_path",
+                "tb.device.cert_path",
                 TEdgeConfig::load_toml_str(""),
             )
             .await
@@ -803,7 +852,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
 
             let msg = format!(
                 "{}",
-                run_get(&mappers_root, "tb", "url", TEdgeConfig::load_toml_str(""))
+                run_get(&mappers_root, "tb.url", TEdgeConfig::load_toml_str(""))
                     .await
                     .unwrap_err()
             );
@@ -834,8 +883,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 "{}",
                 run_get(
                     &mappers_root,
-                    "tb",
-                    "device.id",
+                    "tb.device.id",
                     TEdgeConfig::load_toml_str("")
                 )
                 .await
@@ -858,8 +906,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 "{}",
                 run_get(
                     &mappers_root,
-                    "nonexistent",
-                    "url",
+                    "nonexistent.url",
                     TEdgeConfig::load_toml_str("")
                 )
                 .await
@@ -879,8 +926,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
 
             let result = run_get(
                 &mappers_root,
-                "nonexistent",
-                "url",
+                "nonexistent.url",
                 TEdgeConfig::load_toml_str(""),
             )
             .await;
@@ -903,8 +949,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
 
             let result = run_get(
                 &mappers_root,
-                "nonexistent",
-                "url",
+                "nonexistent.url",
                 TEdgeConfig::load_toml_str(""),
             )
             .await;
@@ -930,8 +975,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
 
             let result = run_get(
                 &mappers_root,
-                "tb",
-                "bridge.topic_prefix",
+                "tb.bridge.topic_prefix",
                 TEdgeConfig::load_toml_str(""),
             )
             .await;
@@ -949,7 +993,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             // No mapper.toml written
 
-            let result = run_get(&mappers_root, "tb", "url", TEdgeConfig::load_toml_str("")).await;
+            let result = run_get(&mappers_root, "tb.url", TEdgeConfig::load_toml_str("")).await;
             let msg = format!("{}", result.unwrap_err());
             assert_eq!(
                 msg,
@@ -973,8 +1017,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             // credentials_path is a known schema key but is not set
             let result = run_get(
                 &mappers_root,
-                "tb",
-                "credentials_path",
+                "tb.credentials_path",
                 TEdgeConfig::load_toml_str(""),
             )
             .await;
@@ -997,13 +1040,159 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
 
             let result = run_get(
                 &mappers_root,
-                "tb",
-                "nonexistent.key",
+                "tb.nonexistent.key",
                 TEdgeConfig::load_toml_str(""),
             )
             .await;
             let msg = format!("{}", result.unwrap_err());
             assert_eq!(msg, "Unknown mapper config key: tb.nonexistent.key");
+        }
+
+        #[tokio::test]
+        async fn aws_config_get_reads_from_tedge_toml() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_root.join("aws"))
+                .await
+                .unwrap();
+
+            let tedge_config = TEdgeConfig::load_toml_str(
+                "aws.url = \"example.amazonaws.com\"\ndevice.id = \"test-aws-device\"\n",
+            );
+
+            let output = run_get(&mappers_root, "aws.url", tedge_config)
+                .await
+                .unwrap();
+            assert_eq!(output.stdout.trim(), "example.amazonaws.com");
+        }
+
+        #[tokio::test]
+        async fn aws_config_get_without_mapper_toml_succeeds() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_root.join("aws"))
+                .await
+                .unwrap();
+
+            let tedge_config = TEdgeConfig::load_toml_str("aws.url = \"example.amazonaws.com\"\n");
+
+            let result = run_get(&mappers_root, "aws.url", tedge_config).await;
+            assert!(
+                result.is_ok(),
+                "aws config get should succeed without mapper.toml: {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn az_config_get_reads_from_tedge_toml() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_root.join("az"))
+                .await
+                .unwrap();
+
+            let tedge_config = TEdgeConfig::load_toml_str(
+                "az.url = \"example.azure-devices.net\"\ndevice.id = \"test-az-device\"\n",
+            );
+
+            let output = run_get(&mappers_root, "az.url", tedge_config)
+                .await
+                .unwrap();
+            assert_eq!(output.stdout.trim(), "example.azure-devices.net");
+        }
+
+        #[tokio::test]
+        async fn az_config_get_without_mapper_toml_succeeds() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_root.join("az"))
+                .await
+                .unwrap();
+
+            let tedge_config =
+                TEdgeConfig::load_toml_str("az.url = \"example.azure-devices.net\"\n");
+
+            let result = run_get(&mappers_root, "az.url", tedge_config).await;
+            assert!(
+                result.is_ok(),
+                "az config get should succeed without mapper.toml: {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn profiled_c8y_config_get_reads_from_tedge_toml() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_root.join("c8y.prod"))
+                .await
+                .unwrap();
+
+            let tedge_config =
+                TEdgeConfig::load_toml_str("[c8y.profiles.prod]\nurl = \"prod.cumulocity.com\"\n");
+
+            let output = run_get(&mappers_root, "c8y.prod.url", tedge_config)
+                .await
+                .unwrap();
+            assert_eq!(output.stdout.trim(), "prod.cumulocity.com");
+        }
+
+        #[tokio::test]
+        async fn profiled_c8y_works_when_default_c8y_also_exists() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            // Both c8y and c8y.new exist — this is the realistic scenario.
+            tokio::fs::create_dir_all(mappers_root.join("c8y"))
+                .await
+                .unwrap();
+            tokio::fs::create_dir_all(mappers_root.join("c8y.new"))
+                .await
+                .unwrap();
+
+            let tedge_config = TEdgeConfig::load_toml_str(
+                "c8y.url = \"default.cumulocity.com\"\n\
+                 [c8y.profiles.new]\nurl = \"new.cumulocity.com\"\n",
+            );
+
+            let output = run_get(&mappers_root, "c8y.new.url", tedge_config)
+                .await
+                .unwrap();
+            assert_eq!(output.stdout.trim(), "new.cumulocity.com");
+        }
+
+        #[tokio::test]
+        async fn profiled_aws_config_get_reads_from_tedge_toml() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_root.join("aws.staging"))
+                .await
+                .unwrap();
+
+            let tedge_config = TEdgeConfig::load_toml_str(
+                "[aws.profiles.staging]\nurl = \"staging.amazonaws.com\"\n",
+            );
+
+            let output = run_get(&mappers_root, "aws.staging.url", tedge_config)
+                .await
+                .unwrap();
+            assert_eq!(output.stdout.trim(), "staging.amazonaws.com");
+        }
+
+        #[tokio::test]
+        async fn profiled_az_config_get_reads_from_tedge_toml() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.utf8_path().join("mappers");
+            tokio::fs::create_dir_all(mappers_root.join("az.staging"))
+                .await
+                .unwrap();
+
+            let tedge_config = TEdgeConfig::load_toml_str(
+                "[az.profiles.staging]\nurl = \"staging.azure-devices.net\"\n",
+            );
+
+            let output = run_get(&mappers_root, "az.staging.url", tedge_config)
+                .await
+                .unwrap();
+            assert_eq!(output.stdout.trim(), "staging.azure-devices.net");
         }
     }
 }

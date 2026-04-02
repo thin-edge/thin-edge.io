@@ -15,6 +15,10 @@ use tracing::warn;
 /// subdirectory but no `mapper.toml`. These mappers will always fail to start because
 /// bridge rules require the connection settings provided by `mapper.toml`.
 ///
+/// Built-in mapper directories (`aws`, `az`, `c8y`, and profile variants like `aws.prod`)
+/// are excluded because they source their configuration from `tedge.toml` and never use
+/// `mapper.toml`.
+///
 /// Empty mapper directories and empty `flows/` directories are valid — the mapper creates
 /// the `flows/` directory automatically on startup.
 pub async fn warn_misconfigured_mapper_dirs(mappers_dir: &Utf8Path) {
@@ -30,6 +34,9 @@ pub async fn warn_misconfigured_mapper_dirs(mappers_dir: &Utf8Path) {
 /// Returns the names of mapper directories that have a `bridge/` subdirectory but no
 /// `mapper.toml`. These mappers will always fail to start because bridge rules require
 /// the connection settings provided by `mapper.toml`.
+///
+/// Built-in mapper directories (`aws`, `az`, `c8y`, and profile variants) are excluded
+/// because they source their configuration from `tedge.toml`.
 pub(crate) async fn collect_bridge_without_mapper_dirs(mappers_dir: &Utf8Path) -> Vec<String> {
     let Ok(mut entries) = tokio::fs::read_dir(mappers_dir).await else {
         return Vec::new();
@@ -44,6 +51,9 @@ pub(crate) async fn collect_bridge_without_mapper_dirs(mappers_dir: &Utf8Path) -
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
+        if is_builtin_mapper_dir(&name) {
+            continue;
+        }
         let path = camino::Utf8PathBuf::from(entry.path().to_string_lossy().into_owned());
         let has_mapper_toml = tokio::fs::try_exists(path.join("mapper.toml"))
             .await
@@ -56,6 +66,13 @@ pub(crate) async fn collect_bridge_without_mapper_dirs(mappers_dir: &Utf8Path) -
         }
     }
     broken
+}
+
+/// Returns `true` if the directory name corresponds to a built-in mapper (`aws`, `az`,
+/// `c8y`) or a profiled variant thereof (e.g. `aws.prod`, `c8y.staging`).
+fn is_builtin_mapper_dir(name: &str) -> bool {
+    matches!(name, "c8y" | "az" | "aws")
+        || matches!(name.split_once('.'), Some(("c8y" | "az" | "aws", _)))
 }
 
 #[cfg(test)]
@@ -141,6 +158,22 @@ mod tests {
             assert!(
                 broken.is_empty(),
                 "Empty flows/ dir should not be flagged: {broken:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn builtin_mapper_dir_with_bridge_but_no_toml_is_not_flagged() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.utf8_path().join("mappers");
+            for name in ["aws", "az", "c8y", "aws.prod", "az.staging"] {
+                tokio::fs::create_dir_all(mappers_dir.join(format!("{name}/bridge")))
+                    .await
+                    .unwrap();
+            }
+            let broken = collect_bridge_without_mapper_dirs(&mappers_dir).await;
+            assert!(
+                broken.is_empty(),
+                "Built-in mapper dirs should not be flagged: {broken:?}"
             );
         }
 
