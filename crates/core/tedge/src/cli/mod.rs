@@ -97,15 +97,13 @@ pub enum Component {
 pub enum TEdgeOpt {
     /// Initialize Thin Edge
     Init {
-        /// The user who will own the directories created.
-        /// Overrides the value from system.toml [user].
-        /// Defaults to "tedge" if not provided here or in system.toml either.
+        /// The user who will own the directories created during initialization.
+        /// Takes precedence over system.toml [user]; defaults to "tedge" if neither is set.
         #[clap(long)]
         user: Option<String>,
 
-        /// The group who will own the directories created.
-        /// Overrides the value from system.toml [group].
-        /// Defaults to "tedge" if not provided here or in system.toml either.
+        /// The group who will own the directories created during initialization.
+        /// Takes precedence over system.toml [group]; defaults to "tedge" if neither is set.
         #[clap(long)]
         group: Option<String>,
 

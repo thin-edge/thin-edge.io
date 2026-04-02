@@ -52,15 +52,16 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let command = parse_arguments(opt)?;
 
     match command {
-        Command::Init(user, group) => declare_supported_operation(
-            tedge_config.root_dir(),
-            &user,
-            &group,
-        )
-        .await
-        .with_context(|| {
-            "Failed to initialize c8y-remote-access-plugin. You have to run the command with sudo."
-        }),
+        Command::Init(user, group) => {
+            let system_config = tedge_config.read_system_config();
+            let user = user.as_deref().unwrap_or(&system_config.user);
+            let group = group.as_deref().unwrap_or(&system_config.group);
+            declare_supported_operation(tedge_config.root_dir(), user, group)
+                .await
+                .with_context(|| {
+                    "Failed to initialize c8y-remote-access-plugin. You have to run the command with sudo."
+                })
+        }
         Command::Cleanup => {
             remove_supported_operation(tedge_config.root_dir());
             Ok(())
