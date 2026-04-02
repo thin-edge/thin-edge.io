@@ -8,7 +8,6 @@ use serde::de::MapAccess;
 use serde::de::{self};
 use serde::Deserializer;
 use std::borrow::Cow;
-use std::convert::TryFrom;
 use std::fmt;
 use tedge_utils::timestamp::IsoOrUnix;
 
@@ -209,11 +208,7 @@ where
     where
         E: serde::de::Error,
     {
-        let value = i32::try_from(value)
-            .map_err(|_| de::Error::custom(invalid_json_number(&self.key)))?
-            .into();
-
-        self.visit_f64(value)
+        self.visit_f64(value as f64)
     }
 
     /// Parses a single-value measurement. See `visit_f64`.
@@ -221,11 +216,7 @@ where
     where
         E: serde::de::Error,
     {
-        let value = u32::try_from(value)
-            .map_err(|_| de::Error::custom(invalid_json_number(&self.key)))?
-            .into();
-
-        self.visit_f64(value)
+        self.visit_f64(value as f64)
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
@@ -409,6 +400,31 @@ mod tests {
         let mut builder = ThinEdgeJsonBuilder::default();
 
         parse_str(input, &mut builder).unwrap();
+    }
+
+    // See https://github.com/thin-edge/thin-edge.io/issues/4102
+    #[test]
+    fn issue_4102() -> anyhow::Result<()> {
+        use crate::measurement::builder::ThinEdgeJsonBuilder;
+        let input = r#"{
+        "temperature": 25000000000,
+        "-temperature": -25000000000
+    }"#;
+
+        let mut builder = ThinEdgeJsonBuilder::default();
+
+        parse_str(input, &mut builder)?;
+
+        let output = builder.done()?;
+
+        assert_eq!(
+            output.values,
+            vec![
+                ("temperature", 25000000000.0).into(),
+                ("-temperature", -25000000000.0).into(),
+            ]
+        );
+        Ok(())
     }
 
     fn parse_timestamp(timestamp: &str) -> OffsetDateTime {
