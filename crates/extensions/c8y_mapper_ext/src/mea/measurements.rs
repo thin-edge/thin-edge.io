@@ -70,13 +70,10 @@ impl MeasurementConverter {
             entity.topic_id().as_str(),
             measurement_type,
         );
-        let Ok(c8y_json_payload) =
-            json::from_thin_edge_json(payload, &entity, measurement_type, units.as_ref())
-        else {
-            return Err(FlowError::UnsupportedMessage(
-                "Not a thin-edge measurement".to_string(),
-            ));
-        };
+        let c8y_json_payload =
+            json::from_thin_edge_json(payload, &entity, measurement_type, units.as_ref()).map_err(
+                |err| FlowError::UnsupportedMessage(format!("Not a thin-edge measurement: {err}")),
+            )?;
         Ok(Message::new(
             "c8y/measurement/measurements/create",
             c8y_json_payload,
