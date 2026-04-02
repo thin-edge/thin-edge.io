@@ -54,6 +54,58 @@ Get entity metadata from the c8y mapper context
     ...    series=temperature
     Should Be Equal As Numbers    ${measurements[0]["temperature"]["temperature"]["value"]}    23.1
 
+Get device.id from the c8y mapper config
+    Execute Command    tedge config upgrade
+    Restart Service    tedge-mapper-c8y
+
+    ${start}    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-measurements.js    /etc/tedge/mappers/c8y/flows/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-measurements.toml    /etc/tedge/mappers/c8y/flows/
+    Wait For The Flow To Reload    ${start}    custom-measurements.toml
+
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub custom/device////m/pressure 101325.0
+    ${message}    Should Have MQTT Messages
+    ...    topic=c8y/measurement/measurements/create
+    ...    message_contains=pressure
+    ...    date_from=${start}
+    Should Contain    ${message}[0]    "type":"custom"
+    Should Contain    ${message}[0]    "externalId":"${DEVICE_SN}"
+
+    Cumulocity.Set Managed Object    ${DEVICE_SN}
+    ${measurements}    Device Should Have Measurements
+    ...    minimum=1
+    ...    maximum=1
+    ...    value=pressure
+    ...    series=pressure
+    Should Be Equal As Numbers    ${measurements[0]["pressure"]["pressure"]["value"]}    101325.0
+
+Get device.id from the c8y mapper config (using the cli)
+    Execute Command    tedge config upgrade
+    Restart Service    tedge-mapper-c8y
+
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-measurements.js    /etc/tedge/mappers/c8y/flows/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-measurements.toml    /etc/tedge/mappers/c8y/flows/
+
+    ${message}    Execute Command    tedge flows test --mapper c8y custom/device////m/pressure 101325.0
+    Should Contain    ${message}    [c8y/measurement/measurements/create]
+    Should Contain    ${message}    "externalId":"${DEVICE_SN}"
+    Should Contain    ${message}    "pressure":{"pressure":{"value":101325}}
+
+Get device.id from the c8y mapper config (using the cli and a sub-directory)
+    Execute Command    tedge config upgrade
+    Restart Service    tedge-mapper-c8y
+
+    Execute Command    mkdir /etc/tedge/mappers/c8y/flows/custom
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-measurements.js    /etc/tedge/mappers/c8y/flows/custom/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/custom-measurements.toml    /etc/tedge/mappers/c8y/flows/custom/
+
+    ${message}    Execute Command
+    ...    tedge flows test --mapper c8y --flows-dir /etc/tedge/mappers/c8y/flows/custom/ custom/device////m/pressure 101325.0
+    Should Contain    ${message}    [c8y/measurement/measurements/create]
+    Should Contain    ${message}    "externalId":"${DEVICE_SN}"
+    Should Contain    ${message}    "pressure":{"pressure":{"value":101325}}
+
 On start builtin-flows TOML files are generated
     Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/measurements.toml
     Execute Command    ls -lh /etc/tedge/mappers/c8y/flows/events.toml
