@@ -5,6 +5,8 @@ use crate::flows_config;
 use anyhow::Context;
 use async_trait::async_trait;
 use aws_mapper_ext::AwsConverter;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
@@ -27,6 +29,13 @@ use yansi::Paint;
 
 pub struct AwsMapper {
     pub profile: Option<ProfileName>,
+}
+
+impl AwsMapper {
+    /// Returns the mapper directory path for this instance.
+    pub fn mapper_dir(&self, config_dir: &Utf8Path) -> Utf8PathBuf {
+        crate::mapper_dir(config_dir, "aws", self.profile.as_ref())
+    }
 }
 
 #[async_trait]
@@ -88,12 +97,8 @@ impl TEdgeComponent for AwsMapper {
             aws_config.mapper.mqtt.max_payload_size.0,
             aws_config.topics.to_string(),
         );
-        let mapper_dir = config_dir.join("mappers").join("aws");
-        let flows_dir =
-            tedge_flows::flows_dir(config_dir, "aws", self.profile.as_ref().map(|p| p.as_ref()));
-        let mapper_config =
-            crate::effective_mapper_config(&tedge_config, "aws", mapper_dir).await?;
-        let mut flows = crate::flow_registry(mapper_config, flows_dir).await?;
+        let mapper_dir = self.mapper_dir(config_dir);
+        let mut flows = crate::mapper_flow_registry(&tedge_config, mapper_dir).await?;
         aws_converter.persist_builtin_flow(&mut flows).await?;
         let service_config = flows_config(&tedge_config, &aws_mapper_name)?;
 

@@ -3210,7 +3210,8 @@ pub(crate) async fn c8y_mapper_builder(
         .connect_source(AvailabilityBuilder::channels(), &mut c8y_mapper_builder);
     c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
 
-    let flows_dir = tedge_flows::flows_dir(tmp_dir.utf8_path(), "c8y", None);
+    let mapper_dir = tmp_dir.utf8_path().join("mappers").join("c8y");
+    let flows_dir = tedge_flows::flows_dir(&mapper_dir);
     create_directory_with_defaults(flows_dir.clone())
         .await
         .unwrap();

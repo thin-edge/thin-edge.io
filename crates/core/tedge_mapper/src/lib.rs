@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-use std::fmt;
-
 #[cfg(feature = "aws")]
 use crate::aws::mapper::AwsMapper;
 #[cfg(feature = "azure")]
@@ -10,10 +7,14 @@ use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
 use crate::custom::mapper::CustomMapper;
+use anyhow::bail;
 use anyhow::Context;
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
+use std::collections::HashMap;
+use std::fmt;
+use std::str::FromStr;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
@@ -238,6 +239,14 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
     }
 }
 
+pub fn mapper_dir(config_dir: &Utf8Path, mapper: &str, profile: Option<&(impl fmt::Display + ?Sized)>) -> Utf8PathBuf {
+    let profiled_name = match profile {
+        None => mapper.to_string(),
+        Some(profile) => format!("{mapper}.{profile}"),
+    };
+    config_dir.join("mappers").join(profiled_name)
+}
+
 pub(crate) fn flows_config(
     tedge_config: &TEdgeConfig,
     mapper_name: &str,
@@ -270,7 +279,17 @@ pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
     aws_mapper_ext::load_builtin_transformers(flows);
 }
 
-pub(crate) async fn flow_registry(
+pub(crate) async fn mapper_flow_registry(
+    tedge_config: &TEdgeConfig,
+    mapper_dir: impl AsRef<Utf8Path>,
+) -> anyhow::Result<ConnectedFlowRegistry> {
+    let flows_dir = tedge_flows::flows_dir(mapper_dir.as_ref());
+    let mapper_config = effective_mapper_config(tedge_config, mapper_dir).await?;
+    let flows = flow_registry(mapper_config, flows_dir).await?;
+    Ok(flows)
+}
+
+async fn flow_registry(
     mapper_config: Option<EffectiveMapperConfig>,
     flows_dir: impl AsRef<Utf8Path>,
 ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
@@ -293,18 +312,27 @@ pub(crate) async fn flow_registry(
     Ok(flows)
 }
 
-pub async fn effective_mapper_config(
+async fn effective_mapper_config(
     tedge_config: &TEdgeConfig,
-    mapper_name: &str,
     mapper_dir: impl AsRef<Utf8Path>,
 ) -> anyhow::Result<Option<EffectiveMapperConfig>> {
     let Some(raw) = custom::config::load_mapper_config(mapper_dir.as_ref()).await? else {
         return Ok(None);
     };
+    let Some(mapper_fullname) = mapper_dir.as_ref().file_name() else {
+        bail!(
+            "Cannot derive the mapper name from its directory: {}",
+            mapper_dir.as_ref()
+        );
+    };
+    let (mapper_name, profile) = match mapper_fullname.split_once('.') {
+        None => (mapper_fullname, None),
+        Some((mapper_name, profile)) => (mapper_name, Some(ProfileName::from_str(profile)?)),
+    };
     match mapper_name {
         #[cfg(feature = "c8y")]
         "c8y" => Ok(Some(
-            c8y::mapper::resolve_effective_mapper_config(tedge_config, None).await?,
+            c8y::mapper::resolve_effective_mapper_config(tedge_config, profile.as_ref()).await?,
         )),
 
         #[cfg(feature = "aws")]

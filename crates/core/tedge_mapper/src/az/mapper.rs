@@ -5,6 +5,8 @@ use crate::flows_config;
 use anyhow::Context;
 use async_trait::async_trait;
 use az_mapper_ext::AzureConverter;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
@@ -27,6 +29,13 @@ use yansi::Paint;
 
 pub struct AzureMapper {
     pub profile: Option<ProfileName>,
+}
+
+impl AzureMapper {
+    /// Returns the mapper directory path for this instance.
+    pub fn mapper_dir(&self, config_dir: &Utf8Path) -> Utf8PathBuf {
+        crate::mapper_dir(config_dir, "az", self.profile.as_ref())
+    }
 }
 
 #[async_trait]
@@ -96,11 +105,8 @@ impl TEdgeComponent for AzureMapper {
             az_config.mapper.mqtt.max_payload_size.0,
             az_config.topics.to_string(),
         );
-        let mapper_dir = config_dir.join("mappers").join("az");
-        let flows_dir =
-            tedge_flows::flows_dir(config_dir, "az", self.profile.as_ref().map(|p| p.as_ref()));
-        let mapper_config = crate::effective_mapper_config(&tedge_config, "az", mapper_dir).await?;
-        let mut flows = crate::flow_registry(mapper_config, flows_dir).await?;
+        let mapper_dir = self.mapper_dir(config_dir);
+        let mut flows = crate::mapper_flow_registry(&tedge_config, mapper_dir).await?;
         az_converter.persist_builtin_flow(&mut flows).await?;
         let service_config = flows_config(&tedge_config, &az_mapper_name)?;
         let mut fs_actor = FsWatchActorBuilder::new();

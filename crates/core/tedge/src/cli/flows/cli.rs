@@ -183,7 +183,12 @@ impl BuildCommand for TEdgeFlowsCli {
 
 impl TEdgeFlowsCli {
     fn default_flows_dir(config: &TEdgeConfig, mapper: &str, profile: Option<&str>) -> Utf8PathBuf {
-        tedge_flows::flows_dir(config.root_dir(), mapper, profile)
+        let profiled_name = match profile {
+            None => mapper.to_string(),
+            Some(profile) => format!("{mapper}.{profile}"),
+        };
+        let mapper_dir = config.root_dir().join("mappers").join(profiled_name);
+        tedge_flows::flows_dir(&mapper_dir)
     }
 
     fn js_config(config: &TEdgeConfig) -> JsRuntimeConfig {

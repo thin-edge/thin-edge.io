@@ -47,7 +47,8 @@ pub struct CustomMapper {
 impl CustomMapper {
     /// Returns the mapper directory path for this instance.
     pub fn mapper_dir(&self, config_dir: &Utf8Path) -> Utf8PathBuf {
-        config_dir.join("mappers").join(&self.name)
+        let profile: Option<String> = None;
+        crate::mapper_dir(config_dir, &self.name, profile.as_ref())
     }
 
     /// Returns the service name: `tedge-mapper-{name}`.
@@ -296,14 +297,7 @@ async fn build_flows_actors(
         stats_config.on_startup,
     );
 
-    let flows_dir = mapper_dir.join("flows");
-    let mapper_config = crate::effective_mapper_config(
-        tedge_config,
-        mapper_dir.file_name().unwrap_or("local"),
-        mapper_dir,
-    )
-    .await?;
-    let flows = crate::flow_registry(mapper_config, flows_dir).await?;
+    let flows = crate::mapper_flow_registry(tedge_config, mapper_dir).await?;
     let fs_actor = FsWatchActorBuilder::new();
     let cmd_watcher_actor = WatchActorBuilder::new();
     let flows_mapper = FlowsMapperBuilder::try_new(flows, service_config).await?;
