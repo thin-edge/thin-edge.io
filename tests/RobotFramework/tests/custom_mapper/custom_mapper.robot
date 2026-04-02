@@ -288,18 +288,35 @@ tedge connect --test succeeds for a running flows-only custom mapper
 
     [Teardown]    Stop And Remove Mapper    test-connect-flows
 
-tedge connect --test fails when the custom mapper is not running
+tedge connect --test exits 2 when the custom mapper is not running
     [Documentation]    When the mapper service is not started, `tedge connect <name> --test`
-    ...    should time out waiting for health and exit with a non-zero code.
+    ...    should time out waiting for mapper health and exit with code 2.
     [Setup]    Create Flows Only Mapper    test-connect-down
 
     ${output}=    Execute Command
     ...    sudo tedge connect test-connect-down --test
-    ...    exp_exit_code=1
+    ...    exp_exit_code=2
     ...    stdout=${False}    stderr=${True}
     Should Contain    ${output}    tedge-mapper-test-connect-down
 
     [Teardown]    Stop And Remove Mapper    test-connect-down
+
+tedge connect --test exits 3 when the mapper is up but bridge is not
+    [Documentation]    When the mapper service is running but the bridge cannot reach its remote
+    ...    host, `tedge connect <name> --test` should time out waiting for bridge health and
+    ...    exit with code 3.
+    [Setup]    Create Unreachable Bridge Mapper    test-connect-nobridge
+
+    Start Service    tedge-mapper-test-connect-nobridge
+    Service Should Be Running    tedge-mapper-test-connect-nobridge
+
+    ${output}=    Execute Command
+    ...    sudo tedge connect test-connect-nobridge --test
+    ...    exp_exit_code=3
+    ...    stdout=${False}    stderr=${True}
+    Should Contain    ${output}    tedge-mapper-bridge-test-connect-nobridge
+
+    [Teardown]    Stop And Remove Mapper    test-connect-nobridge
 
 tedge connect without --test gives a helpful error for custom mappers
     [Documentation]    Running `tedge connect <custom-mapper>` without --test is not supported
@@ -409,6 +426,13 @@ Create Non TLS Bridge Mapper
     Execute Command    mkdir -p /etc/tedge/mappers/${name}/bridge && chown -R tedge:tedge /etc/tedge/mappers/${name}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/mapper-notls.toml    /etc/tedge/mappers/${name}/mapper.toml
     ThinEdgeIO.Transfer To Device    ${CURDIR}/credentials.toml    /etc/tedge/mappers/${name}/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/bridge/rules.toml    /etc/tedge/mappers/${name}/bridge/
+    Create Mapper Service File    ${name}
+
+Create Unreachable Bridge Mapper
+    [Arguments]    ${name}
+    Execute Command    mkdir -p /etc/tedge/mappers/${name}/bridge && chown -R tedge:tedge /etc/tedge/mappers/${name}
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/mapper-unreachable.toml    /etc/tedge/mappers/${name}/mapper.toml
     ThinEdgeIO.Transfer To Device    ${CURDIR}/bridge/rules.toml    /etc/tedge/mappers/${name}/bridge/
     Create Mapper Service File    ${name}
 

@@ -645,7 +645,9 @@ async fn wait_for_custom_mapper_health(
             "{mapper_service} did not report as up"
         ))),
     };
-    mapper_spinner.finish(mapper_result)?;
+    if mapper_spinner.finish(mapper_result).is_err() {
+        std::process::exit(2);
+    }
 
     if !mapper_up || !has_bridge {
         let _ = client.disconnect().await;
@@ -696,7 +698,9 @@ async fn wait_for_custom_mapper_health(
             "{bridge_service} did not report as up"
         ))),
     };
-    bridge_spinner.finish(bridge_result)?;
+    if bridge_spinner.finish(bridge_result).is_err() {
+        std::process::exit(3);
+    }
 
     let _ = client.disconnect().await;
     loop {
