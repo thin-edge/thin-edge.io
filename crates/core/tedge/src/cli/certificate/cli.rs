@@ -29,7 +29,6 @@ use tedge_config::models::HTTPS_PORT;
 use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::CloudConfig;
 use tedge_config::tedge_toml::ProfileName;
-use tedge_config::SystemConfig;
 use tedge_config::TEdgeConfig;
 use tracing::debug;
 
