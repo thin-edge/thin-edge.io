@@ -12,6 +12,8 @@ use c8y_mapper_ext::availability::AvailabilityConfig;
 use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use mqtt_channel::Config;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -61,6 +63,13 @@ pub fn auth_method(c8y_config: &MapperConfig<C8yMapperSpecificConfig>) -> AuthMe
         AuthMethod::Certificate
     } else {
         AuthMethod::Password
+    }
+}
+
+impl CumulocityMapper {
+    /// Returns the mapper directory path for this instance.
+    pub fn mapper_dir(&self, config_dir: &Utf8Path) -> Utf8PathBuf {
+        crate::mapper_dir(config_dir, "c8y", self.profile.as_ref())
     }
 }
 
@@ -162,9 +171,8 @@ impl TEdgeComponent for CumulocityMapper {
             None
         };
 
-        let flows_dir =
-            tedge_flows::flows_dir(cfg_dir, "c8y", self.profile.as_ref().map(|p| p.as_ref()));
-        let mut flows = crate::flow_registry(flows_dir).await?;
+        let mapper_dir = self.mapper_dir(cfg_dir);
+        let mut flows = crate::mapper_flow_registry(&tedge_config, mapper_dir).await?;
         c8y_mapper_actor.persist_builtin_flows(&mut flows).await?;
         let service_config = flows_config(&tedge_config, &c8y_mapper_name)?;
 

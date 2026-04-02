@@ -20,6 +20,8 @@ pub use crate::config::ConfigError;
 pub use crate::config::FlowConfig;
 pub use crate::connected_flow::ConnectedFlowRegistry;
 pub use crate::flow::*;
+pub use crate::params::empty_mapper_params;
+pub use crate::params::MapperParams;
 pub use crate::registry::BaseFlowRegistry;
 pub use crate::registry::FlowRegistryExt;
 pub use crate::registry::UpdateFlowRegistryError;
@@ -123,19 +125,8 @@ impl FlowsMapperConfig {
 
 fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: Clone, Debug, Eq, PartialEq);
 
-pub fn default_flows_dir(tedge_config_dir: &Utf8Path) -> Utf8PathBuf {
-    flows_dir(tedge_config_dir, "local", None)
-}
-
-pub fn flows_dir(tedge_config_dir: &Utf8Path, mapper: &str, profile: Option<&str>) -> Utf8PathBuf {
-    let profiled_name = match profile {
-        None => mapper.to_string(),
-        Some(profile) => format!("{mapper}.{profile}"),
-    };
-    tedge_config_dir
-        .join("mappers")
-        .join(profiled_name)
-        .join("flows")
+pub fn flows_dir(mapper_dir: &Utf8Path) -> Utf8PathBuf {
+    mapper_dir.join("flows")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

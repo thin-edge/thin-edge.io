@@ -4,7 +4,6 @@ use crate::flow::SourceTag;
 use crate::js_lib::kv_store::FlowContextHandle;
 use crate::js_runtime::JsRuntime;
 use crate::js_runtime::JsRuntimeConfig;
-use crate::registry::BaseFlowRegistry;
 use crate::registry::FlowRegistryExt;
 use crate::stats::Counter;
 use crate::stats::StatsFilter;
@@ -20,17 +19,6 @@ pub struct MessageProcessor<Registry> {
     pub registry: Registry,
     pub js_runtime: JsRuntime,
     pub stats: Counter,
-}
-
-impl MessageProcessor<BaseFlowRegistry> {
-    pub async fn with_base_registry(
-        config_dir: impl AsRef<Utf8Path>,
-        js_config: JsRuntimeConfig,
-    ) -> Result<Self, LoadError> {
-        let registry = BaseFlowRegistry::new(config_dir);
-        let context = FlowContextHandle::default();
-        MessageProcessor::with_context(registry, js_config, context).await
-    }
 }
 
 impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {

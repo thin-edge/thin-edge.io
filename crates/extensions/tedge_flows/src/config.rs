@@ -3,6 +3,8 @@ use crate::flow::FlowInput;
 use crate::flow::FlowOutput;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
+use crate::params::is_params_file;
+use crate::params::MapperParams;
 use crate::params::Params;
 use crate::steps::FlowStep;
 use crate::transformers::BuiltinTransformers;
@@ -167,7 +169,7 @@ pub fn derive_flow_name(flows_dir: &Utf8Path, flow_path: &Utf8Path) -> Option<St
     if path.extension() != Some("toml") {
         return None;
     };
-    if path.file_name()? == Params::filename() {
+    if is_params_file(path) {
         return None;
     }
     match (path.parent()?.as_str(), path.file_stem()?) {
@@ -184,6 +186,7 @@ impl FlowConfig {
     /// Return the collection of loaded flow configs
     /// as well as the list of files that cannot be read as flow specs
     pub async fn load_all_flows(
+        mapper_config: &dyn MapperParams,
         flows_dir: &Utf8Path,
     ) -> (HashMap<Utf8PathBuf, FlowConfig>, Vec<Utf8PathBuf>) {
         let pattern = format!("{}/**/*.toml", flows_dir);
@@ -196,7 +199,7 @@ impl FlowConfig {
                             error!(target: "flows", "Skipping non UTF8 path: {}", entry.as_path().display());
                             continue;
                         };
-                        if path.is_file() && !Params::is_params_file(&path) {
+                        if path.is_file() && !is_params_file(&path) {
                             paths.push(path);
                         }
                     }
@@ -214,7 +217,7 @@ impl FlowConfig {
         let mut unloaded_flows = Vec::new();
         for path in paths {
             info!(target: "flows", "Loading flow: {path}");
-            if let Some(flow) = FlowConfig::load_single_flow(&path).await {
+            if let Some(flow) = FlowConfig::load_single_flow(mapper_config, &path).await {
                 flows.insert(path, flow);
             } else {
                 unloaded_flows.push(path.clone());
@@ -223,8 +226,11 @@ impl FlowConfig {
         (flows, unloaded_flows)
     }
 
-    pub async fn load_single_flow(flow: &Utf8Path) -> Option<FlowConfig> {
-        match FlowConfig::load_flow(flow).await {
+    pub async fn load_single_flow(
+        mapper_config: &dyn MapperParams,
+        flow: &Utf8Path,
+    ) -> Option<FlowConfig> {
+        match FlowConfig::load_flow(mapper_config, flow).await {
             Ok(flow) => Some(flow),
             Err(err) => {
                 error!(target: "flows", "Failed to load flow {flow}: {err}");
@@ -237,17 +243,23 @@ impl FlowConfig {
         FlowConfig::from_step(script.to_owned())
     }
 
-    async fn load_flow(path: &Utf8Path) -> Result<FlowConfig, ConfigError> {
+    async fn load_flow(
+        mapper_config: &dyn MapperParams,
+        path: &Utf8Path,
+    ) -> Result<FlowConfig, ConfigError> {
         let specs = read_to_string(path)
             .await
             .map_err(|err| LoadError::from_io(err, path))?;
         let flow: FlowConfig = toml::from_str(&specs).map_err(LoadError::from)?;
 
-        let params = Params::load_flow_params(path).await?;
+        let params = Params::load_flow_params(mapper_config, path).await?;
         flow.substitute_params(&params)
     }
 
-    fn substitute_params(mut self, params: &Params) -> Result<Self, ConfigError> {
+    fn substitute_params(
+        mut self,
+        params: &Params<&dyn MapperParams>,
+    ) -> Result<Self, ConfigError> {
         self.config = params.substitute_all(&self.config)?;
         for step in self.steps.iter_mut() {
             step.substitute_params(params)?;
@@ -326,7 +338,10 @@ impl FlowConfig {
 }
 
 impl StepConfig {
-    pub fn substitute_params(&mut self, params: &Params) -> Result<(), ConfigError> {
+    pub fn substitute_params(
+        &mut self,
+        params: &Params<&dyn MapperParams>,
+    ) -> Result<(), ConfigError> {
         self.config = params.substitute_all(&self.config)?;
         if let Some(interval) = self.interval.take() {
             self.interval = Some(interval.substitute_params(params)?);
@@ -423,7 +438,7 @@ impl StepConfig {
 }
 
 impl InputConfig {
-    fn substitute_params(self, params: &Params) -> Result<Self, ConfigError> {
+    fn substitute_params(self, params: &Params<&dyn MapperParams>) -> Result<Self, ConfigError> {
         match self {
             InputConfig::Mqtt { topics } => Ok(InputConfig::Mqtt {
                 topics: topics
@@ -497,7 +512,7 @@ impl TryFrom<InputConfig> for FlowInput {
 }
 
 impl OutputConfig {
-    fn substitute_params(self, params: &Params) -> Result<Self, LoadError> {
+    fn substitute_params(self, params: &Params<&dyn MapperParams>) -> Result<Self, LoadError> {
         match self {
             OutputConfig::Mqtt { topic } => Ok(OutputConfig::Mqtt {
                 topic: topic.map(|t| params.substitute_inner_paths(&t)),
@@ -523,7 +538,7 @@ impl TryFrom<OutputConfig> for FlowOutput {
 }
 
 impl IntervalConfig {
-    fn substitute_params(self, params: &Params) -> Result<Self, ConfigError> {
+    fn substitute_params(self, params: &Params<&dyn MapperParams>) -> Result<Self, ConfigError> {
         match &self {
             IntervalConfig::Duration(_) => Ok(self),
             IntervalConfig::ParamExpr(expr) => {
@@ -619,6 +634,7 @@ fn detect_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::empty_mapper_params;
     use camino::Utf8PathBuf;
     use serde_json::json;
     use std::time::Duration;
@@ -796,7 +812,8 @@ script = "main.js"
 topic = "te/device/main///e/"
 "#;
 
-        let params = Params::load_toml(params_toml).unwrap();
+        let mapper_config = empty_mapper_params();
+        let params = Params::load_toml(mapper_config.as_ref(), params_toml).unwrap();
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
         let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
 
@@ -821,7 +838,8 @@ topic = "te/device/main///e/"
         output.mqtt.topic = "c8y/output"
         "#;
 
-        let params = Params::load_toml(params_toml).unwrap();
+        let mapper_config = empty_mapper_params();
+        let params = Params::load_toml(mapper_config.as_ref(), params_toml).unwrap();
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
         let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
 
@@ -855,7 +873,8 @@ topic = "te/device/main///e/"
         interval = "3600s"
         "#;
 
-        let params = Params::load_toml(params_toml).unwrap();
+        let mapper_config = empty_mapper_params();
+        let params = Params::load_toml(mapper_config.as_ref(), params_toml).unwrap();
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
         let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
 
@@ -879,7 +898,8 @@ topic = "te/device/main///e/"
         output.file.path = "/var/log/tedge/errors.log"
         "#;
 
-        let params = Params::load_toml(params_toml).unwrap();
+        let mapper_config = empty_mapper_params();
+        let params = Params::load_toml(mapper_config.as_ref(), params_toml).unwrap();
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
         let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
 

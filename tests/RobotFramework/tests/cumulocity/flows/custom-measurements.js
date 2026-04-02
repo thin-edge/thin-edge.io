@@ -27,6 +27,13 @@ export function onMessage(message, context) {
                 "type": "c8y_Serial",
             };
         }
+    } else {
+        const { device_id = "unknown" } = context.config;
+        console.log(device_id);
+        c8y_msg.externalSource = {
+            "externalId": device_id,
+            "type": "c8y_Serial",
+        };
     }
 
     return [{

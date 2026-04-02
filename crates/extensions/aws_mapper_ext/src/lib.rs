@@ -154,6 +154,7 @@ mod tests {
     use assert_matches::*;
     use camino::Utf8Path;
     use serde_json::json;
+    use std::collections::HashMap;
     use tedge_config::tedge_toml::AWS_MQTT_PAYLOAD_LIMIT;
     use tedge_flows::ConnectedFlowRegistry;
     use tedge_flows::FlowResult;
@@ -757,7 +758,8 @@ mod tests {
         );
         let flows_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
         let flows_path = Utf8Path::from_path(flows_dir.path()).unwrap();
-        let mut flows = ConnectedFlowRegistry::new(flows_path);
+        let mapper_config = HashMap::new();
+        let mut flows = ConnectedFlowRegistry::new(mapper_config, flows_path);
         load_builtin_transformers(&mut flows);
         converter.persist_builtin_flow(&mut flows).await.unwrap();
 

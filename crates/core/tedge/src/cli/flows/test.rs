@@ -19,6 +19,7 @@ use tokio::io::Stdin;
 use tokio::time::Instant;
 
 pub struct TestCommand {
+    pub mapper_dir: Utf8PathBuf,
     pub flows_dir: Utf8PathBuf,
     pub flow: Option<Utf8PathBuf>,
     pub context: Option<String>,
@@ -39,11 +40,26 @@ impl Command for TestCommand {
         )
     }
 
-    async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
         let mut processor = match &self.flow {
-            None => TEdgeFlowsCli::load_flows(&self.flows_dir, self.js_config.clone()).await?,
+            None => {
+                TEdgeFlowsCli::load_flows(
+                    &config,
+                    &self.mapper_dir,
+                    &self.flows_dir,
+                    self.js_config.clone(),
+                )
+                .await?
+            }
             Some(flow) => {
-                TEdgeFlowsCli::load_file(&self.flows_dir, flow, self.js_config.clone()).await?
+                TEdgeFlowsCli::load_file(
+                    &config,
+                    &self.mapper_dir,
+                    &self.flows_dir,
+                    flow,
+                    self.js_config.clone(),
+                )
+                .await?
             }
         };
         if let Some(context) = self.context.as_ref() {

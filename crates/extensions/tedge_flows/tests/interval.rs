@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -647,7 +648,8 @@ async fn tick(duration: Duration) {
 type ActorHandle = tokio::task::JoinHandle<Result<(), tedge_actors::RuntimeError>>;
 
 async fn spawn_flows_actor(config_dir: &TempDir, mqtt: &mut MockMqtt) -> ActorHandle {
-    let flows = ConnectedFlowRegistry::new(config_dir.path().to_str().unwrap());
+    let mapper_config = HashMap::new();
+    let flows = ConnectedFlowRegistry::new(mapper_config, config_dir.path().to_str().unwrap());
     let mut flows_builder = FlowsMapperBuilder::try_new(flows, FlowsMapperConfig::default())
         .await
         .expect("Failed to create FlowsMapper");

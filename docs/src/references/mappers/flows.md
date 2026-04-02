@@ -316,6 +316,46 @@ For topics, commands, paths and intervals, several substitutions can be applied 
 as in `input.mqtt.topics = [ "te/device/${params.child}/service/${params.service}/m/${params.measurement.type}" ]`
 :::
 
+### Mapper Configuration Values
+
+Flows can be parameterized with configuration values specific to the mapper running these flows.
+
+All the values defined in the [`mapper.toml`](../user-defined-mappers/#mappertoml) file — including user-defined ones —  
+can substitute [`${mapper.*}` expressions](../user-defined-mappers/#template-variables-mapper)
+in a flow `.toml` definition, in a similar manner as for [parameters](#parameters).
+
+For instance, given a `mapper.toml`, which combines connection settings, derived values (such as the device id)
+as well as user-defined values (here about the sensor):
+
+```toml title="mapper.toml"
+url = "mqtt.thingsboard.io:8883"
+
+[device]
+cert_path = "cert.pem"
+key_path  = "key.pem"
+
+# derived
+# id = derived from the device certificate
+
+# user defined
+arch = "ARMv8.7-A"
+```
+
+The following makes the mapper cloud url and the %%te%% device id and arch
+available to the transformation scripts via the `context.config` object:
+
+```toml title="flow.toml"
+input.mqtt.topics = ["sensor/#"]
+
+[config]
+cloud.url = "${mapper.url}"
+device.id = "${mapper.device.id}"     # derived from the content of mapper.device.cert_path
+device.arch = "${mapper.device.arch}" # user defined value
+
+[[steps]]
+script = "main.js"
+```
+
 ### Transformation
 
 The transformation applied by a step is defined either by

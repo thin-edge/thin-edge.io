@@ -9,6 +9,7 @@ use tedge_flows::FlowRegistryExt;
 use tedge_flows::JsRuntimeConfig;
 
 pub struct ListCommand {
+    pub mapper_dir: Utf8PathBuf,
     pub flows_dir: Utf8PathBuf,
     pub topic: Option<String>,
     pub js_config: JsRuntimeConfig,
@@ -20,8 +21,14 @@ impl Command for ListCommand {
         format!("list flows and flow steps in {}", self.flows_dir)
     }
 
-    async fn execute(&self, _config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
-        let processor = TEdgeFlowsCli::load_flows(&self.flows_dir, self.js_config.clone()).await?;
+    async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
+        let processor = TEdgeFlowsCli::load_flows(
+            &config,
+            &self.mapper_dir,
+            &self.flows_dir,
+            self.js_config.clone(),
+        )
+        .await?;
 
         match &self.topic {
             Some(topic) => processor
