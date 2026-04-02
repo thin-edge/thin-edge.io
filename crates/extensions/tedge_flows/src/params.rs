@@ -168,7 +168,7 @@ impl<'a, T: MapperParams + ?Sized> Params<&'a T> {
         };
 
         if let Some(path) = path.strip_prefix("params") {
-            match Self::get(&self.params, path.strip_prefix('.')) {
+            match get_inner_value(&self.params, path.strip_prefix('.')) {
                 Ok(value) => Ok(value),
                 Err(unknown_path) => Err(LoadError::UnknownParam {
                     path: format!("params.{unknown_path}",),
@@ -218,28 +218,28 @@ impl<'a, T: MapperParams + ?Sized> Params<&'a T> {
             })
             .collect()
     }
+}
 
-    fn get(values: &Map<String, Value>, steps: Option<&str>) -> Result<Value, String> {
-        let Some(path) = steps else {
-            return Ok(values.clone().into());
-        };
-        let (key, next_steps) = match path.split_once(".") {
-            None => (path, None),
-            Some((key, inner_path)) => (key, Some(inner_path)),
-        };
-        let Some(value) = values.get(key) else {
-            return Err(key.to_string());
-        };
-        if next_steps.is_none() {
-            return Ok(value.clone());
-        }
-        let Some(inner_values) = value.as_object() else {
-            return Err(format!("{key}.*"));
-        };
-        match Self::get(inner_values, next_steps) {
-            Ok(value) => Ok(value),
-            Err(unknown_path) => Err(format!("{key}.{unknown_path}")),
-        }
+fn get_inner_value(values: &Map<String, Value>, steps: Option<&str>) -> Result<Value, String> {
+    let Some(path) = steps else {
+        return Ok(values.clone().into());
+    };
+    let (key, next_steps) = match path.split_once(".") {
+        None => (path, None),
+        Some((key, inner_path)) => (key, Some(inner_path)),
+    };
+    let Some(value) = values.get(key) else {
+        return Err(key.to_string());
+    };
+    if next_steps.is_none() {
+        return Ok(value.clone());
+    }
+    let Some(inner_values) = value.as_object() else {
+        return Err(format!("{key}.*"));
+    };
+    match get_inner_value(inner_values, next_steps) {
+        Ok(value) => Ok(value),
+        Err(unknown_path) => Err(format!("{key}.{unknown_path}")),
     }
 }
 
