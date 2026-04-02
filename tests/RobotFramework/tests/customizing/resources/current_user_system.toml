@@ -1,0 +1,16 @@
+user = ""
+group = ""
+
+[init]
+# dummy init system that does nothing but ensure any init interactions don't fail
+name = "dummy"
+is_available = ["/usr/bin/echo", "--version"]
+restart = ["/usr/bin/echo", "restart", "{}"]
+stop =  ["/usr/bin/echo", "stop", "{}"]
+start = ["/usr/bin/echo", "start", "{}"]
+enable =  ["/usr/bin/echo", "enable", "{}"]
+disable =  ["/usr/bin/echo", "disable", "{}"]
+is_active = ["/usr/bin/echo", "is-active", "{}"]
+
+[system]
+reboot = ["/usr/bin/echo", "no-op"]
