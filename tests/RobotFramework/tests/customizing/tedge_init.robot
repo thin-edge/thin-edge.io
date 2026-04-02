@@ -152,6 +152,24 @@ Tedge init leaves user unchanged and group to tedge when user is empty and group
     All Tedge Directories Should Be Owned By    root:tedge
     [Teardown]    Restore Initial State
 
+Tedge cert download c8y creates private key owned by system.toml user/group
+    [Documentation]    Check that the private key created during cert download is owned by
+    ...    the user/group specified in system.toml, not the hardcoded "tedge" default.
+    ...    This tests the case where tedge runs as root but files should be owned by a non-root user.
+    [Tags]    theme:c8y
+    Transfer To Device    ${CURDIR}/resources/custom_user_group_system.toml    /etc/tedge/system.toml
+    Execute Command    sudo tedge init
+    Set Cumulocity URLs
+    ${credentials}=    Bulk Register Device With Cumulocity CA    ${DEVICE_SN}
+    ${DOMAIN}=    Cumulocity.Get Domain
+    Execute Command    sudo -u petertest tedge config set mqtt.bridge.built_in true
+    Execute Command
+    ...    sudo tedge cert download c8y --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --url ${DOMAIN} --retry-every 5s --max-timeout 30s
+    Path Should Have Permissions
+    ...    path=/etc/tedge/device-certs/tedge-private-key.pem
+    ...    owner_group=petertest:petertest
+    [Teardown]    Restore Initial State
+
 Run tedge as the current user
     [Documentation]    Check that users can also run commands using the current user
     ...    by explicitly opting into this behaviour by setting the user/group in the system.toml
@@ -187,6 +205,7 @@ Run tedge as the current user
     Execute Command
     ...    sudo -u petertest tedge cert download c8y --device-id "${DEVICE_SN}" --one-time-password '${credentials.one_time_password}' --url ${DOMAIN} --retry-every 5s --max-timeout 30s
     Execute Command    sudo -u petertest tedge cert show c8y
+    All Device Certificate Files Should Be Owned By    petertest:petertest
 
     # Run each service for a short amount of time as a smoke test
     Execute Command    sudo -u petertest timeout --preserve-status 5 tedge-agent    retries=1
@@ -198,6 +217,11 @@ Run tedge as the current user
     Execute Command    sudo -u petertest nohup tedge-mapper c8y &
     ${output}=    Execute Command    sudo -u petertest tedge connect c8y 2>&1
     Should Not Contain    ${output}    Failed to change ownership    msg=No ownership warnings/errors should be present
+
+    # cert renewal
+    Execute Command    sudo -u petertest tedge cert renew c8y 2>&1
+    Execute Command    sudo -u petertest tedge reconnect c8y 2>&1
+    All Device Certificate Files Should Be Owned By    petertest:petertest
 
     All Tedge Directories Should Be Owned By    petertest:petertest
     [Teardown]    Restore Initial State
@@ -227,6 +251,15 @@ All Tedge Directories Should Be Owned By
     ...    /etc/tedge/plugins    /etc/tedge/device-certs    /var/tedge    /var/log/tedge
     ...    /etc/tedge/operations/c8y/c8y_RemoteAccessConnect
         Check Owner of Directory    ${dir}    ${expected_owner}
+    END
+
+All Device Certificate Files Should Be Owned By
+    [Arguments]    ${expected_owner}
+    FOR    ${file}    IN
+    ...    /etc/tedge/device-certs/tedge-certificate.pem
+    ...    /etc/tedge/device-certs/tedge-private-key.pem
+    ...    /etc/tedge/device-certs/tedge.csr
+        Path Should Have Permissions    path=${file}    owner_group=${expected_owner}
     END
 
 Restore Initial State

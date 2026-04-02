@@ -453,6 +453,8 @@ impl BuildCommand for TEdgeCertCli {
                     retry_every,
                     max_timeout,
                     csr_template,
+                    user: user.clone(),
+                    group: group.clone(),
                 };
                 cmd.into_boxed()
             }
@@ -536,6 +538,8 @@ impl BuildCommand for TEdgeCertCli {
                         csr_path,
                         generate_csr,
                         csr_template,
+                        user,
+                        group,
                     };
                     cmd.into_boxed()
                 }

@@ -21,14 +21,16 @@ async fn create_device_csr(
     current_cert: Option<Utf8PathBuf>,
     csr_path: Utf8PathBuf,
     csr_template: CsrTemplate,
+    user: String,
+    group: String,
 ) -> Result<(), CertError> {
     let create_cmd = CreateCsrCmd {
         id: common_name,
         csr_path: csr_path.clone(),
         key,
         current_cert,
-        user: "tedge".to_string(),
-        group: "tedge".to_string(),
+        user,
+        group,
         csr_template,
     };
     create_cmd.create_certificate_signing_request().await?;
