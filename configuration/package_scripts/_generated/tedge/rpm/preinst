@@ -29,19 +29,22 @@ user_exists() {
     fi
 }
 
-# Parse a TOML string value from system.toml
-# Validates that the value is a properly quoted string and nothing else
-# Arguments:
-#   $1: key name (e.g., "user" or "group")
-#   $2: path to system.toml file
-# Output:
-#   The extracted string value (with quotes removed)
-#   Empty string if key not found or format is invalid
+# Parse a TOML string value from system.toml and provides a default value
+# when no valid entry is found. Note, an empty value is classed as being found.
 parse_toml_string_value() {
+    property="$1"
+    file_path="$2"
+    default_value="$3"
     # Match first line of the form: key = "value" (strict: double-quoted string, nothing else)
-    grep -E "^[[:space:]]*${1}[[:space:]]*=[[:space:]]*\"[^\"]*\"[[:space:]]*$" "$2" \
-        | head -n1 \
-        | sed 's/.*=[[:space:]]*"\([^"]*\)".*/\1/'
+    MATCHES=$(grep -E "^[[:space:]]*${property}[[:space:]]*=[[:space:]]*\"[^\"]*\"[[:space:]]*$" "$file_path" | head -n1)
+    if [ -n "$MATCHES" ]; then
+        # property is defined, so respect all values, even empty ones
+        echo "$MATCHES" | sed 's/.*=[[:space:]]*"\([^"]*\)".*/\1/'
+    else
+        # not-defined so the given default value
+        echo "Using default as no valid value for '$property' was found in '$file_path'" >&2
+        echo "$default_value"
+    fi
 }
 
 # Read user/group from /etc/tedge/system.toml if it exists
@@ -49,10 +52,8 @@ TEDGE_USER="tedge"
 TEDGE_GROUP="tedge"
 SYSTEM_TOML="/etc/tedge/system.toml"
 if [ -f "$SYSTEM_TOML" ]; then
-    _val=$(parse_toml_string_value "user" "$SYSTEM_TOML")
-    TEDGE_USER="${_val:-$TEDGE_USER}"
-    _val=$(parse_toml_string_value "group" "$SYSTEM_TOML")
-    TEDGE_GROUP="${_val:-$TEDGE_GROUP}"
+    TEDGE_USER=$(parse_toml_string_value "user" "$SYSTEM_TOML" "$TEDGE_USER")
+    TEDGE_GROUP=$(parse_toml_string_value "group" "$SYSTEM_TOML" "$TEDGE_GROUP")
 fi
 
 ### Create groups
