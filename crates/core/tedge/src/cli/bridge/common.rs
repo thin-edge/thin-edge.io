@@ -143,7 +143,7 @@ pub async fn load_bridge_rules<Cloud: ExpectedCloudType>(
                     w,
                     "{} {}",
                     "Help:".blue().bold(),
-                    "Try running with the `--debug` flag to see more information on disabled rules"
+                    "Try running with the `--show-all` flag to see more information on disabled rules"
                         .blue()
                 )?;
             }
@@ -266,7 +266,7 @@ pub async fn load_bridge_rules_for_custom_mapper(
                     w,
                     "{} {}",
                     "Help:".blue().bold(),
-                    "Try running with the `--debug` flag to see more information on disabled rules"
+                    "Try running with the `--show-all` flag to see more information on disabled rules"
                         .blue()
                 )?;
             }

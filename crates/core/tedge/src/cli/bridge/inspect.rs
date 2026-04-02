@@ -33,7 +33,7 @@ pub struct BridgeInspectCmd {
 
     /// Show skipped rules (e.g. due to unmet conditions or empty template loops)
     #[clap(long)]
-    debug: bool,
+    show_all: bool,
 }
 
 #[async_trait::async_trait]
@@ -45,7 +45,7 @@ impl Command for BridgeInspectCmd {
     #[mutants::skip]
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         tedge_mapper::warn_misconfigured_mapper_dirs(&config.root_dir().join("mappers")).await;
-        let detail = if self.debug {
+        let detail = if self.show_all {
             DetailLevel::Debug
         } else {
             DetailLevel::Normal
@@ -567,7 +567,7 @@ Bidirectional
     }
 
     #[test]
-    fn non_expansions_are_not_shown_outside_of_debug_mode() {
+    fn non_expansions_are_not_shown_outside_of_show_all_mode() {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_with_root(tmp.path(), &c8y_toml("c8y.auth_method = 'certificate'"));
         let cloud = Cloud::c8y(None);
@@ -592,8 +592,8 @@ Bidirectional
             "Output should not mention skipped rules: {output}"
         );
         assert!(
-            output.contains("--debug"),
-            "Output should suggest running with '--debug': {output}"
+            output.contains("--show-all"),
+            "Output should suggest running with '--show-all': {output}"
         );
     }
 
@@ -711,7 +711,7 @@ Bidirectional
         let cmd = BridgeInspectCmd {
             cloud: "c8y".to_string(),
             profile: None,
-            debug: false,
+            show_all: false,
         };
         assert_eq!(
             cmd.description(),
@@ -896,7 +896,7 @@ topic = "data"
         let cmd = BridgeInspectCmd {
             cloud: cloud.to_string(),
             profile,
-            debug: detail == DetailLevel::Debug,
+            show_all: detail == DetailLevel::Debug,
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let mut buf = Vec::new();
