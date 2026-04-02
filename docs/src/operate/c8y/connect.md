@@ -60,13 +60,13 @@ in this case we are told to run `tedge config set c8y.url <value>`.
 
 ## Making the cloud trust the device
 
-%%te%% primarily uses a x509 certificate to connect to Cumulocity, therefore the certificate must be trusted by Cumulocity in order for the connection to be established.
+%%te%% uses a X.509 certificate to authenticate to Cumulocity. The certificate must be trusted by Cumulocity before a connection can be established.
 
-There are a few different ways to get the device certificate to be trusted by Cumulocity, below lists a few common options.
+The recommended approach is to use the [Cumulocity Certificate Authority](#cumulocity-certificate-authority): the CA's certificate is trusted by Cumulocity, and any device certificate it signs is automatically trusted — no per-device certificate upload required. Alternatively, you can use [self-signed certificates](#self-signed-certificates) (suitable for development and testing), or a third-party CA where the CA certificate is [uploaded to Cumulocity as a trusted certificate](https://cumulocity.com/docs/device-management-application/managing-device-data/#managing-trusted-certificates) and device certificates are issued using your own PKI tooling.
 
-### Option 1: Using Cumulocity Certificate Authority (Preview) {#cumulocity-certificate-authority}
+### Using Cumulocity Certificate Authority (Recommended) {#cumulocity-certificate-authority}
 
-The [Cumulocity Certificate Authority](https://cumulocity.com/docs/device-certificate-authentication/certificate-authority/) feature is currently in the Public Preview phase and hence needs to be enabled for a specific tenant before it can be used. Please read the [Certificate Management Reference Guide](../../../references/certificate-management#enable-cumulocity-certificate-authority) on how to enable this feature in Cumulocity.
+The [Cumulocity Certificate Authority](https://cumulocity.com/docs/device-certificate-authentication/certificate-authority/) feature requires a Tenant Manager to first create a CA certificate for the tenant before devices can use it. Please read the [Certificate Management Reference Guide](../../../references/certificate-management#enable-cumulocity-certificate-authority) for setup instructions.
 
 Devices can be registered by using the Cumulocity Device Management UI or by using Cumulocity's REST API which is demonstrated via the usage of the command line tool, [go-c8y-cli](https://goc8ycli.netlify.app/). The following sections detail the steps on how to register a device using both of these methods, however both are functionally the same as they all utilize the same Cumulocity API.
 
@@ -179,7 +179,7 @@ go-c8y-cli simply uses the Cumulocity REST API to perform the actions, this mean
     *provided* the operator is trusted by the tenant and the device (i.e. has been granted the appropriate access privileges).
     :::
 
-### Option 2: Using self-signed certificates
+### Using self-signed certificates {#self-signed-certificates}
 
 For development purposes, you can use self-signed certificates which can be created on device and then uploaded to Cumulocity using %%te%% or using the [Cumulocity UI](https://cumulocity.com/docs/device-management-application/managing-device-data/#managing-trusted-certificates).
 
