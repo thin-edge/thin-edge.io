@@ -9,14 +9,12 @@ use anyhow::Context;
 use anyhow::Error;
 use camino::Utf8PathBuf;
 use clap::ValueHint;
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::SystemTime;
 use tedge_config::TEdgeConfig;
 use tedge_flows::BaseFlowRegistry;
 use tedge_flows::FlowContextHandle;
 use tedge_flows::JsRuntimeConfig;
-use tedge_flows::LoadError;
 use tedge_flows::Message;
 use tedge_flows::MessageProcessor;
 
@@ -124,11 +122,11 @@ impl BuildCommand for TEdgeFlowsCli {
                 flows_dir,
                 topic,
             } => {
-                let flows_dir = flows_dir.unwrap_or_else(|| {
-                    Self::default_flows_dir(config, &mapper, profile.as_deref())
-                });
+                let mapper_dir = Self::mapper_dir(config, &mapper, profile.as_deref());
+                let flows_dir = flows_dir.unwrap_or_else(|| tedge_flows::flows_dir(&mapper_dir));
                 let js_config = Self::js_config(config);
                 Ok(ListCommand {
+                    mapper_dir,
                     flows_dir,
                     topic,
                     js_config,
@@ -149,9 +147,8 @@ impl BuildCommand for TEdgeFlowsCli {
                 topic,
                 payload,
             } => {
-                let flows_dir = flows_dir.unwrap_or_else(|| {
-                    Self::default_flows_dir(config, &mapper, profile.as_deref())
-                });
+                let mapper_dir = Self::mapper_dir(config, &mapper, profile.as_deref());
+                let flows_dir = flows_dir.unwrap_or_else(|| tedge_flows::flows_dir(&mapper_dir));
                 let message = match (topic, payload) {
                     (Some(topic), Some(payload)) => Some(Message::new(topic, payload)),
                     (Some(_), None) => Err(anyhow!("Missing sample payload"))?,
@@ -160,6 +157,7 @@ impl BuildCommand for TEdgeFlowsCli {
                 };
                 let js_config = Self::js_config(config);
                 Ok(TestCommand {
+                    mapper_dir,
                     flows_dir,
                     flow,
                     context,
@@ -174,7 +172,8 @@ impl BuildCommand for TEdgeFlowsCli {
             }
 
             TEdgeFlowsCli::ConfigDir { mapper, profile } => {
-                let flows_dir = Self::default_flows_dir(config, &mapper, profile.as_deref());
+                let mapper_dir = Self::mapper_dir(config, &mapper, profile.as_deref());
+                let flows_dir = tedge_flows::flows_dir(&mapper_dir);
                 Ok(ConfigDirCommand { flows_dir }.into_boxed())
             }
         }
@@ -182,13 +181,8 @@ impl BuildCommand for TEdgeFlowsCli {
 }
 
 impl TEdgeFlowsCli {
-    fn default_flows_dir(config: &TEdgeConfig, mapper: &str, profile: Option<&str>) -> Utf8PathBuf {
-        let profiled_name = match profile {
-            None => mapper.to_string(),
-            Some(profile) => format!("{mapper}.{profile}"),
-        };
-        let mapper_dir = config.root_dir().join("mappers").join(profiled_name);
-        tedge_flows::flows_dir(&mapper_dir)
+    fn mapper_dir(config: &TEdgeConfig, mapper: &str, profile: Option<&str>) -> Utf8PathBuf {
+        tedge_mapper::mapper_dir(config.root_dir(), mapper, profile)
     }
 
     fn js_config(config: &TEdgeConfig) -> JsRuntimeConfig {
@@ -201,24 +195,27 @@ impl TEdgeFlowsCli {
     }
 
     async fn init_processor(
+        config: &TEdgeConfig,
+        mapper_dir: &Utf8PathBuf,
         flows_dir: &Utf8PathBuf,
         js_config: JsRuntimeConfig,
-    ) -> Result<MessageProcessor<BaseFlowRegistry>, LoadError> {
-        let mapper_config = HashMap::new();
-        let mut registry = BaseFlowRegistry::new(mapper_config, flows_dir);
-        tedge_mapper::load_builtin_transformers(&mut registry);
+    ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
+        let registry = tedge_mapper::test_cli_flow_registry(config, mapper_dir, flows_dir).await?;
         let context = FlowContextHandle::default();
-        MessageProcessor::with_context(registry, js_config, context).await
+        let processor = MessageProcessor::with_context(registry, js_config, context).await?;
+        Ok(processor)
     }
 
     pub async fn load_flows(
+        config: &TEdgeConfig,
+        mapper_dir: &Utf8PathBuf,
         flows_dir: &Utf8PathBuf,
         js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
         let flows_dir = flows_dir
             .canonicalize_utf8()
             .context("Invalid flows-dir path")?;
-        let mut processor = Self::init_processor(&flows_dir, js_config)
+        let mut processor = Self::init_processor(config, mapper_dir, &flows_dir, js_config)
             .await
             .with_context(|| format!("loading flows and steps from {flows_dir}"))?;
         processor.load_all_flows().await;
@@ -226,11 +223,13 @@ impl TEdgeFlowsCli {
     }
 
     pub async fn load_file(
+        config: &TEdgeConfig,
+        mapper_dir: &Utf8PathBuf,
         flows_dir: &Utf8PathBuf,
         path: &Utf8PathBuf,
         js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
-        let mut processor = Self::init_processor(flows_dir, js_config)
+        let mut processor = Self::init_processor(config, mapper_dir, flows_dir, js_config)
             .await
             .with_context(|| format!("loading flow {path}"))?;
 

@@ -9,7 +9,8 @@ use crate::core::component::TEdgeComponent;
 use crate::custom::mapper::CustomMapper;
 use anyhow::bail;
 use anyhow::Context;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use std::collections::HashMap;
@@ -20,6 +21,7 @@ use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
+use tedge_flows::BaseFlowRegistry;
 use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperConfig;
@@ -239,7 +241,11 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
     }
 }
 
-pub fn mapper_dir(config_dir: &Utf8Path, mapper: &str, profile: Option<&(impl fmt::Display + ?Sized)>) -> Utf8PathBuf {
+pub fn mapper_dir(
+    config_dir: &Utf8Path,
+    mapper: &str,
+    profile: Option<&(impl fmt::Display + ?Sized)>,
+) -> Utf8PathBuf {
     let profiled_name = match profile {
         None => mapper.to_string(),
         Some(profile) => format!("{mapper}.{profile}"),
@@ -270,7 +276,7 @@ pub(crate) fn flows_config(
     Ok(flows_config)
 }
 
-pub fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
+fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
     #[cfg(feature = "c8y")]
     c8y_mapper_ext::load_builtin_transformers(flows);
     #[cfg(feature = "azure")]
@@ -286,6 +292,20 @@ pub(crate) async fn mapper_flow_registry(
     let flows_dir = tedge_flows::flows_dir(mapper_dir.as_ref());
     let mapper_config = effective_mapper_config(tedge_config, mapper_dir).await?;
     let flows = flow_registry(mapper_config, flows_dir).await?;
+    Ok(flows)
+}
+
+pub async fn test_cli_flow_registry(
+    tedge_config: &TEdgeConfig,
+    mapper_dir: impl AsRef<Utf8Path>,
+    flows_dir: impl AsRef<Utf8Path>,
+) -> anyhow::Result<BaseFlowRegistry> {
+    let mapper_config = effective_mapper_config(tedge_config, mapper_dir).await?;
+    let mut flows = match mapper_config {
+        None => BaseFlowRegistry::new(HashMap::new(), flows_dir),
+        Some(effective_mapper_config) => BaseFlowRegistry::new(effective_mapper_config, flows_dir),
+    };
+    load_builtin_transformers(&mut flows);
     Ok(flows)
 }
 
