@@ -68,7 +68,7 @@ The recommended approach is to use the [Cumulocity Certificate Authority](#cumul
 
 The [Cumulocity Certificate Authority](https://cumulocity.com/docs/device-certificate-authentication/certificate-authority/) feature requires a Tenant Manager to first create a CA certificate for the tenant before devices can use it. Please read the [Certificate Management Reference Guide](../../../references/certificate-management#enable-cumulocity-certificate-authority) for setup instructions.
 
-Devices can be registered by using the Cumulocity Device Management UI or by using Cumulocity's REST API which is demonstrated via the usage of the command line tool, [go-c8y-cli](https://goc8ycli.netlify.app/). The following sections detail the steps on how to register a device using both of these methods, however both are functionally the same as they all utilize the same Cumulocity API.
+Devices can be registered by using the Cumulocity Device Management UI or by using Cumulocity's REST API which is demonstrated via the usage of the command line tool, [go-c8y-cli](https://c8y.app/). The following sections detail the steps on how to register a device using both of these methods, however both are functionally the same as they all utilize the same Cumulocity API.
 
 #### Registering a device using the Device Management UI {#cumulocity-ca-register-ui}
 
@@ -130,13 +130,13 @@ The following steps detail how to register a device using the Cumulocity [Device
 
 #### Register a device using go-c8y-cli command {#cumulocity-ca-register-cli}
 
-Below describes the steps to register a new device using a combination of [go-c8y-cli](https://goc8ycli.netlify.app/) commands and %%te%%.
+Below describes the steps to register a new device using a combination of [go-c8y-cli](https://c8y.app/) commands and %%te%%.
 
 :::note
 go-c8y-cli simply uses the Cumulocity REST API to perform the actions, this means that you can also do the same steps by using the API directly.
 :::
 
-1. Register the device using [go-c8y-cli](https://goc8ycli.netlify.app/)
+1. Register the device using [go-c8y-cli](https://c8y.app/)
 
     <UserContext>
 
