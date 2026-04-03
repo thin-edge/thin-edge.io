@@ -14,7 +14,6 @@ use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
 use crate::state_repository::state::agent_default_state_dir;
 use crate::state_repository::state::agent_state_dir;
-use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::twin_manager::builder::TwinManagerActorBuilder;
 use crate::twin_manager::builder::TwinManagerConfig;
 use crate::AgentOpt;
@@ -30,13 +29,8 @@ use reqwest::Identity;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::vec;
 use tedge_actors::Concurrent;
-use tedge_actors::ConvertingActor;
-use tedge_actors::ConvertingActorBuilder;
-use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::NullSender;
 use tedge_actors::RequestEnvelope;
 use tedge_actors::Runtime;
@@ -65,7 +59,6 @@ use tedge_log_manager::LogManagerOptions;
 use tedge_log_manager::PluginConfig;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
-use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
@@ -426,11 +419,7 @@ impl Agent {
         // TODO: replace with a call to entity store when we stop assuming default MQTT schema
         let is_main_device = device_topic_id == EntityTopicId::default_main_device();
         if is_main_device {
-            info!("Running as a main device, starting tedge_to_te_converter and File Transfer Service");
-
-            // Tedge to Te topic converter
-            let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
-            runtime.spawn(tedge_to_te_converter).await?;
+            info!("Running as a main device, starting File Transfer Service");
 
             let state_dir = agent_state_dir(self.config.state_dir, self.config.config_dir.clone());
             let clean_start = self.config.entity_store_clean_start;
@@ -482,7 +471,7 @@ impl Agent {
             runtime.spawn(entity_store_actor_builder).await?;
             runtime.spawn(operation_file_cache_builder).await?;
         } else {
-            info!("Running as a child device, tedge_to_te_converter and File Transfer Service disabled");
+            info!("Running as a child device: File Transfer Service disabled");
         }
 
         // Spawn all
@@ -508,29 +497,4 @@ impl Agent {
 
         Ok(())
     }
-}
-
-pub fn create_tedge_to_te_converter(
-    mqtt_actor_builder: &mut MqttActorBuilder,
-) -> Result<ConvertingActorBuilder<TedgetoTeConverter>, anyhow::Error> {
-    let tedge_to_te_converter = TedgetoTeConverter::new();
-
-    let subscriptions: TopicFilter = vec![
-        "tedge/measurements",
-        "tedge/measurements/+",
-        "tedge/events/+",
-        "tedge/events/+/+",
-        "tedge/alarms/+/+",
-        "tedge/alarms/+/+/+",
-    ]
-    .try_into()?;
-
-    // Tedge to Te converter
-    let mut tedge_converter_actor =
-        ConvertingActor::builder("TedgetoTeConverter", tedge_to_te_converter);
-
-    tedge_converter_actor.connect_source(subscriptions, mqtt_actor_builder);
-    tedge_converter_actor.connect_sink(NoConfig, mqtt_actor_builder);
-
-    Ok(tedge_converter_actor)
 }
