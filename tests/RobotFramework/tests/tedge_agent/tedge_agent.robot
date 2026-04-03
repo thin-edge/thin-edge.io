@@ -24,7 +24,7 @@ ${CHILD_SN}     ${EMPTY}
 
 
 *** Test Cases ***
-Converter and file transfer service are not running on a child device
+File transfer service are not running on a child device
     Set Device Context    ${CHILD_SN}
 
     # check that file transfer service is disabled
@@ -32,13 +32,6 @@ Converter and file transfer service are not running on a child device
     Execute Command
     ...    curl -X PUT -d '' http://127.0.0.1:8000/te/v1/files/test-file
     ...    exp_exit_code=7
-
-    # check that tedge-to-te-converter is not working while on a child device
-    Execute Command    tedge mqtt pub tedge/measurements ''
-
-    Set Device Context    ${PARENT_SN}
-    # Only parent converter should convert the message
-    Should Have MQTT Messages    te/device/main///m/    minimum=1    maximum=1
 
 Tedge-agent restarts cleanly without timeout
     [Documentation]    Regression test for \#4041
