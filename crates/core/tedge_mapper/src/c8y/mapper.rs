@@ -9,7 +9,6 @@ use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
 use c8y_mapper_ext::availability::AvailabilityBuilder;
 use c8y_mapper_ext::availability::AvailabilityConfig;
-use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use camino::Utf8Path;
@@ -156,11 +155,6 @@ impl TEdgeComponent for CumulocityMapper {
             &mut service_monitor_actor,
         )?;
 
-        let c8y_prefix = &c8y_config.bridge.topic_prefix;
-        // Adaptor translating commands sent on te/device/main///cmd/+/+ into requests on tedge/commands/req/+/+
-        // and translating the responses received on tedge/commands/res/+/+ to te/device/main///cmd/+/+
-        let old_to_new_agent_adapter = OldAgentAdapter::builder(c8y_prefix, &mut mqtt_actor);
-
         let availability_actor = if c8y_config.cloud_specific.availability.enable {
             Some(AvailabilityBuilder::new(
                 AvailabilityConfig::try_new(&tedge_config, &c8y_config)?,
@@ -193,7 +187,6 @@ impl TEdgeComponent for CumulocityMapper {
         runtime.spawn(service_monitor_actor).await?;
         runtime.spawn(uploader_actor).await?;
         runtime.spawn(downloader_actor).await?;
-        runtime.spawn(old_to_new_agent_adapter).await?;
         if let Some(availability_actor) = availability_actor {
             runtime.spawn(availability_actor).await?;
         }
