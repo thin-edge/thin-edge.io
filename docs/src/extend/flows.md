@@ -125,7 +125,7 @@ echo '[sensors/factory/zone1] {"temp": 22.4}' \
 
 ## Example 2: Local temperature alarm
 
-**Goal:** Raise a %%te%% alarm when a temperature measurement exceeds 70 °C, and clear it automatically when the temperature returns to a safe level.
+**Goal:** Raise a %%te%% alarm when a temperature measurement exceeds 70°C, and clear it automatically when the temperature returns to a safe level.
 
 The input topic uses the wildcard `te/+/+/+/+/m/environment`, which matches both the main device and any connected child devices. The alarm topic is derived from the incoming topic's device prefix so the alarm is always created on the correct device.
 
@@ -157,7 +157,7 @@ export function onMessage(message, context) {
             topic: alarmTopic,
             payload: JSON.stringify({
                 severity: "major",
-                text: `Temperature is ${temperature} °C, exceeding the 70 °C limit`,
+                text: `Temperature is ${temperature}°C, exceeding the 70°C limit`,
             }),
             mqtt: { retain: true, qos: 1 },
         }];
@@ -180,7 +180,7 @@ echo '[te/device/main///m/environment] {"temperature": 75.0}' \
 ```
 
 ```text title="Output"
-[te/device/main///a/temp_high] {"severity":"major","text":"Temperature is 75 °C, exceeding the 70 °C limit"}
+[te/device/main///a/temp_high] {"severity":"major","text":"Temperature is 75°C, exceeding the 70°C limit"}
 ```
 
 ---
@@ -249,7 +249,7 @@ export function onMessage(message, context) {
             topic: alarmTopic,
             payload: JSON.stringify({
                 severity: "major",
-                text: `Temperature is ${temperature} °C, exceeding the ${threshold} °C limit`,
+                text: `Temperature is ${temperature}°C, exceeding the ${threshold}°C limit`,
             }),
             mqtt: { retain: true, qos: 1 },
         }];
@@ -271,12 +271,145 @@ echo '[te/device/main///m/environment] {"temperature": 75.0}' \
 ```
 
 ```text title="Output"
-[te/device/main///a/temp_high] {"severity":"major","text":"Temperature is 75 °C, exceeding the 70 °C limit"}
+[te/device/main///a/temp_high] {"severity":"major","text":"Temperature is 75°C, exceeding the 70°C limit"}
 ```
 
 ---
 
-## Example 4: Aggregating measurements
+## Example 4: Stateful alarm with hysteresis
+
+**Goal:** Improve the alarm from Example 3 in two ways:
+1. **Hysteresis**: instead of clearing the alarm the moment temperature drops below the threshold, require it to drop to a configurable band below the threshold before clearing. This prevents rapid toggling when temperature hovers near the threshold.
+2. **State tracking**: use `context.script` to remember whether the alarm is currently active, and only publish when the state actually changes — avoiding a redundant retain publish on every incoming reading.
+
+This example builds directly on the `high-temp-alert` flow from Example 3 — only the changed files are shown.
+
+With a threshold of 70°C and a hysteresis of 5°C:
+- The alarm **raises** when temperature reaches or exceeds 70°C
+- The alarm **clears** only when temperature drops below 65°C (= 70 − 5)
+
+Alarm state is tracked in `context.script`. The parameter `assume_alarm_active` controls what the script assumes when no state has been recorded yet — either after first startup or after a mapper restart. The default `false` assumes no alarm is active. Set it to `true` on devices where a stale retained alarm may already be present on the broker — this ensures it is cleared as soon as temperature enters the safe zone.
+
+```toml title="file: high-temp-alert/flow.toml"
+input.mqtt.topics = ["te/+/+/+/+/m/environment"]
+
+[config]
+threshold           = "${params.threshold_degc}"
+hysteresis          = "${params.hysteresis_degc}"
+assume_alarm_active = "${params.assume_alarm_active}"
+
+[[steps]]
+script = "main.js"
+```
+
+```toml title="file: high-temp-alert/params.toml.template"
+# Temperature alarm threshold in degrees Celsius.
+# An alarm is raised when the measured temperature reaches or exceeds this value.
+threshold_degc = 70.0
+
+# Hysteresis band in degrees Celsius.
+# The alarm clears only when temperature drops below (threshold - hysteresis).
+# Increase this value to reduce alarm toggling on sensors with noisy readings.
+hysteresis_degc = 5.0
+
+# Assumed alarm state on first start or after a mapper restart, before any reading
+# has been processed. Set to true on devices where a stale retained alarm may already
+# be present on the broker, so it is cleared as soon as temperature enters the safe zone.
+assume_alarm_active = false
+```
+
+```js title="file: high-temp-alert/main.js"
+const decoder = new TextDecoder();
+
+export function onMessage(message, context) {
+    const payload = JSON.parse(decoder.decode(message.payload));
+    const temperature = payload?.temperature;
+
+    if (typeof temperature !== "number") {
+        return [];
+    }
+
+    const { threshold = 70.0, hysteresis = 5.0, assume_alarm_active = false } = context.config;
+    const clearBelow = threshold - hysteresis;
+
+    // Use a per-device key so child devices are tracked independently
+    const deviceKey = message.topic.split("/").slice(0, 5).join("/");
+    const alarmTopic = deviceKey + "/a/temp_high";
+
+    // Fall back to the configured assumption when no state has been recorded yet
+    const alarmActive = context.script.get(deviceKey) ?? assume_alarm_active;
+
+    if (temperature >= threshold) {
+        if (!alarmActive) {
+            context.script.set(deviceKey, true);
+            console.log(`Raising alarm ${deviceKey}: ${temperature}°C >= ${threshold}°C`);
+            return [{
+                topic: alarmTopic,
+                payload: JSON.stringify({
+                    severity: "major",
+                    text: `Temperature is ${temperature}°C, exceeding the ${threshold}°C limit`,
+                }),
+                mqtt: { retain: true, qos: 1 },
+            }];
+        }
+        // Already active — no redundant publish
+        return [];
+    }
+
+    if (temperature < clearBelow) {
+        if (alarmActive) {
+            context.script.set(deviceKey, false);
+            console.log(`Clearing alarm for ${deviceKey}: ${temperature}°C < ${clearBelow}°C`);
+            return [{
+                topic: alarmTopic,
+                payload: "",
+                mqtt: { retain: true, qos: 1 },
+            }];
+        }
+        // Already cleared — no redundant publish
+        return [];
+    }
+
+    // Temperature is in the hysteresis zone [clearBelow, threshold) — no state change
+    return [];
+}
+```
+
+**Raising the alarm.** After a restart the state is unknown — the first reading (60°C) is below the clear threshold, so any stale retained alarm is immediately cleared. The second reading (75°C) exceeds the threshold and raises the alarm:
+
+```sh
+tedge flows test --flows-dir ./high-temp-alert/ <<'EOF'
+[te/device/main///m/environment] {"temperature": 60.0}
+[te/device/main///m/environment] {"temperature": 75.0}
+EOF
+```
+
+```text title="Output"
+JavaScript.Console: "Raising alarm te/device/main//: 75°C >= 70°C"
+[te/device/main///a/temp_high] {"severity":"major","text":"Temperature is 75°C, exceeding the 70°C limit"}
+```
+
+**Clearing the alarm.** Start by sending a reading that raises the alarm (75°C), then show the hysteresis band in action (67°C produces no output), then the final clear when temperature drops to 62°C:
+
+```sh
+tedge flows test --flows-dir ./high-temp-alert/ <<'EOF'
+[te/device/main///m/environment] {"temperature": 75.0}
+[te/device/main///m/environment] {"temperature": 67.0}
+[te/device/main///m/environment] {"temperature": 62.0}
+EOF
+```
+
+```text title="Output"
+JavaScript.Console: "Raising alarm te/device/main//: 75°C >= 70°C"
+[te/device/main///a/temp_high] {"severity":"major","text":"Temperature is 75°C, exceeding the 70°C limit"}
+JavaScript.Console: "Clearing alarm for te/device/main//: 62°C < 65°C"
+[te/device/main///a/temp_high]
+```
+
+---
+
+## Example 5: Aggregating measurements
+
 
 **Goal:** Collect temperature readings over a 30-second window and publish one aggregated message containing the minimum, maximum, and average values, instead of forwarding every individual reading. This reduces bandwidth usage, which is important on cellular connections with limited data plans.
 
@@ -365,7 +498,7 @@ To publish both individual readings and aggregated summaries simultaneously, ret
 
 ---
 
-## Example 5: Monitoring cloud message rate
+## Example 6: Monitoring cloud message rate
 
 **Goal:** Watch outgoing Cumulocity messages and publish a local alert when the rate exceeds a configurable limit — for example, 1000 messages per hour or 10000 per day. This helps catch runaway processes or misconfigured services that might exhaust the data allowance of a SIM card.
 
@@ -475,7 +608,7 @@ yes '[c8y/measurement/measurements/create] {"temp":{"temp":{"value":37.9}},"time
 
 ---
 
-## Example 6: Adaptive data mode
+## Example 7: Adaptive data mode
 
 **Goal:** Automatically switch between publishing raw (full-frequency) measurements and aggregated measurements based on the incoming message rate, while also allowing a user to override the mode at any time via MQTT.
 
@@ -628,7 +761,7 @@ echo '[te/device/main///m/environment] {"temperature": 75.0}' \
 
 ---
 
-## Example 7: Multi-step debounce alarm
+## Example 8: Multi-step debounce alarm
 
 **Goal:** Raise a temperature alarm only after a configurable number of _consecutive_ above-threshold readings. A single spike should not trigger an alarm — only sustained elevated temperatures are actionable.
 
