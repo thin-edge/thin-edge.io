@@ -22,7 +22,7 @@ tedge-agent should not subscribe to legacy topics when running as a child device
     ${output}=    Execute Command
     ...    timeout 5 tedge-agent --mqtt-device-topic-id "device/pump//" 2>&1
     ...    ignore_exit_code=${True}
-    Should Contain    ${output}    Running as a child device, tedge_to_te_converter and File Transfer Service disabled
+    Should Contain    ${output}    Running as a child device: File Transfer Service disabled
     Should Not Contain    ${output}    item=${SPACE}tedge/
 
 
