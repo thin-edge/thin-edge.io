@@ -14,10 +14,10 @@ Test Tags           theme:c8y    theme:installation
 Update tedge version from previous using Cumulocity
     [Tags]    test:retry(1)    workaround
 
-    ${PREV_VERSION}=    Set Variable    0.8.1
+    ${PREV_VERSION}=    Set Variable    1.0.0
     # Install base version
     Execute Command
-    ...    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s ${PREV_VERSION}
+    ...    wget -O - https://thin-edge.io/install.sh | sh -s -- ${PREV_VERSION}
 
     # Disable service (as it was enabled by default in 0.8.1)
     Execute Command    systemctl stop tedge-mapper-az && systemctl disable tedge-mapper-az
@@ -86,10 +86,10 @@ Update tedge version from previous using Cumulocity
     Operation Should Be SUCCESSFUL    ${operation}
 
 Refreshes mosquitto bridge configuration
-    ${PREV_VERSION}=    Set Variable    0.10.0
+    ${PREV_VERSION}=    Set Variable    1.0.0
     # Install base version
     Execute Command
-    ...    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s ${PREV_VERSION}
+    ...    wget -O - https://thin-edge.io/install.sh | sh -s -- ${PREV_VERSION}
 
     # Register device (using already installed version)
     Register Legacy thin-edge.io    external_id=${DEVICE_SN}
