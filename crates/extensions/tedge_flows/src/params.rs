@@ -167,25 +167,8 @@ impl<'a, T: MapperParams + ?Sized> Params<&'a T> {
             return Ok(self.substitute_inner_paths(expr).into());
         };
 
-        if let Some(path) = path.strip_prefix("params") {
-            match get_inner_value(&self.params, path.strip_prefix('.')) {
-                Ok(value) => Ok(value),
-                Err(unknown_path) => Err(LoadError::UnknownParam {
-                    path: format!("params.{unknown_path}",),
-                }),
-            }
-        } else if let Some(path) = path.strip_prefix("mapper.") {
-            match self.mapper.get_value(path) {
-                Some(value) => Ok(value.into()),
-                None => Err(LoadError::UnknownParam {
-                    path: format!("mapper.{path}",),
-                }),
-            }
-        } else {
-            Err(LoadError::UnknownParam {
-                path: path.to_string(),
-            })
-        }
+        self.get_inner_value(path)
+            .map_err(|unknown_path| LoadError::UnknownParam { path: unknown_path })
     }
 
     /// Substitute param values for the path expressions of an input string
@@ -220,26 +203,62 @@ impl<'a, T: MapperParams + ?Sized> Params<&'a T> {
     }
 }
 
-fn get_inner_value(values: &Map<String, Value>, steps: Option<&str>) -> Result<Value, String> {
-    let Some(path) = steps else {
-        return Ok(values.clone().into());
-    };
-    let (key, next_steps) = match path.split_once(".") {
-        None => (path, None),
-        Some((key, inner_path)) => (key, Some(inner_path)),
-    };
-    let Some(value) = values.get(key) else {
-        return Err(key.to_string());
-    };
-    if next_steps.is_none() {
-        return Ok(value.clone());
+trait ParamsTree {
+    /// Return the value reached following the given path
+    ///
+    /// If the path is leading nowhere, return the unknown path prefix
+    fn get_inner_value(&self, path: &str) -> Result<Value, String>;
+}
+
+impl ParamsTree for Map<String, Value> {
+    fn get_inner_value(&self, path: &str) -> Result<Value, String> {
+        let (key, next_steps) = match path.split_once(".") {
+            None => (path, None),
+            Some((key, inner_path)) => (key, Some(inner_path)),
+        };
+        let Some(value) = self.get(key) else {
+            return Err(key.to_string());
+        };
+        let Some(inner_path) = next_steps else {
+            return Ok(value.clone());
+        };
+        let Some(inner_values) = value.as_object() else {
+            return Err(format!("{key}.*"));
+        };
+        match inner_values.get_inner_value(inner_path) {
+            Ok(value) => Ok(value),
+            Err(unknown_path) => Err(format!("{key}.{unknown_path}")),
+        }
     }
-    let Some(inner_values) = value.as_object() else {
-        return Err(format!("{key}.*"));
-    };
-    match get_inner_value(inner_values, next_steps) {
-        Ok(value) => Ok(value),
-        Err(unknown_path) => Err(format!("{key}.{unknown_path}")),
+}
+
+impl<T: MapperParams + ?Sized> ParamsTree for T {
+    fn get_inner_value(&self, path: &str) -> Result<Value, String> {
+        self.get_value(path)
+            .map(Value::from)
+            .ok_or_else(|| path.to_string())
+    }
+}
+
+impl<T: MapperParams + ?Sized> ParamsTree for Params<&T> {
+    fn get_inner_value(&self, path: &str) -> Result<Value, String> {
+        let (namespace, path) = match path.split_once(".") {
+            None => (path, None),
+            Some((namespace, path)) => (namespace, Some(path)),
+        };
+
+        match (namespace, path) {
+            ("params", None) => Ok(self.params.clone().into()),
+            ("params", Some(path)) => self
+                .params
+                .get_inner_value(path)
+                .map_err(|unknown_path| format!("params.{unknown_path}")),
+            ("mapper", Some(path)) => self
+                .mapper
+                .get_inner_value(path)
+                .map_err(|unknown_path| format!("mapper.{unknown_path}")),
+            _ => Err(namespace.to_string()),
+        }
     }
 }
 
