@@ -3,7 +3,6 @@ use tedge_flows::FlowRegistryExt;
 pub mod actor;
 pub mod alarm_converter;
 pub mod availability;
-pub mod compatibility_adapter;
 pub mod config;
 pub mod converter;
 pub mod dynamic_discovery;

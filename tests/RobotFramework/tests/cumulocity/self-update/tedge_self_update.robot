@@ -19,9 +19,6 @@ Update tedge version from previous using Cumulocity
     Execute Command
     ...    wget -O - https://thin-edge.io/install.sh | sh -s -- ${PREV_VERSION}
 
-    # Disable service (as it was enabled by default in 0.8.1)
-    Execute Command    systemctl stop tedge-mapper-az && systemctl disable tedge-mapper-az
-
     # Register device (using already installed version)
     Register Legacy thin-edge.io    external_id=${DEVICE_SN}
     Execute Command    cmd=tedge connect c8y
@@ -31,16 +28,12 @@ Update tedge version from previous using Cumulocity
     Restart Service
     ...    tedge-mapper-c8y
 
-    # Note: Software type is reported as a part of version in thin-edge 0.8.1
     Device Should Have Installed Software
-    ...    tedge,${PREV_VERSION}::apt
-    ...    tedge_mapper,${PREV_VERSION}::apt
-    ...    tedge_agent,${PREV_VERSION}::apt
-    ...    tedge_watchdog,${PREV_VERSION}::apt
-    ...    c8y_configuration_plugin,${PREV_VERSION}::apt
-    ...    c8y_log_plugin,${PREV_VERSION}::apt
-    ...    tedge_apt_plugin,${PREV_VERSION}::apt
-
+    ...    {"name": "tedge", "softwareType": "apt", "version": "${PREV_VERSION}"}
+    ...    {"name": "tedge-mapper", "softwareType": "apt", "version": "${PREV_VERSION}"}
+    ...    {"name": "tedge-agent", "softwareType": "apt", "version": "${PREV_VERSION}"}
+    ...    {"name": "tedge-watchdog", "softwareType": "apt", "version": "${PREV_VERSION}"}
+    ...    {"name": "tedge-apt-plugin", "softwareType": "apt", "version": "${PREV_VERSION}"}
     # Install desired version
     Create Local Repository
     ${operation}=    Install Software
@@ -199,9 +192,6 @@ Custom Setup
     # Cleanup
     Execute Command
     ...    rm -f /etc/tedge/tedge.toml /etc/tedge/system.toml && sudo dpkg --configure -a && apt-get purge -y "tedge*" "c8y*"
-    # Remove any existing repositories (due to candidate bug in <= 0.8.1)
-    Execute Command
-    ...    cmd=rm -f /etc/apt/sources.list.d/thinedge*.list /etc/apt/sources.list.d/tedge*.list
 
 Create Local Repository
     [Arguments]    ${packages_dir}=/setup/packages
