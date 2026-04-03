@@ -49,12 +49,14 @@ pub struct C8yRemoteAccessPluginOpt {
     // Use "-" to read the value from stdin.
     child: Option<String>,
 
-    /// The user who will own the directories created by --init
-    #[arg(long, requires("init"), default_value = "tedge")]
+    /// The user who will own the directories created during initialization.
+    /// Takes precedence over system.toml [user]; defaults to "tedge" if neither is set.
+    #[arg(long, requires("init"))]
     user: Option<String>,
 
-    /// The group who will own the directories created by --init
-    #[arg(long, requires("init"), default_value = "tedge")]
+    /// The group who will own the directories created during initialization.
+    /// Takes precedence over system.toml [group]; defaults to "tedge" if neither is set.
+    #[arg(long, requires("init"))]
     group: Option<String>,
 
     #[arg(long, env = "TEDGE_CLOUD_PROFILE", hide = true)]
@@ -67,7 +69,7 @@ pub struct C8yRemoteAccessPluginOpt {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
-    Init(String, String),
+    Init(Option<String>, Option<String>),
     Cleanup,
     SpawnChild(String),
     TryConnectUnixSocket(String),
@@ -84,8 +86,8 @@ impl TryFrom<C8yRemoteAccessPluginOpt> for Command {
         match arguments {
             C8yRemoteAccessPluginOpt {
                 init: true,
-                user: Some(user),
-                group: Some(group),
+                user,
+                group,
                 ..
             } => Ok(Command::Init(user, group)),
             C8yRemoteAccessPluginOpt { cleanup: true, .. } => Ok(Command::Cleanup),
@@ -170,7 +172,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case::init("--init", Command::Init("tedge".to_string(), "tedge".to_string()))]
+    #[case::init("--init", Command::Init(None, None))]
     #[case::cleanup("--cleanup", Command::Cleanup)]
     fn parses_lifecycle_flags(#[case] argument: &str, #[case] expected: Command) {
         assert_eq!(try_parse_arguments(&[argument]).unwrap(), expected);

@@ -50,6 +50,12 @@ pub struct RenewCertCmd {
 
     /// CSR template
     pub csr_template: CsrTemplate,
+
+    /// The user who will own the CSR file
+    pub user: String,
+
+    /// The group who will own the CSR file
+    pub group: String,
 }
 
 #[async_trait::async_trait]
@@ -87,6 +93,8 @@ impl RenewCertCmd {
                 Some(self.cert_path.clone()),
                 self.csr_path.clone(),
                 self.csr_template.clone(),
+                self.user.clone(),
+                self.group.clone(),
             )
             .await?;
         }

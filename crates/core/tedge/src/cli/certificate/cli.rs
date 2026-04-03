@@ -229,9 +229,10 @@ pub enum CA {
 impl BuildCommand for TEdgeCertCli {
     async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         let (user, group) = if config.mqtt.bridge.built_in {
-            ("tedge", "tedge")
+            let system_config = config.read_system_config();
+            (system_config.user, system_config.group)
         } else {
-            (crate::BROKER_USER, crate::BROKER_USER)
+            (crate::BROKER_USER.to_owned(), crate::BROKER_USER.to_owned())
         };
 
         let csr_template = CsrTemplate {
@@ -451,6 +452,8 @@ impl BuildCommand for TEdgeCertCli {
                     retry_every,
                     max_timeout,
                     csr_template,
+                    user: user.clone(),
+                    group: group.clone(),
                 };
                 cmd.into_boxed()
             }
@@ -534,6 +537,8 @@ impl BuildCommand for TEdgeCertCli {
                         csr_path,
                         generate_csr,
                         csr_template,
+                        user,
+                        group,
                     };
                     cmd.into_boxed()
                 }
