@@ -31,10 +31,7 @@ impl Connection {
         let mut buf = Vec::new();
         self.stream.read_to_end(&mut buf)?;
 
-        // will fail if not version 1
-        let frame: Frame =
-            postcard::from_bytes(&buf).context("Failed to parse the received frame")?;
-
+        let frame = Frame::from_bytes(&buf).context("Failed to parse the received frame")?;
         let Frame::Version1(frame) = frame;
 
         // by that time the sender should've already closed this connection half, so we ignore
