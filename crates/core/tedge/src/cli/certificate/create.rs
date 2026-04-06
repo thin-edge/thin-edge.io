@@ -15,7 +15,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tedge_config::tedge_toml::DynCloudConfig;
 use tedge_config::TEdgeConfig;
-use tedge_p11_server::CryptokiConfig;
+use tedge_p11::CryptokiConfig;
 use tokio::fs::File;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;

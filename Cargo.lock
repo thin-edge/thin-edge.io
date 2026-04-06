@@ -1027,7 +1027,7 @@ dependencies = [
  "rustls 0.23.27",
  "rustls-native-certs",
  "sha1",
- "tedge-p11-server",
+ "tedge-p11",
  "tempfile",
  "thiserror 2.0.12",
  "time",
@@ -4876,7 +4876,7 @@ dependencies = [
  "tedge-file-log-plugin",
  "tedge-flows-plugin",
  "tedge-mapper",
- "tedge-p11-server",
+ "tedge-p11",
  "tedge-watchdog",
  "tedge-write",
  "tedge_api",
@@ -5084,13 +5084,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "tedge-p11-server"
+name = "tedge-p11"
 version = "2.0.0"
 dependencies = [
  "anyhow",
  "asn1-rs 0.7.1",
  "camino",
- "clap",
  "cryptoki",
  "pem",
  "percent-encoding",
@@ -5098,8 +5097,23 @@ dependencies = [
  "rand 0.10.1",
  "rsa",
  "rustls 0.23.27",
+ "serde",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "tedge-p11-server"
+version = "2.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "clap",
+ "rustls 0.23.27",
  "sd-listen-fds",
  "serde",
+ "tedge-p11",
  "tempfile",
  "tokio",
  "toml 0.9.6",
@@ -5211,7 +5225,6 @@ dependencies = [
  "strum",
  "strum_macros",
  "tedge_api",
- "tedge_config",
  "tedge_config_macros",
  "tedge_test_utils",
  "tedge_utils",

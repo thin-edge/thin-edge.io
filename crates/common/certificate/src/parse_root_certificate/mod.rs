@@ -9,9 +9,9 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
-pub use tedge_p11_server::CryptokiConfig;
-pub use tedge_p11_server::CryptokiConfigDirect;
-pub use tedge_p11_server::SecretString;
+pub use tedge_p11::CryptokiConfig;
+pub use tedge_p11::CryptokiConfigDirect;
+pub use tedge_p11::SecretString;
 
 use crate::CertificateError;
 
@@ -40,11 +40,11 @@ pub fn create_tls_config_cryptoki(
 ) -> Result<ClientConfig, CertificateError> {
     use rustls::sign::CertifiedKey;
     use std::sync::Arc;
-    use tedge_p11_server::single_cert_and_key::SingleCertAndKey;
+    use tedge_p11::single_cert_and_key::SingleCertAndKey;
 
     let root_cert_store = new_root_store(root_certificates.as_ref())?;
     let cert_chain = read_cert_chain(client_certificate)?;
-    let key = tedge_p11_server::signing_key(cryptoki_config)?;
+    let key = tedge_p11::signing_key(cryptoki_config)?;
 
     let certified_key = CertifiedKey {
         cert: cert_chain,

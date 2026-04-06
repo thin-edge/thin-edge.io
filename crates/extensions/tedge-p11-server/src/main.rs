@@ -19,8 +19,8 @@ use camino::Utf8PathBuf;
 use clap::crate_version;
 use clap::Parser;
 use serde::Deserialize;
-use tedge_p11_server::CryptokiConfigDirect;
-use tedge_p11_server::TedgeP11Server;
+use tedge_p11::CryptokiConfigDirect;
+use tedge_p11::TedgeP11Server;
 use tokio::signal::unix::SignalKind;
 use tracing::debug;
 use tracing::error;
@@ -248,7 +248,7 @@ async fn main() -> anyhow::Result<()> {
     let config = try_read_config(args).await?;
     let cryptoki_config = CryptokiConfigDirect {
         module_path: config.module_path,
-        pin: tedge_p11_server::SecretString::new(config.pin),
+        pin: tedge_p11::SecretString::new(config.pin),
         uri: config.uri.filter(|s| !s.is_empty()).map(|s| {
             let v = s.into_boxed_str();
             Arc::<str>::from(v)
@@ -290,7 +290,7 @@ async fn main() -> anyhow::Result<()> {
     info!(listener = ?listener.local_addr().as_ref().ok().and_then(|s| s.as_pathname()), "Server listening");
     listener.set_nonblocking(true)?;
     let listener = tokio::net::UnixListener::from_std(listener)?;
-    let service = tedge_p11_server::pkcs11::Cryptoki::new(cryptoki_config)
+    let service = tedge_p11::pkcs11::Cryptoki::new(cryptoki_config)
         .context("Failed to create the signing service")?;
     let server = TedgeP11Server::new(service)?;
     tokio::spawn(async move { server.serve(listener).await });

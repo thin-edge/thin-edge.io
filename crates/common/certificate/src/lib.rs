@@ -7,7 +7,7 @@ use sha1::Digest;
 use sha1::Sha1;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_p11_server::CryptokiConfig;
+use tedge_p11::CryptokiConfig;
 use time::Duration;
 use time::OffsetDateTime;
 pub use zeroize::Zeroizing;
@@ -184,7 +184,7 @@ impl From<SignatureAlgorithm> for &rcgen::SignatureAlgorithm {
     }
 }
 
-impl From<SignatureAlgorithm> for tedge_p11_server::pkcs11::SigScheme {
+impl From<SignatureAlgorithm> for tedge_p11::pkcs11::SigScheme {
     fn from(value: SignatureAlgorithm) -> Self {
         match value {
             SignatureAlgorithm::RsaPkcs1Sha256 => Self::RsaPkcs1Sha256,
