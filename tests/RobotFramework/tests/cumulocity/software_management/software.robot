@@ -11,7 +11,7 @@ Test Tags           theme:c8y    theme:software    theme:plugins
 
 
 *** Test Cases ***
-Supported software types should be declared during startup
+Supported software types should not be declared during startup when disabled
     [Setup]    Custom Setup With Software Types Disabled
     Should Have MQTT Messages
     ...    topic=te/device/main///cmd/software_list
