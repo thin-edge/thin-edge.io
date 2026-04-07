@@ -9,6 +9,7 @@ use crate::tedge_toml::mapper_config::HasPath;
 use crate::tedge_toml::mapper_config::MapperConfigPath;
 use crate::tedge_toml::DtoKey;
 use crate::ConfigSettingResult;
+use crate::SystemConfig;
 use crate::TEdgeConfig;
 use crate::TEdgeConfigDto;
 use crate::TEdgeConfigError;
@@ -23,8 +24,7 @@ use std::path::PathBuf;
 use strum::IntoEnumIterator as _;
 use tedge_config_macros::MultiDto;
 use tedge_config_macros::ProfileName;
-use tedge_utils::file::change_mode;
-use tedge_utils::file::change_user_and_group;
+use tedge_utils::file;
 use tedge_utils::fs::atomically_write_file_async;
 use tracing::debug;
 use tracing::subscriber::NoSubscriber;
@@ -470,12 +470,10 @@ impl TEdgeConfigLocation {
 
         atomically_write_file_async(toml_path, toml.as_bytes()).await?;
 
-        if let Err(err) = change_user_and_group(toml_path, "tedge", "tedge").await {
-            warn!("failed to set file ownership for '{toml_path}': {err}");
-        }
-
-        if let Err(err) = change_mode(toml_path, 0o644).await {
-            warn!("failed to set file permissions for '{toml_path}': {err}");
+        let system_config = SystemConfig::try_new(&self.tedge_config_root_path).unwrap_or_default();
+        let permissions = file::permissions(&system_config.user, &system_config.group, 0o644);
+        if let Err(err) = permissions.apply(toml_path.as_std_path()).await {
+            warn!("failed to set file ownership/permissions for '{toml_path}': {err}");
         }
 
         Ok(())

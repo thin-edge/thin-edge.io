@@ -32,6 +32,10 @@ impl TEdgeConfig {
         config_location.load().await
     }
 
+    pub fn read_system_config(&self) -> SystemConfig {
+        SystemConfig::try_new(self.root_dir()).unwrap_or_default()
+    }
+
     /// Load [TEdgeConfig], using a separate mapper config file as the default
     /// behaviour if no clouds are already configured
     ///

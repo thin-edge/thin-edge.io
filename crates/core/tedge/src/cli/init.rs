@@ -9,19 +9,19 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_utils::file::change_user_and_group;
+use tedge_utils::file;
 use tedge_utils::file::create_directory_and_update_ownership;
-use tedge_utils::file::PermissionEntry;
 use tracing::debug;
+use tracing::info;
 
 pub struct TEdgeInitCmd {
-    user: String,
-    group: String,
+    user: Option<String>,
+    group: Option<String>,
     relative_links: bool,
 }
 
 impl TEdgeInitCmd {
-    pub fn new(user: String, group: String, relative_links: bool) -> Self {
+    pub fn new(user: Option<String>, group: Option<String>, relative_links: bool) -> Self {
         Self {
             user,
             group,
@@ -32,6 +32,11 @@ impl TEdgeInitCmd {
 
 impl TEdgeInitCmd {
     async fn initialize_tedge(&self, config: TEdgeConfig) -> anyhow::Result<()> {
+        let system_config = config.read_system_config();
+
+        let user = Self::resolve_config_value("User", self.user.clone(), system_config.user);
+        let group = Self::resolve_config_value("Group", self.group.clone(), system_config.group);
+
         let executable_name =
             std::env::current_exe().context("retrieving the current executable name")?;
         let stat = tokio::fs::metadata(&executable_name)
@@ -76,13 +81,7 @@ impl TEdgeInitCmd {
         }
 
         let config_dir = &config.root_dir();
-        let permissions = {
-            PermissionEntry::new(
-                Some(self.user.clone()),
-                Some(self.group.clone()),
-                Some(0o775),
-            )
-        };
+        let permissions = file::permissions(&user, &group, 0o775);
         create_directory_and_update_ownership(&config_dir, &permissions).await?;
         create_directory_and_update_ownership(config_dir.join("mosquitto-conf"), &permissions)
             .await?;
@@ -103,13 +102,51 @@ impl TEdgeInitCmd {
         create_directory_and_update_ownership(&config.logs.path, &permissions).await?;
         create_directory_and_update_ownership(&config.data.path, &permissions).await?;
 
-        let entity_store_file = config_dir.join(".agent").join("entity_store.jsonl");
+        let file_permissions = file::permissions(&user, &group, 0o644);
+        let system_toml = config_dir.join("system.toml");
+        if system_toml.exists() {
+            file_permissions
+                .clone()
+                .apply(system_toml.as_std_path())
+                .await?;
+        }
 
+        let agent_state_dir = if config.agent.state.path.exists() {
+            config.agent.state.path.to_path_buf()
+        } else {
+            let agent_state_dir = config_dir.join(".agent");
+            create_directory_and_update_ownership(&agent_state_dir, &permissions).await?;
+            agent_state_dir
+        };
+
+        let entity_store_file = agent_state_dir.join("entity_store.jsonl");
         if entity_store_file.exists() {
-            change_user_and_group(entity_store_file, &self.user, &self.group).await?;
+            file_permissions
+                .apply(entity_store_file.as_std_path())
+                .await?;
         }
 
         Ok(())
+    }
+
+    fn resolve_config_value(
+        field_name: &str,
+        cli_value: Option<String>,
+        system_value: String,
+    ) -> String {
+        match cli_value {
+            Some(val) => {
+                info!("{} '{}' received from CLI arguments", field_name, val);
+                val
+            }
+            None => {
+                info!(
+                    "{} '{}' received from system.toml",
+                    field_name, system_value
+                );
+                system_value
+            }
+        }
     }
 }
 
@@ -351,6 +388,30 @@ mod tests {
                 ErrorKind::NotFound,
                 Box::new(DummyError("File not found")),
             ))
+        }
+    }
+
+    mod resolve_config_value {
+        use super::*;
+
+        #[test]
+        fn uses_system_toml_value_when_no_cli_value_is_given() {
+            assert_eq!(
+                TEdgeInitCmd::resolve_config_value("User", None, "system-user".into()),
+                "system-user"
+            );
+        }
+
+        #[test]
+        fn cli_value_overrides_system_toml_value() {
+            assert_eq!(
+                TEdgeInitCmd::resolve_config_value(
+                    "User",
+                    Some("cli-user".into()),
+                    "system-user".into()
+                ),
+                "cli-user"
+            );
         }
     }
 }
