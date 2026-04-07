@@ -153,10 +153,8 @@ Update tedge Using a Custom Software Update Workflow
     ...    that don't have a version (as the workflow version feature did not exist prior to tedge 1.4.0)
     ${PREV_VERSION}=    Set Variable    1.3.1
 
-    # Install base version (using apt package pinning, then remove it)
-    Pin thin-edge.io APT Packages    ${PREV_VERSION}
-    Execute Command    cmd=curl -fsSL thin-edge.io/install.sh | sh -s
-    Unpin thin-edge.io APT Packages
+    # Install base version
+    Execute Command    cmd=curl -fsSL thin-edge.io/install.sh | sh -s -- ${PREV_VERSION}
 
     # Register device (using already installed version)
     # Use self-signed certificate as the older thin-edge.io version does not support Cumulocity CA
@@ -220,16 +218,6 @@ Create Local Repository
     Execute Command    cd /opt/repository/local && dpkg-scanpackages -m . > Packages
     Execute Command
     ...    cmd=echo 'deb [trusted=yes] file:/opt/repository/local /' > /etc/apt/sources.list.d/tedge-local.list
-
-Pin thin-edge.io APT Packages
-    [Arguments]    ${VERSION}
-    Transfer To Device    ${CURDIR}/apt_package_pinning    /etc/apt/preferences.d/tedge
-    Execute Command    cmd=sed -i 's/%%VERSION%%/${VERSION}/g' /etc/apt/preferences.d/tedge
-
-Unpin thin-edge.io APT Packages
-    Execute Command    cmd=rm -f /etc/apt/preferences.d/tedge
-    # Remove thin-edge.io public repositories to avoid affecting the selected version
-    Execute Command    cmd=rm -f /etc/apt/sources.list.d/thinedge-*.list
 
 Register Legacy thin-edge.io
     [Arguments]    ${external_id}
